@@ -2,8 +2,12 @@
 
 namespace App\Controller\Admin;
 
+use App\Entity\ProductVariant;
+use App\Entity\Size;
+use App\Entity\Style;
 use App\Entity\Cart;
 use App\Entity\Order;
+use App\Entity\Color;
 use App\Entity\Carrier;
 use App\Entity\Contact;
 use App\Entity\Product;
@@ -49,5 +53,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Users', 'fas fa-user', User::class);
         yield MenuItem::linkToCrud('Collections', 'fas fa-archive', Collections::class); // Ajoutez cette ligne
         yield MenuItem::linkToCrud('Commandes', 'fas fa-shopping-cart', Commande::class);
+        yield MenuItem::linkToCrud('Colors', 'fas fa-palette', Color::class);
+        yield MenuItem::linkToCrud('Styles', 'fas fa-brush', Style::class);
+        yield MenuItem::linkToCrud('Sizes', 'fas fa-ruler', Size::class);
+        yield MenuItem::linkToCrud('Product Variants', 'fas fa-boxes', ProductVariant::class);
     }
 }

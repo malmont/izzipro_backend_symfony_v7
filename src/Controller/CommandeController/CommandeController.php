@@ -51,8 +51,9 @@ class CommandeController extends AbstractController
     #[Route('/api/collections/{id}/commandes', name: 'create_commande', methods: ['POST'])]
     public function createCommande(Request $request, Collections $collection): JsonResponse
     {
+       
         $data = json_decode($request->getContent(), true);
-
+        // dd($data);
         $currentUser = $this->security->getUser();
         if (!$currentUser) {
             return $this->json(['error' => 'Unauthenticated'], JsonResponse::HTTP_UNAUTHORIZED);

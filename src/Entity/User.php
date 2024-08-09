@@ -291,4 +291,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
         return $this->firstname . ' ' . $this->lastname; // Ou toute autre combinaison de champs souhaitée
     }
+    public function getFullName(): string
+    {
+        return $this->firstname . ' ' . $this->lastname;
+    }
 }

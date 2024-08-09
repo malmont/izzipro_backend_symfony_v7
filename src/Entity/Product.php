@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Entity;
 
 use DateTime;
@@ -48,9 +47,6 @@ class Product
     #[ORM\ManyToMany(targetEntity: Categories::class, inversedBy: 'products')]
     private Collection $category;
 
-    // #[ORM\ManyToMany(targetEntity: TagsProduct::class, mappedBy: 'product')]
-    // private Collection $tagsProducts;
-
     #[ORM\OneToMany(mappedBy: 'product', targetEntity: RelatedProduct::class)]
     private Collection $relatedProducts;
 
@@ -69,13 +65,33 @@ class Product
     #[ORM\Column(length: 255)]
     private ?string $slug = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?float $purchasePrice = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?float $coefficientMultiplier = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $barcode = null;
+
+    #[ORM\ManyToOne(inversedBy: 'products')]
+    private ?Style $style = null;
+
+    #[ORM\OneToMany(mappedBy: 'product', targetEntity: ProductVariant::class)]
+    private Collection $variants;
+
+    #[ORM\ManyToOne(inversedBy: 'products')]
+    #[ORM\JoinColumn(nullable: true)]
+    private ?Commande $commande = null;
+
     public function __construct()
     {
         $this->category = new ArrayCollection();
-        // $this->tagsProducts = new ArrayCollection();
         $this->relatedProducts = new ArrayCollection();
         $this->reviewsProducts = new ArrayCollection();
         $this->createdAt = new DateTime();
+        $this->variants = new ArrayCollection();
+        $this->updateQuantity(); 
     }
 
     public function getId(): ?int
@@ -129,6 +145,28 @@ class Product
         $this->price = $price;
 
         return $this;
+    }
+    public function setPurchasePrice(?float $purchasePrice): static
+    {
+        $this->purchasePrice = $purchasePrice;
+        $this->updatePrice(); // Recalcule le prix à chaque fois que le prix d'achat est modifié
+
+        return $this;
+    }
+
+    public function setCoefficientMultiplier(?float $coefficientMultiplier): static
+    {
+        $this->coefficientMultiplier = $coefficientMultiplier;
+        $this->updatePrice(); // Recalcule le prix à chaque fois que le coefficient est modifié
+
+        return $this;
+    }
+
+    private function updatePrice(): void
+    {
+        if ($this->purchasePrice !== null && $this->coefficientMultiplier !== null) {
+            $this->price = $this->purchasePrice * $this->coefficientMultiplier * 100;
+        }
     }
 
     public function isIsbestseller(): ?bool
@@ -191,9 +229,6 @@ class Product
         return $this;
     }
 
-    /**
-     * @return Collection<int, Categories>
-     */
     public function getCategory(): Collection
     {
         return $this->category;
@@ -215,36 +250,6 @@ class Product
         return $this;
     }
 
-    // /**
-    //  * @return Collection<int, TagsProduct>
-    //  */
-    // public function getTagsProducts(): Collection
-    // {
-    //     return $this->tagsProducts;
-    // }
-
-    // public function addTagsProduct(TagsProduct $tagsProduct): self
-    // {
-    //     if (!$this->tagsProducts->contains($tagsProduct)) {
-    //         $this->tagsProducts->add($tagsProduct);
-    //         $tagsProduct->addProduct($this);
-    //     }
-
-    //     return $this;
-    // }
-
-    // public function removeTagsProduct(TagsProduct $tagsProduct): self
-    // {
-    //     if ($this->tagsProducts->removeElement($tagsProduct)) {
-    //         $tagsProduct->removeProduct($this);
-    //     }
-
-    //     return $this;
-    // }
-
-    /**
-     * @return Collection<int, RelatedProduct>
-     */
     public function getRelatedProducts(): Collection
     {
         return $this->relatedProducts;
@@ -272,9 +277,6 @@ class Product
         return $this;
     }
 
-    /**
-     * @return Collection<int, ReviewsProduct>
-     */
     public function getReviewsProducts(): Collection
     {
         return $this->reviewsProducts;
@@ -300,11 +302,6 @@ class Product
         }
 
         return $this;
-    }
-
-    public function __toString()
-    {
-        return $this->name;
     }
 
     public function getQuantity(): ?int
@@ -353,5 +350,97 @@ class Product
         $this->slug = $slug;
 
         return $this;
+    }
+
+    public function getPurchasePrice(): ?float
+    {
+        return $this->purchasePrice;
+    }
+
+  
+    public function getCoefficientMultiplier(): ?float
+    {
+        return $this->coefficientMultiplier;
+    }
+
+  
+
+    public function getBarcode(): ?string
+    {
+        return $this->barcode;
+    }
+
+    public function setBarcode(?string $barcode): static
+    {
+        $this->barcode = $barcode;
+
+        return $this;
+    }
+
+    public function getStyle(): ?Style
+    {
+        return $this->style;
+    }
+
+    public function setStyle(?Style $style): static
+    {
+        $this->style = $style;
+
+        return $this;
+    }
+
+    public function updateQuantity(): void
+    {
+        $totalQuantity = 0;
+        foreach ($this->variants as $variant) {
+            $totalQuantity += $variant->getStockQuantity();
+        }
+        $this->quantity = $totalQuantity;
+    }
+
+
+    public function getVariants(): Collection
+    {
+        return $this->variants;
+    }
+
+    public function addVariant(ProductVariant $variant): static
+    {
+        if (!$this->variants->contains($variant)) {
+            $this->variants->add($variant);
+            $variant->setProduct($this);
+            $this->updateQuantity(); // Recalcule la quantité totale
+        }
+
+        return $this;
+    }
+
+    public function removeVariant(ProductVariant $variant): static
+    {
+        if ($this->variants->removeElement($variant)) {
+            if ($variant->getProduct() === $this) {
+                $variant->setProduct(null);
+            }
+            $this->updateQuantity(); // Recalcule la quantité totale
+        }
+
+        return $this;
+    }
+
+    public function getCommande(): ?Commande
+    {
+        return $this->commande;
+    }
+
+    public function setCommande(?Commande $commande): static
+    {
+        $this->commande = $commande;
+
+        return $this;
+    }
+
+    public function __toString(): string
+    {
+        return (string) $this->name;
     }
 }
