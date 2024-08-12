@@ -10,6 +10,7 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\Common\Collections\ArrayCollection;
 
 #[ORM\Entity(repositoryClass: ProductRepository::class)]
+#[ApiResource]
 class Product
 {
     #[ORM\Id]
@@ -57,7 +58,7 @@ class Product
     private ?int $quantity = null;
 
     #[ORM\Column]
-    private ?\DateTime $createdAt = null;
+    private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $tags = null;
@@ -89,7 +90,7 @@ class Product
         $this->category = new ArrayCollection();
         $this->relatedProducts = new ArrayCollection();
         $this->reviewsProducts = new ArrayCollection();
-        $this->createdAt = new DateTime();
+        $this->createdAt = new DateTimeImmutable();
         $this->variants = new ArrayCollection();
         $this->updateQuantity(); 
     }
@@ -165,7 +166,7 @@ class Product
     private function updatePrice(): void
     {
         if ($this->purchasePrice !== null && $this->coefficientMultiplier !== null) {
-            $this->price = $this->purchasePrice * $this->coefficientMultiplier * 100;
+            $this->price = $this->purchasePrice * $this->coefficientMultiplier;
         }
     }
 

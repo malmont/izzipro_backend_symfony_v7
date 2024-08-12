@@ -42,7 +42,7 @@ class Collections
     /**
      * @var Collection<int, Commande>
      */
-    #[ORM\OneToMany(mappedBy: 'Collections', targetEntity: Commande::class)]
+    #[ORM\OneToMany(mappedBy: 'collections', targetEntity: Commande::class)]
     private Collection $CollectionCommande;
 
     public function __construct()

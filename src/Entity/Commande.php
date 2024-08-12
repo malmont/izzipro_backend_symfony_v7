@@ -30,7 +30,7 @@ class Commande
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $photo = null;
 
-    #[ORM\ManyToOne(inversedBy: 'collectionCommandes')]
+    #[ORM\ManyToOne(inversedBy: 'commandes')]
     private ?Collections $collections = null;
 
     /**
