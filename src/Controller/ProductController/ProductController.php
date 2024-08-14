@@ -6,6 +6,10 @@ use App\Entity\Commande;
 use App\Entity\Color;
 use App\Entity\Size;
 use App\Entity\Style;
+use App\Entity\Product;
+use App\Entity\Categories;
+use Cocur\Slugify\Slugify;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
@@ -131,4 +135,101 @@ class ProductController extends AbstractController
         }
         return  $categoryNames; // Retourne les noms des catégories sous forme de chaîne
     }
+   
+    #[Route('/api/commandes/{id}/products', name: 'create_product_by_commande', methods: ['POST'])]
+    public function createProductByCommande(Commande $commande, Request $request): JsonResponse
+    {
+        // Création du produit et définition de ses propriétés
+        $product = new Product();
+        $product->setName($request->get('name'));
+        $product->setDescription($request->get('description'));
+        $product->setPurchasePrice($request->get('purchasePrice'));
+        $product->setCoefficientMultiplier($request->get('coefficientMultiplier'));
+        $product->setCommande($commande);
+    
+        // Ajout du style au produit
+        $styleId = $request->get('style_id');
+        if ($styleId) {
+            $style = $this->entityManager->getRepository(Style::class)->find($styleId);
+            if ($style) {
+                $product->setStyle($style);
+            } else {
+                return new JsonResponse(['error' => 'Style not found'], JsonResponse::HTTP_BAD_REQUEST);
+            }
+        }
+    
+        // Ajout des catégories au produit
+        $categoryIds = $request->get('category_ids', []);
+        if (is_string($categoryIds)) {
+            $categoryIds = explode(',', $categoryIds);
+        }
+    
+        if (!empty($categoryIds)) {
+            foreach ($categoryIds as $categoryId) {
+                $category = $this->entityManager->getRepository(Categories::class)->find($categoryId);
+                if ($category) {
+                    $product->addCategory($category);
+                } else {
+                    return new JsonResponse(['error' => 'Category not found for ID: ' . $categoryId], JsonResponse::HTTP_BAD_REQUEST);
+                }
+            }
+        }
+    
+        // Générer le slug à partir du name
+        $slugify = new Slugify();
+        $slug = $slugify->slugify($request->get('name'));
+        $product->setSlug($slug);
+    
+        // Gestion de l'upload d'image
+        $imageFile = $request->files->get('image');
+        if ($imageFile) {
+            $newFilename = uniqid() . '.' . $imageFile->guessExtension();
+    
+            try {
+                $imageFile->move(
+                    $this->getParameter('kernel.project_dir') . '/public/assets/uploads/products/',
+                    $newFilename
+                );
+            } catch (FileException $e) {
+                return new JsonResponse(['error' => 'Could not upload file'], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
+            }
+    
+            $product->setImage($newFilename);
+        }
+    
+        // Persist and flush the product entity
+        $this->entityManager->persist($product);
+        try {
+            $this->entityManager->flush();
+        } catch (\Exception $e) {
+            return new JsonResponse(['error' => 'Failed to save product: ' . $e->getMessage()], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    
+        // Construction manuelle de la réponse
+        $productData = [
+            'id' => $product->getId(),
+            'name' => $product->getName(),
+            'description' => $product->getDescription(),
+            'moreinformations' => $product->getMoreinformations(),
+            'price' => $product->getPrice(),
+            'isbestseller' => $product->isIsbestseller(),
+            'isnewarrival' => $product->isIsnewarrival(),
+            'isfeatured' => $product->isIsfeatured(),
+            'isspecialoffer' => $product->isIsspecialoffer(),
+            'image' => $product->getImage(),
+            'quantity' => $product->getQuantity(),
+            'createdAt' => $product->getCreatedAt()->format('Y-m-d H:i:s'),
+            'tags' => $product->getTags(),
+            'slug' => $product->getSlug(),
+            'purchasePrice' => $product->getPurchasePrice(),
+            'coefficientMultiplier' => $product->getCoefficientMultiplier(),
+            'barcode' => $product->getBarcode(),
+            'style' => $product->getStyle() ? $product->getStyle()->getName() : null,
+            'category' => $this->getCategoryNames($product->getCategory()),
+            'commande' => $product->getCommande() ? $product->getCommande()->getName() : null,
+        ];
+    
+        return $this->json($productData, JsonResponse::HTTP_CREATED);
+    }
+    
 }

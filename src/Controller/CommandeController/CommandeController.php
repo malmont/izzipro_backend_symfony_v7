@@ -27,7 +27,7 @@ class CommandeController extends AbstractController
     {
         $commandes = $this->entityManager->getRepository(Collections::class)
             ->find($collection->getId())
-            ->getCollectionCommande();
+            ->getCommandes();
 
         // Pour s'assurer que les commandes sont initialisées
         $commandes = $commandes->getValues();

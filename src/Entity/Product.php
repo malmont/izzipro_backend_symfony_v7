@@ -4,6 +4,7 @@ namespace App\Entity;
 use DateTime;
 use App\Entity\Categories;
 use Doctrine\DBAL\Types\Types;
+use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use App\Repository\ProductRepository;
 use Doctrine\Common\Collections\Collection;
@@ -25,7 +26,7 @@ class Product
     private ?string $description = null;
 
     #[ORM\Column(type: Types::TEXT)]
-    private ?string $moreinformations = null;
+    private ?string $moreinformations =  '';
 
     #[ORM\Column]
     private ?float $price = null;

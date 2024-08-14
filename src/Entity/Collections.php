@@ -43,11 +43,11 @@ class Collections
      * @var Collection<int, Commande>
      */
     #[ORM\OneToMany(mappedBy: 'collections', targetEntity: Commande::class)]
-    private Collection $CollectionCommande;
+    private Collection $commandes;
 
     public function __construct()
     {
-        $this->CollectionCommande = new ArrayCollection();
+        $this->commandes = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -142,27 +142,27 @@ class Collections
     /**
      * @return Collection<int, Commande>
      */
-    public function getCollectionCommande(): Collection
+    public function getCommandes(): Collection
     {
-        return $this->CollectionCommande;
+        return $this->commandes;
     }
 
-    public function addCollectionCommande(Commande $collectionCommande): static
+    public function addCommande(Commande $commande): static
     {
-        if (!$this->CollectionCommande->contains($collectionCommande)) {
-            $this->CollectionCommande->add($collectionCommande);
-            $collectionCommande->setCollections($this);
+        if (!$this->commandes->contains($commande)) {
+            $this->commandes->add($commande);
+            $commande->setCollections($this);
         }
 
         return $this;
     }
 
-    public function removeCollectionCommande(Commande $collectionCommande): static
+    public function removeCommande(Commande $commande): static
     {
-        if ($this->CollectionCommande->removeElement($collectionCommande)) {
+        if ($this->commandes->removeElement($commande)) {
             // set the owning side to null (unless already changed)
-            if ($collectionCommande->getCollections() === $this) {
-                $collectionCommande->setCollections(null);
+            if ($commande->getCollections() === $this) {
+                $commande->setCollections(null);
             }
         }
 
