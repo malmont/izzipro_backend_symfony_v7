@@ -231,5 +231,24 @@ class ProductController extends AbstractController
     
         return $this->json($productData, JsonResponse::HTTP_CREATED);
     }
+
+    #[Route('/api/products/{id}', name: 'delete_product', methods: ['DELETE'])]
+    public function deleteProduct(int $id): JsonResponse
+    {
+        $product = $this->entityManager->getRepository(Product::class)->find($id);
+
+        if (!$product) {
+            return new JsonResponse(['error' => 'Product not found'], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        try {
+            $this->entityManager->remove($product);
+            $this->entityManager->flush();
+        } catch (\Exception $e) {
+            return new JsonResponse(['error' => 'Failed to delete product: ' . $e->getMessage()], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        return new JsonResponse(['success' => 'Product deleted'], JsonResponse::HTTP_OK);
+    }
     
 }
