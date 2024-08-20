@@ -17,6 +17,7 @@ use App\Entity\Collections;
 use App\Entity\Commande;
 use App\Entity\User;
 use App\Entity\NoteDeFrais;
+use App\Entity\Fournisseur;
 use App\Controller\Admin\OrderCrudController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -59,5 +60,6 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Sizes', 'fas fa-ruler', Size::class);
         yield MenuItem::linkToCrud('Product Variants', 'fas fa-boxes', ProductVariant::class);
         yield MenuItem::linkToCrud('Notes de Frais', 'fas fa-receipt', NoteDeFrais::class);
+        yield MenuItem::linkToCrud('Fournisseurs', 'fas fa-truck', Fournisseur::class);
     }
 }

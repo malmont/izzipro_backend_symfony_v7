@@ -39,9 +39,16 @@ class Commande
     #[ORM\OneToMany(mappedBy: 'commande', targetEntity: Product::class, cascade: ['persist', 'remove'])]
     private Collection $products;
 
+    /**
+     * @var Collection<int, Fournisseur>
+     */
+    #[ORM\OneToMany(mappedBy: 'commandes', targetEntity: Fournisseur::class)]
+    private Collection $fournisseurs;
+
     public function __construct()
     {
         $this->products = new ArrayCollection();
+        $this->fournisseurs = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -142,5 +149,35 @@ class Commande
     public function __toString(): string
     {
         return (string) $this->name;
+    }
+
+    /**
+     * @return Collection<int, Fournisseur>
+     */
+    public function getFournisseurs(): Collection
+    {
+        return $this->fournisseurs;
+    }
+
+    public function addFournisseur(Fournisseur $fournisseur): static
+    {
+        if (!$this->fournisseurs->contains($fournisseur)) {
+            $this->fournisseurs->add($fournisseur);
+            $fournisseur->setCommandes($this);
+        }
+
+        return $this;
+    }
+
+    public function removeFournisseur(Fournisseur $fournisseur): static
+    {
+        if ($this->fournisseurs->removeElement($fournisseur)) {
+            // set the owning side to null (unless already changed)
+            if ($fournisseur->getCommandes() === $this) {
+                $fournisseur->setCommandes(null);
+            }
+        }
+
+        return $this;
     }
 }
