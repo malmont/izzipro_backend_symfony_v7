@@ -45,9 +45,16 @@ class Collections
     #[ORM\OneToMany(mappedBy: 'collections', targetEntity: Commande::class)]
     private Collection $commandes;
 
+    /**
+     * @var Collection<int, NoteDeFrais>
+     */
+    #[ORM\OneToMany(mappedBy: 'Collection', targetEntity: NoteDeFrais::class)]
+    private Collection $noteDeFrais;
+
     public function __construct()
     {
         $this->commandes = new ArrayCollection();
+        $this->noteDeFrais = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -171,5 +178,35 @@ class Collections
     public function __toString(): string
     {
         return $this->nomCollection;
+    }
+
+    /**
+     * @return Collection<int, NoteDeFrais>
+     */
+    public function getNoteDeFrais(): Collection
+    {
+        return $this->noteDeFrais;
+    }
+
+    public function addNoteDeFrai(NoteDeFrais $noteDeFrai): static
+    {
+        if (!$this->noteDeFrais->contains($noteDeFrai)) {
+            $this->noteDeFrais->add($noteDeFrai);
+            $noteDeFrai->setCollection($this);
+        }
+
+        return $this;
+    }
+
+    public function removeNoteDeFrai(NoteDeFrais $noteDeFrai): static
+    {
+        if ($this->noteDeFrais->removeElement($noteDeFrai)) {
+            // set the owning side to null (unless already changed)
+            if ($noteDeFrai->getCollection() === $this) {
+                $noteDeFrai->setCollection(null);
+            }
+        }
+
+        return $this;
     }
 }
