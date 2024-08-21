@@ -18,47 +18,45 @@ class FournisseurController extends AbstractController
         $this->entityManager = $entityManager;
     }
 
-    #[Route('/api/commandes/{id}/fournisseurs', name: 'get_fournisseurs_by_commande', methods: ['GET'])]
-        public function getFournisseursByCommande(Commande $commande): JsonResponse
-        {
-            $fournisseurs = $commande->getFournisseurs();
+    #[Route('/api/fournisseurs', name: 'get_all_fournisseurs', methods: ['GET'])]
+    public function getAllFournisseurs(): JsonResponse
+    {
+        $fournisseurs = $this->entityManager->getRepository(Fournisseur::class)->findAll();
 
-            $fournisseursArray = [];
-            foreach ($fournisseurs as $fournisseur) {
-                $fournisseursArray[] = [
-                    'id' => $fournisseur->getId(),
-                    'name' => $fournisseur->getName(),
-                    'photo' => $fournisseur->getPhoto(),
-                    'adresse' => $fournisseur->getAdresse(),
-                    'ville' => $fournisseur->getVille(),
-                    'pays' => $fournisseur->getPays(),
-                    'tel' => $fournisseur->getTel(),
-                ];
-            }
+        $fournisseursArray = [];
+        foreach ($fournisseurs as $fournisseur) {
+            $fournisseursArray[] = [
+                'id' => $fournisseur->getId(),
+                'name' => $fournisseur->getName(),
+                'photo' => $fournisseur->getPhoto(),
+                'adresse' => $fournisseur->getAdresse(),
+                'ville' => $fournisseur->getVille(),
+                'pays' => $fournisseur->getPays(),
+                'tel' => $fournisseur->getTel(),
+            ];
+        }
 
-            return $this->json($fournisseursArray, JsonResponse::HTTP_OK);
-        }
+        return $this->json($fournisseursArray, JsonResponse::HTTP_OK);
+    }
+
+    #[Route('/api/fournisseurs', name: 'create_fournisseur', methods: ['POST'])]
+    public function createFournisseur(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
         
-        #[Route('/api/commandes/{id}/fournisseurs', name: 'create_fournisseur', methods: ['POST'])]
-        public function createFournisseur(Commande $commande, Request $request): JsonResponse
-        {
-            $data = json_decode($request->getContent(), true);
-        
-            $fournisseur = new Fournisseur();
-            $fournisseur->setName($data['name'] ?? null);
-            $fournisseur->setPhoto($data['photo'] ?? null);
-            $fournisseur->setAdresse($data['adresse'] ?? null);
-            $fournisseur->setVille($data['ville'] ?? null);
-            $fournisseur->setPays($data['pays'] ?? null);
-            $fournisseur->setTel($data['tel'] ?? null);
-            $fournisseur->setCommandes($commande);
-        
-            $this->entityManager->persist($fournisseur);
-            $this->entityManager->flush();
-        
-            return $this->json(['success' => 'Fournisseur créé avec succès', 'fournisseur_id' => $fournisseur->getId()], JsonResponse::HTTP_CREATED);
-        }
-        
+        $fournisseur = new Fournisseur();
+        $fournisseur->setName($data['name'] ?? null);
+        $fournisseur->setPhoto($data['photo'] ?? null);
+        $fournisseur->setAdresse($data['adresse'] ?? null);
+        $fournisseur->setVille($data['ville'] ?? null);
+        $fournisseur->setPays($data['pays'] ?? null);
+        $fournisseur->setTel($data['tel'] ?? null);
+
+        $this->entityManager->persist($fournisseur);
+        $this->entityManager->flush();
+
+        return $this->json(['success' => 'Fournisseur créé avec succès', 'fournisseur_id' => $fournisseur->getId()], JsonResponse::HTTP_CREATED);
+    }
 
     #[Route('/api/fournisseurs/{id}', name: 'delete_fournisseur', methods: ['DELETE'])]
     public function deleteFournisseur(Fournisseur $fournisseur): JsonResponse
@@ -66,6 +64,6 @@ class FournisseurController extends AbstractController
         $this->entityManager->remove($fournisseur);
         $this->entityManager->flush();
 
-        return $this->json(['success' => 'Fournisseur deleted'], JsonResponse::HTTP_NO_CONTENT);
+        return $this->json(['success' => 'Fournisseur supprimé avec succès'], JsonResponse::HTTP_NO_CONTENT);
     }
 }

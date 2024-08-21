@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Entity;
 
 use ApiPlatform\Metadata\ApiResource;
@@ -32,18 +31,13 @@ class Commande
 
     #[ORM\ManyToOne(inversedBy: 'commandes')]
     private ?Collections $collections = null;
-
     /**
      * @var Collection<int, Product>
      */
     #[ORM\OneToMany(mappedBy: 'commande', targetEntity: Product::class, cascade: ['persist', 'remove'])]
     private Collection $products;
-
-    /**
-     * @var Collection<int, Fournisseur>
-     */
-    #[ORM\OneToMany(mappedBy: 'commandes', targetEntity: Fournisseur::class)]
-    private Collection $fournisseurs;
+    #[ORM\ManyToOne(inversedBy: 'commandes')]
+    private ?Fournisseur $fournisseur = null;
 
     #[ORM\OneToOne(mappedBy: 'commande', cascade: ['persist', 'remove'])]
     private ?FraisDePort $fraisDePort = null;
@@ -51,7 +45,6 @@ class Commande
     public function __construct()
     {
         $this->products = new ArrayCollection();
-        $this->fournisseurs = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -119,6 +112,7 @@ class Commande
         return $this;
     }
 
+
     /**
      * @return Collection<int, Product>
      */
@@ -153,33 +147,14 @@ class Commande
     {
         return (string) $this->name;
     }
-
-    /**
-     * @return Collection<int, Fournisseur>
-     */
-    public function getFournisseurs(): Collection
+    public function getFournisseur(): ?Fournisseur
     {
-        return $this->fournisseurs;
+        return $this->fournisseur;
     }
 
-    public function addFournisseur(Fournisseur $fournisseur): static
+    public function setFournisseur(?Fournisseur $fournisseur): static
     {
-        if (!$this->fournisseurs->contains($fournisseur)) {
-            $this->fournisseurs->add($fournisseur);
-            $fournisseur->setCommandes($this);
-        }
-
-        return $this;
-    }
-
-    public function removeFournisseur(Fournisseur $fournisseur): static
-    {
-        if ($this->fournisseurs->removeElement($fournisseur)) {
-            // set the owning side to null (unless already changed)
-            if ($fournisseur->getCommandes() === $this) {
-                $fournisseur->setCommandes(null);
-            }
-        }
+        $this->fournisseur = $fournisseur;
 
         return $this;
     }
@@ -191,12 +166,10 @@ class Commande
 
     public function setFraisDePort(?FraisDePort $fraisDePort): static
     {
-        // unset the owning side of the relation if necessary
         if ($fraisDePort === null && $this->fraisDePort !== null) {
             $this->fraisDePort->setCommande(null);
         }
 
-        // set the owning side of the relation if necessary
         if ($fraisDePort !== null && $fraisDePort->getCommande() !== $this) {
             $fraisDePort->setCommande($this);
         }

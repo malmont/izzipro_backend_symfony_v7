@@ -2,6 +2,8 @@
 
 namespace App\Entity;
 
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use App\Repository\FournisseurRepository;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -31,8 +33,13 @@ class Fournisseur
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $tel = null;
 
-    #[ORM\ManyToOne(inversedBy: 'fournisseurs')]
-    private ?Commande $commandes = null;
+    #[ORM\OneToMany(mappedBy: 'fournisseur', targetEntity: Commande::class)]
+    private Collection $commandes;
+
+    public function __construct()
+    {
+        $this->commandes = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -111,15 +118,37 @@ class Fournisseur
         return $this;
     }
 
-    public function getCommandes(): ?Commande
+    /**
+     * @return Collection<int, Commande>
+     */
+    public function getCommandes(): Collection
     {
         return $this->commandes;
     }
 
-    public function setCommandes(?Commande $commandes): static
+    public function addCommande(Commande $commande): static
     {
-        $this->commandes = $commandes;
+        if (!$this->commandes->contains($commande)) {
+            $this->commandes->add($commande);
+            $commande->setFournisseur($this);
+        }
 
         return $this;
+    }
+
+    public function removeCommande(Commande $commande): static
+    {
+        if ($this->commandes->removeElement($commande)) {
+            if ($commande->getFournisseur() === $this) {
+                $commande->setFournisseur(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function __toString(): string
+    {
+        return $this->name;
     }
 }

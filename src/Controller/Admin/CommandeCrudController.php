@@ -29,7 +29,8 @@ class CommandeCrudController extends AbstractCrudController
             ImageField::new('photo', 'Photo')
                 ->setBasePath('')
                 ->onlyOnIndex(),
-                AssociationField::new('collections', 'Collections')
+            AssociationField::new('collections', 'Collections'),
+            AssociationField::new('fournisseur', 'Fournisseur Associé'),
         ];
     }
 }

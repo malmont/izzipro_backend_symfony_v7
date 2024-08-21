@@ -30,7 +30,6 @@ class FournisseurCrudController extends AbstractCrudController
             TextField::new('ville', 'Ville'),
             TextField::new('pays', 'Pays'),
             TextField::new('tel', 'Téléphone'),
-            AssociationField::new('commandes', 'Commande Associée'),
         ];
     }
 }

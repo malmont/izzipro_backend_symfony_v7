@@ -1,9 +1,9 @@
 <?php
 namespace App\Controller\CommandeController;
 
-
 use App\Entity\Collections;
 use App\Entity\Commande;
+use App\Entity\Fournisseur;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -29,12 +29,9 @@ class CommandeController extends AbstractController
             ->find($collection->getId())
             ->getCommandes();
 
-        // Pour s'assurer que les commandes sont initialisées
-        $commandes = $commandes->getValues();
-
-        // Convertir les objets de commande en tableau pour une meilleure lisibilité
         $commandesArray = [];
         foreach ($commandes as $commande) {
+            $fournisseur = $commande->getFournisseur();
             $commandesArray[] = [
                 'id' => $commande->getId(),
                 'budget' => $commande->getBudget(),
@@ -42,6 +39,15 @@ class CommandeController extends AbstractController
                 'name' => $commande->getName(),
                 'photo' => $commande->getPhoto(),
                 'collectionId' => $commande->getCollections()->getId(),
+                'fournisseur' => $fournisseur ? [
+                    'id' => $fournisseur->getId(),
+                    'name' => $fournisseur->getName(),
+                    'photo' => $fournisseur->getPhoto(),
+                    'adresse' => $fournisseur->getAdresse(),
+                    'ville' => $fournisseur->getVille(),
+                    'pays' => $fournisseur->getPays(),
+                    'tel' => $fournisseur->getTel(),
+                ] : null,
             ];
         }
 
@@ -51,9 +57,7 @@ class CommandeController extends AbstractController
     #[Route('/api/collections/{id}/commandes', name: 'create_commande', methods: ['POST'])]
     public function createCommande(Request $request, Collections $collection): JsonResponse
     {
-       
         $data = json_decode($request->getContent(), true);
-        // dd($data);
         $currentUser = $this->security->getUser();
         if (!$currentUser) {
             return $this->json(['error' => 'Unauthenticated'], JsonResponse::HTTP_UNAUTHORIZED);
@@ -66,9 +70,107 @@ class CommandeController extends AbstractController
         $commande->setPhoto($data['photo']);
         $commande->setCollections($collection);
 
+        // Associer l'objet fournisseur à la commande
+        if (isset($data['fournisseur'])) {
+            $fournisseurData = $data['fournisseur'];
+
+            // Rechercher un fournisseur existant ou en créer un nouveau
+            $fournisseur = $this->entityManager->getRepository(Fournisseur::class)->findOneBy([
+                'name' => $fournisseurData['name'],
+                'adresse' => $fournisseurData['adresse'],
+                'ville' => $fournisseurData['ville'],
+                'pays' => $fournisseurData['pays'],
+                'tel' => $fournisseurData['tel']
+            ]);
+
+            if (!$fournisseur) {
+                $fournisseur = new Fournisseur();
+                $fournisseur->setName($fournisseurData['name']);
+                $fournisseur->setPhoto($fournisseurData['photo']);
+                $fournisseur->setAdresse($fournisseurData['adresse']);
+                $fournisseur->setVille($fournisseurData['ville']);
+                $fournisseur->setPays($fournisseurData['pays']);
+                $fournisseur->setTel($fournisseurData['tel']);
+
+                $this->entityManager->persist($fournisseur);
+            }
+
+            $commande->setFournisseur($fournisseur);
+        }
+
         $this->entityManager->persist($commande);
         $this->entityManager->flush();
 
-        return $this->json($commande, JsonResponse::HTTP_CREATED, [], ['groups' => 'commande:read']);
+        // Inclure l'objet fournisseur dans la réponse
+        $fournisseur = $commande->getFournisseur();
+        $commandeArray = [
+            'id' => $commande->getId(),
+            'budget' => $commande->getBudget(),
+            'date' => $commande->getDate()->format('Y-m-d H:i:s'),
+            'name' => $commande->getName(),
+            'photo' => $commande->getPhoto(),
+            'collectionId' => $commande->getCollections()->getId(),
+            'fournisseur' => $fournisseur ? [
+                'id' => $fournisseur->getId(),
+                'name' => $fournisseur->getName(),
+                'photo' => $fournisseur->getPhoto(),
+                'adresse' => $fournisseur->getAdresse(),
+                'ville' => $fournisseur->getVille(),
+                'pays' => $fournisseur->getPays(),
+                'tel' => $fournisseur->getTel(),
+            ] : null,
+        ];
+
+        return $this->json($commandeArray, JsonResponse::HTTP_CREATED);
+    }
+
+    // Ajouter une méthode pour mettre à jour le fournisseur d'une commande existante
+    #[Route('/api/commandes/{id}/fournisseur', name: 'update_commande_fournisseur', methods: ['PUT'])]
+    public function updateCommandeFournisseur(Request $request, Commande $commande): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+
+        if (isset($data['fournisseur'])) {
+            $fournisseurData = $data['fournisseur'];
+
+            // Rechercher un fournisseur existant ou en créer un nouveau
+            $fournisseur = $this->entityManager->getRepository(Fournisseur::class)->findOneBy([
+                'name' => $fournisseurData['name'],
+                'adresse' => $fournisseurData['adresse'],
+                'ville' => $fournisseurData['ville'],
+                'pays' => $fournisseurData['pays'],
+                'tel' => $fournisseurData['tel']
+            ]);
+
+            if (!$fournisseur) {
+                $fournisseur = new Fournisseur();
+                $fournisseur->setName($fournisseurData['name']);
+                $fournisseur->setPhoto($fournisseurData['photo']);
+                $fournisseur->setAdresse($fournisseurData['adresse']);
+                $fournisseur->setVille($fournisseurData['ville']);
+                $fournisseur->setPays($fournisseurData['pays']);
+                $fournisseur->setTel($fournisseurData['tel']);
+
+                $this->entityManager->persist($fournisseur);
+            }
+
+            $commande->setFournisseur($fournisseur);
+            $this->entityManager->flush();
+
+            return $this->json([
+                'success' => 'Fournisseur mis à jour avec succès',
+                'fournisseur' => [
+                    'id' => $fournisseur->getId(),
+                    'name' => $fournisseur->getName(),
+                    'photo' => $fournisseur->getPhoto(),
+                    'adresse' => $fournisseur->getAdresse(),
+                    'ville' => $fournisseur->getVille(),
+                    'pays' => $fournisseur->getPays(),
+                    'tel' => $fournisseur->getTel(),
+                ],
+            ], JsonResponse::HTTP_OK);
+        }
+
+        return $this->json(['error' => 'Fournisseur non trouvé'], JsonResponse::HTTP_BAD_REQUEST);
     }
 }
