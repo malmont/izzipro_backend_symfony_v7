@@ -45,6 +45,9 @@ class Commande
     #[ORM\OneToMany(mappedBy: 'commandes', targetEntity: Fournisseur::class)]
     private Collection $fournisseurs;
 
+    #[ORM\OneToOne(mappedBy: 'commande', cascade: ['persist', 'remove'])]
+    private ?FraisDePort $fraisDePort = null;
+
     public function __construct()
     {
         $this->products = new ArrayCollection();
@@ -177,6 +180,28 @@ class Commande
                 $fournisseur->setCommandes(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getFraisDePort(): ?FraisDePort
+    {
+        return $this->fraisDePort;
+    }
+
+    public function setFraisDePort(?FraisDePort $fraisDePort): static
+    {
+        // unset the owning side of the relation if necessary
+        if ($fraisDePort === null && $this->fraisDePort !== null) {
+            $this->fraisDePort->setCommande(null);
+        }
+
+        // set the owning side of the relation if necessary
+        if ($fraisDePort !== null && $fraisDePort->getCommande() !== $this) {
+            $fraisDePort->setCommande($this);
+        }
+
+        $this->fraisDePort = $fraisDePort;
 
         return $this;
     }
