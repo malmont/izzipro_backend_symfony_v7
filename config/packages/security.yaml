@@ -52,6 +52,8 @@ security:
         - { path: ^/checkout, roles: ROLE_USER }
         - { path: ^/api/login, roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/products/by-category, roles: PUBLIC_ACCESS }
+        - { path: ^/api/category, roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: ROLE_USER }
 
 when@test:
