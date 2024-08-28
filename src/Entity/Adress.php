@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Entity;
 
 use App\Repository\AdressRepository;
@@ -7,12 +6,19 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: AdressRepository::class)]
+#[ORM\HasLifecycleCallbacks] // Ajout de l'annotation pour les callbacks
 class Adress
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
     private ?int $id = null;
+
+    #[ORM\Column(length: 255)]
+    private ?string $firstname = null;
+
+    #[ORM\Column(length: 255)]
+    private ?string $lastname = null;
 
     #[ORM\Column(length: 255)]
     private ?string $fullname = null;
@@ -47,6 +53,30 @@ class Adress
         return $this->id;
     }
 
+    public function getFirstname(): ?string
+    {
+        return $this->firstname;
+    }
+
+    public function setFirstname(string $firstname): self
+    {
+        $this->firstname = $firstname;
+        $this->updateFullname(); // Mise à jour du fullname
+        return $this;
+    }
+
+    public function getLastname(): ?string
+    {
+        return $this->lastname;
+    }
+
+    public function setLastname(string $lastname): self
+    {
+        $this->lastname = $lastname;
+        $this->updateFullname(); // Mise à jour du fullname
+        return $this;
+    }
+
     public function getFullname(): ?string
     {
         return $this->fullname;
@@ -55,7 +85,6 @@ class Adress
     public function setFullname(string $fullname): self
     {
         $this->fullname = $fullname;
-
         return $this;
     }
 
@@ -67,7 +96,6 @@ class Adress
     public function setCompany(?string $company): self
     {
         $this->company = $company;
-
         return $this;
     }
 
@@ -79,7 +107,6 @@ class Adress
     public function setAddress(string $address): self
     {
         $this->address = $address;
-
         return $this;
     }
 
@@ -91,7 +118,6 @@ class Adress
     public function setComplement(?string $complement): self
     {
         $this->complement = $complement;
-
         return $this;
     }
 
@@ -103,7 +129,6 @@ class Adress
     public function setPhone(int $phone): self
     {
         $this->phone = $phone;
-
         return $this;
     }
 
@@ -115,7 +140,6 @@ class Adress
     public function setCity(string $city): self
     {
         $this->city = $city;
-
         return $this;
     }
 
@@ -127,7 +151,6 @@ class Adress
     public function setCodepostal(int $codepostal): self
     {
         $this->codepostal = $codepostal;
-
         return $this;
     }
 
@@ -139,7 +162,6 @@ class Adress
     public function setCountry(string $country): self
     {
         $this->country = $country;
-
         return $this;
     }
 
@@ -151,20 +173,26 @@ class Adress
     public function setUserAdress(?User $userAdress): self
     {
         $this->userAdress = $userAdress;
-
         return $this;
+    }
+
+    #[ORM\PrePersist]
+    #[ORM\PreUpdate]
+    public function updateFullname(): void
+    {
+        $this->fullname = $this->lastname . ' ' . $this->firstname;
     }
 
     public function __toString()
     {
-        $result = $this->fullname. "[spr]";
-        if($this->getCompany()){
-            $result .=$this->company. "[spr]";
+        $result = $this->fullname . "[spr]";
+        if ($this->getCompany()) {
+            $result .= $this->company . "[spr]";
         }
-        $result .= $this->address. "[spr]";
-        $result .= $this->complement. "[spr]";
-        $result .= $this->codepostal. " - " .$this->city. "[spr]";
-        $result .= $this->country. "[spr]";
+        $result .= $this->address . "[spr]";
+        $result .= $this->complement . "[spr]";
+        $result .= $this->codepostal . " - " . $this->city . "[spr]";
+        $result .= $this->country . "[spr]";
 
         return $result;
     }

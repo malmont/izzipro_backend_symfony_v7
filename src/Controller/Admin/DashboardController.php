@@ -20,6 +20,7 @@ use App\Entity\NoteDeFrais;
 use App\Entity\Fournisseur;
 use App\Entity\Transporteur;
 use App\Entity\FraisDePort;
+use App\Entity\Adress;
 use App\Controller\Admin\OrderCrudController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -65,5 +66,6 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Fournisseurs', 'fas fa-truck', Fournisseur::class);
         yield MenuItem::linkToCrud('Transporteurs', 'fas fa-truck', Transporteur::class);
         yield MenuItem::linkToCrud('Frais de Port', 'fas fa-shipping-fast', FraisDePort::class);
+        yield MenuItem::linkToCrud('Adresse user', 'fas fa-shipping-fast', Adress::class);
     }
 }
