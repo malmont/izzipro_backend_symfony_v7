@@ -30,6 +30,9 @@ class Carrier
     #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
     private ?\DateTimeInterface $updateAt = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $photo = null;
+
 
     public function __construct()
     {
@@ -109,5 +112,17 @@ class Carrier
         $result .= $this->description. "[spr]";
         $result .= "price: $" .($this->price/100). "[spr]";
         return $result;
+    }
+
+    public function getPhoto(): ?string
+    {
+        return $this->photo;
+    }
+
+    public function setPhoto(?string $photo): static
+    {
+        $this->photo = $photo;
+
+        return $this;
     }
 }
