@@ -20,52 +20,66 @@ class Order
     #[ORM\Column(length: 255)]
     private ?string $reference = null;
 
-    #[ORM\Column(length: 255)]
-    private ?string $fullname = null;
+    #[ORM\ManyToOne(inversedBy: 'userOrders')]
+    private ?User $userId = null;
 
-    #[ORM\Column(length: 255)]
-    private ?string $carriername = null;
-
-    #[ORM\Column]
-    private ?float $carrierprice = null;
-
-    #[ORM\Column(type: Types::TEXT)]
-    private ?string $deleveryaddress = null;
+    #[ORM\Column(type: Types::DATE_MUTABLE)]
+    private ?\DateTimeInterface $orderDate = null;
 
     #[ORM\Column]
-    private ?bool $ispaid = false;
+    private ?float $totalAmount = null;
 
-    #[ORM\Column(type: Types::TEXT, nullable: true)]
-    private ?string $moreinformations = null;
+    #[ORM\ManyToOne(inversedBy: 'orders')]
+    private ?Adress $shippingAdress = null;
 
-    #[ORM\Column(type: Types::DATETIME_MUTABLE)]
-    private ?\DateTimeInterface $createdAt = null;
+    #[ORM\ManyToOne(inversedBy: 'orders')]
+    private ?OrderSource $orderSource = null;
 
-    #[ORM\OneToMany(mappedBy: 'orders', targetEntity: OrderDetails::class)]
-    private Collection $orderDetails;
+    /**
+     * @var Collection<int, OrderItems>
+     */
+    #[ORM\OneToMany(mappedBy: 'orderAssociated', targetEntity: OrderItems::class)]
+    private Collection $orderItems;
+
+    /**
+     * @var Collection<int, Payments>
+     */
+    #[ORM\OneToMany(mappedBy: 'orderPayment', targetEntity: Payments::class)]
+    private Collection $payments;
+
+    /**
+     * @var Collection<int, TransactionCaisse>
+     */
+    #[ORM\OneToMany(mappedBy: 'orderCaisse', targetEntity: TransactionCaisse::class)]
+    private Collection $transactionCaisses;
+
+    #[ORM\ManyToOne(inversedBy: 'orders')]
+    private ?Carrier $carrier = null;
 
     #[ORM\ManyToOne(inversedBy: 'orders')]
     #[ORM\JoinColumn(nullable: false)]
-    private ?User $userOrder = null;
+    private ?StatusCommande $status = null;
 
-    #[ORM\Column]
-    private ?int $quantity = null;
+    #[ORM\Column(nullable: true)]
+    private ?float $subTotal = null;
 
-    #[ORM\Column]
-    private ?float $subTotalHt = null;
+    #[ORM\Column(nullable: true)]
+    private ?float $total_tax = null;
 
-    #[ORM\Column]
-    private ?float $taxe = null;
+    /**
+     * @var Collection<int, OrderTax>
+     */
+    #[ORM\OneToMany(mappedBy: 'orderTax', targetEntity: OrderTax::class)]
+    private Collection $orderTaxes;
 
-    #[ORM\Column]
-    private ?float $subTotalTTC = null;
-
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $StripeCheckoutSessionId = null;
-
+   
     public function __construct()
     {
-        $this->orderDetails = new ArrayCollection();
+        $this->orderItems = new ArrayCollection();
+        $this->payments = new ArrayCollection();
+        $this->transactionCaisses = new ArrayCollection();
+        $this->orderTaxes = new ArrayCollection();
+
     }
 
     public function getId(): ?int
@@ -78,196 +92,245 @@ class Order
         return $this->reference;
     }
 
-    public function setReference(string $reference): self
+    public function setReference(string $reference): static
     {
         $this->reference = $reference;
 
         return $this;
     }
 
-    public function getFullname(): ?string
+    public function getUserId(): ?User
     {
-        return $this->fullname;
+        return $this->userId;
     }
 
-    public function setFullname(string $fullname): self
+    public function setUserId(?User $userId): static
     {
-        $this->fullname = $fullname;
+        $this->userId = $userId;
 
         return $this;
     }
 
-    public function getCarriername(): ?string
+    public function getOrderDate(): ?\DateTimeInterface
     {
-        return $this->carriername;
+        return $this->orderDate;
     }
 
-    public function setCarriername(string $carriername): self
+    public function setOrderDate(\DateTimeInterface $orderDate): static
     {
-        $this->carriername = $carriername;
+        $this->orderDate = $orderDate;
 
         return $this;
     }
 
-    public function getCarrierprice(): ?float
+    public function getTotalAmount(): ?float
     {
-        return $this->carrierprice * 100;
+        return $this->totalAmount;
     }
 
-    public function setCarrierprice(float $carrierprice): self
+    public function setTotalAmount(float $totalAmount): static
     {
-        $this->carrierprice = $carrierprice;
+        $this->totalAmount = $totalAmount;
 
         return $this;
     }
 
-    public function getDeleveryaddress(): ?string
+    public function getShippingAdress(): ?Adress
     {
-        return $this->deleveryaddress;
+        return $this->shippingAdress;
     }
 
-    public function setDeleveryaddress(string $deleveryaddress): self
+    public function setShippingAdress(?Adress $shippingAdress): static
     {
-        $this->deleveryaddress = $deleveryaddress;
+        $this->shippingAdress = $shippingAdress;
 
         return $this;
     }
 
-    public function isIspaid(): ?bool
+    public function getOrderSource(): ?OrderSource
     {
-        return $this->ispaid;
+        return $this->orderSource;
     }
 
-    public function setIspaid(bool $ispaid): self
+    public function setOrderSource(?OrderSource $orderSource): static
     {
-        $this->ispaid = $ispaid;
-
-        return $this;
-    }
-
-    public function getMoreinformations(): ?string
-    {
-        return $this->moreinformations;
-    }
-
-    public function setMoreinformations(?string $moreinformations): self
-    {
-        $this->moreinformations = $moreinformations;
-
-        return $this;
-    }
-
-    public function getCreatedAt(): ?\DateTimeInterface
-    {
-        return $this->createdAt;
-    }
-
-    public function setCreatedAt(\DateTimeInterface $createdAt): self
-    {
-        $this->createdAt = $createdAt;
+        $this->orderSource = $orderSource;
 
         return $this;
     }
 
     /**
-     * @return Collection<int, OrderDetails>
+     * @return Collection<int, OrderItems>
      */
-    public function getOrderDetails(): Collection
+    public function getOrderItems(): Collection
     {
-        return $this->orderDetails;
+        return $this->orderItems;
     }
 
-    public function addOrderDetail(OrderDetails $orderDetail): self
+    public function addOrderItem(OrderItems $orderItem): static
     {
-        if (!$this->orderDetails->contains($orderDetail)) {
-            $this->orderDetails->add($orderDetail);
-            $orderDetail->setOrders($this);
+        if (!$this->orderItems->contains($orderItem)) {
+            $this->orderItems->add($orderItem);
+            $orderItem->setOrderAssociated($this);
         }
 
         return $this;
     }
 
-    public function removeOrderDetail(OrderDetails $orderDetail): self
+    public function removeOrderItem(OrderItems $orderItem): static
     {
-        if ($this->orderDetails->removeElement($orderDetail)) {
+        if ($this->orderItems->removeElement($orderItem)) {
             // set the owning side to null (unless already changed)
-            if ($orderDetail->getOrders() === $this) {
-                $orderDetail->setOrders(null);
+            if ($orderItem->getOrderAssociated() === $this) {
+                $orderItem->setOrderAssociated(null);
             }
         }
 
         return $this;
     }
 
-    public function getUserOrder(): ?User
+    /**
+     * @return Collection<int, Payments>
+     */
+    public function getPayments(): Collection
     {
-        return $this->userOrder;
+        return $this->payments;
     }
 
-    public function setUserOrder(?User $userOrder): self
+    public function addPayment(Payments $payment): static
     {
-        $this->userOrder = $userOrder;
+        if (!$this->payments->contains($payment)) {
+            $this->payments->add($payment);
+            $payment->setOrderPayment($this);
+        }
 
         return $this;
     }
 
-    public function getQuantity(): ?int
+    public function removePayment(Payments $payment): static
     {
-        return $this->quantity;
-    }
-
-    public function setQuantity(int $quantity): self
-    {
-        $this->quantity = $quantity;
+        if ($this->payments->removeElement($payment)) {
+            // set the owning side to null (unless already changed)
+            if ($payment->getOrderPayment() === $this) {
+                $payment->setOrderPayment(null);
+            }
+        }
 
         return $this;
     }
 
-    public function getSubTotalHt(): ?float
+    /**
+     * @return Collection<int, TransactionCaisse>
+     */
+    public function getTransactionCaisses(): Collection
     {
-        return $this->subTotalHt * 100;
+        return $this->transactionCaisses;
     }
 
-    public function setSubTotalHt(float $subTotalHt): self
+    public function addTransactionCaiss(TransactionCaisse $transactionCaiss): static
     {
-        $this->subTotalHt = $subTotalHt *100;
+        if (!$this->transactionCaisses->contains($transactionCaiss)) {
+            $this->transactionCaisses->add($transactionCaiss);
+            $transactionCaiss->setOrderCaisse($this);
+        }
 
         return $this;
     }
 
-    public function getTaxe(): ?float
+    public function removeTransactionCaiss(TransactionCaisse $transactionCaiss): static
     {
-        return $this->taxe *100;
-    }
-
-    public function setTaxe(float $taxe): self
-    {
-        $this->taxe = $taxe;
+        if ($this->transactionCaisses->removeElement($transactionCaiss)) {
+            // set the owning side to null (unless already changed)
+            if ($transactionCaiss->getOrderCaisse() === $this) {
+                $transactionCaiss->setOrderCaisse(null);
+            }
+        }
 
         return $this;
     }
 
-    public function getSubTotalTTC(): ?float
+    public function getCarrier(): ?Carrier
     {
-        return $this->subTotalTTC *100;
+        return $this->carrier;
     }
 
-    public function setSubTotalTTC(float $subTotalTTC): self
+    public function setCarrier(?Carrier $carrier): static
     {
-        $this->subTotalTTC = $subTotalTTC ;
+        $this->carrier = $carrier;
 
         return $this;
     }
 
-    public function getStripeCheckoutSessionId(): ?string
+    public function getStatus(): ?StatusCommande
     {
-        return $this->StripeCheckoutSessionId;
+        return $this->status;
     }
 
-    public function setStripeCheckoutSessionId(?string $StripeCheckoutSessionId): self
+    public function setStatus(?StatusCommande $status): static
     {
-        $this->StripeCheckoutSessionId = $StripeCheckoutSessionId;
+        $this->status = $status;
 
         return $this;
     }
+
+    public function __toString(): string
+    {
+        return $this->reference ?? 'N/A';
+    }
+
+    public function getSubTotal(): ?float
+    {
+        return $this->subTotal;
+    }
+
+    public function setSubTotal(?float $subTotal): static
+    {
+        $this->subTotal = $subTotal;
+
+        return $this;
+    }
+
+    public function getTotalTax(): ?float
+    {
+        return $this->total_tax;
+    }
+
+    public function setTotalTax(?float $total_tax): static
+    {
+        $this->total_tax = $total_tax;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, OrderTax>
+     */
+    public function getOrderTaxes(): Collection
+    {
+        return $this->orderTaxes;
+    }
+
+    public function addOrderTax(OrderTax $orderTax): static
+    {
+        if (!$this->orderTaxes->contains($orderTax)) {
+            $this->orderTaxes->add($orderTax);
+            $orderTax->setOrderTax($this);
+        }
+
+        return $this;
+    }
+
+    public function removeOrderTax(OrderTax $orderTax): static
+    {
+        if ($this->orderTaxes->removeElement($orderTax)) {
+            // set the owning side to null (unless already changed)
+            if ($orderTax->getOrderTax() === $this) {
+                $orderTax->setOrderTax(null);
+            }
+        }
+
+        return $this;
+    }
+
+  
 }

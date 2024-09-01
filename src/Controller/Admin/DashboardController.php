@@ -21,6 +21,20 @@ use App\Entity\Fournisseur;
 use App\Entity\Transporteur;
 use App\Entity\FraisDePort;
 use App\Entity\Adress;
+use App\Entity\TransactionType;
+use App\Entity\OrderItems;
+use App\Entity\MovementType;
+use App\Entity\PaymentMethod;
+use App\Entity\OrderSource;
+use App\Entity\StatusPayment;
+use App\Entity\Caisse;
+use App\Entity\TransactionCaisse;
+use App\Entity\InventoryMovements;
+use App\Entity\Payments;
+use App\Entity\StatusCommande;
+use App\Entity\Tax;
+use App\Entity\OrderTax;
+use App\Controller\Admin\OrderAllCrudController;
 use App\Controller\Admin\OrderCrudController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -49,7 +63,6 @@ class DashboardController extends AbstractDashboardController
     {
         yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
         yield MenuItem::linkToCrud('Product', 'fas fa-shopping-cart', Product::class);
-        yield MenuItem::linkToCrud('Order', 'fas fa-shopping-bag', Order::class);
         yield MenuItem::linkToCrud('Cart', 'fas fa-boxes', Cart::class);
         yield MenuItem::linkToCrud('Categories', 'fas fa-list', Categories::class);
         yield MenuItem::linkToCrud('Carrier', 'fas fa-truck', Carrier::class);
@@ -67,5 +80,23 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Transporteurs', 'fas fa-truck', Transporteur::class);
         yield MenuItem::linkToCrud('Frais de Port', 'fas fa-shipping-fast', FraisDePort::class);
         yield MenuItem::linkToCrud('Adresse user', 'fas fa-shipping-fast', Adress::class);
+        yield MenuItem::linkToCrud('Transaction Type', 'fas fa-exchange-alt', TransactionType::class);
+        yield MenuItem::linkToCrud('Order', 'fas fa-shopping-bag', Order::class);
+        yield MenuItem::linkToCrud('Order Items', 'fas fa-box', OrderItems::class);
+        yield MenuItem::linkToCrud('Types de Mouvement', 'fas fa-exchange-alt', MovementType::class);
+        yield MenuItem::linkToCrud('Méthodes de Paiement', 'fas fa-credit-card', PaymentMethod::class);
+        yield MenuItem::linkToCrud('Sources de Commande', 'fas fa-shopping-cart', OrderSource::class);
+        yield MenuItem::linkToCrud('Statuts de Paiement', 'fas fa-credit-card', StatusPayment::class);
+        yield MenuItem::linkToCrud('Caisse', 'fas fa-cash-register', Caisse::class);
+        yield MenuItem::linkToCrud('Transaction Caisse', 'fas fa-cash-register', TransactionCaisse::class);
+        yield MenuItem::linkToCrud('Inventory Movements', 'fas fa-dolly', InventoryMovements::class);
+        yield MenuItem::linkToCrud('Payments', 'fas fa-credit-card', Payments::class);
+        yield MenuItem::linkToCrud('Status Commandes', 'fas fa-tags', StatusCommande::class);
+        yield MenuItem::linkToCrud('Toutes les Commandes', 'fas fa-list', Order::class)
+                ->setController(OrderAllCrudController::class);
+        yield MenuItem::linkToCrud('Taxes', 'fas fa-percent', Tax::class);
+        yield MenuItem::linkToCrud('Order Taxes', 'fas fa-receipt', OrderTax::class);
+
+
     }
 }

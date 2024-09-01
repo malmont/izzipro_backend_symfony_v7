@@ -10,6 +10,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Core\Security;
+use Symfony\Component\HttpFoundation\JsonResponse;
+
 
 class CollectionController extends AbstractController
 {
@@ -61,4 +63,46 @@ class CollectionController extends AbstractController
 
         return $this->json($collection, Response::HTTP_CREATED, [], ['groups' => 'collection:read']);
     }
+
+    #[Route('/api/collections', name: 'get_collections', methods: ['GET'])]
+    public function getCollections(): JsonResponse
+    {
+        // Récupération de toutes les collections
+        $collections = $this->entityManager->getRepository(Collections::class)->findAll();
+    
+        // Transformation des collections en tableau associatif pour les convertir en JSON
+        $collectionsArray = [];
+        foreach ($collections as $collection) {
+            $user = $collection->getUserCollections(); // Récupération de l'utilisateur associé
+            $collectionsArray[] = [
+                'id' => $collection->getId(),
+                'budgetCollection' => $collection->getBudgetCollection(),
+                'startDateCollection' => $collection->getStartDateCollection()->format('Y-m-d H:i:s'),
+                'endDateCollection' => $collection->getEndDateCollection()->format('Y-m-d H:i:s'),
+                'del' => $collection->isDel(),
+                'nomCollection' => $collection->getNomCollection(),
+                'photoCollection' => $collection->getPhotoCollection(),
+                'user' => $user ? [
+                    'id' => $user->getId(),
+                    'name' => $user->getFirstName() . ' ' . $user->getLastName(),
+                    'email' => $user->getEmail(),
+                ] : null,
+            ];
+        }
+    
+        return $this->json($collectionsArray, 200);
+    }
+    
+    
+    #[Route('/api/collections/{id}', name: 'delete_collection', methods: ['DELETE'])]
+    public function deleteCollection(Collections $collection): JsonResponse
+    {
+        // Suppression de la collection
+        $this->entityManager->remove($collection);
+        $this->entityManager->flush();
+    
+        return $this->json(['message' => 'Collection deleted successfully'], 200);
+    }
+    
+    
 }

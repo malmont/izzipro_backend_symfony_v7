@@ -49,8 +49,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(mappedBy: 'userReview', targetEntity: ReviewsProduct::class)]
     private Collection $reviewsProducts;
 
-    #[ORM\OneToMany(mappedBy: 'userOrder', targetEntity: Order::class)]
-    private Collection $orders;
 
     /**
      * @var Collection<int, Collections>
@@ -58,12 +56,25 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(mappedBy: 'userCollections', targetEntity: Collections::class)]
     private Collection $collections;
 
+    /**
+     * @var Collection<int, Order>
+     */
+    #[ORM\OneToMany(mappedBy: 'userId', targetEntity: Order::class)]
+    private Collection $userOrders;
+
+    /**
+     * @var Collection<int, TransactionCaisse>
+     */
+    #[ORM\OneToMany(mappedBy: 'userCaisse', targetEntity: TransactionCaisse::class)]
+    private Collection $transactionCaisses;
+
     public function __construct()
     {
         $this->adresses = new ArrayCollection();
         $this->reviewsProducts = new ArrayCollection();
-        $this->orders = new ArrayCollection();
         $this->collections = new ArrayCollection();
+        $this->userOrders = new ArrayCollection();
+        $this->transactionCaisses = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -232,31 +243,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    public function getOrders(): Collection
-    {
-        return $this->orders;
-    }
-
-    public function addOrder(Order $order): self
-    {
-        if (!$this->orders->contains($order)) {
-            $this->orders[] = $order;
-            $order->setUserOrder($this);
-        }
-
-        return $this;
-    }
-
-    public function removeOrder(Order $order): self
-    {
-        if ($this->orders->removeElement($order)) {
-            if ($order->getUserOrder() === $this) {
-                $order->setUserOrder(null);
-            }
-        }
-
-        return $this;
-    }
+ 
 
     /**
      * @return Collection<int, Collections>
@@ -295,4 +282,67 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     {
         return $this->firstname . ' ' . $this->lastname;
     }
+
+    /**
+     * @return Collection<int, Order>
+     */
+    public function getUserOrders(): Collection
+    {
+        return $this->userOrders;
+    }
+
+    public function addUserOrder(Order $userOrder): static
+    {
+        if (!$this->userOrders->contains($userOrder)) {
+            $this->userOrders->add($userOrder);
+            $userOrder->setUserId($this);
+        }
+
+        return $this;
+    }
+
+    public function removeUserOrder(Order $userOrder): static
+    {
+        if ($this->userOrders->removeElement($userOrder)) {
+            // set the owning side to null (unless already changed)
+            if ($userOrder->getUserId() === $this) {
+                $userOrder->setUserId(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, TransactionCaisse>
+     */
+    public function getTransactionCaisses(): Collection
+    {
+        return $this->transactionCaisses;
+    }
+
+    public function addTransactionCaiss(TransactionCaisse $transactionCaiss): static
+    {
+        if (!$this->transactionCaisses->contains($transactionCaiss)) {
+            $this->transactionCaisses->add($transactionCaiss);
+            $transactionCaiss->setUserCaisse($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTransactionCaiss(TransactionCaisse $transactionCaiss): static
+    {
+        if ($this->transactionCaisses->removeElement($transactionCaiss)) {
+            // set the owning side to null (unless already changed)
+            if ($transactionCaiss->getUserCaisse() === $this) {
+                $transactionCaiss->setUserCaisse(null);
+            }
+        }
+
+        return $this;
+    }
+
+   
+
 }

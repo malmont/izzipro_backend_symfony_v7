@@ -2,6 +2,8 @@
 
 namespace App\Entity;
 
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\ORM\Event\LifecycleEventArgs;
 use Doctrine\ORM\Event\PostRemoveEventArgs;
@@ -29,6 +31,24 @@ class ProductVariant
 
     #[ORM\Column]
     private ?int $stockQuantity = null;
+
+    /**
+     * @var Collection<int, OrderItems>
+     */
+    #[ORM\OneToMany(mappedBy: 'productVariant', targetEntity: OrderItems::class)]
+    private Collection $orderItems;
+
+    /**
+     * @var Collection<int, InventoryMovements>
+     */
+    #[ORM\OneToMany(mappedBy: 'productVariant', targetEntity: InventoryMovements::class)]
+    private Collection $inventoryMovements;
+
+    public function __construct()
+    {
+        $this->orderItems = new ArrayCollection();
+        $this->inventoryMovements = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -104,5 +124,70 @@ class ProductVariant
             $entityManager->persist($this->product);
             $entityManager->flush();
         }
+    }
+
+    /**
+     * @return Collection<int, OrderItems>
+     */
+    public function getOrderItems(): Collection
+    {
+        return $this->orderItems;
+    }
+
+    public function addOrderItem(OrderItems $orderItem): static
+    {
+        if (!$this->orderItems->contains($orderItem)) {
+            $this->orderItems->add($orderItem);
+            $orderItem->setProductVariant($this);
+        }
+
+        return $this;
+    }
+
+    public function removeOrderItem(OrderItems $orderItem): static
+    {
+        if ($this->orderItems->removeElement($orderItem)) {
+            // set the owning side to null (unless already changed)
+            if ($orderItem->getProductVariant() === $this) {
+                $orderItem->setProductVariant(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, InventoryMovements>
+     */
+    public function getInventoryMovements(): Collection
+    {
+        return $this->inventoryMovements;
+    }
+
+    public function addInventoryMovement(InventoryMovements $inventoryMovement): static
+    {
+        if (!$this->inventoryMovements->contains($inventoryMovement)) {
+            $this->inventoryMovements->add($inventoryMovement);
+            $inventoryMovement->setProductVariant($this);
+        }
+
+        return $this;
+    }
+
+    public function removeInventoryMovement(InventoryMovements $inventoryMovement): static
+    {
+        if ($this->inventoryMovements->removeElement($inventoryMovement)) {
+            // set the owning side to null (unless already changed)
+            if ($inventoryMovement->getProductVariant() === $this) {
+                $inventoryMovement->setProductVariant(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function __toString(): string
+    {
+        return (string)  ' id: ' .$this->id . ' - ' .$this->stockQuantity. ' - '. ($this->product ? $this->product->getName(). ' - ' .$this->color. ' taille ' .$this->size  : 'Sans produit associé');
     }
 }
