@@ -26,6 +26,12 @@ class InventoryMovements
     #[ORM\Column(type: Types::DATE_MUTABLE)]
     private ?\DateTimeInterface $movementDate = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $stockBeforeMovement = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?float $stockAfterMovement = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -75,6 +81,30 @@ class InventoryMovements
     public function setMovementDate(\DateTimeInterface $movementDate): static
     {
         $this->movementDate = $movementDate;
+
+        return $this;
+    }
+
+    public function getStockBeforeMovement(): ?int
+    {
+        return $this->stockBeforeMovement;
+    }
+
+    public function setStockBeforeMovement(?int $stockBeforeMovement): static
+    {
+        $this->stockBeforeMovement = $stockBeforeMovement;
+
+        return $this;
+    }
+
+    public function getStockAfterMovement(): ?float
+    {
+        return $this->stockAfterMovement;
+    }
+
+    public function setStockAfterMovement(?float $stockAfterMovement): static
+    {
+        $this->stockAfterMovement = $stockAfterMovement;
 
         return $this;
     }

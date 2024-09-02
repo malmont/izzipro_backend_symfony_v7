@@ -13,9 +13,17 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\SlugField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 
 class ProductCrudController extends AbstractCrudController
 {
+    private $adminUrlGenerator;
+
+    // Injection du service AdminUrlGenerator via le constructeur
+    public function __construct(AdminUrlGenerator $adminUrlGenerator)
+    {
+        $this->adminUrlGenerator = $adminUrlGenerator;
+    }
     public static function getEntityFqcn(): string
     {
         return Product::class;
@@ -46,6 +54,21 @@ class ProductCrudController extends AbstractCrudController
                 ->setUploadDir('public/assets/uploads/products/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
+
+                AssociationField::new('variants', 'Variantes de Produit')
+                ->formatValue(function ($value, $entity) {
+                    $productVariantsUrl = $this->adminUrlGenerator
+                        ->setController(ProductVariantListController::class)
+                        ->setAction('index')
+                        ->set('productId', $entity->getId())
+                        ->generateUrl();
+
+                    return sprintf(
+                        '<a href="%s" style="text-decoration: none; color: #007bff;">Voir les variantes</a>',
+                        $productVariantsUrl
+                    );
+                })
+                ->renderAsHtml(),
         ];
     }
 }

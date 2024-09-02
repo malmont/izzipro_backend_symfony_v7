@@ -13,16 +13,19 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Security\Core\Security;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 
 class CaisseCrudController extends AbstractCrudController
 {
     private $em;
     private $security;
+    private $adminUrlGenerator;
 
-    public function __construct(EntityManagerInterface $em, Security $security)
+    public function __construct(EntityManagerInterface $em, Security $security,AdminUrlGenerator $adminUrlGenerator)
     {
         $this->em = $em;
         $this->security = $security;
+        $this->adminUrlGenerator = $adminUrlGenerator;
     }
 
     public static function getEntityFqcn(): string
@@ -43,7 +46,20 @@ class CaisseCrudController extends AbstractCrudController
         return [
             NumberField::new('amountTotal', 'Montant Total'),
             DateField::new('createdAt', 'Date de Création')->setFormat('dd/MM/yyyy')->hideOnForm(),
-            AssociationField::new('transactionCaisses', 'Transactions')->hideOnForm(),
+            AssociationField::new('transactionCaisses', 'Transactions')
+                ->formatValue(function ($value, $entity) {
+                    $transactionCaissesUrl = $this->adminUrlGenerator
+                        ->setController(TransactionCaisseListController::class)
+                        ->setAction('index')
+                        ->set('caisseId', $entity->getId())
+                        ->generateUrl();
+
+                    return sprintf(
+                        '<a href="%s" style="text-decoration: none; color: #007bff;">Voir les transactions</a>',
+                        $transactionCaissesUrl
+                    );
+                })
+                ->renderAsHtml()
         ];
     }
 

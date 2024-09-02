@@ -188,6 +188,6 @@ class ProductVariant
 
     public function __toString(): string
     {
-        return (string)  ' id: ' .$this->id . ' - ' .$this->stockQuantity. ' - '. ($this->product ? $this->product->getName(). ' - ' .$this->color. ' taille ' .$this->size  : 'Sans produit associé');
+        return (string)  ' id: ' .$this->id . ' - ' .' qt: ' .$this->stockQuantity. ' - '. ($this->product ? $this->product->getName(). ' - ' .$this->color. ' taille ' .$this->size  : 'Sans produit associé');
     }
 }

@@ -92,4 +92,11 @@ class OrderItems
 
         return $this;
     }
+
+    public function __toString(): string
+    {
+        return $this->productVariant ? $this->productVariant->getProduct()->getName() . ' - ' . $this->quantity . ' pcs' : '';
+    }
+   
+    
 }

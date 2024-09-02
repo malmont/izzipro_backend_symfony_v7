@@ -20,7 +20,9 @@ class InventoryMovementsCrudController extends AbstractCrudController
             IntegerField::new('id')->hideOnForm(),
             AssociationField::new('productVariant', 'Product Variant'),
             AssociationField::new('movementType', 'Movement Type'),
-            IntegerField::new('quantity', 'Quantity'),
+            IntegerField::new('stockBeforeMovement', 'stockBeforeMovement'),
+            IntegerField::new('stockAfterMovement', 'stockAfterMovement'),
+            IntegerField::new('quantity', 'QuantityMoved'),
             DateField::new('movementDate', 'Movement Date'),
         ];
     }

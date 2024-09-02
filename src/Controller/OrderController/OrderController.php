@@ -60,6 +60,10 @@ class OrderController extends AbstractController
      */
     public function createOrder(Request $request): JsonResponse
     {
+         // Initialisation des montants
+         $subtotal = 0;
+         $totalTax = 0;
+
         $data = json_decode($request->getContent(), true);
         $user = $this->getUser();
 
@@ -85,14 +89,13 @@ class OrderController extends AbstractController
         if (!$paymentMethod) {
             return new JsonResponse(['error' => 'Invalid payment method ID'], 400);
         }
-
+      
         // Création de la commande
         $order = new Order();
         $order->setReference('REF#' . uniqid());
         $order->setUserId($user);
         $order->setOrderSource($orderSource);
         $order->setOrderDate(new \DateTime());
-
         // Récupération et assignation de l'adresse
         $address = $this->em->getRepository(Adress::class)->find($data['addressId']);
         if (!$address) {
@@ -105,15 +108,13 @@ class OrderController extends AbstractController
         if (!$carrier) {
             return new JsonResponse(['error' => 'Invalid carrier ID'], 400);
         }
-       
+        $carrierPrice = $carrier->getPrice(); // Prix hors taxes du transporteur
+        $subtotal += $carrierPrice;
         $order->setCarrier($carrier);
         $statusCommande = $this->em->getRepository(StatusCommande::class)->find(1);
         $order->setStatus($statusCommande);
-        
-        // Initialisation des montants
-        $subtotal = 0;
-        $totalTax = 0;
-        
+        $stockBeforeMovement=0;
+        $stockAfterMovement=0;
         // Traitement des items de la commande
         foreach ($data['items'] as $itemData) {
             $productVariant = $this->productVariantRepository->find($itemData['productVariantId']);
@@ -121,16 +122,19 @@ class OrderController extends AbstractController
                 return new JsonResponse(['error' => 'Insufficient stock for product variant'], 400);
             }
             $unitPrice = $productVariant->getProduct()->getPrice();
-            
+            $stockBeforeMovement=$productVariant->getStockQuantity();
             // Mise à jour du stock et création d'un mouvement d'inventaire
-            $productVariant->setStockQuantity($productVariant->getStockQuantity() - $itemData['quantity']);
+            $productVariant->setStockQuantity($stockBeforeMovement - $itemData['quantity']);
+            $this->em->persist($productVariant);
+            $stockAfterMovement=$productVariant->getStockQuantity();
             $movementTypeOutgoing = $this->movementTypeRepository->find(2);
             $inventoryMovement = new InventoryMovements();
             $inventoryMovement->setProductVariant($productVariant);
+            $inventoryMovement->setStockBeforeMovement($stockBeforeMovement);
+            $inventoryMovement->setStockAfterMovement($stockAfterMovement);
             $inventoryMovement->setQuantity($itemData['quantity']);
             $inventoryMovement->setMovementType($movementTypeOutgoing);
             $inventoryMovement->setMovementDate(new \DateTime());
-
             $this->em->persist($inventoryMovement);
 
             // Création des OrderItems

@@ -1,0 +1,15 @@
+{# templates/admin/order_items_list.html.twig #}
+
+{% extends 'base.html.twig' %}
+
+{% block body %}
+    <h1>Articles de la commande</h1>
+    <ul>
+        {% for item in orderItems %}
+            <li>
+                {{ item.productVariant.product.name }} - {{ item.quantity }} unités à {{ item.unitPrice }} $
+            </li>
+        {% endfor %}
+    </ul>
+    <a href="{{ path('admin_order_index') }}">Retour aux commandes</a>
+{% endblock %}
