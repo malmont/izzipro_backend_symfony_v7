@@ -72,6 +72,9 @@ class Order
     #[ORM\OneToMany(mappedBy: 'orderTax', targetEntity: OrderTax::class)]
     private Collection $orderTaxes;
 
+    #[ORM\ManyToOne(inversedBy: 'orders')]
+    private ?OrderType $orderType = null;
+
    
     public function __construct()
     {
@@ -328,6 +331,18 @@ class Order
                 $orderTax->setOrderTax(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getOrderType(): ?OrderType
+    {
+        return $this->orderType;
+    }
+
+    public function setOrderType(?OrderType $orderType): static
+    {
+        $this->orderType = $orderType;
 
         return $this;
     }

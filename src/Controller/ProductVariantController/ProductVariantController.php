@@ -82,6 +82,24 @@ class ProductVariantController extends AbstractController
     
         // Enregistrer la variante de produit
         $this->entityManager->persist($variant);
+        
+        // Création d'un mouvement d'inventaire
+        $movementType = $this->entityManager->getRepository(MovementType::class)->find(1); // ID 1 pour 'entrant'
+    
+        if ($movementType) {
+            $inventoryMovement = new InventoryMovements();
+            $inventoryMovement->setProductVariant($variant);
+            $inventoryMovement->setMovementType($movementType);
+            $inventoryMovement->setQuantity($data['stockQuantity']);
+            $inventoryMovement->setMovementDate(new \DateTime());
+            $inventoryMovement->setStockBeforeMovement(0); // Supposons que le stock précédent était 0 pour une nouvelle création
+            $inventoryMovement->setStockAfterMovement($data['stockQuantity']);
+    
+            $this->entityManager->persist($inventoryMovement);
+        } else {
+            return new JsonResponse(['error' => 'Movement type not found'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    
         $this->entityManager->flush();
     
         return new JsonResponse([
@@ -106,11 +124,29 @@ class ProductVariantController extends AbstractController
     
 
     #[Route('/api/product-variants/{id}', name: 'delete_product_variant', methods: ['DELETE'])]
-    public function deleteProductVariant(ProductVariant $variant): JsonResponse
-    {
-        $this->entityManager->remove($variant);
-        $this->entityManager->flush();
+        public function deleteProductVariant(ProductVariant $variant): JsonResponse
+        {
+            $movementType = $this->entityManager->getRepository(MovementType::class)->find(2); // ID 2 pour 'sortant'
+            $stockQuantity = $variant->getStockQuantity();
 
-        return new JsonResponse(['success' => 'Product variant deleted'], JsonResponse::HTTP_NO_CONTENT);
-    }
+            if ($movementType) {
+                $inventoryMovement = new InventoryMovements();
+                $inventoryMovement->setProductVariant($variant);
+                $inventoryMovement->setMovementType($movementType);
+                $inventoryMovement->setQuantity($stockQuantity);
+                $inventoryMovement->setMovementDate(new \DateTime());
+                $inventoryMovement->setStockBeforeMovement($stockQuantity);
+                $inventoryMovement->setStockAfterMovement(0);
+
+                $this->entityManager->persist($inventoryMovement);
+            } else {
+                return new JsonResponse(['error' => 'Movement type not found'], JsonResponse::HTTP_BAD_REQUEST);
+            }
+
+            $this->entityManager->remove($variant);
+            $this->entityManager->flush();
+
+            return new JsonResponse(['success' => 'Product variant deleted'], JsonResponse::HTTP_NO_CONTENT);
+        }
+
 }

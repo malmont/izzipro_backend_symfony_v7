@@ -37,6 +37,9 @@ class Payments
     #[ORM\OneToMany(mappedBy: 'payment', targetEntity: TransactionCaisse::class)]
     private Collection $transactionCaisses;
 
+    #[ORM\ManyToOne(inversedBy: 'payments')]
+    private ?PaymentType $paymentType = null;
+
 
     public function __construct()
     {
@@ -134,6 +137,18 @@ class Payments
                 $transactionCaiss->setPayment(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getPaymentType(): ?PaymentType
+    {
+        return $this->paymentType;
+    }
+
+    public function setPaymentType(?PaymentType $paymentType): static
+    {
+        $this->paymentType = $paymentType;
 
         return $this;
     }

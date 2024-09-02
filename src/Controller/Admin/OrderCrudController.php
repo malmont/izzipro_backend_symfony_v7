@@ -49,6 +49,7 @@ class OrderCrudController extends AbstractCrudController
                     }
                 }),
             AssociationField::new('orderSource', 'Source de la commande'),
+            AssociationField::new('orderType', 'Type de commande'),
             AssociationField::new('status', 'Statut de la commande')
                 ->formatValue(function ($value, $entity) {
                     return $entity->getStatus() ? $entity->getStatus()->getName() : '';

@@ -14,6 +14,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Security\Core\Security;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
+use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 
 class CaisseCrudController extends AbstractCrudController
 {
@@ -46,6 +47,7 @@ class CaisseCrudController extends AbstractCrudController
         return [
             NumberField::new('amountTotal', 'Montant Total'),
             DateField::new('createdAt', 'Date de Création')->setFormat('dd/MM/yyyy')->hideOnForm(),
+            BooleanField::new('isOpen', 'Ouverte')->renderAsSwitch(false),
             AssociationField::new('transactionCaisses', 'Transactions')
                 ->formatValue(function ($value, $entity) {
                     $transactionCaissesUrl = $this->adminUrlGenerator

@@ -11,6 +11,8 @@ use App\Entity\StatusPayment;
 use App\Entity\InventoryMovements;
 use App\Entity\StatusCommande;
 use App\Entity\OrderTax;
+use App\Entity\OrderType;
+use App\Entity\PaymentType;
 use App\Repository\OrderSourceRepository;
 use App\Repository\PaymentMethodRepository;
 use App\Repository\ProductVariantRepository;
@@ -74,7 +76,7 @@ class OrderController extends AbstractController
         }
 
         // Vérification pour les commandes en caisse
-        if ($orderSource->getName() === 'caisse') {
+        if ($orderSource->getId() === 2) {
             $caisse = $this->getOpenCaisse();
             if (!$caisse) {
                 return new JsonResponse(['error' => 'No open caisse found'], 400);
@@ -89,12 +91,13 @@ class OrderController extends AbstractController
         if (!$paymentMethod) {
             return new JsonResponse(['error' => 'Invalid payment method ID'], 400);
         }
-      
+        $orderType = $this->em->getRepository(OrderType::class)->find(1);
         // Création de la commande
         $order = new Order();
         $order->setReference('REF#' . uniqid());
         $order->setUserId($user);
         $order->setOrderSource($orderSource);
+        $order->setOrderType($orderType);
         $order->setOrderDate(new \DateTime());
         // Récupération et assignation de l'adresse
         $address = $this->em->getRepository(Adress::class)->find($data['addressId']);
@@ -175,12 +178,13 @@ class OrderController extends AbstractController
         if (!$statusPayment) {
             return new JsonResponse(['error' => 'Invalid status payment ID'], 400);
         }
-        
+        $paymentType = $this->em->getRepository(PaymentType::class)->find(2);
         // Enregistrement du paiement
         $payment = new Payments();
         $payment->setOrderPayment($order);
         $payment->setAmount($totalAmount);
         $payment->setPaymentMethod($paymentMethod);
+        $payment->setPaymentType($paymentType);
         $payment->setStatutPayment($statusPayment);
         $payment->setPaymentDate(new \DateTime());
         
@@ -192,7 +196,7 @@ class OrderController extends AbstractController
         $this->em->persist($order);
 
         // Si l'ordre provient de la caisse
-        if ($orderSource->getName() === 'caisse') {
+        if ($orderSource->getId() === 2) {
             // Création de la TransactionCaisse
             $transactionType = $this->transactionTypeRepository->findOneBy(['name' => 'Vendu']);
             $transactionCaisse = new TransactionCaisse();
@@ -226,24 +230,29 @@ class OrderController extends AbstractController
 
         // Vérifier si la commande peut être annulée (ex: déjà livrée ?)
         $currentStatus = $order->getStatus();
-        if ($currentStatus->getName() === 'Livré' || $currentStatus->getName() === 'En cours de livraison') {
+        if ($currentStatus->getId() === 6 || $currentStatus->getId() === 5) {
             return new JsonResponse(['error' => 'Order cannot be canceled after it has been shipped or delivered'], 400);
         }
 
         // Mettre à jour le statut de la commande à "Annulé"
-        $cancelStatus = $this->em->getRepository(StatusCommande::class)->findOneBy(['name' => 'Annulé']);
+        $cancelStatus = $this->em->getRepository(StatusCommande::class)->find(7);
         $order->setStatus($cancelStatus);
 
         // Remboursement du paiement
         $this->refundPayment($order);
-
+        $stockBeforeMovement=0;
+        $stockAfterMovement=0;
         // Mise à jour des mouvements de stock
         foreach ($order->getOrderItems() as $orderItem) {
             $productVariant = $orderItem->getProductVariant();
-            $productVariant->setStockQuantity($productVariant->getStockQuantity() + $orderItem->getQuantity());
-
+            $stockBeforeMovement=$productVariant->getStockQuantity();
+            $productVariant->setStockQuantity(stockBeforeMovement+ $orderItem->getQuantity());
+            $this->em->persist($productVariant);
+            $stockAfterMovement=$productVariant->getStockQuantity();
             $movementTypeIncoming = $this->movementTypeRepository->find(1);
             $inventoryMovement = new InventoryMovements();
+            $inventoryMovement->setStockBeforeMovement($stockBeforeMovement);
+            $inventoryMovement->setStockAfterMovement($stockAfterMovement);
             $inventoryMovement->setProductVariant($productVariant);
             $inventoryMovement->setQuantity($orderItem->getQuantity());
             $inventoryMovement->setMovementType($movementTypeIncoming);
@@ -259,7 +268,7 @@ class OrderController extends AbstractController
         }
 
         // Si l'ordre provient de la caisse, créer une transaction de remboursement
-        if ($order->getOrderSource()->getName() === 'caisse') {
+        if ($order->getOrderSource()->getId() === 2) {
             $this->createCaisseRefundTransaction($order);
         }
 
@@ -270,19 +279,20 @@ class OrderController extends AbstractController
 
     private function refundPayment(Order $order): void
     {
-        $payments = $order->getPayments();
-        $refundStatus = $this->em->getRepository(StatusPayment::class)->findOneBy(['name' => 'Remboursé']);
-
-        foreach ($payments as $payment) {
+       
+        $refundStatus = $this->em->getRepository(StatusPayment::class)->find(2);
+        $paymentType = $this->em->getRepository(PaymentType::class)->find(1);
+        
             $refund = new Payments();
             $refund->setOrderPayment($order);
-            $refund->setAmount(-$payment->getAmount()); // Montant négatif pour refléter le remboursement
+            $refund->setPaymentType($paymentType);
+            $refund->setAmount($payment->getAmount());
             $refund->setPaymentMethod($payment->getPaymentMethod());
             $refund->setStatutPayment($refundStatus);
             $refund->setPaymentDate(new \DateTime());
 
             $this->em->persist($refund);
-        }
+        
     }
 
     private function createCaisseRefundTransaction(Order $order): void
@@ -291,8 +301,7 @@ class OrderController extends AbstractController
         if (!$caisse) {
             throw new \Exception('No open caisse found');
         }
-
-        $transactionType = $this->transactionTypeRepository->findOneBy(['name' => 'Remboursement']);
+        $transactionType = $this->transactionTypeRepository->find(2);
         $transactionCaisse = new TransactionCaisse();
         $transactionCaisse->setCaisse($caisse);
         $transactionCaisse->setUser($this->getUser());

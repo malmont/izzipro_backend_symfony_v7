@@ -34,6 +34,8 @@ use App\Entity\Payments;
 use App\Entity\StatusCommande;
 use App\Entity\Tax;
 use App\Entity\OrderTax;
+use App\Entity\OrderType;
+use App\Entity\PaymentType;
 use App\Controller\Admin\OrderAllCrudController;
 use App\Controller\Admin\OrderCrudController;
 use Symfony\Component\HttpFoundation\Response;
@@ -95,6 +97,7 @@ class DashboardController extends AbstractDashboardController
                 ->setController(OrderAllCrudController::class);
         yield MenuItem::linkToCrud('Status Order', 'fas fa-tags', StatusCommande::class);
         yield MenuItem::linkToCrud('Order source', 'fas fa-shopping-cart', OrderSource::class);
+        yield MenuItem::linkToCrud('Order Types', 'fas fa-tags', OrderType::class);
         yield MenuItem::linkToCrud('Order', 'fas fa-shopping-bag', Order::class);
         yield MenuItem::linkToCrud('Order Items', 'fas fa-box', OrderItems::class)->setController(OrderItemsCrudController::class);
         yield MenuItem::linkToCrud('Cart', 'fas fa-boxes', Cart::class);
@@ -102,6 +105,7 @@ class DashboardController extends AbstractDashboardController
 
         yield MenuItem::section('Payment');
         yield MenuItem::linkToCrud('Payments', 'fas fa-credit-card', Payments::class);
+        yield MenuItem::linkToCrud('Payment Types', 'fas fa-credit-card', PaymentType::class);
         yield MenuItem::linkToCrud('Statuts de Paiement', 'fas fa-credit-card', StatusPayment::class);
         yield MenuItem::linkToCrud('Méthodes de Paiement', 'fas fa-credit-card', PaymentMethod::class);
 

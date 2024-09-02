@@ -25,18 +25,25 @@ class PaymentsCrudController extends AbstractCrudController
     }
 
     public function configureFields(string $pageName): iterable
-    {
-        return [
-            IdField::new('id')->hideOnForm(),
-            AssociationField::new('orderPayment', 'Order')->setRequired(true),
-            MoneyField::new('amount', 'Amount')->setCurrency('USD'),
-            DateField::new('paymentDate', 'Payment Date'),
-            AssociationField::new('paymentMethod', 'Payment Method')->setRequired(true),
-            AssociationField::new('statutPayment', 'Payment Status')->setRequired(true),
-            CollectionField::new('transactionCaisses', 'Transaction Caisse')
-                ->hideOnForm()
-                ->allowAdd(false)
-                ->allowDelete(false),
-        ];
+{
+    $fields = [
+        IdField::new('id')->hideOnForm(),
+        AssociationField::new('orderPayment', 'Order')->setRequired(true),
+        MoneyField::new('amount', 'Amount')->setCurrency('USD'),
+        DateField::new('paymentDate', 'Payment Date'),
+        AssociationField::new('paymentMethod', 'Payment Method')->setRequired(true),
+        AssociationField::new('statutPayment', 'Payment Status')->setRequired(true),
+        AssociationField::new('paymentType', 'Payment Type')->setRequired(true),
+    ];
+
+    // Affichez la transaction caisse seulement si elle n'est pas null
+    if ($pageName === Crud::PAGE_DETAIL && $this->getSubject()->getTransactionCaisses()->count() > 0) {
+        $fields[] = CollectionField::new('transactionCaisses', 'Transaction Caisse')
+            ->hideOnForm()
+            ->allowAdd(false)
+            ->allowDelete(false);
     }
+
+    return $fields;
+}
 }
