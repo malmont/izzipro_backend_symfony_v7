@@ -2,6 +2,7 @@
 namespace App\UseCase\OrderUseCase;
 
 use App\Entity\Order;
+use App\Entity\User;
 use App\Entity\Adress;
 use App\Entity\Carrier;
 use App\Entity\StatusCommande;
@@ -21,7 +22,7 @@ class CreateOrderCommandUseCase
         $this->orderSourceRepository = $orderSourceRepository;
     }
 
-    public function execute(array $data, $user)
+    public function execute(array $data,User $user,int $typeOrderId)
     {
         $orderSource = $this->orderSourceRepository->find($data['orderSource']);
         if (!$orderSource) {
@@ -36,7 +37,7 @@ class CreateOrderCommandUseCase
             return new JsonResponse(['error' => 'Invalid carrier ID'], 400);
         }
         $statusCommande = $this->em->getRepository(StatusCommande::class)->find(3);
-        $orderType = $this->em->getRepository(OrderType::class)->find(1);
+        $orderType = $this->em->getRepository(OrderType::class)->find( $typeOrderId);
         $order = new Order();
         $order->setReference('REF#' . uniqid());
         $order->setUserId($user);

@@ -19,19 +19,21 @@ class ProcessOrderItemsUseCase
         $this->productVariantRepository = $productVariantRepository;
     }
 
-    public function execute(Order $order, array $items, UpdateStockAndInventoryUseCase $updateStockAndInventory)
-    {
+    public function execute(Order $order, array $items, UpdateStockAndInventoryUseCase $updateStockAndInventory, int $typeOrderId)
+    { 
+        $isCancel=$typeOrderId===1?false:true;
         $subtotal = 0;
         $carrierPrice = $order->getCarrier()->getPrice(); // Prix hors taxes du transporteur
         $subtotal += $carrierPrice;
         foreach ($items as $itemData) {
             $productVariant = $this->productVariantRepository->find($itemData['productVariantId']);
-            if (!$productVariant || $productVariant->getStockQuantity() < $itemData['quantity']) {
+            if ((!$productVariant || $productVariant->getStockQuantity() < $itemData['quantity']&& !$isCancel)) {
                 return new JsonResponse(['error' => 'Insufficient stock for product variant'], 400);
             }
 
+           
             // Mise à jour du stock et création d'un mouvement d'inventaire
-            $updateStockAndInventory->execute($productVariant, $itemData['quantity']);
+            $updateStockAndInventory->execute($productVariant, $itemData['quantity'],$isCancel);
 
             // Création des OrderItems et calcul du sous-total
             $orderItem = new OrderItems();

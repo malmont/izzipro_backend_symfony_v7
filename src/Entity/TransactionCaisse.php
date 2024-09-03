@@ -72,7 +72,7 @@ class TransactionCaisse
         return $this->orderCaisse;
     }
 
-    public function setOrderCaisse(?Order $odrerCaisse): static
+    public function setOrderCaisse(?Order $orderCaisse): static
     {
         $this->orderCaisse = $orderCaisse;
 
@@ -125,5 +125,9 @@ class TransactionCaisse
         $this->transactionType = $transactionType;
 
         return $this;
+    }
+    public function __toString(): string
+    {
+        return $this->id ?: 'N/A';
     }
 }

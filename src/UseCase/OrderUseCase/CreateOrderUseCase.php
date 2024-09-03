@@ -18,6 +18,7 @@ class CreateOrderUseCase
     private $handleCaisseTransactionUseCase;
     private $em;
     private $security;
+
     public function __construct(
         CreateOrderCommandUseCase $createOrderCommandUseCase,
         ProcessOrderItemsUseCase $processOrderItemsUseCase,
@@ -42,44 +43,54 @@ class CreateOrderUseCase
 
     public function execute(Request $request): JsonResponse
     {
-        
-        $data = json_decode($request->getContent(), true);
-        $user = $this->security->getUser();
-        $paymentTypeId = 2; 
-        $statusPaymentId = 2;
+        $this->em->getConnection()->beginTransaction(); // Démarrage de la transaction
 
-        $order = $this->createOrderCommandUseCase->execute($data, $user);
-        if ($order instanceof JsonResponse) {
-            return $order;
+        try {
+            $data = json_decode($request->getContent(), true);
+            $user = $this->security->getUser();
+            $statusPaymentId = 2;
+
+            $typeOrderId = $data['typeOrder'] ?? 1;
+
+            $order = $this->createOrderCommandUseCase->execute($data, $user, $typeOrderId);
+            if ($order instanceof JsonResponse) {
+                throw new \Exception('Order creation failed');
+            }
+
+            $subtotal = $this->processOrderItemsUseCase->execute($order, $data['items'], $this->updateStockAndInventoryUseCase, $typeOrderId);
+            if ($subtotal instanceof JsonResponse) {
+                throw new \Exception('Order items processing failed');
+            }
+            $subtotal = $typeOrderId === 1 ? $subtotal : -$subtotal;
+
+            $totalTax = $this->calculateTaxesUseCase->execute($order, $subtotal);
+            if ($totalTax instanceof JsonResponse) {
+                throw new \Exception('Tax calculation failed');
+            }
+
+            $totalAmount = $this->calculateTotalAmountUseCase->execute($subtotal, $totalTax);
+            $paymentTypeId = $typeOrderId === 1 ? 2 : 1;
+            $this->paymentHandlerUseCase->handlePayment($order, $totalAmount, $data['paymentMethod'], $paymentTypeId, $statusPaymentId);
+
+            $order->setSubTotal($subtotal);
+            $order->setTotalTax($totalTax);
+            $order->setTotalAmount($totalAmount);
+
+            $this->em->persist($order);
+
+            // Gestion de la caisse si la commande provient de la caisse
+            if ($order->getOrderSource()->getId() === 2) {
+                $transactionTypeId = $typeOrderId === 1 ? 1 : 2;
+                $this->handleCaisseTransactionUseCase->execute($order, $user, $totalAmount, $transactionTypeId);
+            }
+
+            $this->em->flush(); // Validation des opérations
+            $this->em->getConnection()->commit(); // Confirmation de la transaction
+
+            return new JsonResponse(['message' => 'Order created successfully'], 201);
+        } catch (\Exception $e) {
+            $this->em->getConnection()->rollBack(); // Annulation de la transaction en cas d'erreur
+            return new JsonResponse(['error' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
-
-        $subtotal = $this->processOrderItemsUseCase->execute($order, $data['items'], $this->updateStockAndInventoryUseCase);
-        if ($subtotal instanceof JsonResponse) {
-            return $subtotal; // Gestion de l'erreur ici
-        }
-
-        $totalTax = $this->calculateTaxesUseCase->execute($order, $subtotal);
-        if ($totalTax instanceof JsonResponse) {
-            return $totalTax; // Gestion de l'erreur ici
-        }
-
-        $totalAmount = $this->calculateTotalAmountUseCase->execute($subtotal, $totalTax);
-        $this->paymentHandlerUseCase->handlePayment($order, $totalAmount, $data['paymentMethod'], $paymentTypeId, $statusPaymentId);
-
-          // Assignation des montants à la commande
-        $order->setSubTotal($subtotal);
-        $order->setTotalTax($totalTax); 
-        $order->setTotalAmount($totalAmount);
-        
-        $this->em->persist($order);
-           // Gestion de la caisse si la commande provient de la caisse
-        if ($order->getOrderSource()->getId() === 2) {
-            $this->handleCaisseTransactionUseCase->execute($order, $user, $totalAmount, 'Vendu');
-        }
-
-        // Flushing all persisted entities to the database
-        $this->em->flush();
-
-        return new JsonResponse(['message' => 'Order created successfully'], 201);
     }
 }

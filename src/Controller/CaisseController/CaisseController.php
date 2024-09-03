@@ -2,9 +2,8 @@
 namespace App\Controller\CaisseController;
 
 use App\Entity\Caisse;
-use App\Entity\TransactionCaisse;
-use App\Repository\TransactionTypeRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\CaisseService;
+use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -12,102 +11,98 @@ use Symfony\Component\Routing\Annotation\Route;
 
 class CaisseController extends AbstractController
 {
-    private $em;
-    private $transactionTypeRepository;
+    private $handleCaisseTransactionUseCase;
+    private $caisseService;
 
-    public function __construct(EntityManagerInterface $em, TransactionTypeRepository $transactionTypeRepository)
+    public function __construct(HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase, CaisseService $caisseService)
     {
-        $this->em = $em;
-        $this->transactionTypeRepository = $transactionTypeRepository;
+        $this->handleCaisseTransactionUseCase = $handleCaisseTransactionUseCase;
+        $this->caisseService = $caisseService;
     }
 
-    /**
-     * @Route("/caisse/open", name="caisse_open", methods={"POST"})
+     /**
+     * @Route("api/caisse/open", name="caisse_open", methods={"POST"})
      */
     public function openCaisse(): JsonResponse
-    {
-        $existingCaisse = $this->getOpenCaisse();
-        if ($existingCaisse) {
-            return new JsonResponse(['error' => 'A caisse is already open'], 400);
+        {
+            $existingCaisse = $this->caisseService->getOpenCaisse();
+            if ($existingCaisse) {
+                return new JsonResponse(['error' => 'A caisse is already open'], 400);
+            }
+
+            // Récupérer la dernière caisse fermée
+            $lastClosedCaisse = $this->caisseService->getLastClosedCaisse();
+            $initialAmount = $lastClosedCaisse ? $lastClosedCaisse->getAmountTotal() : 0.0;
+
+            // Créer la nouvelle caisse
+            $caisse = new Caisse();
+            $caisse->setAmountTotal($initialAmount);
+            $caisse->setCreatedAt(new \DateTime());
+            $caisse->setOpen(true);
+
+            // Persist de la nouvelle caisse
+            $entityManager = $this->handleCaisseTransactionUseCase->getEm();
+            $entityManager->persist($caisse);
+            $entityManager->flush();  // Sauvegarder la nouvelle caisse dans la base de données
+
+            // Exécuter la transaction pour l'ouverture de la caisse
+            $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $initialAmount, 4); // 4 pour Ouverture
+
+            return new JsonResponse(['message' => 'Caisse opened successfully', 'caisse_id' => $caisse->getId()], 201);
         }
 
-        $caisse = new Caisse();
-        $caisse->setAmountTotal(0.0);
-        $caisse->setCreatedAt(new \DateTime());
-        $caisse->setIsOpen(true);
-
-        $this->em->persist($caisse);
-
-        // Créer une transaction d'ouverture (ID de transaction type: 4 pour Ouverture)
-        $this->createTransactionCaisse($caisse, 4, 0.0);
-
-        $this->em->flush();
-
-        return new JsonResponse(['message' => 'Caisse opened successfully', 'caisse_id' => $caisse->getId()], 201);
-    }
-
     /**
-     * @Route("/caisse/close", name="caisse_close", methods={"POST"})
+     * @Route("api/caisse/close", name="caisse_close", methods={"POST"})
      */
     public function closeCaisse(): JsonResponse
     {
-        $caisse = $this->getOpenCaisse();
+        $caisse = $this->caisseService->getOpenCaisse();
         if (!$caisse) {
             return new JsonResponse(['error' => 'No open caisse found'], 400);
         }
 
-        // Mettre à jour la caisse pour la fermer
-        $caisse->setIsOpen(false);
-        $caisse->setClosedAt(new \DateTime());
+        $caisse->setOpen(false);
 
-        $this->em->persist($caisse);
-
-        // Créer une transaction de fermeture (ID de transaction type: 5 pour Fermeture)
-        $this->createTransactionCaisse($caisse, 5, $caisse->getAmountTotal());
-
-        $this->em->flush();
+        $this->handleCaisseTransactionUseCase->getEm()->persist($caisse);
+        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $caisse->getAmountTotal(), 5); // 5 pour Fermeture
 
         return new JsonResponse(['message' => 'Caisse closed successfully', 'caisse_id' => $caisse->getId()], 200);
     }
 
     /**
-     * @Route("/caisse/deposit", name="caisse_deposit", methods={"POST"})
+     * @Route("api/caisse/deposit", name="caisse_deposit", methods={"POST"})
      */
     public function deposit(Request $request): JsonResponse
     {
-        $amount = $request->request->get('amount');
+        $data = json_decode($request->getContent(), true);
+        $amount = $data['amount'] ?? null;
         if ($amount <= 0) {
             return new JsonResponse(['error' => 'Invalid amount'], 400);
         }
 
-        $caisse = $this->getOpenCaisse();
+        $caisse = $this->caisseService->getOpenCaisse();
         if (!$caisse) {
             return new JsonResponse(['error' => 'No open caisse found'], 400);
         }
 
-        // Mettre à jour le montant total de la caisse
-        $caisse->setAmountTotal($caisse->getAmountTotal() + $amount);
-        $this->em->persist($caisse);
-
-        // Créer une transaction de dépôt (ID de transaction type: 4 pour Dépôt)
-        $this->createTransactionCaisse($caisse, 4, $amount);
-
-        $this->em->flush();
+        // Créer une transaction de dépôt (ID de transaction type: 3 pour Dépôt)
+        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $amount, 3);
 
         return new JsonResponse(['message' => 'Deposit successful', 'new_total' => $caisse->getAmountTotal()], 201);
     }
 
     /**
-     * @Route("/caisse/withdraw", name="caisse_withdraw", methods={"POST"})
+     * @Route("api/caisse/withdraw", name="caisse_withdraw", methods={"POST"})
      */
     public function withdraw(Request $request): JsonResponse
     {
-        $amount = $request->request->get('amount');
+        $data = json_decode($request->getContent(), true);
+        $amount = $data['amount'] ?? null;
         if ($amount <= 0) {
             return new JsonResponse(['error' => 'Invalid amount'], 400);
         }
 
-        $caisse = $this->getOpenCaisse();
+        $caisse = $this->caisseService->getOpenCaisse();
         if (!$caisse) {
             return new JsonResponse(['error' => 'No open caisse found'], 400);
         }
@@ -116,49 +111,10 @@ class CaisseController extends AbstractController
             return new JsonResponse(['error' => 'Insufficient funds in the caisse'], 400);
         }
 
-        // Mettre à jour le montant total de la caisse
-        $caisse->setAmountTotal($caisse->getAmountTotal() - $amount);
-        $this->em->persist($caisse);
-
-        // Créer une transaction de retrait (ID de transaction type: 5 pour Retrait)
-        $this->createTransactionCaisse($caisse, 5, $amount);
-
-        $this->em->flush();
+        // Créer une transaction de retrait (ID de transaction type: 6 pour Retrait)
+        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $amount, 6);
 
         return new JsonResponse(['message' => 'Withdrawal successful', 'new_total' => $caisse->getAmountTotal()], 201);
     }
-
-    /**
-     * Méthode générique pour créer une transaction de caisse.
-     *
-     * @param Caisse $caisse
-     * @param int $transactionTypeId
-     * @param float $amount
-     */
-    private function createTransactionCaisse(Caisse $caisse, int $transactionTypeId, float $amount): void
-    {
-        $transactionType = $this->transactionTypeRepository->find($transactionTypeId);
-        if (!$transactionType) {
-            throw new \InvalidArgumentException("Invalid transaction type ID: $transactionTypeId");
-        }
-
-        $transactionCaisse = new TransactionCaisse();
-        $transactionCaisse->setCaisse($caisse);
-        $transactionCaisse->setUser($this->getUser());
-        $transactionCaisse->setTransactionDate(new \DateTime());
-        $transactionCaisse->setTransactionType($transactionType);
-        $transactionCaisse->setAmount($amount);
-
-        $this->em->persist($transactionCaisse);
-    }
-
-    /**
-     * Méthode pour obtenir la caisse ouverte.
-     *
-     * @return Caisse|null
-     */
-    private function getOpenCaisse(): ?Caisse
-    {
-        return $this->em->getRepository(Caisse::class)->findOneBy(['isOpen' => true]);
-    }
 }
+
