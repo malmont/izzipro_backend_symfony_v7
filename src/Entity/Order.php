@@ -27,7 +27,7 @@ class Order
     private ?\DateTimeInterface $orderDate = null;
 
     #[ORM\Column]
-    private ?float $totalAmount = null;
+    private ?float $totalAmount = 0;
 
     #[ORM\ManyToOne(inversedBy: 'orders')]
     private ?Adress $shippingAdress = null;
