@@ -4,7 +4,7 @@ namespace App\Controller\Admin;
 use App\Entity\InventoryMovements;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 
 class InventoryMovementsCrudController extends AbstractCrudController
@@ -23,7 +23,7 @@ class InventoryMovementsCrudController extends AbstractCrudController
             IntegerField::new('stockBeforeMovement', 'stockBeforeMovement'),
             IntegerField::new('stockAfterMovement', 'stockAfterMovement'),
             IntegerField::new('quantity', 'QuantityMoved'),
-            DateField::new('movementDate', 'Movement Date'),
+            DateTimeField::new('movementDate', 'Movement Date'),
         ];
     }
 }

@@ -22,7 +22,7 @@ class Payments
     #[ORM\Column]
     private ?float $amount = null;
 
-    #[ORM\Column(type: Types::DATE_MUTABLE)]
+    #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $paymentDate = null;
 
     #[ORM\ManyToOne(inversedBy: 'payments')]

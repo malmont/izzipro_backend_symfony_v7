@@ -6,7 +6,7 @@ use App\Entity\OrderItems;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
@@ -54,7 +54,8 @@ class OrderCrudController extends AbstractCrudController
                 ->formatValue(function ($value, $entity) {
                     return $entity->getStatus() ? $entity->getStatus()->getName() : '';
                 }),
-            DateField::new('orderDate', 'Date de commande'),
+                DateTimeField::new('orderDate', 'Date de commande')
+                    ->setFormat('dd/MM/yyyy HH:mm'),
             MoneyField::new('totalAmount', 'Montant total')->setCurrency('USD'),
             
             // Using AssociationField to display order items

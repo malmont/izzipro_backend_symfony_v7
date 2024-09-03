@@ -4,7 +4,7 @@ namespace App\Controller\Admin;
 use App\Entity\Payments;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
@@ -30,7 +30,7 @@ class PaymentsCrudController extends AbstractCrudController
         IdField::new('id')->hideOnForm(),
         AssociationField::new('orderPayment', 'Order')->setRequired(true),
         MoneyField::new('amount', 'Amount')->setCurrency('USD'),
-        DateField::new('paymentDate', 'Payment Date'),
+        DateTimeField::new('paymentDate', 'Payment Date'),
         AssociationField::new('paymentMethod', 'Payment Method')->setRequired(true),
         AssociationField::new('statutPayment', 'Payment Status')->setRequired(true),
         AssociationField::new('paymentType', 'Payment Type')->setRequired(true),

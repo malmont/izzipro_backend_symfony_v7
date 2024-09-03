@@ -23,7 +23,7 @@ class Order
     #[ORM\ManyToOne(inversedBy: 'userOrders')]
     private ?User $userId = null;
 
-    #[ORM\Column(type: Types::DATE_MUTABLE)]
+    #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $orderDate = null;
 
     #[ORM\Column]

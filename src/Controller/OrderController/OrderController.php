@@ -7,6 +7,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use App\UseCase\OrderUseCase\CreateOrderUseCase;
 use App\UseCase\OrderUseCase\CancelOrderUseCase;
+use App\Dto\CreateOrderDTO;
 
 class OrderController extends AbstractController
 {
@@ -26,9 +27,20 @@ class OrderController extends AbstractController
      */
     public function createOrder(Request $request): JsonResponse
     {
-        return $this->createOrderUseCase->execute($request);
-    }
+        $data = json_decode($request->getContent(), true);
+        $user = $this->getUser();
+        $dto = new CreateOrderDTO(
+            $user->getId(),
+            $data['orderSource'],
+            $data['paymentMethod'],
+            $data['addressId'],
+            $data['carrierId'],
+            $data['typeOrder'],
+            $data['items']
+        );
 
+        return $this->createOrderUseCase->execute($dto);
+    }
     /**
      * @Route("api/order/cancel/{id}", name="order_cancel", methods={"POST"})
      */

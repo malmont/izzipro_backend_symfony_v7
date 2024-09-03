@@ -23,7 +23,7 @@ class InventoryMovements
     #[ORM\Column]
     private ?int $quantity = null;
 
-    #[ORM\Column(type: Types::DATE_MUTABLE)]
+    #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $movementDate = null;
 
     #[ORM\Column(nullable: true)]

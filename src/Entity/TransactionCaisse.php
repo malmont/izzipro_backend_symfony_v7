@@ -28,7 +28,7 @@ class TransactionCaisse
     #[ORM\ManyToOne(inversedBy: 'transactionCaisses')]
     private ?Payments $payment = null;
 
-    #[ORM\Column(type: Types::DATE_MUTABLE)]
+    #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $transactionDate = null;
 
     #[ORM\Column]
