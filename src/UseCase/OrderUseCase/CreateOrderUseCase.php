@@ -42,10 +42,12 @@ class CreateOrderUseCase
 
     public function execute(Request $request): JsonResponse
     {
+        
         $data = json_decode($request->getContent(), true);
         $user = $this->security->getUser();
         $paymentTypeId = 2; 
         $statusPaymentId = 2;
+
         $order = $this->createOrderCommandUseCase->execute($data, $user);
         if ($order instanceof JsonResponse) {
             return $order;

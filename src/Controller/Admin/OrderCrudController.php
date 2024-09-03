@@ -79,9 +79,4 @@ class OrderCrudController extends AbstractCrudController
         ];
     }
     
-
-    private function getOrderItemsByOrderId(int $orderId): array
-    {
-        return $this->em->getRepository(OrderItems::class)->findBy(['orderAssociated' => $orderId]);
-    }
 }

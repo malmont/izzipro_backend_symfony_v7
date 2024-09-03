@@ -78,6 +78,10 @@ class ProductVariant
 
         return $this;
     }
+    public function getProductName(): ?string
+    {
+        return $this->product ? $this->product->getName() : null;
+    }
 
     public function getProduct(): ?Product
     {
@@ -173,6 +177,7 @@ class ProductVariant
 
         return $this;
     }
+
 
     public function removeInventoryMovement(InventoryMovements $inventoryMovement): static
     {

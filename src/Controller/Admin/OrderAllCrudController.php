@@ -2,21 +2,35 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Order;
+use App\Form\PaymentType;
+use App\Form\OrderItemsType;
+use App\UseCase\OrderUseCase\CreateOrderUseCase;
+use App\UseCase\OrderUseCase\CancelOrderUseCase;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
-use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use Symfony\Component\Form\Extension\Core\Type\CollectionType;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\JsonResponse;
 
 class OrderAllCrudController extends AbstractCrudController
 {
+    private $createOrderUseCase;
+    private $cancelOrderUseCase;
     private $em;
 
-    public function __construct(EntityManagerInterface $em)
-    {
+    public function __construct(
+        CreateOrderUseCase $createOrderUseCase,
+        CancelOrderUseCase $cancelOrderUseCase,
+        EntityManagerInterface $em
+    ) {
+        $this->createOrderUseCase = $createOrderUseCase;
+        $this->cancelOrderUseCase = $cancelOrderUseCase;
         $this->em = $em;
     }
 
@@ -44,9 +58,15 @@ class OrderAllCrudController extends AbstractCrudController
             CollectionField::new('orderItems', 'Items')
                 ->allowAdd()
                 ->allowDelete()
-                ->useEntryCrudForm(OrderItemsCrudController::class),
+                ->setEntryType(OrderItemsType::class)
+                ->setFormTypeOptions([
+                    'by_reference' => false,
+                ]),
             MoneyField::new('totalAmount', 'Total Amount')->setCurrency('USD')->hideOnForm(),
-            CollectionField::new('payments', 'Payments')->onlyOnDetail(),
+            CollectionField::new('payments', 'Payments')
+                ->setEntryType(PaymentType::class)
+                ->allowAdd()
+                ->allowDelete(),
             TextField::new('reference', 'Reference')->hideOnForm(),
         ];
     }
@@ -54,11 +74,47 @@ class OrderAllCrudController extends AbstractCrudController
     public function persistEntity(EntityManagerInterface $em, $entityInstance): void
     {
         if ($entityInstance instanceof Order) {
-            // Logique simplifiée pour la création d'une commande de test
-            $entityInstance->setReference('TEST#' . uniqid());
-            $entityInstance->setOrderDate(new \DateTime());
+            // Pas besoin de persister explicitement les entités liées grâce au cascade persist
+            $items = [];
+            foreach ($entityInstance->getOrderItems() as $orderItem) {
+                $items[] = [
+                    'productVariantId' => $orderItem->getProductVariant()->getId(),
+                    'quantity' => $orderItem->getQuantity(),
+                ];
+            }
 
-            // Vous pouvez ajouter plus de logique ici si nécessaire
+            // Créer un tableau de données basé sur l'entité Order
+            $data = [
+                'orderSource' => $entityInstance->getOrderSource()->getId(),
+                'paymentMethod' => $entityInstance->getPayments()->first()->getPaymentMethod()->getId(),
+                'addressId' => $entityInstance->getShippingAdress()->getId(),
+                'carrierId' => $entityInstance->getCarrier()->getId(),
+                'items' => $items,
+            ];
+
+            // Convertir les données en JSON
+            $jsonData = json_encode($data);
+
+            // Créer un objet Request avec un contenu JSON
+            $request = new Request(
+                [],   // Query parameters
+                [],   // Request parameters
+                [],   // Attributes
+                [],   // Cookies
+                [],   // Files
+                [],   // Server
+                $jsonData // The raw body data
+            );
+
+            // Définir le type de contenu de la requête comme JSON
+            $request->headers->set('Content-Type', 'application/json');
+
+            // Appelez le UseCase de création
+            $response = $this->createOrderUseCase->execute($request);
+
+            if ($response instanceof JsonResponse && $response->getStatusCode() !== 201) {
+                throw new \Exception('Failed to create order: ' . $response->getContent());
+            }
         }
 
         parent::persistEntity($em, $entityInstance);
@@ -66,76 +122,14 @@ class OrderAllCrudController extends AbstractCrudController
 
     public function updateEntity(EntityManagerInterface $em, $entityInstance): void
     {
-        if ($entityInstance instanceof Order) {
-            // Gérer l'annulation de la commande dans EasyAdmin
-            if ($entityInstance->getStatus()->getName() === 'Annulé') {
-                $this->handleOrderCancellation($entityInstance);
+        if ($entityInstance instanceof Order && $entityInstance->getStatus()->getName() === 'Annulé') {
+            $response = $this->cancelOrderUseCase->execute($entityInstance->getId());
+
+            if ($response instanceof JsonResponse && $response->getStatusCode() !== 200) {
+                throw new \Exception('Failed to cancel order: ' . $response->getContent());
             }
         }
 
         parent::updateEntity($em, $entityInstance);
-    }
-
-    private function handleOrderCancellation(Order $order): void
-    {
-        // Annuler la commande et rembourser
-        $payments = $order->getPayments();
-        $refundStatus = $this->em->getRepository(StatusPayment::class)->findOneBy(['name' => 'Remboursé']);
-
-        foreach ($payments as $payment) {
-            $refund = new Payments();
-            $refund->setOrderPayment($order);
-            $refund->setAmount(-$payment->getAmount());
-            $refund->setPaymentMethod($payment->getPaymentMethod());
-            $refund->setStatutPayment($refundStatus);
-            $refund->setPaymentDate(new \DateTime());
-
-            $this->em->persist($refund);
-        }
-
-        foreach ($order->getOrderItems() as $orderItem) {
-            $productVariant = $orderItem->getProductVariant();
-            $productVariant->setStockQuantity($productVariant->getStockQuantity() + $orderItem->getQuantity());
-
-            $movementType = $this->em->getRepository(MovementType::class)->findOneBy(['name' => 'incoming']);
-            $inventoryMovement = new InventoryMovements();
-            $inventoryMovement->setProductVariant($productVariant);
-            $inventoryMovement->setQuantity($orderItem->getQuantity());
-            $inventoryMovement->setMovementType($movementType);
-            $inventoryMovement->setMovementDate(new \DateTime());
-
-            $this->em->persist($inventoryMovement);
-        }
-
-        // Si l'ordre provient de la caisse, créer une transaction de remboursement
-        if ($order->getOrderSource()->getName() === 'caisse') {
-            $this->createCaisseRefundTransaction($order);
-        }
-
-        $this->em->flush();
-    }
-
-    private function createCaisseRefundTransaction(Order $order): void
-    {
-        $caisse = $this->getOpenCaisse();
-        if (!$caisse) {
-            throw new \Exception('No open caisse found');
-        }
-
-        $transactionType = $this->em->getRepository(TransactionType::class)->findOneBy(['name' => 'Remboursement']);
-        $transactionCaisse = new TransactionCaisse();
-        $transactionCaisse.setCaisse($caisse);
-        $transactionCaisse.setUser($this->getUser());
-        $transactionCaisse.setOrder($order);
-        $transactionCaisse.setTransactionDate(new \DateTime());
-        $transactionCaisse.setTransactionType($transactionType);
-        $transactionCaisse.setAmount(-$order->getTotalAmount());
-
-        $this->em->persist($transactionCaisse);
-    }
-
-    private function getOpenCaisse(): ?Caisse
-    {
-        return $this->em->getRepository(Caisse::class)->findOneBy(['isOpen' => true]);
     }
 }
