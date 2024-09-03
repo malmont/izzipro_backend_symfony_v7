@@ -56,9 +56,12 @@ class CreateOrderUseCase
                 throw new \Exception('Order creation failed');
             }
 
-            $subtotal = $this->processOrderItemsUseCase->execute($order, $orderDTO->getItems(), $this->updateStockAndInventoryUseCase, $typeOrderId);
-            if ($subtotal instanceof JsonResponse) {
-                throw new \Exception('Order items processing failed');
+            try {
+                $subtotal = $this->processOrderItemsUseCase->execute($order, $orderDTO->getItems(), $this->updateStockAndInventoryUseCase, $typeOrderId);
+            } catch (BadRequestHttpException $e) {
+                throw new \Exception($e->getMessage());
+            } catch (\Exception $e) {
+                throw new \Exception('Insufficient stock for product variant');
             }
             $subtotal = $typeOrderId === 1 ? $subtotal : -$subtotal;
 

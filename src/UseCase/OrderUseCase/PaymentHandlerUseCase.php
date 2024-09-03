@@ -3,36 +3,36 @@ namespace App\UseCase\OrderUseCase;
 
 use App\Entity\Order;
 use App\Entity\Payments;
+use App\Entity\PaymentMethod;
+use App\Entity\PaymentType;
+use App\Entity\StatusPayment;
 use Doctrine\ORM\EntityManagerInterface;
-use App\Repository\PaymentMethodRepository;
-use App\Repository\PaymentTypeRepository;
-use App\Repository\StatusPaymentRepository;
+use App\Services\EntityRetrieverService;
 
 class PaymentHandlerUseCase
 {
     private $em;
-    private $paymentMethodRepository;
-    private $paymentTypeRepository;
-    private $statusPaymentRepository;
+    private $entityRetrieverService;
 
     public function __construct(
         EntityManagerInterface $em,
-        PaymentMethodRepository $paymentMethodRepository,
-        PaymentTypeRepository $paymentTypeRepository,
-        StatusPaymentRepository $statusPaymentRepository
+        EntityRetrieverService $entityRetrieverService
     ) {
         $this->em = $em;
-        $this->paymentMethodRepository = $paymentMethodRepository;
-        $this->paymentTypeRepository = $paymentTypeRepository;
-        $this->statusPaymentRepository = $statusPaymentRepository;
+        $this->entityRetrieverService = $entityRetrieverService;
     }
 
     public function handlePayment(Order $order, float $amount, int $paymentMethodId = null, int $paymentTypeId, int $statusPaymentId, \DateTime $paymentDate = null): void
     {
-        $paymentMethod = $paymentMethodId ? $this->paymentMethodRepository->find($paymentMethodId) : $order->getPayments()->first()->getPaymentMethod();
-        $paymentType = $this->paymentTypeRepository->find($paymentTypeId);
-        $statusPayment = $this->statusPaymentRepository->find($statusPaymentId);
+        // Utilisation de EntityRetrieverService pour récupérer les entités
+        $paymentMethod = $paymentMethodId 
+            ? $this->entityRetrieverService->findOrFail(PaymentMethod::class, $paymentMethodId, 'Payment method not found') 
+            : $order->getPayments()->first()->getPaymentMethod();
+        
+        $paymentType = $this->entityRetrieverService->findOrFail(PaymentType::class, $paymentTypeId, 'Payment type not found');
+        $statusPayment = $this->entityRetrieverService->findOrFail(StatusPayment::class, $statusPaymentId, 'Status payment not found');
 
+        // Création et persistance de l'entité Payments
         $payment = new Payments();
         $payment->setOrderPayment($order);
         $payment->setAmount($amount);
