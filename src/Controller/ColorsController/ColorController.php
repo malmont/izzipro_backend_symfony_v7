@@ -1,34 +1,26 @@
 <?php
 namespace App\Controller\ColorsController;
 
-use App\Entity\Color;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Dto\ColorOutputDTO;
+use App\UseCase\ColorUseCase\GetAllColorsUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
 
 class ColorController extends AbstractController
 {
-    private $entityManager;
+    private GetAllColorsUseCase $getAllColorsUseCase;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    public function __construct(GetAllColorsUseCase $getAllColorsUseCase)
     {
-        $this->entityManager = $entityManager;
+        $this->getAllColorsUseCase = $getAllColorsUseCase;
     }
 
     #[Route('/api/colors', name: 'get_colors', methods: ['GET'])]
     public function getColors(): JsonResponse
     {
-        $colors = $this->entityManager->getRepository(Color::class)->findAll();
-
-        $colorsArray = [];
-        foreach ($colors as $color) {
-            $colorsArray[] = [
-                'id' => $color->getId(),
-                'name' => $color->getName(),
-                'codeHexa' => $color->getCodeHexa(),
-            ];
-        }
+        $colors = $this->getAllColorsUseCase->execute();
+        $colorsArray = array_map(fn($color) => new ColorOutputDTO($color), $colors);
 
         return $this->json($colorsArray, JsonResponse::HTTP_OK);
     }
