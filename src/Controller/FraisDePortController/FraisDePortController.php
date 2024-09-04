@@ -2,22 +2,30 @@
 
 namespace App\Controller\FraisDePortController;
 
-use App\Entity\FraisDePort;
-use App\Entity\Transporteur;
 use App\Entity\Commande;
-use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Dto\FraisDePortInputDTO;
+use App\UseCase\FraisDePortUseCase\GetFraisDePortByCommandeUseCase;
+use App\UseCase\FraisDePortUseCase\CreateFraisDePortUseCase;
+use App\UseCase\FraisDePortUseCase\DeleteFraisDePortUseCase;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
 
 class FraisDePortController extends AbstractController
 {
-    private $entityManager;
+    private GetFraisDePortByCommandeUseCase $getFraisDePortByCommandeUseCase;
+    private CreateFraisDePortUseCase $createFraisDePortUseCase;
+    private DeleteFraisDePortUseCase $deleteFraisDePortUseCase;
 
-    public function __construct(EntityManagerInterface $entityManager)
-    {
-        $this->entityManager = $entityManager;
+    public function __construct(
+        GetFraisDePortByCommandeUseCase $getFraisDePortByCommandeUseCase,
+        CreateFraisDePortUseCase $createFraisDePortUseCase,
+        DeleteFraisDePortUseCase $deleteFraisDePortUseCase
+    ) {
+        $this->getFraisDePortByCommandeUseCase = $getFraisDePortByCommandeUseCase;
+        $this->createFraisDePortUseCase = $createFraisDePortUseCase;
+        $this->deleteFraisDePortUseCase = $deleteFraisDePortUseCase;
     }
 
     #[Route('/api/commandes/{id}/frais-de-port', name: 'create_frais_de_port', methods: ['POST'])]
@@ -25,72 +33,40 @@ class FraisDePortController extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
 
-        // Création de l'objet FraisDePort
-        $fraisDePort = new FraisDePort();
-        $fraisDePort->setName($data['name'] ?? '');
-        $fraisDePort->setFacture($data['facture'] ?? '');
-        $fraisDePort->setImage($data['image'] ?? null);
-        $fraisDePort->setTracknumber($data['tracknumber'] ?? '');
-        $fraisDePort->setPrice((float)($data['price'] ?? 0));
-
-        // Lier le FraisDePort à la commande
-        $fraisDePort->setCommande($commande);
-
-        // Gestion du transporteur
-        if (isset($data['transporteur']['id'])) {
-            $transporteur = $this->entityManager->getRepository(Transporteur::class)->find($data['transporteur']['id']);
-            if ($transporteur) {
-                $fraisDePort->setTransporteur($transporteur);
-            } else {
-                return new JsonResponse(['error' => 'Transporteur not found'], JsonResponse::HTTP_BAD_REQUEST);
-            }
+        if (!$data) {
+            return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
-        $this->entityManager->persist($fraisDePort);
-        $this->entityManager->flush();
+        $inputDTO = new FraisDePortInputDTO(
+            $data['name'] ?? '',
+            $data['facture'] ?? '',
+            $data['image'] ?? null,
+            $data['tracknumber'] ?? '',
+            (float)($data['price'] ?? 0),
+            (int)($data['transporteur']['id'] ?? 0)
+        );
 
-        return $this->json(['success' => 'Frais de port created', 'frais_de_port_id' => $fraisDePort->getId()], JsonResponse::HTTP_CREATED);
+        $this->createFraisDePortUseCase->execute($commande, $inputDTO);
+
+        return $this->json(['success' => 'Frais de port created'], JsonResponse::HTTP_CREATED);
     }
 
     #[Route('/api/commandes/{id}/frais-de-port', name: 'get_frais_de_port', methods: ['GET'])]
     public function getFraisDePort(Commande $commande): JsonResponse
     {
-        $fraisDePort = $commande->getFraisDePort();
+        $fraisDePort = $this->getFraisDePortByCommandeUseCase->execute($commande);
 
         if (!$fraisDePort) {
             return new JsonResponse(['error' => 'No shipping cost associated with this order'], JsonResponse::HTTP_NOT_FOUND);
         }
 
-        $fraisDePortData = [
-            'id' => $fraisDePort->getId(),
-            'name' => $fraisDePort->getName(),
-            'facture' => $fraisDePort->getFacture(),
-            'image' => $fraisDePort->getImage(),
-            'tracknumber' => $fraisDePort->getTracknumber(),
-            'price' => $fraisDePort->getPrice(),
-            'transporteur' => [
-                'id' => $fraisDePort->getTransporteur()->getId(),
-                'name' => $fraisDePort->getTransporteur()->getName(),
-                'logo' => $fraisDePort->getTransporteur()->getLogo(),
-                'contact' => $fraisDePort->getTransporteur()->getContact(),
-            ]
-        ];
-
-        return $this->json($fraisDePortData, JsonResponse::HTTP_OK);
+        return $this->json($fraisDePort, JsonResponse::HTTP_OK);
     }
 
     #[Route('/api/commandes/{id}/frais-de-port', name: 'delete_frais_de_port', methods: ['DELETE'])]
     public function deleteFraisDePort(Commande $commande): JsonResponse
     {
-        $fraisDePort = $commande->getFraisDePort();
-
-        if (!$fraisDePort) {
-            return new JsonResponse(['error' => 'No shipping cost associated with this order'], JsonResponse::HTTP_NOT_FOUND);
-        }
-
-        $this->entityManager->remove($fraisDePort);
-        $this->entityManager->flush();
-
-        return new JsonResponse(['success' => 'Frais de port deleted'], JsonResponse::HTTP_NO_CONTENT);
+        $this->deleteFraisDePortUseCase->execute($commande);
+        return $this->json(['success' => 'Frais de port deleted'], JsonResponse::HTTP_NO_CONTENT);
     }
 }
