@@ -25,7 +25,7 @@ class StatusPayment
     /**
      * @var Collection<int, Order>
      */
-    #[ORM\OneToMany(mappedBy: 'statusOrder', targetEntity: Order::class)]
+    #[ORM\OneToMany(mappedBy: 'status', targetEntity: Order::class)]
     private Collection $orders;
 
     /**
