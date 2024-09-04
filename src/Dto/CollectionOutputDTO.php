@@ -1,0 +1,38 @@
+<?php
+namespace App\Dto;
+
+use App\Entity\Collections;
+
+class CollectionOutputDTO
+{
+    public int $id;
+    public float $budgetCollection;
+    public string $startDateCollection;
+    public string $endDateCollection;
+    public bool $del;
+    public string $nomCollection;
+    public ?string $photoCollection;
+    public ?array $user;
+
+    public function __construct(Collections $collection)
+    {
+        $this->id = $collection->getId();
+        $this->budgetCollection = $collection->getBudgetCollection();
+        $this->startDateCollection = $collection->getStartDateCollection()->format('Y-m-d H:i:s');
+        $this->endDateCollection = $collection->getEndDateCollection()->format('Y-m-d H:i:s');
+        $this->del = $collection->isDel();
+        $this->nomCollection = $collection->getNomCollection();
+        $this->photoCollection = $collection->getPhotoCollection();
+        $user = $collection->getUserCollections();
+        $this->user = $user ? [
+            'id' => $user->getId(),
+            'name' => $user->getFirstName() . ' ' . $user->getLastName(),
+            'email' => $user->getEmail(),
+        ] : null;
+    }
+
+    public static function fromEntity(Collections $collection): self
+    {
+        return new self($collection);
+    }
+}
