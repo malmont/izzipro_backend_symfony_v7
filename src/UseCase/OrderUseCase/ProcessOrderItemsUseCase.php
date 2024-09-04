@@ -8,21 +8,27 @@ use App\Services\EntityRetrieverService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use App\Services\OrderService\OrderItemService;
 
 class ProcessOrderItemsUseCase
 {
     private $em;
     private $entityRetrieverService;
+    private $orderItemService;
 
-    public function __construct(EntityManagerInterface $em, EntityRetrieverService $entityRetrieverService)
-    {
+    public function __construct(
+        EntityManagerInterface $em,
+        EntityRetrieverService $entityRetrieverService,
+        OrderItemService $orderItemService
+    ) {
         $this->em = $em;
         $this->entityRetrieverService = $entityRetrieverService;
+        $this->orderItemService = $orderItemService;
     }
 
     public function execute(Order $order, array $items, UpdateStockAndInventoryUseCase $updateStockAndInventory, int $typeOrderId)
     {
-        $isCancel = $typeOrderId === 1 ? false : true;
+        $isCancel = $typeOrderId !== 1;
         $subtotal = 0;
         $carrierPrice = $order->getCarrier()->getPrice(); // Prix hors taxes du transporteur
         $subtotal += $carrierPrice;
@@ -37,14 +43,10 @@ class ProcessOrderItemsUseCase
             // Mise à jour du stock et création d'un mouvement d'inventaire
             $updateStockAndInventory->execute($productVariant, $itemData['quantity'], $isCancel);
 
-            // Création des OrderItems et calcul du sous-total
-            $orderItem = new OrderItems();
-            $orderItem->setOrderAssociated($order);
-            $orderItem->setProductVariant($productVariant);
-            $orderItem->setQuantity($itemData['quantity']);
-            $orderItem->setUnitPrice($productVariant->getProduct()->getPrice());
-            $orderItem->setTotalPrice($orderItem->getUnitPrice() * $itemData['quantity']);
+            // Création de l'article de commande via le service
+            $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $itemData['quantity']);
 
+            // Persistance de l'article de commande
             $this->em->persist($orderItem);
             $subtotal += $orderItem->getTotalPrice();
         }

@@ -12,17 +12,22 @@ use App\DTO\CreateOrderDTO;
 use App\Services\EntityRetrieverService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use App\Services\OrderService\OrderCreationService;
 
 class CreateOrderCommandUseCase
 {
     private $em;
     private $entityRetrieverService;
+    private $orderCreationService;
 
-    // L'injection automatique se fait via le type hinting dans le constructeur
-    public function __construct(EntityManagerInterface $em, EntityRetrieverService $entityRetrieverService)
-    {
+    public function __construct(
+        EntityManagerInterface $em,
+        EntityRetrieverService $entityRetrieverService,
+        OrderCreationService $orderCreationService
+    ) {
         $this->em = $em;
         $this->entityRetrieverService = $entityRetrieverService;
+        $this->orderCreationService = $orderCreationService;
     }
 
     public function execute(CreateOrderDTO $orderDTO, User $user)
@@ -36,19 +41,17 @@ class CreateOrderCommandUseCase
         } catch (NotFoundHttpException $e) {
             return new JsonResponse(['error' => $e->getMessage()], 400);
         }
+        $order = $this->orderCreationService->createOrder(
+            $user,
+            $orderSource,
+            $address,
+            $carrier,
+            $statusCommande,
+            $orderType
+        );
 
-        $order = new Order();
-        $order->setReference('REF#' . uniqid());
-        $order->setUserId($user);
-        $order->setOrderType($orderType);
-        $order->setOrderSource($orderSource);
-        $order->setOrderDate(new \DateTime());
-        $order->setShippingAdress($address);
-        $order->setCarrier($carrier);
-        $order->setStatus($statusCommande);
-
-        // Persist the order entity
         $this->em->persist($order);
+  
 
         return $order;
     }

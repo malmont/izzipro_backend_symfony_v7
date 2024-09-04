@@ -7,24 +7,31 @@ use App\Entity\TransactionCaisse;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Repository\TransactionTypeRepository;
 use App\Services\CaisseService;
+use App\Services\OrderService\CaisseTransactionService;
 
 class HandleCaisseTransactionUseCase
 {
     private $em;
     private $transactionTypeRepository;
     private $caisseService;
+    private $caisseTransactionService;
 
-    public function __construct(EntityManagerInterface $em, TransactionTypeRepository $transactionTypeRepository, CaisseService $caisseService)
-    {
+    public function __construct(
+        EntityManagerInterface $em,
+        TransactionTypeRepository $transactionTypeRepository,
+        CaisseService $caisseService,
+        CaisseTransactionService $caisseTransactionService
+    ) {
         $this->em = $em;
         $this->transactionTypeRepository = $transactionTypeRepository;
         $this->caisseService = $caisseService;
+        $this->caisseTransactionService = $caisseTransactionService;
     }
 
     public function execute(Order $order = null, $user, float $amount, int $transactionTypeId): void
     {
         $caisse = $this->caisseService->getOpenCaisse();
-        if (!$caisse && $transactionTypeId!=4) {
+        if (!$caisse && $transactionTypeId != 4) {
             throw new \Exception('No open caisse found');
         }
 
@@ -33,47 +40,41 @@ class HandleCaisseTransactionUseCase
             throw new \Exception('Transaction type not found');
         }
 
-        // Mettre à jour le montant total de la caisse en fonction du type de transaction
+        // Mise à jour du montant total de la caisse en fonction du type de transaction
         switch ($transactionTypeId) {
-            case 1: 
-                $caisse->setAmountTotal($caisse->getAmountTotal() + $amount);
-            break;
-            case 3:
+            case 1: // Vendu
+            case 2: // Dépôt
+            case 3: // Ajout
                 $caisse->setAmountTotal($caisse->getAmountTotal() + $amount);
                 break;
-
-            case 2:  $caisse->setAmountTotal($caisse->getAmountTotal() + $amount);
-            break;
-            case 6: // Retrait (soustraire du montant)
+            case 6: // Retrait
                 if ($caisse->getAmountTotal() < $amount) {
                     throw new \Exception('Insufficient funds in the caisse');
                 }
                 $caisse->setAmountTotal($caisse->getAmountTotal() - $amount);
-                $amount=-abs($amount);
-            break;
-                case 4:  break;
-            
-            case 5: break;
+                $amount = -abs($amount); // Retrait
+                break;
+            case 4: // Ouverture
+            case 5: // Fermeture
+                break;
             default:
                 throw new \InvalidArgumentException('Unknown transaction type');
         }
-     
+
+        // Persister la caisse mise à jour
         $this->em->persist($caisse);
 
-        $transactionCaisse = new TransactionCaisse();
-        $transactionCaisse->setCaisse($caisse);
-        $transactionCaisse->setUserCaisse($user);
-        $transactionCaisse->setOrderCaisse($order);
-        $transactionCaisse->setTransactionDate(new \DateTime());
-        $transactionCaisse->setTransactionType($transactionType);
-        $transactionCaisse->setAmount($amount);
+        // Création de la transaction caisse via le service
+        $transactionCaisse = $this->caisseTransactionService->createTransaction(
+            $caisse,
+            $user,
+            $order,
+            $amount,
+            $transactionType
+        );
 
+        // Persister la transaction caisse
         $this->em->persist($transactionCaisse);
         $this->em->flush();
-    }
-
-    public function getEm(): EntityManagerInterface
-    {
-        return $this->em;
     }
 }

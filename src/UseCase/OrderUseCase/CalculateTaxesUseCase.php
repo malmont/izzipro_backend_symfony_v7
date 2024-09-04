@@ -2,38 +2,25 @@
 namespace App\UseCase\OrderUseCase;
 
 use App\Entity\Order;
-use App\Entity\OrderTax;
-use App\Repository\TaxRepository;
+use App\Services\OrderService\TaxCalculationService;
 use Doctrine\ORM\EntityManagerInterface;
 
 class CalculateTaxesUseCase
 {
     private $em;
-    private $taxRepository;
+    private $taxCalculationService;
 
-    public function __construct(EntityManagerInterface $em, TaxRepository $taxRepository)
+    public function __construct(EntityManagerInterface $em, TaxCalculationService $taxCalculationService)
     {
         $this->em = $em;
-        $this->taxRepository = $taxRepository;
+        $this->taxCalculationService = $taxCalculationService;
     }
 
     public function execute(Order $order, float $subtotal): float
     {
-        $totalTax = 0;
-        $taxes = $this->taxRepository->findAll();
+        $totalTax = $this->taxCalculationService->calculateTaxes($order, $subtotal);
 
-        foreach ($taxes as $tax) {
-            $taxAmount = $subtotal * $tax->getRate();
-            $totalTax += $taxAmount;
-
-            $orderTax = new OrderTax();
-            $orderTax->setOrderTax($order);
-            $orderTax->setTax($tax);
-            $orderTax->setAmount($taxAmount);
-
-            $this->em->persist($orderTax);
-        }
-
+        // Persist the changes to the database       
         return $totalTax;
     }
 }
