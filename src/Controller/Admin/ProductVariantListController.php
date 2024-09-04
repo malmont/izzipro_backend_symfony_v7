@@ -8,6 +8,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
@@ -49,6 +50,7 @@ class ProductVariantListController extends AbstractCrudController
     public function configureFields(string $pageName): iterable
     {
         return [
+            IdField::new('id')->hideOnForm(),
             TextField::new('size', 'size'),
             NumberField::new('stockQuantity', 'Stock'),
             TextField::new('color', 'color'),
