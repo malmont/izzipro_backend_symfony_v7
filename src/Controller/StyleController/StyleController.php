@@ -1,34 +1,25 @@
 <?php
+
 namespace App\Controller\StyleController;
-use App\Entity\Style;
-use Doctrine\ORM\EntityManagerInterface;
+
+use App\UseCase\StylesUseCase\GetStylesUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
 
 class StyleController extends AbstractController
 {
-    private $entityManager;
+    private GetStylesUseCase $getStylesUseCase;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    public function __construct(GetStylesUseCase $getStylesUseCase)
     {
-        $this->entityManager = $entityManager;
+        $this->getStylesUseCase = $getStylesUseCase;
     }
 
     #[Route('/api/styles', name: 'get_styles', methods: ['GET'])]
     public function getStyles(): JsonResponse
     {
-        $styles = $this->entityManager->getRepository(Style::class)->findAll();
-
-        // Manuellement composer la réponse JSON pour éviter les problèmes de sérialisation
-        $stylesArray = [];
-        foreach ($styles as $style) {
-            $stylesArray[] = [
-                'id' => $style->getId(),
-                'name' => $style->getName(),
-            ];
-        }
-
+        $stylesArray = $this->getStylesUseCase->execute();
         return new JsonResponse($stylesArray, JsonResponse::HTTP_OK);
     }
 }
