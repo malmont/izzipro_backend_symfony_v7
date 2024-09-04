@@ -1,9 +1,12 @@
 <?php
 namespace App\Controller\FournisseurController;
 
+use App\Dto\FournisseurInputDTO;
+use App\Dto\FournisseurOutputDTO;
+use App\UseCase\FournisseurUseCase\CreateFournisseurUseCase;
+use App\UseCase\FournisseurUseCase\GetAllFournisseursUseCase;
+use App\UseCase\FournisseurUseCase\DeleteFournisseurUseCase;
 use App\Entity\Fournisseur;
-use App\Entity\Commande;
-use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -11,30 +14,25 @@ use Symfony\Component\Routing\Annotation\Route;
 
 class FournisseurController extends AbstractController
 {
-    private $entityManager;
+    private GetAllFournisseursUseCase $getAllFournisseursUseCase;
+    private CreateFournisseurUseCase $createFournisseurUseCase;
+    private DeleteFournisseurUseCase $deleteFournisseurUseCase;
 
-    public function __construct(EntityManagerInterface $entityManager)
-    {
-        $this->entityManager = $entityManager;
+    public function __construct(
+        GetAllFournisseursUseCase $getAllFournisseursUseCase,
+        CreateFournisseurUseCase $createFournisseurUseCase,
+        DeleteFournisseurUseCase $deleteFournisseurUseCase
+    ) {
+        $this->getAllFournisseursUseCase = $getAllFournisseursUseCase;
+        $this->createFournisseurUseCase = $createFournisseurUseCase;
+        $this->deleteFournisseurUseCase = $deleteFournisseurUseCase;
     }
 
     #[Route('/api/fournisseurs', name: 'get_all_fournisseurs', methods: ['GET'])]
     public function getAllFournisseurs(): JsonResponse
     {
-        $fournisseurs = $this->entityManager->getRepository(Fournisseur::class)->findAll();
-
-        $fournisseursArray = [];
-        foreach ($fournisseurs as $fournisseur) {
-            $fournisseursArray[] = [
-                'id' => $fournisseur->getId(),
-                'name' => $fournisseur->getName(),
-                'photo' => $fournisseur->getPhoto(),
-                'adresse' => $fournisseur->getAdresse(),
-                'ville' => $fournisseur->getVille(),
-                'pays' => $fournisseur->getPays(),
-                'tel' => $fournisseur->getTel(),
-            ];
-        }
+        $fournisseurs = $this->getAllFournisseursUseCase->execute();
+        $fournisseursArray = array_map(fn($fournisseur) => new FournisseurOutputDTO($fournisseur), $fournisseurs);
 
         return $this->json($fournisseursArray, JsonResponse::HTTP_OK);
     }
@@ -43,17 +41,8 @@ class FournisseurController extends AbstractController
     public function createFournisseur(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
-        
-        $fournisseur = new Fournisseur();
-        $fournisseur->setName($data['name'] ?? null);
-        $fournisseur->setPhoto($data['photo'] ?? null);
-        $fournisseur->setAdresse($data['adresse'] ?? null);
-        $fournisseur->setVille($data['ville'] ?? null);
-        $fournisseur->setPays($data['pays'] ?? null);
-        $fournisseur->setTel($data['tel'] ?? null);
-
-        $this->entityManager->persist($fournisseur);
-        $this->entityManager->flush();
+        $fournisseurInputDTO = new FournisseurInputDTO($data);
+        $fournisseur = $this->createFournisseurUseCase->execute($fournisseurInputDTO);
 
         return $this->json(['success' => 'Fournisseur créé avec succès', 'fournisseur_id' => $fournisseur->getId()], JsonResponse::HTTP_CREATED);
     }
@@ -61,9 +50,9 @@ class FournisseurController extends AbstractController
     #[Route('/api/fournisseurs/{id}', name: 'delete_fournisseur', methods: ['DELETE'])]
     public function deleteFournisseur(Fournisseur $fournisseur): JsonResponse
     {
-        $this->entityManager->remove($fournisseur);
-        $this->entityManager->flush();
+        $this->deleteFournisseurUseCase->execute($fournisseur);
 
         return $this->json(['success' => 'Fournisseur supprimé avec succès'], JsonResponse::HTTP_NO_CONTENT);
     }
 }
+
