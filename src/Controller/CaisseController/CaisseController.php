@@ -2,7 +2,7 @@
 namespace App\Controller\CaisseController;
 
 use App\Entity\Caisse;
-use App\Services\CaisseService;
+use App\Services\CaisseService\CaisseService;;
 use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;

@@ -6,7 +6,7 @@ use App\Entity\Caisse;
 use App\Entity\TransactionCaisse;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Repository\TransactionTypeRepository;
-use App\Services\CaisseService;
+use App\Services\CaisseService\CaisseService;
 use App\Services\OrderService\CaisseTransactionService;
 
 class HandleCaisseTransactionUseCase
