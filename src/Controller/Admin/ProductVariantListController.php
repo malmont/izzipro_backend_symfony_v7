@@ -2,16 +2,17 @@
 namespace App\Controller\Admin;
 
 use App\Entity\ProductVariant;
+use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
+use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -20,11 +21,13 @@ class ProductVariantListController extends AbstractCrudController
 {
     private $em;
     private $requestStack;
+    private $updateStockAndInventoryUseCase;
 
-    public function __construct(EntityManagerInterface $em, RequestStack $requestStack)
+    public function __construct(EntityManagerInterface $em, RequestStack $requestStack, UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase)
     {
         $this->em = $em;
         $this->requestStack = $requestStack;
+        $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
     }
 
     public static function getEntityFqcn(): string
@@ -32,12 +35,8 @@ class ProductVariantListController extends AbstractCrudController
         return ProductVariant::class;
     }
 
-    /**
-     * Cette méthode est utilisée pour filtrer les variantes de produit par l'ID du produit passé via l'URL.
-     */
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
     {
-        // Récupérer la requête actuelle
         $request = $this->requestStack->getCurrentRequest();
         $productId = $request->query->get('productId');
         
@@ -48,21 +47,54 @@ class ProductVariantListController extends AbstractCrudController
     }
 
     public function configureFields(string $pageName): iterable
+        {
+            return [
+                IdField::new('id')->hideOnForm(),
+                AssociationField::new('product', 'Product'),
+                AssociationField::new('color', 'Color'),
+                AssociationField::new('size', 'Size'),
+                IntegerField::new('stockQuantity', 'Stock Quantity'),
+            ];
+        }
+
+    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
-        return [
-            IdField::new('id')->hideOnForm(),
-            TextField::new('size', 'size'),
-            NumberField::new('stockQuantity', 'Stock'),
-            TextField::new('color', 'color'),
-            TextField::new('product.name', 'Produit'),
-        ];
+        $request = $this->requestStack->getCurrentRequest();
+        $productId = $request->query->get('productId');
+
+        $stockBeforeMovement = 0;
+        $movementTypeId = 1; // Entrée de stock
+
+        if ($entityInstance instanceof ProductVariant) {
+            $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, $movementTypeId);
+        }
+
+        parent::persistEntity($entityManager, $entityInstance);
+    
     }
 
-    /**
-     * Cette méthode récupère les variantes de produit associées à un produit spécifique.
-     */
-    private function getProductVariantsByProductId(int $productId): array
+    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
-        return $this->em->getRepository(ProductVariant::class)->findBy(['product' => $productId]);
+        $request = $this->requestStack->getCurrentRequest();
+        $productId = $request->query->get('productId');
+
+        $stockBeforeMovement = 0;
+        $movementTypeId = 4; // Ajustement de stock
+
+        if ($entityInstance instanceof ProductVariant) {
+            $unitOfWork = $this->em->getUnitOfWork();
+            $originalData = $unitOfWork->getOriginalEntityData($entityInstance);
+
+            if ($originalData && isset($originalData['stockQuantity'])) {
+                $stockBeforeMovement = $originalData['stockQuantity'];
+            }
+
+            $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, $movementTypeId);
+        }
+
+        parent::updateEntity($entityManager, $entityInstance);
+
     }
+
+
 }

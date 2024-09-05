@@ -47,7 +47,32 @@ class UpdateStockAndInventoryUseCase
 
         // Persister le mouvement d'inventaire
         $this->em->persist($inventoryMovement);
+    }
+    public function executeNewProductVariant(ProductVariant $productVariant, int $stockBeforeMovement, int $movementTypeId): void
+    {
+        
+        $stockAfterMovement = $productVariant->getStockQuantity();
 
-      
+        if($stockBeforeMovement>$stockAfterMovement)
+        {
+            $quantity=$stockBeforeMovement -$stockAfterMovement;
+            $quantity=$quantity* -1;
+        }else
+        {
+            $quantity=$stockBeforeMovement+$stockAfterMovement;
+
+        }
+        $movementType = $this->movementTypeRepository->find($movementTypeId);
+        // Création du mouvement d'inventaire via le service
+        $inventoryMovement = $this->inventoryMovementService->createInventoryMovement(
+            $productVariant,
+            $stockBeforeMovement,
+            $stockAfterMovement,
+            $quantity,
+            $movementType
+        );
+       
+        // Persister le mouvement d'inventaire
+        $this->em->persist($inventoryMovement);
     }
 }

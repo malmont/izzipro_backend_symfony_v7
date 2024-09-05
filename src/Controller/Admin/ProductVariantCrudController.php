@@ -2,7 +2,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\ProductVariant;
-use App\Entity\InventoryMovements;
+use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
@@ -12,10 +12,12 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 class ProductVariantCrudController extends AbstractCrudController
 {
     private $entityManager;
+    private $updateStockAndInventoryUseCase;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    public function __construct(EntityManagerInterface $entityManager, UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase)
     {
         $this->entityManager = $entityManager;
+        $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
     }
 
     public static function getEntityFqcn(): string
@@ -36,9 +38,12 @@ class ProductVariantCrudController extends AbstractCrudController
 
     public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
+        $stockBeforeMovement=0;
+        $movementTypeId=1;
         if ($entityInstance instanceof ProductVariant) {
-            // Mouvement d'inventaire pour la création
-            $this->createInventoryMovement($entityInstance, 1); // ID 1 pour 'Entrant'
+
+            // Utilisation du use case pour la création du mouvement d'inventaire
+            $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance,  $stockBeforeMovement, $movementTypeId);
         }
 
         parent::persistEntity($entityManager, $entityInstance);
@@ -46,60 +51,42 @@ class ProductVariantCrudController extends AbstractCrudController
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
+        $stockBeforeMovement = 0;
+        $movementTypeId = 4;
+
         if ($entityInstance instanceof ProductVariant) {
-            // Récupérer l'ancienne quantité en stock avant la modification
-            $oldVariant = $this->entityManager->getRepository(ProductVariant::class)->find($entityInstance->getId());
+ 
+            $unitOfWork = $this->entityManager->getUnitOfWork();
+            $originalData = $unitOfWork->getOriginalEntityData($entityInstance);
 
-            if ($oldVariant) {
-                $oldStockQuantity = $oldVariant->getStockQuantity();
-                $newStockQuantity = $entityInstance->getStockQuantity();
-
-                if ($newStockQuantity !== $oldStockQuantity) {
-                    // Créer un mouvement d'inventaire en fonction de l'ajustement
-                    $this->createInventoryMovement($entityInstance, $newStockQuantity > $oldStockQuantity ? 1 : 4, $oldStockQuantity);
-                }
+            if ($originalData && isset($originalData['stockQuantity'])) {
+                $stockBeforeMovement = $originalData['stockQuantity']; 
             }
+
+            $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, $movementTypeId);
         }
 
         parent::updateEntity($entityManager, $entityInstance);
     }
-
     public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
+        $movementTypeId = 2;
+        $stockBeforeMovement = 0;
+
+
         if ($entityInstance instanceof ProductVariant) {
-            // Mouvement d'inventaire pour la suppression
-            $this->createInventoryMovement($entityInstance, 2); // ID 2 pour 'Sortant'
+
+            $oldVariant = $this->entityManager->getRepository(ProductVariant::class)->find($entityInstance->getId());
+
+
+            if ($oldVariant) {
+                $stockBeforeMovement = $oldVariant->getStockQuantity();
+                $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, $movementTypeId);
+                $entityManager->flush();
+            }
         }
 
+        // Supprimez ensuite l'entité ProductVariant
         parent::deleteEntity($entityManager, $entityInstance);
-    }
-
-    private function createInventoryMovement(ProductVariant $variant, int $movementTypeId, ?int $oldStockQuantity = null): void
-    {
-        $movementType = $this->entityManager->getRepository(MovementType::class)->find($movementTypeId);
-
-        if (!$movementType) {
-            throw new \Exception("Movement type with ID '{$movementTypeId}' not found");
-        }
-
-        $inventoryMovement = new InventoryMovements();
-        $inventoryMovement->setProductVariant($variant);
-        $inventoryMovement->setMovementType($movementType);
-        $inventoryMovement->setQuantity(abs($variant->getStockQuantity() - ($oldStockQuantity ?? 0)));
-        $inventoryMovement->setMovementDate(new \DateTime());
-
-        if ($movementTypeId === 1) { // Entrant
-            $inventoryMovement->setStockBeforeMovement($oldStockQuantity ?? 0); // Pour la création, on part de 0
-            $inventoryMovement->setStockAfterMovement($variant->getStockQuantity());
-        } elseif ($movementTypeId === 2) { // Sortant
-            $inventoryMovement->setStockBeforeMovement($variant->getStockQuantity());
-            $inventoryMovement->setStockAfterMovement(0); // Suppression, donc stock après = 0
-        } elseif ($movementTypeId === 4) { // Ajustement
-            $inventoryMovement->setStockBeforeMovement($oldStockQuantity);
-            $inventoryMovement->setStockAfterMovement($variant->getStockQuantity());
-        }
-
-        $this->entityManager->persist($inventoryMovement);
-        $this->entityManager->flush();
     }
 }

@@ -7,6 +7,7 @@ use App\Entity\Categories;
 use App\Entity\Style;
 use App\Dto\ProductInputDTO;
 use App\Dto\ProductOutputDTO;
+use App\Dto\ProductDetailedOutputDTO;
 use App\Services\EntityRetrieverService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -26,7 +27,7 @@ class ProductService
     public function getProductsByCommande(Commande $commande, string $host): array
     {
         $products = $commande->getProducts();
-        return array_map(fn($product) => new ProductOutputDTO($product, $host), $products->toArray());
+        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $products->toArray());
     }
 
     public function createProductByCommande(Commande $commande, ProductInputDTO $inputDTO, Request $request, string $uploadDir): Product
