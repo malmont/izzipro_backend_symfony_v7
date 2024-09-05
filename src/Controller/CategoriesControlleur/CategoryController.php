@@ -1,7 +1,8 @@
 <?php
 namespace App\Controller\CategoriesControlleur;
 
-
+use App\Entity\Categories;
+use App\Entity\Product;
 use App\Dto\CategoryOutputDTO;
 use App\Dto\ProductDetailedOutputDTO;
 use App\UseCase\CategoriesUseCase\GetCategoriesUseCase;
@@ -11,18 +12,21 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use Doctrine\ORM\EntityManagerInterface;
 
 class CategoryController extends AbstractController
 {
     private GetProductsByCategoryUseCase $getProductsByCategoryUseCase;
     private CountProductsByCategoryUseCase $countProductsByCategoryUseCase;
-
+    private $entityManager;
     public function __construct(
         GetProductsByCategoryUseCase $getProductsByCategoryUseCase,
-        CountProductsByCategoryUseCase $countProductsByCategoryUseCase
+        CountProductsByCategoryUseCase $countProductsByCategoryUseCase,
+        EntityManagerInterface $entityManager
     ) {
         $this->getProductsByCategoryUseCase = $getProductsByCategoryUseCase;
         $this->countProductsByCategoryUseCase = $countProductsByCategoryUseCase;
+        $this->entityManager = $entityManager;
     }
 
     #[Route('/api/products/by-category', name: 'get_products_by_category', methods: ['GET'])]
@@ -51,4 +55,26 @@ class CategoryController extends AbstractController
             'data' => $productsDTO,
         ], JsonResponse::HTTP_OK);
     }
+
+    #[Route('/api/category', name: 'get_categories', methods: ['GET'])]
+    public function getCategories(Request $request): JsonResponse
+        {
+            $categories = $this->entityManager->getRepository(Categories::class)->findAll();
+
+            // Obtenir l'URL de base de l'hôte
+            $host = $request->getSchemeAndHttpHost() . '/jeesign';
+
+            // Manuellement composer la réponse JSON sans les produits associés
+            $categoriesArray = [];
+            foreach ($categories as $category) {
+                $categoriesArray[] = [
+                    'id' => $category->getId(),
+                    'name' => $category->getName(),
+                    'description' => $category->getDescription(),
+                    'image' => $category->getImage() ? $host . '/assets/uploads/categories/' . $category->getImage() : null,
+                ];
+            }
+
+            return new JsonResponse($categoriesArray, JsonResponse::HTTP_OK);
+        }
 }
