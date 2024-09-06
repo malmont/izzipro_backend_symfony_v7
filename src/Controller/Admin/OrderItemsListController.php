@@ -14,6 +14,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Component\HttpFoundation\RequestStack;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 
 class OrderItemsListController extends AbstractCrudController
 {
@@ -29,6 +31,13 @@ class OrderItemsListController extends AbstractCrudController
     public static function getEntityFqcn(): string
     {
         return OrderItems::class;
+    }
+
+    public function configureActions(Actions $actions): Actions
+    {
+        // Désactiver le bouton "Add Order Item"
+        return $actions
+            ->disable(Action::NEW); // Désactiver l'action "new"
     }
 
     /**
