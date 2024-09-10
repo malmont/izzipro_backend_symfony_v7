@@ -29,10 +29,11 @@ class CategoryController extends AbstractController
         $this->entityManager = $entityManager;
     }
 
-    #[Route('/api/products/by-category', name: 'get_products_by_category', methods: ['GET'])]
+   #[Route('/api/products/by-category', name: 'get_products_by_category', methods: ['GET'])]
     public function getProductsByCategory(Request $request): JsonResponse
     {
         $categoryIds = $request->query->get('categories');
+        $keyword = $request->query->get('keyword'); // Ajout du paramètre keyword
         $page = $request->query->getInt('page', 1);
         $pageSize = $request->query->getInt('pageSize', 10);
 
@@ -40,7 +41,7 @@ class CategoryController extends AbstractController
             $categoryIds = json_decode($categoryIds);
         }
 
-        $products = $this->getProductsByCategoryUseCase->execute($categoryIds, $page, $pageSize);
+        $products = $this->getProductsByCategoryUseCase->execute($categoryIds, $keyword, $page, $pageSize);
         $totalProducts = $this->countProductsByCategoryUseCase->execute($categoryIds);
 
         $host = $request->getSchemeAndHttpHost() . '/jeesign';
@@ -55,6 +56,7 @@ class CategoryController extends AbstractController
             'data' => $productsDTO,
         ], JsonResponse::HTTP_OK);
     }
+
 
     #[Route('/api/category', name: 'get_categories', methods: ['GET'])]
     public function getCategories(Request $request): JsonResponse

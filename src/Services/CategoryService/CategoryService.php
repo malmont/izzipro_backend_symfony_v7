@@ -19,7 +19,7 @@ class CategoryService
         return $this->entityManager->getRepository(Categories::class)->findAll();
     }
 
-    public function getProductsByCategory(?array $categoryIds, int $page, int $pageSize): array
+    public function getProductsByCategory(?array $categoryIds, ?string $keyword, int $page, int $pageSize): array
     {
         $queryBuilder = $this->entityManager->getRepository(Product::class)->createQueryBuilder('p');
 
@@ -27,6 +27,11 @@ class CategoryService
             $queryBuilder->join('p.category', 'c')
                          ->andWhere('c.id IN (:categoryIds)')
                          ->setParameter('categoryIds', $categoryIds);
+        }
+
+        if ($keyword) {
+            $queryBuilder->andWhere('p.name LIKE :keyword OR p.description LIKE :keyword')
+                         ->setParameter('keyword', '%' . $keyword . '%');
         }
 
         // Appliquer la pagination
