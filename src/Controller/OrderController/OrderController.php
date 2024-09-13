@@ -7,19 +7,22 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use App\UseCase\OrderUseCase\CreateOrderUseCase;
 use App\UseCase\OrderUseCase\CancelOrderUseCase;
+use App\UseCase\OrderUseCase\GetOrdersBySourceUseCase;
 use App\Dto\CreateOrderDTO;
 
 class OrderController extends AbstractController
 {
     private $createOrderUseCase;
     private $cancelOrderUseCase;
-
+    private $getOrdersBySourceUseCase;
     public function __construct(
         CreateOrderUseCase $createOrderUseCase,
-        CancelOrderUseCase $cancelOrderUseCase
+        CancelOrderUseCase $cancelOrderUseCase,
+        GetOrdersBySourceUseCase $getOrdersBySourceUseCase
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
+        $this->getOrdersBySourceUseCase = $getOrdersBySourceUseCase;
     }
 
     /**
@@ -48,4 +51,27 @@ class OrderController extends AbstractController
     {
         return $this->cancelOrderUseCase->execute($id);
     }
+
+
+    #[Route('api/orders', name: 'get_orders', methods: ['GET'])]
+    public function getOrders(Request $request): JsonResponse
+    {
+        $orderSourceId = $request->query->get('orderSource');
+        if (!$orderSourceId) {
+            return $this->json(['error' => 'orderSource parameter is required'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        $days = $request->query->get('days');
+        
+        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+    
+        $orderDTOs = $this->getOrdersBySourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
+    
+        if (empty($orderDTOs)) {
+            return $this->json(['message' => 'No orders found for the given order source'], JsonResponse::HTTP_NOT_FOUND);
+        }
+    
+        $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);
+        return $this->json($orderData);
+    }
+    
 }

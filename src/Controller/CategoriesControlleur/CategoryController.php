@@ -35,7 +35,7 @@ class CategoryController extends AbstractController
         $categoryIds = $request->query->get('categories');
         $keyword = $request->query->get('keyword'); // Ajout du paramètre keyword
         $page = $request->query->getInt('page', 1);
-        $pageSize = $request->query->getInt('pageSize', 10);
+        $pageSize = $request->query->getInt('pageSize', 12);
 
         if ($categoryIds) {
             $categoryIds = json_decode($categoryIds);
