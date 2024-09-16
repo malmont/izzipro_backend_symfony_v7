@@ -8,16 +8,20 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use App\UseCase\CaisseUseCase\GestCaisseUseCase;
+
 
 class CaisseController extends AbstractController
 {
     private $handleCaisseTransactionUseCase;
     private $caisseService;
+    private $gestCaisseUseCase ;
 
-    public function __construct(HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase, CaisseService $caisseService)
+    public function __construct(HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase, CaisseService $caisseService,GestCaisseUseCase $gestCaisseUseCase )
     {
         $this->handleCaisseTransactionUseCase = $handleCaisseTransactionUseCase;
         $this->caisseService = $caisseService;
+        $this->gestCaisseUseCase =$gestCaisseUseCase;
     }
 
      /**
@@ -34,13 +38,11 @@ class CaisseController extends AbstractController
             $lastClosedCaisse = $this->caisseService->getLastClosedCaisse();
             $initialAmount = $lastClosedCaisse ? $lastClosedCaisse->getAmountTotal() : 0.0;
 
-            // Créer la nouvelle caisse
             $caisse = new Caisse();
             $caisse->setAmountTotal($initialAmount);
             $caisse->setCreatedAt(new \DateTime());
             $caisse->setOpen(true);
 
-            // Persist de la nouvelle caisse
             $entityManager = $this->handleCaisseTransactionUseCase->getEm();
             $entityManager->persist($caisse);
             $entityManager->flush();  // Sauvegarder la nouvelle caisse dans la base de données
@@ -116,5 +118,25 @@ class CaisseController extends AbstractController
 
         return new JsonResponse(['message' => 'Withdrawal successful', 'new_total' => $caisse->getAmountTotal()], 201);
     }
+
+    #[Route('api/caisse', name: 'get_caisse', methods: ['GET'])]
+    public function getCaisse(Request $request): JsonResponse
+    {
+        $days = $request->query->get('days');
+        $days = $days !== null ? (int)$days : null; // Conversion sécurisée en entier si non null
+        
+        $caisseDTOs = $this->gestCaisseUseCase->execute($days);
+        
+        if (empty($caisseDTOs)) {
+            return $this->json(['message' => 'Aucune caisse trouvée pour la période donnée'], JsonResponse::HTTP_NOT_FOUND);
+        }
+        
+        $caisseDatas = array_map(fn($dto) => $dto->toArray(), $caisseDTOs);
+        
+        return $this->json($caisseDatas);
+    }
+    
+        
+
 }
 
