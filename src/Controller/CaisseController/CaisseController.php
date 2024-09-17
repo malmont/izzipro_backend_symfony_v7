@@ -1,57 +1,64 @@
 <?php
+
 namespace App\Controller\CaisseController;
 
 use App\Entity\Caisse;
-use App\Services\CaisseService\CaisseService;;
+use App\Services\CaisseService\CaisseService;
 use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use App\UseCase\CaisseUseCase\GestCaisseUseCase;
-
+use Doctrine\ORM\EntityManagerInterface;
 
 class CaisseController extends AbstractController
 {
     private $handleCaisseTransactionUseCase;
     private $caisseService;
-    private $gestCaisseUseCase ;
-
-    public function __construct(HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase, CaisseService $caisseService,GestCaisseUseCase $gestCaisseUseCase )
-    {
+    private $gestCaisseUseCase;
+    private $entityManager;
+    public function __construct(
+        HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase,
+        CaisseService $caisseService,
+        GestCaisseUseCase $gestCaisseUseCase,
+        EntityManagerInterface $entityManager
+    ) {
         $this->handleCaisseTransactionUseCase = $handleCaisseTransactionUseCase;
         $this->caisseService = $caisseService;
-        $this->gestCaisseUseCase =$gestCaisseUseCase;
+        $this->gestCaisseUseCase = $gestCaisseUseCase;
+        $this->entityManager = $entityManager;
     }
 
-     /**
+    /**
      * @Route("api/caisse/open", name="caisse_open", methods={"POST"})
      */
     public function openCaisse(): JsonResponse
-        {
-            $existingCaisse = $this->caisseService->getOpenCaisse();
-            if ($existingCaisse) {
-                return new JsonResponse(['error' => 'A caisse is already open'], 400);
-            }
-
-            // Récupérer la dernière caisse fermée
-            $lastClosedCaisse = $this->caisseService->getLastClosedCaisse();
-            $initialAmount = $lastClosedCaisse ? $lastClosedCaisse->getAmountTotal() : 0.0;
-
-            $caisse = new Caisse();
-            $caisse->setAmountTotal($initialAmount);
-            $caisse->setCreatedAt(new \DateTime());
-            $caisse->setOpen(true);
-
-            $entityManager = $this->handleCaisseTransactionUseCase->getEm();
-            $entityManager->persist($caisse);
-            $entityManager->flush();  // Sauvegarder la nouvelle caisse dans la base de données
-
-            // Exécuter la transaction pour l'ouverture de la caisse
-            $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $initialAmount, 4); // 4 pour Ouverture
-
-            return new JsonResponse(['message' => 'Caisse opened successfully', 'caisse_id' => $caisse->getId()], 201);
+    {
+        // Vérifier si une caisse est déjà ouverte
+        $existingCaisse = $this->caisseService->getOpenCaisse();
+        if ($existingCaisse) {
+            return new JsonResponse(['error' => 'A caisse is already open'], 400);
         }
+
+        // Récupérer la dernière caisse fermée et calculer le montant initial
+        $lastClosedCaisse = $this->caisseService->getLastClosedCaisse();
+        $initialAmount = $lastClosedCaisse ? $lastClosedCaisse->getAmountTotal() : 0.0;
+
+        // Créer une nouvelle caisse
+        $caisse = new Caisse();
+        $caisse->setAmountTotal($initialAmount);
+        $caisse->setCreatedAt(new \DateTime());
+        $caisse->setOpen(true);
+
+        $this->entityManager->persist($caisse);
+        $this->entityManager->flush();
+
+        // Utiliser le UseCase pour gérer l'ouverture de la caisse (transaction)
+        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $initialAmount, 4); // 4 pour Ouverture
+
+        return new JsonResponse(['message' => 'Caisse opened successfully', 'caisse_id' => $caisse->getId()], 201);
+    }
 
     /**
      * @Route("api/caisse/close", name="caisse_close", methods={"POST"})
@@ -65,7 +72,7 @@ class CaisseController extends AbstractController
 
         $caisse->setOpen(false);
 
-        $this->handleCaisseTransactionUseCase->getEm()->persist($caisse);
+        // Utiliser le UseCase pour gérer la fermeture de la caisse
         $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $caisse->getAmountTotal(), 5); // 5 pour Fermeture
 
         return new JsonResponse(['message' => 'Caisse closed successfully', 'caisse_id' => $caisse->getId()], 200);
@@ -87,8 +94,8 @@ class CaisseController extends AbstractController
             return new JsonResponse(['error' => 'No open caisse found'], 400);
         }
 
-        // Créer une transaction de dépôt (ID de transaction type: 3 pour Dépôt)
-        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $amount, 3);
+        // Utiliser le UseCase pour gérer le dépôt
+        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $amount, 3); // 3 pour Dépôt
 
         return new JsonResponse(['message' => 'Deposit successful', 'new_total' => $caisse->getAmountTotal()], 201);
     }
@@ -113,8 +120,8 @@ class CaisseController extends AbstractController
             return new JsonResponse(['error' => 'Insufficient funds in the caisse'], 400);
         }
 
-        // Créer une transaction de retrait (ID de transaction type: 6 pour Retrait)
-        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $amount, 6);
+        // Utiliser le UseCase pour gérer le retrait
+        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $amount, 6); // 6 pour Retrait
 
         return new JsonResponse(['message' => 'Withdrawal successful', 'new_total' => $caisse->getAmountTotal()], 201);
     }
@@ -135,8 +142,5 @@ class CaisseController extends AbstractController
         
         return $this->json($caisseDatas);
     }
-    
-        
-
 }
 
