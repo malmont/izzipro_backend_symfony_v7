@@ -1,0 +1,6 @@
+gesdinet_jwt_refresh_token:
+    ttl: 604800 
+    user_identity_field: email  
+    manager_type: orm  
+    firewall: api 
+    ttl_update: true  
