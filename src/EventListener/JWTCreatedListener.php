@@ -15,11 +15,17 @@ class JWTCreatedListener
             return;
         }
 
+        // Récupérer le payload existant
         $payload = $event->getData();
-        $payload['id'] = $user->getId(); // Ajouter l'ID de l'utilisateur au payload
+
+        // Ajouter des informations supplémentaires au payload du JWT
+        $payload['id'] = $user->getId();
         $payload['firstName'] = $user->getFirstname();
         $payload['lastName'] = $user->getLastname();
         $payload['email'] = $user->getEmail();
+        $payload['roles'] = $user->getRoles(); // Ajouter les rôles de l'utilisateur au JWT
+
+        // Mettre à jour le payload du JWT
         $event->setData($payload);
     }
 }

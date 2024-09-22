@@ -35,54 +35,52 @@ class SecurityController extends AbstractController
         throw new \LogicException('This method can be blank - it will be intercepted by the logout key on your firewall.');
     }
 
-    #[Route('/api/login','api_login',methods:['POST'])]
-    public function loginApi(){ 
-        $user =$this->getUser();
-        return $this-> json(
-            [
-                
-                'mail' =>$user->getUserIdentifier(),
-                'roles'=> $user->getRoles()
-            ] 
-            );
-    
-    }
 
-
-#[Route('/api/login-web', name: 'api_login_web', methods: ['POST'])]
-    public function loginWebWithRefreshToken(JWTTokenManagerInterface $JWTManager, RefreshTokenManagerInterface $refreshTokenManager): Response
+    #[Route(path: '/api/login', name: 'api_login', methods: ['POST'])]
+        public function loginApi(AuthenticationUtils $authenticationUtils, JWTTokenManagerInterface $JWTManager, RefreshTokenManagerInterface $refreshTokenManager, Request $request): Response
         {
+          
             $user = $this->getUser();
-
             if (!$user instanceof UserInterface) {
                 return new Response('Unauthorized', Response::HTTP_UNAUTHORIZED);
             }
-
             $jwt = $JWTManager->create($user);
-
             $refreshToken = $refreshTokenManager->createForUser($user);
             $response = new Response();
-            $response->headers->setCookie(
-                Cookie::create('jwt')
-                    ->withValue($jwt)
-                    ->withHttpOnly(true)
-                    ->withSecure(true)
-                    ->withSameSite(Cookie::SAMESITE_STRICT)
-                    ->withExpires(time() + 3600)
-            );
+            $platform = $request->request->get('platform'); 
+            if ($platform === 'web') {
+               
+                $response->headers->setCookie(
+                    Cookie::create('jwt')
+                        ->withValue($jwt)
+                        ->withHttpOnly(true)
+                        ->withSecure(true)
+                        ->withSameSite(Cookie::SAMESITE_STRICT)
+                        ->withExpires(time() + 3600)  
+                );
+                $response->headers->setCookie(
+                    Cookie::create('refresh_token')
+                        ->withValue($refreshToken->getRefreshToken())
+                        ->withHttpOnly(true)
+                        ->withSecure(true)
+                        ->withSameSite(Cookie::SAMESITE_STRICT)
+                        ->withExpires(time() + 604800) 
+                );
+                $response->setContent(json_encode([
+                    'mail' => $user->getUserIdentifier(),
+                    'roles' => $user->getRoles(),
+                ]));
+        
+                // Définir les en-têtes de la réponse pour le JSON
+                $response->headers->set('Content-Type', 'application/json');
+            } else {
+                return $this-> json([ 
+                                'mail' =>$user->getUserIdentifier(),
+                                'roles'=> $user->getRoles()
+                            ]);
+            }
 
-            $response->headers->setCookie(
-                Cookie::create('refresh_token')
-                    ->withValue($refreshToken->getRefreshToken())
-                    ->withHttpOnly(true)
-                    ->withSecure(true)
-                    ->withSameSite(Cookie::SAMESITE_STRICT)
-                    ->withExpires(time() + 604800)  // Durée de vie du refresh token (7 jours)
-            );
-
-            return $this->json([
-                'message' => 'Logged in successfully'
-            ], Response::HTTP_OK, [], $response->headers->all());
+            return $response;
         }
 
 
@@ -100,11 +98,8 @@ class SecurityController extends AbstractController
             if (!$validRefreshToken || !$refreshTokenManager->isValid($validRefreshToken)) {
                 return new Response('Invalid or expired refresh token', Response::HTTP_UNAUTHORIZED);
             }
-        
-            // Récupérer l'utilisateur associé au refresh token
+
             $user = $validRefreshToken->getUser();
-        
-            // Vérifier si l'utilisateur est toujours valide (ex : non désactivé)
             if (!$user instanceof UserInterface) {
                 return new Response('User not found', Response::HTTP_UNAUTHORIZED);
             }
@@ -126,8 +121,36 @@ class SecurityController extends AbstractController
             ], Response::HTTP_OK, [], $response->headers->all());
         }
         
+        #[Route('/api/validate-token', name: 'api_validate_token', methods: ['GET'])]
+        public function validateToken(): Response
+        {
+            $user = $this->getUser();
+        
+            if ($user instanceof UserInterface) {
+                return $this->json([
+                    'status' => 'success',
+                    'message' => 'Token is valid',
+                ], 200);
+            }
+        
+            // Token invalide ou expiré
+            return $this->json([
+                'status' => 'error',
+                'message' => 'Token is invalid or expired',
+            ], 401);
+        }
+        
+        #[Route(path: '/api/logout', name: 'api_logout', methods: ['POST'])]
+        public function logoutWeb(Request $request): Response
+        {
+            $response = new Response();
+            $response->headers->clearCookie('jwt', '/', null, true, true, Cookie::SAMESITE_NONE);
+            $response->headers->clearCookie('refresh_token', '/', null, true, true, Cookie::SAMESITE_NONE);
 
-
+            return $this->json([
+                'message' => 'Successfully logged out',
+            ]);
+        }
     
 
 }
