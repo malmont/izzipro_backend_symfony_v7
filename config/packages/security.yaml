@@ -54,9 +54,11 @@ security:
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/products/by-category, roles: PUBLIC_ACCESS }
         - { path: ^/api/category, roles: PUBLIC_ACCESS }
-        - { path: ^/api, roles: ROLE_USER }
+        - { path: ^/api/homeslider, roles: PUBLIC_ACCESS }
         - { path: ^/api/login-web, roles: PUBLIC_ACCESS }
         - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
+        - { path: ^/api, roles: ROLE_USER }
+        
 
 
 
