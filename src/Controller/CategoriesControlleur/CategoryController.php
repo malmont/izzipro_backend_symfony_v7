@@ -33,7 +33,7 @@ class CategoryController extends AbstractController
     public function getProductsByCategory(Request $request): JsonResponse
     {
         $categoryIds = $request->query->get('categories');
-        $keyword = $request->query->get('keyword'); // Ajout du paramètre keyword
+        $keyword = $request->query->get('keyword'); 
         $page = $request->query->getInt('page', 1);
         $pageSize = $request->query->getInt('pageSize', 12);
 

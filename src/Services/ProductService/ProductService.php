@@ -76,4 +76,47 @@ class ProductService
         $this->entityManager->remove($product);
         $this->entityManager->flush();
     }
+
+    public function getAllProducts(string $host): array
+    {
+
+        $products = $this->entityManager->getRepository(Product::class)->findAll();
+        $bestsellers = array_filter($products, fn($product) => $product->isIsbestseller());
+        $newArrivals = array_filter($products, fn($product) => $product->isIsnewarrival());
+        $specialOffers = array_filter($products, fn($product) => $product->isIsspecialoffer());
+
+        $bestsellersDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $bestsellers);
+        $newArrivalsDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $newArrivals);
+        $specialOffersDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $specialOffers);
+
+        return [
+            'bestsellers' => $bestsellersDTO,
+            'newArrivals' => $newArrivalsDTO,
+            'specialOffers' => $specialOffersDTO,
+        ];
+    }
+
+    public function getProductsByOffer(string $offer, string $host): array
+    {
+        $products = $this->entityManager->getRepository(Product::class)->findAll();
+
+        switch ($offer) {
+            case 'bestsellers':
+                $filteredProducts = array_filter($products, fn($product) => $product->isIsbestseller());
+                break;
+            case 'newarrivals':
+                $filteredProducts = array_filter($products, fn($product) => $product->isIsnewarrival());
+                break;
+            case 'specialoffers':
+                $filteredProducts = array_filter($products, fn($product) => $product->isIsspecialoffer());
+                break;
+            case 'isfeatured':
+                $filteredProducts = array_filter($products, fn($product) => $product->isIsfeatured());
+                break;
+            default:
+                return []; 
+        }
+
+        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $filteredProducts);
+    }
 }

@@ -57,6 +57,7 @@ security:
         - { path: ^/api/homeslider, roles: PUBLIC_ACCESS }
         - { path: ^/api/login-web, roles: PUBLIC_ACCESS }
         - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
+        - { path: ^/api/products, roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: ROLE_USER }
         
 

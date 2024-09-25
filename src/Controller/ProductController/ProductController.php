@@ -3,6 +3,7 @@
 namespace App\Controller\ProductController;
 
 use App\Entity\Commande;
+use App\Entity\Product;
 use App\Dto\ProductOutputDTO;
 use App\UseCase\ProductUseCase\GetProductsByCommandeUseCase;
 use App\UseCase\ProductUseCase\CreateProductByCommandeUseCase;
@@ -11,22 +12,30 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
-
+use Doctrine\ORM\EntityManagerInterface;
+use App\UseCase\ProductUseCase\GetAllProductsUseCase;
+use App\UseCase\ProductUseCase\GetProductsByOfferUseCase;
 
 class ProductController extends AbstractController
 {
     private GetProductsByCommandeUseCase $getProductsByCommandeUseCase;
     private CreateProductByCommandeUseCase $createProductByCommandeUseCase;
     private DeleteProductUseCase $deleteProductUseCase;
-
+    private EntityManagerInterface $entityManager;
+    private GetAllProductsUseCase $getAllProductsUseCase;
+    private GetProductsByOfferUseCase $getProductsByOfferUseCase;
     public function __construct(
         GetProductsByCommandeUseCase $getProductsByCommandeUseCase,
         CreateProductByCommandeUseCase $createProductByCommandeUseCase,
-        DeleteProductUseCase $deleteProductUseCase
+        DeleteProductUseCase $deleteProductUseCase,EntityManagerInterface $entityManager
+        , GetAllProductsUseCase $getAllProductsUseCase,GetProductsByOfferUseCase $getProductsByOfferUseCase
     ) {
         $this->getProductsByCommandeUseCase = $getProductsByCommandeUseCase;
         $this->createProductByCommandeUseCase = $createProductByCommandeUseCase;
         $this->deleteProductUseCase = $deleteProductUseCase;
+        $this->entityManager = $entityManager;
+        $this->getAllProductsUseCase = $getAllProductsUseCase;
+        $this->getProductsByOfferUseCase = $getProductsByOfferUseCase;
     }
 
     #[Route('/api/commandes/{id}/products', name: 'get_products_by_commande', methods: ['GET'])]
@@ -68,4 +77,25 @@ class ProductController extends AbstractController
             return new JsonResponse(['error' => $e->getMessage()], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
+
+    #[Route('/api/products', name: 'get_all_products', methods: ['GET'])]
+    public function getAllProducts(Request $request): JsonResponse
+    {
+        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+        $products = $this->getAllProductsUseCase->execute($host);
+
+        return $this->json($products, JsonResponse::HTTP_OK);
+    }
+
+    #[Route('/api/products/{offer}', name: 'get_products_by_offer', methods: ['GET'])]
+    public function getProductsByOffer(string $offer, Request $request): JsonResponse
+    {
+        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+
+        // Récupérer les produits en fonction de l'offre
+        $products = $this->getProductsByOfferUseCase->execute($offer, $host);
+
+        return $this->json($products, JsonResponse::HTTP_OK);
+    }
+    
 }
