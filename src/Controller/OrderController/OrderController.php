@@ -9,20 +9,25 @@ use App\UseCase\OrderUseCase\CreateOrderUseCase;
 use App\UseCase\OrderUseCase\CancelOrderUseCase;
 use App\UseCase\OrderUseCase\GetOrdersBySourceUseCase;
 use App\Dto\CreateOrderDTO;
+use Symfony\Component\Security\Core\Security;
+use App\UseCase\OrderUseCase\GetOrdersByUserUseCase;
 
 class OrderController extends AbstractController
 {
+    private GetOrdersByUserUseCase $getOrdersByUserUseCase;
     private $createOrderUseCase;
     private $cancelOrderUseCase;
     private $getOrdersBySourceUseCase;
     public function __construct(
         CreateOrderUseCase $createOrderUseCase,
         CancelOrderUseCase $cancelOrderUseCase,
-        GetOrdersBySourceUseCase $getOrdersBySourceUseCase
+        GetOrdersBySourceUseCase $getOrdersBySourceUseCase,
+        GetOrdersByUserUseCase $getOrdersByUserUseCase
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
         $this->getOrdersBySourceUseCase = $getOrdersBySourceUseCase;
+        $this->getOrdersByUserUseCase = $getOrdersByUserUseCase;
     }
 
     /**
@@ -73,5 +78,28 @@ class OrderController extends AbstractController
         $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);
         return $this->json($orderData);
     }
-    
+
+    #[Route('api/ordersuser', name: 'get_user_orders', methods: ['GET'])]
+    public function getUserOrders(Request $request, Security $security): JsonResponse
+    {
+        $user = $security->getUser();
+
+        if (!$user) {
+            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+        }
+
+        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+        $orderDTOs = $this->getOrdersByUserUseCase->execute($user->getId(), $host);
+
+        if (empty($orderDTOs)) {
+            return $this->json(['message' => 'No orders found for the current user'], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);
+
+        return $this->json($orderData);
+    }
 }
+
+    
+

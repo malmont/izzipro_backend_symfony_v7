@@ -16,7 +16,6 @@ class OrderService
 
     public function getOrdersByOrderSource(int $orderSourceId, ?int $days = null)
     {
-        // If days are provided, filter orders based on the date
         if ($days) {
             $date = new DateTime();
             $date->modify("-$days days");
@@ -29,8 +28,11 @@ class OrderService
                 ->getQuery()
                 ->getResult();
         }
-
-        // If no days parameter, return all orders for the given order source
         return $this->orderRepository->findBy(['orderSource' => $orderSourceId]);
+    }
+
+    public function getOrdersByUser(int $userId)
+    {
+        return $this->orderRepository->findBy(['userId' => $userId]);
     }
 }

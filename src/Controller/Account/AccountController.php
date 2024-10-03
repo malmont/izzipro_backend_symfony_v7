@@ -13,7 +13,7 @@ class AccountController extends AbstractController
     #[Route('/account', name: 'app_account')]
     public function index(OrderRepository $repoOrder): Response
     {
-        $orders = $repoOrder->findBy(['ispaid' => true, 'userOrder'=>$this->getUser()],['id'=>'DESC']);
+        $orders = $repoOrder->findBy(['userId'=>$this->getUser()],['id'=>'DESC']);
         return $this->render('account/index.html.twig', [
             'orders' => $orders,
         ]);

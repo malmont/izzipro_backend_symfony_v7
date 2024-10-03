@@ -43,38 +43,36 @@ class CustomAuthenticationSuccessHandler implements AuthenticationSuccessHandler
                 $refreshToken = new RefreshToken();
                 $refreshToken->setRefreshToken(base64_encode(random_bytes(64)));
                 $refreshToken->setUsername($user->getUserIdentifier());
-                $refreshToken->setValid((new DateTime())->modify('+7 days')); // Refresh token valable 7 jours
+                $refreshToken->setValid((new DateTime())->modify('+7 days')); 
 
                 $this->entityManager->persist($refreshToken);
                 $this->entityManager->flush();
 
-                // Ajouter le cookie JWT
+
                 $response->headers->setCookie(
                     Cookie::create('jwt')
                         ->withValue($jwt)
                         ->withHttpOnly(true)
-                        ->withSecure(true) // HTTPS uniquement
-                        ->withSameSite(Cookie::SAMESITE_NONE)  // Permettre les requêtes cross-origin
-                        ->withExpires(time() + 3600)  // 1 heure
+                        ->withSecure(true)
+                        ->withSameSite(Cookie::SAMESITE_NONE)  
+                        ->withExpires(time() + 3600)
+                        ->withPath('/')  // Explicitement définir le chemin
                 );
-
-                // Ajouter le refresh_token
+                
                 $response->headers->setCookie(
                     Cookie::create('refresh_token')
                         ->withValue($refreshToken->getRefreshToken())
                         ->withHttpOnly(true)
                         ->withSecure(true)
                         ->withSameSite(Cookie::SAMESITE_NONE)  
-                        ->withExpires(time() + 604800) // 7 jours
+                        ->withExpires(time() + 604800)
+                        ->withPath('/')  // Explicitement définir le chemin
                 );
-
-                // Réponse avec JWT et refresh token
                 $response->setData([
                     'token' => $jwt,
                     'refresh_token' => $refreshToken->getRefreshToken(),
                 ]);
             } else {
-                // Réponse uniquement avec le JWT pour mobile
                 $response->setData([
                     'token' => $jwt,
                 ]);

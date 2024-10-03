@@ -157,13 +157,13 @@
                             {{order.id}}
                           </td>
                           <td>
-                         {{order.createdAt|date('d/m/Y')}}
+                         {# {{order.createdAt|date('d/m/Y')}} #}
                           </td>
                           <td>
                             Completed
                           </td>
                           <td>
-                           ${{order.subTotalTTC/100}} for {{order.quantity}} items
+                           {# ${{order.subTotalTTC/100}} for {{order.quantity}} items #}
                           </td>
                           <td>
                             <a href="{{path('account_order_details',{'id':order.id})}}" class="btn btn-fill-out btn-sm">View</a>

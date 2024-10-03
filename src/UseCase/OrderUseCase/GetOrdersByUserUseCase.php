@@ -6,7 +6,7 @@ use App\Dto\OrderDTO;
 use App\Dto\OrderItemDTO;
 use App\Services\OrderService\OrderService;
 
-class GetOrdersBySourceUseCase
+class GetOrdersByUserUseCase
 {
     private $orderService;
 
@@ -15,13 +15,14 @@ class GetOrdersBySourceUseCase
         $this->orderService = $orderService;
     }
 
-    public function execute(int $orderSourceId, string $host, ?int $days = null): array
+    public function execute(int $userId, string $host): array
     {
-        $orders = $this->orderService->getOrdersByOrderSource($orderSourceId, $days);
+        $orders = $this->orderService->getOrdersByUser($userId);
         $orderDTOs = [];
 
         foreach ($orders as $order) {
             $orderItemDTOs = [];
+
             foreach ($order->getOrderItems() as $orderItem) {
                 $orderItemDTOs[] = new OrderItemDTO($orderItem, $host);
             }
