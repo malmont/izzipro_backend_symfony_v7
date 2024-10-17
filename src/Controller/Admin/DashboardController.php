@@ -35,6 +35,7 @@ use App\Entity\StatusCommande;
 use App\Entity\Tax;
 use App\Entity\OrderTax;
 use App\Entity\OrderType;
+use App\Entity\AdminSettings;
 use App\Entity\PaymentType;
 use App\Controller\Admin\OrderAllCrudController;
 use App\Controller\Admin\OrderCrudController;
@@ -69,7 +70,8 @@ class DashboardController extends AbstractDashboardController
         
         yield MenuItem::section('UI');
         yield MenuItem::linkToCrud('Home Slider', 'fas fa-images', HomeSlider::class);
-        
+        yield MenuItem::linkToCrud('Admin Settings', 'fas fa-cogs', AdminSettings::class);
+
         yield MenuItem::section('EASYMAKEMONEY');
         yield MenuItem::linkToCrud('Collections', 'fas fa-archive', Collections::class); // Ajoutez cette ligne
         yield MenuItem::linkToCrud('Commandes', 'fas fa-shopping-cart', Commande::class);
