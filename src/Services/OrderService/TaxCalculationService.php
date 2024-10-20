@@ -27,18 +27,13 @@ class TaxCalculationService
             $totalTax += $taxAmount;
 
             $orderTax = new OrderTax();
-            $orderTax->setOrderTax($order);  // Associer la taxe à l'ordre
+            $orderTax->setOrderTax($order); 
             $orderTax->setTax($tax);
             $orderTax->setAmount($taxAmount);
-
-            // Ajouter à l'ordre
             $order->addOrderTax($orderTax);
-
-            // Persister chaque instance de OrderTax
             $this->em->persist($orderTax);
         }
 
-        // Ici, le flush n'est pas encore nécessaire, il sera probablement fait ailleurs
         return $totalTax;
     }
 }

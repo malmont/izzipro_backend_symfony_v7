@@ -30,7 +30,7 @@ class ProcessOrderItemsUseCase
     {
         $isCancel = $typeOrderId !== 1;
         $subtotal = 0;
-        $carrierPrice = $order->getCarrier()->getPrice(); // Prix hors taxes du transporteur
+        $carrierPrice = $order->getCarrier()->getPrice(); 
         $subtotal += $carrierPrice;
 
         foreach ($items as $itemData) {

@@ -63,13 +63,13 @@ class CreateOrderUseCase
             } catch (\Exception $e) {
                 throw new \Exception('Insufficient stock for product variant');
             }
+            
             $subtotal = $typeOrderId === 1 ? $subtotal : -$subtotal;
-
+            ;
             $totalTax = $this->calculateTaxesUseCase->execute($order, $subtotal);
             if ($totalTax instanceof JsonResponse) {
                 throw new \Exception('Tax calculation failed');
             }
-
             $totalAmount = $this->calculateTotalAmountUseCase->execute($subtotal, $totalTax);
             $paymentTypeId = $typeOrderId === 1 ? 2 : 1;
             $this->paymentHandlerUseCase->handlePayment($order, $totalAmount, $orderDTO->getPaymentMethod(), $paymentTypeId, $statusPaymentId);

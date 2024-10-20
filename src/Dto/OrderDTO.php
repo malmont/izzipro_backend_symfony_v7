@@ -1,17 +1,19 @@
 <?php
 
 namespace App\Dto;
+use App\Dto\AdressOutputDTO;
 
 class OrderDTO
 {
-    private int $id;
-    private string $reference;
-    private float $totalAmount;
-    private string $orderDate;
-    private ?int $userId;
-    private ?int $shippingAdress;
-    private ?string $orderSource;
-    private array $orderItems;
+    public int $id;
+    public string $reference;
+    public float $totalAmount;
+    public string $orderDate;
+    public ?int $userId;
+    public ?AdressOutputDTO $shippingAdress; 
+    public ?string $orderSource;
+    public ?string $status;
+    public array $orderItems;
 
     public function __construct(
         int $id,
@@ -19,8 +21,9 @@ class OrderDTO
         float $totalAmount,
         string $orderDate,
         ?int $userId,
-        ?int $shippingAdress,
+        ?AdressOutputDTO $shippingAdress, 
         ?string $orderSource,
+        ?string $status,
         array $orderItems
     ) {
         $this->id = $id;
@@ -30,6 +33,7 @@ class OrderDTO
         $this->userId = $userId;
         $this->shippingAdress = $shippingAdress;
         $this->orderSource = $orderSource;
+        $this->status = $status;
         $this->orderItems = $orderItems;
     }
 
@@ -43,6 +47,7 @@ class OrderDTO
             'userId' => $this->userId,
             'shippingAdress' => $this->shippingAdress,
             'orderSource' => $this->orderSource,
+            'status' => $this->status,
             'orderItems' => array_map(fn($item) => $item->toArray(), $this->orderItems),
         ];
     }

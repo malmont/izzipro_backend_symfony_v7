@@ -5,6 +5,7 @@ namespace App\UseCase\OrderUseCase;
 use App\Dto\OrderDTO;
 use App\Dto\OrderItemDTO;
 use App\Services\OrderService\OrderService;
+use App\Dto\AdressOutputDTO;
 
 class GetOrdersBySourceUseCase
 {
@@ -25,6 +26,9 @@ class GetOrdersBySourceUseCase
             foreach ($order->getOrderItems() as $orderItem) {
                 $orderItemDTOs[] = new OrderItemDTO($orderItem, $host);
             }
+            $shippingAdressDTO = $order->getShippingAdress() 
+            ? new AdressOutputDTO($order->getShippingAdress()) 
+            : null;
 
             $orderDTOs[] = new OrderDTO(
                 $order->getId(),
@@ -32,8 +36,9 @@ class GetOrdersBySourceUseCase
                 $order->getTotalAmount(),
                 $order->getOrderDate()->format('Y-m-d H:i:s'),
                 $order->getUserId() ? $order->getUserId()->getId() : null,
-                $order->getShippingAdress() ? $order->getShippingAdress()->getId() : null,
+                $shippingAdressDTO,
                 $order->getOrderSource() ? $order->getOrderSource()->getName() : null,
+                $order->getStatus() ? $order->getStatus()->getName() : null,
                 $orderItemDTOs
             );
         }
