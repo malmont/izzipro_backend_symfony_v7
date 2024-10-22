@@ -39,7 +39,7 @@ class GetOrdersByUserUseCase
                 $order->getTotalAmount(),
                 $order->getOrderDate()->format('Y-m-d H:i:s'),
                 $order->getUserId() ? $order->getUserId()->getId() : null,
-                $shippingAdressDTO, // Utiliser AdressOutputDTO à la place de l'ID
+                $shippingAdressDTO,
                 $order->getOrderSource() ? $order->getOrderSource()->getName() : null,
                 $order->getStatus() ? $order->getStatus()->getName() : null,
                 $orderItemDTOs

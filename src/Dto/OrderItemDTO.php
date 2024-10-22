@@ -13,6 +13,8 @@ class OrderItemDTO
     public float $totalPrice;
     public int $productId;
     public string $productVariantName;
+    public string $productVariantSize;
+    public string $productVariantColor;
     public ?string $productImage;
 
     public function __construct(OrderItems $orderItem, string $host)
@@ -25,7 +27,10 @@ class OrderItemDTO
         $product = $orderItem->getProductVariant()->getProduct();
         $this->productId = $product->getId();
         $this->productVariantName = $product->getName();
-        
+
+        $variant = $orderItem->getProductVariant();
+        $this->productVariantColor = $variant->getColor() ? $variant->getColor()->getName() : 'Inconnu';
+        $this->productVariantSize = $variant->getSize() ? $variant->getSize()->getName() : 'Inconnu';
         // Gestion de l'image avec le chemin complet
         $this->productImage = $product->getImage() 
             ? $host . '/assets/uploads/products/' . $product->getImage() 
@@ -41,6 +46,8 @@ class OrderItemDTO
             'totalPrice' => $this->totalPrice,
             'productId' => $this->productId,
             'productVariantName' => $this->productVariantName,
+            'productVariantColor' => $this->productVariantColor,
+            'productVariantSize' => $this->productVariantSize,
             'productImage' => $this->productImage,
         ];
     }
