@@ -2,6 +2,7 @@
 
 namespace App\Controller\Account;
 
+use Doctrine\Persistence\ManagerRegistry;
 use App\Entity\User;
 use App\Form\RegistrationFormType;
 use App\Repository\UserRepository;
@@ -16,6 +17,10 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use SymfonyCasts\Bundle\VerifyEmail\Exception\VerifyEmailExceptionInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
+use Gesdinet\JWTRefreshTokenBundle\Entity\RefreshToken;
+use DateTime;
 
 class RegistrationController extends AbstractController
 {
@@ -45,7 +50,6 @@ class RegistrationController extends AbstractController
             $entityManager->persist($user);
             $entityManager->flush();
 
-            // generate a signed url and email it to the user
             $this->emailVerifier->sendEmailConfirmation('app_verify_email', $user,
                 (new TemplatedEmail())
                     ->from(new Address('michel.almont@gmail.com', '\"Ecommerce Contact\"'))
@@ -53,7 +57,6 @@ class RegistrationController extends AbstractController
                     ->subject('Please Confirm your Email')
                     ->htmlTemplate('registration/confirmation_email.html.twig')
             );
-            // do anything else you need here, like send an email
 
             return $this->redirectToRoute('app_home');
         }
@@ -63,23 +66,72 @@ class RegistrationController extends AbstractController
         ]);
     }
 
-    #[Route('api/register', name: 'register')]
-    public function registerApi(ManagerRegistry $doctrine, Request $request, UserPasswordHasherInterface $passwordHasher): Response
-        {
+    #[Route('api/register', name: 'register', methods: ['POST'])]
+    public function registerApi(
+        ManagerRegistry $doctrine,
+        Request $request,
+        UserPasswordHasherInterface $passwordHasher,
+        JWTTokenManagerInterface $jwtManager,
+        EntityManagerInterface $entityManager
+    ): Response {
+        $em = $doctrine->getManager();
+        $decoded = json_decode($request->getContent(), true);
+    
+        if (!isset($decoded['email'], $decoded['password'], $decoded['firstName'], $decoded['lastName'])) {
+            return $this->json(['message' => 'Invalid data'], Response::HTTP_BAD_REQUEST);
+        }
+    
+        $email = $decoded['email'];
+        $password = $decoded['password'];
+        $firstName = $decoded['firstName'];
+        $lastName = $decoded['lastName'];
+    
+        $username = $email;
+    
+        $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $email]);
+        if ($existingUser) {
+            return $this->json(['message' => 'User already exists'], Response::HTTP_CONFLICT);
+        }
+    
+        $user = new User();
+        $user->setEmail($email);
+        $user->setFirstname($firstName);
+        $user->setLastname($lastName);
+        $user->setUsername($username);
+        
+        $hashedPassword = $passwordHasher->hashPassword($user, $password);
+        $user->setPassword($hashedPassword);
+    
+        $em->persist($user);
+        $em->flush();
+ 
+        $jwt = $jwtManager->create($user);
+    
+        $platform = $decoded['platform'] ?? 'mobile';
+    
+        if ($platform === 'web') {
+            $refreshToken = new RefreshToken();
+            $refreshToken->setRefreshToken(base64_encode(random_bytes(64)));
+            $refreshToken->setUsername($user->getUserIdentifier());
+            $refreshToken->setValid((new DateTime())->modify('+7 days'));
+    
+            $entityManager->persist($refreshToken);
+            $entityManager->flush();
+    
+            return $this->json([
+                'message' => 'Registered Successfully',
+                'token' => $jwt,
+                'refresh_token' => $refreshToken->getRefreshToken(),
+            ], Response::HTTP_CREATED);
+        }
+    
+        return $this->json([
+            'message' => 'Registered Successfully',
+            'token' => $jwt,
+        ], Response::HTTP_CREATED);
+    }
 
-            $em = $doctrine->getManager();
-            $decoded = json_decode($request->getContent());
-            $email = $decoded->email;
-            $password= $decoded->plainPassword;
-            $user = new User();
-         
-            $user->setPlainPassword($password);
-            $user->setEmail($email);
-            $em->persist($user);
-            $em->flush();
 
-            return $this->json(['message' => 'Registered Successfully']);
-            }
 
     #[Route('/verify/email', name: 'app_verify_email')]
     public function verifyUserEmail(Request $request, TranslatorInterface $translator, UserRepository $userRepository): Response
@@ -96,7 +148,6 @@ class RegistrationController extends AbstractController
             return $this->redirectToRoute('app_register');
         }
 
-        // validate email confirmation link, sets User::isVerified=true and persists
         try {
             $this->emailVerifier->handleEmailConfirmation($request, $user);
         } catch (VerifyEmailExceptionInterface $exception) {

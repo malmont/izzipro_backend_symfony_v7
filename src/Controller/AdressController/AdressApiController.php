@@ -71,25 +71,27 @@ class AdressApiController extends AbstractController
     }
 
     #[Route('/{id}', name: 'edit_adress', methods: ['PUT'])]
-    public function editAdress(Request $request, Adress $adress): JsonResponse
-    {
-        $user = $this->getUser();
+        public function editAdress(Request $request, Adress $adress): JsonResponse
+        {
+            $user = $this->getUser();
 
-        if (!$user || $adress->getUserAdress() !== $user) {
-            return new JsonResponse(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+            // Vérifier que l'utilisateur est authentifié et qu'il est bien propriétaire de l'adresse
+            if (!$user || $adress->getUserAdress() !== $user) {
+                return new JsonResponse(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+            }
+
+            $data = json_decode($request->getContent(), true);
+
+            if (!$data) {
+                return new JsonResponse(['error' => 'Invalid JSON'], Response::HTTP_BAD_REQUEST);
+            }
+
+            $inputDTO = new AdressInputDTO($data);
+            $this->editAdressUseCase->execute($inputDTO, $adress);
+
+            return $this->json(['success' => 'Adresse mise à jour avec succès'], Response::HTTP_OK);
         }
 
-        $data = json_decode($request->getContent(), true);
-
-        if (!$data) {
-            return new JsonResponse(['error' => 'Invalid JSON'], Response::HTTP_BAD_REQUEST);
-        }
-
-        $inputDTO = new AdressInputDTO($data);
-        $this->editAdressUseCase->execute($inputDTO, $adress);
-
-        return $this->json(['success' => 'Adresse créée avec succès'], Response::HTTP_CREATED);
-    }
 
     #[Route('/{id}', name: 'delete_adress', methods: ['DELETE'])]
     public function deleteAdress(Adress $adress): JsonResponse

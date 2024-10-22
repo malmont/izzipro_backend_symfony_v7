@@ -133,7 +133,6 @@ class SecurityController extends AbstractController
                 ], 200);
             }
         
-            // Token invalide ou expiré
             return $this->json([
                 'status' => 'error',
                 'message' => 'Token is invalid or expired',
