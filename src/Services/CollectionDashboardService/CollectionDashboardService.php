@@ -75,8 +75,8 @@ class CollectionDashboardService
                 'marge' => ($stockValue - $usedBudget),
             ],
             'TauxMarge' => [
-                'tauxMarge' => (($stockValue - $usedBudget) / $stockValue) * 100,
-                'tauxMarque' => (($stockValue - $usedBudget) / $usedBudget) * 100,
+            'tauxMarge' => ($stockValue > 0) ? (($stockValue - $usedBudget) / $stockValue) * 100 : 0,
+            'tauxMarque' => ($usedBudget > 0) ? (($stockValue - $usedBudget) / $usedBudget) * 100 : 0,
             ],
         ];
 

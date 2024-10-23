@@ -45,4 +45,18 @@ class DashboardCollectionDTO
             $data['TauxMarge']
         );
     }
+
+    public function toArray(): array
+    {
+        return [
+            'averageMultiplier' => $this->averageMultiplier,
+            'BudgetGeneral' => $this->budgetGeneral,
+            'CollectionDuration' => $this->collectionDuration,
+            'totalItemCost' => $this->totalItemCost,
+            'GeneralExpenses' => $this->generalExpenses,
+            'Statistics' => $this->statistics,
+            'ValeurStock' => $this->valeurStock,
+            'TauxMarge' => $this->tauxMarge,
+        ];
+    }
 }
