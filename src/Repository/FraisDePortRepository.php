@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\FraisDePort;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
+use DateTime;
 
 /**
  * @extends ServiceEntityRepository<FraisDePort>
@@ -16,28 +17,67 @@ class FraisDePortRepository extends ServiceEntityRepository
         parent::__construct($registry, FraisDePort::class);
     }
 
-    //    /**
-    //     * @return FraisDePort[] Returns an array of FraisDePort objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('f')
-    //            ->andWhere('f.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('f.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
+    /**
+     * Calcule le total des frais de port pour une année donnée.
+     *
+     * @param int $year
+     * @return float
+     */
+    public function getTotalFraisByYear(int $year): float
+    {
+        $startDate = new DateTime("$year-01-01");
+        $endDate = new DateTime("$year-12-31");
 
-    //    public function findOneBySomeField($value): ?FraisDePort
-    //    {
-    //        return $this->createQueryBuilder('f')
-    //            ->andWhere('f.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+        return (float) $this->createQueryBuilder('f')
+            ->select('SUM(f.price)')
+            ->join('f.commande', 'c')
+            ->where('c.date BETWEEN :start AND :end')
+            ->setParameter('start', $startDate)
+            ->setParameter('end', $endDate)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
+     * Calcule le total des frais de port pour un mois donné d'une année spécifique.
+     *
+     * @param int $year
+     * @param int $month
+     * @return float
+     */
+    public function getTotalFraisByMonth(int $year, int $month): float
+    {
+        $startDate = new DateTime("$year-$month-01");
+        $endDate = (clone $startDate)->modify('last day of this month');
+
+        return (float) $this->createQueryBuilder('f')
+            ->select('SUM(f.price)')
+            ->join('f.commande', 'c')
+            ->where('c.date BETWEEN :start AND :end')
+            ->setParameter('start', $startDate)
+            ->setParameter('end', $endDate)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
+     * Calcule le total des frais de port pour une date spécifique.
+     *
+     * @param DateTime $date
+     * @return float
+     */
+    public function getTotalFraisByDay(DateTime $date): float
+    {
+        $startOfDay = (clone $date)->setTime(0, 0);
+        $endOfDay = (clone $date)->setTime(23, 59, 59);
+
+        return (float) $this->createQueryBuilder('f')
+            ->select('SUM(f.price)')
+            ->join('f.commande', 'c')
+            ->where('c.date BETWEEN :start AND :end')
+            ->setParameter('start', $startOfDay)
+            ->setParameter('end', $endOfDay)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
 }

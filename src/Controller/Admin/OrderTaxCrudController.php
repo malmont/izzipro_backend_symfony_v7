@@ -28,15 +28,17 @@ class OrderTaxCrudController extends AbstractCrudController
             IdField::new('id')->hideOnForm(),
             AssociationField::new('orderTax', 'Order')
                 ->setFormTypeOption('choice_label', 'reference')
-                ->setFormTypeOption('query_builder', function($qb) {
-                    return $qb->orderBy('o.reference', 'ASC');
+                ->setFormTypeOption('query_builder', function($repository) {
+                    return $repository->createQueryBuilder('o')
+                        ->orderBy('o.reference', 'ASC');
                 }),
             AssociationField::new('tax', 'Tax')
                 ->setFormTypeOption('choice_label', 'name')
-                ->setFormTypeOption('query_builder', function($qb) {
-                    return $qb->orderBy('t.name', 'ASC');
+                ->setFormTypeOption('query_builder', function($repository) {
+                    return $repository->createQueryBuilder('t')
+                        ->orderBy('t.name', 'ASC');
                 }),
-                MoneyField::new('amount', 'Amount')->setCurrency('USD'),
+            MoneyField::new('amount', 'Amount')->setCurrency('USD'),
         ];
     }
 }

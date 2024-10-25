@@ -17,6 +17,7 @@ class InventoryMovementService
     }
 
     public function createInventoryMovement(
+        bool $isCancellation = false,
         ProductVariant $productVariant,
         int $stockBeforeMovement,
         int $stockAfterMovement,
@@ -24,7 +25,7 @@ class InventoryMovementService
         MovementType $movementType
     ): InventoryMovements {
         // Utilisation du service pour vérifier si un variant similaire existe
-        if ($this->productVariantExistenceService->doesVariantExist($productVariant)) {
+        if (($this->productVariantExistenceService->doesVariantExist($productVariant)) && !$isCancellation) {
             throw new \Exception("Stock existant, vous pouvez modifier le stock de l'existant");
         }
 

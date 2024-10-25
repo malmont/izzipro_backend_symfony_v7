@@ -76,4 +76,38 @@ class OrderRepository extends ServiceEntityRepository
 
         return (float) $result;
     }
+
+
+     /**
+     * Calcule le total des montants des transporteurs par mois pour une année donnée.
+     *
+     * @param int $year
+     * @return array
+     */
+    public function getTotalCarrierByMonth(int $year): array
+    {
+        $result = [];
+
+        // Parcourir chaque mois de l'année
+        for ($month = 1; $month <= 12; $month++) {
+            // Créer les dates de début et de fin du mois
+            $startDate = new DateTime("$year-$month-01");
+            $endDate = (clone $startDate)->modify('last day of this month');
+
+            // Effectuer la requête pour le mois actuel
+            $total = $this->createQueryBuilder('o')
+                ->select('SUM(c.price) as total')
+                ->join('o.carrier', 'c')
+                ->where('o.orderDate BETWEEN :start AND :end')
+                ->setParameter('start', $startDate)
+                ->setParameter('end', $endDate)
+                ->getQuery()
+                ->getSingleScalarResult();
+
+            // Stocker le résultat pour le mois
+            $result[$month] = (float)$total;
+        }
+
+        return $result;
+    }
 }

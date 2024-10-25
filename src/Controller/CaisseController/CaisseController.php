@@ -11,23 +11,27 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use App\UseCase\CaisseUseCase\GestCaisseUseCase;
 use Doctrine\ORM\EntityManagerInterface;
+use App\UseCase\CaisseUseCase\GetTransactionsForOpenCaisseUseCase;
 
 class CaisseController extends AbstractController
 {
     private $handleCaisseTransactionUseCase;
     private $caisseService;
     private $gestCaisseUseCase;
+    private $getTransactionsForOpenCaisseUseCase;
     private $entityManager;
     public function __construct(
         HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase,
         CaisseService $caisseService,
         GestCaisseUseCase $gestCaisseUseCase,
-        EntityManagerInterface $entityManager
+        EntityManagerInterface $entityManager,
+        GetTransactionsForOpenCaisseUseCase $getTransactionsForOpenCaisseUseCase,
     ) {
         $this->handleCaisseTransactionUseCase = $handleCaisseTransactionUseCase;
         $this->caisseService = $caisseService;
         $this->gestCaisseUseCase = $gestCaisseUseCase;
         $this->entityManager = $entityManager;
+        $this->getTransactionsForOpenCaisseUseCase = $getTransactionsForOpenCaisseUseCase;
     }
 
     /**
@@ -141,6 +145,27 @@ class CaisseController extends AbstractController
         $caisseDatas = array_map(fn($dto) => $dto->toArray(), $caisseDTOs);
         
         return $this->json($caisseDatas);
+    }
+
+     /**
+     * @Route("api/caisse/transactions", name="get_open_caisse_transactions", methods={"GET"})
+     */
+    public function getOpenCaisseTransactions(): JsonResponse
+    {
+        $transactions = $this->getTransactionsForOpenCaisseUseCase->execute();
+
+        if (empty($transactions)) {
+            return new JsonResponse(['message' => 'Aucune transaction trouvée pour la caisse ouverte'], 404);
+        }
+
+        $transactionData = array_map(fn($transaction) => [
+            'id' => $transaction->getId(),
+            'amount' => $transaction->getAmount(),
+            'transactionDate' => $transaction->getTransactionDate()->format('Y-m-d H:i:s'),
+            'transactionType' => $transaction->getTransactionType()->getName(),
+        ], $transactions);
+
+        return new JsonResponse($transactionData);
     }
 }
 

@@ -134,7 +134,7 @@ class StatistiqueGeneraleController extends AbstractController
         $dailyRevenueForCurrentWeek = $this->calculateDailyRevenueForCurrentWeekUseCase->execute();
 
         $currentMonthRevenue = $this->calculateMonthlyRevenueUseCase->execute(0);
-        $lastYearMonthRevenue = $this->calculateMonthlyRevenueUseCase->execute(12);
+        $lastYearMonthRevenue = $this->calculateMonthlyRevenueUseCase->execute(1);
         $weeklyRevenueForCurrentMonth = $this->calculateWeeklyRevenueForCurrentMonthUseCase->execute();
 
         $currentYearRevenue = $this->calculateYearlyRevenueUseCase->execute(0);

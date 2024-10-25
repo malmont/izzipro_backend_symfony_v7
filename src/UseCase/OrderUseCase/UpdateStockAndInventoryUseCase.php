@@ -38,6 +38,7 @@ class UpdateStockAndInventoryUseCase
 
         // Création du mouvement d'inventaire via le service
         $inventoryMovement = $this->inventoryMovementService->createInventoryMovement(
+            $isCancellation,
             $productVariant,
             $stockBeforeMovement,
             $stockAfterMovement,

@@ -53,6 +53,9 @@ class CancelOrderUseCase
             // Mettre à jour le statut de la commande à "Annulé"
             $cancelStatus = $this->entityRetrieverService->findOrFail(StatusCommande::class, 7, 'Cancel status not found');
             $order->setStatus($cancelStatus);
+            $order->setTotalAmount(0);
+            $order->setSubTotal(0);
+            $order->setTotalTax(0);
 
             // Remboursement du paiement
             $this->paymentHandlerUseCase->handlePayment($order, -$refundAmount, null, $paymentTypeId, $statusPaymentId);
@@ -64,7 +67,7 @@ class CancelOrderUseCase
 
             // Annulation des taxes associées
             foreach ($order->getOrderTaxes() as $orderTax) {
-                $orderTax->setAmount(-abs($orderTax->getAmount()));
+                $orderTax->setAmount(0);
             }
             
             $transactionTypeId = 2;

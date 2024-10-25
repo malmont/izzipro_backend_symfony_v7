@@ -1,19 +1,20 @@
 <?php
 namespace App\Services\CaisseService;
 
-
 use App\Entity\Caisse;
 use App\Repository\CaisseRepository;
+use App\Repository\TransactionCaisseRepository;
 use DateTime;
-
 
 class CaisseService
 {
     private $caisseRepository;
+    private $transactionCaisseRepository;
 
-    public function __construct(CaisseRepository $caisseRepository)
+    public function __construct(CaisseRepository $caisseRepository, TransactionCaisseRepository $transactionCaisseRepository)
     {
         $this->caisseRepository = $caisseRepository;
+        $this->transactionCaisseRepository = $transactionCaisseRepository;
     }
 
     public function getOpenCaisse(): ?Caisse
@@ -25,6 +26,7 @@ class CaisseService
     {
         return $this->caisseRepository->findOneBy(['isOpen' => false], ['createdAt' => 'DESC']);
     }
+
     public function getCaisse(?int $days = null)
     {
         if ($days) {
@@ -32,14 +34,21 @@ class CaisseService
             $date->modify("-$days days");
 
             return $this->caisseRepository->createQueryBuilder('o')
-                ->where('o.createdAt >= :date') // Filtres par date de création
+                ->where('o.createdAt >= :date')
                 ->setParameter('date', $date)
                 ->getQuery()
                 ->getResult();
         }
 
-        // Retourne toutes les caisses si aucun jour n'est fourni
         return $this->caisseRepository->findAll();
     }
 
+    public function getTransactionsForOpenCaisse(): array
+    {
+        $openCaisse = $this->getOpenCaisse();
+        if ($openCaisse) {
+            return $this->transactionCaisseRepository->findBy(['caisse' => $openCaisse]);
+        }
+        return [];
+    }
 }
