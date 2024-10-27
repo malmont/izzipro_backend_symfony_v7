@@ -26,6 +26,9 @@ class Order
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $orderDate = null;
 
+    #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
+    private ?\DateTimeInterface $statusUpdatedAt = null;
+
     #[ORM\Column]
     private ?float $totalAmount = 0;
 
@@ -125,7 +128,17 @@ class Order
 
         return $this;
     }
+    public function getStatusUpdatedAt(): ?\DateTimeInterface
+    {
+        return $this->statusUpdatedAt;
+    }
 
+    public function setStatusUpdatedAt(\DateTimeInterface $statusUpdatedAt): static
+    {
+        $this->statusUpdatedAt = $statusUpdatedAt;
+
+        return $this;
+    }
     public function getTotalAmount(): ?float
     {
         return $this->totalAmount;

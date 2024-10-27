@@ -14,18 +14,18 @@ class StatistiqueCommandeService
         $this->orderRepository = $orderRepository;
     }
 
-    // Méthode pour obtenir le nombre de commandes pour la semaine en cours
-    public function getOrderCountForCurrentWeek(): int
+    // Méthode pour obtenir le nombre de commandes pour la semaine en cours, avec filtres
+    public function getOrderCountForCurrentWeek(int $typeId, int $statusId): int
     {
         $now = new DateTime();
         $startOfWeek = (clone $now)->modify('monday this week');
         $endOfWeek = (clone $startOfWeek)->modify('sunday this week');
 
-        return $this->orderRepository->getOrderCountBetweenDates($startOfWeek, $endOfWeek);
+        return $this->orderRepository->getOrderCountBetweenDatesAndFilters($startOfWeek, $endOfWeek, $typeId, $statusId);
     }
 
-    // Méthode pour obtenir le nombre de commandes pour chaque jour de la semaine en cours
-    public function getDailyOrderCountForCurrentWeek(): array
+    // Méthode pour obtenir le nombre de commandes pour chaque jour de la semaine en cours, avec filtres
+    public function getDailyOrderCountForCurrentWeek(int $typeId, int $statusId): array
     {
         $now = new DateTime();
         $startOfWeek = (clone $now)->modify('monday this week');
@@ -33,14 +33,17 @@ class StatistiqueCommandeService
 
         for ($i = 0; $i < 7; $i++) {
             $currentDay = (clone $startOfWeek)->modify("+$i day");
-            $nextDay = (clone $currentDay)->modify('+1 day');
+            $startOfDay = (clone $currentDay)->setTime(0, 0, 0);
+            $endOfDay = (clone $currentDay)->setTime(23, 59, 59);
 
-            $count = $this->orderRepository->getOrderCountBetweenDates($currentDay, $nextDay);
+            // Récupérer le nombre de commandes pour le jour actuel
+            $count = $this->orderRepository->getOrderCountBetweenDatesAndFilters($startOfDay, $endOfDay, $typeId, $statusId);
             $dailyCounts[$currentDay->format('Y-m-d')] = $count;
         }
 
         return $dailyCounts;
     }
+
 
     // Méthode pour obtenir le nombre de commandes pour le mois en cours
     public function getOrderCountForCurrentMonth(): int

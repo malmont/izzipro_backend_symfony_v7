@@ -18,3 +18,4 @@ class CalculateOrderCountForCurrentYearUseCase
         return $this->statistiqueCommandeService->getOrderCountForCurrentYear();
     }
 }
+

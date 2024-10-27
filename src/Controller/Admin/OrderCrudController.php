@@ -59,6 +59,8 @@ class OrderCrudController extends AbstractCrudController
                 }),
             DateTimeField::new('orderDate', 'Date de commande')
                 ->setFormat('dd/MM/yyyy HH:mm'),
+                DateTimeField::new('statusUpdatedAt', 'Date de updateStatut')
+                ->setFormat('dd/MM/yyyy HH:mm'),
             MoneyField::new('totalAmount', 'Montant total')->setCurrency('USD'),
             
             AssociationField::new('orderItems', 'Articles de la commande')

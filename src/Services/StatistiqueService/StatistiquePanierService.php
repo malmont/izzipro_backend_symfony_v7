@@ -18,8 +18,8 @@ class StatistiquePanierService
     public function getAverageOrderValueForCurrentWeek(): float
     {
         $now = new DateTime();
-        $startOfWeek = (clone $now)->modify('monday this week');
-        $endOfWeek = (clone $startOfWeek)->modify('sunday this week');
+        $startOfWeek = (clone $now)->modify('monday this week')->setTime(0, 0, 0);
+        $endOfWeek = (clone $startOfWeek)->modify('+6 days')->setTime(23, 59, 59);
 
         return $this->orderRepository->getAverageOrderValueBetweenDates($startOfWeek, $endOfWeek);
     }
@@ -28,8 +28,8 @@ class StatistiquePanierService
     public function getAverageOrderValueForLastWeek(): float
     {
         $now = new DateTime();
-        $startOfLastWeek = (clone $now)->modify('monday last week');
-        $endOfLastWeek = (clone $startOfLastWeek)->modify('sunday this week');
+        $startOfLastWeek = (clone $now)->modify('monday last week')->setTime(0, 0, 0);
+        $endOfLastWeek = (clone $startOfLastWeek)->modify('+6 days')->setTime(23, 59, 59);
 
         return $this->orderRepository->getAverageOrderValueBetweenDates($startOfLastWeek, $endOfLastWeek);
     }
@@ -42,11 +42,11 @@ class StatistiquePanierService
         $dailyAverages = [];
 
         for ($i = 0; $i < 7; $i++) {
-            $currentDay = (clone $startOfWeek)->modify("+$i day");
-            $nextDay = (clone $currentDay)->modify('+1 day');
+            $currentDayStart = (clone $startOfWeek)->modify("+$i day")->setTime(0, 0, 0);
+            $currentDayEnd = (clone $currentDayStart)->setTime(23, 59, 59);
 
-            $average = $this->orderRepository->getAverageOrderValueBetweenDates($currentDay, $nextDay);
-            $dailyAverages[$currentDay->format('Y-m-d')] = $average;
+            $average = $this->orderRepository->getAverageOrderValueBetweenDates($currentDayStart, $currentDayEnd);
+            $dailyAverages[$currentDayStart->format('Y-m-d')] = $average;
         }
 
         return $dailyAverages;
@@ -56,8 +56,8 @@ class StatistiquePanierService
     public function getAverageOrderValueForCurrentMonth(): float
     {
         $now = new DateTime();
-        $startOfMonth = (clone $now)->modify('first day of this month');
-        $endOfMonth = (clone $startOfMonth)->modify('last day of this month');
+        $startOfMonth = (clone $now)->modify('first day of this month')->setTime(0, 0, 0);
+        $endOfMonth = (clone $now)->modify('last day of this month')->setTime(23, 59, 59);
 
         return $this->orderRepository->getAverageOrderValueBetweenDates($startOfMonth, $endOfMonth);
     }
@@ -66,8 +66,8 @@ class StatistiquePanierService
     public function getAverageOrderValueForLastMonth(): float
     {
         $now = new DateTime();
-        $startOfLastMonth = (clone $now)->modify('first day of previous month');
-        $endOfLastMonth = (clone $startOfLastMonth)->modify('last day of this month');
+        $startOfLastMonth = (clone $now)->modify('first day of previous month')->setTime(0, 0, 0);
+        $endOfLastMonth = (clone $startOfLastMonth)->modify('last day of this month')->setTime(23, 59, 59);
 
         return $this->orderRepository->getAverageOrderValueBetweenDates($startOfLastMonth, $endOfLastMonth);
     }
@@ -76,20 +76,22 @@ class StatistiquePanierService
     public function getWeeklyAverageOrderValueForCurrentMonth(): array
     {
         $now = new DateTime();
-        $startOfMonth = (clone $now)->modify('first day of this month');
+        $startOfMonth = (clone $now)->modify('first day of this month')->setTime(0, 0, 0);
         $weeklyAverages = [];
         $currentWeekStart = clone $startOfMonth;
 
         while ($currentWeekStart->format('m') == $now->format('m')) {
-            $currentWeekEnd = (clone $currentWeekStart)->modify('sunday this week');
+            $currentWeekEnd = (clone $currentWeekStart)->modify('+6 days')->setTime(23, 59, 59);
+
+            // Si la fin de la semaine dépasse le mois en cours, ajustez-la à la fin du mois
             if ($currentWeekEnd->format('m') != $now->format('m')) {
-                $currentWeekEnd = (clone $now)->modify('last day of this month');
+                $currentWeekEnd = (clone $now)->modify('last day of this month')->setTime(23, 59, 59);
             }
 
             $average = $this->orderRepository->getAverageOrderValueBetweenDates($currentWeekStart, $currentWeekEnd);
             $weeklyAverages[$currentWeekStart->format('W')] = $average;
 
-            $currentWeekStart = (clone $currentWeekEnd)->modify('+1 day');
+            $currentWeekStart = (clone $currentWeekEnd)->modify('+1 day')->setTime(0, 0, 0);
         }
 
         return $weeklyAverages;
@@ -99,8 +101,8 @@ class StatistiquePanierService
     public function getAverageOrderValueForCurrentYear(): float
     {
         $now = new DateTime();
-        $startOfYear = (clone $now)->modify('first day of January');
-        $endOfYear = (clone $startOfYear)->modify('last day of December');
+        $startOfYear = (clone $now)->modify('first day of January')->setTime(0, 0, 0);
+        $endOfYear = (clone $startOfYear)->modify('last day of December')->setTime(23, 59, 59);
 
         return $this->orderRepository->getAverageOrderValueBetweenDates($startOfYear, $endOfYear);
     }
@@ -109,12 +111,12 @@ class StatistiquePanierService
     public function getMonthlyAverageOrderValueForCurrentYear(): array
     {
         $now = new DateTime();
-        $startOfYear = (clone $now)->modify('first day of January');
+        $startOfYear = (clone $now)->modify('first day of January')->setTime(0, 0, 0);
         $monthlyAverages = [];
 
         for ($i = 0; $i < 12; $i++) {
-            $currentMonthStart = (clone $startOfYear)->modify("+$i month");
-            $currentMonthEnd = (clone $currentMonthStart)->modify('last day of this month');
+            $currentMonthStart = (clone $startOfYear)->modify("+$i month")->setTime(0, 0, 0);
+            $currentMonthEnd = (clone $currentMonthStart)->modify('last day of this month')->setTime(23, 59, 59);
 
             if ($currentMonthStart > $now) {
                 break; // Arrêter si le mois dépasse la date actuelle

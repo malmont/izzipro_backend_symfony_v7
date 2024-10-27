@@ -53,6 +53,7 @@ class CancelOrderUseCase
             // Mettre à jour le statut de la commande à "Annulé"
             $cancelStatus = $this->entityRetrieverService->findOrFail(StatusCommande::class, 7, 'Cancel status not found');
             $order->setStatus($cancelStatus);
+            $order->setStatusUpdatedAt(new \DateTime());
             $order->setTotalAmount(0);
             $order->setSubTotal(0);
             $order->setTotalTax(0);

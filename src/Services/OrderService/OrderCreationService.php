@@ -25,6 +25,7 @@ class OrderCreationService
         $order->setOrderType($orderType);
         $order->setOrderSource($orderSource);
         $order->setOrderDate(new \DateTime());
+        $order->setStatusUpdatedAt(new \DateTime());
         $order->setShippingAdress($address);
         $order->setCarrier($carrier);
         $order->setStatus($statusCommande);

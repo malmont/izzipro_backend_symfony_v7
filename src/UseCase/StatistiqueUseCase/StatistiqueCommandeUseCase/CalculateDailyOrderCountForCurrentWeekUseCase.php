@@ -13,8 +13,8 @@ class CalculateDailyOrderCountForCurrentWeekUseCase
         $this->statistiqueCommandeService = $statistiqueCommandeService;
     }
 
-    public function execute(): array
+    public function execute(int $typeId, int $statusId): array
     {
-        return $this->statistiqueCommandeService->getDailyOrderCountForCurrentWeek();
+        return $this->statistiqueCommandeService->getDailyOrderCountForCurrentWeek($typeId, $statusId);
     }
 }

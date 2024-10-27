@@ -154,33 +154,43 @@ class StatistiqueGeneraleController extends AbstractController
         ]);
     }
 
-     /**
+    /**
      * @Route("/api/statistiques/nombre-commandes", name="statistiques_nombre_commandes", methods={"GET"})
      */
     public function getOrderStatistics(): JsonResponse
     {
-        $currentWeekCount = $this->calculateOrderCountForCurrentWeekUseCase->execute();
-        $lastWeekCount = $this->calculateOrderCountForCurrentWeekUseCase->execute(); // Ajuster pour le nombre de la semaine précédente si nécessaire
-        $dailyCountForCurrentWeek = $this->calculateDailyOrderCountForCurrentWeekUseCase->execute();
+        $types = [1 => 'AchatClient', 2 => 'RetourClient'];
+        $statuses = [3 => 'Complétée', 6 => 'Livrée', 7 => 'Annulation'];
 
-        $currentMonthCount = $this->calculateOrderCountForCurrentMonthUseCase->execute();
-        $lastMonthCount = $this->calculateOrderCountForLastMonthUseCase->execute();
-        $weeklyCountForCurrentMonth = $this->calculateWeeklyOrderCountForCurrentMonthUseCase->execute();
+        $statistics = [];
 
-        $currentYearCount = $this->calculateOrderCountForCurrentYearUseCase->execute();
-        $monthlyCountForCurrentYear = $this->calculateMonthlyOrderCountForCurrentYearUseCase->execute();
+        foreach ($types as $typeId => $typeName) {
+            foreach ($statuses as $statusId => $statusName) {
+                if(!($typeId == 2 &&  ($statusId==7)) ){
+                // Calculs pour la semaine en cours
+                $currentWeekCount = $this->calculateOrderCountForCurrentWeekUseCase->execute($typeId, $statusId);
+                $lastWeekCount = $this->calculateOrderCountForCurrentWeekUseCase->execute($typeId, $statusId);
+                $dailyCountForCurrentWeek = $this->calculateDailyOrderCountForCurrentWeekUseCase->execute($typeId, $statusId);
 
-        return $this->json([
-            "current_week_count" => $currentWeekCount,
-            "last_week_count" => $lastWeekCount,
-            "daily_count_for_current_week" => $dailyCountForCurrentWeek,
-            "current_month_count" => $currentMonthCount,
-            "last_month_count" => $lastMonthCount,
-            "weekly_count_for_current_month" => $weeklyCountForCurrentMonth,
-            "current_year_count" => $currentYearCount,
-            "monthly_count_for_current_year" => $monthlyCountForCurrentYear,
-        ]);
+                // Ajout des résultats au tableau de réponse
+
+                $statistics["current_week_count_{$typeName}_{$statusName}"] = $currentWeekCount;
+                $statistics["last_week_count_{$typeName}_{$statusName}"] = $lastWeekCount;
+                $statistics["daily_count_{$typeName}_{$statusName}_for_current_week"] = $dailyCountForCurrentWeek;
+            }
+            }
+        }
+
+        // Calcul des autres statistiques
+        $statistics["current_month_count"] = $this->calculateOrderCountForCurrentMonthUseCase->execute();
+        $statistics["last_month_count"] = $this->calculateOrderCountForLastMonthUseCase->execute();
+        $statistics["weekly_count_for_current_month"] = $this->calculateWeeklyOrderCountForCurrentMonthUseCase->execute();
+        $statistics["current_year_count"] = $this->calculateOrderCountForCurrentYearUseCase->execute();
+        $statistics["monthly_count_for_current_year"] = $this->calculateMonthlyOrderCountForCurrentYearUseCase->execute();
+
+        return $this->json($statistics);
     }
+
 
     /**
      * @Route("/api/statistiques/panier-moyen", name="statistiques_panier_moyen", methods={"GET"})
