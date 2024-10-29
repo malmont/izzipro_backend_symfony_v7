@@ -51,18 +51,24 @@ class OrderRepository extends ServiceEntityRepository
      * @param DateTime $endDate
      * @return int
      */
-    public function getOrderCountBetweenDates(DateTime $startDate, DateTime $endDate): int
-    {
-        $qb = $this->createQueryBuilder('o')
-            ->select('COUNT(o.id) as orderCount')
-            ->where('o.orderDate BETWEEN :startDate AND :endDate')
-            ->setParameter('startDate', $startDate->format('Y-m-d 00:00:00'))
+    public function getOrderCountBetweenDates(DateTime $startDate, DateTime $endDate, ?int $orderSource = null): int
+        {
+            $qb = $this->createQueryBuilder('o')
+                ->select('COUNT(o.id) as orderCount')
+                ->where('o.orderDate BETWEEN :startDate AND :endDate')
+                ->setParameter('startDate', $startDate->format('Y-m-d 00:00:00'))
             ->setParameter('endDate', $endDate->format('Y-m-d 23:59:59'));
 
-        $result = $qb->getQuery()->getSingleScalarResult();
+            if ($orderSource !== null) {
+                $qb->andWhere('o.orderSource = :orderSource')
+                    ->setParameter('orderSource', $orderSource);
+            }
 
-        return (int) $result;
-    }
+            $result = $qb->getQuery()->getSingleScalarResult();
+
+            return (int) $result;
+        }
+
 
     /**
      * Compte le nombre de commandes entre deux dates, avec des filtres pour le type et le statut.
@@ -73,9 +79,9 @@ class OrderRepository extends ServiceEntityRepository
      * @param int $statusId
      * @return int
      */
-    public function getOrderCountBetweenDatesAndFilters(DateTime $startDate, DateTime $endDate, int $typeId, int $statusId): int
-    {
-        $qb = $this->createQueryBuilder('o')
+    public function getOrderCountBetweenDatesAndFilters(DateTime $startDate, DateTime $endDate, int $typeId, int $statusId, ?int $orderSource = null): int
+        {
+            $qb = $this->createQueryBuilder('o')
             ->select('COUNT(o.id) as orderCount')
             ->where('o.statusUpdatedAt >= :startDate')
             ->andWhere('o.statusUpdatedAt <= :endDate')
@@ -86,10 +92,15 @@ class OrderRepository extends ServiceEntityRepository
             ->setParameter('typeId', $typeId)
             ->setParameter('statusId', $statusId);
 
-        $result = $qb->getQuery()->getSingleScalarResult();
+            if ($orderSource !== null) {
+                $qb->andWhere('o.orderSource = :orderSource')
+                    ->setParameter('orderSource', $orderSource);
+            }
 
-        return (int) $result;
-    }
+            $result = $qb->getQuery()->getSingleScalarResult();
+
+            return (int) $result;
+        }
 
 
 

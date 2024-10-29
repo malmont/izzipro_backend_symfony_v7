@@ -165,23 +165,31 @@ class StatistiqueGeneraleController extends AbstractController
     }
 
 
-    /**
-     * @Route("/api/statistiques/nombre-commandes", name="statistiques_nombre_commandes", methods={"GET"})
+        /**
+     * @Route("/api/statistiques/nombre-commandes/{source}", name="statistiques_nombre_commandes", methods={"GET"}, defaults={"source"=null})
      */
-    public function getOrderStatistics(): JsonResponse
+    public function getOrderStatistics(Request $request, ?string $source = null): JsonResponse
     {
         $types = [1 => 'AchatClient', 2 => 'RetourClient'];
         $statuses = [3 => 'Complétée', 6 => 'Livrée', 7 => 'Annulation'];
 
+        $sourceMap = [
+            'pos' => 2,
+            'ecommerce' => 1,
+            'mobile_app' => 3,
+        ];
+
+        // Définir `orderSource` en fonction de l'URL ou null pour tous
+        $orderSource = $sourceMap[$source] ?? null;
         $statistics = [];
 
         foreach ($types as $typeId => $typeName) {
             foreach ($statuses as $statusId => $statusName) {
                 if(!($typeId == 2 &&  ($statusId==7)) ){
                 // Calculs pour la semaine en cours
-                $currentWeekCount = $this->calculateOrderCountForCurrentWeekUseCase->execute($typeId, $statusId);
-                $lastWeekCount = $this->calculateOrderCountForCurrentWeekUseCase->execute($typeId, $statusId);
-                $dailyCountForCurrentWeek = $this->calculateDailyOrderCountForCurrentWeekUseCase->execute($typeId, $statusId);
+                $currentWeekCount = $this->calculateOrderCountForCurrentWeekUseCase->execute($typeId, $statusId,$orderSource);
+                $lastWeekCount = $this->calculateOrderCountForCurrentWeekUseCase->execute($typeId, $statusId,$orderSource);
+                $dailyCountForCurrentWeek = $this->calculateDailyOrderCountForCurrentWeekUseCase->execute($typeId, $statusId,$orderSource);
 
                 // Ajout des résultats au tableau de réponse
 
@@ -193,14 +201,15 @@ class StatistiqueGeneraleController extends AbstractController
         }
 
         // Calcul des autres statistiques
-        $statistics["current_month_count"] = $this->calculateOrderCountForCurrentMonthUseCase->execute();
-        $statistics["last_month_count"] = $this->calculateOrderCountForLastMonthUseCase->execute();
-        $statistics["weekly_count_for_current_month"] = $this->calculateWeeklyOrderCountForCurrentMonthUseCase->execute();
-        $statistics["current_year_count"] = $this->calculateOrderCountForCurrentYearUseCase->execute();
-        $statistics["monthly_count_for_current_year"] = $this->calculateMonthlyOrderCountForCurrentYearUseCase->execute();
+        $statistics["current_month_count"] = $this->calculateOrderCountForCurrentMonthUseCase->execute($orderSource);
+        $statistics["last_month_count"] = $this->calculateOrderCountForLastMonthUseCase->execute($orderSource);
+        $statistics["weekly_count_for_current_month"] = $this->calculateWeeklyOrderCountForCurrentMonthUseCase->execute($orderSource);
+        $statistics["current_year_count"] = $this->calculateOrderCountForCurrentYearUseCase->execute($orderSource);
+        $statistics["monthly_count_for_current_year"] = $this->calculateMonthlyOrderCountForCurrentYearUseCase->execute($orderSource);
 
         return $this->json($statistics);
     }
+
 
 
     /**

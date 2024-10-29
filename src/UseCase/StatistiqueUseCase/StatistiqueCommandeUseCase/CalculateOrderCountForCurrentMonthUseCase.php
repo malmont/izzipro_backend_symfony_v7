@@ -13,8 +13,8 @@ class CalculateOrderCountForCurrentMonthUseCase
         $this->statistiqueCommandeService = $statistiqueCommandeService;
     }
 
-    public function execute(): int
+    public function execute(?int $orderSource = null): int
     {
-        return $this->statistiqueCommandeService->getOrderCountForCurrentMonth();
+        return $this->statistiqueCommandeService->getOrderCountForCurrentMonth($orderSource);
     }
 }

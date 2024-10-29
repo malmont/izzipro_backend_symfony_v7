@@ -15,17 +15,17 @@ class StatistiqueCommandeService
     }
 
     // Méthode pour obtenir le nombre de commandes pour la semaine en cours, avec filtres
-    public function getOrderCountForCurrentWeek(int $typeId, int $statusId): int
+    public function getOrderCountForCurrentWeek(int $typeId, int $statusId,?int $orderSource = null): int
     {
         $now = new DateTime();
         $startOfWeek = (clone $now)->modify('monday this week');
         $endOfWeek = (clone $startOfWeek)->modify('sunday this week');
 
-        return $this->orderRepository->getOrderCountBetweenDatesAndFilters($startOfWeek, $endOfWeek, $typeId, $statusId);
+        return $this->orderRepository->getOrderCountBetweenDatesAndFilters($startOfWeek, $endOfWeek, $typeId, $statusId, $orderSource);
     }
 
     // Méthode pour obtenir le nombre de commandes pour chaque jour de la semaine en cours, avec filtres
-    public function getDailyOrderCountForCurrentWeek(int $typeId, int $statusId): array
+    public function getDailyOrderCountForCurrentWeek(int $typeId, int $statusId,?int $orderSource = null): array
     {
         $now = new DateTime();
         $startOfWeek = (clone $now)->modify('monday this week');
@@ -37,7 +37,7 @@ class StatistiqueCommandeService
             $endOfDay = (clone $currentDay)->setTime(23, 59, 59);
 
             // Récupérer le nombre de commandes pour le jour actuel
-            $count = $this->orderRepository->getOrderCountBetweenDatesAndFilters($startOfDay, $endOfDay, $typeId, $statusId);
+            $count = $this->orderRepository->getOrderCountBetweenDatesAndFilters($startOfDay, $endOfDay, $typeId, $statusId, $orderSource);
             $dailyCounts[$currentDay->format('Y-m-d')] = $count;
         }
 
@@ -46,17 +46,17 @@ class StatistiqueCommandeService
 
 
     // Méthode pour obtenir le nombre de commandes pour le mois en cours
-    public function getOrderCountForCurrentMonth(): int
+    public function getOrderCountForCurrentMonth(?int $orderSource = null): int
     {
         $now = new DateTime();
         $startOfMonth = (clone $now)->modify('first day of this month');
         $endOfMonth = (clone $startOfMonth)->modify('last day of this month');
 
-        return $this->orderRepository->getOrderCountBetweenDates($startOfMonth, $endOfMonth);
+        return $this->orderRepository->getOrderCountBetweenDates($startOfMonth, $endOfMonth, $orderSource);
     }
 
     // Méthode pour obtenir le nombre de commandes pour chaque semaine du mois en cours
-    public function getWeeklyOrderCountForCurrentMonth(): array
+    public function getWeeklyOrderCountForCurrentMonth(?int $orderSource = null): array
     {
         $now = new DateTime();
         $startOfMonth = (clone $now)->modify('first day of this month');
@@ -69,7 +69,7 @@ class StatistiqueCommandeService
                 $currentWeekEnd = (clone $now)->modify('last day of this month');
             }
 
-            $count = $this->orderRepository->getOrderCountBetweenDates($currentWeekStart, $currentWeekEnd);
+            $count = $this->orderRepository->getOrderCountBetweenDates($currentWeekStart, $currentWeekEnd, $orderSource);
             $weeklyCounts[$currentWeekStart->format('W')] = $count;
 
             $currentWeekStart = (clone $currentWeekEnd)->modify('+1 day');
@@ -79,17 +79,17 @@ class StatistiqueCommandeService
     }
 
     // Méthode pour obtenir le nombre de commandes pour l'année en cours
-    public function getOrderCountForCurrentYear(): int
+    public function getOrderCountForCurrentYear(?int $orderSource = null): int
     {
         $now = new DateTime();
         $startOfYear = (clone $now)->modify('first day of January');
         $endOfYear = (clone $startOfYear)->modify('last day of December');
 
-        return $this->orderRepository->getOrderCountBetweenDates($startOfYear, $endOfYear);
+        return $this->orderRepository->getOrderCountBetweenDates($startOfYear, $endOfYear, $orderSource);
     }
 
     // Méthode pour obtenir le nombre de commandes pour chaque mois de l'année en cours
-    public function getMonthlyOrderCountForCurrentYear(): array
+    public function getMonthlyOrderCountForCurrentYear(?int $orderSource = null): array
     {
         $now = new DateTime();
         $startOfYear = (clone $now)->modify('first day of January');
@@ -103,7 +103,7 @@ class StatistiqueCommandeService
                 break; // Arrêter si le mois dépasse la date actuelle
             }
 
-            $count = $this->orderRepository->getOrderCountBetweenDates($currentMonthStart, $currentMonthEnd);
+            $count = $this->orderRepository->getOrderCountBetweenDates($currentMonthStart, $currentMonthEnd, $orderSource);
             $monthlyCounts[$currentMonthStart->format('F')] = $count;
         }
 
@@ -111,12 +111,12 @@ class StatistiqueCommandeService
     }
 
     // Méthode pour obtenir le nombre de commandes pour le mois précédent de l'année en cours
-    public function getOrderCountForLastMonth(): int
+    public function getOrderCountForLastMonth(?int $orderSource = null): int
     {
         $now = new DateTime();
         $startOfLastMonth = (clone $now)->modify('first day of previous month');
         $endOfLastMonth = (clone $startOfLastMonth)->modify('last day of this month');
 
-        return $this->orderRepository->getOrderCountBetweenDates($startOfLastMonth, $endOfLastMonth);
+        return $this->orderRepository->getOrderCountBetweenDates($startOfLastMonth, $endOfLastMonth, $orderSource);
     }
 }

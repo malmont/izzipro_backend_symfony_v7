@@ -13,9 +13,9 @@ class CalculateOrderCountForCurrentYearUseCase
         $this->statistiqueCommandeService = $statistiqueCommandeService;
     }
 
-    public function execute(): int
+    public function execute(?int $orderSource = null): int
     {
-        return $this->statistiqueCommandeService->getOrderCountForCurrentYear();
+        return $this->statistiqueCommandeService->getOrderCountForCurrentYear($orderSource);
     }
 }
 

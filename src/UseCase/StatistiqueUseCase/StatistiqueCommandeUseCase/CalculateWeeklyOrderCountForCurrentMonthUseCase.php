@@ -13,8 +13,8 @@ class CalculateWeeklyOrderCountForCurrentMonthUseCase
         $this->statistiqueCommandeService = $statistiqueCommandeService;
     }
 
-    public function execute(): array
+    public function execute(?int $orderSource = null): array
     {
-        return $this->statistiqueCommandeService->getWeeklyOrderCountForCurrentMonth();
+        return $this->statistiqueCommandeService->getWeeklyOrderCountForCurrentMonth($orderSource);
     }
 }
