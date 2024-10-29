@@ -13,8 +13,8 @@ class CalculateYearlyRevenueUseCase
         $this->statistiqueRevenuService = $statistiqueRevenuService;
     }
 
-    public function execute(int $yearsAgo): float
+    public function execute(int $yearsAgo, ?int $orderSource = null): float
     {
-        return $this->statistiqueRevenuService->getRevenueForYear($yearsAgo);
+        return $this->statistiqueRevenuService->getRevenueForYear($yearsAgo, $orderSource);
     }
 }

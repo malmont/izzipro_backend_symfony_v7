@@ -13,8 +13,8 @@ class CalculateWeeklyRevenueUseCase
         $this->statistiqueRevenuService = $statistiqueRevenuService;
     }
 
-    public function execute(int $weeksAgo): float
+    public function execute(int $weeksAgo,?int $orderSource = null): float
     {
-        return $this->statistiqueRevenuService->getRevenueForWeek($weeksAgo);
+        return $this->statistiqueRevenuService->getRevenueForWeek($weeksAgo, $orderSource);
     }
 }

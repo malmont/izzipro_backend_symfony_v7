@@ -15,7 +15,7 @@ class StatistiqueRevenuService
     }
 
 
-    public function getDailyRevenueForCurrentWeek(): array
+    public function getDailyRevenueForCurrentWeek(?int $orderSource = null): array
     {
         $now = new DateTime();
         $startOfWeek = (clone $now)->modify('monday this week');
@@ -23,17 +23,19 @@ class StatistiqueRevenuService
 
         for ($i = 0; $i < 7; $i++) {
             $currentDay = (clone $startOfWeek)->modify("+$i day");
-            $nextDay = (clone $currentDay)->modify('+1 day');
-
-            $revenue = $this->orderRepository->getTotalRevenueBetweenDates($currentDay, $nextDay);
+            $startDate = (clone $currentDay)->setTime(0, 0, 0);
+            $endDate = (clone $currentDay)->setTime(23, 59, 59);
+            
+            $revenue = $this->orderRepository->getTotalRevenueBetweenDates($startDate, $endDate, $orderSource);
             $dailyRevenues[$currentDay->format('Y-m-d')] = $revenue;
         }
+        
 
         return $dailyRevenues;
     }
 
 
-    public function getWeeklyRevenueForCurrentMonth(): array
+    public function getWeeklyRevenueForCurrentMonth(?int $orderSource = null): array
     {
         $now = new DateTime();
         $startOfMonth = (clone $now)->modify('first day of this month');
@@ -46,7 +48,7 @@ class StatistiqueRevenuService
                 $currentWeekEnd = (clone $now)->modify('last day of this month');
             }
 
-            $revenue = $this->orderRepository->getTotalRevenueBetweenDates($currentWeekStart, $currentWeekEnd);
+            $revenue = $this->orderRepository->getTotalRevenueBetweenDates($currentWeekStart, $currentWeekEnd, $orderSource);
             $weeklyRevenues[$currentWeekStart->format('W')] = $revenue;
 
             $currentWeekStart = (clone $currentWeekEnd)->modify('+1 day');
@@ -56,7 +58,7 @@ class StatistiqueRevenuService
     }
 
 
-    public function getMonthlyRevenueForCurrentYear(): array
+    public function getMonthlyRevenueForCurrentYear(?int $orderSource = null): array
     {
         $now = new DateTime();
         $startOfYear = (clone $now)->modify('first day of January');
@@ -70,7 +72,7 @@ class StatistiqueRevenuService
                 break; 
             }
 
-            $revenue = $this->orderRepository->getTotalRevenueBetweenDates($currentMonthStart, $currentMonthEnd);
+            $revenue = $this->orderRepository->getTotalRevenueBetweenDates($currentMonthStart, $currentMonthEnd, $orderSource);
             $monthlyRevenues[$currentMonthStart->format('F')] = $revenue;
         }
 
@@ -78,26 +80,26 @@ class StatistiqueRevenuService
     }
 
 
-    public function getRevenueForWeek(int $weeksAgo): float
-    {
-        $now = new DateTime();
-        $startOfWeek = (clone $now)->modify('monday this week')->modify("-$weeksAgo week");
-        $endOfWeek = (clone $startOfWeek)->modify('sunday this week');
+    public function getRevenueForWeek(int $weeksAgo, ?int $orderSource = null): float
+{
+    $now = new DateTime();
+    $startOfWeek = (clone $now)->modify('monday this week')->modify("-$weeksAgo week");
+    $endOfWeek = (clone $startOfWeek)->modify('sunday this week');
 
-        return $this->orderRepository->getTotalRevenueBetweenDates($startOfWeek, $endOfWeek);
-    }
+    return $this->orderRepository->getTotalRevenueBetweenDates($startOfWeek, $endOfWeek, $orderSource);
+}
 
 
-    public function getRevenueForMonth(int $monthsAgo): float
+    public function getRevenueForMonth(int $monthsAgo,?int $orderSource = null): float
     {
         $now = new DateTime();
         $startOfMonth = (clone $now)->modify('first day of this month')->modify("-$monthsAgo month");
         $endOfMonth = (clone $startOfMonth)->modify('last day of this month');
 
-        return $this->orderRepository->getTotalRevenueBetweenDates($startOfMonth, $endOfMonth);
+        return $this->orderRepository->getTotalRevenueBetweenDates($startOfMonth, $endOfMonth, $orderSource);
     }
 
-    public function getRevenueForYear(int $yearsAgo): float
+    public function getRevenueForYear(int $yearsAgo, ?int $orderSource = null): float
     {
         $now = new DateTime();
         $startOfYear = (clone $now)->modify('first day of January')->modify("-$yearsAgo year");
@@ -107,6 +109,6 @@ class StatistiqueRevenuService
     }
     public function getRevenueForCustomInterval(DateTime $startDate, DateTime $endDate): float
     {
-        return $this->orderRepository->getTotalRevenueBetweenDates($startDate, $endDate);
+        return $this->orderRepository->getTotalRevenueBetweenDates($startDate, $endDate, $orderSource);
     }
 }

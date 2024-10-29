@@ -13,8 +13,8 @@ class CalculateDailyRevenueForCurrentWeekUseCase
         $this->statistiqueRevenuService = $statistiqueRevenuService;
     }
 
-    public function execute(): array
+    public function execute(?int $orderSource = null): array
     {
-        return $this->statistiqueRevenuService->getDailyRevenueForCurrentWeek();
+        return $this->statistiqueRevenuService->getDailyRevenueForCurrentWeek($orderSource);
     }
 }

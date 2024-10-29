@@ -24,18 +24,25 @@ class OrderRepository extends ServiceEntityRepository
      * @param DateTime $endDate
      * @return float
      */
-    public function getTotalRevenueBetweenDates(DateTime $startDate, DateTime $endDate): float
+    public function getTotalRevenueBetweenDates(DateTime $startDate, DateTime $endDate, ?int $orderSource = null): float
     {
         $qb = $this->createQueryBuilder('o')
             ->select('SUM(o.totalAmount) as totalRevenue')
             ->where('o.orderDate BETWEEN :startDate AND :endDate')
             ->setParameter('startDate', $startDate->format('Y-m-d 00:00:00'))
             ->setParameter('endDate', $endDate->format('Y-m-d 23:59:59'));
-
+    
+        // Appliquer le filtre de source de commande, si spécifié
+        if ($orderSource !== null) {
+            $qb->andWhere('o.orderSource = :orderSource')
+               ->setParameter('orderSource', $orderSource);
+        }
+    
         $result = $qb->getQuery()->getSingleScalarResult();
-
-        return (float) $result;
+    
+        return (float) ($result ?? 0.0);
     }
+    
 
     /**
      * Compte le nombre de commandes entre deux dates.

@@ -13,8 +13,8 @@ class CalculateWeeklyRevenueForCurrentMonthUseCase
         $this->statistiqueRevenuService = $statistiqueRevenuService;
     }
 
-    public function execute(): array
+    public function execute( ?int $orderSource = null): array
     {
-        return $this->statistiqueRevenuService->getWeeklyRevenueForCurrentMonth();
+        return $this->statistiqueRevenuService->getWeeklyRevenueForCurrentMonth($orderSource);
     }
 }

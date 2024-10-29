@@ -13,8 +13,8 @@ class CalculateMonthlyRevenueForCurrentYearUseCase
         $this->statistiqueRevenuService = $statistiqueRevenuService;
     }
 
-    public function execute(): array
+    public function execute( ?int $orderSource = null): array
     {
-        return $this->statistiqueRevenuService->getMonthlyRevenueForCurrentYear();
+        return $this->statistiqueRevenuService->getMonthlyRevenueForCurrentYear($orderSource);
     }
 }

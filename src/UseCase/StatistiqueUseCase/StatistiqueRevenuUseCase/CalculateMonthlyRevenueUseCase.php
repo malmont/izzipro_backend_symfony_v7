@@ -13,8 +13,8 @@ class CalculateMonthlyRevenueUseCase
         $this->statistiqueRevenuService = $statistiqueRevenuService;
     }
 
-    public function execute(int $monthsAgo): float
+    public function execute(int $monthsAgo, ?int $orderSource = null): float
     {
-        return $this->statistiqueRevenuService->getRevenueForMonth($monthsAgo);
+        return $this->statistiqueRevenuService->getRevenueForMonth($monthsAgo, $orderSource);
     }
 }

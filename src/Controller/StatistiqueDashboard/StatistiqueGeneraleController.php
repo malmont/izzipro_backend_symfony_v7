@@ -106,18 +106,28 @@ class StatistiqueGeneraleController extends AbstractController
     }
 
     /**
-     * @Route("/api/statistiques/chiffre-affaires", name="statistiques_chiffre_affaires", methods={"GET"})
+     * @Route("/api/statistiques/chiffre-affaires/{source}", name="statistiques_chiffre_affaires", methods={"GET"})
      */
-    public function getChiffreAffaires(Request $request): JsonResponse
+    public function getChiffreAffaires(Request $request, ?string $source = null): JsonResponse
     {
         $startDateParam = $request->query->get('startDate');
         $endDateParam = $request->query->get('endDate');
+
+        // Associer les sources de commande aux valeurs d'enum
+        $sourceMap = [
+            'pos' => 2,
+            'ecommerce' => 1,
+            'mobile_app' => 3,
+        ];
+
+        // Définir `orderSource` en fonction de l'URL ou null pour tous
+        $orderSource = $sourceMap[$source] ?? null;
 
         if ($startDateParam && $endDateParam) {
             try {
                 $startDate = new DateTime($startDateParam);
                 $endDate = new DateTime($endDateParam);
-                $customRevenue = $this->calculateCustomIntervalRevenueUseCase->execute($startDate, $endDate);
+                $customRevenue = $this->calculateCustomIntervalRevenueUseCase->execute($startDate, $endDate, $orderSource);
 
                 return $this->json([
                     'startDate' => $startDate->format('Y-m-d'),
@@ -129,30 +139,31 @@ class StatistiqueGeneraleController extends AbstractController
             }
         }
 
-        $currentWeekRevenue = $this->calculateWeeklyRevenueUseCase->execute(0);
-        $lastWeekRevenue = $this->calculateWeeklyRevenueUseCase->execute(1);
-        $dailyRevenueForCurrentWeek = $this->calculateDailyRevenueForCurrentWeekUseCase->execute();
+        $currentWeekRevenue = $this->calculateWeeklyRevenueUseCase->execute(0, $orderSource);
+        $lastWeekRevenue = $this->calculateWeeklyRevenueUseCase->execute(1, $orderSource);
+        $dailyRevenueForCurrentWeek = $this->calculateDailyRevenueForCurrentWeekUseCase->execute($orderSource);
 
-        $currentMonthRevenue = $this->calculateMonthlyRevenueUseCase->execute(0);
-        $lastYearMonthRevenue = $this->calculateMonthlyRevenueUseCase->execute(1);
-        $weeklyRevenueForCurrentMonth = $this->calculateWeeklyRevenueForCurrentMonthUseCase->execute();
+        $currentMonthRevenue = $this->calculateMonthlyRevenueUseCase->execute(0, $orderSource);
+        $lastMonthRevenue = $this->calculateMonthlyRevenueUseCase->execute(1, $orderSource);
+        $weeklyRevenueForCurrentMonth = $this->calculateWeeklyRevenueForCurrentMonthUseCase->execute($orderSource);
 
-        $currentYearRevenue = $this->calculateYearlyRevenueUseCase->execute(0);
-        $lastYearRevenue = $this->calculateYearlyRevenueUseCase->execute(1);
-        $monthlyRevenueForCurrentYear = $this->calculateMonthlyRevenueForCurrentYearUseCase->execute();
+        $currentYearRevenue = $this->calculateYearlyRevenueUseCase->execute(0, $orderSource);
+        $lastYearRevenue = $this->calculateYearlyRevenueUseCase->execute(1, $orderSource);
+        $monthlyRevenueForCurrentYear = $this->calculateMonthlyRevenueForCurrentYearUseCase->execute($orderSource);
 
         return $this->json([
             'current_week_revenue' => $currentWeekRevenue,
             'last_week_revenue' => $lastWeekRevenue,
             'daily_revenue_for_current_week' => $dailyRevenueForCurrentWeek,
             'current_month_revenue' => $currentMonthRevenue,
-            'last_month_revenue' => $lastYearMonthRevenue,
+            'last_month_revenue' => $lastMonthRevenue,
             'weekly_revenue_for_current_month' => $weeklyRevenueForCurrentMonth,
             'current_year_revenue' => $currentYearRevenue,
             'last_year_revenue' => $lastYearRevenue,
             'monthly_revenue_for_current_year' => $monthlyRevenueForCurrentYear,
         ]);
     }
+
 
     /**
      * @Route("/api/statistiques/nombre-commandes", name="statistiques_nombre_commandes", methods={"GET"})

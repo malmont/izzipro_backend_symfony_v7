@@ -14,8 +14,8 @@ class CalculateCustomIntervalRevenueUseCase
         $this->statistiqueRevenuService = $statistiqueRevenuService;
     }
 
-    public function execute(DateTime $startDate, DateTime $endDate): float
+    public function execute(DateTime $startDate, DateTime $endDate,?int $orderSource = null): float
     {
-        return $this->statistiqueRevenuService->getRevenueForCustomInterval($startDate, $endDate);
+        return $this->statistiqueRevenuService->getRevenueForCustomInterval($startDate, $endDate, $orderSource);
     }
 }
