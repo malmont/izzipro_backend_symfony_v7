@@ -13,8 +13,8 @@ class CalculateWeeklyAverageOrderValueForCurrentMonthUseCase
         $this->statistiquePanierService = $statistiquePanierService;
     }
 
-    public function execute(): array
+    public function execute(?int $orderSource = null): array
     {
-        return $this->statistiquePanierService->getWeeklyAverageOrderValueForCurrentMonth();
+        return $this->statistiquePanierService->getWeeklyAverageOrderValueForCurrentMonth($orderSource);
     }
 }

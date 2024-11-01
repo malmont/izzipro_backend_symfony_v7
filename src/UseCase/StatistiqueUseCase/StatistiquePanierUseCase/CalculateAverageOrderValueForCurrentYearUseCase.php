@@ -13,8 +13,8 @@ class CalculateAverageOrderValueForCurrentYearUseCase
         $this->statistiquePanierService = $statistiquePanierService;
     }
 
-    public function execute(): float
+    public function execute(?int $orderSource = null): float
     {
-        return $this->statistiquePanierService->getAverageOrderValueForCurrentYear();
+        return $this->statistiquePanierService->getAverageOrderValueForCurrentYear($orderSource);
     }
 }

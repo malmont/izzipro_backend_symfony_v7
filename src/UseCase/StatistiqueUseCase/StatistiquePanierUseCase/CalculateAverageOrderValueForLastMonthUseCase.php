@@ -13,8 +13,8 @@ class CalculateAverageOrderValueForLastMonthUseCase
         $this->statistiquePanierService = $statistiquePanierService;
     }
 
-    public function execute(): float
+    public function execute(?int $orderSource = null): float
     {
-        return $this->statistiquePanierService->getAverageOrderValueForLastMonth();
+        return $this->statistiquePanierService->getAverageOrderValueForLastMonth($orderSource);
     }
 }

@@ -17,6 +17,7 @@ class FraisService
         $this->noteDeFraisRepository = $noteDeFraisRepository;
     }
 
+    // Récupérer le total des frais pour l'année sous forme d'objet structuré
     public function getTotalFraisForYear(int $year): array
     {
         $totalNoteDeFraisAnnee = $this->noteDeFraisRepository->getTotalFraisByYear($year);
@@ -24,56 +25,61 @@ class FraisService
         $totalFraisAnnee = $totalNoteDeFraisAnnee + $totalFraisDePortAnnee;
 
         return [
-            'total_frais_annee' => $totalFraisAnnee,
-            'total_Note_de_frais_annee' => $totalNoteDeFraisAnnee,
-            'total_fraisdeport_annee' => $totalFraisDePortAnnee,
+            'year' => $year,
+            'total_frais' => [
+                'total' => $totalFraisAnnee,
+                'note_de_frais' => $totalNoteDeFraisAnnee,
+                'frais_de_port' => $totalFraisDePortAnnee,
+            ],
         ];
     }
 
+    // Récupérer le total des frais pour chaque mois de l'année sous forme d'objet structuré
     public function getTotalFraisByMonth(int $year): array
     {
         $fraisParMois = [];
-        $noteDeFraisParMois = [];
-        $fraisDePortParMois = [];
 
         for ($month = 1; $month <= 12; $month++) {
             $totalNoteDeFrais = $this->noteDeFraisRepository->getTotalFraisByMonth($year, $month);
             $totalFraisDePort = $this->fraisDePortRepository->getTotalFraisByMonth($year, $month);
-            $fraisParMois[$month] = $totalNoteDeFrais + $totalFraisDePort;
-            $noteDeFraisParMois[$month] = $totalNoteDeFrais;
-            $fraisDePortParMois[$month] = $totalFraisDePort;
+            $totalFrais = $totalNoteDeFrais + $totalFraisDePort;
+
+            $fraisParMois[] = [
+                'month' => DateTime::createFromFormat('!m', $month)->format('F'),
+                'total_frais' => [
+                    'total' => $totalFrais,
+                    'note_de_frais' => $totalNoteDeFrais,
+                    'frais_de_port' => $totalFraisDePort,
+                ]
+            ];
         }
 
-        return [
-            'frais_par_mois' => $fraisParMois,
-            'notedefrais_par_mois' => $noteDeFraisParMois,
-            'frais_de_port_par_mois' => $fraisDePortParMois,
-        ];
+        return $fraisParMois;
     }
 
+    // Récupérer le total des frais pour chaque jour d'une semaine sous forme d'objet structuré
     public function getTotalFraisByDay(DateTime $weekStart, DateTime $weekEnd): array
     {
         $fraisParJour = [];
-        $noteDeFraisParJour = [];
-        $fraisDePortParJour = [];
         $currentDay = clone $weekStart;
 
         while ($currentDay <= $weekEnd) {
             $totalNoteDeFrais = $this->noteDeFraisRepository->getTotalFraisByDay($currentDay);
             $totalFraisDePort = $this->fraisDePortRepository->getTotalFraisByDay($currentDay);
-            $dateFormatted = $currentDay->format('Y-m-d');
+            $totalFrais = $totalNoteDeFrais + $totalFraisDePort;
 
-            $fraisParJour[$dateFormatted] = $totalNoteDeFrais + $totalFraisDePort;
-            $noteDeFraisParJour[$dateFormatted] = $totalNoteDeFrais;
-            $fraisDePortParJour[$dateFormatted] = $totalFraisDePort;
+            $fraisParJour[] = [
+                'date' => $currentDay->format('Y-m-d'),
+                'total_frais' => [
+                    'total' => $totalFrais,
+                    'note_de_frais' => $totalNoteDeFrais,
+                    'frais_de_port' => $totalFraisDePort,
+                ]
+            ];
 
             $currentDay->modify('+1 day');
         }
 
-        return [
-            'frais_par_jour' => $fraisParJour,
-            'notedefrais_par_jour' => $noteDeFraisParJour,
-            'frais_de_port_par_jour' => $fraisDePortParJour,
-        ];
+        return $fraisParJour;
     }
 }

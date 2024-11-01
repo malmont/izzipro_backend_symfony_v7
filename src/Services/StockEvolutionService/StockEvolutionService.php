@@ -5,7 +5,6 @@ namespace App\Services\StockEvolutionService;
 use App\Repository\InventoryMovementsRepository;
 use DateTime;
 
-
 class StockEvolutionService
 {
     private $inventoryMovementsRepository;
@@ -20,7 +19,9 @@ class StockEvolutionService
         $startOfWeek = (new DateTime())->modify('monday this week');
         $endOfWeek = (new DateTime())->modify('sunday this week');
 
-        return $this->getStockEvolutionBetweenDates($startOfWeek, $endOfWeek);
+        return $this->transformToStockEvolutionList(
+            $this->getStockEvolutionBetweenDates($startOfWeek, $endOfWeek)
+        );
     }
 
     public function getStockEvolutionForCurrentMonth(): array
@@ -28,7 +29,9 @@ class StockEvolutionService
         $startOfMonth = (new DateTime())->modify('first day of this month');
         $endOfMonth = (new DateTime())->modify('last day of this month');
 
-        return $this->getStockEvolutionBetweenDates($startOfMonth, $endOfMonth);
+        return $this->transformToStockEvolutionList(
+            $this->getStockEvolutionBetweenDates($startOfMonth, $endOfMonth)
+        );
     }
 
     public function getStockEvolutionForCurrentYear(): array
@@ -36,7 +39,9 @@ class StockEvolutionService
         $startOfYear = (new DateTime())->modify('first day of January');
         $endOfYear = (new DateTime())->modify('last day of December');
 
-        return $this->getStockEvolutionBetweenDates($startOfYear, $endOfYear);
+        return $this->transformToStockEvolutionList(
+            $this->getStockEvolutionBetweenDates($startOfYear, $endOfYear)
+        );
     }
 
     private function getStockEvolutionBetweenDates(DateTime $startDate, DateTime $endDate): array
@@ -53,5 +58,18 @@ class StockEvolutionService
             'Return' => $return,
             'Ajustement' => $ajustement,
         ];
+    }
+
+    // Méthode de transformation pour formater les résultats en liste typée
+    private function transformToStockEvolutionList(array $stockData): array
+    {
+        $stockEvolutionList = [];
+        foreach ($stockData as $type => $quantity) {
+            $stockEvolutionList[] = [
+                'type' => $type,
+                'quantity' => $quantity,
+            ];
+        }
+        return $stockEvolutionList;
     }
 }

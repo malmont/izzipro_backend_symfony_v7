@@ -2,7 +2,6 @@
 
 namespace App\Services\StatistiqueService;
 
-
 use App\Repository\OrderTaxRepository;
 
 class TaxService
@@ -30,9 +29,25 @@ class TaxService
         ];
 
         foreach ($moisNoms as $month => $nom) {
-            $taxesParMois[$nom] = $this->orderTaxRepository->getTotalTaxByMonth($year, $month);
+            $totalTax = $this->orderTaxRepository->getTotalTaxByMonth($year, $month);
+            $taxesParMois[] = $this->transformToMonthlyTaxObject($nom, $totalTax);
         }
 
-        return ['monthly_taxe_for_current_year' => $taxesParMois];
+        return ['monthly_taxes_for_current_year' => $taxesParMois];
+    }
+
+    /**
+     * Transforme les données de taxe mensuelle en un objet structuré.
+     *
+     * @param string $month Nom du mois
+     * @param float $totalTax Total des taxes pour le mois
+     * @return array
+     */
+    private function transformToMonthlyTaxObject(string $month, float $totalTax): array
+    {
+        return [
+            'month' => $month,
+            'total_tax' => $totalTax
+        ];
     }
 }

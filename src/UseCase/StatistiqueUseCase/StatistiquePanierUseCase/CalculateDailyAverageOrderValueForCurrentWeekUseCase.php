@@ -13,8 +13,8 @@ class CalculateDailyAverageOrderValueForCurrentWeekUseCase
         $this->statistiquePanierService = $statistiquePanierService;
     }
 
-    public function execute(): array
+    public function execute(?int $orderSource = null): array
     {
-        return $this->statistiquePanierService->getDailyAverageOrderValueForCurrentWeek();
+        return $this->statistiquePanierService->getDailyAverageOrderValueForCurrentWeek($orderSource);
     }
 }

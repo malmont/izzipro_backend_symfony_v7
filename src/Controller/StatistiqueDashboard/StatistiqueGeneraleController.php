@@ -27,6 +27,7 @@ use App\UseCase\StatistiqueUseCase\StatistiquePanierUseCase\CalculateAverageOrde
 use App\UseCase\StatistiqueUseCase\StatistiquePanierUseCase\CalculateWeeklyAverageOrderValueForCurrentMonthUseCase;
 use App\UseCase\StatistiqueUseCase\StatistiquePanierUseCase\CalculateAverageOrderValueForCurrentYearUseCase;
 use App\UseCase\StatistiqueUseCase\StatistiquePanierUseCase\CalculateMonthlyAverageOrderValueForCurrentYearUseCase;
+use App\UseCase\StatistiqueUseCase\StatistiqueCommandeUseCase\CalculateOrderCountForLastYearUseCase;
 
 use Symfony\Component\HttpFoundation\Request;
 
@@ -56,6 +57,7 @@ class StatistiqueGeneraleController extends AbstractController
     private $calculateWeeklyAverageOrderValueForCurrentMonthUseCase;
     private $calculateAverageOrderValueForCurrentYearUseCase;
     private $calculateMonthlyAverageOrderValueForCurrentYearUseCase;
+    private $calculateOrderCountForLastYearUseCase;
 
     public function __construct(
         CalculateWeeklyRevenueUseCase $calculateWeeklyRevenueUseCase,
@@ -79,7 +81,8 @@ class StatistiqueGeneraleController extends AbstractController
         CalculateAverageOrderValueForLastMonthUseCase $calculateAverageOrderValueForLastMonthUseCase,
         CalculateWeeklyAverageOrderValueForCurrentMonthUseCase $calculateWeeklyAverageOrderValueForCurrentMonthUseCase,
         CalculateAverageOrderValueForCurrentYearUseCase $calculateAverageOrderValueForCurrentYearUseCase,
-        CalculateMonthlyAverageOrderValueForCurrentYearUseCase $calculateMonthlyAverageOrderValueForCurrentYearUseCase
+        CalculateMonthlyAverageOrderValueForCurrentYearUseCase $calculateMonthlyAverageOrderValueForCurrentYearUseCase,
+        CalculateOrderCountForLastYearUseCase $calculateOrderCountForLastYearUseCase
     ) {
         $this->calculateWeeklyRevenueUseCase = $calculateWeeklyRevenueUseCase;
         $this->calculateMonthlyRevenueUseCase = $calculateMonthlyRevenueUseCase;
@@ -103,6 +106,7 @@ class StatistiqueGeneraleController extends AbstractController
         $this->calculateWeeklyAverageOrderValueForCurrentMonthUseCase = $calculateWeeklyAverageOrderValueForCurrentMonthUseCase;
         $this->calculateAverageOrderValueForCurrentYearUseCase = $calculateAverageOrderValueForCurrentYearUseCase;
         $this->calculateMonthlyAverageOrderValueForCurrentYearUseCase = $calculateMonthlyAverageOrderValueForCurrentYearUseCase;
+        $this->calculateOrderCountForLastYearUseCase = $calculateOrderCountForLastYearUseCase;
     }
 
     /**
@@ -152,15 +156,15 @@ class StatistiqueGeneraleController extends AbstractController
         $monthlyRevenueForCurrentYear = $this->calculateMonthlyRevenueForCurrentYearUseCase->execute($orderSource);
 
         return $this->json([
-            'current_week_revenue' => $currentWeekRevenue,
-            'last_week_revenue' => $lastWeekRevenue,
-            'daily_revenue_for_current_week' => $dailyRevenueForCurrentWeek,
-            'current_month_revenue' => $currentMonthRevenue,
-            'last_month_revenue' => $lastMonthRevenue,
-            'weekly_revenue_for_current_month' => $weeklyRevenueForCurrentMonth,
-            'current_year_revenue' => $currentYearRevenue,
-            'last_year_revenue' => $lastYearRevenue,
-            'monthly_revenue_for_current_year' => $monthlyRevenueForCurrentYear,
+            'currentWeekRevenue' => $currentWeekRevenue,
+            'lastWeekRevenue' => $lastWeekRevenue,
+            'dailyRevenueForCurrentWeek' => $dailyRevenueForCurrentWeek,
+            'currentMonthRevenue' => $currentMonthRevenue,
+            'lastMonthRevenue' => $lastMonthRevenue,
+            'weeklyRevenueForCurrentMonth' => $weeklyRevenueForCurrentMonth,
+            'currentYearRevenue' => $currentYearRevenue,
+            'lastYearRevenue' => $lastYearRevenue,
+            'monthlyRevenueForCurrentYear' => $monthlyRevenueForCurrentYear,
         ]);
     }
 
@@ -193,19 +197,20 @@ class StatistiqueGeneraleController extends AbstractController
 
                 // Ajout des résultats au tableau de réponse
 
-                $statistics["current_week_count_{$typeName}_{$statusName}"] = $currentWeekCount;
-                $statistics["last_week_count_{$typeName}_{$statusName}"] = $lastWeekCount;
-                $statistics["daily_count_{$typeName}_{$statusName}_for_current_week"] = $dailyCountForCurrentWeek;
+                $statistics["currentWeekCount{$typeName}{$statusName}"] = $currentWeekCount;
+                $statistics["lastWeekCount{$typeName}{$statusName}"] = $lastWeekCount;
+                $statistics["dailyCount{$typeName}_{$statusName}ForCurrentWeek"] = $dailyCountForCurrentWeek;
             }
             }
         }
 
         // Calcul des autres statistiques
-        $statistics["current_month_count"] = $this->calculateOrderCountForCurrentMonthUseCase->execute($orderSource);
-        $statistics["last_month_count"] = $this->calculateOrderCountForLastMonthUseCase->execute($orderSource);
-        $statistics["weekly_count_for_current_month"] = $this->calculateWeeklyOrderCountForCurrentMonthUseCase->execute($orderSource);
-        $statistics["current_year_count"] = $this->calculateOrderCountForCurrentYearUseCase->execute($orderSource);
-        $statistics["monthly_count_for_current_year"] = $this->calculateMonthlyOrderCountForCurrentYearUseCase->execute($orderSource);
+        $statistics["currentMonthCount"] = $this->calculateOrderCountForCurrentMonthUseCase->execute($orderSource);
+        $statistics["lastMonthCount"] = $this->calculateOrderCountForLastMonthUseCase->execute($orderSource);
+        $statistics["weeklyCountForCurrentMonth"] = $this->calculateWeeklyOrderCountForCurrentMonthUseCase->execute($orderSource);
+        $statistics["currentYearCount"] = $this->calculateOrderCountForCurrentYearUseCase->execute($orderSource);
+        $statistics["lastYearCount"] = $this->calculateOrderCountForLastYearUseCase->execute($orderSource);
+        $statistics["monthlyCountForCurrentYear"] = $this->calculateMonthlyOrderCountForCurrentYearUseCase->execute($orderSource);
 
         return $this->json($statistics);
     }
@@ -213,30 +218,37 @@ class StatistiqueGeneraleController extends AbstractController
 
 
     /**
-     * @Route("/api/statistiques/panier-moyen", name="statistiques_panier_moyen", methods={"GET"})
+     * @Route("/api/statistiques/panier-moyen/{source}", name="statistiques_panier_moyen", methods={"GET"})
      */
-    public function getAverageOrderValueStatistics(): JsonResponse
+    public function getAverageOrderValueStatistics(Request $request, ?string $source = null): JsonResponse
     {
-        $currentWeekAverage = $this->calculateAverageOrderValueForCurrentWeekUseCase->execute();
-        $lastWeekAverage = $this->calculateAverageOrderValueForLastWeekUseCase->execute();
-        $dailyAverageForCurrentWeek = $this->calculateDailyAverageOrderValueForCurrentWeekUseCase->execute();
+        $sourceMap = [
+            'pos' => 2,
+            'ecommerce' => 1,
+            'mobile_app' => 3,
+        ];
+        $orderSource = $sourceMap[$source] ?? null;
 
-        $currentMonthAverage = $this->calculateAverageOrderValueForCurrentMonthUseCase->execute();
-        $lastMonthAverage = $this->calculateAverageOrderValueForLastMonthUseCase->execute();
-        $weeklyAverageForCurrentMonth = $this->calculateWeeklyAverageOrderValueForCurrentMonthUseCase->execute();
+        $currentWeekAverage = $this->calculateAverageOrderValueForCurrentWeekUseCase->execute($orderSource);
+        $lastWeekAverage = $this->calculateAverageOrderValueForLastWeekUseCase->execute($orderSource);
+        $dailyAverageForCurrentWeek = $this->calculateDailyAverageOrderValueForCurrentWeekUseCase->execute($orderSource);
 
-        $currentYearAverage = $this->calculateAverageOrderValueForCurrentYearUseCase->execute();
-        $monthlyAverageForCurrentYear = $this->calculateMonthlyAverageOrderValueForCurrentYearUseCase->execute();
+        $currentMonthAverage = $this->calculateAverageOrderValueForCurrentMonthUseCase->execute($orderSource);
+        $lastMonthAverage = $this->calculateAverageOrderValueForLastMonthUseCase->execute($orderSource);
+        $weeklyAverageForCurrentMonth = $this->calculateWeeklyAverageOrderValueForCurrentMonthUseCase->execute($orderSource);
+
+        $currentYearAverage = $this->calculateAverageOrderValueForCurrentYearUseCase->execute($orderSource);
+        $monthlyAverageForCurrentYear = $this->calculateMonthlyAverageOrderValueForCurrentYearUseCase->execute($orderSource);
 
         return $this->json([
-            "current_week_average" => $currentWeekAverage,
-            "last_week_average" => $lastWeekAverage,
-            "daily_average_for_current_week" => $dailyAverageForCurrentWeek,
-            "current_month_average" => $currentMonthAverage,
-            "last_average_count" => $lastMonthAverage,
-            "weekly_average_for_current_month" => $weeklyAverageForCurrentMonth,
-            "current_year_average" => $currentYearAverage,
-            "monthly_average_for_current_year" => $monthlyAverageForCurrentYear,
+            "currentWeekAverage" => $currentWeekAverage,
+            "lastWeekAverage" => $lastWeekAverage,
+            "dailyAverageForCurrentWeek" => $dailyAverageForCurrentWeek,
+            "currentMonthAverage" => $currentMonthAverage,
+            "lastAverageCount" => $lastMonthAverage,
+            "weeklyAverageForCurrentMonth" => $weeklyAverageForCurrentMonth,
+            "currentYearAverage" => $currentYearAverage,
+            "monthlyAverageForCurrentYear" => $monthlyAverageForCurrentYear,
         ]);
     }
 }

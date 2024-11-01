@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services\StatistiqueService;
 
 use App\Repository\OrderRepository;
@@ -17,21 +18,32 @@ class CarrierStatisticsService
         $currentYear = (int)date('Y');
         $carrierData = $this->orderRepository->getTotalCarrierByMonth($currentYear);
 
-        $monthlyCarrierData = [
-            'January' => $carrierData[1] ?? 0,
-            'February' => $carrierData[2] ?? 0,
-            'March' => $carrierData[3] ?? 0,
-            'April' => $carrierData[4] ?? 0,
-            'May' => $carrierData[5] ?? 0,
-            'June' => $carrierData[6] ?? 0,
-            'July' => $carrierData[7] ?? 0,
-            'August' => $carrierData[8] ?? 0,
-            'September' => $carrierData[9] ?? 0,
-            'October' => $carrierData[10] ?? 0,
-            'November' => $carrierData[11] ?? 0,
-            'December' => $carrierData[12] ?? 0,
+        $monthlyCarrierData = [];
+        $moisNoms = [
+            1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
+            5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+            9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
         ];
 
+        foreach ($moisNoms as $monthNum => $monthName) {
+            $monthlyCarrierData[] = $this->transformToMonthlyCarrierObject($monthName, $carrierData[$monthNum] ?? 0);
+        }
+
         return ['monthly_carrier_for_current_year' => $monthlyCarrierData];
+    }
+
+    /**
+     * Transforme les données de transport mensuelles en un objet structuré.
+     *
+     * @param string $month Nom du mois
+     * @param int $carrierCount Nombre de transporteurs pour le mois
+     * @return array
+     */
+    private function transformToMonthlyCarrierObject(string $month, int $carrierCount): array
+    {
+        return [
+            'month' => $month,
+            'carrier_count' => $carrierCount
+        ];
     }
 }

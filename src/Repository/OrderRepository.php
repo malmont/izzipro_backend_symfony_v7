@@ -111,7 +111,7 @@ class OrderRepository extends ServiceEntityRepository
      * @param DateTime $endDate
      * @return float
      */
-    public function getAverageOrderValueBetweenDates(DateTime $startDate, DateTime $endDate): float
+    public function getAverageOrderValueBetweenDates(DateTime $startDate, DateTime $endDate, ?int $orderSource = null): float
     {
         $qb = $this->createQueryBuilder('o')
             ->select('AVG(o.totalAmount) as averageOrderValue')
@@ -119,7 +119,12 @@ class OrderRepository extends ServiceEntityRepository
             ->andWhere('o.totalAmount > 0') // Exclure les montants négatifs si nécessaire
             ->setParameter('startDate', $startDate)
             ->setParameter('endDate', $endDate);
-
+            
+            if ($orderSource !== null) {
+                $qb->andWhere('o.orderSource = :orderSource')
+                    ->setParameter('orderSource', $orderSource);
+            }
+            
         $result = $qb->getQuery()->getSingleScalarResult();
 
         return (float) ($result ?? 0.0);

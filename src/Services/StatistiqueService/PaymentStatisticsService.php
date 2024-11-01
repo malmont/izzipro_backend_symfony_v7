@@ -16,11 +16,15 @@ class PaymentStatisticsService
     {
         // Paiements pour la semaine en cours
         $currentWeekPayment = $this->paymentsRepository->getTotalPaymentsForCurrentWeek('PaiementClient');
-        $dailyPaymentsForCurrentWeek = $this->paymentsRepository->getDailyPaymentsForCurrentWeek('PaiementClient');
+        $dailyPaymentsForCurrentWeek = $this->transformToDailyPaymentList(
+            $this->paymentsRepository->getDailyPaymentsForCurrentWeek('PaiementClient')
+        );
 
         // Remboursements pour la semaine en cours
         $currentWeekRefund = $this->paymentsRepository->getTotalPaymentsForCurrentWeek('RemboursementClient');
-        $dailyRefundsForCurrentWeek = $this->paymentsRepository->getDailyPaymentsForCurrentWeek('RemboursementClient');
+        $dailyRefundsForCurrentWeek = $this->transformToDailyPaymentList(
+            $this->paymentsRepository->getDailyPaymentsForCurrentWeek('RemboursementClient')
+        );
 
         // Paiements pour le mois en cours
         $currentMonthPayment = $this->paymentsRepository->getTotalPaymentsForCurrentMonth('PaiementClient');
@@ -31,14 +35,37 @@ class PaymentStatisticsService
         $currentYearRefund = $this->paymentsRepository->getTotalPaymentsForCurrentYear('RemboursementClient');
 
         return [
-            'current_week_PaiementClient' => $currentWeekPayment,
-            'daily_PaiementClient_for_current_week' => $dailyPaymentsForCurrentWeek,
-            'current_week_RemboursementClient' => $currentWeekRefund,
-            'daily_RemboursementClient_for_current_week' => $dailyRefundsForCurrentWeek,
-            'current_month_PaiementClient' => $currentMonthPayment,
-            'current_month_RemboursementClient' => $currentMonthRefund,
-            'current_year_PaiementClient' => $currentYearPayment,
-            'current_year_RemboursementClient' => $currentYearRefund,
+            'current_week' => [
+                'PaiementClient' => [
+                    'total' => $currentWeekPayment,
+                    'daily' => $dailyPaymentsForCurrentWeek
+                ],
+                'RemboursementClient' => [
+                    'total' => $currentWeekRefund,
+                    'daily' => $dailyRefundsForCurrentWeek
+                ]
+            ],
+            'current_month' => [
+                'PaiementClient' => $currentMonthPayment,
+                'RemboursementClient' => $currentMonthRefund
+            ],
+            'current_year' => [
+                'PaiementClient' => $currentYearPayment,
+                'RemboursementClient' => $currentYearRefund
+            ]
         ];
+    }
+
+    // Transforme les données de paiements journaliers en une liste structurée
+    private function transformToDailyPaymentList(array $dailyData): array
+    {
+        $dailyPaymentList = [];
+        foreach ($dailyData as $date => $amount) {
+            $dailyPaymentList[] = [
+                'date' => $date,
+                'amount' => $amount
+            ];
+        }
+        return $dailyPaymentList;
     }
 }

@@ -13,7 +13,7 @@ class GetStockValueForTwoMonthsAgoUseCase
         $this->stockValueService = $stockValueService;
     }
 
-    public function execute(): float
+    public function execute(): array
     {
         return $this->stockValueService->getStockValueForTwoMonthsAgo();
     }

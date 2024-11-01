@@ -13,8 +13,8 @@ class CalculateMonthlyAverageOrderValueForCurrentYearUseCase
         $this->statistiquePanierService = $statistiquePanierService;
     }
 
-    public function execute(): array
+    public function execute(?int $orderSource = null): array
     {
-        return $this->statistiquePanierService->getMonthlyAverageOrderValueForCurrentYear();
+        return $this->statistiquePanierService->getMonthlyAverageOrderValueForCurrentYear($orderSource);
     }
 }
