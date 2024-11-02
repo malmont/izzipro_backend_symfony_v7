@@ -8,21 +8,25 @@ use Symfony\Component\Routing\Annotation\Route;
 use App\UseCase\StockValue\GetStockValueForCurrentMonthUseCase;
 use App\UseCase\StockValue\GetStockValueForLastMonthUseCase;
 use App\UseCase\StockValue\GetStockValueForTwoMonthsAgoUseCase;
+use App\UseCase\StockValue\GetStockValueForCurrentUseCase;
 
 class StockValueController extends AbstractController
 {
     private $getStockValueForCurrentMonthUseCase;
     private $getStockValueForLastMonthUseCase;
     private $getStockValueForTwoMonthsAgoUseCase;
+    private $getStockValueForCurrentUseCase;
 
     public function __construct(
         GetStockValueForCurrentMonthUseCase $getStockValueForCurrentMonthUseCase,
         GetStockValueForLastMonthUseCase $getStockValueForLastMonthUseCase,
-        GetStockValueForTwoMonthsAgoUseCase $getStockValueForTwoMonthsAgoUseCase
+        GetStockValueForTwoMonthsAgoUseCase $getStockValueForTwoMonthsAgoUseCase,
+        GetStockValueForCurrentUseCase $getStockValueForCurrentUseCase
     ) {
         $this->getStockValueForCurrentMonthUseCase = $getStockValueForCurrentMonthUseCase;
         $this->getStockValueForLastMonthUseCase = $getStockValueForLastMonthUseCase;
         $this->getStockValueForTwoMonthsAgoUseCase = $getStockValueForTwoMonthsAgoUseCase;
+        $this->getStockValueForCurrentUseCase = $getStockValueForCurrentUseCase;
     }
 
     /**
@@ -30,9 +34,10 @@ class StockValueController extends AbstractController
      */
     public function getStockValues(): JsonResponse
     {
-        $currentMonthValue = $this->getStockValueForCurrentMonthUseCase->execute();
+        // $currentMonthValue = $this->getStockValueForCurrentMonthUseCase->execute();
         $lastMonthValue = $this->getStockValueForLastMonthUseCase->execute();
         $twoMonthsAgoValue = $this->getStockValueForTwoMonthsAgoUseCase->execute();
+        $currentMonthValue = $this->getStockValueForCurrentUseCase->execute();
 
         return $this->json([
             'stock_value_current_month' => $currentMonthValue,

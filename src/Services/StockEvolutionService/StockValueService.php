@@ -68,4 +68,24 @@ class StockValueService
             ]
         ];
     }
+
+         /**
+     * Renvoie la valeur de stock formatée pour le mois actuel.
+     *
+     * @return array
+     */
+    public function getStockValueCurrentMonth(): array
+    {
+        $currentDate = new DateTime('last day of this month');
+        $totalValue = $this->productRepository->calculateCurrentStockValue();
+
+        return [
+            'stock_value_current_month' => [
+                [
+                    'month' => $currentDate->format('F Y'),
+                    'stock_value' => $totalValue,
+                ]
+            ]
+        ];
+    }
 }

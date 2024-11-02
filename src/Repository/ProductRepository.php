@@ -67,6 +67,18 @@ class ProductRepository extends ServiceEntityRepository
         return $query->getQuery()->getResult();
     }
 
+    public function calculateCurrentStockValue(): float
+    {
+        $qb = $this->createQueryBuilder('p')
+            ->select('SUM(p.purchasePrice * p.coefficientMultiplier * p.quantity) as stockValue')
+            ->where('p.purchasePrice IS NOT NULL')
+            ->andWhere('p.coefficientMultiplier IS NOT NULL');
+
+        $result = $qb->getQuery()->getSingleScalarResult();
+
+        return (float) $result;
+    }
+
 //    /**
 //     * @return Product[] Returns an array of Product objects
 //     */
