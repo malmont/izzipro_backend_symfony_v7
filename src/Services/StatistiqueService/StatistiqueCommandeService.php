@@ -24,6 +24,17 @@ class StatistiqueCommandeService
         return $this->orderRepository->getOrderCountBetweenDatesAndFilters($startOfWeek, $endOfWeek, $typeId, $statusId, $orderSource);
     }
 
+    // Méthode pour obtenir le nombre de commandes pour la semaine dernière, avec filtres
+    public function getOrderCountForLastWeek(int $typeId, int $statusId, ?int $orderSource = null): int
+    {
+        $now = new DateTime();
+        $startOfLastWeek = (clone $now)->modify('monday last week');
+        $endOfLastWeek = (clone $startOfLastWeek)->modify('sunday this week');
+
+        return $this->orderRepository->getOrderCountBetweenDatesAndFilters($startOfLastWeek, $endOfLastWeek, $typeId, $statusId, $orderSource);
+    }
+
+
     // Méthode pour obtenir le nombre de commandes pour chaque jour de la semaine en cours, avec filtres
     public function getDailyOrderCountForCurrentWeek(int $typeId, int $statusId, ?int $orderSource = null): array
     {

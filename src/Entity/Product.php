@@ -86,6 +86,9 @@ class Product
     #[ORM\JoinColumn(nullable: true)]
     private ?Commande $commande = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $freezeQuantity = null;
+
     public function __construct()
     {
         $this->category = new ArrayCollection();
@@ -444,5 +447,17 @@ class Product
     public function __toString(): string
     {
         return (string) $this->name;
+    }
+
+    public function getFreezeQuantity(): ?int
+    {
+        return $this->freezeQuantity;
+    }
+
+    public function setFreezeQuantity(?int $freezeQuantity): static
+    {
+        $this->freezeQuantity = $freezeQuantity;
+
+        return $this;
     }
 }

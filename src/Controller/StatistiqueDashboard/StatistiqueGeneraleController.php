@@ -28,6 +28,9 @@ use App\UseCase\StatistiqueUseCase\StatistiquePanierUseCase\CalculateWeeklyAvera
 use App\UseCase\StatistiqueUseCase\StatistiquePanierUseCase\CalculateAverageOrderValueForCurrentYearUseCase;
 use App\UseCase\StatistiqueUseCase\StatistiquePanierUseCase\CalculateMonthlyAverageOrderValueForCurrentYearUseCase;
 use App\UseCase\StatistiqueUseCase\StatistiqueCommandeUseCase\CalculateOrderCountForLastYearUseCase;
+use App\UseCase\StatistiqueUseCase\StatistiqueCommandeUseCase\CalculateOrderCountForLastWeekUseCase;
+ 
+
 
 use Symfony\Component\HttpFoundation\Request;
 
@@ -58,6 +61,7 @@ class StatistiqueGeneraleController extends AbstractController
     private $calculateAverageOrderValueForCurrentYearUseCase;
     private $calculateMonthlyAverageOrderValueForCurrentYearUseCase;
     private $calculateOrderCountForLastYearUseCase;
+    private $calculateOrderCountForLastWeekUseCase;
 
     public function __construct(
         CalculateWeeklyRevenueUseCase $calculateWeeklyRevenueUseCase,
@@ -82,7 +86,8 @@ class StatistiqueGeneraleController extends AbstractController
         CalculateWeeklyAverageOrderValueForCurrentMonthUseCase $calculateWeeklyAverageOrderValueForCurrentMonthUseCase,
         CalculateAverageOrderValueForCurrentYearUseCase $calculateAverageOrderValueForCurrentYearUseCase,
         CalculateMonthlyAverageOrderValueForCurrentYearUseCase $calculateMonthlyAverageOrderValueForCurrentYearUseCase,
-        CalculateOrderCountForLastYearUseCase $calculateOrderCountForLastYearUseCase
+        CalculateOrderCountForLastYearUseCase $calculateOrderCountForLastYearUseCase,
+        CalculateOrderCountForLastWeekUseCase $calculateOrderCountForLastWeekUseCase
     ) {
         $this->calculateWeeklyRevenueUseCase = $calculateWeeklyRevenueUseCase;
         $this->calculateMonthlyRevenueUseCase = $calculateMonthlyRevenueUseCase;
@@ -107,6 +112,7 @@ class StatistiqueGeneraleController extends AbstractController
         $this->calculateAverageOrderValueForCurrentYearUseCase = $calculateAverageOrderValueForCurrentYearUseCase;
         $this->calculateMonthlyAverageOrderValueForCurrentYearUseCase = $calculateMonthlyAverageOrderValueForCurrentYearUseCase;
         $this->calculateOrderCountForLastYearUseCase = $calculateOrderCountForLastYearUseCase;
+        $this->calculateOrderCountForLastWeekUseCase =$calculateOrderCountForLastWeekUseCase;
     }
 
     /**
@@ -192,7 +198,7 @@ class StatistiqueGeneraleController extends AbstractController
                 if(!($typeId == 2 &&  ($statusId==7)) ){
                 // Calculs pour la semaine en cours
                 $currentWeekCount = $this->calculateOrderCountForCurrentWeekUseCase->execute($typeId, $statusId,$orderSource);
-                $lastWeekCount = $this->calculateOrderCountForCurrentWeekUseCase->execute($typeId, $statusId,$orderSource);
+                $lastWeekCount = $this->calculateOrderCountForLastWeekUseCase->execute($typeId, $statusId,$orderSource);
                 $dailyCountForCurrentWeek = $this->calculateDailyOrderCountForCurrentWeekUseCase->execute($typeId, $statusId,$orderSource);
 
                 // Ajout des résultats au tableau de réponse

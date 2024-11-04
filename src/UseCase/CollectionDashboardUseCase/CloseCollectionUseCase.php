@@ -46,6 +46,11 @@ class CloseCollectionUseCase
                 
                 $commande->setIsClosed(true);
                 $this->entityManager->persist($commande);
+
+                foreach ($commande->getProducts() as $product) {
+                    $product->setFreezeQuantity($product->getQuantity());
+                    $this->entityManager->persist($product);
+                }
             }
         }
 
