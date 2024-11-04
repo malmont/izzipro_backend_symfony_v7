@@ -12,6 +12,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
+
 class CollectionsCrudController extends AbstractCrudController
 {
     public static function getEntityFqcn(): string
@@ -32,7 +33,8 @@ class CollectionsCrudController extends AbstractCrudController
             ImageField::new('photoCollection', 'Photo')
                 ->setBasePath('')
                 ->onlyOnIndex(),
-            AssociationField::new('userCollections', 'Utilisateur')
+            AssociationField::new('userCollections', 'Utilisateur'),
+            BooleanField::new('isClosed', 'isClosed'),
         ];
     }
 }

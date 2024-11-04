@@ -250,12 +250,12 @@ class Collections
         return $this;
     }
 
-    public function isClosed(): ?bool
+    public function getIsClosed(): ?bool
     {
         return $this->isClosed;
     }
 
-    public function setClosed(?bool $isClosed): static
+    public function setIsClosed(?bool $isClosed): static
     {
         $this->isClosed = $isClosed;
 

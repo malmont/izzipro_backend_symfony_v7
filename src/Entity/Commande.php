@@ -31,20 +31,32 @@ class Commande
 
     #[ORM\ManyToOne(inversedBy: 'commandes')]
     private ?Collections $collections = null;
+
     /**
      * @var Collection<int, Product>
      */
     #[ORM\OneToMany(mappedBy: 'commande', targetEntity: Product::class, cascade: ['persist', 'remove'])]
     private Collection $products;
+
     #[ORM\ManyToOne(inversedBy: 'commandes')]
     private ?Fournisseur $fournisseur = null;
 
     #[ORM\OneToOne(mappedBy: 'commande', cascade: ['persist', 'remove'])]
     private ?FraisDePort $fraisDePort = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?bool $isClosed = false;
+
+    /**
+     * @var Collection<int, CommandeStatistiques>
+     */
+    #[ORM\OneToMany(mappedBy: 'commande', targetEntity: CommandeStatistiques::class)]
+    private Collection $commandeStatistiques;
+
     public function __construct()
     {
         $this->products = new ArrayCollection();
+        $this->commandeStatistiques = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -112,7 +124,6 @@ class Commande
         return $this;
     }
 
-
     /**
      * @return Collection<int, Product>
      */
@@ -134,7 +145,6 @@ class Commande
     public function removeProduct(Product $product): static
     {
         if ($this->products->removeElement($product)) {
-            // set the owning side to null (unless already changed)
             if ($product->getCommande() === $this) {
                 $product->setCommande(null);
             }
@@ -147,6 +157,7 @@ class Commande
     {
         return (string) $this->name;
     }
+
     public function getFournisseur(): ?Fournisseur
     {
         return $this->fournisseur;
@@ -175,6 +186,47 @@ class Commande
         }
 
         $this->fraisDePort = $fraisDePort;
+
+        return $this;
+    }
+
+    public function getIsClosed(): ?bool
+    {
+        return $this->isClosed;
+    }
+
+    public function setIsClosed(?bool $isClosed): static
+    {
+        $this->isClosed = $isClosed;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, CommandeStatistiques>
+     */
+    public function getCommandeStatistiques(): Collection
+    {
+        return $this->commandeStatistiques;
+    }
+
+    public function addCommandeStatistiques(CommandeStatistiques $commandeStatistique): static
+    {
+        if (!$this->commandeStatistiques->contains($commandeStatistique)) {
+            $this->commandeStatistiques->add($commandeStatistique);
+            $commandeStatistique->setCommande($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCommandeStatistiques(CommandeStatistiques $commandeStatistique): static
+    {
+        if ($this->commandeStatistiques->removeElement($commandeStatistique)) {
+            if ($commandeStatistique->getCommande() === $this) {
+                $commandeStatistique->setCommande(null);
+            }
+        }
 
         return $this;
     }

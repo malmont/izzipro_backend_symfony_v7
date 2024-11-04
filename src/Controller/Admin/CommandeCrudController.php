@@ -10,6 +10,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
+
 
 class CommandeCrudController extends AbstractCrudController
 {
@@ -31,6 +33,7 @@ class CommandeCrudController extends AbstractCrudController
                 ->onlyOnIndex(),
             AssociationField::new('collections', 'Collections'),
             AssociationField::new('fournisseur', 'Fournisseur Associé'),
+            BooleanField::new('isClosed', 'isClosed'),
         ];
     }
 }

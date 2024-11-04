@@ -1,5 +1,6 @@
 <?php
 namespace App\Dto;
+use App\Entity\CommandeStatistiques;
 
 class DashboardCommandeDTO
 {
@@ -44,5 +45,50 @@ class DashboardCommandeDTO
             $data['TauxMarge'],
             $data['Transporteur']
         );
+    }
+
+    public static function fromEntity(CommandeStatistiques $statistiques): self
+    {
+        return new self(
+            $statistiques->getAverageMultiplier(),
+            [
+                'generalBudget' => $statistiques->getGeneralBudget(),
+                'usedBudget' => $statistiques->getUsedBudget(),
+                'remainingBudget' => $statistiques->getRemainingBudget(),
+            ],
+            $statistiques->getTotalItemCost(),
+            $statistiques->getTotalFraisDePort(),
+            [
+                'itemCount' => $statistiques->getItemCount(),
+                'modelCount' => $statistiques->getModelCount(),
+            ],
+            [
+                'stockValue' => $statistiques->getStockValue(),
+                'marge' => $statistiques->getMarge(),
+            ],
+            [
+                'tauxMarge' => $statistiques->getTauxMarge(),
+                'tauxMarque' => $statistiques->getTauxMarque(),
+            ],
+            $statistiques->getTransporteur() ? [
+                'name' => $statistiques->getTransporteur()->getName(),
+                'logo' => $statistiques->getTransporteur()->getLogo(),
+                'contact' => $statistiques->getTransporteur()->getContact(),
+            ] : null
+        );
+    }
+
+    public function toArray(): array
+    {
+        return [
+            'averageMultiplier' => $this->averageMultiplier,
+            'BudgetGeneral' => $this->budgetGeneral,
+            'totalItemCost' => $this->totalItemCost,
+            'totalFraisDePort' => $this->totalFraisDePort,
+            'Statistics' => $this->statistics,
+            'ValeurStock' => $this->valeurStock,
+            'TauxMarge' => $this->tauxMarge,
+            'Transporteur' => $this->transporteur,
+        ];
     }
 }

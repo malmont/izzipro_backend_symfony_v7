@@ -34,7 +34,7 @@ class DashboardListCollectionController extends AbstractController
 
     #[Route('/api/dashboard/collection/{id}', name: 'dashboard_collection', methods: ['GET'])]
     public function dashboardCollection(Collections $collection): JsonResponse {
-        if ($collection->isClosed()) {
+        if ($collection->getIsClosed()) {
             $frozenMetricsDTO = $this->getCollectionStatistiquesUseCase->execute($collection);
     
             if ($frozenMetricsDTO === null) {

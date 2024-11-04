@@ -30,9 +30,16 @@ class Transporteur
     #[ORM\OneToMany(mappedBy: 'transporteur', targetEntity: FraisDePort::class)]
     private Collection $fraisDePorts;
 
+    /**
+     * @var Collection<int, CommandeStatistiques>
+     */
+    #[ORM\OneToMany(mappedBy: 'transporteur', targetEntity: CommandeStatistiques::class)]
+    private Collection $commandeStatistiques;
+
     public function __construct()
     {
         $this->fraisDePorts = new ArrayCollection();
+        $this->commandeStatistiques = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -109,5 +116,35 @@ class Transporteur
     public function __toString(): string
     {
         return $this->name; // Retourne le nom du transporteur comme représentation de l'objet
+    }
+
+    /**
+     * @return Collection<int, CommandeStatistiques>
+     */
+    public function getCommandeStatistiques(): Collection
+    {
+        return $this->commandeStatistiques;
+    }
+
+    public function addCommandeStatistique(CommandeStatistiques $commandeStatistique): static
+    {
+        if (!$this->commandeStatistiques->contains($commandeStatistique)) {
+            $this->commandeStatistiques->add($commandeStatistique);
+            $commandeStatistique->setTransporteur($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCommandeStatistique(CommandeStatistiques $commandeStatistique): static
+    {
+        if ($this->commandeStatistiques->removeElement($commandeStatistique)) {
+            // set the owning side to null (unless already changed)
+            if ($commandeStatistique->getTransporteur() === $this) {
+                $commandeStatistique->setTransporteur(null);
+            }
+        }
+
+        return $this;
     }
 }
