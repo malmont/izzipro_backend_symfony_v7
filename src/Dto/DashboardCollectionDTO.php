@@ -1,6 +1,8 @@
 <?php
 namespace App\Dto;
 
+use App\Entity\CollectionStatistiques;
+
 class DashboardCollectionDTO
 {
     public float $averageMultiplier;
@@ -43,6 +45,43 @@ class DashboardCollectionDTO
             $data['Statistics'],
             $data['ValeurStock'],
             $data['TauxMarge']
+        );
+    }
+
+    // Nouvelle méthode pour créer un DashboardCollectionDTO à partir de CollectionStatistiques
+    public static function fromCollectionStatistiques(CollectionStatistiques $collectionStatistiques): self
+    {
+        return new self(
+            $collectionStatistiques->getAverageMultiplier(),
+            [
+                'generalBudget' => $collectionStatistiques->getGeneralBudget(),
+                'usedBudget' => $collectionStatistiques->getUsedBudget(),
+                'remainingBudget' => $collectionStatistiques->getRemainingBudget(),
+            ],
+            [
+                'startDate' => $collectionStatistiques->getStartDate()->format('Y-m-d'),
+                'endDate' => $collectionStatistiques->getEndDate()->format('Y-m-d'),
+                'days' => $collectionStatistiques->getDurationDays(),
+            ],
+            $collectionStatistiques->getTotalItemCost(),
+            [
+                'totalShippingCost' => $collectionStatistiques->getTotalShippingCost(),
+                'totalExpenseCost' => $collectionStatistiques->getTotalExpenseCost(),
+                'totalGeneralExpenses' => $collectionStatistiques->getTotalShippingCost() + $collectionStatistiques->getTotalExpenseCost(),
+            ],
+            [
+                'orderCount' => $collectionStatistiques->getOrderCount(),
+                'itemCount' => $collectionStatistiques->getItemCount(),
+                'modelCount' => $collectionStatistiques->getModelCount(),
+            ],
+            [
+                'stockValue' => $collectionStatistiques->getStockValue(),
+                'marge' => $collectionStatistiques->getMargin(),
+            ],
+            [
+                'tauxMarge' => $collectionStatistiques->getTauxMarge(),
+                'tauxMarque' => $collectionStatistiques->getTauxMarque(),
+            ]
         );
     }
 

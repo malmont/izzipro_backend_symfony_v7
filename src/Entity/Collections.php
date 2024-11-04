@@ -51,10 +51,20 @@ class Collections
     #[ORM\OneToMany(mappedBy: 'Collection', targetEntity: NoteDeFrais::class)]
     private Collection $noteDeFrais;
 
+    /**
+     * @var Collection<int, CollectionStatistiques>
+     */
+    #[ORM\OneToMany(mappedBy: 'collection', targetEntity: CollectionStatistiques::class)]
+    private Collection $collectionStatistiques;
+
+    #[ORM\Column(nullable: true)]
+    private ?bool $isClosed = false;
+
     public function __construct()
     {
         $this->commandes = new ArrayCollection();
         $this->noteDeFrais = new ArrayCollection();
+        $this->collectionStatistiques = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -206,6 +216,48 @@ class Collections
                 $noteDeFrai->setCollection(null);
             }
         }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, CollectionStatistiques>
+     */
+    public function getCollectionStatistiques(): Collection
+    {
+        return $this->collectionStatistiques;
+    }
+
+    public function addCollectionStatistique(CollectionStatistiques $collectionStatistique): static
+    {
+        if (!$this->collectionStatistiques->contains($collectionStatistique)) {
+            $this->collectionStatistiques->add($collectionStatistique);
+            $collectionStatistique->setCollection($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCollectionStatistique(CollectionStatistiques $collectionStatistique): static
+    {
+        if ($this->collectionStatistiques->removeElement($collectionStatistique)) {
+            // set the owning side to null (unless already changed)
+            if ($collectionStatistique->getCollection() === $this) {
+                $collectionStatistique->setCollection(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function isClosed(): ?bool
+    {
+        return $this->isClosed;
+    }
+
+    public function setClosed(?bool $isClosed): static
+    {
+        $this->isClosed = $isClosed;
 
         return $this;
     }

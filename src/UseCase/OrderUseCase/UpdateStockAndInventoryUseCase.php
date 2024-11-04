@@ -66,6 +66,7 @@ class UpdateStockAndInventoryUseCase
         $movementType = $this->movementTypeRepository->find($movementTypeId);
         // Création du mouvement d'inventaire via le service
         $inventoryMovement = $this->inventoryMovementService->createInventoryMovement(
+            false,
             $productVariant,
             $stockBeforeMovement,
             $stockAfterMovement,

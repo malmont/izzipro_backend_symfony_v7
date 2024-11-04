@@ -35,14 +35,14 @@ class StockValueController extends AbstractController
     public function getStockValues(): JsonResponse
     {
         // $currentMonthValue = $this->getStockValueForCurrentMonthUseCase->execute();
-        $lastMonthValue = $this->getStockValueForLastMonthUseCase->execute();
-        $twoMonthsAgoValue = $this->getStockValueForTwoMonthsAgoUseCase->execute();
+        // $lastMonthValue = $this->getStockValueForLastMonthUseCase->execute();
+        // $twoMonthsAgoValue = $this->getStockValueForTwoMonthsAgoUseCase->execute();
         $currentMonthValue = $this->getStockValueForCurrentUseCase->execute();
 
         return $this->json([
-            'stock_value_current_month' => $currentMonthValue,
-            'stock_value_last_month' => $lastMonthValue,
-            'stock_value_two_months_ago' => $twoMonthsAgoValue,
+            'stock_value_current' => $currentMonthValue,
+            // 'stock_value_last_month' => $lastMonthValue,
+            // 'stock_value_two_months_ago' => $twoMonthsAgoValue,
         ]);
     }
 }
