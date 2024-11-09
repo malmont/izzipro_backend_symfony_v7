@@ -30,7 +30,7 @@ class PaymentsController extends AbstractController
         $paymentDTOs = $this->getPaymentsByOrderSourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
 
         if (empty($paymentDTOs)) {
-            return $this->json(['message' => 'No payments found for the given order source'], JsonResponse::HTTP_NOT_FOUND);
+            return $this->json([], JsonResponse::HTTP_OK);
         }
 
         $paymentData = array_map(fn($dto) => $dto->toArray(), $paymentDTOs);

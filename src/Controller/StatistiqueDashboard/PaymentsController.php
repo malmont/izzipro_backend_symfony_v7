@@ -16,10 +16,16 @@ class PaymentsController extends AbstractController
         $this->getPaymentsStatisticsUseCase = $getPaymentsStatisticsUseCase;
     }
 
-    #[Route('/api/payments/statistics', name: 'get_payments_statistics', methods: ['GET'])]
-    public function getPaymentStatistics(): JsonResponse
+    #[Route('/api/payments/statistics/{source}', name: 'get_payments_statistics', methods: ['GET'])]
+    public function getPaymentStatistics( ?string $source = null): JsonResponse
     {
-        $statistics = $this->getPaymentsStatisticsUseCase->execute();
+        $sourceMap = [
+            'pos' => 2,
+            'ecommerce' => 1,
+            'mobile_app' => 3,
+        ];
+        $orderSource = $sourceMap[$source] ?? null;
+        $statistics = $this->getPaymentsStatisticsUseCase->execute($orderSource);
 
         return $this->json($statistics);
     }

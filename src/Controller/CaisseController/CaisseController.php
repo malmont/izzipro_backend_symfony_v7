@@ -138,15 +138,15 @@ class CaisseController extends AbstractController
         
         $caisseDTOs = $this->gestCaisseUseCase->execute($days);
         
+        // Si aucune caisse n'est trouvée, renvoyer une liste vide avec un code 200
         if (empty($caisseDTOs)) {
-            return $this->json(['message' => 'Aucune caisse trouvée pour la période donnée'], JsonResponse::HTTP_NOT_FOUND);
+            return $this->json([], JsonResponse::HTTP_OK);
         }
         
         $caisseDatas = array_map(fn($dto) => $dto->toArray(), $caisseDTOs);
         
         return $this->json($caisseDatas);
     }
-
      /**
      * @Route("api/caisse/transactions", name="get_open_caisse_transactions", methods={"GET"})
      */

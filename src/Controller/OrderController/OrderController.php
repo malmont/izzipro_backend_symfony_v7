@@ -70,11 +70,11 @@ class OrderController extends AbstractController
         $host = $request->getSchemeAndHttpHost() . '/jeesign';
     
         $orderDTOs = $this->getOrdersBySourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
-    
+
         if (empty($orderDTOs)) {
-            return $this->json(['message' => 'No orders found for the given order source'], JsonResponse::HTTP_NOT_FOUND);
+            return $this->json([], JsonResponse::HTTP_OK);
         }
-    
+
         $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);
         return $this->json($orderData);
     }

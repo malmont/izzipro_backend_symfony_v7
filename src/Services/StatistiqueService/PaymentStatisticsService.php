@@ -12,27 +12,27 @@ class PaymentStatisticsService
         $this->paymentsRepository = $paymentsRepository;
     }
 
-    public function getPaymentStatistics(): array
+    public function getPaymentStatistics(?int $orderSource = null): array
     {
         // Paiements pour la semaine en cours
-        $currentWeekPayment = $this->paymentsRepository->getTotalPaymentsForCurrentWeek('PaiementClient');
+        $currentWeekPayment = $this->paymentsRepository->getTotalPaymentsForCurrentWeek('PaiementClient',$orderSource);
         $dailyPaymentsForCurrentWeek = $this->transformToDailyPaymentList(
-            $this->paymentsRepository->getDailyPaymentsForCurrentWeek('PaiementClient')
+            $this->paymentsRepository->getDailyPaymentsForCurrentWeek('PaiementClient',$orderSource)
         );
 
         // Remboursements pour la semaine en cours
-        $currentWeekRefund = $this->paymentsRepository->getTotalPaymentsForCurrentWeek('RemboursementClient');
+        $currentWeekRefund = $this->paymentsRepository->getTotalPaymentsForCurrentWeek('RemboursementClient',$orderSource);
         $dailyRefundsForCurrentWeek = $this->transformToDailyPaymentList(
-            $this->paymentsRepository->getDailyPaymentsForCurrentWeek('RemboursementClient')
+            $this->paymentsRepository->getDailyPaymentsForCurrentWeek('RemboursementClient',$orderSource)
         );
 
         // Paiements pour le mois en cours
-        $currentMonthPayment = $this->paymentsRepository->getTotalPaymentsForCurrentMonth('PaiementClient');
-        $currentMonthRefund = $this->paymentsRepository->getTotalPaymentsForCurrentMonth('RemboursementClient');
+        $currentMonthPayment = $this->paymentsRepository->getTotalPaymentsForCurrentMonth('PaiementClient',$orderSource);
+        $currentMonthRefund = $this->paymentsRepository->getTotalPaymentsForCurrentMonth('RemboursementClient',$orderSource);
 
         // Paiements pour l'année en cours
-        $currentYearPayment = $this->paymentsRepository->getTotalPaymentsForCurrentYear('PaiementClient');
-        $currentYearRefund = $this->paymentsRepository->getTotalPaymentsForCurrentYear('RemboursementClient');
+        $currentYearPayment = $this->paymentsRepository->getTotalPaymentsForCurrentYear('PaiementClient',$orderSource);
+        $currentYearRefund = $this->paymentsRepository->getTotalPaymentsForCurrentYear('RemboursementClient',$orderSource);
 
         return [
             'current_week' => [

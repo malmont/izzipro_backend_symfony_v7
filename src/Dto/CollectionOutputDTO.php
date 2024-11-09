@@ -10,6 +10,7 @@ class CollectionOutputDTO
     public string $startDateCollection;
     public string $endDateCollection;
     public bool $del;
+    public bool $isClosed;
     public string $nomCollection;
     public ?string $photoCollection;
     public ?array $user;
@@ -21,6 +22,7 @@ class CollectionOutputDTO
         $this->startDateCollection = $collection->getStartDateCollection()->format('Y-m-d H:i:s');
         $this->endDateCollection = $collection->getEndDateCollection()->format('Y-m-d H:i:s');
         $this->del = $collection->isDel();
+        $this->isClosed = $collection->getIsClosed();
         $this->nomCollection = $collection->getNomCollection();
         $this->photoCollection = $collection->getPhotoCollection();
         $user = $collection->getUserCollections();

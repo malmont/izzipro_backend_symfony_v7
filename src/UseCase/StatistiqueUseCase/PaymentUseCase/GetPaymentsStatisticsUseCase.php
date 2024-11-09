@@ -12,8 +12,8 @@ class GetPaymentsStatisticsUseCase
         $this->paymentStatisticsService = $paymentStatisticsService;
     }
 
-    public function execute(): array
+    public function execute(?int $orderSource = null): array
     {
-        return $this->paymentStatisticsService->getPaymentStatistics();
+        return $this->paymentStatisticsService->getPaymentStatistics($orderSource);
     }
 }
