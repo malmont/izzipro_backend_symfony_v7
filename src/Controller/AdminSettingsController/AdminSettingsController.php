@@ -36,6 +36,9 @@ class AdminSettingsController extends AbstractController
             'navbarComponent' => $settings->getNavbarComponent(),
             'styleChoice' => $settings->getStyleChoice(),
             'themeChoice' => $settings->getThemeChoice(),
+            'section1Component' => $settings->getSection1Component(),
+            'typeComponentSection1' => $settings->getTypeComponentSection1(),
+            
         ]);
     }
 
@@ -55,6 +58,8 @@ class AdminSettingsController extends AbstractController
         $settings->setNavbarComponent($data['navbarComponent'] ?? $settings->getNavbarComponent());
         $settings->setStyleChoice($data['styleChoice'] ?? $settings->getStyleChoice());
         $settings->setThemeChoice($data['themeChoice'] ?? $settings->getThemeChoice());
+        $settings->setStyleChoice($data['section1Component'] ?? $settings->getSection1Component());
+        $settings->setThemeChoice($data['typeComponentSection1'] ?? $settings->getTypeComponentSection1());
 
         $this->entityManager->flush();
 

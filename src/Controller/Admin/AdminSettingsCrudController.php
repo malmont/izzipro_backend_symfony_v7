@@ -21,6 +21,8 @@ class AdminSettingsCrudController extends AbstractCrudController
             TextField::new('navbarComponent', 'Navbar Component'),
             TextField::new('styleChoice', 'Style Choice'),
             TextField::new('themeChoice', 'Theme Choice'),
+            TextField::new('section1Component', 'typesection1'),
+            TextField::new('typeComponentSection1', 'typeSection1Component'),
         ];
     }
 }
