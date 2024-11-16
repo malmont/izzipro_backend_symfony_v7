@@ -89,6 +89,9 @@ class Product
     #[ORM\Column(nullable: true)]
     private ?int $freezeQuantity = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?bool $isAccessory = false;
+
     public function __construct()
     {
         $this->category = new ArrayCollection();
@@ -457,6 +460,19 @@ class Product
     public function setFreezeQuantity(?int $freezeQuantity): static
     {
         $this->freezeQuantity = $freezeQuantity;
+
+        return $this;
+    }
+
+    public function isAccessory(): ?bool
+    {
+        return $this->isAccessory;
+    }
+
+    // Setter
+    public function setIsAccessory(?bool $isAccessory): static
+    {
+        $this->isAccessory = $isAccessory;
 
         return $this;
     }

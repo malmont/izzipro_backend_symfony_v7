@@ -47,6 +47,7 @@ class ProductCrudController extends AbstractCrudController
             BooleanField::new('isnewarrival', 'New Arrival'),
             BooleanField::new('isfeatured', 'Featured'),
             BooleanField::new('isspecialoffer', 'Special Offer'),
+            BooleanField::new('isAccessory', 'Accessoires '),
             AssociationField::new('category'),
             AssociationField::new('style', 'Style'),
             AssociationField::new('commande', 'Commande'),

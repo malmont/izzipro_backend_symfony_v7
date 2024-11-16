@@ -113,6 +113,9 @@ class ProductService
             case 'isfeatured':
                 $filteredProducts = array_filter($products, fn($product) => $product->isIsfeatured());
                 break;
+            case 'isAccessory':
+                $filteredProducts = array_filter($products, fn($product) => $product->isAccessory());
+                break;
             default:
                 return []; 
         }
