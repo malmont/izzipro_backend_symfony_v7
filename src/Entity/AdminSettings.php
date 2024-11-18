@@ -58,6 +58,33 @@ class AdminSettings
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $selectTypeProductFetchSection4 = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $section5Component = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $typeComponentSection5 = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $section6Component = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $typeComponentSection6 = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $section7Component = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $typeComponentSection7 = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $selectTypeProductFetchSection5 = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $selectTypeProductFetchSection6 = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $selectTypeProductFetchSection7 = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -239,6 +266,114 @@ class AdminSettings
     public function setSelectTypeProductFetchSection4(?string $selectTypeProductFetchSection4): static
     {
         $this->selectTypeProductFetchSection4 = $selectTypeProductFetchSection4;
+
+        return $this;
+    }
+
+    public function getSection5Component(): ?string
+    {
+        return $this->section5Component;
+    }
+
+    public function setSection5Component(?string $section5Component): static
+    {
+        $this->section5Component = $section5Component;
+
+        return $this;
+    }
+
+    public function getTypeComponentSection5(): ?string
+    {
+        return $this->typeComponentSection5;
+    }
+
+    public function setTypeComponentSection5(?string $typeComponentSection5): static
+    {
+        $this->typeComponentSection5 = $typeComponentSection5;
+
+        return $this;
+    }
+
+    public function getSection6Component(): ?string
+    {
+        return $this->section6Component;
+    }
+
+    public function setSection6Component(?string $section6Component): static
+    {
+        $this->section6Component = $section6Component;
+
+        return $this;
+    }
+
+    public function getTypeComponentSection6(): ?string
+    {
+        return $this->typeComponentSection6;
+    }
+
+    public function setTypeComponentSection6(?string $typeComponentSection6): static
+    {
+        $this->typeComponentSection6 = $typeComponentSection6;
+
+        return $this;
+    }
+
+    public function getSection7Component(): ?string
+    {
+        return $this->section7Component;
+    }
+
+    public function setSection7Component(?string $section7Component): static
+    {
+        $this->section7Component = $section7Component;
+
+        return $this;
+    }
+
+    public function getTypeComponentSection7(): ?string
+    {
+        return $this->typeComponentSection7;
+    }
+
+    public function setTypeComponentSection7(?string $typeComponentSection7): static
+    {
+        $this->typeComponentSection7 = $typeComponentSection7;
+
+        return $this;
+    }
+
+    public function getSelectTypeProductFetchSection5(): ?string
+    {
+        return $this->selectTypeProductFetchSection5;
+    }
+
+    public function setSelectTypeProductFetchSection5(?string $selectTypeProductFetchSection5): static
+    {
+        $this->selectTypeProductFetchSection5 = $selectTypeProductFetchSection5;
+
+        return $this;
+    }
+
+    public function getSelectTypeProductFetchSection6(): ?string
+    {
+        return $this->selectTypeProductFetchSection6;
+    }
+
+    public function setSelectTypeProductFetchSection6(?string $selectTypeProductFetchSection6): static
+    {
+        $this->selectTypeProductFetchSection6 = $selectTypeProductFetchSection6;
+
+        return $this;
+    }
+
+    public function getSelectTypeProductFetchSection7(): ?string
+    {
+        return $this->selectTypeProductFetchSection7;
+    }
+
+    public function setSelectTypeProductFetchSection7(?string $selectTypeProductFetchSection7): static
+    {
+        $this->selectTypeProductFetchSection7 = $selectTypeProductFetchSection7;
 
         return $this;
     }

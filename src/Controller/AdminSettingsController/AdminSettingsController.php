@@ -45,9 +45,18 @@ class AdminSettingsController extends AbstractController
             'section3Component' => $settings->getSection3Component(),
             'typeComponentSection4' => $settings->getTypeComponentSection4(),
             'section4Component' => $settings->getSection4Component(),
+            'typeComponentSection5' => $settings->getTypeComponentSection5(),
+            'section5Component' => $settings->getSection5Component(),
+            'typeComponentSection6' => $settings->getTypeComponentSection6(),
+            'section6Component' => $settings->getSection6Component(),
+            'typeComponentSection7' => $settings->getTypeComponentSection7(),
+            'section7Component' => $settings->getSection7Component(),
             'selectTypeProductFetchSection2' => $settings->getSelectTypeProductFetchSection2(),
             'selectTypeProductFetchSection3' => $settings->getSelectTypeProductFetchSection3(),
             'selectTypeProductFetchSection4' => $settings->getSelectTypeProductFetchSection4(),
+            'selectTypeProductFetchSection5' => $settings->getSelectTypeProductFetchSection5(),
+            'selectTypeProductFetchSection6' => $settings->getSelectTypeProductFetchSection6(),
+            'selectTypeProductFetchSection7' => $settings->getSelectTypeProductFetchSection7(),
             
         ]);
     }
@@ -77,9 +86,18 @@ class AdminSettingsController extends AbstractController
         $settings->setSection3Component($data['section3Component'] ?? $settings->getSection3Component());
         $settings->setTypeComponentSection4($data['typeComponentSection4'] ?? $settings->getTypeComponentSection4());
         $settings->setSection4Component($data['section4Component'] ?? $settings->getSection4Component());
+        $settings->setTypeComponentSection5($data['typeComponentSection5'] ?? $settings->getTypeComponentSection5());
+        $settings->setSection5Component($data['section5Component'] ?? $settings->getSection5Component());
+        $settings->setTypeComponentSection6($data['typeComponentSection6'] ?? $settings->getTypeComponentSection6());
+        $settings->setSection6Component($data['section6Component'] ?? $settings->getSection6Component());
+        $settings->setTypeComponentSection7($data['typeComponentSection7'] ?? $settings->getTypeComponentSection7());
+        $settings->setSection7Component($data['section7Component'] ?? $settings->getSection7Component());
         $settings->setSelectTypeProductFetchSection2($data['selectTypeProductFetchSection2'] ?? $settings->getSelectTypeProductFetchSection2());
         $settings->setSelectTypeProductFetchSection3($data['selectTypeProductFetchSection3'] ?? $settings->getSelectTypeProductFetchSection3());
         $settings->setSelectTypeProductFetchSection4($data['selectTypeProductFetchSection4'] ?? $settings->getSelectTypeProductFetchSection4());
+        $settings->setSelectTypeProductFetchSection5($data['selectTypeProductFetchSection5'] ?? $settings->getSelectTypeProductFetchSection5());
+        $settings->setSelectTypeProductFetchSection6($data['selectTypeProductFetchSection6'] ?? $settings->getSelectTypeProductFetchSection6());
+        $settings->setSelectTypeProductFetchSection7($data['selectTypeProductFetchSection7'] ?? $settings->getSelectTypeProductFetchSection7());
 
         $this->entityManager->flush();
 
