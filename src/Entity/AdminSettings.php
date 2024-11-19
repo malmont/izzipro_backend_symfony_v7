@@ -85,6 +85,9 @@ class AdminSettings
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $selectTypeProductFetchSection7 = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $typeCategoryCard = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -374,6 +377,18 @@ class AdminSettings
     public function setSelectTypeProductFetchSection7(?string $selectTypeProductFetchSection7): static
     {
         $this->selectTypeProductFetchSection7 = $selectTypeProductFetchSection7;
+
+        return $this;
+    }
+
+    public function getTypeCategoryCard(): ?string
+    {
+        return $this->typeCategoryCard;
+    }
+
+    public function setTypeCategoryCard(?string $typeCategoryCard): static
+    {
+        $this->typeCategoryCard = $typeCategoryCard;
 
         return $this;
     }

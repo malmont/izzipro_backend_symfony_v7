@@ -57,6 +57,7 @@ class AdminSettingsController extends AbstractController
             'selectTypeProductFetchSection5' => $settings->getSelectTypeProductFetchSection5(),
             'selectTypeProductFetchSection6' => $settings->getSelectTypeProductFetchSection6(),
             'selectTypeProductFetchSection7' => $settings->getSelectTypeProductFetchSection7(),
+            'typeCategoryCard' => $settings->getTypeCategoryCard(),
             
         ]);
     }
@@ -98,7 +99,7 @@ class AdminSettingsController extends AbstractController
         $settings->setSelectTypeProductFetchSection5($data['selectTypeProductFetchSection5'] ?? $settings->getSelectTypeProductFetchSection5());
         $settings->setSelectTypeProductFetchSection6($data['selectTypeProductFetchSection6'] ?? $settings->getSelectTypeProductFetchSection6());
         $settings->setSelectTypeProductFetchSection7($data['selectTypeProductFetchSection7'] ?? $settings->getSelectTypeProductFetchSection7());
-
+        $settings->setTypeCategoryCard($data['typeCategoryCard'] ?? $settings->getTypeCategoryCard());
         $this->entityManager->flush();
 
         return new JsonResponse(['message' => 'Settings updated successfully']);
