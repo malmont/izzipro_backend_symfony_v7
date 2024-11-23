@@ -58,6 +58,12 @@ class AdminSettingsController extends AbstractController
             'selectTypeProductFetchSection6' => $settings->getSelectTypeProductFetchSection6(),
             'selectTypeProductFetchSection7' => $settings->getSelectTypeProductFetchSection7(),
             'typeCategoryCard' => $settings->getTypeCategoryCard(),
+            'detailsProductCardComponent' => $settings->getDetailsProductCardComponent(),
+            'cartItemCardComponent' => $settings->getCartItemCardComponent(),
+            'totalCardComponent' => $settings->getTotalCardComponent(),
+            'checkoutCardComponent' => $settings->getCheckoutCardComponent(),
+            'accountDashboardComponent' => $settings->getAccountDashboardComponent(),
+            'orderListCardComponent' => $settings->getOrderListCardComponent(),
             
         ]);
     }
@@ -100,6 +106,12 @@ class AdminSettingsController extends AbstractController
         $settings->setSelectTypeProductFetchSection6($data['selectTypeProductFetchSection6'] ?? $settings->getSelectTypeProductFetchSection6());
         $settings->setSelectTypeProductFetchSection7($data['selectTypeProductFetchSection7'] ?? $settings->getSelectTypeProductFetchSection7());
         $settings->setTypeCategoryCard($data['typeCategoryCard'] ?? $settings->getTypeCategoryCard());
+        $settings->setDetailsProductCardComponent($data['detailsProductCardComponent'] ?? $settings->getDetailsProductCardComponent());
+        $settings->setCartItemCardComponent($data['cartItemCardComponent'] ?? $settings->getCartItemCardComponent());
+        $settings->setTotalCardComponent($data['totalCardComponent'] ?? $settings->getTotalCardComponent());
+        $settings->setCheckoutCardComponent($data['checkoutCardComponent'] ?? $settings->getCheckoutCardComponent());
+        $settings->setAccountDashboardComponent($data['accountDashboardComponent'] ?? $settings->getAccountDashboardComponent());
+        $settings->setOrderListCardComponent($data['orderListCardComponent'] ?? $settings->getOrderListCardComponent());
         $this->entityManager->flush();
 
         return new JsonResponse(['message' => 'Settings updated successfully']);

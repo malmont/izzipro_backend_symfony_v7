@@ -43,6 +43,11 @@ class AdminSettingsCrudController extends AbstractCrudController
             TextField::new('selectTypeProductFetchSection6', ' produit téléchargé section6'),
             TextField::new('selectTypeProductFetchSection7', 'produit téléchargé section7'),
             TextField::new('typeCategoryCard', 'Type de card category'),
+            TextField::new('detailsProductCardComponent', 'detailsProductCardComponent'),
+            TextField::new('cartItemCardComponent', 'cartItemCardComponent'),
+            TextField::new('checkoutCardComponent', 'checkoutCardComponent'),
+            TextField::new('accountDashboardComponent', 'accountDashboardComponent'),
+            TextField::new('orderListCardComponent', 'orderListCardComponent'),
         ];
     }
 }

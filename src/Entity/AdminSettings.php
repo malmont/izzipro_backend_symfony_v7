@@ -88,6 +88,24 @@ class AdminSettings
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $typeCategoryCard = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $detailsProductCardComponent = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $cartItemCardComponent = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $totalCardComponent = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $checkoutCardComponent = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $accountDashboardComponent = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $orderListCardComponent = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -389,6 +407,78 @@ class AdminSettings
     public function setTypeCategoryCard(?string $typeCategoryCard): static
     {
         $this->typeCategoryCard = $typeCategoryCard;
+
+        return $this;
+    }
+
+    public function getDetailsProductCardComponent(): ?string
+    {
+        return $this->detailsProductCardComponent;
+    }
+
+    public function setDetailsProductCardComponent(?string $detailsProductCardComponent): static
+    {
+        $this->detailsProductCardComponent = $detailsProductCardComponent;
+
+        return $this;
+    }
+
+    public function getCartItemCardComponent(): ?string
+    {
+        return $this->cartItemCardComponent;
+    }
+
+    public function setCartItemCardComponent(?string $cartItemCardComponent): static
+    {
+        $this->cartItemCardComponent = $cartItemCardComponent;
+
+        return $this;
+    }
+
+    public function getTotalCardComponent(): ?string
+    {
+        return $this->totalCardComponent;
+    }
+
+    public function setTotalCardComponent(?string $totalCardComponent): static
+    {
+        $this->totalCardComponent = $totalCardComponent;
+
+        return $this;
+    }
+
+    public function getCheckoutCardComponent(): ?string
+    {
+        return $this->checkoutCardComponent;
+    }
+
+    public function setCheckoutCardComponent(?string $checkoutCardComponent): static
+    {
+        $this->checkoutCardComponent = $checkoutCardComponent;
+
+        return $this;
+    }
+
+    public function getAccountDashboardComponent(): ?string
+    {
+        return $this->accountDashboardComponent;
+    }
+
+    public function setAccountDashboardComponent(?string $accountDashboardComponent): static
+    {
+        $this->accountDashboardComponent = $accountDashboardComponent;
+
+        return $this;
+    }
+
+    public function getOrderListCardComponent(): ?string
+    {
+        return $this->orderListCardComponent;
+    }
+
+    public function setOrderListCardComponent(?string $orderListCardComponent): static
+    {
+        $this->orderListCardComponent = $orderListCardComponent;
 
         return $this;
     }
