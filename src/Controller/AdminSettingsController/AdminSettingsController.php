@@ -64,6 +64,8 @@ class AdminSettingsController extends AbstractController
             'checkoutCardComponent' => $settings->getCheckoutCardComponent(),
             'accountDashboardComponent' => $settings->getAccountDashboardComponent(),
             'orderListCardComponent' => $settings->getOrderListCardComponent(),
+            'adressListCardComponent' => $settings->getAdressListCardComponent(),
+            'carrierListCardComponent' => $settings->getCarrierListCardComponent(),
             
         ]);
     }
@@ -112,6 +114,8 @@ class AdminSettingsController extends AbstractController
         $settings->setCheckoutCardComponent($data['checkoutCardComponent'] ?? $settings->getCheckoutCardComponent());
         $settings->setAccountDashboardComponent($data['accountDashboardComponent'] ?? $settings->getAccountDashboardComponent());
         $settings->setOrderListCardComponent($data['orderListCardComponent'] ?? $settings->getOrderListCardComponent());
+        $settings->setAdressListCardComponent($data['adressListCardComponent'] ?? $settings->getAdressListCardComponent());
+        $settings->setCarrierListCardComponent($data['carrierListCardComponent'] ?? $settings->getCarrierListCardComponent());
         $this->entityManager->flush();
 
         return new JsonResponse(['message' => 'Settings updated successfully']);

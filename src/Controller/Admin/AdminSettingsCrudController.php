@@ -48,6 +48,8 @@ class AdminSettingsCrudController extends AbstractCrudController
             TextField::new('checkoutCardComponent', 'checkoutCardComponent'),
             TextField::new('accountDashboardComponent', 'accountDashboardComponent'),
             TextField::new('orderListCardComponent', 'orderListCardComponent'),
+            TextField::new('adressListCardComponent', 'adressListCardComponent'),
+            TextField::new('carrierListCardComponent', 'carrierListCardComponent'),
         ];
     }
 }

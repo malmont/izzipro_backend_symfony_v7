@@ -106,6 +106,12 @@ class AdminSettings
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $orderListCardComponent = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $adressListCardComponent = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $carrierListCardComponent = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -479,6 +485,30 @@ class AdminSettings
     public function setOrderListCardComponent(?string $orderListCardComponent): static
     {
         $this->orderListCardComponent = $orderListCardComponent;
+
+        return $this;
+    }
+
+    public function getAdressListCardComponent(): ?string
+    {
+        return $this->adressListCardComponent;
+    }
+
+    public function setAdressListCardComponent(?string $adressListCardComponent): static
+    {
+        $this->adressListCardComponent = $adressListCardComponent;
+
+        return $this;
+    }
+
+    public function getCarrierListCardComponent(): ?string
+    {
+        return $this->carrierListCardComponent;
+    }
+
+    public function setCarrierListCardComponent(?string $carrierListCardComponent): static
+    {
+        $this->carrierListCardComponent = $carrierListCardComponent;
 
         return $this;
     }
