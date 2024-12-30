@@ -2,11 +2,11 @@
 namespace App\Dto;
 use App\Dto\ICreateOrderDTO; 
 
-class CreateOrderDTO implements ICreateOrderDTO
+class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
 {
     private $userId;
     private $orderSource;
-    private $paymentMethod;
+    private $paymentMethods; 
     private $addressId;
     private $carrierId;
     private $typeOrder;
@@ -15,7 +15,7 @@ class CreateOrderDTO implements ICreateOrderDTO
     public function __construct(
         int $userId,
         int $orderSource,
-        int $paymentMethod,
+        array $paymentMethods,
         int $addressId,
         int $carrierId,
         int $typeOrder,
@@ -23,7 +23,7 @@ class CreateOrderDTO implements ICreateOrderDTO
     ) {
         $this->userId = $userId;
         $this->orderSource = $orderSource;
-        $this->paymentMethod = $paymentMethod;
+        $this->paymentMethods = $paymentMethods;
         $this->addressId = $addressId;
         $this->carrierId = $carrierId;
         $this->typeOrder = $typeOrder;
@@ -40,9 +40,9 @@ class CreateOrderDTO implements ICreateOrderDTO
         return $this->orderSource;
     }
 
-    public function getPaymentMethod(): int
+    public function getPaymentMethods(): array
     {
-        return $this->paymentMethod;
+        return $this->paymentMethods;
     }
 
     public function getAddressId(): int

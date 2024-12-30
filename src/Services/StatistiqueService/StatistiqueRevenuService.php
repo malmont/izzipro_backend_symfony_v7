@@ -48,7 +48,8 @@ class StatistiqueRevenuService
             }
 
             $revenue = $this->orderRepository->getTotalRevenueBetweenDates($currentWeekStart, $currentWeekEnd, $orderSource);
-            $weeklyRevenues[$currentWeekStart->format('W')] = $revenue;
+            $weekNumber = (int) $currentWeekStart->format('W');
+            $weeklyRevenues[$weekNumber] = $revenue;
 
             $currentWeekStart = (clone $currentWeekEnd)->modify('+1 day');
         }

@@ -13,6 +13,7 @@ use App\Services\EntityRetrieverService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use App\Services\OrderService\OrderCreationService;
+use App\Dto\ICreateOrderDTO; 
 
 class CreateOrderCommandUseCase
 {
@@ -30,7 +31,7 @@ class CreateOrderCommandUseCase
         $this->orderCreationService = $orderCreationService;
     }
 
-    public function execute(CreateOrderDTO $orderDTO, User $user)
+    public function execute(ICreateOrderDTO $orderDTO, User $user)
     {
         try {
             $orderSource = $this->entityRetrieverService->findOrFail(OrderSource::class, $orderDTO->getOrderSource(), 'Invalid order source ID');

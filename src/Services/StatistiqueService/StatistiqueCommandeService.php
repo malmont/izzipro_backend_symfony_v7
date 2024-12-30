@@ -80,7 +80,7 @@ class StatistiqueCommandeService
 
             $count = $this->orderRepository->getOrderCountBetweenDates($currentWeekStart, $currentWeekEnd, $orderSource);
             $weeklyCounts[$currentWeekStart->format('W')] = $count;
-
+            
             $currentWeekStart = (clone $currentWeekEnd)->modify('+1 day');
         }
 
@@ -164,7 +164,7 @@ class StatistiqueCommandeService
         $weeklyOrderList = [];
         foreach ($weeklyData as $week => $count) {
             $weeklyOrderList[] = [
-                'week' => $week,
+                'week' => (int) $week,
                 'orderCount' => $count,
             ];
         }

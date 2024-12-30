@@ -2,10 +2,12 @@
 namespace App\UseCase\OrderUseCase;
 
 use App\Dto\CreateOrderDTO;
+use App\Dto\CreateOrderMultiPaymentDTO;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Security\Core\Security;
 use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
+use App\Dto\ICreateOrderDTO; 
 
 class CreateOrderUseCase
 {
@@ -41,7 +43,7 @@ class CreateOrderUseCase
         $this->security = $security;
     }
 
-    public function execute(CreateOrderDTO $orderDTO): JsonResponse
+    public function execute(ICreateOrderDTO $orderDTO): JsonResponse
     {
         $this->em->getConnection()->beginTransaction();
 
@@ -72,7 +74,27 @@ class CreateOrderUseCase
             }
             $totalAmount = $this->calculateTotalAmountUseCase->execute($subtotal, $totalTax);
             $paymentTypeId = $typeOrderId === 1 ? 2 : 1;
-            $this->paymentHandlerUseCase->handlePayment($order, $totalAmount, $orderDTO->getPaymentMethod(), $paymentTypeId, $statusPaymentId);
+
+            if ($orderDTO instanceof CreateOrderMultiPaymentDTO) {
+                foreach ($orderDTO->getPaymentMethods() as $paymentMethod) {
+                    $this->paymentHandlerUseCase->handlePayment(
+                        $order,
+                        $paymentMethod->getAmount() *100,
+                        $paymentMethod->getType(),
+                        $paymentTypeId,
+                        $statusPaymentId
+                    );
+                }
+            } else {
+                $this->paymentHandlerUseCase->handlePayment(
+                    $order,
+                    $totalAmount,
+                    $orderDTO->getPaymentMethod(),
+                    $paymentTypeId,
+                    $statusPaymentId
+                );
+            }
+            // $this->paymentHandlerUseCase->handlePayment($order, $totalAmount, $orderDTO->getPaymentMethod(), $paymentTypeId, $statusPaymentId);
 
             $order->setSubTotal($subtotal);
             $order->setTotalTax($totalTax);
