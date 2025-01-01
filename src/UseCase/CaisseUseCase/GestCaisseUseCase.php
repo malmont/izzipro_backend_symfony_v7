@@ -29,6 +29,7 @@ class GestCaisseUseCase
             $caisseDTOS[] = new CaisseDTO(
                 $caisse->getId(),
                 $caisse->getAmountTotal(),
+                $caisse->getFonDeCaisse(),
                 $caisse->getCreatedAt()->format('Y-m-d H:i:s'),
                 $caisse->isOpen(),
                 $transactionCaisseDTO

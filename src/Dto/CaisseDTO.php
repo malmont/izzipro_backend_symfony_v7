@@ -5,6 +5,7 @@ class CaisseDTO
 {
     private int $id;
     private ?float $amountTotal;
+    private ?float $fonDeCaisse;
     private ?string $createdAt;
     private ?bool $isOpen;
     private array $transactionCaisses;
@@ -12,6 +13,7 @@ class CaisseDTO
     public function __construct(
         int $id,
         ?float $amountTotal,
+        ?float $fonDeCaisse,
         ?string $createdAt,
         ?bool $isOpen,
         array $transactionCaisses
@@ -19,6 +21,7 @@ class CaisseDTO
     {
         $this->id = $id;
         $this->amountTotal = $amountTotal;
+        $this->fonDeCaisse = $fonDeCaisse;
         $this->createdAt = $createdAt;
         $this->isOpen = $isOpen;
         $this->transactionCaisses = $transactionCaisses;
@@ -29,6 +32,7 @@ class CaisseDTO
         return [
             'id' => $this->id,
             'amountTotal' => $this->amountTotal,
+            'fonDeCaisse' => $this->fonDeCaisse,
             'createdAt' => $this->createdAt,
             'isOpen' => $this->isOpen,
             'transactionCaisses' => array_map(fn($item) => $item->toArray(), $this->transactionCaisses),
