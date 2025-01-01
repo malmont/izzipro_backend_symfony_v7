@@ -31,6 +31,9 @@ class Caisse
     #[ORM\Column(type: "boolean", options: ["default" => false])]
     private ?bool $isOpen = false;
 
+    #[ORM\Column(nullable: true)]
+    private ?float $fonDeCaisse = null;
+
     public function __construct()
     {
         $this->transactionCaisses = new ArrayCollection();
@@ -114,6 +117,18 @@ class Caisse
     public function setOpen(bool $isOpen): static
     {
         $this->isOpen = $isOpen;
+
+        return $this;
+    }
+
+    public function getFonDeCaisse(): ?float
+    {
+        return $this->fonDeCaisse;
+    }
+
+    public function setFonDeCaisse(float $fonDeCaisse): static
+    {
+        $this->fonDeCaisse = $fonDeCaisse;
 
         return $this;
     }

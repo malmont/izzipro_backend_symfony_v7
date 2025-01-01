@@ -13,16 +13,20 @@ use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
 use Doctrine\ORM\QueryBuilder;
 use Symfony\Component\HttpFoundation\RequestStack;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 
 class TransactionCaisseListController extends AbstractCrudController
 {
     private $em;
     private $requestStack;
+    private AdminUrlGenerator $adminUrlGenerator;
 
-    public function __construct(EntityManagerInterface $em, RequestStack $requestStack)
+    public function __construct(EntityManagerInterface $em, RequestStack $requestStack,AdminUrlGenerator $adminUrlGenerator)
     {
         $this->em = $em;
         $this->requestStack = $requestStack;
+        $this->adminUrlGenerator = $adminUrlGenerator;
     }
 
     public static function getEntityFqcn(): string
@@ -55,6 +59,20 @@ class TransactionCaisseListController extends AbstractCrudController
             MoneyField::new('amount', 'Montant')->setCurrency('USD'),      
             AssociationField::new('orderCaisse', 'Commande')->hideOnIndex(),
             AssociationField::new('payment', 'Paiement')->hideOnIndex(),
+            AssociationField::new('cashdetails', 'Détails de cash')
+                ->formatValue(function ($value, $entity) {
+                    $cashDetailsUrl = $this->adminUrlGenerator
+                        ->setController(CashDetailsListController::class)
+                        ->setAction(Crud::PAGE_INDEX)
+                        ->set('transactionId', $entity->getId())
+                        ->generateUrl();
+
+                    return sprintf(
+                        '<a href="%s" style="text-decoration: none; color: #007bff;">Voir les détails de cash</a>',
+                        $cashDetailsUrl
+                    );
+                })
+                ->renderAsHtml(),
         ];
     }
 }

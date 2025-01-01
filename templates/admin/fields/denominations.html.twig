@@ -1,0 +1,16 @@
+{% if field.value is empty %}
+    <div class="text-muted">Aucune dénomination disponible</div>
+{% else %}
+    <ul class="list-group">
+        {% for denomination in field.value %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>
+                    <strong>Type:</strong> {{ denomination.typeCash }}
+                </span>
+                <span class="badge bg-primary rounded-pill">
+                    <strong>Nombre:</strong> {{ denomination.numberItems }}
+                </span>
+            </li>
+        {% endfor %}
+    </ul>
+{% endif %}

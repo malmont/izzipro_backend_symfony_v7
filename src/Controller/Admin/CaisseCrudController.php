@@ -11,6 +11,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Security\Core\Security;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
@@ -47,6 +48,7 @@ class CaisseCrudController extends AbstractCrudController
         return [
             MoneyField::new('amountTotal', 'Montant Total')->setCurrency('USD'),
             DateField::new('createdAt', 'Date de Création')->setFormat('dd/MM/yyyy')->hideOnForm(),
+            NumberField::new('fondDeCaisse', 'Fond de Caisse'),
             BooleanField::new('isOpen', 'Ouverte')->renderAsSwitch(false),
             AssociationField::new('transactionCaisses', 'Transactions')
                 ->formatValue(function ($value, $entity) {

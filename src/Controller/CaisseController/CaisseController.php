@@ -89,6 +89,7 @@ class CaisseController extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
         $amount = $data['amount'] ?? null;
+        $cashDetails = $data['cashDetails'] ?? []; // Nouveaux détails de cash
         if ($amount <= 0) {
             return new JsonResponse(['error' => 'Invalid amount'], 400);
         }
@@ -98,11 +99,47 @@ class CaisseController extends AbstractController
             return new JsonResponse(['error' => 'No open caisse found'], 400);
         }
 
-        // Utiliser le UseCase pour gérer le dépôt
-        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $amount, 3); // 3 pour Dépôt
+        // Utiliser le UseCase pour gérer le dépôt avec ou sans détails de cash
+        $this->handleCaisseTransactionUseCase->execute(
+            null,
+            $this->getUser(),
+            $amount,
+            3, // 3 pour Dépôt
+            $cashDetails // Passer les détails de cash
+        );
 
         return new JsonResponse(['message' => 'Deposit successful', 'new_total' => $caisse->getAmountTotal()], 201);
     }
+
+    /**
+     * @Route("api/caisse/cashfunddeposit", name="caisse_cash_funddeposit", methods={"POST"})
+     */
+    public function cashFundDeposit(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $amount = $data['amount'] ?? null;
+        $cashDetails = $data['cashDetails'] ?? []; // Nouveaux détails de cash
+        if ($amount <= 0) {
+            return new JsonResponse(['error' => 'Invalid amount'], 400);
+        }
+
+        $caisse = $this->caisseService->getOpenCaisse();
+        if (!$caisse) {
+            return new JsonResponse(['error' => 'No open caisse found'], 400);
+        }
+
+        // Utiliser le UseCase pour gérer le dépôt avec ou sans détails de cash
+        $this->handleCaisseTransactionUseCase->execute(
+            null,
+            $this->getUser(),
+            $amount,
+            8, // 8 pour Dépôt fond de caisse
+            $cashDetails // Passer les détails de cash
+        );
+
+        return new JsonResponse(['message' => 'Deposit successful', 'new_total' => $caisse->getAmountTotal()], 201);
+    }
+
 
     /**
      * @Route("api/caisse/withdraw", name="caisse_withdraw", methods={"POST"})
@@ -111,6 +148,7 @@ class CaisseController extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
         $amount = $data['amount'] ?? null;
+        $cashDetails = $data['cashDetails'] ?? []; // Nouveaux détails de cash
         if ($amount <= 0) {
             return new JsonResponse(['error' => 'Invalid amount'], 400);
         }
@@ -125,10 +163,38 @@ class CaisseController extends AbstractController
         }
 
         // Utiliser le UseCase pour gérer le retrait
-        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $amount, 6); // 6 pour Retrait
+        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $amount, 6, $cashDetails); 
 
         return new JsonResponse(['message' => 'Withdrawal successful', 'new_total' => $caisse->getAmountTotal()], 201);
     }
+
+     /**
+     * @Route("api/caisse/cashfundwithdraw", name="caisse_cash_fund_withdraw", methods={"POST"})
+     */
+    public function cashFundWithdraw(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $amount = $data['amount'] ?? null;
+        $cashDetails = $data['cashDetails'] ?? []; // Nouveaux détails de cash
+        if ($amount <= 0) {
+            return new JsonResponse(['error' => 'Invalid amount'], 400);
+        }
+
+        $caisse = $this->caisseService->getOpenCaisse();
+        if (!$caisse) {
+            return new JsonResponse(['error' => 'No open caisse found'], 400);
+        }
+
+        if ($caisse->getAmountTotal() < $amount) {
+            return new JsonResponse(['error' => 'Insufficient funds in the caisse'], 400);
+        }
+
+        // Utiliser le UseCase pour gérer le retrait fond de caisse
+        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $amount, 7, $cashDetails); 
+
+        return new JsonResponse(['message' => 'Withdrawal successful', 'new_total' => $caisse->getAmountTotal()], 201);
+    }
+
 
     #[Route('api/caisse', name: 'get_caisse', methods: ['GET'])]
     public function getCaisse(Request $request): JsonResponse

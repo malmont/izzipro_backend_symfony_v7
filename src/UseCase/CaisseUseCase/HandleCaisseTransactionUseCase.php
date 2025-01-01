@@ -28,7 +28,8 @@ class HandleCaisseTransactionUseCase
         $this->caisseTransactionService = $caisseTransactionService;
     }
 
-    public function execute(Order $order = null, $user, float $amount, int $transactionTypeId): void
+    public function execute(Order $order = null, $user, float $amount, int $transactionTypeId, array $cashDetails = []): void
+    
     {
         $caisse = $this->caisseService->getOpenCaisse();
         if (!$caisse && $transactionTypeId != 4) {
@@ -56,6 +57,17 @@ class HandleCaisseTransactionUseCase
                 break;
             case 4: // Ouverture
             case 5: // Fermeture
+            case 7: // Retrait fond de caisse
+                if ($caisse->getAmountTotal() < $amount) {
+                    throw new \Exception('Insufficient funds in the caisse');
+                }
+                $caisse->setAmountTotal($caisse->getAmountTotal() - $amount);
+                $caisse->setFonDeCaisse($caisse->getFonDeCaisse()() - $amount);
+                $amount = -abs($amount); // 
+                break;
+            case 8: //ajout fond de caisse
+                $caisse->setAmountTotal($caisse->getAmountTotal() + $amount);
+                $caisse->setFonDeCaisse($caisse->getFonDeCaisse() + $amount);
                 break;
             default:
                 throw new \InvalidArgumentException('Unknown transaction type');
@@ -70,7 +82,8 @@ class HandleCaisseTransactionUseCase
             $user,
             $order,
             $amount,
-            $transactionType
+            $transactionType,
+            $cashDetails 
         );
 
         // Persister la transaction caisse

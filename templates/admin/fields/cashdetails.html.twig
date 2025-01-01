@@ -1,0 +1,11 @@
+{% if field.value|length > 0 %}
+    <ul>
+        {% for cashDetail in field.value %}
+            <li>
+                {{ cashDetail.typeCash.name }}: {{ cashDetail.nombreItems }}
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>Aucun détail de cash trouvé.</p>
+{% endif %}

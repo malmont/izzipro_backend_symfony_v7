@@ -37,6 +37,9 @@ use App\Entity\OrderTax;
 use App\Entity\OrderType;
 use App\Entity\AdminSettings;
 use App\Entity\PaymentType;
+use App\Entity\CashDetails;
+use App\Entity\Denomination;
+use App\Entity\TypeCash;
 use App\Controller\Admin\OrderAllCrudController;
 use App\Controller\Admin\OrderCrudController;
 use Symfony\Component\HttpFoundation\Response;
@@ -93,6 +96,8 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Caisse', 'fas fa-cash-register', Caisse::class);
         yield MenuItem::linkToCrud('Transaction Caisse', 'fas fa-cash-register', TransactionCaisse::class)->setController(TransactionCaisseCrudController::class);
         yield MenuItem::linkToCrud('Transaction Type caisse', 'fas fa-exchange-alt', TransactionType::class);
+        yield MenuItem::linkToCrud('Cash Details', 'fas fa-money-bill-wave', CashDetails::class)->setController(CashDetailsCrudController::class);
+        yield MenuItem::linkToCrud('Type Cash', 'fas fa-money-bill-wave', TypeCash::class)->setController(TypeCashCrudController::class);
 
         yield MenuItem::section('Order');
         yield MenuItem::linkToCrud('complet order', 'fas fa-list', Order::class)
