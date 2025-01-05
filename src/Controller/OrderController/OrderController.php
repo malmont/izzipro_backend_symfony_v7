@@ -79,9 +79,10 @@ class OrderController extends AbstractController
     /**
      * @Route("api/order/cancel/{id}", name="order_cancel", methods={"POST"})
      */
-    public function cancelOrder(int $id): JsonResponse
+    public function cancelOrder(int $id,Request $request): JsonResponse
     {
-        return $this->cancelOrderUseCase->execute($id);
+        $data = json_decode($request->getContent(), true);
+        return $this->cancelOrderUseCase->execute($id, $data['paymentMethod']);
     }
 
 

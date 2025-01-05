@@ -48,8 +48,9 @@ class CaisseCrudController extends AbstractCrudController
         return [
             MoneyField::new('amountTotal', 'Montant Total')->setCurrency('USD'),
             DateField::new('createdAt', 'Date de Création')->setFormat('dd/MM/yyyy')->hideOnForm(),
-            NumberField::new('fondDeCaisse', 'Fond de Caisse'),
+            MoneyField::new('fonDeCaisse', 'Fond de Caisse')->setCurrency('USD'),
             BooleanField::new('isOpen', 'Ouverte')->renderAsSwitch(false),
+
             AssociationField::new('transactionCaisses', 'Transactions')
                 ->formatValue(function ($value, $entity) {
                     $transactionCaissesUrl = $this->adminUrlGenerator

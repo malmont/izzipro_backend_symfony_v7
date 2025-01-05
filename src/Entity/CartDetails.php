@@ -123,4 +123,5 @@ class CartDetails
 
         return $this;
     }
+    
 }

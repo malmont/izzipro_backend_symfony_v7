@@ -46,7 +46,7 @@ class CreateOrderUseCase
     public function execute(ICreateOrderDTO $orderDTO): JsonResponse
     {
         $this->em->getConnection()->beginTransaction();
-
+        $caisseAmount = 0;
         try {
             $user = $this->security->getUser();
             $typeOrderId = $orderDTO->getTypeOrder();
@@ -77,9 +77,11 @@ class CreateOrderUseCase
 
             if ($orderDTO instanceof CreateOrderMultiPaymentDTO) {
                 foreach ($orderDTO->getPaymentMethods() as $paymentMethod) {
+                    if ($paymentMethod->getType() == 2){$caisseAmount += $paymentMethod->getAmount();}
+                    $amountPaymentMethod =$typeOrderId === 1 ? $paymentMethod->getAmount() : -$paymentMethod->getAmount();
                     $this->paymentHandlerUseCase->handlePayment(
                         $order,
-                        $paymentMethod->getAmount() *100,
+                        $amountPaymentMethod *100,
                         $paymentMethod->getType(),
                         $paymentTypeId,
                         $statusPaymentId
@@ -101,10 +103,10 @@ class CreateOrderUseCase
             $order->setTotalAmount($totalAmount);
 
             $this->em->persist($order);
-
+            $caisseAmount=$caisseAmount*100;
             if ($order->getOrderSource()->getId() === 2) {
                 $transactionTypeId = $typeOrderId === 1 ? 1 : 2;
-                $this->handleCaisseTransactionUseCase->execute($order, $user, $totalAmount, $transactionTypeId);
+                $this->handleCaisseTransactionUseCase->execute($order, $user, $totalAmount, $transactionTypeId,[],$caisseAmount);
             }
 
             $this->em->flush();

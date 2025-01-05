@@ -28,7 +28,7 @@ class HandleCaisseTransactionUseCase
         $this->caisseTransactionService = $caisseTransactionService;
     }
 
-    public function execute(Order $order = null, $user, float $amount, int $transactionTypeId, array $cashDetails = []): void
+    public function execute(Order $order = null, $user, float $transactionAmount, int $transactionTypeId, array $cashDetails = [],float $caisseAmount=0): void
     
     {
         $caisse = $this->caisseService->getOpenCaisse();
@@ -37,38 +37,53 @@ class HandleCaisseTransactionUseCase
         }
 
         $transactionType = $this->transactionTypeRepository->find($transactionTypeId);
-        if (!$transactionType) {
+        if (!$transactionTypeId) {
             throw new \Exception('Transaction type not found');
         }
-
+     
         // Mise à jour du montant total de la caisse en fonction du type de transaction
         switch ($transactionTypeId) {
             case 1: // Vendu
-            case 2: // Dépôt
-            case 3: // Ajout
-                $caisse->setAmountTotal($caisse->getAmountTotal() + $amount);
+                $caisse->setAmountTotal($caisse->getAmountTotal() + $caisseAmount);
+                break;
+            case 2: //  Remboursement 
+                if ($caisse->getAmountTotal() < $caisseAmount) {
+                    throw new \Exception('Insufficient funds in the caisse');
+                }
+                $caisse->setAmountTotal($caisse->getAmountTotal() - abs($caisseAmount));
+                $transactionAmount = -abs($transactionAmount); // Retrait
+                break;
+            case 3: // Dépôt
+                $caisse->setAmountTotal($caisse->getAmountTotal() + $transactionAmount);
+                break;
+            case 5: // Fermeture de la caisse
+                // Aucune logique spécifique pour le moment
+                break;
+        
+            case 4: // Ouverture de la caisse
+                // Aucune logique spécifique pour le moment
                 break;
             case 6: // Retrait
-                if ($caisse->getAmountTotal() < $amount) {
+                if ($caisse->getAmountTotal() < $transactionAmount) {
                     throw new \Exception('Insufficient funds in the caisse');
                 }
-                $caisse->setAmountTotal($caisse->getAmountTotal() - $amount);
-                $amount = -abs($amount); // Retrait
+                $caisse->setAmountTotal($caisse->getAmountTotal() - $transactionAmount);
+                $transactionAmount = -abs($transactionAmount); // Retrait
                 break;
-            case 4: // Ouverture
-            case 5: // Fermeture
             case 7: // Retrait fond de caisse
-                if ($caisse->getAmountTotal() < $amount) {
+                if ($caisse->getAmountTotal() < $transactionAmount) {
                     throw new \Exception('Insufficient funds in the caisse');
                 }
-                $caisse->setAmountTotal($caisse->getAmountTotal() - $amount);
-                $caisse->setFonDeCaisse($caisse->getFonDeCaisse()() - $amount);
-                $amount = -abs($amount); // 
+                $caisse->setAmountTotal($caisse->getAmountTotal() - $transactionAmount);
+                $caisse->setFonDeCaisse($caisse->getFonDeCaisse() - $transactionAmount);
+                $transactionAmount = -abs($transactionAmount); // 
                 break;
             case 8: //ajout fond de caisse
-                $caisse->setAmountTotal($caisse->getAmountTotal() + $amount);
-                $caisse->setFonDeCaisse($caisse->getFonDeCaisse() + $amount);
+                $caisse->setAmountTotal($caisse->getAmountTotal() + $transactionAmount);
+                $caisse->setFonDeCaisse($caisse->getFonDeCaisse() + $transactionAmount);
                 break;
+            
+            
             default:
                 throw new \InvalidArgumentException('Unknown transaction type');
         }
@@ -81,7 +96,7 @@ class HandleCaisseTransactionUseCase
             $caisse,
             $user,
             $order,
-            $amount,
+            $transactionAmount,
             $transactionType,
             $cashDetails 
         );

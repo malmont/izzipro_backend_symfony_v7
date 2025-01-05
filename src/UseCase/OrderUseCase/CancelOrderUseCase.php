@@ -31,11 +31,11 @@ class CancelOrderUseCase
         $this->em = $em;
     }
 
-    public function execute(int $orderId): JsonResponse
+    public function execute(int $orderId, int $paymentMethod): JsonResponse
     {
         // Démarrer une transaction
         $this->em->beginTransaction();
-
+        $caisseAmount = 0;
         try {
             // Récupérer la commande par son ID
             $order = $this->entityRetrieverService->findOrFail(Order::class, $orderId, 'Order not found');
@@ -70,10 +70,10 @@ class CancelOrderUseCase
             foreach ($order->getOrderTaxes() as $orderTax) {
                 $orderTax->setAmount(0);
             }
-            
+            if ($paymentMethod == 2){$caisseAmount += $refundAmount;}
             $transactionTypeId = 2;
             if ($order->getOrderSource()->getId() === 2) {
-                $this->handleCaisseTransactionUseCase->execute($order, $order->getUserId(), -$refundAmount, $transactionTypeId);
+                $this->handleCaisseTransactionUseCase->execute($order, $order->getUserId(), $refundAmount, $transactionTypeId,[],$caisseAmount);
             }
 
             // Valider la transaction

@@ -16,6 +16,18 @@ class CaisseRepository extends ServiceEntityRepository
         parent::__construct($registry, Caisse::class);
     }
 
+    public function getLastClosedCaisse(): ?Caisse
+        {
+            return $this->createQueryBuilder('c')
+                ->where('c.isOpen = :isOpen')
+                ->setParameter('isOpen', false)
+                ->orderBy('c.createdAt', 'DESC')
+                ->addOrderBy('c.id', 'DESC') // Critère secondaire
+                ->setMaxResults(1)
+                ->getQuery()
+                ->getOneOrNullResult();
+        }
+
     //    /**
     //     * @return Caisse[] Returns an array of Caisse objects
     //     */

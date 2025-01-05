@@ -48,7 +48,6 @@ class CaisseController extends AbstractController
         // Récupérer la dernière caisse fermée et calculer le montant initial
         $lastClosedCaisse = $this->caisseService->getLastClosedCaisse();
         $initialAmount = $lastClosedCaisse ? $lastClosedCaisse->getAmountTotal() : 0.0;
-
         // Créer une nouvelle caisse
         $caisse = new Caisse();
         $caisse->setAmountTotal($initialAmount);
@@ -59,7 +58,7 @@ class CaisseController extends AbstractController
         $this->entityManager->flush();
 
         // Utiliser le UseCase pour gérer l'ouverture de la caisse (transaction)
-        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $initialAmount, 4); // 4 pour Ouverture
+        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $initialAmount, 4,[]); // 4 pour Ouverture
 
         return new JsonResponse(['message' => 'Caisse opened successfully', 'caisse_id' => $caisse->getId()], 201);
     }
@@ -77,7 +76,7 @@ class CaisseController extends AbstractController
         $caisse->setOpen(false);
 
         // Utiliser le UseCase pour gérer la fermeture de la caisse
-        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $caisse->getAmountTotal(), 5); // 5 pour Fermeture
+        $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $caisse->getAmountTotal(), 5,[]); // 5 pour Fermeture
 
         return new JsonResponse(['message' => 'Caisse closed successfully', 'caisse_id' => $caisse->getId()], 200);
     }

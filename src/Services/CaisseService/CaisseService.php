@@ -24,7 +24,7 @@ class CaisseService
 
     public function getLastClosedCaisse(): ?Caisse
     {
-        return $this->caisseRepository->findOneBy(['isOpen' => false], ['createdAt' => 'DESC']);
+        return $this->caisseRepository->getLastClosedCaisse();
     }
 
     public function getCaisse(?int $days = null)
