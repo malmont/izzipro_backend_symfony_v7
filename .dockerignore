@@ -1,0 +1,25 @@
+# Ignorer les dossiers liés à Git
+.git
+.gitignore
+
+# Ignorer les dépendances et fichiers temporaires
+node_modules/
+vendor/
+var/
+!var/cache
+!var/log
+
+# Ignorer les configurations locales
+.env
+.env.local
+docker-compose.override.yml
+
+# Ignorer les fichiers système
+.DS_Store
+Thumbs.db
+
+# Ignorer les fichiers de log
+*.log
+
+# Ignorer les sauvegardes SQL
+*.sql
