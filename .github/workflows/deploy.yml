@@ -11,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        client: [CLIENT1, CLIENT2]  # Déploiement multi-serveurs
+        client: [CLIENT1]  # Déploiement multi-serveurs
 
     steps:
       # 📥 Récupération du code
