@@ -1,0 +1,78 @@
+name: Build and Deploy Docker Image to GHCR and Servers
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        client: [CLIENT1, CLIENT2]  # Déploiement multi-serveurs
+
+    steps:
+      # 📥 Récupération du code
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
+
+      # 🔑 Connexion à GHCR
+      - name: 🔑 Login to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      # 🏗️ Construction de l'image Docker
+      - name: 🏗️ Build Docker Image
+        run: docker build -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} .
+
+      # 📦 Push de l'image Docker sur GHCR
+      - name: 📦 Push Docker Image to GHCR
+        run: docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
+
+      # 🔑 Définir les variables d'environnement pour le déploiement
+      - name: 🔑 Définir les variables d'environnement
+        run: |
+          if [[ "${{ matrix.client }}" == "CLIENT1" ]]; then
+            echo "SERVER_IP=${{ secrets.CLIENT1_SERVER_IP }}" >> $GITHUB_ENV
+            echo "SERVER_USER=${{ secrets.CLIENT1_SERVER_USER }}" >> $GITHUB_ENV
+            echo "SERVER_PASSWORD=${{ secrets.CLIENT1_SERVER_PASSWORD }}" >> $GITHUB_ENV
+          elif [[ "${{ matrix.client }}" == "CLIENT2" ]]; then
+            echo "SERVER_IP=${{ secrets.CLIENT2_SERVER_IP }}" >> $GITHUB_ENV
+            echo "SERVER_USER=${{ secrets.CLIENT2_SERVER_USER }}" >> $GITHUB_ENV
+            echo "SERVER_PASSWORD=${{ secrets.CLIENT2_SERVER_PASSWORD }}" >> $GITHUB_ENV
+          fi
+
+      # 🚀 Déploiement sur les serveurs
+      - name: 🚀 Deploy to Server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ env.SERVER_IP }}
+          username: ${{ env.SERVER_USER }}
+          password: ${{ env.SERVER_PASSWORD }}
+          script: |
+            echo "🔄 Pull de l'image Docker depuis GHCR..."
+            docker pull ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
+
+            echo "🧹 Nettoyage des anciens conteneurs..."
+            docker-compose -f /home/${{ matrix.client }}/docker-compose.yml down
+
+            echo "🔎 Vérification du conteneur Symfony..."
+            if [ $(docker ps -a -q -f name=symfony_app) ]; then
+              echo "🛑 Arrêt et suppression du conteneur existant..."
+              docker stop symfony_app
+              docker rm symfony_app
+            fi
+
+            echo "🚀 Lancement du conteneur Symfony..."
+            docker run -d --name symfony_app \
+              --env-file /home/${{ matrix.client }}/.env \
+              -v /home/${{ matrix.client }}/nginx.conf:/etc/nginx/nginx.conf \
+              -p 80:80 \
+              ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
+
+            echo "✅ Déploiement terminé."
