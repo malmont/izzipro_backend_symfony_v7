@@ -68,29 +68,23 @@ jobs:
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
 
-      - name: 🔄 Générer le fichier .env directement
+      # 🔄 Génération du fichier .env sur le serveur AVANT Docker Compose
+      - name: 🔄 Générer le fichier .env sur le serveur
         run: |
-          echo "📄 Création du fichier .env..."
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
-            # 1️⃣ Création du .env.template avec les variables
-            cat <<EOL > /home/${{ secrets.CLIENT1_SERVER_USER }}/app/.env.template
-          POSTGRES_USER=${DB_USER}
-          POSTGRES_PASSWORD=${DB_PASSWORD}
-          POSTGRES_DB=${DB_NAME}
-          POSTGRES_HOST=${DB_HOST}
-          POSTGRES_PORT=${DB_PORT}
-          APP_ENV=prod
-          APP_SECRET=${APP_SECRET}
-          DATABASE_URL=pgsql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
-          EOL
-      
-            # 2️⃣ Remplacement des variables et création de .env
-            envsubst < /home/${{ secrets.CLIENT1_SERVER_USER }}/app/.env.template > /home/${{ secrets.CLIENT1_SERVER_USER }}/app/.env
-      
-            # 3️⃣ Suppression du template
-            rm /home/${{ secrets.CLIENT1_SERVER_USER }}/app/.env.template
+          echo "📄 Génération du fichier .env avant lancement des conteneurs..."
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << EOF
+            cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
+
+            echo "⚙️ Attribution des droits au script generate-env.sh..."
+            chmod +x generate-env.sh
+
+            echo "⚙️ Exécution de generate-env.sh pour créer le .env..."
+            ./generate-env.sh
+
+            echo "✅ Fichier .env généré avec succès."
+            chmod 644 .env
           EOF
-          echo "✅ Fichier .env généré."
+
         
 
       # 🚀 Déploiement des conteneurs
@@ -114,6 +108,9 @@ jobs:
 
             echo "⚙️ Attribution des permissions d'exécution au script d'initialisation..."
             chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/docker-entrypoint.sh
+
+            echo "⚙️ Attribution des permissions d'exécution au script d'initialisation..."
+            chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/generate-env.sh
 
             echo "⚙️ Exécution du script d'initialisation dans le conteneur Symfony..."
             docker exec symfony_app bash /home/app/docker-entrypoint.sh
