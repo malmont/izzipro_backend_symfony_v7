@@ -63,6 +63,7 @@ jobs:
             docker/nginx/nginx.conf
             docker/db/init.sql
           target: /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
+          debug: true
 
       # 🚀 Déploiement sur le serveur
       - name: 🚀 Deploy to Server
