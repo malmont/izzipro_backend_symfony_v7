@@ -1,6 +1,6 @@
 #!/bin/bash
 
-APP_DIR="/home/${USER}/app"
+APP_DIR="."  # Dossier actuel
 
 if [ ! -f "$APP_DIR/.env" ]; then
   echo "📄 Création sécurisée du fichier .env..."
