@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-APP_DIR="/home/app"
+APP_DIR="/home/${CLIENT1_SERVER_USER}/app"
 
 # ✅ Génération du fichier .env si nécessaire
 if [ ! -f "$APP_DIR/.env" ]; then
@@ -12,7 +12,7 @@ fi
 # ✅ Installation des dépendances
 if [ ! -d "$APP_DIR/vendor" ]; then
   echo "📦 Installation des dépendances..."
-  composer install --no-interaction --optimize-autoloader
+  composer install --no-interaction --optimize-autoloader --working-dir="$APP_DIR"
 fi
 
 # ✅ Donner les permissions
@@ -20,13 +20,13 @@ chown -R www-data:www-data "$APP_DIR/var"
 chmod -R 775 "$APP_DIR/var"
 
 # ✅ Exécuter les migrations
-php bin/console doctrine:migrations:migrate --no-interaction
+php "$APP_DIR/bin/console" doctrine:migrations:migrate --no-interaction
 
 # ✅ Installer les assets
-php bin/console assets:install --symlink
+php "$APP_DIR/bin/console" assets:install --symlink
 
 # ✅ Nettoyer le cache Symfony
-php -d memory_limit=-1 bin/console cache:clear
+php -d memory_limit=-1 "$APP_DIR/bin/console" cache:clear
 
 # ✅ Lancer PHP-FPM
 php-fpm

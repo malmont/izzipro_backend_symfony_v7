@@ -26,7 +26,7 @@ services:
       - /home/app/.env
     volumes:
       - db_data:/var/lib/postgresql/data
-      - /home/${USER}/app/docker/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - /home/${USER}/app/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     networks:
@@ -40,7 +40,7 @@ services:
       - "80:80"
     volumes:
       - /home/${USER}/app/src:/home/app
-      - /home/${USER}/app/docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - /home/${USER}/app/nginx/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
       - app
     networks:
