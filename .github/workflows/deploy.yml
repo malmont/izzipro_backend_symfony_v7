@@ -42,10 +42,10 @@ jobs:
       - name: 🔑 Configurer la clé SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.CLIENT1_SERVER_IP }} >> ~/.ssh/known_hosts
-          echo "✅ Clé SSH configurée."
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 -H ${{ secrets.CLIENT1_SERVER_IP }} >> ~/.ssh/known_hosts
+          echo "✅ Clé SSH ED25519 configurée."
 
       # 🛠️ Création du dossier de déploiement avec permissions
       - name: 🛠️ Create app directory on server
