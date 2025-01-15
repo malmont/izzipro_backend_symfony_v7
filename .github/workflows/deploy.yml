@@ -77,13 +77,16 @@ jobs:
       - name: 🔄 Générer le fichier .env sur le serveur
         run: |
           echo "🔄 Attribution des droits d'exécution au script generate-env.sh..."
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
+            ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
             "chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/generate-env.sh"
-            
+
           echo "🔄 Génération du fichier .env..."
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
+            ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
             "cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app && bash generate-env.sh"
-          echo "✅ Fichier .env généré.
+
+          echo "✅ Fichier .env généré."
 
       # 🚀 Déploiement des conteneurs
       - name: 🚀 Deploy to Server
