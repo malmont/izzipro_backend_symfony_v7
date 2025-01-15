@@ -38,79 +38,53 @@ jobs:
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
 
-      # 🔑 Ajouter la clé SSH du serveur distant à known_hosts
-      - name: 🔑 Add SSH Host to known_hosts
+      # 🔑 Configuration de la clé SSH
+      - name: 🔑 Configurer la clé SSH
         run: |
           mkdir -p ~/.ssh
-          if ! ssh-keygen -F ${{ secrets.CLIENT1_SERVER_IP }} > /dev/null; then
-            echo "🔑 Clé SSH absente, ajout en cours..."
-            ssh-keyscan -H ${{ secrets.CLIENT1_SERVER_IP }} >> ~/.ssh/known_hosts
-            echo "✅ Clé SSH ajoutée."
-          else
-            echo "✅ Clé SSH déjà présente dans known_hosts."
-          fi
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.CLIENT1_SERVER_IP }} >> ~/.ssh/known_hosts
+          echo "✅ Clé SSH configurée."
 
       # 🛠️ Création du dossier de déploiement avec permissions
       - name: 🛠️ Create app directory on server
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.CLIENT1_SERVER_IP }}
-          username: ${{ secrets.CLIENT1_SERVER_USER }}
-          password: ${{ secrets.CLIENT1_SERVER_PASSWORD }}
-          script: |
-            echo "📂 Création du dossier app si nécessaire..."
-            sudo mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app
-            echo "🔒 Attribution des droits au dossier..."
-            sudo chown -R $USER:$USER /home/${{ secrets.CLIENT1_SERVER_USER }}/app
-            sudo chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app
-            echo "✅ Dossier prêt avec les bonnes permissions."
+        run: |
+          echo "📂 Création du dossier app si nécessaire..."
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} "sudo mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && sudo chown -R $USER:$USER /home/${{ secrets.CLIENT1_SERVER_USER }}/app && sudo chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
+          echo "✅ Dossier prêt avec les bonnes permissions."
 
-      # 🔄 Synchronisation des fichiers avec rsync
+      # 🔄 Synchronisation des fichiers avec rsync via SSH
       - name: 🔄 Synchroniser les fichiers avec rsync
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.CLIENT1_SERVER_IP }}
-          username: ${{ secrets.CLIENT1_SERVER_USER }}
-          password: ${{ secrets.CLIENT1_SERVER_PASSWORD }}
-          script: |
-            echo "📤 Synchronisation des fichiers avec rsync..."
-            rsync -avz --delete \
-              Dockerfile \
-              docker-compose.yml \
-              generate-env.sh \
-              docker-entrypoint.sh \
-              docker/ \
-              ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
-            echo "✅ Synchronisation terminée."
+        run: |
+          echo "📤 Synchronisation des fichiers avec rsync..."
+          rsync -avz -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" \
+            Dockerfile \
+            docker-compose.yml \
+            generate-env.sh \
+            docker-entrypoint.sh \
+            docker/ \
+            ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
+          echo "✅ Synchronisation terminée."
 
       # 🚀 Déploiement des conteneurs
       - name: 🚀 Deploy to Server
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.CLIENT1_SERVER_IP }}
-          username: ${{ secrets.CLIENT1_SERVER_USER }}
-          password: ${{ secrets.CLIENT1_SERVER_PASSWORD }}
-          script: |
-            echo "📂 Déplacement dans le dossier de déploiement..."
-            cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
-
-            echo "🔄 Pull de l'image Docker depuis GHCR..."
-            docker pull ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
-            docker pull ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
-
-            echo "🧹 Nettoyage des anciens conteneurs..."
-            docker-compose down || true
-
-            echo "🚀 Lancement des conteneurs avec Docker Compose..."
-            docker-compose up -d --build
-
-            echo "⏳ Attente de la disponibilité des services..."
-            sleep 20  # Temps d'attente pour laisser PostgreSQL démarrer
-
-            echo "⚙️ Attribution des permissions d'exécution aux scripts..."
-            chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/docker-entrypoint.sh
-
-            echo "⚙️ Exécution du script d'initialisation dans le conteneur Symfony..."
-            docker exec symfony_app bash /home/app/docker-entrypoint.sh
-
-            echo "✅ Déploiement terminé."
+        run: |
+          echo "📂 Déploiement des conteneurs..."
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} "
+            cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/ && \
+            echo '🔄 Pull de l'image Docker depuis GHCR...' && \
+            docker pull ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} && \
+            docker pull ghcr.io/${{ github.repository_owner }}/symfony-backend:latest && \
+            echo '🧹 Nettoyage des anciens conteneurs...' && \
+            docker-compose down || true && \
+            echo '🚀 Lancement des conteneurs avec Docker Compose...' && \
+            docker-compose up -d --build && \
+            echo '⏳ Attente de la disponibilité des services...' && \
+            sleep 20 && \
+            echo '⚙️ Attribution des permissions d'exécution aux scripts...' && \
+            chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/docker-entrypoint.sh && \
+            echo '⚙️ Exécution du script d'initialisation dans le conteneur Symfony...' && \
+            docker exec symfony_app bash /home/app/docker-entrypoint.sh && \
+            echo '✅ Déploiement terminé.'
+          "
