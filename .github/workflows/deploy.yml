@@ -38,6 +38,16 @@ jobs:
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
 
+      # 🛠️ Création du dossier de déploiement si absent
+      - name: 🛠️ Create app directory on server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.CLIENT1_SERVER_IP }}
+          username: ${{ secrets.CLIENT1_SERVER_USER }}
+          password: ${{ secrets.CLIENT1_SERVER_PASSWORD }}
+          script: |
+            mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+
       # 📤 Copier tous les fichiers nécessaires sur le serveur
       - name: 📤 Copy Project Files to Server
         uses: appleboy/scp-action@v0.1.1
@@ -76,12 +86,12 @@ jobs:
             docker-compose up -d --build
 
             echo "⏳ Attente de la disponibilité des services..."
-            sleep 15  # Attente pour laisser PostgreSQL démarrer
+            sleep 20  # Temps d'attente pour laisser PostgreSQL démarrer
 
             echo "⚙️ Attribution des permissions d'exécution aux scripts..."
             chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/docker-entrypoint.sh
 
-            echo "⚙️ Exécution du script d'initialisation..."
-            docker exec symfony_app /home/app/docker-entrypoint.sh
+            echo "⚙️ Exécution du script d'initialisation dans le conteneur Symfony..."
+            docker exec symfony_app bash /home/app/docker-entrypoint.sh
 
             echo "✅ Déploiement terminé."
