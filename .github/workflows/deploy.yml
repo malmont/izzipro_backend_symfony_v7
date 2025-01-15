@@ -38,6 +38,18 @@ jobs:
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
 
+      # 🔑 Ajouter la clé SSH du serveur distant à known_hosts
+      - name: 🔑 Add SSH Host to known_hosts
+        run: |
+           mkdir -p ~/.ssh
+            if ! ssh-keygen -F ${{ secrets.CLIENT1_SERVER_IP }} > /dev/null; then
+              echo "🔑 Clé SSH absente, ajout en cours..."
+              ssh-keyscan -H ${{ secrets.CLIENT1_SERVER_IP }} >> ~/.ssh/known_hosts
+              echo "✅ Clé SSH ajoutée."
+            else
+              echo "✅ Clé SSH déjà présente dans known_hosts."
+            fi
+
       # 🛠️ Création du dossier de déploiement avec permissions
       - name: 🛠️ Create app directory on server
         uses: appleboy/ssh-action@v1.0.0
@@ -62,6 +74,7 @@ jobs:
           echo "📤 Transfert de l'archive vers le serveur dans /app..."
           scp -P 22 project-files.tar.gz ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
+      # 📂 Décompression de l'archive sur le serveur
       - name: 📂 Décompression de l'archive sur le serveur
         uses: appleboy/ssh-action@v1.0.0
         with:
