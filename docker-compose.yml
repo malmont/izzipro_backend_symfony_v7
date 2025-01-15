@@ -4,14 +4,14 @@ services:
   # Symfony (PHP)
   app:
     build:
-      context: .
+      context: /home/${USER}/app
       dockerfile: Dockerfile
     container_name: symfony_app
-    working_dir: /var/www
+    working_dir: /home/app
     env_file:
-      - .env  # ✅ Utilisation du fichier .env
+      - /home/app/.env
     volumes:
-      - ./src:/var/www  # ✅ Limite les montages pour ne pas écraser le .env
+      - /home/${USER}/app/src:/home/app
     networks:
       - symfony
     depends_on:
@@ -23,10 +23,10 @@ services:
     container_name: symfony_db
     restart: always
     env_file:
-      - .env  # ✅ Reprise des variables d'environnement
+      - /home/app/.env
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./docker/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - /home/${USER}/app/docker/db/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     networks:
@@ -39,8 +39,8 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./src:/var/www  # ✅ Réduit le volume monté
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - /home/${USER}/app/src:/home/app
+      - /home/${USER}/app/docker/nginx/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
       - app
     networks:

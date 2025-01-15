@@ -1,9 +1,9 @@
 #!/bin/bash
 
-if [ ! -f /var/www/.env ]; then
+if [ ! -f /home/app/.env ]; then
   echo "📄 Création sécurisée du fichier .env..."
 
-  cat <<EOL > /var/www/.env
+  cat <<EOL > /home/app/.env
 POSTGRES_USER=${DB_USER}
 POSTGRES_PASSWORD=${DB_PASSWORD}
 POSTGRES_DB=${DB_NAME}

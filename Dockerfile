@@ -11,22 +11,22 @@ RUN apt-get update && apt-get install -y \
     libicu-dev \
     && docker-php-ext-install pdo pdo_pgsql zip intl
 
-# ✅ Augmenter la mémoire PHP (correction de l'erreur Allowed memory size)
+# ✅ Augmenter la mémoire PHP
 RUN echo "memory_limit=-1" > /usr/local/etc/php/conf.d/memory-limit.ini
 
 # Installer Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Définir le dossier de travail
-WORKDIR /var/www
+WORKDIR /home/app
 
 # Copier les fichiers du projet
-COPY . .
+COPY . /home/app/
 
-# ✅ Créer le dossier var après la copie du projet
-RUN mkdir -p /var/www/var \
-    && chown -R www-data:www-data /var/www/var \
-    && chmod -R 775 /var/www/var
+# ✅ Créer le dossier var
+RUN mkdir -p /home/app/var \
+    && chown -R www-data:www-data /home/app/var \
+    && chmod -R 775 /home/app/var
 
-# Lancer le script d'initialisation au démarrage
-CMD ["bash", "/usr/local/bin/docker-entrypoint.sh"]
+# # ✅ Lancer le script d'initialisation
+# CMD ["bash", "/home/app/docker-entrypoint.sh"]

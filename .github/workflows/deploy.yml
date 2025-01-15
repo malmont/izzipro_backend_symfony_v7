@@ -29,10 +29,7 @@ jobs:
       # 🏗️ Construction de l'image Docker avec les tags
       - name: 🏗️ Build Docker Image with Tags
         run: |
-          # 🔨 Build de l'image avec le tag spécifique au client
           docker build -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} .
-          
-          # 🔖 Tag de l'image en 'latest'
           docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
 
       # 📦 Push de l'image Docker sur GHCR avec les tags
@@ -41,7 +38,23 @@ jobs:
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
 
-      # 🚀 Déploiement sur les serveurs
+      # 📤 Copier tous les fichiers nécessaires sur le serveur
+      - name: 📤 Copy Project Files to Server
+        uses: appleboy/scp-action@v0.1.1
+        with:
+          host: ${{ secrets.CLIENT1_SERVER_IP }}
+          username: ${{ secrets.CLIENT1_SERVER_USER }}
+          password: ${{ secrets.CLIENT1_SERVER_PASSWORD }}
+          source: |
+            Dockerfile
+            docker-compose.yml
+            generate-env.sh
+            docker-entrypoint.sh
+            docker/nginx/nginx.conf
+            docker/db/init.sql
+          target: /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
+
+      # 🚀 Déploiement sur le serveur
       - name: 🚀 Deploy to Server
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -49,21 +62,26 @@ jobs:
           username: ${{ secrets.CLIENT1_SERVER_USER }}
           password: ${{ secrets.CLIENT1_SERVER_PASSWORD }}
           script: |
+            echo "📂 Déplacement dans le dossier de déploiement..."
+            cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
+
             echo "🔄 Pull de l'image Docker depuis GHCR..."
-            
-            # ✅ Pull de l'image avec le tag spécifique au client
             docker pull ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
-            
-            # ✅ Pull de l'image avec le tag latest (sécurité)
             docker pull ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
 
             echo "🧹 Nettoyage des anciens conteneurs..."
-            docker stop symfony_app || true
-            docker rm symfony_app || true
+            docker-compose down || true
 
-            echo "🚀 Lancement du conteneur Symfony..."
-            docker run -d --name symfony_app \
-              -p 80:80 \
-              ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
+            echo "🚀 Lancement des conteneurs avec Docker Compose..."
+            docker-compose up -d --build
+
+            echo "⏳ Attente de la disponibilité des services..."
+            sleep 15  # Attente pour laisser PostgreSQL démarrer
+
+            echo "⚙️ Attribution des permissions d'exécution aux scripts..."
+            chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/docker-entrypoint.sh
+
+            echo "⚙️ Exécution du script d'initialisation..."
+            docker exec symfony_app /home/app/docker-entrypoint.sh
 
             echo "✅ Déploiement terminé."
