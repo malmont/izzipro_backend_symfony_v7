@@ -63,16 +63,16 @@ jobs:
           script: |
             echo "📦 Compression des fichiers..."
             tar -czf project-files.tar.gz Dockerfile docker-compose.yml generate-env.sh docker-entrypoint.sh docker/
-            
-            echo "📤 Transfert des fichiers..."
+
+            echo "📤 Transfert des fichiers vers le serveur..."
             scp -P 22 project-files.tar.gz ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
-            echo "📂 Décompression sur le serveur..."
+            echo "📂 Décompression de l'archive dans le dossier app..."
             ssh ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} "
               cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/ && \
               tar -xzf project-files.tar.gz && \
               rm project-files.tar.gz && \
-              echo '✅ Fichiers décompressés.'
+              echo '✅ Fichiers décompressés dans /app.'
             "
 
             echo "✅ Transfert et décompression terminés."
