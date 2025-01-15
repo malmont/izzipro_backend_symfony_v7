@@ -46,7 +46,12 @@ jobs:
           username: ${{ secrets.CLIENT1_SERVER_USER }}
           password: ${{ secrets.CLIENT1_SERVER_PASSWORD }}
           script: |
-            mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+            echo "📂 Création du dossier app si nécessaire..."
+            sudo mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+            echo "🔒 Attribution des droits au dossier..."
+            sudo chown -R $USER:$USER /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+            sudo chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+            echo "✅ Dossier prêt avec les bonnes permissions."
 
       # 📤 Copier tous les fichiers nécessaires sur le serveur
       - name: 📤 Copy Project Files to Server
