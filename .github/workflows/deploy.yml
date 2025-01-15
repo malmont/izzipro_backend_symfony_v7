@@ -52,12 +52,8 @@ jobs:
         run: |
           echo "📂 Création du dossier app si nécessaire..."
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
-            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chown -R ${{
-            secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{
-            secrets.CLIENT1_SERVER_USER }}/app && chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
+            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
           echo "✅ Dossier prêt avec les bonnes permissions."
-
-
 
       # 🔄 Synchronisation des fichiers avec rsync
       - name: 🔄 Synchroniser les fichiers avec rsync
@@ -66,27 +62,30 @@ jobs:
           rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
             Dockerfile \
             docker-compose.yml \
-            generate-env.sh \
             docker-entrypoint.sh \
             docker/ \
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
 
-
-          # 🔄 Génération du fichier .env
-      - name: 🔄 Générer le fichier .env sur le serveur
+      # 🔄 Création directe du fichier .env
+      - name: 🔄 Générer le fichier .env directement
         run: |
-          echo "🔄 Attribution des droits d'exécution au script generate-env.sh..."
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
-            ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
-            "chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/generate-env.sh"
-
-          echo "🔄 Génération du fichier .env..."
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
-            ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
-            "cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app && bash generate-env.sh"
-
-          echo "✅ Fichier .env généré."
+          echo "📄 Création du fichier .env..."
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} 
+            # Indentez le bloc ici
+            << 'EOF'
+            cat > /home/${{ secrets.CLIENT1_SERVER_USER }}/app/.env << 'EOL'
+            POSTGRES_USER=${{ secrets.DB_USER }}
+            POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
+            POSTGRES_DB=${{ secrets.DB_NAME }}
+            POSTGRES_HOST=${{ secrets.DB_HOST }}
+            POSTGRES_PORT=${{ secrets.DB_PORT }}
+            APP_ENV=prod
+            APP_SECRET=${{ secrets.APP_SECRET }}
+            DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@${{ secrets.DB_HOST }}:${{ secrets.DB_PORT }}/${{ secrets.DB_NAME }}
+            EOL
+            EOF
+            echo "✅ Fichier .env généré."
 
       # 🚀 Déploiement des conteneurs
       - name: 🚀 Deploy to Server
