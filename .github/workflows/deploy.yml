@@ -53,29 +53,33 @@ jobs:
             sudo chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app
             echo "✅ Dossier prêt avec les bonnes permissions."
 
-      # 📦 Compression et transfert des fichiers (optimisé)
+      # 📦 Compression et transfert des fichiers
       - name: 📤 Compress and Copy Project Files to Server
+        run: |
+          echo "📦 Compression des fichiers en local..."
+          tar -czf project-files.tar.gz Dockerfile docker-compose.yml generate-env.sh docker-entrypoint.sh docker/
+
+          echo "📤 Transfert de l'archive vers le serveur dans /app..."
+          scp -P 22 project-files.tar.gz ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
+
+      - name: 📂 Décompression de l'archive sur le serveur
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.CLIENT1_SERVER_IP }}
           username: ${{ secrets.CLIENT1_SERVER_USER }}
           password: ${{ secrets.CLIENT1_SERVER_PASSWORD }}
+          port: 22
           script: |
-            echo "📦 Compression des fichiers..."
-            tar -czf project-files.tar.gz Dockerfile docker-compose.yml generate-env.sh docker-entrypoint.sh docker/
+            echo "📂 Déplacement dans le dossier app..."
+            cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
-            echo "📤 Transfert des fichiers vers le serveur..."
-            scp -P 22 project-files.tar.gz ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
+            echo "📦 Décompression de l'archive..."
+            tar -xzf project-files.tar.gz
 
-            echo "📂 Décompression de l'archive dans le dossier app..."
-            ssh ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} "
-              cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/ && \
-              tar -xzf project-files.tar.gz && \
-              rm project-files.tar.gz && \
-              echo '✅ Fichiers décompressés dans /app.'
-            "
+            echo "🗑️ Suppression de l'archive après extraction..."
+            rm project-files.tar.gz
 
-            echo "✅ Transfert et décompression terminés."
+            echo "✅ Décompression terminée."
 
       # 🚀 Déploiement des conteneurs
       - name: 🚀 Deploy to Server
