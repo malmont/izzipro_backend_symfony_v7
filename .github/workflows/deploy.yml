@@ -38,7 +38,7 @@ jobs:
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
 
-      # 🛠️ Création du dossier de déploiement si absent
+      # 🛠️ Création du dossier de déploiement avec permissions
       - name: 🛠️ Create app directory on server
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -53,24 +53,26 @@ jobs:
             sudo chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app
             echo "✅ Dossier prêt avec les bonnes permissions."
 
-      # 📤 Copier tous les fichiers nécessaires sur le serveur
-      - name: 📤 Copy Project Files to Server
-        uses: appleboy/scp-action@v0.1.1
+      # 📦 Compression et transfert des fichiers (optimisé)
+      - name: 📤 Compress and Copy Project Files to Server
+        uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.CLIENT1_SERVER_IP }}
           username: ${{ secrets.CLIENT1_SERVER_USER }}
           password: ${{ secrets.CLIENT1_SERVER_PASSWORD }}
-          source: |
-            Dockerfile
-            docker-compose.yml
-            generate-env.sh
-            docker-entrypoint.sh
-            docker/nginx/nginx.conf
-            docker/db/init.sql
-          target: /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
-          debug: true
+          script: |
+            echo "📦 Compression des fichiers..."
+            tar -czf project-files.tar.gz Dockerfile docker-compose.yml generate-env.sh docker-entrypoint.sh docker/
+            
+            echo "📤 Transfert des fichiers..."
+            scp -P 22 project-files.tar.gz ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
-      # 🚀 Déploiement sur le serveur
+            echo "📂 Décompression sur le serveur..."
+            ssh ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} "cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app && tar -xzf project-files.tar.gz && rm project-files.tar.gz"
+
+            echo "✅ Transfert terminé."
+
+      # 🚀 Déploiement des conteneurs
       - name: 🚀 Deploy to Server
         uses: appleboy/ssh-action@v1.0.0
         with:
