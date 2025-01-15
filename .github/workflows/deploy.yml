@@ -41,14 +41,14 @@ jobs:
       # 🔑 Ajouter la clé SSH du serveur distant à known_hosts
       - name: 🔑 Add SSH Host to known_hosts
         run: |
-           mkdir -p ~/.ssh
-            if ! ssh-keygen -F ${{ secrets.CLIENT1_SERVER_IP }} > /dev/null; then
-              echo "🔑 Clé SSH absente, ajout en cours..."
-              ssh-keyscan -H ${{ secrets.CLIENT1_SERVER_IP }} >> ~/.ssh/known_hosts
-              echo "✅ Clé SSH ajoutée."
-            else
-              echo "✅ Clé SSH déjà présente dans known_hosts."
-            fi
+          mkdir -p ~/.ssh
+          if ! ssh-keygen -F ${{ secrets.CLIENT1_SERVER_IP }} > /dev/null; then
+            echo "🔑 Clé SSH absente, ajout en cours..."
+            ssh-keyscan -H ${{ secrets.CLIENT1_SERVER_IP }} >> ~/.ssh/known_hosts
+            echo "✅ Clé SSH ajoutée."
+          else
+            echo "✅ Clé SSH déjà présente dans known_hosts."
+          fi
 
       # 🛠️ Création du dossier de déploiement avec permissions
       - name: 🛠️ Create app directory on server
@@ -65,34 +65,23 @@ jobs:
             sudo chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app
             echo "✅ Dossier prêt avec les bonnes permissions."
 
-      # 📦 Compression et transfert des fichiers
-      - name: 📤 Compress and Copy Project Files to Server
-        run: |
-          echo "📦 Compression des fichiers en local..."
-          tar -czf project-files.tar.gz Dockerfile docker-compose.yml generate-env.sh docker-entrypoint.sh docker/
-
-          echo "📤 Transfert de l'archive vers le serveur dans /app..."
-          scp -P 22 project-files.tar.gz ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
-
-      # 📂 Décompression de l'archive sur le serveur
-      - name: 📂 Décompression de l'archive sur le serveur
+      # 🔄 Synchronisation des fichiers avec rsync
+      - name: 🔄 Synchroniser les fichiers avec rsync
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.CLIENT1_SERVER_IP }}
           username: ${{ secrets.CLIENT1_SERVER_USER }}
           password: ${{ secrets.CLIENT1_SERVER_PASSWORD }}
-          port: 22
           script: |
-            echo "📂 Déplacement dans le dossier app..."
-            cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
-
-            echo "📦 Décompression de l'archive..."
-            tar -xzf project-files.tar.gz
-
-            echo "🗑️ Suppression de l'archive après extraction..."
-            rm project-files.tar.gz
-
-            echo "✅ Décompression terminée."
+            echo "📤 Synchronisation des fichiers avec rsync..."
+            rsync -avz --delete \
+              Dockerfile \
+              docker-compose.yml \
+              generate-env.sh \
+              docker-entrypoint.sh \
+              docker/ \
+              ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
+            echo "✅ Synchronisation terminée."
 
       # 🚀 Déploiement des conteneurs
       - name: 🚀 Deploy to Server
