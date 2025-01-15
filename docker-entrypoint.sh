@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-# ✅ Génération du fichier .env si nécessaire
-if [ ! -f ".env" ]; then
-  echo "📄 Génération du fichier .env..."
-  bash generate-env.sh
-fi
+# # ✅ Génération du fichier .env si nécessaire
+# if [ ! -f ".env" ]; then
+#   echo "📄 Génération du fichier .env..."
+#   bash generate-env.sh
+# fi
 
 # ✅ Installation des dépendances
 if [ ! -d "vendor" ]; then

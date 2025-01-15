@@ -55,11 +55,28 @@ jobs:
             "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
           echo "✅ Dossier prêt avec les bonnes permissions."
 
-      # 🔄 Synchronisation des fichiers avec rsync
+      # 🔄 Générer le fichier .env en local et le transférer
+      - name: 🔄 Générer le fichier .env localement
+        run: |
+          echo "📄 Génération du fichier .env..."
+          cat <<EOL > .env
+          POSTGRES_USER=${{ secrets.DB_USER }}
+          POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
+          POSTGRES_DB=${{ secrets.DB_NAME }}
+          POSTGRES_HOST=${{ secrets.DB_HOST }}
+          POSTGRES_PORT=${{ secrets.DB_PORT }}
+          APP_ENV=prod
+          APP_SECRET=${{ secrets.APP_SECRET }}
+          DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@${{ secrets.DB_HOST }}:${{ secrets.DB_PORT }}/${{ secrets.DB_NAME }}
+          EOL
+          echo "✅ Fichier .env généré localement."
+
+      # 🔄 Synchronisation des fichiers avec rsync (y compris le .env)
       - name: 🔄 Synchroniser les fichiers avec rsync
         run: |
           echo "📤 Synchronisation des fichiers avec rsync..."
           rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            .env \
             Dockerfile \
             docker-compose.yml \
             docker-entrypoint.sh \
@@ -68,35 +85,16 @@ jobs:
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
 
-      # 🔄 Génération du fichier .env sur le serveur AVANT Docker Compose
-      - name: 🔄 Générer le fichier .env sur le serveur
-        run: |
-          echo "📄 Génération du fichier .env avant lancement des conteneurs..."
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << EOF
-            cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
-
-            echo "⚙️ Attribution des droits au script generate-env.sh..."
-            chmod +x generate-env.sh
-
-            echo "⚙️ Exécution de generate-env.sh pour créer le .env..."
-            ./generate-env.sh
-
-            echo "✅ Fichier .env généré avec succès."
-            chmod 644 .env
-          EOF
-
-        
-
       # 🚀 Déploiement des conteneurs
       - name: 🚀 Deploy to Server
         run: |
           echo "📂 Déploiement sur le serveur..."
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
-            
+
             echo "🔄 Pull de l'image Docker depuis GHCR..."
             docker pull ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
-            
+
             echo "🧹 Nettoyage des anciens conteneurs..."
             docker-compose down || true
 
@@ -108,9 +106,6 @@ jobs:
 
             echo "⚙️ Attribution des permissions d'exécution au script d'initialisation..."
             chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/docker-entrypoint.sh
-
-            echo "⚙️ Attribution des permissions d'exécution au script d'initialisation..."
-            chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/generate-env.sh
 
             echo "⚙️ Exécution du script d'initialisation dans le conteneur Symfony..."
             docker exec symfony_app bash /home/app/docker-entrypoint.sh
