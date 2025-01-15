@@ -72,17 +72,39 @@ jobs:
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
 
+
+          # 🔄 Génération du fichier .env
+      - name: 🔄 Générer le fichier .env sur le serveur
+        run: |
+          echo "🔄 Génération du fichier .env..."
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
+            "cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app && bash generate-env.sh"
+          echo "✅ Fichier .env généré."
+
       # 🚀 Déploiement des conteneurs
       - name: 🚀 Deploy to Server
         run: |
           echo "📂 Déploiement sur le serveur..."
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
+            
+            echo "🔄 Pull de l'image Docker depuis GHCR..."
             docker pull ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
+            
+            echo "🧹 Nettoyage des anciens conteneurs..."
             docker-compose down || true
+
+            echo "🚀 Lancement des conteneurs avec Docker Compose..."
             docker-compose up -d --build
-            sleep 20
+
+            echo "⏳ Attente de la disponibilité des services..."
+            sleep 20  # Laisse PostgreSQL démarrer
+
+            echo "⚙️ Attribution des permissions d'exécution au script d'initialisation..."
             chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/docker-entrypoint.sh
+
+            echo "⚙️ Exécution du script d'initialisation dans le conteneur Symfony..."
             docker exec symfony_app bash /home/app/docker-entrypoint.sh
+
+            echo "✅ Déploiement terminé."
           EOF
-          echo "✅ Déploiement terminé."
