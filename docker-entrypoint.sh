@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-APP_DIR="/home/${CLIENT1_SERVER_USER}/app"
+APP_DIR="/home/${USER}/app"
 
 # ✅ Génération du fichier .env si nécessaire
 if [ ! -f "$APP_DIR/.env" ]; then
