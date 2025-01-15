@@ -8,10 +8,11 @@ services:
       dockerfile: Dockerfile
     container_name: symfony_app
     working_dir: /var/www
-    env_file:
+    env_file:a  
       - .env
     volumes:
       - ./src:/var/www
+    user: "${UID}:${GID}"  # 👈 Ajout de l'utilisateur hôte
     networks:
       - symfony
     depends_on:
