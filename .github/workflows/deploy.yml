@@ -68,9 +68,14 @@ jobs:
             scp -P 22 project-files.tar.gz ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
             echo "📂 Décompression sur le serveur..."
-            ssh ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} "cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app && tar -xzf project-files.tar.gz && rm project-files.tar.gz"
+            ssh ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} "
+              cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/ && \
+              tar -xzf project-files.tar.gz && \
+              rm project-files.tar.gz && \
+              echo '✅ Fichiers décompressés.'
+            "
 
-            echo "✅ Transfert terminé."
+            echo "✅ Transfert et décompression terminés."
 
       # 🚀 Déploiement des conteneurs
       - name: 🚀 Deploy to Server
