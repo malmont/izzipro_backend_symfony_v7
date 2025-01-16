@@ -3,21 +3,19 @@ version: '3.8'
 services:
   # Symfony (PHP)
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/symfony-backend:latest
     container_name: symfony_app
     working_dir: /var/www
     env_file:
       - .env
     volumes:
-      - ./src:/var/www/src
-      - ./vendor:/var/www/vendor
-      - ./public:/var/www/public
+      - var_cache:/var/www/var/cache   # ✅ Données dynamiques
+      - var_log:/var/www/var/log       # ✅ Données dynamiques
     networks:
       - symfony
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost"]
@@ -34,7 +32,6 @@ services:
       - .env
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     networks:
@@ -52,15 +49,19 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./:/var/www  # 📦 Montage du projet
+      - ./public:/var/www/public  # ✅ Nginx n'a besoin que de public
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     networks:
       - symfony
     restart: always
+
 volumes:
   db_data:
+  var_cache:
+  var_log:
 
 networks:
   symfony:

@@ -31,26 +31,19 @@ WORKDIR /var/www
 # 📄 Copier uniquement composer.json et composer.lock pour profiter du cache Docker
 COPY composer.json composer.lock ./
 
-# 📥 Installer les dépendances sans exécuter les scripts
-RUN composer install --no-scripts --no-autoloader --prefer-dist --no-progress
+# 📥 Installer les dépendances avec autoload optimisé
+RUN composer install --prefer-dist --no-dev --optimize-autoloader --no-progress --no-scripts
 
 # 📂 Copier les fichiers restants du projet
 COPY . .
-
-# 🚀 Générer l'autoloader optimisé
-RUN composer dump-autoload --optimize
-
-# 🛠️ Copier et rendre exécutables les scripts
-COPY generate-env.sh /usr/local/bin/generate-env.sh
-RUN chmod +x /usr/local/bin/generate-env.sh
-
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # 📁 Créer le dossier var avec les bonnes permissions
 RUN mkdir -p /var/www/var \
     && chown -R www-data:www-data /var/www \
     && chmod -R 755 /var/www
 
-# 🚀 Lancer le script d'initialisation au démarrage
-CMD ["/usr/local/bin/docker-entrypoint.sh"]
+# ✅ Exécuter avec un utilisateur non-root
+USER www-data
+
+# 🚀 Lancer PHP-FPM directement
+CMD ["php-fpm"]

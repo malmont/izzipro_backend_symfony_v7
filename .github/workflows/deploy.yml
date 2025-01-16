@@ -1,4 +1,4 @@
-name: Build and Deploy Docker Image to GHCR and Servers
+name: Build and Deploy Docker Image to GHCR and Server
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 permissions:
-  contents: read  # Autoriser la lecture du dépôt
+  contents: read
 
 jobs:
   build-and-deploy:
@@ -17,30 +17,22 @@ jobs:
         client: [CLIENT1]  # Déploiement multi-serveurs
 
     steps:
-      # 🔑 Configuration de la clé SSH
+      # 🔑 1️⃣ Configuration de la clé SSH
       - name: 🔑 Configure SSH Key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -t ed25519 -H ${{ secrets.CLIENT1_SERVER_IP }} >> ~/.ssh/known_hosts
-          echo "✅ Clé SSH ED25519 configurée."
+          echo "✅ Clé SSH configurée."
 
-      # 📥 Checkout complet du repository
+      # 📥 2️⃣ Checkout complet du repository
       - name: 📥 Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Clone complet du dépôt
+          fetch-depth: 0
 
-      # 🔍 Vérifier la présence des fichiers du dépôt
-      - name: 🔍 Vérifier les fichiers clonés
-        run: |
-          echo "📁 Liste des fichiers après le checkout :"
-          ls -al
-          echo "📄 Vérification de composer.json :"
-          ls -al composer.json || echo "❌ Fichier composer.json manquant"
-
-      # 🔄 Génération du fichier .env AVANT la synchronisation
+      # 🔄 3️⃣ Générer le fichier .env
       - name: 🔄 Générer le fichier .env localement
         run: |
           echo "📄 Génération du fichier .env..."
@@ -54,29 +46,19 @@ jobs:
           APP_SECRET=${{ secrets.APP_SECRET }}
           DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@${{ secrets.DB_HOST }}:${{ secrets.DB_PORT }}/${{ secrets.DB_NAME }}
           EOL
-          echo "✅ Fichier .env généré localement."
+          echo "✅ Fichier .env généré."
 
-      # 🛠️ Création du dossier de déploiement sur le serveur
-      - name: 🛠️ Create app directory on server
+      # 🔄 4️⃣ Synchronisation des fichiers nécessaires (.env et docker-compose.yml)
+      - name: 🔄 Synchroniser les fichiers nécessaires
         run: |
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
-            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
-
-      # 🔄 Synchronisation des fichiers avec rsync APRÈS la génération du .env
-      - name: 🔄 Synchroniser les fichiers avec rsync
-        run: |
-          echo "📤 Synchronisation des fichiers avec rsync..."
+          echo "📤 Synchronisation des fichiers..."
           rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
             .env \
-            Dockerfile \
             docker-compose.yml \
-            docker-entrypoint.sh \
-            generate-env.sh \
-            docker/ \
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
 
-      # 🔑 Connexion à GHCR
+      # 🔑 5️⃣ Connexion à GHCR
       - name: 🔑 Login to GHCR
         uses: docker/login-action@v2
         with:
@@ -84,36 +66,38 @@ jobs:
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      # 🏗️ Construction de l'image Docker avec le .env inclus
-      - name: 🏗️ Build Docker Image with Tags
+      # 🏗️ 6️⃣ Construction de l'image Docker (uniquement sur GitHub Actions)
+      - name: 🏗️ Build Docker Image
         run: |
-          echo "📦 Démarrage du build Docker"
-          docker build --build-arg APP_ENV=prod -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ./
-          docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
-          echo "✅ Build Docker terminé"
+          echo "📦 Construction de l'image Docker..."
+          docker build -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} .
+          docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
+          echo "✅ Construction terminée."
 
-      # 📦 Push de l'image Docker
+      # 📦 7️⃣ Push de l'image Docker vers GHCR
       - name: 📦 Push Docker Image to GHCR
         run: |
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
-          echo "✅ Image Docker poussée vers GHCR"
+          echo "✅ Image Docker poussée vers GHCR."
 
-      # 🚀 Déploiement des conteneurs Docker
-      - name: 🚀 Deploy to Server
+      # 🚀 8️⃣ Déploiement sans rebuild
+      - name: 🚀 Déployer les conteneurs
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
-            docker pull ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
-            docker-compose down || true
-            docker-compose up -d --build
-            sleep 20
-            chmod +x /home/${{ secrets.CLIENT1_SERVER_USER }}/app/docker-entrypoint.sh
-            docker exec symfony_app bash /home/app/docker-entrypoint.sh
+
+            echo "📥 Pull de la dernière image..."
+            docker-compose pull  # ✅ Pull sans rebuild
+
+            echo "🚀 Lancement des conteneurs..."
+            docker-compose up -d  # ✅ PAS de --build
+
+            echo "✅ Déploiement terminé."
           EOF
 
-      # ⚙️ Exécution des commandes Symfony
-      - name: ⚙️ Lancer les commandes Symfony
+      # ⚙️ 9️⃣ Commandes Symfony post-déploiement
+      - name: ⚙️ Exécuter les commandes Symfony
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             docker exec symfony_app php bin/console cache:clear
