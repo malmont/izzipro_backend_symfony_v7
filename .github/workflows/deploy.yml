@@ -27,7 +27,7 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v3
 
-      # 🔄 Génération du fichier .env AVANT le build
+      # 🔄 Génération du fichier .env AVANT la synchronisation
       - name: 🔄 Générer le fichier .env localement
         run: |
           echo "📄 Génération du fichier .env..."
@@ -42,6 +42,20 @@ jobs:
           DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@${{ secrets.DB_HOST }}:${{ secrets.DB_PORT }}/${{ secrets.DB_NAME }}
           EOL
           echo "✅ Fichier .env généré localement."
+
+      # 🔄 Synchronisation des fichiers avec rsync APRÈS la génération du .env
+      - name: 🔄 Synchroniser les fichiers avec rsync
+        run: |
+          echo "📤 Synchronisation des fichiers avec rsync..."
+          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            .env \
+            Dockerfile \
+            docker-compose.yml \
+            docker-entrypoint.sh \
+            generate-env.sh \
+            docker/ \
+            ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
+          echo "✅ Synchronisation terminée."
 
       # 🔑 Connexion à GHCR
       - name: 🔑 Login to GHCR
@@ -68,18 +82,6 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
             "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
-
-      # 🔄 Synchronisation des fichiers avec rsync
-      - name: 🔄 Synchroniser les fichiers avec rsync
-        run: |
-          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
-            .env \
-            Dockerfile \
-            docker-compose.yml \
-            docker-entrypoint.sh \
-            generate-env.sh \
-            docker/ \
-            ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
       # 🚀 Déploiement des conteneurs Docker
       - name: 🚀 Deploy to Server
