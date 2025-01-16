@@ -12,7 +12,6 @@ services:
       - .env
     volumes:
       - ./:/var/www  # ✅ Correction ici
-    user: "${UID}:${GID}"
     networks:
       - symfony
     depends_on:
