@@ -23,8 +23,8 @@ WORKDIR /var/www
 # ✅ Copier le projet Symfony dans /var/www
 COPY . .
 
-# ✅ Copier le fichier .env avant l'installation de composer
-COPY .env.test /var/www/.env
+# ✅ Copier .env.test uniquement si .env n'existe pas
+RUN if [ ! -f /var/www/.env ]; then cp /var/www/.env.test /var/www/.env; fi
 
 # ✅ Variable d'environnement factice pour le build
 ARG DATABASE_URL="postgresql://user:password@localhost:5432/db"
