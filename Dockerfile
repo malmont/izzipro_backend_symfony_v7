@@ -23,6 +23,9 @@ WORKDIR /var/www
 # ✅ Copier le projet Symfony dans /var/www
 COPY . .
 
+# ✅ Copier le fichier .env avant l'installation de composer
+COPY .env /var/www/.env
+
 # ✅ Installer les dépendances Symfony
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader
 
