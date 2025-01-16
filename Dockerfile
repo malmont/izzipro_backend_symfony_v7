@@ -26,8 +26,13 @@ COPY . .
 # ✅ Copier le fichier .env avant l'installation de composer
 COPY .env.test /var/www/.env
 
-# ✅ Installer les dépendances Symfony
-RUN composer install --no-interaction --prefer-dist --optimize-autoloader
+# ✅ Variable d'environnement factice pour le build
+ARG DATABASE_URL="postgresql://user:password@localhost:5432/db"
+
+ENV DATABASE_URL=${DATABASE_URL}
+
+# ✅ Installer les dépendances Symfony sans exécuter les scripts (dont cache:clear)
+RUN composer install --no-scripts --no-interaction --prefer-dist --optimize-autoloader
 
 # ✅ Fixer les permissions sur var et vendor
 RUN mkdir -p /var/www/var \

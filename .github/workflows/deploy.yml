@@ -112,3 +112,17 @@ jobs:
 
             echo "✅ Déploiement terminé."
           EOF
+
+          # 🚀 Exécuter les commandes Symfony après déploiement
+      - name: ⚙️ Lancer les commandes Symfony
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+            echo "🧹 Nettoyage du cache Symfony..."
+            docker exec symfony_app php bin/console cache:clear
+
+            echo "📦 Application des migrations Doctrine..."
+            docker exec symfony_app php bin/console doctrine:migrations:migrate --no-interaction
+
+            echo "✅ Commandes Symfony exécutées avec succès."
+          EOF
+
