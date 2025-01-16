@@ -17,16 +17,19 @@ RUN echo "memory_limit=-1" > /usr/local/etc/php/conf.d/memory-limit.ini
 # Installer Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Définir le dossier de travail
-WORKDIR /home/app
+# ✅ Définir le dossier de travail cohérent avec docker-compose
+WORKDIR /var/www
 
-# Copier les fichiers du projet
-COPY . /home/app/
+# ✅ Copier le projet Symfony dans /var/www
+COPY . /var/www/
 
-# ✅ Créer le dossier var
-RUN mkdir -p /home/app/var \
-    && chown -R www-data:www-data /home/app/var \
-    && chmod -R 775 /home/app/var
+# ✅ Installer les dépendances Symfony
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader
 
-# # ✅ Lancer le script d'initialisation
-# CMD ["bash", "/home/app/docker-entrypoint.sh"]
+# ✅ Fixer les permissions sur var et vendor
+RUN mkdir -p var \
+    && chown -R www-data:www-data var vendor \
+    && chmod -R 775 var vendor
+
+# ✅ Lancer le script d'initialisation si besoin
+CMD ["php-fpm"]
