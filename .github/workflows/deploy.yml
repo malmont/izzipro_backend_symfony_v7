@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read  # Autoriser la lecture du dépôt
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -23,9 +26,19 @@ jobs:
           ssh-keyscan -t ed25519 -H ${{ secrets.CLIENT1_SERVER_IP }} >> ~/.ssh/known_hosts
           echo "✅ Clé SSH ED25519 configurée."
 
-      # 📥 Checkout du repository
+      # 📥 Checkout complet du repository
       - name: 📥 Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Clone complet du dépôt
+
+      # 🔍 Vérifier la présence des fichiers du dépôt
+      - name: 🔍 Vérifier les fichiers clonés
+        run: |
+          echo "📁 Liste des fichiers après le checkout :"
+          ls -al
+          echo "📄 Vérification de composer.json :"
+          ls -al composer.json || echo "❌ Fichier composer.json manquant"
 
       # 🔄 Génération du fichier .env AVANT la synchronisation
       - name: 🔄 Générer le fichier .env localement
@@ -42,6 +55,12 @@ jobs:
           DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@${{ secrets.DB_HOST }}:${{ secrets.DB_PORT }}/${{ secrets.DB_NAME }}
           EOL
           echo "✅ Fichier .env généré localement."
+
+      # 🛠️ Création du dossier de déploiement sur le serveur
+      - name: 🛠️ Create app directory on server
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
+            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
 
       # 🔄 Synchronisation des fichiers avec rsync APRÈS la génération du .env
       - name: 🔄 Synchroniser les fichiers avec rsync
@@ -68,20 +87,17 @@ jobs:
       # 🏗️ Construction de l'image Docker avec le .env inclus
       - name: 🏗️ Build Docker Image with Tags
         run: |
-          docker build --build-arg APP_ENV=prod -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} .
+          echo "📦 Démarrage du build Docker"
+          docker build --build-arg APP_ENV=prod -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ./
           docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
+          echo "✅ Build Docker terminé"
 
       # 📦 Push de l'image Docker
       - name: 📦 Push Docker Image to GHCR
         run: |
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
-
-      # 🛠️ Création du dossier de déploiement sur le serveur
-      - name: 🛠️ Create app directory on server
-        run: |
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
-            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
+          echo "✅ Image Docker poussée vers GHCR"
 
       # 🚀 Déploiement des conteneurs Docker
       - name: 🚀 Deploy to Server

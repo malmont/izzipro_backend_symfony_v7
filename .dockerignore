@@ -10,7 +10,7 @@ var/
 !var/log
 
 # Ignorer les configurations locales
-.env
+# .env
 .env.local
 docker-compose.override.yml
 
