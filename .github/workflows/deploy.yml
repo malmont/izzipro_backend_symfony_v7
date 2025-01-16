@@ -31,8 +31,16 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          
+      # 🛠️ Création du dossier de déploiement avec permissions
+      - name: 🛠️ Create app directory on server
+        run: |
+          echo "📂 Création du dossier app si nécessaire..."
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
+            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
+          echo "✅ Dossier prêt avec les bonnes permissions."
 
-      # 🔄 3️⃣ Générer le fichier .env
+      # 🔄 3️⃣ Générer le fichier .env avec Messenger DSN
       - name: 🔄 Générer le fichier .env localement
         run: |
           echo "📄 Génération du fichier .env..."
@@ -45,6 +53,10 @@ jobs:
           APP_ENV=prod
           APP_SECRET=${{ secrets.APP_SECRET }}
           DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@${{ secrets.DB_HOST }}:${{ secrets.DB_PORT }}/${{ secrets.DB_NAME }}
+          
+          ###> symfony/messenger ###
+          MESSENGER_TRANSPORT_DSN=doctrine://default
+          ###< symfony/messenger ###
           EOL
           echo "✅ Fichier .env généré."
 
@@ -55,6 +67,7 @@ jobs:
           rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
             .env \
             docker-compose.yml \
+            nginx/nginx.conf \  # ✅ Ajout du fichier nginx.conf
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
 
@@ -95,6 +108,15 @@ jobs:
             docker-compose up -d  # ✅ PAS de --build
 
             echo "✅ Déploiement terminé."
+          EOF
+
+      # 🛠️ Fixer les permissions des dossiers Symfony
+      - name: 🛠️ Fixer les permissions des dossiers Symfony
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+            docker exec symfony_app mkdir -p /var/www/var/cache /var/www/var/log
+            docker exec symfony_app chown -R www-data:www-data /var/www/var
+            docker exec symfony_app chmod -R 775 /var/www/var
           EOF
 
       # ⚙️ 9️⃣ Commandes Symfony post-déploiement
