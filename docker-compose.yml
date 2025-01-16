@@ -8,9 +8,6 @@ services:
     working_dir: /var/www
     env_file:
       - .env
-    volumes:
-      - var_cache:/var/www/var/cache   # ✅ Données dynamiques
-      - var_log:/var/www/var/log       # ✅ Données dynamiques
     networks:
       - symfony
     depends_on:
