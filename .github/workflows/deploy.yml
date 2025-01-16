@@ -66,20 +66,21 @@ jobs:
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      # 🏗️ 6️⃣ Construction de l'image Docker (uniquement sur GitHub Actions)
-      - name: 🏗️ Build Docker Image
+        # 🏗️ Construction de l'image Docker 
+      - name: 🏗️ Build Docker Image with Tags
         run: |
-          echo "📦 Construction de l'image Docker..."
-          docker build -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} .
-          docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
-          echo "✅ Construction terminée."
+          echo "📦 Démarrage du build Docker"
+          docker build --build-arg APP_ENV=prod -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ./
+          docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
+          echo "✅ Build Docker terminé"
 
-      # 📦 7️⃣ Push de l'image Docker vers GHCR
+      # 📦 Push de l'image Docker
       - name: 📦 Push Docker Image to GHCR
         run: |
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
-          echo "✅ Image Docker poussée vers GHCR."
+          echo "✅ Image Docker poussée vers GHCR"
+
 
       # 🚀 8️⃣ Déploiement sans rebuild
       - name: 🚀 Déployer les conteneurs
