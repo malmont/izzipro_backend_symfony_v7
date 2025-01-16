@@ -21,15 +21,15 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 
 # ✅ Copier le projet Symfony dans /var/www
-COPY . /var/www/
+COPY . .
 
 # ✅ Installer les dépendances Symfony
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader
 
 # ✅ Fixer les permissions sur var et vendor
-RUN mkdir -p var \
-    && chown -R www-data:www-data var vendor \
-    && chmod -R 775 var vendor
+RUN mkdir -p /var/www/var \
+    && chown -R www-data:www-data /var/www/var /var/www/vendor \
+    && chmod -R 775 /var/www/var /var/www/vendor
 
 # ✅ Lancer le script d'initialisation si besoin
 CMD ["php-fpm"]
