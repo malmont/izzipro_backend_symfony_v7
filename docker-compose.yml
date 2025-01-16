@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # Symfony (PHP)
   app:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/symfony-backend:latest
+    image: image: ghcr.io/malmont/symfony-backend:latest
     container_name: symfony_app
     working_dir: /var/www
     env_file:
