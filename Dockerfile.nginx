@@ -1,0 +1,20 @@
+# Utilise l'image officielle de Nginx
+FROM nginx:latest
+
+# Supprime la configuration par défaut
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copie la configuration personnalisée de Nginx
+COPY dokcer/nginx/nginx.conf /etc/nginx/nginx.conf
+
+# Copie les fichiers statiques du projet
+COPY public /var/www/public
+
+# Permissions pour le dossier public
+RUN chmod -R 755 /var/www/public && chown -R www-data:www-data /var/www/public
+
+# Expose le port 80
+EXPOSE 80
+
+# Commande pour démarrer Nginx
+CMD ["nginx", "-g", "daemon off;"]

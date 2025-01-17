@@ -32,24 +32,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 🛠️ Create app and public directories on server
+      # 🛠️ Création du dossier de déploiement avec permissions
+      - name: 🛠️ Create app directory on server
         run: |
-          echo "📂 Création des dossiers app et public si nécessaire..."
-          
-          # Création du dossier app
+          echo "📂 Création du dossier app si nécessaire..."
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
-            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && \
-              chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app && \
-              chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
-              
-          # Création du dossier public
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
-            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public && \
-              chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public && \
-              chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public"
-      
-          echo "✅ Dossiers app et public prêts avec les bonnes permissions."
-        
+            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
+          echo "✅ Dossier prêt avec les bonnes permissions."
 
       # 🔄 3️⃣ Générer le fichier .env avec Messenger DSN
       - name: 🔄 Générer le fichier .env localement
@@ -71,7 +60,7 @@ jobs:
           EOL
           echo "✅ Fichier .env généré."
 
-      # 🔄 Synchronisation des fichiers avec rsync (y compris le .env et le dossier public)
+      # 🔄 Synchronisation des fichiers avec rsync (y compris le .env)
       - name: 🔄 Synchroniser les fichiers avec rsync
         run: |
           echo "📤 Synchronisation des fichiers avec rsync..."
@@ -82,10 +71,8 @@ jobs:
             docker-entrypoint.sh \
             generate-env.sh \
             docker/ \
-            public/ \   # <-- ✅ Ajout du dossier public
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
-
 
       # 🔑 5️⃣ Connexion à GHCR
       - name: 🔑 Login to GHCR
@@ -95,38 +82,47 @@ jobs:
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-        # 🏗️ Construction de l'image Docker 
-      - name: 🏗️ Build Docker Image with Tags
+        # 🏗️ 7️⃣ Construction des images Docker
+      - name: 🏗️ Build Symfony and Nginx Docker Images
         run: |
-          echo "📦 Démarrage du build Docker"
-          docker build --build-arg APP_ENV=prod -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ./
+          echo "📦 Build de l'image Symfony"
+          docker build --build-arg APP_ENV=prod -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} -f Dockerfile .
           docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
-          echo "✅ Build Docker terminé"
 
-      # 📦 Push de l'image Docker
-      - name: 📦 Push Docker Image to GHCR
+          echo "📦 Build de l'image Nginx"
+          docker build -t ghcr.io/${{ github.repository_owner }}/symfony-nginx:${{ matrix.client }} -f Dockerfile.nginx .
+          docker tag ghcr.io/${{ github.repository_owner }}/symfony-nginx:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-nginx:latest
+          echo "✅ Build terminé."
+
+      # 📦 8️⃣ Push des images Docker
+      - name: 📦 Push Docker Images to GHCR
         run: |
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }}
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
-          echo "✅ Image Docker poussée vers GHCR"
 
+          docker push ghcr.io/${{ github.repository_owner }}/symfony-nginx:${{ matrix.client }}
+          docker push ghcr.io/${{ github.repository_owner }}/symfony-nginx:latest
+          echo "✅ Images Docker poussées vers GHCR."
 
-      # 🚀 8️⃣ Déploiement sans rebuild
+      # 🚀 9️⃣ Déploiement sans rebuild
       - name: 🚀 Déployer les conteneurs
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
-            echo "📥 Pull de la dernière image..."
+            echo "📥 Pull des dernières images..."
             docker-compose pull  # ✅ Pull sans rebuild
 
+            echo "🛑 Arrêt des anciens conteneurs..."
+            docker-compose down
+
             echo "🚀 Lancement des conteneurs..."
-            docker-compose up -d  # ✅ PAS de --build
+            docker-compose up -d
 
             echo "✅ Déploiement terminé."
           EOF
 
-      # 🛠️ Fixer les permissions des dossiers Symfony
+      # 🛠️ 🔟 Fixer les permissions des dossiers Symfony
       - name: 🛠️ Fixer les permissions des dossiers Symfony
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
@@ -135,7 +131,7 @@ jobs:
             docker exec symfony_app chmod -R 775 /var/www/var
           EOF
 
-      # ⚙️ 9️⃣ Commandes Symfony post-déploiement
+      # ⚙️ 🔟 Commandes Symfony post-déploiement
       - name: ⚙️ Exécuter les commandes Symfony
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
