@@ -47,7 +47,6 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./public:/var/www/public  # ✅ Nginx n'a besoin que de public
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
       - app
