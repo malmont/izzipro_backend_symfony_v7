@@ -31,7 +31,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          
+
       # 🛠️ Création du dossier de déploiement avec permissions
       - name: 🛠️ Create app directory on server
         run: |
@@ -60,14 +60,17 @@ jobs:
           EOL
           echo "✅ Fichier .env généré."
 
-      # 🔄 4️⃣ Synchronisation des fichiers nécessaires (.env et docker-compose.yml)
-      - name: 🔄 Synchroniser les fichiers nécessaires
+      # 🔄 Synchronisation des fichiers avec rsync (y compris le .env)
+      - name: 🔄 Synchroniser les fichiers avec rsync
         run: |
-          echo "📤 Synchronisation des fichiers..."
+          echo "📤 Synchronisation des fichiers avec rsync..."
           rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
             .env \
+            Dockerfile \
             docker-compose.yml \
-            nginx/nginx.conf \  # ✅ Ajout du fichier nginx.conf
+            docker-entrypoint.sh \
+            generate-env.sh \
+            docker/ \
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
 
