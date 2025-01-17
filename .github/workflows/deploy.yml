@@ -60,7 +60,7 @@ jobs:
           EOL
           echo "✅ Fichier .env généré."
 
-      # 🔄 Synchronisation des fichiers avec rsync (y compris le .env)
+      # 🔄 Synchronisation des fichiers avec rsync (y compris le .env et le dossier public)
       - name: 🔄 Synchroniser les fichiers avec rsync
         run: |
           echo "📤 Synchronisation des fichiers avec rsync..."
@@ -71,8 +71,10 @@ jobs:
             docker-entrypoint.sh \
             generate-env.sh \
             docker/ \
+            public/ \   # <-- ✅ Ajout du dossier public
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
+
 
       # 🔑 5️⃣ Connexion à GHCR
       - name: 🔑 Login to GHCR
