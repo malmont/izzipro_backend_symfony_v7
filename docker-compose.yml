@@ -50,11 +50,9 @@ services:
       - ./public:/var/www/public  # ✅ Nginx n'a besoin que de public
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     depends_on:
-      app:
-        condition: service_healthy
+      - app
     networks:
       - symfony
-    restart: always
 
 volumes:
   db_data:
