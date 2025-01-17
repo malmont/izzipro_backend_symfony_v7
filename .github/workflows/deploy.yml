@@ -32,13 +32,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 🛠️ Création du dossier de déploiement avec permissions
-      - name: 🛠️ Create app directory on server
+      - name: 🛠️ Create app and public directories on server
         run: |
-          echo "📂 Création du dossier app si nécessaire..."
+          echo "📂 Création des dossiers app et public si nécessaire..."
+          
+          # Création du dossier app
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
-            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app && chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
-          echo "✅ Dossier prêt avec les bonnes permissions."
+            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app && \
+              chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app && \
+              chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app"
+              
+          # Création du dossier public
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
+            "mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public && \
+              chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public && \
+              chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public"
+      
+          echo "✅ Dossiers app et public prêts avec les bonnes permissions."
+        
 
       # 🔄 3️⃣ Générer le fichier .env avec Messenger DSN
       - name: 🔄 Générer le fichier .env localement
