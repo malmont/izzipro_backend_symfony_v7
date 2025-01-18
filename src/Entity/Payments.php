@@ -40,6 +40,33 @@ class Payments
     #[ORM\ManyToOne(inversedBy: 'payments')]
     private ?PaymentType $paymentType = null;
 
+    // 🔑 ID du paiement Square
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $squarePaymentId = null;
+
+    // 🛒 ID de la commande Square
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $squareOrderId = null;
+
+    // 🧾 URL du reçu
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $squareReceiptUrl = null;
+
+    // 📊 Statut du paiement Square
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $squareStatus = null;
+
+    // 💳 Marque de la carte (VISA, MASTERCARD...)
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $squareCardBrand = null;
+
+    // 🔢 4 derniers chiffres de la carte
+    #[ORM\Column(length: 4, nullable: true)]
+    private ?string $squareLast4 = null;
+
+    // 🔒 Niveau de risque
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $squareRiskLevel = null;
 
     public function __construct()
     {
@@ -155,6 +182,84 @@ class Payments
     public function __toString(): string
     {
         return $this->id;
+    }
+
+
+    public function getSquarePaymentId(): ?string
+    {
+        return $this->squarePaymentId;
+    }
+
+    public function setSquarePaymentId(?string $squarePaymentId): self
+    {
+        $this->squarePaymentId = $squarePaymentId;
+        return $this;
+    }
+
+    public function getSquareOrderId(): ?string
+    {
+        return $this->squareOrderId;
+    }
+
+    public function setSquareOrderId(?string $squareOrderId): self
+    {
+        $this->squareOrderId = $squareOrderId;
+        return $this;
+    }
+
+    public function getSquareReceiptUrl(): ?string
+    {
+        return $this->squareReceiptUrl;
+    }
+
+    public function setSquareReceiptUrl(?string $squareReceiptUrl): self
+    {
+        $this->squareReceiptUrl = $squareReceiptUrl;
+        return $this;
+    }
+
+    public function getSquareStatus(): ?string
+    {
+        return $this->squareStatus;
+    }
+
+    public function setSquareStatus(?string $squareStatus): self
+    {
+        $this->squareStatus = $squareStatus;
+        return $this;
+    }
+
+    public function getSquareCardBrand(): ?string
+    {
+        return $this->squareCardBrand;
+    }
+
+    public function setSquareCardBrand(?string $squareCardBrand): self
+    {
+        $this->squareCardBrand = $squareCardBrand;
+        return $this;
+    }
+
+    public function getSquareLast4(): ?string
+    {
+        return $this->squareLast4;
+    }
+
+    public function setSquareLast4(?string $squareLast4): self
+    {
+        $this->squareLast4 = $squareLast4;
+        return $this;
+    }
+
+    public function getSquareRiskLevel(): ?string
+    {
+        return $this->squareRiskLevel;
+    }
+
+    public function setSquareRiskLevel(?string $squareRiskLevel): self
+    {
+        $this->squareRiskLevel = $squareRiskLevel;
+        return $this;
     }
  
 }

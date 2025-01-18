@@ -17,6 +17,7 @@
         "phpdocumentor/reflection-docblock": "^5.3",
         "phpstan/phpdoc-parser": "^1.15",
         "sensio/framework-extra-bundle": "^6.1",
+        "square/square": "39.1.0.20241218",
         "stripe/stripe-php": "^10.12",
         "symfony/asset": "^6.4",
         "symfony/console": "^6.4",

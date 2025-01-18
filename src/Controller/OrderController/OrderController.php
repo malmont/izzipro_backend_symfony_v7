@@ -39,6 +39,10 @@ class OrderController extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
         $user = $this->getUser();
+
+        // 🟢 Récupération des données de paiement Square
+        $paymentData = $data['payment'] ?? [];
+
         $dto = new CreateOrderDTO(
             $user->getId(),
             $data['orderSource'],
@@ -46,7 +50,16 @@ class OrderController extends AbstractController
             $data['addressId'],
             $data['carrierId'],
             $data['typeOrder'],
-            $data['items']
+            $data['items'],
+
+            // 🔑 Infos Square
+            $paymentData['squarePaymentId'] ?? null,
+            $paymentData['squareOrderId'] ?? null,
+            $paymentData['squareReceiptUrl'] ?? null,
+            $paymentData['squareStatus'] ?? null,
+            $paymentData['squareCardBrand'] ?? null,
+            $paymentData['squareLast4'] ?? null,
+            $paymentData['squareRiskLevel'] ?? null
         );
 
         return $this->createOrderUseCase->execute($dto);
@@ -59,6 +72,8 @@ class OrderController extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
         $user = $this->getUser();
+         // 🟢 Récupération des données de paiement Square
+        $paymentData = $data['payment'] ?? [];
         $paymentMethods = array_map(function ($method) {
             return new PaymentMethodDTO($method['type'], $method['amount']);
         }, $data['paymentMethods']);
@@ -70,9 +85,16 @@ class OrderController extends AbstractController
             $data['addressId'],
             $data['carrierId'],
             $data['typeOrder'],
-            $data['items']
+            $data['items'],
+             // 🔑 Infos Square
+         $paymentData['squarePaymentId'] ?? null,
+         $paymentData['squareOrderId'] ?? null,
+         $paymentData['squareReceiptUrl'] ?? null,
+         $paymentData['squareStatus'] ?? null,
+         $paymentData['squareCardBrand'] ?? null,
+         $paymentData['squareLast4'] ?? null,
+         $paymentData['squareRiskLevel'] ?? null
         );
-
         return $this->createOrderUseCase->execute($dto);
     }
 

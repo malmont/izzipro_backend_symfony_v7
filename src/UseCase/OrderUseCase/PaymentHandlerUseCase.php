@@ -9,6 +9,7 @@ use App\Entity\StatusPayment;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Services\EntityRetrieverService;
 use App\Services\OrderService\PaymentService;
+use App\Dto\ICreateOrderDTO; 
 
 class PaymentHandlerUseCase
 {
@@ -26,28 +27,37 @@ class PaymentHandlerUseCase
         $this->paymentService = $paymentService;
     }
 
-    public function handlePayment(Order $order, float $amount, int $paymentMethodId = null, int $paymentTypeId, int $statusPaymentId, \DateTime $paymentDate = null): void
-    {
+    public function handlePayment(
+        Order $order,
+        float $amount,
+        int $paymentMethodId = null,
+        int $paymentTypeId,
+        int $statusPaymentId,
+        \DateTime $paymentDate = null,
+        ICreateOrderDTO $orderDTO = null
+    ): void {
         // Récupération des entités nécessaires
-        $paymentMethod = $paymentMethodId 
-            ? $this->entityRetrieverService->findOrFail(PaymentMethod::class, $paymentMethodId, 'Payment method not found') 
+        $paymentMethod = $paymentMethodId
+            ? $this->entityRetrieverService->findOrFail(PaymentMethod::class, $paymentMethodId, 'Payment method not found')
             : $order->getPayments()->first()->getPaymentMethod();
-        
+    
         $paymentType = $this->entityRetrieverService->findOrFail(PaymentType::class, $paymentTypeId, 'Payment type not found');
         $statusPayment = $this->entityRetrieverService->findOrFail(StatusPayment::class, $statusPaymentId, 'Status payment not found');
-
-        // Création du paiement avec le service
+    
+        // Création du paiement
         $payment = $this->paymentService->createPayment(
             $order,
             $amount,
             $paymentMethod,
             $paymentType,
             $statusPayment,
-            $paymentDate
+            $paymentDate,
+            $orderDTO  // ✅ Peut être null
         );
-
-        // Persistance du paiement
+    
+        // Persistance du remboursement
         $this->em->persist($payment);
         $this->em->flush();
     }
+    
 }

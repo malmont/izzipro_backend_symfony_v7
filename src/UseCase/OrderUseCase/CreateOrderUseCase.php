@@ -77,23 +77,37 @@ class CreateOrderUseCase
 
             if ($orderDTO instanceof CreateOrderMultiPaymentDTO) {
                 foreach ($orderDTO->getPaymentMethods() as $paymentMethod) {
-                    if ($paymentMethod->getType() == 2){$caisseAmount += $paymentMethod->getAmount();}
-                    $amountPaymentMethod =$typeOrderId === 1 ? $paymentMethod->getAmount() : -$paymentMethod->getAmount();
+                    $orderDtoValue = $orderDTO;  // 🟢 On initialise à chaque boucle
+            
+                    if ($paymentMethod->getType() == 2) {
+                        $caisseAmount += $paymentMethod->getAmount();
+                        $orderDtoValue = null;  // 🔴 Mettre à null uniquement si type == 2
+                    }
+            
+                    $amountPaymentMethod = $typeOrderId === 1 
+                        ? $paymentMethod->getAmount() 
+                        : -$paymentMethod->getAmount();
+            
                     $this->paymentHandlerUseCase->handlePayment(
                         $order,
-                        $amountPaymentMethod *100,
+                        $amountPaymentMethod * 100,
                         $paymentMethod->getType(),
                         $paymentTypeId,
-                        $statusPaymentId
+                        $statusPaymentId,
+                        new \DateTime(),
+                        $orderDtoValue  // ✅ Null si type == 2, sinon $orderDTO
                     );
                 }
-            } else {
+            }
+             else {
                 $this->paymentHandlerUseCase->handlePayment(
                     $order,
                     $totalAmount,
                     $orderDTO->getPaymentMethod(),
                     $paymentTypeId,
-                    $statusPaymentId
+                    $statusPaymentId,
+                    new \DateTime(),
+                    $orderDTO
                 );
             }
             // $this->paymentHandlerUseCase->handlePayment($order, $totalAmount, $orderDTO->getPaymentMethod(), $paymentTypeId, $statusPaymentId);

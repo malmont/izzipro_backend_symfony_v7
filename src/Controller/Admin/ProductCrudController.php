@@ -35,8 +35,8 @@ class ProductCrudController extends AbstractCrudController
             IdField::new('id')->hideOnForm(),
             TextField::new('name'),
             SlugField::new('slug')->setTargetFieldName('name')->hideOnIndex(),
-            TextEditorField::new('description'),
-            TextEditorField::new('moreinformations')->hideOnIndex(),
+            TextEditorField::new('description')->setLabel('Description'),
+            TextEditorField::new('moreinformations')->hideOnIndex()->setLabel('moreinformations'),
             MoneyField::new('price')->setCurrency('USD')->onlyOnIndex(), // Prix calculé automatiquement
             NumberField::new('purchasePrice', "Prix d'achat de l'article"),
             NumberField::new('coefficientMultiplier', 'Coefficient Multiplier'),

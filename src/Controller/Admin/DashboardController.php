@@ -16,6 +16,7 @@ use App\Entity\HomeSlider;
 use App\Entity\Collections;
 use App\Entity\Commande;
 use App\Entity\User;
+use App\Entity\SquareConfig;
 use App\Entity\NoteDeFrais;
 use App\Entity\Fournisseur;
 use App\Entity\Transporteur;
@@ -115,6 +116,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Payment Types', 'fas fa-credit-card', PaymentType::class);
         yield MenuItem::linkToCrud('Statuts de Paiement', 'fas fa-credit-card', StatusPayment::class);
         yield MenuItem::linkToCrud('Méthodes de Paiement', 'fas fa-credit-card', PaymentMethod::class);
+        yield MenuItem::linkToCrud('Configuration Square', 'fas fa-credit-card', SquareConfig::class);
 
         yield MenuItem::section('Taxe');
         yield MenuItem::linkToCrud('Taxes', 'fas fa-percent', Tax::class);

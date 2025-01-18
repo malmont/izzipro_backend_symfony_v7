@@ -59,7 +59,7 @@ class CancelOrderUseCase
             $order->setTotalTax(0);
 
             // Remboursement du paiement
-            $this->paymentHandlerUseCase->handlePayment($order, -$refundAmount, null, $paymentTypeId, $statusPaymentId);
+            $this->paymentHandlerUseCase->handlePayment($order, -$refundAmount, null, $paymentTypeId, $statusPaymentId,new \DateTime(),null);
 
             // Mise à jour des mouvements de stock
             foreach ($order->getOrderItems() as $orderItem) {
