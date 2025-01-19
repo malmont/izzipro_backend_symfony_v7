@@ -122,15 +122,6 @@ jobs:
             echo "✅ Déploiement terminé."
           EOF
 
-      # 🛠️ 🔟 Fixer les permissions des dossiers Symfony
-      - name: 🛠️ Fixer les permissions des dossiers Symfony
-        run: |
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
-            docker exec symfony_app mkdir -p /var/www/var/cache /var/www/var/log
-            docker exec symfony_app chown -R www-data:www-data /var/www/var
-            docker exec symfony_app chmod -R 775 /var/www/var
-          EOF
-
       # ⚙️ 🔟 Commandes Symfony post-déploiement
       - name: ⚙️ Exécuter les commandes Symfony
         run: |
