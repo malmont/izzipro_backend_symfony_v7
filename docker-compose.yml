@@ -75,5 +75,7 @@ volumes:
 
 networks:
   symfony:
+    name: symfony  # Forcer le nom du réseau à être "symfony"
   web:
     external: true
+
