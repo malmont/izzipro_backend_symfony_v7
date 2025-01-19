@@ -1,6 +1,6 @@
 api:
   dashboard: true
-  insecure: true  # À désactiver en production
+  insecure: false
 
 entryPoints:
   web:
@@ -21,3 +21,8 @@ certificatesResolvers:
       httpChallenge:
         entryPoint: web
 
+middlewares:
+  secure-dashboard:
+    basicAuth:
+      users:
+        - "admin:$2y$05$lfmjn5OCwnYruXb9q3eqE.5KFfO3XjUyQfPlwK3o5HIyYqu86S9B2" 
