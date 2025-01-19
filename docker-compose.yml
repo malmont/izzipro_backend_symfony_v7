@@ -9,10 +9,10 @@ services:
     env_file:
       - .env
     networks:
-      symfony:
+      internal_symfony:
         aliases:
           - symfony_app
-      web:
+      web: # Permet à Traefik de trouver ce service
     depends_on:
       db:
         condition: service_healthy
@@ -36,7 +36,7 @@ services:
     ports:
       - "5432:5432"
     networks:
-      symfony:
+      internal_symfony:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
       interval: 10s
@@ -51,8 +51,8 @@ services:
     image: ghcr.io/malmont/symfony-nginx:latest
     container_name: symfony_nginx
     networks:
-      symfony:
-      web:
+      internal_symfony:
+      web: # Permet à Traefik de trouver ce service
     restart: always
 
   # Traefik (Reverse Proxy + SSL)
@@ -76,7 +76,7 @@ volumes:
   var_log:
 
 networks:
-  symfony:
-    name: symfony  # Nom explicite pour le réseau Symfony
+  internal_symfony:
+    driver: bridge  # Réseau interne pour Symfony (Nginx, PHP-FPM, PostgreSQL)
   web:
     external: true  # Réseau externe pour Traefik
