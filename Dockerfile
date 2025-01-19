@@ -22,6 +22,9 @@ opcache.interned_strings_buffer=8\n\
 opcache.max_accelerated_files=10000\n\
 opcache.validate_timestamps=0" > /usr/local/etc/php/conf.d/opcache-recommended.ini
 
+# ✅ Modifier la configuration www.conf pour écouter sur toutes les interfaces
+RUN sed -i "s|listen = 127.0.0.1:9000|listen = 0.0.0.0:9000|g" /usr/local/etc/php-fpm.d/www.conf
+
 # 📦 Installer Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
