@@ -110,6 +110,14 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
+            echo "🔧 Vérification du réseau Docker 'web'..."
+            if ! docker network ls | grep -q "web"; then
+              echo "🌐 Création du réseau Docker 'web'..."
+              docker network create web
+            else
+              echo "✅ Le réseau 'web' existe déjà."
+            fi
+
             echo "📥 Pull des dernières images..."
             docker-compose pull  # ✅ Pull sans rebuild
 
