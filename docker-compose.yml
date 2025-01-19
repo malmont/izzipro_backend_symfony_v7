@@ -10,6 +10,7 @@ services:
       - .env
     networks:
       - symfony
+      - web
     depends_on:
       db:
         condition: service_healthy
@@ -42,18 +43,30 @@ services:
 
   # Nginx
   nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile.nginx
+    extends:
+      file: ./label/labels.yml
+      service: nginx
     image: ghcr.io/malmont/symfony-nginx:latest
     container_name: symfony_nginx
-    ports:
-      - "80:80"
-    depends_on:
-      - app
     networks:
       - symfony
+      - web
     restart: always
+
+  # Traefik (Reverse Proxy + SSL)
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./letsencrypt:/letsencrypt
+      - ./traefik/traefik.yml:/traefik.yml
+    networks:
+      - web
 
 volumes:
   db_data:
@@ -62,3 +75,5 @@ volumes:
 
 networks:
   symfony:
+  web:
+    external: true

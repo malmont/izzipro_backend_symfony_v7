@@ -1,0 +1,23 @@
+api:
+  dashboard: true
+  insecure: true  # À désactiver en production
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: easydev972@gmail.com  # Votre adresse email
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
