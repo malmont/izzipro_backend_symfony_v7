@@ -145,3 +145,10 @@ jobs:
             docker exec symfony_app php bin/console cache:clear
             docker exec symfony_app php bin/console doctrine:migrations:migrate --no-interaction
           EOF
+
+                # ⚙️ 10️⃣ Regénérer les fichiers d'assets Symfony
+      - name: ⚙️ Regénérer les fichiers d'assets Symfony
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+            docker exec symfony_app php bin/console assets:install --symlink --relative
+          EOF
