@@ -74,13 +74,29 @@ jobs:
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
 
-      # 🔑 Appliquer les permissions correctes au fichier acme.json
-      - name: 🔑 Appliquer les permissions pour acme.json
+
+      # 🔑 Créer ou vérifier le dossier letsencrypt
+      - name: 🔑 Vérifier et créer le dossier letsencrypt
         run: |
-          echo "🔧 Vérification et correction des permissions pour acme.json..."
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} \
-            "if [ -f /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt/acme.json ]; then chmod 600 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt/acme.json && echo '✅ Permissions de acme.json définies sur 600.'; else echo '⚠️ Fichier acme.json introuvable dans /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt.'; fi"
-          echo "✅ Permissions appliquées."
+          echo "📂 Vérification du dossier letsencrypt..."
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+            if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt ]; then
+              echo "📂 Création du dossier letsencrypt..."
+              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt
+              chmod -R 700 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt
+            else
+              echo "✅ Le dossier letsencrypt existe déjà."
+            fi
+
+            if [ ! -f /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt/acme.json ]; then
+              echo "📄 Création du fichier acme.json..."
+              touch /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt/acme.json
+              chmod 600 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt/acme.json
+            else
+              echo "✅ Le fichier acme.json existe déjà."
+            fi
+          EOF
+          echo "✅ Vérification terminée."
 
       # 🔑 5️⃣ Connexion à GHCR
       - name: 🔑 Login to GHCR
@@ -146,7 +162,7 @@ jobs:
             docker exec symfony_app php bin/console doctrine:migrations:migrate --no-interaction
           EOF
 
-                # ⚙️ 10️⃣ Regénérer les fichiers d'assets Symfony
+        # ⚙️ 10️⃣ Regénérer les fichiers d'assets Symfony
       - name: ⚙️ Regénérer les fichiers d'assets Symfony
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
