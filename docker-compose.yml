@@ -9,8 +9,10 @@ services:
     env_file:
       - .env
     networks:
-      - symfony
-      - web
+      symfony:
+        aliases:
+          - symfony_app
+      web:
     depends_on:
       db:
         condition: service_healthy
@@ -34,7 +36,7 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - symfony
+      symfony:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
       interval: 10s
@@ -49,8 +51,8 @@ services:
     image: ghcr.io/malmont/symfony-nginx:latest
     container_name: symfony_nginx
     networks:
-      - symfony
-      - web
+      symfony:
+      web:
     restart: always
 
   # Traefik (Reverse Proxy + SSL)
@@ -66,7 +68,7 @@ services:
       - ./letsencrypt:/letsencrypt
       - ./traefik/traefik.yml:/traefik.yml
     networks:
-      - web
+      web:
 
 volumes:
   db_data:
@@ -75,7 +77,6 @@ volumes:
 
 networks:
   symfony:
-    name: symfony  # Forcer le nom du réseau à être "symfony"
+    name: symfony  # Nom explicite pour le réseau Symfony
   web:
-    external: true
-
+    external: true  # Réseau externe pour Traefik
