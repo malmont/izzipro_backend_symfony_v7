@@ -130,6 +130,7 @@ jobs:
           mkdir -p ./public
           docker run --rm \
             -v $(pwd)/public:/var/www/public \
+            -e DATABASE_URL=sqlite:///var/data.db \
             ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} \
             php bin/console assets:install --symlink --relative
           echo "✅ Assets Symfony générés dans ./public"
