@@ -123,18 +123,20 @@ jobs:
           docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
           echo "✅ Image Symfony construite."
 
-      # ⚙️ Génération et synchronisation des fichiers d'assets Symfony
+      # ⚙️ Création du dossier temporaire pour les assets Symfony
       - name: ⚙️ Générer et synchroniser les fichiers d'assets Symfony
         run: |
           echo "📂 Création du dossier temporaire pour les assets..."
           mkdir -p ./temp_public
+          chmod -R 777 ./temp_public
 
           echo "🔄 Génération des assets Symfony dans le dossier temporaire..."
           docker run --rm \
             -v $(pwd)/temp_public:/var/www/public \
+            --user $(id -u):$(id -g) \
             -e DATABASE_URL=sqlite:///var/data.db \
             ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} \
-            sh -c "chmod -R 777 /var/www/public && php bin/console assets:install --symlink --relative"
+            sh -c "php bin/console assets:install --symlink --relative"
           echo "✅ Assets Symfony générés dans ./temp_public"
 
           echo "📂 Préparation du dossier public sur le serveur distant..."
@@ -158,7 +160,6 @@ jobs:
           echo "🗑️ Nettoyage du dossier temporaire..."
           rm -rf ./temp_public
           echo "✅ Dossier temporaire supprimé."
-
 
       # 📦 8️⃣ Push des images Docker
       - name: 📦 Push Docker Images to GHCR
