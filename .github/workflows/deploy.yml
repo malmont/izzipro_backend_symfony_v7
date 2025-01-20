@@ -175,5 +175,5 @@ jobs:
       - name: ⚙️ Regénérer les fichiers d'assets Symfony
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
-            docker exec symfony_nginx php bin/console assets:install --symlink --relative
+            docker exec symfony_app php bin/console assets:install --symlink --relative
           EOF

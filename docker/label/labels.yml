@@ -4,14 +4,14 @@ services:
   nginx:
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.symfony.rule=Host(`srv690974.hstgr.cloud`)"
+      - "traefik.http.routers.symfony.rule=Host(`naowe-backend.store`)"
       - "traefik.http.routers.symfony.entrypoints=websecure"
       - "traefik.http.routers.symfony.tls.certresolver=letsencrypt"
 
   traefik:
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.srv690974.hstgr.cloud`)"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.naowe-backend.store`)"
       - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
       - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.services.traefik-dashboard.loadbalancer.server.port=8080"

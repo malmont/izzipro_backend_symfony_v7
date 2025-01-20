@@ -16,7 +16,7 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: easydev972@gmail.com  # Votre adresse email
+      email: michel.almont972@gmail.com  # Votre adresse email
       storage: /letsencrypt/acme.json
       httpChallenge:
         entryPoint: web
