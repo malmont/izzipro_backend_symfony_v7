@@ -107,6 +107,21 @@ jobs:
           EOF
           echo "✅ Vérification terminée."
 
+        # ⚙️ Création du dossier public pour les assets Symfony
+      - name: ⚙️ Générer et synchroniser les fichiers d'assets Symfony
+        run: |
+          echo "📂 Préparation du dossier public sur le serveur distant..."
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+            if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public ]; then
+              echo "📂 Création du dossier public sur le serveur distant..."
+              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              chmod -R 700 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              echo "✅ Dossier public créé sur le serveur distant."
+            else
+              echo "✅ Le dossier public existe déjà sur le serveur distant."
+            fi
+          EOF
+
       # 🔑 5️⃣ Connexion à GHCR
       - name: 🔑 Login to GHCR
         uses: docker/login-action@v2
@@ -122,52 +137,6 @@ jobs:
           docker build --build-arg APP_ENV=prod -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} -f Dockerfile .
           docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
           echo "✅ Image Symfony construite."
-
-      # ⚙️ Création du dossier temporaire pour les assets Symfony
-      - name: ⚙️ Générer et synchroniser les fichiers d'assets Symfony
-        run: |
-          echo "📂 Création du dossier temporaire pour les assets..."
-          mkdir -p ./temp_public
-          chmod -R 777 ./temp_public
-
-          echo "🔄 Démarrage d'un conteneur temporaire pour générer les assets Symfony..."
-          CONTAINER_ID=$(docker run -d \
-            -e DATABASE_URL=sqlite:///var/data.db \
-            ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} \
-            sh -c "php bin/console assets:install --symlink --relative && sleep 10")
-            
-          if [ -z "${CONTAINER_ID}" ]; then
-            echo "❌ Échec de la création du conteneur temporaire."
-            exit 1
-          fi
-
-          echo "📤 Copie des fichiers générés depuis le conteneur vers ./temp_public..."
-          mkdir -p ./temp_public
-          docker cp "${CONTAINER_ID}:/var/www/public/." ./temp_public
-          echo "🗑️ Suppression du conteneur temporaire..."
-          docker rm -f "${CONTAINER_ID}"
-
-          echo "📂 Préparation du dossier public sur le serveur distant..."
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
-            if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public ]; then
-              echo "📂 Création du dossier public sur le serveur distant..."
-              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
-              chmod -R 700 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
-              echo "✅ Dossier public créé sur le serveur distant."
-            else
-              echo "✅ Le dossier public existe déjà sur le serveur distant."
-            fi
-          EOF
-
-          echo "📤 Synchronisation des fichiers du dossier temporaire avec rsync..."
-          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
-            ./temp_public/ \
-            ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/public/
-          echo "✅ Synchronisation du dossier public terminée."
-
-          echo "🗑️ Nettoyage du dossier temporaire..."
-          rm -rf ./temp_public
-          echo "✅ Dossier temporaire supprimé."
 
       # 🏗️ 7️⃣ Construire l'image Nginx
       - name: 🏗️ Build Nginx Docker Image
@@ -221,9 +190,45 @@ jobs:
             docker exec symfony_app php bin/console doctrine:migrations:migrate --no-interaction
           EOF
 
-        # ⚙️ 10️⃣ Regénérer les fichiers d'assets Symfony
+      # ⚙️ 10️⃣ Regénérer les fichiers d'assets Symfony
       - name: ⚙️ Regénérer les fichiers d'assets Symfony
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             docker exec symfony_app php bin/console assets:install --symlink --relative
           EOF
+
+          # 📂 Création du dossier temporaire
+          echo "📂 Création du dossier temporaire pour les assets..."
+          mkdir -p ./temp_public
+
+          # 🔄 Génération des assets Symfony dans le dossier temporaire
+          echo "🔄 Génération des assets Symfony..."
+          if docker ps | grep -q "symfony_app"; then
+            docker cp symfony_app:/var/www/public ./temp_public
+            echo "✅ Assets Symfony copiés dans ./temp_public"
+          else
+            echo "❌ Le conteneur symfony_app n'est pas en cours d'exécution." >&2
+            exit 1
+          fi
+
+          # 📤 Synchronisation des fichiers générés avec rsync
+          echo "📤 Synchronisation des fichiers générés avec rsync..."
+          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./temp_public/ \
+            ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/public/
+          if [ $? -ne 0 ]; then
+            echo "❌ Erreur lors de la synchronisation avec rsync." >&2
+            exit 1
+          fi
+          echo "✅ Synchronisation du dossier public terminée."
+
+          # 🔧 Mise à jour des permissions sur le serveur distant
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+            chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+            echo "✅ Permissions mises à jour sur le dossier public distant."
+          EOF
+
+          # 🗑️ Nettoyage du dossier temporaire
+          echo "🗑️ Nettoyage du dossier temporaire..."
+          rm -rf ./temp_public
+          echo "✅ Dossier temporaire supprimé."
