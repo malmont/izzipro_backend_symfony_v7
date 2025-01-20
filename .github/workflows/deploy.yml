@@ -123,45 +123,42 @@ jobs:
           docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
           echo "✅ Image Symfony construite."
 
-      # ⚙️ Création du dossier public et génération des assets Symfony
-      - name: ⚙️ Préparer et générer les fichiers d'assets Symfony
+      # ⚙️ Génération et synchronisation des fichiers d'assets Symfony
+      - name: ⚙️ Générer et synchroniser les fichiers d'assets Symfony
         run: |
-          echo "📂 Préparation du dossier public sur le serveur distant..."
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
-            if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public ]; then
-              echo "📂 Création du dossier public..."
-              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
-              chmod -R 700 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
-              echo "✅ Dossier public créé avec les bonnes permissions."
-            else
-              echo "✅ Le dossier public existe déjà."
-            fi
-          EOF
+          echo "📂 Création du dossier temporaire pour les assets..."
+          mkdir -p ./temp_public
 
-          echo "🔄 Génération des assets Symfony..."
+          echo "🔄 Génération des assets Symfony dans le dossier temporaire..."
           docker run --rm \
+            -v $(pwd)/temp_public:/var/www/public \
             -e DATABASE_URL=sqlite:///var/data.db \
             ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} \
             sh -c "chmod -R 777 /var/www/public && php bin/console assets:install --symlink --relative"
-          echo "✅ Assets Symfony générés dans le dossier public distant."
+          echo "✅ Assets Symfony générés dans ./temp_public"
 
+          echo "📂 Préparation du dossier public sur le serveur distant..."
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+            if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public ]; then
+              echo "📂 Création du dossier public sur le serveur distant..."
+              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              chmod -R 700 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              echo "✅ Dossier public créé sur le serveur distant."
+            else
+              echo "✅ Le dossier public existe déjà sur le serveur distant."
+            fi
+          EOF
 
-      # 🔄 Synchroniser le dossier public avec rsync
-      - name: 🔄 Synchroniser le dossier public avec rsync
-        run: |
-          echo "📤 Synchronisation des fichiers du dossier public..."
+          echo "📤 Synchronisation des fichiers du dossier temporaire avec rsync..."
           rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
-            ./public/ \
+            ./temp_public/ \
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/public/
           echo "✅ Synchronisation du dossier public terminée."
 
-      # 🏗️ 7️⃣ Construire l'image Nginx
-      - name: 🏗️ Build Nginx Docker Image
-        run: |
-          echo "📦 Construction de l'image Nginx"
-          docker build -t ghcr.io/${{ github.repository_owner }}/symfony-nginx:${{ matrix.client }} -f Dockerfile.nginx .
-          docker tag ghcr.io/${{ github.repository_owner }}/symfony-nginx:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-nginx:latest
-          echo "✅ Image Nginx construite."
+          echo "🗑️ Nettoyage du dossier temporaire..."
+          rm -rf ./temp_public
+          echo "✅ Dossier temporaire supprimé."
+
 
       # 📦 8️⃣ Push des images Docker
       - name: 📦 Push Docker Images to GHCR

@@ -7,6 +7,9 @@ RUN rm /etc/nginx/conf.d/default.conf
 # Copie la configuration personnalisée de Nginx
 COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
 
+# Crée le dossier public s'il n'existe pas pour éviter les erreurs
+RUN mkdir -p /var/www/public
+
 # Permissions pour le dossier public
 RUN chmod -R 755 /var/www/public && chown -R www-data:www-data /var/www/public
 
