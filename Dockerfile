@@ -40,6 +40,9 @@ RUN composer install --prefer-dist --no-dev --optimize-autoloader --no-progress 
 # 📂 Copier les fichiers restants du projet
 COPY . .
 
+# Générer les assets Symfony
+RUN php bin/console assets:install --symlink --relative
+
 # 📁 Créer le dossier var avec les bonnes permissions
 RUN mkdir -p /var/www/var \
     && chown -R www-data:www-data /var/www \
