@@ -123,17 +123,28 @@ jobs:
           docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
           echo "✅ Image Symfony construite."
 
-      # ⚙️ Générer les fichiers d'assets Symfony
-      - name: ⚙️ Générer les fichiers d'assets Symfony
+      # ⚙️ Création du dossier public et génération des assets Symfony
+      - name: ⚙️ Préparer et générer les fichiers d'assets Symfony
         run: |
+          echo "📂 Préparation du dossier public sur le serveur distant..."
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+            if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public ]; then
+              echo "📂 Création du dossier public..."
+              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              chmod -R 700 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              echo "✅ Dossier public créé avec les bonnes permissions."
+            else
+              echo "✅ Le dossier public existe déjà."
+            fi
+          EOF
+
           echo "🔄 Génération des assets Symfony..."
-          mkdir -p ./public
           docker run --rm \
-            -v $(pwd)/public:/var/www/public \
             -e DATABASE_URL=sqlite:///var/data.db \
             ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} \
-            php bin/console assets:install --symlink --relative
-          echo "✅ Assets Symfony générés dans ./public"
+            sh -c "chmod -R 777 /var/www/public && php bin/console assets:install --symlink --relative"
+          echo "✅ Assets Symfony générés dans le dossier public distant."
+
 
       # 🔄 Synchroniser le dossier public avec rsync
       - name: 🔄 Synchroniser le dossier public avec rsync
