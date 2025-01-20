@@ -50,6 +50,8 @@ services:
       service: nginx
     image: ghcr.io/malmont/symfony-nginx:latest
     container_name: symfony_nginx
+    volumes:
+      - ./public:/var/www/public
     networks:
       symfony:
       web:

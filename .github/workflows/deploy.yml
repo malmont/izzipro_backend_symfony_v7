@@ -114,18 +114,42 @@ jobs:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
-
-        # 🏗️ 7️⃣ Construction des images Docker
-      - name: 🏗️ Build Symfony and Nginx Docker Images
+          
+      # 🏗️ 7️⃣ Construire l'image Symfony
+      - name: 🏗️ Build Symfony Docker Image
         run: |
-          echo "📦 Build de l'image Symfony"
+          echo "📦 Construction de l'image Symfony"
           docker build --build-arg APP_ENV=prod -t ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} -f Dockerfile .
           docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
+          echo "✅ Image Symfony construite."
 
-          echo "📦 Build de l'image Nginx"
+      # ⚙️ Générer les fichiers d'assets Symfony
+      - name: ⚙️ Générer les fichiers d'assets Symfony
+        run: |
+          echo "🔄 Génération des assets Symfony..."
+          mkdir -p ./public
+          docker run --rm \
+            -v $(pwd)/public:/var/www/public \
+            ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} \
+            php bin/console assets:install --symlink --relative
+          echo "✅ Assets Symfony générés dans ./public"
+
+      # 🔄 Synchroniser le dossier public avec rsync
+      - name: 🔄 Synchroniser le dossier public avec rsync
+        run: |
+          echo "📤 Synchronisation des fichiers du dossier public..."
+          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./public/ \
+            ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/public/
+          echo "✅ Synchronisation du dossier public terminée."
+
+      # 🏗️ 7️⃣ Construire l'image Nginx
+      - name: 🏗️ Build Nginx Docker Image
+        run: |
+          echo "📦 Construction de l'image Nginx"
           docker build -t ghcr.io/${{ github.repository_owner }}/symfony-nginx:${{ matrix.client }} -f Dockerfile.nginx .
           docker tag ghcr.io/${{ github.repository_owner }}/symfony-nginx:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-nginx:latest
-          echo "✅ Build terminé."
+          echo "✅ Image Nginx construite."
 
       # 📦 8️⃣ Push des images Docker
       - name: 📦 Push Docker Images to GHCR
