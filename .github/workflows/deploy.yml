@@ -132,8 +132,6 @@ jobs:
 
           echo "🔄 Génération des assets Symfony dans le dossier temporaire..."
           docker run --rm \
-            -v $(pwd)/temp_public:/var/www/public \
-            --user $(id -u):$(id -g) \
             -e DATABASE_URL=sqlite:///var/data.db \
             ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} \
             sh -c "php bin/console assets:install --symlink --relative"
