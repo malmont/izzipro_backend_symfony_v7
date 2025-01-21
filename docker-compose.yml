@@ -63,9 +63,6 @@ services:
       web:
         aliases:
           - nginx_web
-    depends_on:
-      app:
-        condition: service_healthy
     restart: always
 
   # Traefik (Reverse Proxy + SSL)
