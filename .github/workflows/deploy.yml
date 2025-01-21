@@ -197,7 +197,7 @@ jobs:
             echo "🔄 Vérification du conteneur Symfony..."
             if docker ps | grep -q "symfony_app"; then
               echo "✅ Conteneur Symfony trouvé. Installation des assets..."
-              docker exec symfony_app php bin/console assets:install --symlink --relative
+              docker exec symfony_app php bin/console assets:install
               echo "✅ Assets Symfony installés."
 
               echo "📤 Copie des assets vers /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public..."
