@@ -77,8 +77,6 @@ jobs:
             .env \
             Dockerfile \
             docker-compose.yml \
-            docker-entrypoint.sh \
-            generate-env.sh \
             docker/ \
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
