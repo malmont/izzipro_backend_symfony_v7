@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 
+
 # ✅ Configurer PHP : mémoire illimitée
 RUN echo "memory_limit=-1" > /usr/local/etc/php/conf.d/memory-limit.ini
 
