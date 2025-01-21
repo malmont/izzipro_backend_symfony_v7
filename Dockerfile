@@ -3,17 +3,17 @@ FROM php:8.3-fpm
 
 # 🔧 Installer les dépendances système nécessaires
 RUN apt-get update && apt-get install -y \
+    iputils-ping \      
+    net-tools \          
+    curl \  
     git \
     unzip \
     libpq-dev \
     libzip-dev \
     zip \
     libicu-dev \
-    iputils-ping \  # Pour ajouter la commande ping
     && docker-php-ext-install pdo pdo_pgsql zip intl opcache \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-
 
 # ✅ Configurer PHP : mémoire illimitée
 RUN echo "memory_limit=-1" > /usr/local/etc/php/conf.d/memory-limit.ini
