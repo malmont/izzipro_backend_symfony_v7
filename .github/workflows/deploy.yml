@@ -191,12 +191,23 @@ jobs:
           EOF
 
       # ⚙️ 10️⃣ Regénérer les fichiers d'assets Symfony
-      - name: ⚙️ Regénérer les fichiers d'assets Symfony
+      - name: ⚙️ Regénérer et copier les fichiers d'assets Symfony
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
-            docker exec symfony_app php bin/console assets:install --symlink --relative
+            echo "🔄 Vérification du conteneur Symfony..."
+            if docker ps | grep -q "symfony_app"; then
+              echo "✅ Conteneur Symfony trouvé. Installation des assets..."
+              docker exec symfony_app php bin/console assets:install --symlink --relative
+              echo "✅ Assets Symfony installés."
+
+              echo "📤 Copie des assets vers /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public..."
+              docker cp symfony_app:/var/www/public /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              echo "✅ Assets copiés et permissions mises à jour."
+            else
+              echo "❌ Conteneur Symfony non trouvé !" >&2
+              exit 1
+            fi
           EOF
-          docker cp symfony_app:/var/www/public ./public
-          echo "✅ Assets Symfony copiés dans ./public."
-         
+
         
