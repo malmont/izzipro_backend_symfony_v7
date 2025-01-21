@@ -106,7 +106,22 @@ jobs:
             fi
           EOF
           echo "✅ Vérification terminée."
-          
+
+        # ⚙️ Création du dossier public pour les assets Symfony
+      - name: ⚙️ Générer et synchroniser les fichiers d'assets Symfony
+        run: |
+          echo "📂 Préparation du dossier public sur le serveur distant..."
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+            if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public ]; then
+              echo "📂 Création du dossier public sur le serveur distant..."
+              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              chmod -R 700 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              echo "✅ Dossier public créé sur le serveur distant."
+            else
+              echo "✅ Le dossier public existe déjà sur le serveur distant."
+            fi
+          EOF
+
       # 🔑 5️⃣ Connexion à GHCR
       - name: 🔑 Login to GHCR
         uses: docker/login-action@v2
@@ -186,8 +201,7 @@ jobs:
               echo "✅ Assets Symfony installés."
 
               echo "📤 Copie des assets vers /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public..."
-              docker cp symfony_app:/var/www/public /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
-              chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              docker cp symfony_app:/var/www/public /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
               echo "✅ Assets copiés et permissions mises à jour."
             else
               echo "❌ Conteneur Symfony non trouvé !" >&2
