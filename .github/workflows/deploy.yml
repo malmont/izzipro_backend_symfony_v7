@@ -196,39 +196,7 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             docker exec symfony_app php bin/console assets:install --symlink --relative
           EOF
-
-          # 📂 Création du dossier temporaire
-          echo "📂 Création du dossier temporaire pour les assets..."
-          mkdir -p ./temp_public
-
-          # 🔄 Génération des assets Symfony dans le dossier temporaire
-          echo "🔄 Génération des assets Symfony..."
-          if docker ps | grep -q "symfony_app"; then
-            docker cp symfony_app:/var/www/public ./temp_public
-            echo "✅ Assets Symfony copiés dans ./temp_public"
-          else
-            echo "❌ Le conteneur symfony_app n'est pas en cours d'exécution." >&2
-            exit 1
-          fi
-
-          # 📤 Synchronisation des fichiers générés avec rsync
-          echo "📤 Synchronisation des fichiers générés avec rsync..."
-          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
-            ./temp_public/ \
-            ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/public/
-          if [ $? -ne 0 ]; then
-            echo "❌ Erreur lors de la synchronisation avec rsync." >&2
-            exit 1
-          fi
-          echo "✅ Synchronisation du dossier public terminée."
-
-          # 🔧 Mise à jour des permissions sur le serveur distant
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
-            chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
-            echo "✅ Permissions mises à jour sur le dossier public distant."
-          EOF
-
-          # 🗑️ Nettoyage du dossier temporaire
-          echo "🗑️ Nettoyage du dossier temporaire..."
-          rm -rf ./temp_public
-          echo "✅ Dossier temporaire supprimé."
+          docker cp symfony_app:/var/www/public ./public
+          echo "✅ Assets Symfony copiés dans ./public."
+         
+        
