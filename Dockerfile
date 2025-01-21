@@ -5,7 +5,8 @@ FROM php:8.3-fpm
 RUN apt-get update && apt-get install -y \
     iputils-ping \      
     net-tools \          
-    curl \  
+    curl \
+    libfcgi-bin \  
     git \
     unzip \
     libpq-dev \

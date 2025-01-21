@@ -16,7 +16,7 @@ services:
         condition: service_healthy
     restart: always
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost"]
+      test: ["CMD", "cgi-fcgi", "-bind", "-connect", "localhost:9000"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -48,6 +48,8 @@ services:
       service: nginx
     image: ghcr.io/malmont/symfony-nginx:latest
     container_name: symfony_nginx
+    volumes:
+      - ./public:/var/www/public
     networks:
       - symfony
       - web
