@@ -9,20 +9,14 @@ services:
     env_file:
       - .env
     networks:
-      symfony:
-        aliases:
-          - symfony_app
-      web:
-        aliases:
-          - symfony_app_web
+      - symfony
+      - web
     depends_on:
       db:
         condition: service_healthy
     restart: always
-    ports:
-      - "9000:9000" # Expose PHP-FPM port
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000"]
+      test: ["CMD", "curl", "-f", "http://localhost"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -40,7 +34,7 @@ services:
     ports:
       - "5432:5432"
     networks:
-      symfony:
+      - symfony
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
       interval: 10s
@@ -54,15 +48,9 @@ services:
       service: nginx
     image: ghcr.io/malmont/symfony-nginx:latest
     container_name: symfony_nginx
-    volumes:
-      - ./public:/var/www/public
     networks:
-      symfony:
-        aliases:
-          - nginx_symfony
-      web:
-        aliases:
-          - nginx_web
+      - symfony
+      - web
     restart: always
 
   # Traefik (Reverse Proxy + SSL)
@@ -78,7 +66,7 @@ services:
       - ./letsencrypt:/letsencrypt
       - ./traefik/traefik.yml:/traefik.yml
     networks:
-      web:
+      - web
 
 volumes:
   db_data:
@@ -87,6 +75,5 @@ volumes:
 
 networks:
   symfony:
-    name: symfony  # Réseau interne pour Symfony
   web:
-    external: true  # Réseau externe pour Traefik
+    external: true
