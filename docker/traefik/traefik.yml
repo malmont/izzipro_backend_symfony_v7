@@ -7,6 +7,12 @@ api:
 entryPoints:
   web:
     address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true  # Utilise une redirection permanente (301)
   websecure:
     address: ":443"
 
