@@ -1,6 +1,8 @@
+# traefik.yml
+
 api:
   dashboard: true
-  insecure: false
+  insecure: false  # Ne pas exposer le dashboard publiquement
 
 entryPoints:
   web:
@@ -11,18 +13,25 @@ entryPoints:
 providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
-    exposedByDefault: false
+    exposedByDefault: false  # Les services ne sont pas exposés par défaut
 
 certificatesResolvers:
   letsencrypt:
     acme:
       email: michel.almont972@gmail.com  # Votre adresse email
       storage: /letsencrypt/acme.json
-      httpChallenge:
-        entryPoint: web
+      tlsChallenge: {}  # Utilise le challenge TLS-ALPN-01
 
 middlewares:
   secure-dashboard:
     basicAuth:
       users:
-        - "admin:$2y$05$lfmjn5OCwnYruXb9q3eqE.5KFfO3XjUyQfPlwK3o5HIyYqu86S9B2" 
+        - "admin:$2y$05$lfmjn5OCwnYruXb9q3eqE.5KFfO3XjUyQfPlwK3o5HIyYqu86S9B2"  # Mot de passe haché
+
+log:
+  level: DEBUG
+  filePath: "/var/log/traefik/traefik.log"  # Chemin pour les logs d'erreur
+
+accessLog:
+  filePath: "/var/log/traefik/access.log"  # Chemin pour les logs d'accès
+  bufferingSize: 100

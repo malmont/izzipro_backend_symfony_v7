@@ -11,9 +11,6 @@ services:
     networks:
       - symfony
       - web
-    depends_on:
-      db:
-        condition: service_healthy
     restart: always
     healthcheck:
       disable: true
@@ -28,15 +25,11 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
     networks:
       - symfony
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      disable: true
+
 
   # Nginx
   nginx:
@@ -47,10 +40,15 @@ services:
     container_name: symfony_nginx
     volumes:
       - ./public:/var/www/public
+      # Montez le fichier nginx.conf local dans /etc/nginx/nginx.conf
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
       - symfony
       - web
+    depends_on:
+      - app
     restart: always
+
 
   # Traefik (Reverse Proxy + SSL)
   traefik:
