@@ -41,7 +41,7 @@ services:
     volumes:
       - ./public:/var/www/public
       # Montez le fichier nginx.conf local dans /etc/nginx/nginx.conf
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - symfony
       - web
