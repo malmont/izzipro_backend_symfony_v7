@@ -64,6 +64,8 @@ services:
       - ./traefik/traefik.yml:/traefik.yml
     networks:
       - web
+    depends_on:
+      - nginx
 
 volumes:
   db_data:
