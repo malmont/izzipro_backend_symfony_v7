@@ -81,30 +81,6 @@ jobs:
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
 
-
-      # 🔑 Créer ou vérifier le dossier letsencrypt
-      - name: 🔑 Vérifier et créer le dossier letsencrypt
-        run: |
-          echo "📂 Vérification du dossier letsencrypt..."
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
-            if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt ]; then
-              echo "📂 Création du dossier letsencrypt..."
-              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt
-              chmod -R 700 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt
-            else
-              echo "✅ Le dossier letsencrypt existe déjà."
-            fi
-
-            if [ ! -f /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt/acme.json ]; then
-              echo "📄 Création du fichier acme.json..."
-              touch /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt/acme.json
-              chmod 600 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/letsencrypt/acme.json
-            else
-              echo "✅ Le fichier acme.json existe déjà."
-            fi
-          EOF
-          echo "✅ Vérification terminée."
-
         # ⚙️ Création du dossier public pour les assets Symfony
       - name: ⚙️ Générer et synchroniser les fichiers d'assets Symfony
         run: |

@@ -1,0 +1,5 @@
+naowe-backend.store {
+    reverse_proxy symfony_nginx:80
+    encode gzip
+    tls michel.almont972@gmail.com
+}
