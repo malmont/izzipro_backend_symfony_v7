@@ -50,7 +50,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./caddyfile/caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddyfile/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
