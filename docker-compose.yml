@@ -33,9 +33,6 @@ services:
 
   # Nginx
   nginx:
-    extends:
-      file: ./label/labels.yml
-      service: nginx
     image: ghcr.io/malmont/symfony-nginx:latest
     container_name: symfony_nginx
     volumes:
@@ -47,6 +44,12 @@ services:
     depends_on:
       - app
     restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.symfony.rule=Host(`naowe-backend.store`)"
+      - "traefik.http.routers.symfony.entrypoints=websecure"
+      - "traefik.http.routers.symfony.tls.certresolver=letsencrypt"
+      - "traefik.http.services.nginx.loadbalancer.server.port=80"
 
 
   # Traefik (Reverse Proxy + SSL)
@@ -63,6 +66,12 @@ services:
       - ./traefik/traefik.yml:/traefik.yml
     networks:
       - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.naowe-backend.store`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik-dashboard.middlewares=secure-dashboard@file"
     depends_on:
       - nginx
 
