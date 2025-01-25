@@ -38,12 +38,12 @@ class UpdateStockAndInventoryUseCase
 
         // Création du mouvement d'inventaire via le service
         $inventoryMovement = $this->inventoryMovementService->createInventoryMovement(
-            $isCancellation,
             $productVariant,
             $stockBeforeMovement,
             $stockAfterMovement,
             $quantity,
-            $movementType
+            $movementType,
+            $isCancellation,
         );
 
         // Persister le mouvement d'inventaire
@@ -66,12 +66,12 @@ class UpdateStockAndInventoryUseCase
         $movementType = $this->movementTypeRepository->find($movementTypeId);
         // Création du mouvement d'inventaire via le service
         $inventoryMovement = $this->inventoryMovementService->createInventoryMovement(
-            false,
             $productVariant,
             $stockBeforeMovement,
             $stockAfterMovement,
             $quantity,
-            $movementType
+            $movementType,
+            false,
         );
        
         // Persister le mouvement d'inventaire

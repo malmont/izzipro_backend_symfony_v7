@@ -17,12 +17,12 @@ class InventoryMovementService
     }
 
     public function createInventoryMovement(
-        bool $isCancellation = false,
         ProductVariant $productVariant,
         int $stockBeforeMovement,
         int $stockAfterMovement,
         int $quantity,
-        MovementType $movementType
+        MovementType $movementType,
+        bool $isCancellation = false,
     ): InventoryMovements {
         // Utilisation du service pour vérifier si un variant similaire existe
         if (($this->productVariantExistenceService->doesVariantExist($productVariant)) && !$isCancellation) {
