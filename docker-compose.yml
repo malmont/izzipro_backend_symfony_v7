@@ -7,7 +7,7 @@ services:
     container_name: symfony_app
     volumes:
       - public_data:/var/www/public
-      - ./config/jwt:/var/www/config/jwt
+      - ./jwt:/var/www/config/jwt
     working_dir: /var/www
     env_file:
       - .env
