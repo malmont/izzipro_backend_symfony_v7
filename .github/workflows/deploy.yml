@@ -49,7 +49,7 @@ jobs:
           EOF
 
 
-      # 🔄 3️⃣ Générer le fichier .env avec Messenger DSN
+      # 🔄 3️⃣ Générer le fichier .env avec Messenger DSN et JWT
       - name: 🔄 Générer le fichier .env localement
         run: |
           echo "📄 Génération du fichier .env..."
@@ -62,12 +62,20 @@ jobs:
           APP_ENV=prod
           APP_SECRET=${{ secrets.APP_SECRET }}
           DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@${{ secrets.DB_HOST }}:${{ secrets.DB_PORT }}/${{ secrets.DB_NAME }}
-          
+
           ###> symfony/messenger ###
           MESSENGER_TRANSPORT_DSN=doctrine://default
           ###< symfony/messenger ###
+
+          ###> JWT ###
+          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+          JWT_PUBLIC_KEY=${{ secrets.JWT_PUBLIC_KEY }}
+          JWT_PASSPHRASE=${{ secrets.JWT_PASSPHRASE }}
+          ###< JWT ###
+          SQUARE_SECRET_KEY=${{ secrets.SQUARE_SECRET_KEY }}
           EOL
           echo "✅ Fichier .env généré."
+
 
       # 🔄 Synchronisation des fichiers avec rsync (y compris le .env)
       - name: 🔄 Synchroniser les fichiers avec rsync
