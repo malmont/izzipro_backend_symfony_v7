@@ -176,9 +176,18 @@ jobs:
               docker exec symfony_app php bin/console assets:install
               echo "✅ Assets Symfony installés."
 
-              echo "📤 Copie des assets vers /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public..."
-              docker cp symfony_app:/var/www/public /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
+              # Chemin vers le répertoire local
+            LOCAL_PUBLIC_DIR="/home/${{ secrets.CLIENT1_SERVER_USER }}/app/public"
+
+            # Vérifiez si le répertoire local est vide
+            if [ -z "$(ls -A $LOCAL_PUBLIC_DIR 2>/dev/null)" ]; then
+              echo "📤 Copie des assets vers $LOCAL_PUBLIC_DIR..."
+              docker cp symfony_app:/var/www/public $LOCAL_PUBLIC_DIR
               echo "✅ Assets copiés et permissions mises à jour."
+            else
+              echo "🛑 Le répertoire $LOCAL_PUBLIC_DIR n'est pas vide, aucun fichier n'a été écrasé."
+            fi
+
             else
               echo "❌ Conteneur Symfony non trouvé !" >&2
               exit 1
