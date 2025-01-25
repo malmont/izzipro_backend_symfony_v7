@@ -109,17 +109,23 @@ jobs:
         run: |
           echo "📂 Vérification et préparation du dossier jwt sur le serveur distant..."
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
-            if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt ]; then
+            JWT_DIR="/home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt"
+            if [ ! -d "$JWT_DIR" ]; then
               echo "📂 Création du dossier jwt sur le serveur distant..."
-              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt
-              chmod -R 700 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt
+              mkdir -p "$JWT_DIR"
+              chmod -R 700 "$JWT_DIR"
               echo "✅ Dossier jwt créé sur le serveur distant."
-              
+
               echo "🔑 Génération des clés JWT..."
-              openssl genrsa -out /home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt/private.pem 2048
-              openssl rsa -pubout -in /home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt/private.pem -out /home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt/public.pem
-              chmod 600 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt/private.pem /home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt/public.pem
-              echo "✅ Clés JWT générées sur le serveur distant."
+              openssl genrsa -out "$JWT_DIR/private.pem" 2048
+              openssl rsa -pubout -in "$JWT_DIR/private.pem" -out "$JWT_DIR/public.pem"
+              chmod 600 "$JWT_DIR/private.pem" "$JWT_DIR/public.pem"
+
+              echo "⚙️ Ajustement des permissions pour le conteneur..."
+              chown -R www-data:www-data "$JWT_DIR"
+              chmod -R 750 "$JWT_DIR"
+
+              echo "✅ Clés JWT générées et permissions ajustées."
             else
               echo "✅ Le dossier jwt existe déjà sur le serveur distant. Aucun changement."
             fi
