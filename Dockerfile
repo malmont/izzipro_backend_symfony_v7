@@ -3,10 +3,10 @@ FROM php:8.3-fpm
 
 # 🔧 Installer les dépendances système nécessaires
 RUN apt-get update && apt-get install -y \
-    iputils-ping \      
-    net-tools \          
+    iputils-ping \
+    net-tools \
     curl \
-    libfcgi-bin \  
+    libfcgi-bin \
     git \
     unzip \
     libpq-dev \
@@ -43,6 +43,11 @@ RUN composer install --prefer-dist --no-dev --optimize-autoloader --no-progress 
 
 # 📂 Copier les fichiers restants du projet
 COPY . .
+
+# 🔧 Configurer les permissions spécifiques pour jwt
+RUN mkdir -p /var/www/config/jwt \
+    && chown -R www-data:www-data /var/www/config/jwt \
+    && chmod -R 755 /var/www/config/jwt
 
 # 📁 Créer le dossier var avec les bonnes permissions
 RUN mkdir -p /var/www/var \

@@ -1,5 +1,31 @@
 naowe-backend.store {
     reverse_proxy symfony_nginx:80
+
     encode gzip
+
     tls michel.almont972@gmail.com
+
+    # Configuration des en-têtes CORS
+    @cors_preflight {
+        method OPTIONS
+    }
+
+    handle @cors_preflight {
+        # Définir les en-têtes CORS avant de répondre
+        header Access-Control-Allow-Origin "https://srv703974.hstgr.cloud"
+        header Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
+        header Access-Control-Allow-Headers "Content-Type, Authorization"
+        header Access-Control-Allow-Credentials "true"
+        
+        # Réponse vide pour les requêtes préflight
+        respond "" 204
+    }
+
+    # Ajout des en-têtes CORS pour les autres requêtes
+    header {
+        Access-Control-Allow-Origin "https://srv703974.hstgr.cloud"
+        Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
+        Access-Control-Allow-Headers "Content-Type, Authorization"
+        Access-Control-Allow-Credentials "true"
+    }
 }
