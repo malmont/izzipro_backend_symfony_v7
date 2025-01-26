@@ -44,7 +44,7 @@ class CategoryController extends AbstractController
         $products = $this->getProductsByCategoryUseCase->execute($categoryIds, $keyword, $page, $pageSize);
         $totalProducts = $this->countProductsByCategoryUseCase->execute($categoryIds);
 
-        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+        $host = $request->getSchemeAndHttpHost() ;
         $productsDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $products);
 
         return new JsonResponse([
@@ -64,7 +64,7 @@ class CategoryController extends AbstractController
             $categories = $this->entityManager->getRepository(Categories::class)->findAll();
 
             // Obtenir l'URL de base de l'hôte
-            $host = $request->getSchemeAndHttpHost() . '/jeesign';
+            $host = $request->getSchemeAndHttpHost();
 
             // Manuellement composer la réponse JSON sans les produits associés
             $categoriesArray = [];

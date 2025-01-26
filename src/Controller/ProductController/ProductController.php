@@ -41,7 +41,7 @@ class ProductController extends AbstractController
     #[Route('/api/commandes/{id}/products', name: 'get_products_by_commande', methods: ['GET'])]
     public function getProductsByCommande(Commande $commande, Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+        $host = $request->getSchemeAndHttpHost() ;
         $products = $this->getProductsByCommandeUseCase->execute($commande, $host);
 
         return $this->json($products, JsonResponse::HTTP_OK);
@@ -81,7 +81,7 @@ class ProductController extends AbstractController
     #[Route('/api/products', name: 'get_all_products', methods: ['GET'])]
     public function getAllProducts(Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+        $host = $request->getSchemeAndHttpHost() ;
         $products = $this->getAllProductsUseCase->execute($host);
 
         return $this->json($products, JsonResponse::HTTP_OK);
@@ -90,7 +90,7 @@ class ProductController extends AbstractController
     #[Route('/api/products/{offer}', name: 'get_products_by_offer', methods: ['GET'])]
     public function getProductsByOffer(string $offer, Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+        $host = $request->getSchemeAndHttpHost() ;
 
         // Récupérer les produits en fonction de l'offre
         $products = $this->getProductsByOfferUseCase->execute($offer, $host);

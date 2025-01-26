@@ -20,7 +20,7 @@ class HomeSliderController extends AbstractController
     #[Route('/api/homeslider', name: 'get_home_slider', methods: ['GET'])]
     public function getHomeSLider(Request $request)
     {
-        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+        $host = $request->getSchemeAndHttpHost();
         $homeSlider = $this->getAllHomeSliderUseCase->execute($host);
         return $this->json($homeSlider, JsonResponse::HTTP_OK);
     }

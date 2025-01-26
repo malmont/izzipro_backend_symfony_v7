@@ -117,7 +117,7 @@ class OrderController extends AbstractController
         }
         $days = $request->query->get('days');
         
-        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+        $host = $request->getSchemeAndHttpHost() ;
     
         $orderDTOs = $this->getOrdersBySourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
 
@@ -138,7 +138,7 @@ class OrderController extends AbstractController
             return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
-        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+        $host = $request->getSchemeAndHttpHost() ;
         $orderDTOs = $this->getOrdersByUserUseCase->execute($user->getId(), $host);
 
         if (empty($orderDTOs)) {

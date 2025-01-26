@@ -19,7 +19,7 @@ class CarrierControleur extends AbstractController
     #[Route('/api/Carrier', name: 'get_Carrier', methods: ['GET'])]
     public function getCarrier(Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost() . '/jeesign';
+        $host = $request->getSchemeAndHttpHost();
         $carriers = $this->getAllCarriersUseCase->execute($host);
 
         return $this->json($carriers, JsonResponse::HTTP_OK);
