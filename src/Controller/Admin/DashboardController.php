@@ -129,6 +129,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Styles', 'fas fa-brush', Style::class);
         yield MenuItem::linkToCrud('Sizes', 'fas fa-ruler', Size::class);
         yield MenuItem::linkToCrud('Categories', 'fas fa-list', Categories::class);
+        yield MenuItem::linkToRoute('Gestion des Codes-Barres', 'fa fa-barcode', 'admin_barcode_management');
 
 
     }

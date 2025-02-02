@@ -1,0 +1,16 @@
+{% extends 'base_print.html.twig' %}
+
+{% block title %}Impression du Code Barre{% endblock %}
+
+{% block body %}
+    <h1>Impression du Code Barre pour {{ product.name }}</h1>
+    <div id="barcode-container">
+        {% for i in 1..copies %}
+            <div class="barcode-label">
+                <img src="data:image/png;base64,{{ barcodeImage }}" alt="Code Barre">
+                <p>{{ product.barcode }}</p>
+            </div>
+        {% endfor %}
+    </div>
+    <button onclick="window.print();" class="btn btn-primary">Imprimer</button>
+{% endblock %}

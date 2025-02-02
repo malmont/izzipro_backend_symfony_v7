@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Espace Admin{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    {# Intégration de Bootstrap (vous pouvez adapter le chemin selon votre installation) #}
+    <link rel="stylesheet" href="{{ asset('assets/bootstrap/css/bootstrap.min.css') }}">
+    {# Vos styles personnalisés pour l'admin #}
+    <link rel="stylesheet" href="{{ asset('assets/css/admin.css') }}">
+    
+    {% block stylesheets %}{% endblock %}
+  </head>
+  <body>
+    {# Barre de navigation (exemple) #}
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+     <a class="navbar-brand" href="https://backend-strapi.online/admin">Admin</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarAdmin" aria-controls="navbarAdmin" aria-expanded="false" aria-label="Basculer la navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarAdmin">
+        <ul class="navbar-nav mr-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{{ path('admin_barcode_management') }}">Gestion Codes-Barres</a>
+          </li>
+          {# Vous pouvez ajouter d'autres éléments de menu ici #}
+        </ul>
+      </div>
+    </nav>
+
+    <div class="container mt-4">
+      {% block body %}{% endblock %}
+    </div>
+
+    {# Pied de page (optionnel) #}
+    <footer class="footer bg-dark text-white mt-4">
+      <div class="container">
+        <span class="text-muted">© {{ "now"|date("Y") }} Mon Application Admin</span>
+      </div>
+    </footer>
+
+    {# Scripts JavaScript (jQuery et Bootstrap) #}
+    <script src="{{ asset('assets/js/jquery.min.js') }}"></script>
+    <script src="{{ asset('assets/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+    {% block javascripts %}{% endblock %}
+  </body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>{% block title %}Impression - Ecommerce!{% endblock %}</title>
+    <link rel="stylesheet" href="/assets/style.css" />
+    <style>
+      @media print {
+        @page {
+          /* Vous pouvez définir ici la taille globale de la page, si besoin */
+          size: 50mm 30mm;
+          margin: 0;
+        }
+        /* Style pour le conteneur de chaque étiquette */
+        .barcode-label {
+          width: 50mm;       /* Largeur de l'étiquette */
+          height: 30mm;      /* Hauteur de l'étiquette */
+          margin: 5mm auto;  /* Marge autour de chaque étiquette */
+          border: 1px solid #ccc; /* Optionnel : une bordure pour visualiser les limites */
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          box-sizing: border-box;
+        }
+        /* Limiter la taille de l'image pour qu'elle ne déborde pas */
+        .barcode-label img {
+          max-width: 50%;
+          max-height: 50%;
+          object-fit: contain;
+        }
+        /* Si vous souhaitez ajuster le titre uniquement pour l'impression */
+        h1 {
+          margin-bottom: 10mm;
+        }
+      }
+    </style>
+    {% block stylesheets %}{% endblock %}
+  </head>
+  <body>
+    {% block body %}{% endblock %}
+    {% block javascripts %}{% endblock %}
+  </body>
+</html>
