@@ -19,27 +19,36 @@ class CategoryService
         return $this->entityManager->getRepository(Categories::class)->findAll();
     }
 
-    public function getProductsByCategory(?array $categoryIds, ?string $keyword, int $page, int $pageSize): array
+    public function getProductsByCategory(?array $categoryIds, ?string $keyword, int $page, int $pageSize, ?string $barcode): array
     {
         $queryBuilder = $this->entityManager->getRepository(Product::class)->createQueryBuilder('p');
 
+        // Filtrer par catégorie
         if ($categoryIds) {
             $queryBuilder->join('p.category', 'c')
-                         ->andWhere('c.id IN (:categoryIds)')
-                         ->setParameter('categoryIds', $categoryIds);
+                        ->andWhere('c.id IN (:categoryIds)')
+                        ->setParameter('categoryIds', $categoryIds);
         }
 
+        // Filtrer par mot-clé (nom ou description)
         if ($keyword) {
-            $queryBuilder->andWhere('p.name LIKE :keyword OR p.description LIKE :keyword')
-                         ->setParameter('keyword', '%' . $keyword . '%');
+            $queryBuilder->andWhere('(p.name LIKE :keyword OR p.description LIKE :keyword)')
+                        ->setParameter('keyword', '%' . $keyword . '%');
         }
 
-        // Appliquer la pagination
+        // Filtrer par code-barres (exact match)
+        if ($barcode) {
+            $queryBuilder->andWhere('p.barcode = :barcode')
+                        ->setParameter('barcode', $barcode);
+        }
+
+        // Gérer la pagination
         $queryBuilder->setFirstResult(($page - 1) * $pageSize)
-                     ->setMaxResults($pageSize);
+                    ->setMaxResults($pageSize);
 
         return $queryBuilder->getQuery()->getResult();
     }
+
 
     public function countTotalProducts(?array $categoryIds = null): int
     {

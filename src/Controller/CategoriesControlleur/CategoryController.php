@@ -36,12 +36,13 @@ class CategoryController extends AbstractController
         $keyword = $request->query->get('keyword'); 
         $page = $request->query->getInt('page', 1);
         $pageSize = $request->query->getInt('pageSize', 12);
+        $barcode = $request->query->get('barcode');
 
         if ($categoryIds) {
             $categoryIds = json_decode($categoryIds);
         }
 
-        $products = $this->getProductsByCategoryUseCase->execute($categoryIds, $keyword, $page, $pageSize);
+        $products = $this->getProductsByCategoryUseCase->execute($categoryIds, $keyword, $page, $pageSize, $barcode);
         $totalProducts = $this->countProductsByCategoryUseCase->execute($categoryIds);
 
         $host = $request->getSchemeAndHttpHost() ;

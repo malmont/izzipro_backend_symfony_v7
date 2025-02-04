@@ -12,8 +12,8 @@ class GetProductsByCategoryUseCase
         $this->categoryService = $categoryService;
     }
 
-    public function execute(?array $categoryIds, ?string $keyword, int $page, int $pageSize): array
+    public function execute(?array $categoryIds, ?string $keyword, int $page, int $pageSize,?string $barcode): array
     {
-        return $this->categoryService->getProductsByCategory($categoryIds, $keyword, $page, $pageSize);
+        return $this->categoryService->getProductsByCategory($categoryIds, $keyword, $page, $pageSize, $barcode);
     }
 }
