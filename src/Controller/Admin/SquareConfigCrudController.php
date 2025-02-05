@@ -19,6 +19,7 @@ class SquareConfigCrudController extends AbstractCrudController
         return [
             TextField::new('accessToken', 'Access Token')->hideOnIndex(),
             TextField::new('applicationId', 'Application ID'),
+            TextField::new('locationId', 'Location ID'), // Ajout du champ locationId
             BooleanField::new('isActive', 'Actif'),
         ];
     }

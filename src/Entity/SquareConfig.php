@@ -22,6 +22,9 @@ class SquareConfig
     #[ORM\Column]
     private ?bool $isActive = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $locationId = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -100,6 +103,18 @@ class SquareConfig
         }
 
         return $decodedKey;
+    }
+
+    public function getLocationId(): ?string
+    {
+        return $this->locationId;
+    }
+
+    public function setLocationId(?string $locationId): static
+    {
+        $this->locationId = $locationId;
+
+        return $this;
     }
 
 

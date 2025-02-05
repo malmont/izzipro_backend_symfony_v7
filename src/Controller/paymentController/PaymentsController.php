@@ -7,16 +7,20 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Entity\SquareConfig;
+use Doctrine\ORM\EntityManagerInterface;
 
 class PaymentsController extends AbstractController
 {
     private $getPaymentsByOrderSourceUseCase;
     private $createPaymentUseCase;
+    private $entityManager;
 
-    public function __construct(GetPaymentsByOrderSourceUseCase $getPaymentsByOrderSourceUseCase,CreatePaymentUseCase $createPaymentUseCase)
+    public function __construct(GetPaymentsByOrderSourceUseCase $getPaymentsByOrderSourceUseCase,CreatePaymentUseCase $createPaymentUseCase,EntityManagerInterface $entityManager)
     {
         $this->getPaymentsByOrderSourceUseCase = $getPaymentsByOrderSourceUseCase;
         $this->createPaymentUseCase = $createPaymentUseCase;
+        $this->entityManager = $entityManager;
     }
 
     #[Route('api/payments', name: 'get_payments', methods: ['GET'])]
@@ -79,6 +83,29 @@ class PaymentsController extends AbstractController
         }
 
         return $this->json(['success' => false, 'errors' => $result['errors']], 500);
+    }
+
+     /**
+     * Récupérer applicationId et locationId pour le front
+     */
+    #[Route('/api/square-config', name: 'get_square_config', methods: ['GET'])]
+    public function getSquareConfig(): JsonResponse
+    {
+        $squareConfig = $this->entityManager
+            ->getRepository(SquareConfig::class)
+            ->findOneBy(['isActive' => true]);
+
+        if (!$squareConfig) {
+            return $this->json(['success' => false, 'error' => 'Configuration Square introuvable.'], 404);
+        }
+
+        return $this->json([
+            'success' => true,
+            'data' => [
+                'applicationId' => $squareConfig->getApplicationId(),
+                'locationId' => $squareConfig->getLocationId(),
+            ]
+        ]);
     }
 
 }
