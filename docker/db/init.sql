@@ -22,11 +22,11 @@ SET row_security = off;
 
 CREATE FUNCTION public.notify_messenger_messages() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-            BEGIN
-                PERFORM pg_notify('messenger_messages', NEW.queue_name::text);
-                RETURN NEW;
-            END;
+    AS $$
+            BEGIN
+                PERFORM pg_notify('messenger_messages', NEW.queue_name::text);
+                RETURN NEW;
+            END;
         $$;
 
 
@@ -991,7 +991,14 @@ CREATE TABLE public.payments (
     statut_payment_id integer,
     payment_type_id integer,
     amount double precision NOT NULL,
-    payment_date timestamp(0) without time zone NOT NULL
+    payment_date timestamp(0) without time zone NOT NULL,
+    square_payment_id character varying(255) DEFAULT NULL::character varying,
+    square_order_id character varying(255) DEFAULT NULL::character varying,
+    square_receipt_url character varying(255) DEFAULT NULL::character varying,
+    square_status character varying(50) DEFAULT NULL::character varying,
+    square_card_brand character varying(50) DEFAULT NULL::character varying,
+    square_last4 character varying(4) DEFAULT NULL::character varying,
+    square_risk_level character varying(50) DEFAULT NULL::character varying
 );
 
 
@@ -1256,6 +1263,35 @@ CREATE SEQUENCE public.size_id_seq
 
 
 ALTER TABLE public.size_id_seq OWNER TO symfony;
+
+--
+-- Name: square_config; Type: TABLE; Schema: public; Owner: symfony
+--
+
+CREATE TABLE public.square_config (
+    id integer NOT NULL,
+    access_token character varying(255) NOT NULL,
+    application_id character varying(255) NOT NULL,
+    is_active boolean NOT NULL,
+    location_id character varying(255) DEFAULT NULL::character varying
+);
+
+
+ALTER TABLE public.square_config OWNER TO symfony;
+
+--
+-- Name: square_config_id_seq; Type: SEQUENCE; Schema: public; Owner: symfony
+--
+
+CREATE SEQUENCE public.square_config_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE public.square_config_id_seq OWNER TO symfony;
 
 --
 -- Name: status_commande; Type: TABLE; Schema: public; Owner: symfony
@@ -1532,6 +1568,7 @@ COPY public."Cart" (id, user_cart_id, reference, fullname, carriername, carrierp
 --
 
 COPY public.admin_settings (id, navbar_component, style_choice, theme_choice, section1_component, type_component_section1, select_type_product_fetch, section2_component, type_component_section2, section3_component, type_component_section3, section4_component, type_component_section4, select_type_product_fetch_section2, select_type_product_fetch_section3, select_type_product_fetch_section4, section5_component, type_component_section5, section6_component, type_component_section6, section7_component, type_component_section7, select_type_product_fetch_section5, select_type_product_fetch_section6, select_type_product_fetch_section7, type_category_card, details_product_card_component, cart_item_card_component, total_card_component, checkout_card_component, account_dashboard_component, order_list_card_component, adress_list_card_component, carrier_list_card_component) FROM stdin;
+1	typeC	style7	theme4	typeE	typeD	typeIsfeatured	typeA	typeA	typeB	typeA	typeB	typeE	typeSpecialoffers	typeIsfeatured	typeNewarrivals	typeB	typeC	typeD	typeE	typeC	typeD	bestsellers	bestsellers	bestsellers	typeF	typeE	typeA	typeA	typeB	typeE	typeC	typeE	typeE
 \.
 
 
@@ -1669,6 +1706,12 @@ DoctrineMigrations\\Version20250111161730	2025-01-11 16:17:30	1
 DoctrineMigrations\\Version20250111162342	2025-01-11 16:23:43	1
 DoctrineMigrations\\Version20250111163254	2025-01-11 16:32:54	1
 DoctrineMigrations\\Version20250111163731	2025-01-11 16:37:31	1
+DoctrineMigrations\\Version20250111191417	2025-01-25 18:01:38	2
+DoctrineMigrations\\Version20250118154036	2025-01-25 18:01:38	10
+DoctrineMigrations\\Version20250118165038	2025-01-25 18:01:38	0
+DoctrineMigrations\\Version20250118170808	2025-01-25 18:01:38	0
+DoctrineMigrations\\Version20250118181308	2025-01-25 18:01:38	4
+DoctrineMigrations\\Version20250205003601	2025-02-05 00:55:01	10
 \.
 
 
@@ -1693,8 +1736,8 @@ COPY public.frais_de_port (id, commande_id, transporteur_id, name, facture, imag
 --
 
 COPY public.home_slider (id, title, description, button_message, button_url, image, is_diplayed) FROM stdin;
-1	Woman Fashion	Get up to 50% off today only!	Shop Now	https://backend-strapi.online/jeesign/product/combinaison	5a874b2b85729e78855d27eca91a6169c11f3ac3.jpg	t
-2	Woman Fashion	Get up to 50% off today only!	Shop Now	https://backend-strapi.online/jeesign/product/combinaison	76ffeb8c6bd3f6f378c4621561f68c2258410d4d.jpg	t
+1	Woman Fashion	Get up to 50% off today only!	Shop Now	https://backend-strapi.online/jeesign/product/combinaison	94fc5356a2cd04058aa9cf115384c15c4291ca44.jpg	t
+2	Woman Fashion	Get up to 50% off today only!	Shop Now	https://backend-strapi.online/jeesign/product/combinaison	2b37fc8c8db364f6733e6242c9bf1ed9bca7371f.jpg	t
 \.
 
 
@@ -1703,6 +1746,7 @@ COPY public.home_slider (id, title, description, button_message, button_url, ima
 --
 
 COPY public.inventory_movements (id, product_variant_id, movement_type_id, quantity, movement_date, stock_before_movement, stock_after_movement) FROM stdin;
+1	1	1	10	2025-02-02 23:20:55	0	10
 \.
 
 
@@ -1804,7 +1848,7 @@ COPY public.payment_type (id, name, description) FROM stdin;
 -- Data for Name: payments; Type: TABLE DATA; Schema: public; Owner: symfony
 --
 
-COPY public.payments (id, order_payment_id, payment_method_id, statut_payment_id, payment_type_id, amount, payment_date) FROM stdin;
+COPY public.payments (id, order_payment_id, payment_method_id, statut_payment_id, payment_type_id, amount, payment_date, square_payment_id, square_order_id, square_receipt_url, square_status, square_card_brand, square_last4, square_risk_level) FROM stdin;
 \.
 
 
@@ -1813,6 +1857,8 @@ COPY public.payments (id, order_payment_id, payment_method_id, statut_payment_id
 --
 
 COPY public.product (id, style_id, commande_id, name, description, moreinformations, price, isbestseller, isnewarrival, isfeatured, isspecialoffer, image, quantity, created_at, tags, slug, purchase_price, coefficient_multiplier, barcode, freeze_quantity, is_accessory) FROM stdin;
+1	1	\N	Feel A Way Shirt - Tan/Multi	<div>Feel A Way Shirt - Tan/Multi</div>	<div>Feel A Way Shirt - Tan/Multi</div>	3000	t	t	t	f	8a6bff1ca2b570ff314aff6bf533f2e3025c4f5b.webp	10	2025-01-25 18:03:48	Feel A Way Shirt - Tan/Multi	feel-a-way-shirt-tanmulti	1000	3	\N	\N	f
+2	5	\N	Watch Me Bloom Shirt - Pink/combo	<div>Watch Me Bloom Shirt - Pink/combo</div>	<div>Watch Me Bloom Shirt - Pink/combo</div>	3600	t	f	t	t	e7177b9220bea82eb0c1d49def3b714ffadec5a6.png	0	2025-01-25 18:05:00	Watch Me Bloom Shirt - Pink/combo	watch-me-bloom-shirt-pinkcombo	1200	3	\N	\N	f
 \.
 
 
@@ -1821,6 +1867,8 @@ COPY public.product (id, style_id, commande_id, name, description, moreinformati
 --
 
 COPY public.product_categories (product_id, categories_id) FROM stdin;
+1	1
+2	2
 \.
 
 
@@ -1829,6 +1877,7 @@ COPY public.product_categories (product_id, categories_id) FROM stdin;
 --
 
 COPY public.product_variant (id, color_id, size_id, product_id, stock_quantity) FROM stdin;
+1	\N	\N	1	10
 \.
 
 
@@ -1837,6 +1886,7 @@ COPY public.product_variant (id, color_id, size_id, product_id, stock_quantity) 
 --
 
 COPY public.refresh_tokens (id, refresh_token, username, valid) FROM stdin;
+1	pxMeM1l3oPJq0aQK6d2eJ7/sfw7vwufzzDThSLtUQ7GK+bPdo5zj7q0uAs+NHNQnpYOimYbq5mYGErPxoahEbA==	michel.almont@gmail.com	2025-02-14 02:07:26
 \.
 
 
@@ -1873,6 +1923,14 @@ COPY public.size (id, name) FROM stdin;
 2	Medium
 3	Large
 4	ExtraLarge
+\.
+
+
+--
+-- Data for Name: square_config; Type: TABLE DATA; Schema: public; Owner: symfony
+--
+
+COPY public.square_config (id, access_token, application_id, is_active, location_id) FROM stdin;
 \.
 
 
@@ -1991,7 +2049,7 @@ SELECT pg_catalog.setval('public."Cart_id_seq"', 1, false);
 -- Name: admin_settings_id_seq; Type: SEQUENCE SET; Schema: public; Owner: symfony
 --
 
-SELECT pg_catalog.setval('public.admin_settings_id_seq', 1, false);
+SELECT pg_catalog.setval('public.admin_settings_id_seq', 1, true);
 
 
 --
@@ -2103,7 +2161,7 @@ SELECT pg_catalog.setval('public.home_slider_id_seq', 2, true);
 -- Name: inventory_movements_id_seq; Type: SEQUENCE SET; Schema: public; Owner: symfony
 --
 
-SELECT pg_catalog.setval('public.inventory_movements_id_seq', 1, false);
+SELECT pg_catalog.setval('public.inventory_movements_id_seq', 1, true);
 
 
 --
@@ -2187,21 +2245,21 @@ SELECT pg_catalog.setval('public.payments_id_seq', 1, false);
 -- Name: product_id_seq; Type: SEQUENCE SET; Schema: public; Owner: symfony
 --
 
-SELECT pg_catalog.setval('public.product_id_seq', 1, false);
+SELECT pg_catalog.setval('public.product_id_seq', 2, true);
 
 
 --
 -- Name: product_variant_id_seq; Type: SEQUENCE SET; Schema: public; Owner: symfony
 --
 
-SELECT pg_catalog.setval('public.product_variant_id_seq', 1, false);
+SELECT pg_catalog.setval('public.product_variant_id_seq', 1, true);
 
 
 --
 -- Name: refresh_tokens_id_seq; Type: SEQUENCE SET; Schema: public; Owner: symfony
 --
 
-SELECT pg_catalog.setval('public.refresh_tokens_id_seq', 1, false);
+SELECT pg_catalog.setval('public.refresh_tokens_id_seq', 1, true);
 
 
 --
@@ -2230,6 +2288,13 @@ SELECT pg_catalog.setval('public.reviews_product_id_seq', 1, false);
 --
 
 SELECT pg_catalog.setval('public.size_id_seq', 4, true);
+
+
+--
+-- Name: square_config_id_seq; Type: SEQUENCE SET; Schema: public; Owner: symfony
+--
+
+SELECT pg_catalog.setval('public.square_config_id_seq', 1, false);
 
 
 --
@@ -2597,6 +2662,14 @@ ALTER TABLE ONLY public.reviews_product
 
 ALTER TABLE ONLY public.size
     ADD CONSTRAINT size_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: square_config square_config_pkey; Type: CONSTRAINT; Schema: public; Owner: symfony
+--
+
+ALTER TABLE ONLY public.square_config
+    ADD CONSTRAINT square_config_pkey PRIMARY KEY (id);
 
 
 --
