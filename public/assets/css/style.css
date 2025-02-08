@@ -3743,7 +3743,7 @@ footer {
 	overflow: hidden;
 }
 .footer_dark {
-	background-color: #202325;
+	background-color: white;
 	position: relative;
 }
 .footer_top {
@@ -3814,12 +3814,12 @@ footer .widget_title {
 	display: inline-block;
 }
 .contact_info_light li i {
-	border-color: #fff;
-	color: #fff;
+	border-color: black;
+	color: black;
 }
 .contact_info_light li span,
 .contact_info_light li a {
-	color: #fff;
+	color: black;
 }
 .contact_info_style2 i + * {
 	font-size: 18px;
@@ -3844,7 +3844,7 @@ footer .widget_title {
 	color: #687188;
 }
 .footer_dark h1, .footer_dark h2, .footer_dark h3, .footer_dark h4, .footer_dark h5, .footer_dark h6, .footer_dark p, .footer_dark a, .footer_dark .widget_links li a, .footer_dark .footer_link li a, .footer_dark .post_content a {
-	color: #fff;
+	color: black;
 }
 .footer_dark a:hover, .footer_dark .widget_links li a:hover, .widget_links li a:hover, .footer_dark .footer_link li a:hover,.footer_link li a:hover {
 	color: #100790;
