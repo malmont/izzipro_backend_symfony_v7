@@ -196,10 +196,13 @@ jobs:
       - name: ⚙️ Exécuter les commandes Symfony
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+            echo "Pause de 10 secondes pour laisser le container s'initialiser..."
+            sleep 10
             docker exec symfony_app php bin/console cache:clear --env=prod --no-warmup
             docker exec symfony_app php bin/console cache:warmup --env=prod
             docker exec symfony_app php bin/console doctrine:migrations:migrate --no-interaction --env=prod
           EOF
+
 
 
       # ⚙️ 10️⃣ Regénérer les fichiers d'assets Symfony
