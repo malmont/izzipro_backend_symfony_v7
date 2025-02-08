@@ -30,37 +30,38 @@ class CategoryController extends AbstractController
     }
 
     #[Route('/api/products/by-category', name: 'get_products_by_category', methods: ['GET'])]
-    public function getProductsByCategory(Request $request): JsonResponse
-    {
-        $categoryIds = $request->query->get('categories');
-        $keyword = $request->query->get('keyword'); 
-        $page = $request->query->getInt('page', 1);
-        $pageSize = $request->query->getInt('pageSize', 12);
-        $barcode = $request->query->get('barcode');
-    
-        // Si isWeb n'est pas défini, il sera false par défaut
-        $isWeb = filter_var($request->query->get('isWeb', 'false'), FILTER_VALIDATE_BOOLEAN);
-    
-        if ($categoryIds) {
-            $categoryIds = json_decode($categoryIds);
+        public function getProductsByCategory(Request $request): JsonResponse
+        {
+            $categoryIds = $request->query->get('categories');
+            $keyword = $request->query->get('keyword'); 
+            $page = $request->query->getInt('page', 1);
+            $pageSize = $request->query->getInt('pageSize', 12);
+            $barcode = $request->query->get('barcode');
+
+            // Ne pas forcer false par défaut : laisser null si non défini
+            $isWeb = $request->query->has('isWeb') ? filter_var($request->query->get('isWeb'), FILTER_VALIDATE_BOOLEAN) : null;
+            $isPos = $request->query->has('isPos') ? filter_var($request->query->get('isPos'), FILTER_VALIDATE_BOOLEAN) : null;
+
+            if ($categoryIds) {
+                $categoryIds = json_decode($categoryIds);
+            }
+
+            $products = $this->getProductsByCategoryUseCase->execute($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos);
+            $totalProducts = $this->countProductsByCategoryUseCase->execute($categoryIds);
+
+            $host = $request->getSchemeAndHttpHost();
+            $productsDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $products);
+
+            return new JsonResponse([
+                'meta' => [
+                    'total' => $totalProducts,
+                    'page' => $page,
+                    'pageSize' => $pageSize,
+                ],
+                'data' => $productsDTO,
+            ], JsonResponse::HTTP_OK);
         }
-    
-        $products = $this->getProductsByCategoryUseCase->execute($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb);
-        $totalProducts = $this->countProductsByCategoryUseCase->execute($categoryIds);
-    
-        $host = $request->getSchemeAndHttpHost();
-        $productsDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $products);
-    
-        return new JsonResponse([
-            'meta' => [
-                'total' => $totalProducts,
-                'page' => $page,
-                'pageSize' => $pageSize,
-            ],
-            'data' => $productsDTO,
-        ], JsonResponse::HTTP_OK);
-    }
-    
+
 
     #[Route('/api/category', name: 'get_categories', methods: ['GET'])]
     public function getCategories(Request $request): JsonResponse

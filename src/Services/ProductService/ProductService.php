@@ -102,19 +102,29 @@ class ProductService
 
         switch ($offer) {
             case 'bestsellers':
-                $filteredProducts = array_filter($products, fn($product) => $product->isIsbestseller());
+                $filteredProducts = array_filter($products, fn($product) =>
+                    $product->isIsbestseller() && ($product->isWeb())
+                );
                 break;
             case 'newarrivals':
-                $filteredProducts = array_filter($products, fn($product) => $product->isIsnewarrival());
+                $filteredProducts = array_filter($products, fn($product) =>
+                    $product->isIsnewarrival() && ($product->isWeb() )
+                );
                 break;
             case 'specialoffers':
-                $filteredProducts = array_filter($products, fn($product) => $product->isIsspecialoffer());
+                $filteredProducts = array_filter($products, fn($product) =>
+                    $product->isIsspecialoffer() && ($product->isWeb())
+                );
                 break;
             case 'isfeatured':
-                $filteredProducts = array_filter($products, fn($product) => $product->isIsfeatured());
+                $filteredProducts = array_filter($products, fn($product) =>
+                    $product->isIsfeatured() && ($product->isWeb() )
+                );
                 break;
             case 'isAccessory':
-                $filteredProducts = array_filter($products, fn($product) => $product->isAccessory());
+                $filteredProducts = array_filter($products, fn($product) =>
+                    $product->isAccessory() && ($product->isWeb() )
+                );
                 break;
             default:
                 return []; 
@@ -122,4 +132,5 @@ class ProductService
 
         return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $filteredProducts);
     }
+
 }

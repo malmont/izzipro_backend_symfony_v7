@@ -19,7 +19,7 @@ class CategoryService
         return $this->entityManager->getRepository(Categories::class)->findAll();
     }
 
-    public function getProductsByCategory(?array $categoryIds, ?string $keyword, int $page, int $pageSize, ?string $barcode, ?bool $isWeb): array
+    public function getProductsByCategory(?array $categoryIds, ?string $keyword, int $page, int $pageSize, ?string $barcode, ?bool $isWeb, ?bool $isPos): array
     {
         $queryBuilder = $this->entityManager->getRepository(Product::class)->createQueryBuilder('p');
 
@@ -46,6 +46,11 @@ class CategoryService
         if ($isWeb !== null) {
             $queryBuilder->andWhere('p.isWeb = :isWeb')
                         ->setParameter('isWeb', $isWeb);
+        }
+
+        if ($isPos !== null) {
+            $queryBuilder->andWhere('p.isPos = :isPos')
+                        ->setParameter('isPos', $isPos);
         }
 
         // Gérer la pagination

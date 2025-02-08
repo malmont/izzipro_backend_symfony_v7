@@ -95,6 +95,9 @@ class Product
     #[ORM\Column(nullable: true)]
     private ?bool $isWeb = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?bool $isPos = null;
+
     public function __construct()
     {
         $this->category = new ArrayCollection();
@@ -488,6 +491,18 @@ class Product
     public function setIsWeb(?bool $isWeb): static
     {
         $this->isWeb = $isWeb;
+
+        return $this;
+    }
+
+    public function isPos(): ?bool
+    {
+        return $this->isPos;
+    }
+
+    public function setIsPos(?bool $isPos): static
+    {
+        $this->isPos = $isPos;
 
         return $this;
     }
