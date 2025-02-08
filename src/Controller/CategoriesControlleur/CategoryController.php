@@ -29,7 +29,7 @@ class CategoryController extends AbstractController
         $this->entityManager = $entityManager;
     }
 
-   #[Route('/api/products/by-category', name: 'get_products_by_category', methods: ['GET'])]
+    #[Route('/api/products/by-category', name: 'get_products_by_category', methods: ['GET'])]
     public function getProductsByCategory(Request $request): JsonResponse
     {
         $categoryIds = $request->query->get('categories');
@@ -37,17 +37,20 @@ class CategoryController extends AbstractController
         $page = $request->query->getInt('page', 1);
         $pageSize = $request->query->getInt('pageSize', 12);
         $barcode = $request->query->get('barcode');
-
+    
+        // Si isWeb n'est pas défini, il sera false par défaut
+        $isWeb = filter_var($request->query->get('isWeb', 'false'), FILTER_VALIDATE_BOOLEAN);
+    
         if ($categoryIds) {
             $categoryIds = json_decode($categoryIds);
         }
-
-        $products = $this->getProductsByCategoryUseCase->execute($categoryIds, $keyword, $page, $pageSize, $barcode);
+    
+        $products = $this->getProductsByCategoryUseCase->execute($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb);
         $totalProducts = $this->countProductsByCategoryUseCase->execute($categoryIds);
-
-        $host = $request->getSchemeAndHttpHost() ;
+    
+        $host = $request->getSchemeAndHttpHost();
         $productsDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $products);
-
+    
         return new JsonResponse([
             'meta' => [
                 'total' => $totalProducts,
@@ -57,7 +60,7 @@ class CategoryController extends AbstractController
             'data' => $productsDTO,
         ], JsonResponse::HTTP_OK);
     }
-
+    
 
     #[Route('/api/category', name: 'get_categories', methods: ['GET'])]
     public function getCategories(Request $request): JsonResponse

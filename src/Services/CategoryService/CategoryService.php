@@ -19,7 +19,7 @@ class CategoryService
         return $this->entityManager->getRepository(Categories::class)->findAll();
     }
 
-    public function getProductsByCategory(?array $categoryIds, ?string $keyword, int $page, int $pageSize, ?string $barcode): array
+    public function getProductsByCategory(?array $categoryIds, ?string $keyword, int $page, int $pageSize, ?string $barcode, ?bool $isWeb): array
     {
         $queryBuilder = $this->entityManager->getRepository(Product::class)->createQueryBuilder('p');
 
@@ -42,12 +42,19 @@ class CategoryService
                         ->setParameter('barcode', $barcode);
         }
 
+        // Filtrer par is_web uniquement si la valeur est définie
+        if ($isWeb !== null) {
+            $queryBuilder->andWhere('p.isWeb = :isWeb')
+                        ->setParameter('isWeb', $isWeb);
+        }
+
         // Gérer la pagination
         $queryBuilder->setFirstResult(($page - 1) * $pageSize)
                     ->setMaxResults($pageSize);
 
         return $queryBuilder->getQuery()->getResult();
     }
+
 
 
     public function countTotalProducts(?array $categoryIds = null): int
