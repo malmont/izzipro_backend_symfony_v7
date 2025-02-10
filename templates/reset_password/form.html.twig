@@ -1,0 +1,18 @@
+{% extends 'base.email.html.twig' %}
+
+
+{% block title %}Réinitialiser le mot de passe{% endblock %}
+
+{% block body %}
+<div class="container mt-5">
+    <h2>Réinitialisation du mot de passe</h2>
+    <form action="{{ path('app_password_reset_confirm') }}" method="post">
+        <input type="hidden" name="token" value="{{ token }}">
+        <div class="form-group">
+            <label for="newPassword">Nouveau mot de passe</label>
+            <input type="password" id="newPassword" name="newPassword" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-primary mt-3">Changer mon mot de passe</button>
+    </form>
+</div>
+{% endblock %}
