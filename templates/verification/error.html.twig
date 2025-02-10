@@ -1,0 +1,21 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Erreur de vérification{% endblock %}
+
+{% block body %}
+<div class="container mt-5">
+    {% if emailConfig and emailConfig.logo %}
+        <div class="text-center mb-4">
+          <img src="{{ domain ~ asset(emailConfig.logo) }}" alt="Logo" style="max-width: 200px;">
+
+
+        </div>
+    {% endif %}
+    <div class="alert alert-danger" role="alert">
+        <h4 class="alert-heading">Erreur</h4>
+        <p>{{ message }}</p>
+        <hr>
+        <p class="mb-0">Veuillez réessayer ou contacter le support si le problème persiste.</p>
+    </div>
+</div>
+{% endblock %}

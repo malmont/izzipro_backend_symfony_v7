@@ -1,0 +1,19 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Compte Vérifié{% endblock %}
+
+{% block body %}
+<div class="container mt-5">
+    {% if emailConfig and emailConfig.logo %}
+        <div class="text-center mb-4">
+            <img src="{{ app.request.schemeAndHttpHost ~ asset(emailConfig.logo) }}" alt="Logo" style="max-width: 200px;">
+        </div>
+    {% endif %}
+    <div class="alert alert-success" role="alert">
+        <h4 class="alert-heading">Félicitations, {{ user.firstname }}!</h4>
+        <p>Votre compte a été vérifié avec succès.</p>
+        <hr>
+        <p class="mb-0">Vous pouvez maintenant vous connecter et profiter de toutes les fonctionnalités de notre site.</p>
+    </div>
+</div>
+{% endblock %}

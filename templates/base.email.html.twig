@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Email{% endblock %}</title>
+    <style type="text/css">
+      /* Quelques styles basiques pour les emails */
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f6f6f6;
+        margin: 0;
+        padding: 20px;
+      }
+      .email-container {
+        background-color: #ffffff;
+        margin: 0 auto;
+        max-width: 600px;
+        padding: 20px;
+        border: 1px solid #dddddd;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      {% block body %}
+      <!-- Le contenu de vos templates étendus sera inséré ici -->
+      {% endblock %}
+    </div>
+  </body>
+</html>

@@ -49,6 +49,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
+use App\Entity\EmailConfiguration;
 
 class DashboardController extends AbstractDashboardController
 {
@@ -88,6 +89,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Adresse user', 'fas fa-shipping-fast', Adress::class);
         yield MenuItem::linkToCrud('Contact', 'fas fa-envelope', Contact::class);
         yield MenuItem::linkToCrud('Users', 'fas fa-user', User::class);
+        yield MenuItem::linkToCrud('Email Configuration', 'fa fa-envelope', EmailConfiguration::class);
 
         yield MenuItem::section('Mouvements stock');
         yield MenuItem::linkToCrud('Types de Mouvement', 'fas fa-exchange-alt', MovementType::class);
