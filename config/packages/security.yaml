@@ -19,7 +19,7 @@ security:
                 check_path: /api/login
                 success_handler: App\Security\CustomAuthenticationSuccessHandler
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
-
+            user_checker: App\Security\UserChecker
         api:
             pattern: ^/api
             stateless: true
@@ -34,7 +34,7 @@ security:
             custom_authenticator: App\Security\LoginAuthenticator
             logout:
                 path: app_logout
-        
+            user_checker: App\Security\UserChecker
         
         
             # activate different ways to authenticate
