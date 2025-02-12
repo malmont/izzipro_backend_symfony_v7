@@ -28,11 +28,6 @@ services:
         tags:
             - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_created, method: onJWTCreated }
 
-    App\Security\CustomAuthenticationSuccessHandler:
-        arguments:
-            $jwtManager: '@lexik_jwt_authentication.jwt_manager'
-            $entityManager: '@doctrine.orm.entity_manager'
-
     App\EventListener\JWTFromCookieListener:
         tags:
             - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest, priority: 10 }
