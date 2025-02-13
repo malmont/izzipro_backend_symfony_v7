@@ -13,6 +13,8 @@ use Symfony\Component\Security\Core\User\UserInterface;
 use Gesdinet\JWTRefreshTokenBundle\Entity\RefreshToken;
 use Doctrine\ORM\EntityManagerInterface;
 use DateTime;
+use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
+
 
 use App\Entity\User; 
 
@@ -159,7 +161,7 @@ class SecurityController extends AbstractController
                 ->withValue($newToken)
                 ->withHttpOnly(true)
                 ->withSecure(true)
-                ->withSameSite(Cookie::SAMESITE_STRICT)
+                ->withSameSite(Cookie::SAMESITE_NONE)
                 ->withExpires(time() + 3600)
         );
         
@@ -183,14 +185,22 @@ class SecurityController extends AbstractController
         ], 401);
     }
     
+
     #[Route(path: '/api/logout', name: 'api_logout', methods: ['POST'])]
     public function logoutWeb(Request $request): Response {
-        $response = new Response();
-        $response->headers->clearCookie('jwt', '/', null, true, true, Cookie::SAMESITE_NONE);
-        $response->headers->clearCookie('refresh_token', '/', null, true, true, Cookie::SAMESITE_NONE);
-    
-        return $this->json([
+        $domain = $request->getHost();
+
+        // Créez d'abord la réponse JSON
+        $response = $this->json([
             'message' => 'Successfully logged out',
         ]);
+
+        // Ajoutez les headers de suppression des cookies
+        $response->headers->clearCookie('jwt', '/', $domain, true, true, Cookie::SAMESITE_NONE);
+        $response->headers->clearCookie('refresh_token', '/', $domain, true, true, Cookie::SAMESITE_NONE);
+
+        return $response;
     }
+
+
 }
