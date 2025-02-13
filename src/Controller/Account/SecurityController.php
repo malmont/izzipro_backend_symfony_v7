@@ -189,16 +189,14 @@ class SecurityController extends AbstractController
     #[Route(path: '/api/logout', name: 'api_logout', methods: ['POST'])]
     public function logoutWeb(Request $request): Response {
         $domain = $request->getHost();
-
         // Créez d'abord la réponse JSON
         $response = $this->json([
             'message' => 'Successfully logged out',
         ]);
 
         // Ajoutez les headers de suppression des cookies
-        $response->headers->clearCookie('jwt', '/', $domain, true, true, Cookie::SAMESITE_NONE);
-        $response->headers->clearCookie('refresh_token', '/', $domain, true, true, Cookie::SAMESITE_NONE);
-
+        $response->headers->clearCookie('jwt');
+        $response->headers->clearCookie('refresh_token');
         return $response;
     }
 
