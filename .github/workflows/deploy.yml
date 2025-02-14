@@ -64,7 +64,7 @@ jobs:
           DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@${{ secrets.DB_HOST }}:${{ secrets.DB_PORT }}/${{ secrets.DB_NAME }}
 
           ###> symfony/messenger ###
-          MESSENGER_TRANSPORT_DSN=doctrine://default
+          MAILER_DSN=${{ secrets.MAILER_DSN }}
           ###< symfony/messenger ###
 
           ###> JWT ###
