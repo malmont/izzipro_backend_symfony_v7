@@ -29,6 +29,18 @@ opcache.validate_timestamps=0" > /usr/local/etc/php/conf.d/opcache-recommended.i
 # ✅ Modifier la configuration www.conf pour écouter sur toutes les interfaces
 RUN sed -i "s|listen = 127.0.0.1:9000|listen = 0.0.0.0:9000|g" /usr/local/etc/php-fpm.d/www.conf
 
+# ✅ Optimiser la configuration PHP-FPM (pool www)
+#    Ici, nous utilisons le mode dynamique avec les paramètres recommandés :
+#    - pm.max_children: nombre maximum de processus enfants
+#    - pm.start_servers: nombre de processus au démarrage
+#    - pm.min_spare_servers et pm.max_spare_servers: nombre minimal et maximal de processus en réserve
+RUN echo "\n; Optimisation du pool PHP-FPM\n\
+pm = dynamic\n\
+pm.max_children = 50\n\
+pm.start_servers = 10\n\
+pm.min_spare_servers = 5\n\
+pm.max_spare_servers = 15\n" >> /usr/local/etc/php-fpm.d/www.conf
+
 # 📦 Installer Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
