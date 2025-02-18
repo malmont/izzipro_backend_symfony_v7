@@ -46,7 +46,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $verificationToken = null;
 
-    #[ORM\OneToMany(mappedBy: 'userAdress', targetEntity: Adress::class)]
+    #[ORM\OneToMany(mappedBy: 'userAdress', targetEntity: Adress::class, cascade: ['remove'], orphanRemoval: true)]
     private Collection $adresses;
 
     #[ORM\OneToMany(mappedBy: 'userReview', targetEntity: ReviewsProduct::class)]

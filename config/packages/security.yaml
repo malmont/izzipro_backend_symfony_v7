@@ -43,9 +43,14 @@ security:
     # Easy way to control access for large sections of your site
     # Note: Only the *first* access control that matches will be used
     access_control:
+        # 🔹 ROLE_USER_INTERNET peut lire (GET)
+        - { path: ^/api/admin-settings, methods: [GET], roles: PUBLIC_ACCESS }
+        # 🔹 ROLE_ADMIN peut modifier (POST, PUT, DELETE)
+        - { path: ^/api/admin-settings, methods: [POST, PUT, DELETE], roles: ROLE_ADMIN }
+
         - { path: ^/admin, roles: ROLE_ADMIN }
         - { path: ^/(account|adress|checkout), roles: [ROLE_USER_INTERNET, ROLE_USER_POS,ROLE_ADMIN] }
-        - { path: ^/api/(login|register|login-web|token/refresh|password-reset/request|password-reset/confirm|password-reset/form|products/by-category|category|homeslider|products|admin-settings), roles: PUBLIC_ACCESS }
+        - { path: ^/api/(login|register|login-web|token/refresh|password-reset/request|password-reset/confirm|password-reset/form|products/by-category|category|homeslider|products), roles: PUBLIC_ACCESS }
         - { path: ^/api/(collections|createcollections|commandes|fournisseurs|transporteurs|dashboard|caisse|statistiques|stock-evolution|stock-value|frais|payments/statistics|taxes/monthly|carrier/statistics), roles: ROLE_ADMIN }
         - { path: ^/api, roles: [ROLE_USER_INTERNET, ROLE_USER_POS,ROLE_ADMIN] }
 
