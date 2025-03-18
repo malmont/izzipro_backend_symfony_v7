@@ -39,15 +39,14 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app ]; then
               echo "📂 Création du dossier app..."
-              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app
-              chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app
-              chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+              sudo mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+              sudo chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+              sudo chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app
               echo "✅ Dossier app créé avec les bonnes permissions."
             else
               echo "✅ Le dossier app existe déjà. Aucune action nécessaire."
             fi
           EOF
-
 
       # 🔄 3️⃣ Générer le fichier .env avec Messenger DSN et JWT
       - name: 🔄 Générer le fichier .env localement
@@ -76,7 +75,6 @@ jobs:
           EOL
           echo "✅ Fichier .env généré."
 
-
       # 🔄 Synchronisation des fichiers avec rsync (y compris le .env)
       - name: 🔄 Synchroniser les fichiers avec rsync
         run: |
@@ -89,22 +87,22 @@ jobs:
             ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }}:/home/${{ secrets.CLIENT1_SERVER_USER }}/app/
           echo "✅ Synchronisation terminée."
 
-        # ⚙️ Création du dossier public pour les assets Symfony
+      # ⚙️ Création du dossier public pour les assets Symfony
       - name: ⚙️ Générer et synchroniser les fichiers d'assets Symfony
         run: |
           echo "📂 Préparation du dossier public sur le serveur distant..."
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public ]; then
               echo "📂 Création du dossier public sur le serveur distant..."
-              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
-              chmod -R 700 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              sudo mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
+              sudo chmod -R 700 /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
               echo "✅ Dossier public créé sur le serveur distant."
             else
               echo "✅ Le dossier public existe déjà sur le serveur distant."
             fi
           EOF
 
-        # 🔑 Création du dossier jwt pour les clés JWT
+      # 🔑 Création du dossier jwt pour les clés JWT
       - name: 🔑 Vérifier et créer le dossier jwt sur le serveur distant
         run: |
           echo "📂 Vérification et préparation du dossier jwt sur le serveur distant..."
@@ -112,25 +110,24 @@ jobs:
             JWT_DIR="/home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt"
             if [ ! -d "$JWT_DIR" ]; then
               echo "📂 Création du dossier jwt sur le serveur distant..."
-              mkdir -p "$JWT_DIR"
-              chmod -R 700 "$JWT_DIR"
+              sudo mkdir -p "$JWT_DIR"
+              sudo chmod -R 700 "$JWT_DIR"
               echo "✅ Dossier jwt créé sur le serveur distant."
 
               echo "🔑 Génération des clés JWT..."
-              openssl genrsa -out "$JWT_DIR/private.pem" 2048
-              openssl rsa -pubout -in "$JWT_DIR/private.pem" -out "$JWT_DIR/public.pem"
-              chmod 600 "$JWT_DIR/private.pem" "$JWT_DIR/public.pem"
+              sudo openssl genrsa -out "$JWT_DIR/private.pem" 2048
+              sudo openssl rsa -pubout -in "$JWT_DIR/private.pem" -out "$JWT_DIR/public.pem"
+              sudo chmod 600 "$JWT_DIR/private.pem" "$JWT_DIR/public.pem"
 
               echo "⚙️ Ajustement des permissions pour le conteneur..."
-              chown -R www-data:www-data "$JWT_DIR"
-              chmod -R 750 "$JWT_DIR"
+              sudo chown -R www-data:www-data "$JWT_DIR"
+              sudo chmod -R 750 "$JWT_DIR"
 
               echo "✅ Clés JWT générées et permissions ajustées."
             else
               echo "✅ Le dossier jwt existe déjà sur le serveur distant. Aucun changement."
             fi
           EOF
-
 
       # 🔑 5️⃣ Connexion à GHCR
       - name: 🔑 Login to GHCR
@@ -140,7 +137,7 @@ jobs:
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
           
-      # 🏗️ 7️⃣ Construire l'image Symfony
+      # 🏗️ 7️⃣ Construire l'image Symfony Docker Image
       - name: 🏗️ Build Symfony Docker Image
         run: |
           echo "📦 Construction de l'image Symfony"
@@ -148,7 +145,7 @@ jobs:
           docker tag ghcr.io/${{ github.repository_owner }}/symfony-backend:${{ matrix.client }} ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
           echo "✅ Image Symfony construite."
 
-      # 🏗️ 7️⃣ Construire l'image Nginx
+      # 🏗️ 7️⃣ Construire l'image Nginx Docker Image
       - name: 🏗️ Build Nginx Docker Image
         run: |
           echo "📦 Construction de l'image Nginx"
@@ -175,19 +172,19 @@ jobs:
             echo "🔧 Vérification du réseau Docker 'web'..."
             if ! docker network ls | grep -q "web"; then
               echo "🌐 Création du réseau Docker 'web'..."
-              docker network create web
+              sudo docker network create web
             else
               echo "✅ Le réseau 'web' existe déjà."
             fi
 
             echo "📥 Pull des dernières images..."
-            docker-compose pull  # ✅ Pull sans rebuild
+            sudo docker-compose pull  # ✅ Pull sans rebuild
 
             echo "🛑 Arrêt des anciens conteneurs..."
-            docker-compose down
+            sudo docker-compose down
 
             echo "🚀 Lancement des conteneurs..."
-            docker-compose up -d
+            sudo docker-compose up -d
 
             echo "✅ Déploiement terminé."
           EOF
@@ -198,12 +195,10 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             echo "Pause de 10 secondes pour laisser le container s'initialiser..."
             sleep 12
-            docker exec symfony_app php bin/console cache:clear --env=prod --no-warmup
-            docker exec symfony_app php bin/console cache:warmup --env=prod
-            docker exec symfony_app php bin/console doctrine:migrations:migrate --no-interaction --env=prod
+            sudo docker exec symfony_app php bin/console cache:clear --env=prod --no-warmup
+            sudo docker exec symfony_app php bin/console cache:warmup --env=prod
+            sudo docker exec symfony_app php bin/console doctrine:migrations:migrate --no-interaction --env=prod
           EOF
-
-
 
       # ⚙️ 10️⃣ Regénérer les fichiers d'assets Symfony
       - name: ⚙️ Regénérer et copier les fichiers d'assets Symfony
@@ -212,25 +207,23 @@ jobs:
             echo "🔄 Vérification du conteneur Symfony..."
             if docker ps | grep -q "symfony_app"; then
               echo "✅ Conteneur Symfony trouvé. Installation des assets..."
-              docker exec symfony_app php bin/console assets:install
+              sudo docker exec symfony_app php bin/console assets:install
               echo "✅ Assets Symfony installés."
 
               # Chemin vers le répertoire local
-            LOCAL_PUBLIC_DIR="/home/${{ secrets.CLIENT1_SERVER_USER }}/app/public"
+              LOCAL_PUBLIC_DIR="/home/${{ secrets.CLIENT1_SERVER_USER }}/app/public"
 
-            # Vérifiez si le répertoire local est vide
-            if [ -z "$(ls -A $LOCAL_PUBLIC_DIR 2>/dev/null)" ]; then
-              echo "📤 Copie des assets vers $LOCAL_PUBLIC_DIR..."
-              docker cp symfony_app:/var/www/public $LOCAL_PUBLIC_DIR
-              echo "✅ Assets copiés et permissions mises à jour."
-            else
-              echo "🛑 Le répertoire $LOCAL_PUBLIC_DIR n'est pas vide, aucun fichier n'a été écrasé."
-            fi
+              # Vérifiez si le répertoire local est vide
+              if [ -z "$(ls -A $LOCAL_PUBLIC_DIR 2>/dev/null)" ]; then
+                echo "📤 Copie des assets vers $LOCAL_PUBLIC_DIR..."
+                sudo docker cp symfony_app:/var/www/public $LOCAL_PUBLIC_DIR
+                echo "✅ Assets copiés et permissions mises à jour."
+              else
+                echo "🛑 Le répertoire $LOCAL_PUBLIC_DIR n'est pas vide, aucun fichier n'a été écrasé."
+              fi
 
             else
               echo "❌ Conteneur Symfony non trouvé !" >&2
               exit 1
             fi
           EOF
-
-        
