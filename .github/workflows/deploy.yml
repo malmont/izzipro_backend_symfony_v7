@@ -21,11 +21,10 @@ jobs:
       - name: 🔑 Configure SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 --decode > ~/.ssh/id_ed25519_backend_docker
-          chmod 600 ~/.ssh/id_ed25519_backend_docker
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | base64 --decode > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -t ed25519 -H ${{ secrets.CLIENT1_SERVER_IP }} >> ~/.ssh/known_hosts
           echo "✅ Clé SSH configurée."
-
 
       # 📥 2️⃣ Checkout complet du repository
       - name: 📥 Checkout repository
@@ -37,7 +36,7 @@ jobs:
       - name: 🛠️ Create app directory on server
         run: |
           echo "📂 Vérification et création du dossier app si nécessaire..."
-          ssh -i ~/.ssh/id_ed25519_backend_docker -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app ]; then
               echo "📂 Création du dossier app..."
               sudo mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app
@@ -80,7 +79,7 @@ jobs:
       - name: 🔄 Synchroniser les fichiers avec rsync
         run: |
           echo "📤 Synchronisation des fichiers avec rsync..."
-          rsync -avz -e "ssh -i ~/.ssh/id_ed25519_backend_docker -o StrictHostKeyChecking=no" \
+          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
             .env \
             Dockerfile \
             docker-compose.yml \
@@ -92,7 +91,7 @@ jobs:
       - name: ⚙️ Générer et synchroniser les fichiers d'assets Symfony
         run: |
           echo "📂 Préparation du dossier public sur le serveur distant..."
-          ssh -i ~/.ssh/id_ed25519_backend_docker -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public ]; then
               echo "📂 Création du dossier public sur le serveur distant..."
               sudo mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
@@ -107,7 +106,7 @@ jobs:
       - name: 🔑 Vérifier et créer le dossier jwt sur le serveur distant
         run: |
           echo "📂 Vérification et préparation du dossier jwt sur le serveur distant..."
-          ssh -i ~/.ssh/id_ed25519_backend_docker -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             JWT_DIR="/home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt"
             if [ ! -d "$JWT_DIR" ]; then
               echo "📂 Création du dossier jwt sur le serveur distant..."
@@ -167,7 +166,7 @@ jobs:
       # 🚀 9️⃣ Déploiement sans rebuild
       - name: 🚀 Déployer les conteneurs
         run: |
-          ssh -i ~/.ssh/id_ed25519_backend_docker -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
             echo "🔧 Vérification du réseau Docker 'web'..."
@@ -204,7 +203,7 @@ jobs:
       # ⚙️ 10️⃣ Regénérer les fichiers d'assets Symfony
       - name: ⚙️ Regénérer et copier les fichiers d'assets Symfony
         run: |
-          ssh -i ~/.ssh/id_ed25519_backend_docker -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             echo "🔄 Vérification du conteneur Symfony..."
             if docker ps | grep -q "symfony_app"; then
               echo "✅ Conteneur Symfony trouvé. Installation des assets..."
