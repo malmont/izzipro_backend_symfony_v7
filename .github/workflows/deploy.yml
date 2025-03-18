@@ -54,9 +54,9 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             if [ ! -d /home/${{ secrets.CLIENT1_SERVER_USER }}/app ]; then
               echo "📂 Création du dossier app..."
-              sudo mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app
-              sudo chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app
-              sudo chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+              mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+              chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+              chmod -R 755 /home/${{ secrets.CLIENT1_SERVER_USER }}/app
               echo "✅ Dossier app créé avec les bonnes permissions."
             else
               echo "✅ Le dossier app existe déjà. Aucune action nécessaire."
