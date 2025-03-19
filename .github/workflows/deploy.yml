@@ -20,26 +20,11 @@ jobs:
       # 🔑 1️⃣ Configuration de la clé SSH
       - name: 🔑 Configure SSH Key
         run: |
-          set -x  # Active le mode debug pour voir toutes les commandes exécutées
           mkdir -p ~/.ssh
-
-          echo "🛠 Vérification de la variable SSH_PRIVATE_KEY..."
-          if [[ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
-            echo "❌ ERREUR: La clé SSH est vide !"
-            exit 1
-          else
-            echo "✅ La clé SSH semble bien définie dans GitHub Secrets."
-          fi
-
-          echo "🔑 Écriture de la clé privée..."
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-
-          echo "📋 Vérification du fichier écrit..."
-          ls -lah ~/.ssh/
-          cat ~/.ssh/id_ed25519 || echo "❌ ERREUR: Le fichier id_ed25519 est vide !"
-
-          echo "🔍 Ajout de l'hôte dans known_hosts..."
+          ssh-keyscan -t ed25519 -H ${{ secrets.CLIENT1_SERVER_IP }} >> ~/.ssh/known_hosts
+          echo "✅ Clé SSH configurée."
 
       # 📥 2️⃣ Checkout complet du repository
       - name: 📥 Checkout repository
