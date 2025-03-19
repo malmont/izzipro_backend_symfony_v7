@@ -166,12 +166,14 @@ jobs:
       # 🚀 9️⃣ Déploiement sans rebuild
       - name: 🚀 Déployer les conteneurs
         run: |
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << EOF
             cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
-            # Correction des droits : s'assurer que tous les fichiers appartiennent à l'utilisateur
             echo "🔧 Ajustement des permissions sur le dossier app..."
             sudo chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} .
+
+            echo "🔑 Login to GHCR sur le serveur distant..."
+            sudo docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" -p "${{ secrets.GHCR_TOKEN }}"
 
             echo "🔧 Vérification du réseau Docker 'web'..."
             if ! docker network ls | grep -q "web"; then
@@ -182,7 +184,7 @@ jobs:
             fi
 
             echo "📥 Pull des dernières images..."
-            sudo docker compose pull  # ✅ Pull sans rebuild
+            sudo docker compose pull
 
             echo "🛑 Arrêt des anciens conteneurs..."
             sudo docker compose down
