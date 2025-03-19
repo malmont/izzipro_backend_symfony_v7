@@ -169,6 +169,10 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
+            # Correction des droits : s'assurer que tous les fichiers appartiennent à l'utilisateur
+            echo "🔧 Ajustement des permissions sur le dossier app..."
+            sudo chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} .
+
             echo "🔧 Vérification du réseau Docker 'web'..."
             if ! docker network ls | grep -q "web"; then
               echo "🌐 Création du réseau Docker 'web'..."
@@ -178,13 +182,13 @@ jobs:
             fi
 
             echo "📥 Pull des dernières images..."
-            sudo docker-compose pull  # ✅ Pull sans rebuild
+            sudo docker compose pull  # ✅ Pull sans rebuild
 
             echo "🛑 Arrêt des anciens conteneurs..."
-            sudo docker-compose down
+            sudo docker compose down
 
             echo "🚀 Lancement des conteneurs..."
-            sudo docker-compose up -d
+            sudo docker compose up -d
 
             echo "✅ Déploiement terminé."
           EOF
