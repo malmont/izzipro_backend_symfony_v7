@@ -73,6 +73,7 @@ jobs:
           ###< JWT ###
           SQUARE_SECRET_KEY=${{ secrets.SQUARE_SECRET_KEY }}
           CLIENT1_SERVER_USER=${{ secrets.CLIENT1_SERVER_USER }}
+          CLIENT1_GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
           EOL
           echo "✅ Fichier .env généré."
 
