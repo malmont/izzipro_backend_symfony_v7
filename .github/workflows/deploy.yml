@@ -72,6 +72,7 @@ jobs:
           JWT_PASSPHRASE=${{ secrets.JWT_PASSPHRASE }}
           ###< JWT ###
           SQUARE_SECRET_KEY=${{ secrets.SQUARE_SECRET_KEY }}
+          CLIENT1_SERVER_USER=${{ secrets.CLIENT1_SERVER_USER }}
           EOL
           echo "✅ Fichier .env généré."
 

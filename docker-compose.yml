@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # Symfony (PHP)
   app:
-    image: ghcr.io/malmont/symfony-backend:latest
+    image: ghcr.io/${CLIENT1_SERVER_USER}/symfony-backend:latest
     container_name: symfony_app
     volumes:
       - public_data:/var/www/public
@@ -34,7 +34,7 @@ services:
 
   # Symfony Nginx (Backend)
   nginx:
-    image: ghcr.io/malmont/symfony-nginx:latest
+    image: ghcr.io/${CLIENT1_SERVER_USER}/symfony-nginx:latest
     container_name: symfony_nginx
     volumes:
       - public_data:/var/www/public
@@ -70,7 +70,7 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /home/malmont/app/public
+      device: /home/${CLIENT1_SERVER_USER}/app/public
 
 networks:
   symfony:
