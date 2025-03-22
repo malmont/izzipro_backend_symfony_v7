@@ -172,7 +172,8 @@ jobs:
             cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
 
             echo "🔧 Ajustement des permissions sur le dossier app..."
-            sudo chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} .
+            sudo find . -mindepth 1 -maxdepth 1 ! -name 'jwt' -exec chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} {} \;
+
 
             echo "🔑 Login to GHCR sur le serveur distant..."
             sudo docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" -p "${{ secrets.GHCR_TOKEN }}"
