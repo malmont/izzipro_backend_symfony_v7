@@ -92,6 +92,45 @@ class OrderController extends AbstractController
         return $this->createOrderUseCase->execute($dto);
     }
 
+      /**
+     * @Route("api/order/create-multi-payment", name="order_create_multi_payment", methods={"POST"})
+     */
+    public function createOrderWithMultiplePayments(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $user = $this->getUser();
+
+        if (!$user) {
+            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+        }
+
+         // 🟢 Récupération des données de paiement Square
+        $paymentData = $data['payment'] ?? [];
+        $paymentMethods = array_map(function ($method) {
+            return new PaymentMethodDTO($method['type'], $method['amount']);
+        }, $data['paymentMethods']);
+
+        $dto = new CreateOrderMultiPaymentDTO(
+            $user->getId(),
+            $data['orderSource'],
+            $paymentMethods,
+            $data['addressId'],
+            $data['carrierId'],
+            $data['typeOrder'],
+            $data['items'],
+             // 🔑 Infos Square
+         $paymentData['squarePaymentId'] ?? null,
+         $paymentData['squareOrderId'] ?? null,
+         $paymentData['squareReceiptUrl'] ?? null,
+         $paymentData['squareStatus'] ?? null,
+         $paymentData['squareCardBrand'] ?? null,
+         $paymentData['squareLast4'] ?? null,
+         $paymentData['squareRiskLevel'] ?? null
+        );
+        return $this->createOrderUseCase->execute($dto);
+    }
+
+
     /**
      * @Route("api/order/cancel/{id}", name="order_cancel", methods={"POST"})
      */
