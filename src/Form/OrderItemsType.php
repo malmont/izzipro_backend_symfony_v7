@@ -16,11 +16,16 @@ class OrderItemsType extends AbstractType
         $builder
             ->add('productVariant', EntityType::class, [
                 'class' => ProductVariant::class,
-                'choice_label' => function (ProductVariant $productVariant) {
-                    return $productVariant->getProductName(); // Utilise la méthode pour récupérer le nom du produit
+                'choice_label' => function (ProductVariant $variant) {
+                    $product = $variant->getProduct()?->getName() ?? 'Produit inconnu';
+                    $size = $variant->getSize() ?? 'Taille ?';
+                    $color = $variant->getColor() ?? 'Couleur ?';
+                    $id= $variant->getId();
+                    return sprintf('%s - %s - %s (ID: %s)', $product, $size, $color, $id);
                 },
                 'label' => 'Produit',
             ])
+        
             ->add('quantity', IntegerType::class, [
                 'label' => 'Quantité',
                 'required' => true, 

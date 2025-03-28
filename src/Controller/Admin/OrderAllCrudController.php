@@ -14,8 +14,6 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use Symfony\Component\Form\Extension\Core\Type\CollectionType;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
 class OrderAllCrudController extends AbstractCrudController
@@ -46,11 +44,20 @@ class OrderAllCrudController extends AbstractCrudController
 
     public function configureFields(string $pageName): iterable
     {
+        // On utilise le champ "userId" pour sélectionner le client.
+        // Le champ "shippingAdress" sera automatiquement rempli dans persistEntity.
         return [
             IdField::new('id')->hideOnForm(),
+            AssociationField::new('userId', 'Client'),
             AssociationField::new('orderSource', 'Order Source'),
-            AssociationField::new('shippingAdress', 'Shipping Address'),
-            AssociationField::new('carrier', 'Carrier'),
+            // On affiche l'adresse en lecture seule dans le détail, mais dans le formulaire elle sera vide.
+            AssociationField::new('shippingAdress', 'Adresse de livraison')
+                ->onlyOnDetail(),
+            AssociationField::new('carrier', 'Transporteur')
+                ->formatValue(function ($value, $entity) {
+                    return $entity->getCarrier() ? $entity->getCarrier()->getName() : 'Transporteur non disponible';
+                }),
+            AssociationField::new('orderType', 'Order Type'),
             AssociationField::new('status', 'Order Status')
                 ->formatValue(function ($value, $entity) {
                     return $entity->getStatus() ? $entity->getStatus()->getName() : '';
@@ -59,9 +66,7 @@ class OrderAllCrudController extends AbstractCrudController
                 ->allowAdd()
                 ->allowDelete()
                 ->setEntryType(OrderItemsType::class)
-                ->setFormTypeOptions([
-                    'by_reference' => false,
-                ]),
+                ->setFormTypeOptions(['by_reference' => false]),
             MoneyField::new('totalAmount', 'Total Amount')->setCurrency('USD')->hideOnForm(),
             CollectionField::new('payments', 'Payments')
                 ->setEntryType(PaymentType::class)
@@ -74,62 +79,75 @@ class OrderAllCrudController extends AbstractCrudController
     public function persistEntity(EntityManagerInterface $em, $entityInstance): void
     {
         if ($entityInstance instanceof Order) {
-            // Pas besoin de persister explicitement les entités liées grâce au cascade persist
+            // Si aucune adresse n'est renseignée, on récupère la première adresse du client
+            if (!$entityInstance->getShippingAdress() && $entityInstance->getUserId()) {
+                $user = $entityInstance->getUserId();
+                $adresses = $user->getAdresses(); // Assurez-vous que cette méthode renvoie une Collection
+                if (!$adresses->isEmpty()) {
+                    $firstAdress = $adresses->first();
+                    $entityInstance->setShippingAdress($firstAdress);
+                }
+            }
+
+            // Construction du tableau des items de commande
             $items = [];
             foreach ($entityInstance->getOrderItems() as $orderItem) {
+                $productVariant = $orderItem->getProductVariant();
                 $items[] = [
-                    'productVariantId' => $orderItem->getProductVariant()->getId(),
-                    'quantity' => $orderItem->getQuantity(),
+                    'productVariantId' => $productVariant->getId(),
+                    'quantity'         => $orderItem->getQuantity(),
+                    'size'             => $productVariant->getSize(),   // Vérifiez que la méthode existe
+                    'color'            => $productVariant->getColor(),  // Vérifiez que la méthode existe
                 ];
             }
 
-            // Créer un tableau de données basé sur l'entité Order
+            // Création du tableau de données pour le DTO
             $data = [
-                'orderSource' => $entityInstance->getOrderSource()->getId(),
-                'paymentMethod' => $entityInstance->getPayments()->first()->getPaymentMethod()->getId(),
-                'addressId' => $entityInstance->getShippingAdress()->getId(),
-                'carrierId' => $entityInstance->getCarrier()->getId(),
-                'items' => $items,
+                'userId'        => $entityInstance->getUserId()->getId(),
+                'orderSource'   => $entityInstance->getOrderSource()->getId(),
+                // Pour une création manuelle, on peut passer null pour paymentMethod si aucun paiement n'est défini
+                'paymentMethod' => $entityInstance->getPayments()->isEmpty()
+                                    ? null
+                                    : $entityInstance->getPayments()->first()->getPaymentMethod()->getId(),
+                'addressId'     => $entityInstance->getShippingAdress()->getId(),
+                'carrierId'     => $entityInstance->getCarrier()->getId(),
+                'typeOrder'     => $entityInstance->getOrderType() ? $entityInstance->getOrderType()->getId() : null,
+                'items'         => $items,
             ];
 
-            // Convertir les données en JSON
-            $jsonData = json_encode($data);
-
-            // Créer un objet Request avec un contenu JSON
-            $request = new Request(
-                [],   // Query parameters
-                [],   // Request parameters
-                [],   // Attributes
-                [],   // Cookies
-                [],   // Files
-                [],   // Server
-                $jsonData // The raw body data
+            $dto = new \App\Dto\CreateOrderDTO(
+                $data['userId'],
+                $data['orderSource'],
+                $data['paymentMethod'],
+                $data['addressId'],
+                $data['carrierId'],
+                $data['typeOrder'],
+                $data['items'],
+                null, // squarePaymentId
+                null, // squareOrderId
+                null, // squareReceiptUrl
+                null, // squareStatus
+                null, // squareCardBrand
+                null, // squareLast4
+                null  // squareRiskLevel
             );
-
-            // Définir le type de contenu de la requête comme JSON
-            $request->headers->set('Content-Type', 'application/json');
-
-            // Appelez le UseCase de création
-            $response = $this->createOrderUseCase->execute($request);
+            $response = $this->createOrderUseCase->execute($dto);
 
             if ($response instanceof JsonResponse && $response->getStatusCode() !== 201) {
                 throw new \Exception('Failed to create order: ' . $response->getContent());
             }
+            return;
         }
 
         parent::persistEntity($em, $entityInstance);
     }
 
-    public function updateEntity(EntityManagerInterface $em, $entityInstance): void
+    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
-        if ($entityInstance instanceof Order && $entityInstance->getStatus()->getName() === 'Annulé') {
-            $response = $this->cancelOrderUseCase->execute($entityInstance->getId());
-
-            if ($response instanceof JsonResponse && $response->getStatusCode() !== 200) {
-                throw new \Exception('Failed to cancel order: ' . $response->getContent());
-            }
+        if ($entityInstance instanceof Order && $entityInstance->getStatus()->getId() === 7) {
+            $this->cancelOrderUseCase->execute($entityInstance->getId());
         }
 
-        parent::updateEntity($em, $entityInstance);
+        parent::updateEntity($entityManager, $entityInstance);
     }
 }

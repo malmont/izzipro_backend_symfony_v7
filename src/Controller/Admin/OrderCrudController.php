@@ -12,6 +12,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use App\UseCase\OrderUseCase\CancelOrderUseCase;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 
 class OrderCrudController extends AbstractCrudController
 {
@@ -92,4 +94,8 @@ class OrderCrudController extends AbstractCrudController
         // Continuer la mise à jour de l'entité
         parent::updateEntity($entityManager, $entityInstance);
     }
+    public function configureActions(Actions $actions): Actions
+        {
+            return $actions->disable(Action::NEW);
+        }
 }

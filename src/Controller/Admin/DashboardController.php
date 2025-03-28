@@ -37,6 +37,7 @@ use App\Entity\Tax;
 use App\Entity\OrderTax;
 use App\Entity\OrderType;
 use App\Entity\AdminSettings;
+use App\Entity\Entreprise;
 use App\Entity\PaymentType;
 use App\Entity\CashDetails;
 use App\Entity\Denomination;
@@ -77,7 +78,10 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Home Slider', 'fas fa-images', HomeSlider::class);
         yield MenuItem::linkToCrud('Admin Settings', 'fas fa-cogs', AdminSettings::class);
 
-        yield MenuItem::section('EASYMAKEMONEY');
+        yield MenuItem::section('Entreprise');
+        yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
+
+        yield MenuItem::section('IIZIMANAGER');
         yield MenuItem::linkToCrud('Collections', 'fas fa-archive', Collections::class); // Ajoutez cette ligne
         yield MenuItem::linkToCrud('Commandes', 'fas fa-shopping-cart', Commande::class);
         yield MenuItem::linkToCrud('Notes de Frais', 'fas fa-receipt', NoteDeFrais::class);
@@ -103,7 +107,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Type Cash', 'fas fa-money-bill-wave', TypeCash::class)->setController(TypeCashCrudController::class);
 
         yield MenuItem::section('Order');
-        yield MenuItem::linkToCrud('complet order', 'fas fa-list', Order::class)
+        yield MenuItem::linkToCrud('Create order', 'fas fa-list', Order::class)
                 ->setController(OrderAllCrudController::class);
         yield MenuItem::linkToCrud('Status Order', 'fas fa-tags', StatusCommande::class);
         yield MenuItem::linkToCrud('Order source', 'fas fa-shopping-cart', OrderSource::class);

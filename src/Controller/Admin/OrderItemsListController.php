@@ -8,6 +8,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
@@ -56,15 +57,21 @@ class OrderItemsListController extends AbstractCrudController
     }
 
     public function configureFields(string $pageName): iterable
-    {
-        return [
-            TextField::new('productVariant.product.name', 'Produit'),
-            NumberField::new('quantity', 'Quantité'), // Remplacer TextField par NumberField
-            MoneyField::new('unitPrice', 'Prix unitaire')->setCurrency('USD'),
-            MoneyField::new('totalPrice', 'Total')->setCurrency('USD')
-               ,
-        ];
-    }
+        {
+            return [
+                TextField::new('productVariant.product.name', 'Produit'),
+                TextField::new('productVariant.size', 'Taille'),
+                TextField::new('productVariant.color', 'Couleur'),
+                ImageField::new('productVariant.product.image', 'Image')
+                    ->setBasePath('assets/uploads/products/')
+                    ->setUploadDir('public/assets/uploads/products/')
+                    ->setUploadedFileNamePattern('[randomhash].[extension]')
+                    ->setRequired(false),
+                NumberField::new('quantity', 'Quantité'),
+                MoneyField::new('unitPrice', 'Prix unitaire')->setCurrency('USD'),
+                MoneyField::new('totalPrice', 'Total')->setCurrency('USD'),
+            ];
+        }
 
     /**
      * Cette méthode récupère les articles de commande associés à une commande spécifique.
