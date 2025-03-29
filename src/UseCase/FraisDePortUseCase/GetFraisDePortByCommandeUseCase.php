@@ -14,9 +14,9 @@ class GetFraisDePortByCommandeUseCase
         $this->fraisDePortService = $fraisDePortService;
     }
 
-    public function execute(Commande $commande): ?FraisDePortOutputDTO
+    public function execute(Commande $commande,string $host): ?FraisDePortOutputDTO
     {
         $fraisDePort = $this->fraisDePortService->getFraisDePortByCommande($commande);
-        return $fraisDePort ? new FraisDePortOutputDTO($fraisDePort) : null;
+        return $fraisDePort ? new FraisDePortOutputDTO($fraisDePort,$host) : null;
     }
 }

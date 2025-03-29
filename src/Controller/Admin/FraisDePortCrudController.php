@@ -28,12 +28,10 @@ class FraisDePortCrudController extends AbstractCrudController
             MoneyField::new('price', 'Prix')->setCurrency('EUR'),
             AssociationField::new('commande', 'Commande')->autocomplete(),
             AssociationField::new('transporteur', 'Transporteur'),
-            TextField::new('image', 'URL de la Photo'), 
-            ImageField::new('image', 'photoFraisDePort')
-                ->setBasePath('assets/images/')
-                ->setUploadDir('public/assets/images/')
-                ->setUploadedFileNamePattern('[randomhash].[extension]')
-                ->setRequired(false),   
+             ImageField::new('transporteur.logo', 'Logo du Transporteur')
+            ->setBasePath('/assets/uploads/Carrier/')
+            ->onlyOnIndex(),
+ 
         ];
     }
 }

@@ -26,7 +26,6 @@ class FraisDePortService
         $fraisDePort = new FraisDePort();
         $fraisDePort->setName($inputDTO->name);
         $fraisDePort->setFacture($inputDTO->facture);
-        $fraisDePort->setImage($inputDTO->image);
         $fraisDePort->setTracknumber($inputDTO->tracknumber);
         $fraisDePort->setPrice($inputDTO->price);
         $fraisDePort->setCommande($commande);

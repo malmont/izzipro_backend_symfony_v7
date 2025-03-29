@@ -22,10 +22,11 @@ class TransporteurCrudController extends AbstractCrudController
             IdField::new('id')->hideOnForm(),
             TextField::new('name', 'Nom'),
             TextField::new('contact', 'Contact'),
-            TextField::new('logo', 'URL de la Photo'), 
-            ImageField::new('logo', 'Photo')
-                ->setBasePath('')
-                ->onlyOnIndex(),
+            ImageField::new('logo')->setBasePath('assets/uploads/Carrier/')
+                ->setUploadDir('public/assets/uploads/Carrier/')
+                ->setUploadedFileNamePattern('[randomhash].[extension]')
+                ->setRequired(false),
+ 
         ];
     }
 }

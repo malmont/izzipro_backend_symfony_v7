@@ -34,9 +34,10 @@ class NoteDeFraisController extends AbstractController
     }
 
     #[Route('/api/collections/{id}/notes-de-frais', name: 'get_notes_de_frais_by_collection', methods: ['GET'])]
-    public function getNotesDeFraisByCollection(Collections $collection): JsonResponse
+    public function getNotesDeFraisByCollection(Collections $collection,Request $request): JsonResponse
     {
-        $notes = $this->getNotesDeFraisByCollectionUseCase->execute($collection);
+        $host = $request->getSchemeAndHttpHost();
+        $notes = $this->getNotesDeFraisByCollectionUseCase->execute($collection,$host);
         return $this->json($notes, JsonResponse::HTTP_OK);
     }
 
@@ -48,9 +49,8 @@ class NoteDeFraisController extends AbstractController
             return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
-        $inputDTO = new NoteDeFraisInputDTO($data['description'], (float) $data['montant'], $data['date'], $data['imageNdf'] ?? null);
+        $inputDTO = new NoteDeFraisInputDTO($data['description'], (float) $data['montant'], $data['date'], $data['typeNoteDeFraisId']);
         $this->createNoteDeFraisUseCase->execute($collection, $inputDTO);
-
         return $this->json(['success' => 'Note de frais created'], JsonResponse::HTTP_CREATED);
     }
 
@@ -62,7 +62,7 @@ class NoteDeFraisController extends AbstractController
             return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
-        $inputDTO = new NoteDeFraisInputDTO($data['description'], (float) $data['montant'], $data['date'], $data['imageNdf'] ?? null);
+        $inputDTO = new NoteDeFraisInputDTO($data['description'], (float) $data['montant'], $data['date'], $data['typeNoteDeFraisId']);
         $this->updateNoteDeFraisUseCase->execute($note, $inputDTO);
 
         return $this->json(['success' => 'Note de frais updated'], JsonResponse::HTTP_OK);

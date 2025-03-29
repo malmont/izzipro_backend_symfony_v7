@@ -6,13 +6,13 @@ class NoteDeFraisInputDTO
     public string $description;
     public float $montant;
     public string $date;
-    public ?string $imageNdf;
+    public int $typeNoteDeFraisId;
 
-    public function __construct(string $description, float $montant, string $date, ?string $imageNdf = null)
+    public function __construct(string $description, float $montant, string $date, int $typeNoteDeFraisId)
     {
         $this->description = $description;
         $this->montant = $montant;
         $this->date = $date;
-        $this->imageNdf = $imageNdf;
+        $this->typeNoteDeFraisId = $typeNoteDeFraisId ;
     }
 }

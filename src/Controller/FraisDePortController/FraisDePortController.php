@@ -40,7 +40,6 @@ class FraisDePortController extends AbstractController
         $inputDTO = new FraisDePortInputDTO(
             $data['name'] ?? '',
             $data['facture'] ?? '',
-            $data['image'] ?? null,
             $data['tracknumber'] ?? '',
             (float)($data['price'] ?? 0),
             (int)($data['transporteur']['id'] ?? 0)
@@ -52,9 +51,10 @@ class FraisDePortController extends AbstractController
     }
 
     #[Route('/api/commandes/{id}/frais-de-port', name: 'get_frais_de_port', methods: ['GET'])]
-    public function getFraisDePort(Commande $commande): JsonResponse
+    public function getFraisDePort(Commande $commande,Request $request): JsonResponse
     {
-        $fraisDePort = $this->getFraisDePortByCommandeUseCase->execute($commande);
+        $host = $request->getSchemeAndHttpHost();
+        $fraisDePort = $this->getFraisDePortByCommandeUseCase->execute($commande, $host);
 
         if (!$fraisDePort) {
             return new JsonResponse(['error' => 'No shipping cost associated with this order'], JsonResponse::HTTP_NOT_FOUND);

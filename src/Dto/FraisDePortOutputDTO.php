@@ -13,12 +13,13 @@ class FraisDePortOutputDTO
     public float $price;
     public array $transporteur;
 
-    public function __construct(FraisDePort $fraisDePort)
+    public function __construct(FraisDePort $fraisDePort,string $host)
     {
         $this->id = $fraisDePort->getId();
         $this->name = $fraisDePort->getName();
-        $this->facture = $fraisDePort->getFacture() ?? ''; // Assigner une chaîne vide si null
-        $this->image = $fraisDePort->getImage();
+        $this->facture = $fraisDePort->getFacture() ?? ''; 
+        $photo = $fraisDePort->getTransporteur();
+        $this->image = $photo ? $host . '/assets/uploads/Carrier/' . $photo->getLogo() : null;
         $this->tracknumber = $fraisDePort->getTracknumber();
         $this->price = $fraisDePort->getPrice();
         $this->transporteur = [

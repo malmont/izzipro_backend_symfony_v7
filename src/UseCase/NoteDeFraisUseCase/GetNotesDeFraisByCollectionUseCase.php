@@ -14,9 +14,13 @@ class GetNotesDeFraisByCollectionUseCase
         $this->noteDeFraisService = $noteDeFraisService;
     }
 
-    public function execute(Collections $collection): array
+
+    public function execute(Collections $collection, string $host): array
     {
         $notes = $this->noteDeFraisService->getNotesByCollection($collection);
-        return array_map(fn($note) => new NoteDeFraisOutputDTO($note), $notes);
+        return array_map(function($note) use ($host) {
+            return new NoteDeFraisOutputDTO($note, $host);
+        }, $notes);
     }
+    
 }

@@ -19,8 +19,8 @@ class FraisDePort
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $facture = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $image = null;
+    // #[ORM\Column(length: 255, nullable: true)]
+    // private ?string $image = null;
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $tracknumber = null;
@@ -63,17 +63,17 @@ class FraisDePort
         return $this;
     }
 
-    public function getImage(): ?string
-    {
-        return $this->image;
-    }
+    // public function getImage(): ?string
+    // {
+    //     return $this->image;
+    // }
 
-    public function setImage(?string $image): static
-    {
-        $this->image = $image;
+    // public function setImage(?string $image): static
+    // {
+    //     $this->image = $image;
 
-        return $this;
-    }
+    //     return $this;
+    // }
 
     public function gettracknumber(): ?string
     {
@@ -121,5 +121,10 @@ class FraisDePort
         $this->transporteur = $transporteur;
 
         return $this;
+    }
+
+    public function getTransporteurLogoPath(): ?string
+    {
+        return $this->transporteur?->getLogo();
     }
 }

@@ -11,12 +11,13 @@ class NoteDeFraisOutputDTO
     public string $date;
     public ?string $imageNdf;
 
-    public function __construct(NoteDeFrais $noteDeFrais)
+    public function __construct(NoteDeFrais $noteDeFrais, string $host)
     {
         $this->id = $noteDeFrais->getId();
         $this->description = $noteDeFrais->getDescription();
         $this->montant = $noteDeFrais->getMontant();
         $this->date = $noteDeFrais->getDate()->format('Y-m-d');
-        $this->imageNdf = $noteDeFrais->getImageNdf();
+        $photo = $noteDeFrais->getTypeNoteDeFrais();
+        $this->imageNdf = $photo ? $host . '/assets/images/' . $photo->getImage() : null;
     }
 }

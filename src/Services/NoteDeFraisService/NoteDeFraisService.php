@@ -3,6 +3,7 @@ namespace App\Services\NoteDeFraisService;
 
 use App\Entity\Collections;
 use App\Entity\NoteDeFrais;
+use App\Entity\TypeNoteDeFrais;
 use App\Dto\NoteDeFraisInputDTO;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -26,10 +27,9 @@ class NoteDeFraisService
         $note->setDescription($inputDTO->description);
         $note->setMontant($inputDTO->montant);
         $note->setDate(new \DateTime($inputDTO->date));
+        $typeNoteDeFrais = $this->entityManager->getRepository(TypeNoteDeFrais::class)->find($inputDTO->typeNoteDeFraisId);
+        $note->setTypeNoteDeFrais($typeNoteDeFrais);
         $note->setCollection($collection);
-        if ($inputDTO->imageNdf) {
-            $note->setImageNdf($inputDTO->imageNdf);
-        }
 
         $this->entityManager->persist($note);
         $this->entityManager->flush();
@@ -40,11 +40,8 @@ class NoteDeFraisService
         $note->setDescription($inputDTO->description);
         $note->setMontant($inputDTO->montant);
         $note->setDate(new \DateTime($inputDTO->date));
-
-        if ($inputDTO->imageNdf) {
-            $note->setImageNdf($inputDTO->imageNdf);
-        }
-
+        $typeNoteDeFrais = $this->entityManager->getRepository(TypeNoteDeFrais::class)->find($inputDTO->typeNoteDeFraisId);
+        $note->setTypeNoteDeFrais($typeNoteDeFrais);
         $this->entityManager->flush();
     }
 

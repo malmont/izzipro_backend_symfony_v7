@@ -21,8 +21,8 @@ class NoteDeFrais
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $Description = null;
 
-    #[ORM\Column(length: 255)]
-    private ?string $imageNdf = null;
+    // #[ORM\Column(length: 255)]
+    // private ?string $imageNdf = null;
 
     #[ORM\Column]
     private ?float $montant = null;
@@ -32,6 +32,9 @@ class NoteDeFrais
 
     #[ORM\ManyToOne(inversedBy: 'noteDeFrais')]
     private ?Collections $Collection = null;
+
+    #[ORM\ManyToOne(inversedBy: 'noteDeFrais')]
+    private ?TypeNoteDeFrais $typeNoteDeFrais = null;
 
     #[ORM\PrePersist] // Annotation pour générer le nom avant de persister
     public function generateName(): void
@@ -70,17 +73,17 @@ class NoteDeFrais
         return $this;
     }
 
-    public function getImageNdf(): ?string
-    {
-        return $this->imageNdf;
-    }
+    // public function getImageNdf(): ?string
+    // {
+    //     return $this->imageNdf;
+    // }
 
-    public function setImageNdf(string $imageNdf): static
-    {
-        $this->imageNdf = $imageNdf;
+    // public function setImageNdf(string $imageNdf): static
+    // {
+    //     $this->imageNdf = $imageNdf;
 
-        return $this;
-    }
+    //     return $this;
+    // }
 
     public function getMontant(): ?float
     {
@@ -114,6 +117,18 @@ class NoteDeFrais
     public function setCollection(?Collections $Collection): static
     {
         $this->Collection = $Collection;
+
+        return $this;
+    }
+
+    public function getTypeNoteDeFrais(): ?TypeNoteDeFrais
+    {
+        return $this->typeNoteDeFrais;
+    }
+
+    public function setTypeNoteDeFrais(?TypeNoteDeFrais $typeNoteDeFrais): static
+    {
+        $this->typeNoteDeFrais = $typeNoteDeFrais;
 
         return $this;
     }
