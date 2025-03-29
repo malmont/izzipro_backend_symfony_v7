@@ -27,13 +27,13 @@ class CommandeCrudController extends AbstractCrudController
             MoneyField::new('budget', 'Budget')->setCurrency('USD'),
             DateField::new('date', 'Date'),
             TextField::new('name', 'Nom de la Commande'),
-            TextField::new('photo', 'Photo de la Commande')->setRequired(false),
-            ImageField::new('photo', 'Photo')
-                ->setBasePath('')
-                ->onlyOnIndex(),
             AssociationField::new('collections', 'Collections'),
             AssociationField::new('fournisseur', 'Fournisseur Associé'),
             BooleanField::new('isClosed', 'isClosed'),
+            AssociationField::new('commandepictures', 'Image de la collection'),
+            ImageField::new('commandepictures.imageUrl', 'Aperçu de l\'image')
+            ->setBasePath('assets/images/')
+            ->onlyOnIndex(),
         ];
     }
 }

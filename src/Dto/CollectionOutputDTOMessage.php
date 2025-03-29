@@ -4,7 +4,7 @@ namespace App\Dto;
 
 use App\Entity\Collections;
 
-class CollectionOutputDTO
+class CollectionOutputDTOMessage
 {
     public int $id;
     public float $budgetCollection;
@@ -13,10 +13,10 @@ class CollectionOutputDTO
     public bool $del;
     public bool $isClosed;
     public string $nomCollection;
-    public ?string $photoCollection;
+    public CollectionPicture $photoCollections;
     public ?array $user;
 
-    public function __construct(Collections $collection, string $host)
+    public function __construct(Collections $collection)
     {
         $this->id = $collection->getId();
         $this->budgetCollection = $collection->getBudgetCollection();
@@ -25,10 +25,7 @@ class CollectionOutputDTO
         $this->del = $collection->isDel();
         $this->isClosed = $collection->getIsClosed();
         $this->nomCollection = $collection->getNomCollection();
-
-        $photo = $collection->getPhotoCollections();
-        $this->photoCollection = $photo ? $host . '/assets/images/' . $photo->getImageUrl() : null;
-
+        $this->photoCollections = $collection->getPhotoCollections();
         $user = $collection->getUserCollections();
         $this->user = $user ? [
             'id' => $user->getId(),
@@ -37,8 +34,8 @@ class CollectionOutputDTO
         ] : null;
     }
 
-    public static function fromEntity(Collections $collection, string $host): self
+    public static function fromEntity(Collections $collection): self
     {
-        return new self($collection, $host);
+        return new self($collection);
     }
 }

@@ -33,8 +33,8 @@ class Collections
     #[ORM\Column(length: 255)]
     private ?string $nomCollection = null;
 
-    #[ORM\Column(length: 255)]
-    private ?string $photoCollection = null;
+    // #[ORM\Column(length: 255)]
+    // private ?string $photoCollection = null;
 
     #[ORM\ManyToOne(inversedBy: 'collections')]
     private ?User $userCollections = null;
@@ -59,6 +59,9 @@ class Collections
 
     #[ORM\Column(nullable: true)]
     private ?bool $isClosed = false;
+
+    #[ORM\ManyToOne(inversedBy: 'collections')]
+    private ?CollectionPicture $photoCollections = null;
 
     public function __construct()
     {
@@ -132,17 +135,17 @@ class Collections
         return $this;
     }
 
-    public function getPhotoCollection(): ?string
-    {
-        return $this->photoCollection;
-    }
+    // public function getPhotoCollection(): ?string
+    // {
+    //     return $this->photoCollection;
+    // }
 
-    public function setPhotoCollection(string $photoCollection): static
-    {
-        $this->photoCollection = $photoCollection;
+    // public function setPhotoCollection(string $photoCollection): static
+    // {
+    //     $this->photoCollection = $photoCollection;
 
-        return $this;
-    }
+    //     return $this;
+    // }
 
     public function getUserCollections(): ?User
     {
@@ -261,4 +264,17 @@ class Collections
 
         return $this;
     }
+
+    public function getPhotoCollections(): ?CollectionPicture
+    {
+        return $this->photoCollections;
+    }
+
+    public function setPhotoCollections(?CollectionPicture $photoCollections): static
+    {
+        $this->photoCollections = $photoCollections;
+
+        return $this;
+    }
+    
 }

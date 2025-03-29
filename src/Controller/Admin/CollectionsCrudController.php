@@ -29,12 +29,13 @@ class CollectionsCrudController extends AbstractCrudController
             DateField::new('startDateCollection', 'Date de Début'),
             DateField::new('endDateCollection', 'Date de Fin'),
             BooleanField::new('del', 'Supprimé'),
-            TextField::new('photoCollection', 'URL de la Photo'),
-            ImageField::new('photoCollection', 'Photo')
-                ->setBasePath('')
-                ->onlyOnIndex(),
             AssociationField::new('userCollections', 'Utilisateur'),
             BooleanField::new('isClosed', 'isClosed'),
+            AssociationField::new('photoCollections', 'Image de la collection'),
+            ImageField::new('photoCollections.imageUrl', 'Aperçu de l\'image')
+            ->setBasePath('assets/images/')
+            ->onlyOnIndex(),
+           
         ];
     }
 }

@@ -29,9 +29,11 @@ class FraisDePortCrudController extends AbstractCrudController
             AssociationField::new('commande', 'Commande')->autocomplete(),
             AssociationField::new('transporteur', 'Transporteur'),
             TextField::new('image', 'URL de la Photo'), 
-            ImageField::new('image', 'Photo')
-                ->setBasePath('')
-                ->onlyOnIndex(),
+            ImageField::new('image', 'photoFraisDePort')
+                ->setBasePath('assets/images/')
+                ->setUploadDir('public/assets/images/')
+                ->setUploadedFileNamePattern('[randomhash].[extension]')
+                ->setRequired(false),   
         ];
     }
 }

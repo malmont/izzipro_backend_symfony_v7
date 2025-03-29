@@ -26,8 +26,8 @@ class Commande
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $name = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $photo = null;
+    // #[ORM\Column(length: 255, nullable: true)]
+    // private ?string $photo = null;
 
     #[ORM\ManyToOne(inversedBy: 'commandes')]
     private ?Collections $collections = null;
@@ -52,6 +52,9 @@ class Commande
      */
     #[ORM\OneToMany(mappedBy: 'commande', targetEntity: CommandeStatistiques::class)]
     private Collection $commandeStatistiques;
+
+    #[ORM\ManyToOne(inversedBy: 'commandes')]
+    private ?CollectionPicture $commandepictures = null;
 
     public function __construct()
     {
@@ -100,17 +103,17 @@ class Commande
         return $this;
     }
 
-    public function getPhoto(): ?string
-    {
-        return $this->photo;
-    }
+    // public function getPhoto(): ?string
+    // {
+    //     return $this->photo;
+    // }
 
-    public function setPhoto(?string $photo): static
-    {
-        $this->photo = $photo;
+    // public function setPhoto(?string $photo): static
+    // {
+    //     $this->photo = $photo;
 
-        return $this;
-    }
+    //     return $this;
+    // }
 
     public function getCollections(): ?Collections
     {
@@ -227,6 +230,18 @@ class Commande
                 $commandeStatistique->setCommande(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getCommandepictures(): ?CollectionPicture
+    {
+        return $this->commandepictures;
+    }
+
+    public function setCommandepictures(?CollectionPicture $commandepictures): static
+    {
+        $this->commandepictures = $commandepictures;
 
         return $this;
     }

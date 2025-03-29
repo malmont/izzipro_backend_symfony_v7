@@ -29,20 +29,22 @@ class CommandeController extends AbstractController
     }
 
     #[Route('/api/collections/{id}/commandes', name: 'get_commandes_by_collection', methods: ['GET'])]
-    public function getCommandesByCollection(Collections $collection): JsonResponse
-    {
-        $commandes = $this->getCommandesByCollectionUseCase->execute($collection);
-    
-        // Utiliser toArray() pour convertir la collection Doctrine en tableau PHP
-        $commandesArray = $commandes->toArray();
-    
-        // Transformer chaque commande en CommandeOutputDTO
-        $commandesDTO = array_map(function($commande) {
-            return new CommandeOutputDTO($commande);
-        }, $commandesArray);
-    
-        return $this->json($commandesDTO, 200);
-    }
+        public function getCommandesByCollection(Collections $collection, Request $request): JsonResponse
+        {
+            $host = $request->getSchemeAndHttpHost();
+            $commandes = $this->getCommandesByCollectionUseCase->execute($collection);
+
+            // Utiliser toArray() pour convertir la collection Doctrine en tableau PHP
+            $commandesArray = $commandes->toArray();
+
+            // Transformer chaque commande en CommandeOutputDTO en important $host dans la closure
+            $commandesDTO = array_map(function($commande) use ($host) {
+                return new CommandeOutputDTO($commande, $host);
+            }, $commandesArray);
+
+            return $this->json($commandesDTO, 200);
+        }
+
     #[Route('/api/collections/{id}/commandes', name: 'create_commande', methods: ['POST'])]
     public function createCommande(Request $request, Collections $collection): JsonResponse
     {

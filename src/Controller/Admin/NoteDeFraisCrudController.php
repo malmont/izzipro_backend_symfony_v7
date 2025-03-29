@@ -30,9 +30,11 @@ class NoteDeFraisCrudController extends AbstractCrudController
             DateField::new('date', 'Date'),
             AssociationField::new('Collection', 'Collection Associée'), // Utilisation de AssociationField pour le champ 'collection'
             UrlField::new('imageNdf', 'URL de l\'image de la Note de Frais'), // Utilisation de UrlField pour gérer l'URL de l'image
-            ImageField::new('imageNdf', 'Photo')
-                ->setBasePath('')
-                ->onlyOnIndex(),
+            ImageField::new('imageNdf', 'photoNoteDeFrais')
+                ->setBasePath('assets/images/')
+                ->setUploadDir('public/assets/images/')
+                ->setUploadedFileNamePattern('[randomhash].[extension]')
+                ->setRequired(false),   
         ];
     }
 }

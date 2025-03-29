@@ -12,8 +12,8 @@ class GetCollectionsUseCase
         $this->collectionService = $collectionService;
     }
 
-    public function execute(): array
+    public function execute(string $host): array
     {
-        return $this->collectionService->getCollections();
+        return $this->collectionService->getCollections( $host);
     }
 }

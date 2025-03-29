@@ -1,11 +1,14 @@
 <?php
+
 namespace App\Services\CollectionService;
 
 use App\Dto\CollectionInputDTO;
 use App\Dto\CollectionOutputDTO;
 use App\Entity\Collections;
+use App\Entity\CollectionPicture;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Query\ResultSetMapping;
 
 class CollectionService
 {
@@ -31,7 +34,11 @@ class CollectionService
         $collection->setEndDateCollection($inputDTO->endDateCollection);
         $collection->setDel($inputDTO->del);
         $collection->setNomCollection($inputDTO->nomCollection);
-        $collection->setPhotoCollection($inputDTO->photoCollection);
+
+
+        $randomPicture = $this->getRandomCollectionPicture();
+        $collection->setPhotoCollections($randomPicture);
+
         $collection->setUserCollections($user);
 
         $this->entityManager->persist($collection);
@@ -40,15 +47,32 @@ class CollectionService
         return $collection;
     }
 
-    public function getCollections(): array
+    public function getCollections(string $host): array
     {
         $collections = $this->entityManager->getRepository(Collections::class)->findAll();
-        return array_map(fn($collection) => new CollectionOutputDTO($collection), $collections);
+        return array_map(fn($collection) => new CollectionOutputDTO($collection, $host), $collections);
     }
 
     public function deleteCollection(Collections $collection): void
     {
         $this->entityManager->remove($collection);
         $this->entityManager->flush();
+    }
+    
+    /**
+     * Sélectionne aléatoirement une CollectionPicture depuis la base de données.
+     * Cette méthode utilise une requête native PostgreSQL qui trie les enregistrements par RANDOM().
+     */
+    private function getRandomCollectionPicture(): ?CollectionPicture
+    {
+        $sql = 'SELECT * FROM collection_picture ORDER BY RANDOM() LIMIT 1';
+        $rsm = new ResultSetMapping();
+        $rsm->addEntityResult(CollectionPicture::class, 'cp');
+        $rsm->addFieldResult('cp', 'id', 'id');
+        // Assurez-vous que le nom de la colonne dans votre table est bien « image_url ».
+        $rsm->addFieldResult('cp', 'image_url', 'imageUrl');
+
+        return $this->entityManager->createNativeQuery($sql, $rsm)
+            ->getOneOrNullResult();
     }
 }

@@ -16,6 +16,7 @@ use App\Entity\HomeSlider;
 use App\Entity\Collections;
 use App\Entity\Commande;
 use App\Entity\User;
+use App\Entity\CollectionPicture;
 use App\Entity\SquareConfig;
 use App\Entity\NoteDeFrais;
 use App\Entity\Fournisseur;
@@ -88,6 +89,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Fournisseurs', 'fas fa-truck', Fournisseur::class);
         yield MenuItem::linkToCrud('Transporteurs', 'fas fa-truck', Transporteur::class);
         yield MenuItem::linkToCrud('Frais de Port', 'fas fa-shipping-fast', FraisDePort::class);
+        yield MenuItem::linkToCrud('ImageCollection', 'fas fa-images ', CollectionPicture::class);
         
         yield MenuItem::section('Mouvements User');
         yield MenuItem::linkToCrud('Adresse user', 'fas fa-shipping-fast', Adress::class);

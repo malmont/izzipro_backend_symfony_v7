@@ -2,7 +2,7 @@
 namespace App\UseCase\CollectionUseCase;
 
 use App\Dto\CollectionInputDTO;
-use App\Dto\CollectionOutputDTO;
+use App\Dto\CollectionOutputDTOMessage;
 use App\Services\CollectionService\CollectionService;
 
 class CreateCollectionUseCase
@@ -14,9 +14,9 @@ class CreateCollectionUseCase
         $this->collectionService = $collectionService;
     }
 
-    public function execute(CollectionInputDTO $inputDTO): CollectionOutputDTO
+    public function execute(CollectionInputDTO $inputDTO): String
     {
         $collection = $this->collectionService->createCollection($inputDTO);
-        return CollectionOutputDTO::fromEntity($collection);
+        return 'Collection creer avec succes';
     }
 }

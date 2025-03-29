@@ -6,6 +6,8 @@ use App\Entity\Commande;
 use App\Entity\Fournisseur;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Dto\FournisseurInputDTO;
+use App\Entity\CollectionPicture;
+use Doctrine\ORM\Query\ResultSetMapping;
 
 class CommandeService
 {
@@ -29,9 +31,10 @@ class CommandeService
         $commande->setBudget($data['budget']);
         $commande->setDate(new \DateTime($data['date']));
         $commande->setName($data['name']);
-        $commande->setPhoto($data['photo']);
         $commande->setCollections($collection);
         $commande->setFournisseur($fournisseur);
+        $randomPicture = $this->getRandomCollectionPicture();
+        $commande->setCommandepictures($randomPicture);
 
         $this->entityManager->persist($commande);
         $this->entityManager->flush();
@@ -62,5 +65,22 @@ class CommandeService
         }
 
         return $fournisseur;
+    }
+
+    /**
+     * Sélectionne aléatoirement une CollectionPicture depuis la base de données.
+     * Cette méthode utilise une requête native PostgreSQL qui trie les enregistrements par RANDOM().
+     */
+    private function getRandomCollectionPicture(): ?CollectionPicture
+    {
+        $sql = 'SELECT * FROM collection_picture ORDER BY RANDOM() LIMIT 1';
+        $rsm = new ResultSetMapping();
+        $rsm->addEntityResult(CollectionPicture::class, 'cp');
+        $rsm->addFieldResult('cp', 'id', 'id');
+        // Assurez-vous que le nom de la colonne dans votre table est bien « image_url ».
+        $rsm->addFieldResult('cp', 'image_url', 'imageUrl');
+
+        return $this->entityManager->createNativeQuery($sql, $rsm)
+            ->getOneOrNullResult();
     }
 }

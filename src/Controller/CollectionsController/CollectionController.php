@@ -45,9 +45,10 @@ class CollectionController extends AbstractController
     }
 
     #[Route('/api/collections', name: 'get_collections', methods: ['GET'])]
-    public function getCollections(): JsonResponse
+    public function getCollections(Request $request): JsonResponse
     {
-        $collections = $this->getCollectionsUseCase->execute();
+        $host = $request->getSchemeAndHttpHost();
+        $collections = $this->getCollectionsUseCase->execute($host);
         return $this->json($collections);
     }
 

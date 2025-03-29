@@ -13,13 +13,15 @@ class CommandeOutputDTO
     public int $collectionId;
     public ?FournisseurOutputDTO $fournisseur;
 
-    public function __construct(Commande $commande)
+    public function __construct(Commande $commande, string $host)
     {
         $this->id = $commande->getId();
         $this->budget = $commande->getBudget();
         $this->date = $commande->getDate()->format('Y-m-d H:i:s');
         $this->name = $commande->getName();
-        $this->photo = $commande->getPhoto();
+        $photoCommande = $commande->getCommandepictures();
+        $this->photo = $photoCommande ? $host . '/assets/images/' . $photoCommande->getImageUrl() : null;
+
         $this->collectionId = $commande->getCollections()->getId();
         
         $fournisseur = $commande->getFournisseur();
