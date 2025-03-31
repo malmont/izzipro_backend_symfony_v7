@@ -3,6 +3,7 @@ namespace App\Services\FournisseurService;
 
 use App\Dto\FournisseurInputDTO;
 use App\Entity\Fournisseur;
+use App\Entity\TypeFournisseur;
 use Doctrine\ORM\EntityManagerInterface;
 
 class FournisseurService
@@ -18,7 +19,7 @@ class FournisseurService
     {
         $fournisseur = new Fournisseur();
         $fournisseur->setName($inputDTO->name);
-        $fournisseur->setPhoto($inputDTO->photo);
+        $fournisseur->setTypeFournisseur($this->entityManager->getRepository(TypeFournisseur::class)->find($inputDTO->typeFournisseur));
         $fournisseur->setAdresse($inputDTO->adresse);
         $fournisseur->setVille($inputDTO->ville);
         $fournisseur->setPays($inputDTO->pays);

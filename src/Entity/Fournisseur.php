@@ -18,8 +18,8 @@ class Fournisseur
     #[ORM\Column(length: 255)]
     private ?string $name = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $photo = null;
+    // #[ORM\Column(length: 255, nullable: true)]
+    // private ?string $photo = null;
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $adresse = null;
@@ -35,6 +35,9 @@ class Fournisseur
 
     #[ORM\OneToMany(mappedBy: 'fournisseur', targetEntity: Commande::class)]
     private Collection $commandes;
+
+    #[ORM\ManyToOne(inversedBy: 'fournisseurs')]
+    private ?TypeFournisseur $typeFournisseur = null;
 
     public function __construct()
     {
@@ -58,17 +61,17 @@ class Fournisseur
         return $this;
     }
 
-    public function getPhoto(): ?string
-    {
-        return $this->photo;
-    }
+    // public function getPhoto(): ?string
+    // {
+    //     return $this->photo;
+    // }
 
-    public function setPhoto(?string $photo): static
-    {
-        $this->photo = $photo;
+    // public function setPhoto(?string $photo): static
+    // {
+    //     $this->photo = $photo;
 
-        return $this;
-    }
+    //     return $this;
+    // }
 
     public function getAdresse(): ?string
     {
@@ -150,5 +153,17 @@ class Fournisseur
     public function __toString(): string
     {
         return $this->name;
+    }
+
+    public function getTypeFournisseur(): ?TypeFournisseur
+    {
+        return $this->typeFournisseur;
+    }
+
+    public function setTypeFournisseur(?TypeFournisseur $typeFournisseur): static
+    {
+        $this->typeFournisseur = $typeFournisseur;
+
+        return $this;
     }
 }

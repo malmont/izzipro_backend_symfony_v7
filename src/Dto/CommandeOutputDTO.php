@@ -25,6 +25,6 @@ class CommandeOutputDTO
         $this->collectionId = $commande->getCollections()->getId();
         
         $fournisseur = $commande->getFournisseur();
-        $this->fournisseur = $fournisseur ? new FournisseurOutputDTO($fournisseur) : null;
+        $this->fournisseur = $fournisseur ? new FournisseurOutputDTO($fournisseur,$host) : null;
     }
 }

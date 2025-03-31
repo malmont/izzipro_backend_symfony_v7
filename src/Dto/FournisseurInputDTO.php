@@ -4,7 +4,7 @@ namespace App\Dto;
 class FournisseurInputDTO
 {
     public ?string $name;
-    public ?string $photo;
+    public int $typeFournisseur;
     public ?string $adresse;
     public ?string $ville;
     public ?string $pays;
@@ -13,7 +13,7 @@ class FournisseurInputDTO
     public function __construct(array $data)
     {
         $this->name = $data['name'] ?? null;
-        $this->photo = $data['photo'] ?? null;
+        $this->typeFournisseur = $data['typeFournisseur'] ?? null;
         $this->adresse = $data['adresse'] ?? null;
         $this->ville = $data['ville'] ?? null;
         $this->pays = $data['pays'] ?? null;

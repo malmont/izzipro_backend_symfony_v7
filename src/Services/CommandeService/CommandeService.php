@@ -45,6 +45,7 @@ class CommandeService
     public function findOrCreateFournisseur(FournisseurInputDTO $fournisseurDTO): Fournisseur
     {
         $fournisseur = $this->entityManager->getRepository(Fournisseur::class)->findOneBy([
+            'id' => $fournisseurDTO->id,
             'name' => $fournisseurDTO->name,
             'adresse' => $fournisseurDTO->adresse,
             'ville' => $fournisseurDTO->ville,
@@ -55,7 +56,7 @@ class CommandeService
         if (!$fournisseur) {
             $fournisseur = new Fournisseur();
             $fournisseur->setName($fournisseurDTO->name);
-            $fournisseur->setPhoto($fournisseurDTO->photo);
+            $fournisseur->setTypeFournisseur($this->entityManager->getRepository(TypeFournisseur::class)->find($fournisseurDTO->typeFournisseur));
             $fournisseur->setAdresse($fournisseurDTO->adresse);
             $fournisseur->setVille($fournisseurDTO->ville);
             $fournisseur->setPays($fournisseurDTO->pays);

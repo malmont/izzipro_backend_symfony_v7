@@ -32,6 +32,7 @@ use App\Entity\StatusPayment;
 use App\Entity\Caisse;
 use App\Entity\TransactionCaisse;
 use App\Entity\TypeNoteDeFrais;
+use App\Entity\TypeFournisseur;
 use App\Entity\InventoryMovements;
 use App\Entity\Payments;
 use App\Entity\StatusCommande;
@@ -88,6 +89,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Commandes', 'fas fa-shopping-cart', Commande::class);
         yield MenuItem::linkToCrud('Notes de Frais', 'fas fa-receipt', NoteDeFrais::class);
         yield MenuItem::linkToCrud('Fournisseurs', 'fas fa-truck', Fournisseur::class);
+        yield MenuItem::linkToCrud('Type Fournisseurs', 'fas fa-list', TypeFournisseur::class);
         yield MenuItem::linkToCrud('Transporteurs', 'fas fa-truck', Transporteur::class);
         yield MenuItem::linkToCrud('Frais de Port', 'fas fa-shipping-fast', FraisDePort::class);
         yield MenuItem::linkToCrud('ImageCollection', 'fas fa-images ', CollectionPicture::class);

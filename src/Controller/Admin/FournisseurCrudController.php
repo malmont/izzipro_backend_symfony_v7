@@ -22,12 +22,10 @@ class FournisseurCrudController extends AbstractCrudController
         return [
             IdField::new('id')->hideOnForm(),
             TextField::new('name', 'Nom du Fournisseur'),
-            TextField::new('photo', 'URL de la Photo'), 
-            ImageField::new('photo', 'photoFournisseur') 
-                ->setBasePath('assets/images/')
-                ->setUploadDir('public/assets/images/')
-                ->setUploadedFileNamePattern('[randomhash].[extension]')
-                ->setRequired(false), 
+            AssociationField::new('typeFournisseur', 'Type de fournisseur'),
+            ImageField::new('typeFournisseur.photo', 'Logo note de fournisseur')
+            ->setBasePath('/assets/images/')
+            ->onlyOnIndex(),  
             TextField::new('adresse', 'Adresse'),
             TextField::new('ville', 'Ville'),
             TextField::new('pays', 'Pays'),

@@ -29,13 +29,17 @@ class FournisseurController extends AbstractController
     }
 
     #[Route('/api/fournisseurs', name: 'get_all_fournisseurs', methods: ['GET'])]
-    public function getAllFournisseurs(): JsonResponse
-    {
-        $fournisseurs = $this->getAllFournisseursUseCase->execute();
-        $fournisseursArray = array_map(fn($fournisseur) => new FournisseurOutputDTO($fournisseur), $fournisseurs);
+        public function getAllFournisseurs(Request $request): JsonResponse
+        {
+            $host = $request->getSchemeAndHttpHost();
+            $fournisseurs = $this->getAllFournisseursUseCase->execute();
 
-        return $this->json($fournisseursArray, JsonResponse::HTTP_OK);
-    }
+            $fournisseursArray = array_map(function($fournisseur) use ($host) {
+                return new FournisseurOutputDTO($fournisseur, $host);
+            }, $fournisseurs);
+
+            return $this->json($fournisseursArray, JsonResponse::HTTP_OK);
+        }
 
     #[Route('/api/fournisseurs', name: 'create_fournisseur', methods: ['POST'])]
     public function createFournisseur(Request $request): JsonResponse
