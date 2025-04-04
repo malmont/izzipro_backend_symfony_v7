@@ -36,7 +36,7 @@ class EntrepriseService
         return $dto;
     }
 
-    public function getEntrepriseById(int $id): ?EntrepriseDto
+    public function getEntrepriseById(int $id,string $host): ?EntrepriseDto
     {
         $entreprise = $this->em->getRepository(Entreprise::class)->find($id);
         if (!$entreprise) {
@@ -45,8 +45,9 @@ class EntrepriseService
         $dto = new EntrepriseDto();
         $dto->id = $entreprise->getId();
         $dto->name = $entreprise->getName();
-        $dto->logo = $entreprise->getLogo();
+        $dto->logo = $entreprise->getLogo() ? $host . '/assets/uploads/email-logos/' . $entreprise->getLogo() : null;
         $dto->email = $entreprise->getEmail();
+        $dto->apropos = $entreprise->getApropos();
         $dto->tel = $entreprise->getTel();
         $dto->website = $entreprise->getWebsite();
         $dto->ein = $entreprise->getEin();

@@ -36,9 +36,10 @@ class EntrepriseController extends AbstractController
     }
 
     #[Route('/api/entreprise/{id}', name: 'api_entreprise_get', methods: ['GET'])]
-    public function getEntreprise(int $id): JsonResponse
+    public function getEntreprise(int $id,Request $request ): JsonResponse
     {
-        $entrepriseDto = $this->getEntrepriseUseCase->execute($id);
+        $host = $request->getSchemeAndHttpHost();
+        $entrepriseDto = $this->getEntrepriseUseCase->execute($id, $host);
 
         if (!$entrepriseDto) {
             return $this->json(['message' => 'Entreprise not found'], 404);

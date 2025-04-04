@@ -47,6 +47,9 @@ class Entreprise
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $adress = null;
 
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $Apropos = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -180,6 +183,18 @@ class Entreprise
     public function setAdress(?string $adress): static
     {
         $this->adress = $adress;
+
+        return $this;
+    }
+
+    public function getApropos(): ?string
+    {
+        return $this->Apropos;
+    }
+
+    public function setApropos(?string $Apropos): static
+    {
+        $this->Apropos = $Apropos;
 
         return $this;
     }

@@ -8,6 +8,7 @@ class EntrepriseDto
     public ?string $name = null;
     public ?string $logo = null;
     public ?string $email = null;
+    public ?string $apropos = null;
     public ?string $tel = null;
     public ?string $website = null;
     public ?string $ein = null;

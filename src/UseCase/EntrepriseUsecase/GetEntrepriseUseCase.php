@@ -12,8 +12,8 @@ class GetEntrepriseUseCase
         $this->entrepriseService = $entrepriseService;
     }
 
-    public function execute(int $id): ?EntrepriseDto
+    public function execute(int $id,string $host): ?EntrepriseDto
     {
-        return $this->entrepriseService->getEntrepriseById($id);
+        return $this->entrepriseService->getEntrepriseById($id,$host);
     }
 }

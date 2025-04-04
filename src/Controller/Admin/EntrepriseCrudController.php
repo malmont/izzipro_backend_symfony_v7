@@ -38,6 +38,7 @@ class EntrepriseCrudController extends AbstractCrudController
             TextareaField::new('conditionOfUse', 'Conditions d\'utilisation'),
             TextareaField::new('LegalNotice', 'Mentions légales'),
             TextareaField::new('privacyPolicy', 'Politique de confidentialité'),
+            TextareaField::new('Apropos', 'A propos'),
 
         ];
     }
