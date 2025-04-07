@@ -37,6 +37,7 @@ class UserCrudController extends AbstractCrudController
             TextField::new('lastname'),
             ArrayField::new('roles'),
             BooleanField::new('isVerified', 'Verified'),
+            BooleanField::new('otpEnabled', 'OTP Enabled'),
             TextField::new('plainPassword', 'Password')
                 ->setFormType(PasswordType::class)
                 ->onlyOnForms(),
@@ -63,7 +64,7 @@ class UserCrudController extends AbstractCrudController
                 $entityInstance->getPlainPassword()
             );
             $entityInstance->setPassword($hashedPassword);
-            // Ensure plainPassword is not persisted
+            // On s'assure que plainPassword ne sera pas persisté
             $entityInstance->setPlainPassword(null);
         }
     }

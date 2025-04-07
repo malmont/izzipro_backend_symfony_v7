@@ -1,0 +1,20 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Vérification OTP{% endblock %}
+
+{% block body %}
+  <div class="container">
+    <h2>Vérification OTP</h2>
+    {% if error %}
+      <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    <form method="post">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+      <div class="form-group">
+        <label for="otp">Entrez votre code OTP :</label>
+        <input type="text" id="otp" name="otp" class="form-control" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Valider</button>
+    </form>
+  </div>
+{% endblock %}

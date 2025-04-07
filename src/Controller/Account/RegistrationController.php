@@ -155,26 +155,6 @@ class RegistrationController extends AbstractController
         
 
         $mailer->send($emailMessage);
-
-        // $jwt = $jwtManager->create($user);
-
-        // // Pour le cas 'web', créer également un refresh token
-        // if ($platform === 'web') {
-        //     $refreshToken = new RefreshToken();
-        //     $refreshToken->setRefreshToken(base64_encode(random_bytes(64)));
-        //     $refreshToken->setUsername($user->getUserIdentifier());
-        //     $refreshToken->setValid((new \DateTime())->modify('+7 days'));
-
-        //     $entityManager->persist($refreshToken);
-        //     $entityManager->flush();
-
-        //     return $this->json([
-        //         'message' => 'Registered Successfully. Please check your email to verify your account.',
-        //         'token' => $jwt,
-        //         'refresh_token' => $refreshToken->getRefreshToken(),
-        //     ], Response::HTTP_CREATED);
-        // }
-
         return $this->json([
             'message' => 'Registered Successfully. Please check your email to verify your account.'
         ], Response::HTTP_CREATED);

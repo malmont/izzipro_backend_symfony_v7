@@ -77,6 +77,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(mappedBy: 'userCaisse', targetEntity: TransactionCaisse::class)]
     private Collection $transactionCaisses;
 
+    #[ORM\Column(nullable: true)]
+    private ?bool $otpEnabled = true;
+
+    /**
+     * @var Collection<int, OtpCode>
+     */
+    #[ORM\OneToMany(mappedBy: 'userOtp', targetEntity: OtpCode::class)]
+    private Collection $otpCodes;
+
     public function __construct()
     {
         $this->adresses = new ArrayCollection();
@@ -84,6 +93,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->collections = new ArrayCollection();
         $this->userOrders = new ArrayCollection();
         $this->transactionCaisses = new ArrayCollection();
+        $this->otpCodes = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -383,6 +393,48 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setResetTokenExpiresAt(?\DateTimeInterface $resetTokenExpiresAt): self
     {
         $this->resetTokenExpiresAt = $resetTokenExpiresAt;
+        return $this;
+    }
+
+    public function isOtpEnabled(): ?bool
+    {
+        return $this->otpEnabled;
+    }
+
+    public function setOtpEnabled(?bool $otpEnabled): static
+    {
+        $this->otpEnabled = $otpEnabled;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, OtpCode>
+     */
+    public function getOtpCodes(): Collection
+    {
+        return $this->otpCodes;
+    }
+
+    public function addOtpCode(OtpCode $otpCode): static
+    {
+        if (!$this->otpCodes->contains($otpCode)) {
+            $this->otpCodes->add($otpCode);
+            $otpCode->setUserOtp($this);
+        }
+
+        return $this;
+    }
+
+    public function removeOtpCode(OtpCode $otpCode): static
+    {
+        if ($this->otpCodes->removeElement($otpCode)) {
+            // set the owning side to null (unless already changed)
+            if ($otpCode->getUserOtp() === $this) {
+                $otpCode->setUserOtp(null);
+            }
+        }
+
         return $this;
     }
 

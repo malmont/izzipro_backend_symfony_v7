@@ -13,6 +13,11 @@ use Symfony\Component\Security\Core\User\UserInterface;
 use Gesdinet\JWTRefreshTokenBundle\Entity\RefreshToken;
 use Doctrine\ORM\EntityManagerInterface;
 use DateTime;
+
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Mime\Email;
+use App\Entity\OtpCode;
+use App\Entity\Entreprise;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 
 
@@ -32,13 +37,7 @@ class SecurityController extends AbstractController
     #[Route(path: '/login', name: 'app_login')]
     public function login(AuthenticationUtils $authenticationUtils): Response
     {
-        // if ($this->getUser()) {
-        //     return $this->redirectToRoute('target_path');
-        // }
-
-        // get the login error if there is one
         $error = $authenticationUtils->getLastAuthenticationError();
-        // last username entered by the user
         $lastUsername = $authenticationUtils->getLastUsername();
 
         return $this->render('security/login.html.twig', ['last_username' => $lastUsername, 'error' => $error]);
@@ -53,7 +52,8 @@ class SecurityController extends AbstractController
     #[Route(path: '/api/login', name: 'api_login', methods: ['POST'])]
     public function loginApi(
         Request $request,
-        JWTTokenManagerInterface $JWTManager
+        JWTTokenManagerInterface $JWTManager,
+        MailerInterface $mailer
     ): Response {
         // Lecture des données JSON envoyées par le client API
         $data = json_decode($request->getContent(), true) ?? [];
@@ -81,6 +81,66 @@ class SecurityController extends AbstractController
                 return new Response('This account is not allowed to access the POS platform.', Response::HTTP_FORBIDDEN);
             }
         }
+
+           // Si l'OTP est activé pour cet utilisateur
+           if ($user->isOtpEnabled()) {
+            // Générer un OTP à 6 chiffres
+            $otp = random_int(100000, 999999);
+            
+            // Créer et sauvegarder l'entité OtpCode
+            $otpCode = new OtpCode();
+            $otpCode->setUserOtp($user);
+            $otpCode->setCode((string)$otp);
+            // Le code est valable 5 minutes
+            $otpCode->setExpiration((new DateTime())->modify('+5 minutes'));
+            $this->entityManager->persist($otpCode);
+            $this->entityManager->flush();
+            // Envoyer l'OTP par email
+            // Récupérer la configuration d'email depuis la base de données
+            $emailConfig = $this->entityManager->getRepository(\App\Entity\EmailConfiguration::class)->findOneBy([]);
+
+            // Définir les valeurs d'expéditeur en fonction de la configuration ou des valeurs par défaut
+            if (!$emailConfig) {
+                $fromEmail = 'no-reply@votredomaine.com';
+                $fromName  = 'Votre Société';
+            } else {
+                $fromEmail = $emailConfig->getFromEmail();
+                $fromName  = $emailConfig->getFromName();
+            }
+
+            // Récupérer les informations de l'entreprise (on suppose qu'il n'y a qu'une seule entreprise)
+            $entreprise = $this->entityManager
+                ->getRepository(\App\Entity\Entreprise::class)
+                ->findOneBy([]);
+
+            // Création et envoi du message OTP avec le template Twig enrichi
+            $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+            $emailMessage = (new Email())
+                ->from(sprintf('%s <%s>', $fromName, $fromEmail))
+                ->to($user->getEmail())
+                ->subject('Votre code OTP')
+                ->html(
+                    $this->renderView('security/2fa_email.html.twig', [
+                        'code'       => $otp,
+                        'lifetime'   => 300, // durée en secondes
+                        'entreprise' => $entreprise,
+                        'domain'     => $domain,
+                    ])
+                );
+            $mailer->send($emailMessage);
+
+            
+            // Réponse indiquant que la vérification OTP est requise
+            return new Response(
+                json_encode([
+                    'otp_required' => true,
+                    'message' => 'Un code OTP vous a été envoyé par email. Veuillez le saisir pour continuer.'
+                ]),
+                Response::HTTP_OK,
+                ['Content-Type' => 'application/json']
+            );
+        }
+        
         
 
         $jwt = $JWTManager->create($user);
