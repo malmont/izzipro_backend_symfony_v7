@@ -1,3 +1,4 @@
+{# templates/emails/verification_error.html.twig #}
 {% extends 'base.email.html.twig' %}
 
 {% block title %}Erreur de vérification{% endblock %}
@@ -6,9 +7,12 @@
 <div class="container mt-5">
     {% if emailConfig and emailConfig.logo %}
         <div class="text-center mb-4">
-          <img src="{{ domain ~ asset(emailConfig.logo) }}" alt="Logo" style="max-width: 200px;">
-
-
+            <img src="{{ domain ~ asset(emailConfig.logo) }}" alt="{{ emailConfig.name }} Logo" style="max-width: 200px;">
+        </div>
+    {% endif %}
+    {% if emailConfig and emailConfig.name %}
+        <div class="text-center mb-4">
+            <h2>{{ emailConfig.name }}</h2>
         </div>
     {% endif %}
     <div class="alert alert-danger" role="alert">

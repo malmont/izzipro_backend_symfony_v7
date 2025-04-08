@@ -13,26 +13,28 @@ use Symfony\Component\Security\Core\User\UserInterface;
 use Gesdinet\JWTRefreshTokenBundle\Entity\RefreshToken;
 use Doctrine\ORM\EntityManagerInterface;
 use DateTime;
-
-use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
+use App\Services\TokenService;
 use App\Entity\OtpCode;
 use App\Entity\Entreprise;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
-
+use App\Services\OtpService;
 
 use App\Entity\User; 
 
 class SecurityController extends AbstractController
 {
     private EntityManagerInterface $entityManager;
+    private TokenService $tokenService;
+    private OtpService $otpService;
 
-
-    public function __construct( EntityManagerInterface $entityManager)
+    public function __construct(EntityManagerInterface $entityManager, TokenService $tokenService, OtpService $otpService)
     {
         $this->entityManager = $entityManager;
-
+        $this->tokenService  = $tokenService;
+        $this->otpService    = $otpService;
     }
+    
     
     #[Route(path: '/login', name: 'app_login')]
     public function login(AuthenticationUtils $authenticationUtils): Response
@@ -53,7 +55,6 @@ class SecurityController extends AbstractController
     public function loginApi(
         Request $request,
         JWTTokenManagerInterface $JWTManager,
-        MailerInterface $mailer
     ): Response {
         // Lecture des données JSON envoyées par le client API
         $data = json_decode($request->getContent(), true) ?? [];
@@ -82,55 +83,9 @@ class SecurityController extends AbstractController
             }
         }
 
-           // Si l'OTP est activé pour cet utilisateur
-           if ($user->isOtpEnabled()) {
-            // Générer un OTP à 6 chiffres
-            $otp = random_int(100000, 999999);
-            
-            // Créer et sauvegarder l'entité OtpCode
-            $otpCode = new OtpCode();
-            $otpCode->setUserOtp($user);
-            $otpCode->setCode((string)$otp);
-            // Le code est valable 5 minutes
-            $otpCode->setExpiration((new DateTime())->modify('+5 minutes'));
-            $this->entityManager->persist($otpCode);
-            $this->entityManager->flush();
-            // Envoyer l'OTP par email
-            // Récupérer la configuration d'email depuis la base de données
-            $emailConfig = $this->entityManager->getRepository(\App\Entity\EmailConfiguration::class)->findOneBy([]);
-
-            // Définir les valeurs d'expéditeur en fonction de la configuration ou des valeurs par défaut
-            if (!$emailConfig) {
-                $fromEmail = 'no-reply@votredomaine.com';
-                $fromName  = 'Votre Société';
-            } else {
-                $fromEmail = $emailConfig->getFromEmail();
-                $fromName  = $emailConfig->getFromName();
-            }
-
-            // Récupérer les informations de l'entreprise (on suppose qu'il n'y a qu'une seule entreprise)
-            $entreprise = $this->entityManager
-                ->getRepository(\App\Entity\Entreprise::class)
-                ->findOneBy([]);
-
-            // Création et envoi du message OTP avec le template Twig enrichi
-            $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
-            $emailMessage = (new Email())
-                ->from(sprintf('%s <%s>', $fromName, $fromEmail))
-                ->to($user->getEmail())
-                ->subject('Votre code OTP')
-                ->html(
-                    $this->renderView('security/2fa_email.html.twig', [
-                        'code'       => $otp,
-                        'lifetime'   => 300, // durée en secondes
-                        'entreprise' => $entreprise,
-                        'domain'     => $domain,
-                    ])
-                );
-            $mailer->send($emailMessage);
-
-            
-            // Réponse indiquant que la vérification OTP est requise
+             // Si l'OTP est activé pour cet utilisateur, on génère et envoie l'OTP via le service dédié
+        if ($user->isOtpEnabled()) {
+            $this->otpService->generateAndSendOtp($user, $request);
             return new Response(
                 json_encode([
                     'otp_required' => true,
@@ -140,55 +95,13 @@ class SecurityController extends AbstractController
                 ['Content-Type' => 'application/json']
             );
         }
-        
-        
+ 
+        // Sinon (si OTP n'est pas activé), générer les tokens via le service factorisé
+        $tokens = $this->tokenService->generateTokens($user);
 
-        $jwt = $JWTManager->create($user);
+        // Construire la réponse avec tokens (cookies gérés pour 'web' via le service)
+        return $this->tokenService->createResponseWithTokens($tokens, $platform);
 
-        $refreshToken = new RefreshToken();
-        $refreshToken->setRefreshToken(base64_encode(random_bytes(64)));
-        $refreshToken->setUsername($user->getUserIdentifier());
-        $refreshToken->setValid((new DateTime())->modify('+7 days'));
-        $this->entityManager->persist($refreshToken);
-        $this->entityManager->flush();
-        
-        $response = new Response();
-        
-        // Pour la plateforme web, on définit des cookies et on renvoie une réponse JSON
-        if ($platform === 'web') {
-            $response->headers->setCookie(
-                Cookie::create('jwt')
-                    ->withValue($jwt)
-                    ->withHttpOnly(true)
-                    ->withSecure(true)
-                    ->withSameSite(Cookie::SAMESITE_NONE)
-                    ->withExpires(time() + 3600)
-                    ->withPath('/')
-            );
-            $response->headers->setCookie(
-                Cookie::create('refresh_token')
-                    ->withValue($refreshToken->getRefreshToken())
-                    ->withHttpOnly(true)
-                    ->withSecure(true)
-                    ->withSameSite(Cookie::SAMESITE_NONE)
-                    ->withExpires(time() + 604800)
-                    ->withPath('/')
-            );
-            $response->setContent(json_encode([
-                'token' => $jwt,
-                'refresh_token' => $refreshToken->getRefreshToken(),
-            ]));
-            $response->headers->set('Content-Type', 'application/json');
-        } else {
-            // Pour d'autres plateformes, renvoyer simplement la réponse JSON
-            $response->setContent(json_encode([
-                'token' => $jwt,
-                'refresh_token' => $refreshToken->getRefreshToken(),
-            ]));
-            $response->headers->set('Content-Type', 'application/json');
-        }
-        
-        return $response;
     }
     
     #[Route('/api/token/refresh', name: 'api_token_refresh', methods: ['POST'])]

@@ -1,0 +1,26 @@
+{# templates/emails/validation_email.html.twig #}
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Veuillez valider votre adresse email{% endblock %}
+
+{% block body %}
+<div class="container mt-5">
+    {% if emailConfig and emailConfig.logo %}
+        <div class="text-center mb-4">
+            <img src="{{ domain ~ emailConfig.logo }}" alt="{{ emailConfig.fromName }} Logo" style="max-width: 200px;">
+        </div>
+    {% endif %}
+    {% if emailConfig and emailConfig.fromName %}
+        <div class="text-center mb-4">
+            <h2>{{ emailConfig.fromName }}</h2>
+        </div>
+    {% endif %}
+    <div class="alert alert-info" role="alert">
+        <h4 class="alert-heading">Bonjour, {{ user.firstname }}!</h4>
+        <p>Merci de vous être inscrit. Pour activer votre compte, veuillez cliquer sur le lien ci-dessous :</p>
+        <p class="mb-0"><a href="{{ verificationUrl }}">Valider mon compte</a></p>
+        <hr>
+        <p class="mb-0">Si vous n'avez pas demandé cette inscription, veuillez ignorer cet email.</p>
+    </div>
+</div>
+{% endblock %}

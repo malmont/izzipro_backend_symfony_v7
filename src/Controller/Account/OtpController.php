@@ -12,16 +12,19 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 class OtpController extends AbstractController
 {
     private EntityManagerInterface $entityManager;
+    private UrlGeneratorInterface $urlGenerator;
     private $session;
 
-    public function __construct(EntityManagerInterface $entityManager, RequestStack $requestStack)
+    public function __construct(EntityManagerInterface $entityManager, RequestStack $requestStack, UrlGeneratorInterface $urlGenerator)
     {
         $this->entityManager = $entityManager;
         $this->session = $requestStack->getSession();
+        $this->urlGenerator = $urlGenerator;
     }
     
     #[Route('/account/otp', name: 'account_otp')]

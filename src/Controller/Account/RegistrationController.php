@@ -133,31 +133,38 @@ class RegistrationController extends AbstractController
         );
         $emailConfig = $entityManager->getRepository(EmailConfiguration::class)->findOneBy([]);
 
-        // Si aucune configuration n'est définie, vous pouvez prévoir une valeur par défaut
+        // Définir les valeurs par défaut si aucune configuration n'est trouvée
         if (!$emailConfig) {
-            // Valeurs par défaut
             $fromEmail = 'no-reply@votredomaine.com';
-            $fromName = 'Votre Société';
+            $fromName  = 'Votre Société';
         } else {
             $fromEmail = $emailConfig->getFromEmail();
-            $fromName = $emailConfig->getFromName();
+            $fromName  = $emailConfig->getFromName();
         }
-        
+
+        // Définir le domaine pour le logo, par exemple :
+        $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+
+        // Rendu du template via Twig
+        $emailContent = $this->renderView('verification/validation_email.html.twig', [
+            'user'        => $user,
+            'emailConfig' => $emailConfig,
+            'domain'      => $domain,
+            'verificationUrl' => $verificationUrl,
+        ]);
+
         $emailMessage = (new Email())
             ->from(sprintf('%s <%s>', $fromName, $fromEmail))
             ->to($user->getEmail())
             ->subject('Veuillez valider votre adresse email')
-            ->html("<p>Bonjour {$user->getFirstname()},</p>
-                    <p>Merci de vous être inscrit. Pour activer votre compte, cliquez sur le lien suivant :</p>
-                    <p><a href='{$verificationUrl}'>Valider mon compte</a></p>
-                    <p>Si vous n'avez pas demandé cette inscription, ignorez cet email.</p>
-                    <p>{$emailConfig?->getSignature()}</p>");
-        
+            ->html($emailContent);
 
         $mailer->send($emailMessage);
+
         return $this->json([
             'message' => 'Registered Successfully. Please check your email to verify your account.'
         ], Response::HTTP_CREATED);
+
     }
     
     #[Route('/verify/email', name: 'app_verify_email', methods: ['GET'])]

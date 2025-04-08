@@ -1,3 +1,4 @@
+{# templates/emails/verified_account.html.twig #}
 {% extends 'base.email.html.twig' %}
 
 {% block title %}Compte Vérifié{% endblock %}
@@ -6,7 +7,12 @@
 <div class="container mt-5">
     {% if emailConfig and emailConfig.logo %}
         <div class="text-center mb-4">
-            <img src="{{ app.request.schemeAndHttpHost ~ asset(emailConfig.logo) }}" alt="Logo" style="max-width: 200px;">
+            <img src="{{ domain ~ emailConfig.logo }}" alt="{{ emailConfig.fromName }}" style="max-width: 200px;">
+        </div>
+    {% endif %}
+    {% if emailConfig and emailConfig.fromName %}
+        <div class="text-center mb-4">
+            <h2>{{ emailConfig.fromName }}</h2>
         </div>
     {% endif %}
     <div class="alert alert-success" role="alert">

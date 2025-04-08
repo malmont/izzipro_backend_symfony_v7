@@ -1,18 +1,32 @@
 {% extends 'base.email.html.twig' %}
 
-
 {% block title %}Réinitialiser le mot de passe{% endblock %}
 
 {% block body %}
-<div class="container mt-5">
-    <h2>Réinitialisation du mot de passe</h2>
-    <form action="{{ path('app_password_reset_confirm') }}" method="post">
-        <input type="hidden" name="token" value="{{ token }}">
-        <div class="form-group">
-            <label for="newPassword">Nouveau mot de passe</label>
-            <input type="password" id="newPassword" name="newPassword" class="form-control" required>
-        </div>
-        <button type="submit" class="btn btn-primary mt-3">Changer mon mot de passe</button>
+  <div style="text-align: center; margin-bottom: 20px;">
+    {% if emailConfig and emailConfig.logo %}
+      <img src="{{ domain ~ asset(emailConfig.logo) }}" alt="{{ emailConfig.fromName }} Logo" style="max-width: 200px;">
+      <h1>{{ emailConfig.fromName }}</h1>
+    {% endif %}
+  </div>
+  <div class="container mt-5">
+    <h2 style="text-align: center;">Réinitialisation du mot de passe</h2>
+    <form action="{{ path('app_password_reset_confirm') }}" method="post" style="margin-top: 20px;">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token('app_password_reset_confirm') }}">
+      <div class="form-group" style="margin-bottom: 15px;">
+        <label for="newPassword">Nouveau mot de passe</label>
+        <input type="password" id="newPassword" name="newPassword" class="form-control" required>
+      </div>
+      <div style="text-align: center;">
+        <button type="submit" class="btn btn-primary">Changer mon mot de passe</button>
+      </div>
     </form>
-</div>
+    {% if emailConfig %}
+      <div style="text-align: center; margin-top: 20px;">
+        <p>Pour toute question, contactez-nous :</p>
+        <p>Email : {{ emailConfig.fromEmail }}</p>
+      </div>
+    {% endif %}
+  </div>
 {% endblock %}

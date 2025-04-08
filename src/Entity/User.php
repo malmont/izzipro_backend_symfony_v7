@@ -78,7 +78,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private Collection $transactionCaisses;
 
     #[ORM\Column(nullable: true)]
-    private ?bool $otpEnabled = true;
+    private ?bool $otpEnabled = false;
 
     /**
      * @var Collection<int, OtpCode>

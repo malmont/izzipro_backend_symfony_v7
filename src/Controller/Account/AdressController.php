@@ -61,14 +61,6 @@ class AdressController extends AbstractController
         ]);
     }
 
-    // #[Route('/{id}', name: 'app_adress_show', methods: ['GET'])]
-    // public function show(Adress $adress): Response
-    // {
-    //     return $this->render('adress/show.html.twig', [
-    //         'adress' => $adress,
-    //     ]);
-    // }
-
     #[Route('/{id}/edit', name: 'app_adress_edit', methods: ['GET', 'POST'])]
     public function edit(
         Request $request,

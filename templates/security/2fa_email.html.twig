@@ -1,18 +1,20 @@
-<html>
-  <body>
-    <div style="text-align: center; margin-bottom: 20px;">
-      <img src="{{ domain ~ entreprise.logo }}" alt="{{ entreprise.name }} Logo" style="max-width: 200px;" />
-      <h1>{{ entreprise.name }}</h1>
-    </div>
-    <p>
-      Bonjour,<br>
-      Votre code de vérification est : <strong>{{ code }}</strong>.<br>
-      Ce code expirera dans {{ lifetime }} secondes.
-    </p>
-    <p>
-      Pour toute question, contactez-nous :<br>
-      Email : {{ entreprise.email }}<br>
-      Téléphone : {{ entreprise.tel }}
-    </p>
-  </body>
-</html>
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Vérification de votre compte{% endblock %}
+
+{% block body %}
+  <div style="text-align: center; margin-bottom: 20px;">
+    <img src="{{ domain ~ entreprise.logo }}" alt="{{ entreprise.name }} Logo" style="max-width: 200px;">
+    <h1>{{ entreprise.name }}</h1>
+  </div>
+  <p>
+    Bonjour,<br>
+    Votre code de vérification est : <strong>{{ code }}</strong>.<br>
+    Ce code expirera dans {{ lifetime }} secondes.
+  </p>
+  <p>
+    Pour toute question, contactez-nous :<br>
+    Email : {{ entreprise.email }}<br>
+    Téléphone : {{ entreprise.tel }}
+  </p>
+{% endblock %}
