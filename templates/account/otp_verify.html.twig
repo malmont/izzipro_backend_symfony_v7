@@ -1,20 +1,46 @@
+{# templates/account/otp_verify.html.twig #}
 {% extends 'base.email.html.twig' %}
 
 {% block title %}Vérification OTP{% endblock %}
 
 {% block body %}
-  <div class="container">
-    <h2>Vérification OTP</h2>
-    {% if error %}
-      <div class="alert alert-danger">{{ error }}</div>
+  <div style="text-align: center; margin-bottom: 20px;">
+    {% if entreprise and entreprise.logo %}
+      <img src="{{ domain ~ entreprise.logo }}" alt="{{ entreprise.name }} Logo" style="max-width: 200px;">
     {% endif %}
-    <form method="post">
+    {% if entreprise and entreprise.name %}
+      <h2>{{ entreprise.name }}</h2>
+    {% endif %}
+  </div>
+
+  <div class="container" style="max-width: 500px; margin: 0 auto;">
+    <h3 style="text-align: center;">Vérification du code OTP</h3>
+
+    {% if error %}
+      <div class="alert alert-danger" style="margin-top: 15px;">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" style="margin-top: 20px;">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
       <div class="form-group">
         <label for="otp">Entrez votre code OTP :</label>
         <input type="text" id="otp" name="otp" class="form-control" required>
       </div>
-      <button type="submit" class="btn btn-primary">Valider</button>
+      <div style="text-align: center; margin-top: 20px;">
+        <button type="submit" class="btn btn-primary">Valider</button>
+      </div>
     </form>
+
+    {% if entreprise %}
+      <div style="text-align: center; margin-top: 30px; font-size: 14px; color: #555;">
+        <p>Pour toute question, contactez-nous :</p>
+        {% if entreprise.email %}
+          <p>Email : {{ entreprise.email }}</p>
+        {% endif %}
+        {% if entreprise.tel %}
+          <p>Téléphone : {{ entreprise.tel }}</p>
+        {% endif %}
+      </div>
+    {% endif %}
   </div>
 {% endblock %}

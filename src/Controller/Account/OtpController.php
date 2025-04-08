@@ -5,6 +5,7 @@ namespace App\Controller\Account;
 use App\Entity\User;
 use App\Entity\OtpCode;
 use DateTime;
+use App\Entity\Entreprise;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -69,10 +70,19 @@ class OtpController extends AbstractController
                 }
             }
         }
+        // Récupérer les informations de l'entreprise (supposons une seule entreprise)
+        $entreprise = $this->entityManager
+            ->getRepository(Entreprise::class)
+            ->findOneBy([]);
+
+        // Construire le domaine pour le logo, par exemple : https://backend-strapi.online/assets/uploads/email-logos/
+        $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
         
         return $this->render('account/otp_verify.html.twig', [
             'error' => $error,
             'csrf_token' => $this->container->get('security.csrf.token_manager')->getToken('otp_verify')->getValue(),
+            'entreprise' => $entreprise,
+            'domain' => $domain,
         ]);
     }
 }
