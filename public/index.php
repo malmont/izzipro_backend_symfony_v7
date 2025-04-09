@@ -5,7 +5,8 @@ use Symfony\Component\HttpFoundation\Request;
 
 require_once dirname(__DIR__).'/vendor/autoload_runtime.php';
 
-if ('prod' === $_SERVER['APP_ENV']) {
+// Utiliser getenv() permet d'être sûr de récupérer l'environnement correctement
+if ('prod' === getenv('APP_ENV')) {
     Request::setTrustedProxies(
         ['172.17.0.0/16'],
         Request::HEADER_X_FORWARDED_ALL
