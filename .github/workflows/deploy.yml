@@ -174,11 +174,6 @@ jobs:
             echo "🔧 Ajustement des permissions sur le dossier app..."
             sudo find . -mindepth 1 -maxdepth 1 ! -name 'jwt' -exec chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} {} \;
 
-            # Pour les dossiers où le serveur web doit écrire (uploads et images)
-            sudo chown -R www-data:www-data app/public/assets/uploads app/public/assets/images
-            sudo chmod -R 775 app/public/assets/uploads app/public/assets/images
-
-
             echo "🔑 Login to GHCR sur le serveur distant..."
             sudo docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" -p "${{ secrets.GHCR_TOKEN }}"
 
@@ -234,6 +229,13 @@ jobs:
               else
                 echo "🛑 Le répertoire $LOCAL_PUBLIC_DIR n'est pas vide, aucun fichier n'a été écrasé."
               fi
+
+              # Réapplique systématiquement les bonnes permissions sur les dossiers sensibles
+                echo "🔧 Réajustement définitif des permissions sur les dossiers uploads et images..."
+                sudo chown -R www-data:www-data $LOCAL_PUBLIC_DIR/assets/uploads $LOCAL_PUBLIC_DIR/assets/images
+                sudo chmod -R 775 $LOCAL_PUBLIC_DIR/assets/uploads $LOCAL_PUBLIC_DIR/assets/images
+                echo "✅ Permissions mises à jour."
+
 
             else
               echo "❌ Conteneur Symfony non trouvé !" >&2
