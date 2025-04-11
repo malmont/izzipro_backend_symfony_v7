@@ -61,6 +61,10 @@ jobs:
           APP_ENV=prod
           APP_SECRET=${{ secrets.APP_SECRET }}
           DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@${{ secrets.DB_HOST }}:${{ secrets.DB_PORT }}/${{ secrets.DB_NAME }}
+          
+          ###> Redis ###
+          REDIS_URL=redis://redis
+          ###< Redis ###
 
           ###> symfony/messenger ###
           MAILER_DSN=${{ secrets.MAILER_DSN }}

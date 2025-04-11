@@ -32,6 +32,18 @@ services:
     healthcheck:
       disable: true
 
+  # Redis (🆕)
+  redis:
+    image: redis:7
+    container_name: redis_cache
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - symfony
+    volumes:
+      - redis_data:/data
+
   # Symfony Nginx (Backend)
   nginx:
     image: ghcr.io/${CLIENT1_GITHUB_REPOSITORY_OWNER}/symfony-nginx:latest
@@ -63,6 +75,7 @@ services:
 
 volumes:
   db_data:
+  redis_data:         # 🆕 volume pour Redis
   caddy_data:
   caddy_config:
   public_data:

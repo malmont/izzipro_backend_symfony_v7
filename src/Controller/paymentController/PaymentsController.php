@@ -11,6 +11,8 @@ use App\Entity\SquareConfig;
 use App\Entity\Order;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Security\Core\Security;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 class PaymentsController extends AbstractController
 {
@@ -18,17 +20,20 @@ class PaymentsController extends AbstractController
     private CreatePaymentUseCase $createPaymentUseCase;
     private EntityManagerInterface $entityManager;
     private Security $security;
+    private CacheInterface $cache;
 
     public function __construct(
         GetPaymentsByOrderSourceUseCase $getPaymentsByOrderSourceUseCase,
         CreatePaymentUseCase $createPaymentUseCase,
         EntityManagerInterface $entityManager,
-        Security $security
+        Security $security,
+        CacheInterface $cache
     ) {
         $this->getPaymentsByOrderSourceUseCase = $getPaymentsByOrderSourceUseCase;
         $this->createPaymentUseCase = $createPaymentUseCase;
         $this->entityManager = $entityManager;
         $this->security = $security;
+        $this->cache = $cache;
     }
 
     #[Route('api/payments', name: 'get_payments', methods: ['GET'])]
@@ -120,27 +125,43 @@ class PaymentsController extends AbstractController
      * Récupérer applicationId et locationId pour le front
      */
     #[Route('/api/square-config', name: 'get_square_config', methods: ['GET'])]
-    public function getSquareConfig(): JsonResponse
+    public function getSquareConfig(Request $request): JsonResponse
     {
+        // Vérifier que l'utilisateur est authentifié
         $user = $this->getUser();
         if (!$user) {
             return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
-        $squareConfig = $this->entityManager
-            ->getRepository(SquareConfig::class)
-            ->findOneBy(['isActive' => true]);
+        // Utiliser le cache pour stocker la configuration "square_config"
+        $squareConfigData = $this->cache->get('square_config', function (ItemInterface $item) {
+            // On définit une expiration de 3600 secondes (1 heure)
+            $item->expiresAfter(3600);
+            
+            // Récupérer la configuration active depuis la base de données
+            $squareConfig = $this->entityManager
+                ->getRepository(SquareConfig::class)
+                ->findOneBy(['isActive' => true]);
+            
+            if (!$squareConfig) {
+                // Vous pouvez lever une exception ou retourner null
+                return null;
+            }
+            
+            // On retourne seulement les données nécessaires pour le front
+            return [
+                'applicationId' => $squareConfig->getApplicationId(),
+                'locationId'    => $squareConfig->getLocationId(),
+            ];
+        });
 
-        if (!$squareConfig) {
+        if (!$squareConfigData) {
             return $this->json(['success' => false, 'error' => 'Configuration Square introuvable.'], 404);
         }
 
         return $this->json([
             'success' => true,
-            'data' => [
-                'applicationId' => $squareConfig->getApplicationId(),
-                'locationId' => $squareConfig->getLocationId(),
-            ]
+            'data'    => $squareConfigData,
         ]);
     }
 }

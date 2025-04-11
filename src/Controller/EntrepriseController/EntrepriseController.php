@@ -8,19 +8,23 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 class EntrepriseController extends AbstractController
 {
     private CreateEntrepriseUseCase $createEntrepriseUseCase;
     private GetEntrepriseUseCase $getEntrepriseUseCase;
-    
+    private CacheInterface $cache;
+
     public function __construct(
-         CreateEntrepriseUseCase $createEntrepriseUseCase,
-         GetEntrepriseUseCase $getEntrepriseUseCase
+        CreateEntrepriseUseCase $createEntrepriseUseCase,
+        GetEntrepriseUseCase $getEntrepriseUseCase,
+        CacheInterface $cache
     ) {
         $this->createEntrepriseUseCase = $createEntrepriseUseCase;
         $this->getEntrepriseUseCase = $getEntrepriseUseCase;
-
+        $this->cache = $cache;
     }
 
     #[Route('/api/entreprise', name: 'api_entreprise_create', methods: ['POST'])]
@@ -36,10 +40,14 @@ class EntrepriseController extends AbstractController
     }
 
     #[Route('/api/entreprise/{id}', name: 'api_entreprise_get', methods: ['GET'])]
-    public function getEntreprise(int $id,Request $request ): JsonResponse
+    public function getEntreprise(int $id, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $entrepriseDto = $this->getEntrepriseUseCase->execute($id, $host);
+        $entrepriseDto = $this->cache->get("entreprise_$id", function (ItemInterface $item) use ($id, $host) {
+            $item->expiresAfter(3600);
+            error_log("Cache miss for entreprise_$id");
+            return $this->getEntrepriseUseCase->execute($id, $host);
+        });
 
         if (!$entrepriseDto) {
             return $this->json(['message' => 'Entreprise not found'], 404);
