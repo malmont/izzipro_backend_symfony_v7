@@ -28,12 +28,12 @@ class HomeSliderController extends AbstractController
     {
         $host = $request->getSchemeAndHttpHost();
 
-        // Utilisation du cache : on stocke le résultat dans Redis avec la clé "homeslider"
         $homeSlider = $this->cache->get('homeslider', function (ItemInterface $item) use ($host) {
-            $item->expiresAfter(3600); // Le cache expire après 1 heure
+            $item->expiresAfter(3600);
             error_log("Cache miss for homeslider");
             return $this->getAllHomeSliderUseCase->execute($host);
         });
+        
 
         return $this->json($homeSlider, JsonResponse::HTTP_OK);
     }

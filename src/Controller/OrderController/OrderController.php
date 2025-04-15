@@ -17,6 +17,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use App\Entity\Adress;
 use App\Entity\Carrier;
 use App\Entity\Order;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 class OrderController extends AbstractController
 {
@@ -25,19 +27,22 @@ class OrderController extends AbstractController
     private CancelOrderUseCase $cancelOrderUseCase;
     private GetOrdersBySourceUseCase $getOrdersBySourceUseCase;
     private EntityManagerInterface $entityManager;
+    private CacheInterface $cache;
 
     public function __construct(
         CreateOrderUseCase $createOrderUseCase,
         CancelOrderUseCase $cancelOrderUseCase,
         GetOrdersBySourceUseCase $getOrdersBySourceUseCase,
         GetOrdersByUserUseCase $getOrdersByUserUseCase,
-        EntityManagerInterface $entityManager
+        EntityManagerInterface $entityManager,
+        CacheInterface $cache
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
         $this->getOrdersBySourceUseCase = $getOrdersBySourceUseCase;
         $this->getOrdersByUserUseCase = $getOrdersByUserUseCase;
         $this->entityManager = $entityManager;
+        $this->cache = $cache;
     }
 
     /**
@@ -156,29 +161,32 @@ class OrderController extends AbstractController
         return $this->cancelOrderUseCase->execute($id, $data['paymentMethod']);
     }
 
-    #[Route('api/orders', name: 'get_orders', methods: ['GET'])]
+    #[Route("api/orders", name:"get_orders", methods:["GET"])]
     public function getOrders(Request $request): JsonResponse
     {
         $this->denyAccessUnlessGranted('ROLE_ADMIN'); // Seuls les admins peuvent voir toutes les commandes
-    
+
         $orderSourceId = $request->query->get('orderSource');
         if (!$orderSourceId) {
             return $this->json(['error' => 'orderSource parameter is required'], JsonResponse::HTTP_BAD_REQUEST);
         }
-    
         $days = $request->query->get('days');
         $host = $request->getSchemeAndHttpHost();
-        $orderDTOs = $this->getOrdersBySourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
-    
-        if (empty($orderDTOs)) {
-            return $this->json([], JsonResponse::HTTP_OK);
-        }
-    
+
+        // Construction d'une clé de cache basée sur orderSource et days
+        $cacheKey = 'orders_source_' . $orderSourceId . ($days ? '_days_' . (int)$days : '');
+
+        $orderDTOs = $this->cache->get($cacheKey, function (ItemInterface $item) use ($orderSourceId, $host, $days) {
+            $item->expiresAfter(300); // 5 minutes
+            $item->tag(['orders_source']);
+            return $this->getOrdersBySourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
+        });
+
         $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);
         return $this->json($orderData);
     }
-    
-    #[Route('api/ordersuser', name: 'get_user_orders', methods: ['GET'])]
+
+    #[Route("api/ordersuser", name:"get_user_orders", methods:["GET"])]
     public function getUserOrders(Request $request, Security $security): JsonResponse
     {
         $user = $security->getUser();
@@ -188,14 +196,19 @@ class OrderController extends AbstractController
         }
 
         $host = $request->getSchemeAndHttpHost();
-        $orderDTOs = $this->getOrdersByUserUseCase->execute($user->getId(), $host);
+        $cacheKey = 'orders_user_' . $user->getId();
+
+        $orderDTOs = $this->cache->get($cacheKey, function (ItemInterface $item) use ($user, $host) {
+            $item->expiresAfter(300); // 5 minutes
+            $item->tag(['orders_user']);
+            return $this->getOrdersByUserUseCase->execute($user->getId(), $host);
+        });
 
         if (empty($orderDTOs)) {
             return $this->json(['message' => 'No orders found for the current user'], JsonResponse::HTTP_NOT_FOUND);
         }
 
         $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);
-
         return $this->json($orderData);
     }
 }

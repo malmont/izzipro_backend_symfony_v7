@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Controller\AdressController;
 
 use App\Dto\AdressInputDTO;
@@ -12,6 +13,8 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 #[Route('/api/adresses')]
 class AdressApiController extends AbstractController
@@ -20,90 +23,102 @@ class AdressApiController extends AbstractController
     private CreateAdressUseCase $createAdressUseCase;
     private EditAdressUseCase $editAdressUseCase;
     private DeleteAdressUseCase $deleteAdressUseCase;
+    private CacheInterface $cache;
 
     public function __construct(
         GetUserAdressesUseCase $getUserAdressesUseCase,
         CreateAdressUseCase $createAdressUseCase,
         EditAdressUseCase $editAdressUseCase,
-        DeleteAdressUseCase $deleteAdressUseCase
+        DeleteAdressUseCase $deleteAdressUseCase,
+        CacheInterface $cache
     ) {
         $this->getUserAdressesUseCase = $getUserAdressesUseCase;
         $this->createAdressUseCase = $createAdressUseCase;
         $this->editAdressUseCase = $editAdressUseCase;
         $this->deleteAdressUseCase = $deleteAdressUseCase;
+        $this->cache = $cache;
     }
 
+    /**
+     * Récupérer les adresses de l'utilisateur
+     */
     #[Route('/', name: 'get_user_adresses', methods: ['GET'])]
     public function getUserAdresses(): JsonResponse
     {
         $user = $this->getUser();
-
         if (!$user) {
             return new JsonResponse(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $adresses = $this->getUserAdressesUseCase->execute($user);
+        $cacheKey = "adresses_user_" . $user->getId();
+        $adresses = $this->cache->get($cacheKey, function (ItemInterface $item) use ($user) {
+            $item->expiresAfter(3600);
+            // Ajoutez le tag pour pouvoir invalider en bloc
+            $item->tag(['adresses_user']);
+            error_log("Cache miss for {$item->getKey()}");
+            return $this->getUserAdressesUseCase->execute($user);
+        });
 
         return $this->json($adresses, Response::HTTP_OK);
     }
 
+    /**
+     * Créer une nouvelle adresse
+     */
     #[Route('', name: 'create_adress', methods: ['POST'])]
     public function createAdress(Request $request): JsonResponse
     {
         $user = $this->getUser();
-
         if (!$user) {
             return new JsonResponse(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
         }
 
         $data = json_decode($request->getContent(), true);
-        
         if (!$data) {
             return new JsonResponse(['error' => 'Invalid JSON'], Response::HTTP_BAD_REQUEST);
         }
 
         $inputDTO = new AdressInputDTO($data);
-        
         $adress = $this->createAdressUseCase->execute($inputDTO, $user);
 
         return $this->json(['success' => 'Adresse créée avec succès'], Response::HTTP_CREATED);
-
     }
 
+    /**
+     * Modifier une adresse
+     */
     #[Route('/{id}', name: 'edit_adress', methods: ['PUT'])]
-        public function editAdress(Request $request, Adress $adress): JsonResponse
-        {
-            $user = $this->getUser();
-
-            // Vérifier que l'utilisateur est authentifié et qu'il est bien propriétaire de l'adresse
-            if (!$user || $adress->getUserAdress() !== $user) {
-                return new JsonResponse(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
-            }
-
-            $data = json_decode($request->getContent(), true);
-
-            if (!$data) {
-                return new JsonResponse(['error' => 'Invalid JSON'], Response::HTTP_BAD_REQUEST);
-            }
-
-            $inputDTO = new AdressInputDTO($data);
-            $this->editAdressUseCase->execute($inputDTO, $adress);
-
-            return $this->json(['success' => 'Adresse mise à jour avec succès'], Response::HTTP_OK);
+    public function editAdress(Request $request, Adress $adress): JsonResponse
+    {
+        $user = $this->getUser();
+        // Vérifier que l'utilisateur est authentifié et est le propriétaire de l'adresse
+        if (!$user || $adress->getUserAdress() !== $user) {
+            return new JsonResponse(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
         }
 
+        $data = json_decode($request->getContent(), true);
+        if (!$data) {
+            return new JsonResponse(['error' => 'Invalid JSON'], Response::HTTP_BAD_REQUEST);
+        }
 
+        $inputDTO = new AdressInputDTO($data);
+        $this->editAdressUseCase->execute($inputDTO, $adress);
+
+        return $this->json(['success' => 'Adresse mise à jour avec succès'], Response::HTTP_OK);
+    }
+
+    /**
+     * Supprimer une adresse
+     */
     #[Route('/{id}', name: 'delete_adress', methods: ['DELETE'])]
     public function deleteAdress(Adress $adress): JsonResponse
     {
         $user = $this->getUser();
-
         if (!$user || $adress->getUserAdress() !== $user) {
             return new JsonResponse(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
         }
 
         $this->deleteAdressUseCase->execute($adress);
-
-        return new JsonResponse(['success' => 'Address deleted successfully'], Response::HTTP_NO_CONTENT);
+        return new JsonResponse(['success' => 'Adresse supprimée avec succès'], Response::HTTP_NO_CONTENT);
     }
 }

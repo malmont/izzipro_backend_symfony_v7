@@ -12,21 +12,26 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 class CollectionController extends AbstractController
 {
     private CreateCollectionUseCase $createCollectionUseCase;
     private GetCollectionsUseCase $getCollectionsUseCase;
     private DeleteCollectionUseCase $deleteCollectionUseCase;
+    private CacheInterface $cache;
 
     public function __construct(
         CreateCollectionUseCase $createCollectionUseCase,
         GetCollectionsUseCase $getCollectionsUseCase,
-        DeleteCollectionUseCase $deleteCollectionUseCase
+        DeleteCollectionUseCase $deleteCollectionUseCase,
+        CacheInterface $cache
     ) {
         $this->createCollectionUseCase = $createCollectionUseCase;
         $this->getCollectionsUseCase = $getCollectionsUseCase;
         $this->deleteCollectionUseCase = $deleteCollectionUseCase;
+        $this->cache = $cache;
     }
 
     #[Route('/api/createcollections', name: 'create_collection', methods: ['POST'])]
@@ -48,8 +53,13 @@ class CollectionController extends AbstractController
     public function getCollections(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $collections = $this->getCollectionsUseCase->execute($host);
-        return $this->json($collections);
+        $cacheKey = 'collections_all';
+        $collections = $this->cache->get($cacheKey, function (ItemInterface $item) use ($host) {
+            $item->expiresAfter(600); // 1 heure
+            return $this->getCollectionsUseCase->execute($host);
+        });
+
+        return new JsonResponse($collections, JsonResponse::HTTP_OK);
     }
 
     #[Route('/api/collections/{id}', name: 'delete_collection', methods: ['DELETE'])]

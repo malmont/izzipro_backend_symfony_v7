@@ -21,13 +21,11 @@ class CarrierControleur extends AbstractController
         $this->cache = $cache;
     }
 
-    #[Route('/api/carrier', name: 'get_carrier', methods: ['GET'])]
+    #[Route('/api/Carrier', name: 'get_carrier', methods: ['GET'])]
     public function getCarrier(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
 
-        // Utilisation du cache pour lister les transporteurs.
-        // On stocke la valeur sous la clé "carriers" pour une durée de 3600 secondes.
         $carriers = $this->cache->get('carriers', function (ItemInterface $item) use ($host) {
             $item->expiresAfter(3600);
             error_log("Cache miss for carriers");

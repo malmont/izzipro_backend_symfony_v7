@@ -6,30 +6,38 @@ use App\UseCase\TypeFournisseurUseCase\GetListTypeFournisseurUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
+
 
 class TypeFournisseurController extends AbstractController
 {
     private GetListTypeFournisseurUseCase $useCase;
+    private CacheInterface $cache;
 
-    public function __construct(GetListTypeFournisseurUseCase $useCase)
+    public function __construct(GetListTypeFournisseurUseCase $useCase, CacheInterface $cache)
     {
         $this->useCase = $useCase;
+        $this->cache = $cache;
     }
 
     #[Route('/api/type-fournisseurs', name: 'api_type_fournisseurs', methods: ['GET'])]
     public function list(): JsonResponse
     {
-        $dtoList = $this->useCase->execute();
+        $cacheKey = 'api_type_fournisseurs_all';
 
-        // Convertir les DTO en tableau
-        $data = array_map(function ($dto) {
-            return [
-                'id'    => $dto->id,
-                'name'  => $dto->name,
-                'photo' => $dto->photo,
-            ];
-        }, $dtoList);
+        $data = $this->cache->get($cacheKey, function (ItemInterface $item) {
+            $item->expiresAfter(3600); // 1 heure
+            $dtoList = $this->useCase->execute();
+            return array_map(function ($dto) {
+                return [
+                    'id'    => $dto->id,
+                    'name'  => $dto->name,
+                    'photo' => $dto->photo,
+                ];
+            }, $dtoList);
+        });
 
-        return $this->json($data);
+        return $this->json($data, JsonResponse::HTTP_OK);
     }
 }

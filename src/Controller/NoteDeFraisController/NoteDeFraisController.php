@@ -13,6 +13,9 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
+
 
 class NoteDeFraisController extends AbstractController
 {
@@ -20,25 +23,36 @@ class NoteDeFraisController extends AbstractController
     private CreateNoteDeFraisUseCase $createNoteDeFraisUseCase;
     private UpdateNoteDeFraisUseCase $updateNoteDeFraisUseCase;
     private DeleteNoteDeFraisUseCase $deleteNoteDeFraisUseCase;
+    private CacheInterface $cache;
 
     public function __construct(
         GetNotesDeFraisByCollectionUseCase $getNotesDeFraisByCollectionUseCase,
         CreateNoteDeFraisUseCase $createNoteDeFraisUseCase,
         UpdateNoteDeFraisUseCase $updateNoteDeFraisUseCase,
-        DeleteNoteDeFraisUseCase $deleteNoteDeFraisUseCase
+        DeleteNoteDeFraisUseCase $deleteNoteDeFraisUseCase,
+        CacheInterface $cache
     ) {
         $this->getNotesDeFraisByCollectionUseCase = $getNotesDeFraisByCollectionUseCase;
         $this->createNoteDeFraisUseCase = $createNoteDeFraisUseCase;
         $this->updateNoteDeFraisUseCase = $updateNoteDeFraisUseCase;
         $this->deleteNoteDeFraisUseCase = $deleteNoteDeFraisUseCase;
+        $this->cache = $cache;
     }
 
     #[Route('/api/collections/{id}/notes-de-frais', name: 'get_notes_de_frais_by_collection', methods: ['GET'])]
-    public function getNotesDeFraisByCollection(Collections $collection,Request $request): JsonResponse
+    public function getNotesDeFraisByCollection(Collections $collection, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $notes = $this->getNotesDeFraisByCollectionUseCase->execute($collection,$host);
-        return $this->json($notes, JsonResponse::HTTP_OK);
+        // Construction d'une clé de cache basée sur l'ID de la collection
+        $cacheKey = 'notes_de_frais_collection_' . $collection->getId();
+
+        $notes = $this->cache->get($cacheKey, function (ItemInterface $item) use ($collection, $host) {
+            $item->expiresAfter(3600); // Cache expire après 1 heure
+            $item->tag(['notes_de_frais']);
+            return $this->getNotesDeFraisByCollectionUseCase->execute($collection, $host);
+        });
+
+        return new JsonResponse($notes, JsonResponse::HTTP_OK);
     }
 
     #[Route('/api/collections/{id}/notes-de-frais', name: 'create_note_de_frais', methods: ['POST'])]
@@ -49,9 +63,16 @@ class NoteDeFraisController extends AbstractController
             return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
-        $inputDTO = new NoteDeFraisInputDTO($data['description'], (float) $data['montant'], $data['date'], $data['typeNoteDeFraisId']);
+        $inputDTO = new NoteDeFraisInputDTO(
+            $data['description'],
+            (float)$data['montant'],
+            $data['date'],
+            $data['typeNoteDeFraisId']
+        );
+
         $this->createNoteDeFraisUseCase->execute($collection, $inputDTO);
-        return $this->json(['success' => 'Note de frais created'], JsonResponse::HTTP_CREATED);
+
+        return new JsonResponse(['success' => 'Note de frais created'], JsonResponse::HTTP_CREATED);
     }
 
     #[Route('/api/notes-de-frais/{id}', name: 'update_note_de_frais', methods: ['PUT'])]
@@ -62,16 +83,22 @@ class NoteDeFraisController extends AbstractController
             return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
-        $inputDTO = new NoteDeFraisInputDTO($data['description'], (float) $data['montant'], $data['date'], $data['typeNoteDeFraisId']);
+        $inputDTO = new NoteDeFraisInputDTO(
+            $data['description'],
+            (float)$data['montant'],
+            $data['date'],
+            $data['typeNoteDeFraisId']
+        );
+
         $this->updateNoteDeFraisUseCase->execute($note, $inputDTO);
 
-        return $this->json(['success' => 'Note de frais updated'], JsonResponse::HTTP_OK);
+        return new JsonResponse(['success' => 'Note de frais updated'], JsonResponse::HTTP_OK);
     }
 
     #[Route('/api/notes-de-frais/{id}', name: 'delete_note_de_frais', methods: ['DELETE'])]
     public function deleteNoteDeFrais(NoteDeFrais $note): JsonResponse
     {
         $this->deleteNoteDeFraisUseCase->execute($note);
-        return $this->json(['success' => 'Note de frais deleted'], JsonResponse::HTTP_NO_CONTENT);
+        return new JsonResponse(['success' => 'Note de frais deleted'], JsonResponse::HTTP_NO_CONTENT);
     }
 }

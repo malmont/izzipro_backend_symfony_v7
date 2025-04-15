@@ -11,21 +11,27 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
+use Symfony\Contracts\Cache\TagAwareCacheInterface;
 
 class FraisDePortController extends AbstractController
 {
     private GetFraisDePortByCommandeUseCase $getFraisDePortByCommandeUseCase;
     private CreateFraisDePortUseCase $createFraisDePortUseCase;
     private DeleteFraisDePortUseCase $deleteFraisDePortUseCase;
+    private CacheInterface $cache;
 
     public function __construct(
         GetFraisDePortByCommandeUseCase $getFraisDePortByCommandeUseCase,
         CreateFraisDePortUseCase $createFraisDePortUseCase,
-        DeleteFraisDePortUseCase $deleteFraisDePortUseCase
+        DeleteFraisDePortUseCase $deleteFraisDePortUseCase,
+        CacheInterface $cache
     ) {
         $this->getFraisDePortByCommandeUseCase = $getFraisDePortByCommandeUseCase;
         $this->createFraisDePortUseCase = $createFraisDePortUseCase;
         $this->deleteFraisDePortUseCase = $deleteFraisDePortUseCase;
+        $this->cache = $cache;
     }
 
     #[Route('/api/commandes/{id}/frais-de-port', name: 'create_frais_de_port', methods: ['POST'])]
@@ -46,18 +52,26 @@ class FraisDePortController extends AbstractController
         );
 
         $this->createFraisDePortUseCase->execute($commande, $inputDTO);
-
         return $this->json(['success' => 'Frais de port created'], JsonResponse::HTTP_CREATED);
     }
 
     #[Route('/api/commandes/{id}/frais-de-port', name: 'get_frais_de_port', methods: ['GET'])]
-    public function getFraisDePort(Commande $commande,Request $request): JsonResponse
+    public function getFraisDePort(Commande $commande, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $fraisDePort = $this->getFraisDePortByCommandeUseCase->execute($commande, $host);
+        // La clé de cache est basée sur l'ID de la commande
+        $cacheKey = 'frais_de_port_commande_' . $commande->getId();
+
+        $fraisDePort = $this->cache->get($cacheKey, function (ItemInterface $item) use ($commande, $host) {
+            // Cache expire après 1 heure
+            $item->expiresAfter(3600);
+            // Ajout d'un tag pour le regroupement et l'invalidation via le subscriber
+            $item->tag(['frais_de_port']);
+            return $this->getFraisDePortByCommandeUseCase->execute($commande, $host);
+        });
 
         if (!$fraisDePort) {
-            return new JsonResponse(['error' => 'No shipping cost associated with this order'], JsonResponse::HTTP_NOT_FOUND);
+            return $this->json(['error' => 'No shipping cost associated with this order'], JsonResponse::HTTP_NOT_FOUND);
         }
 
         return $this->json($fraisDePort, JsonResponse::HTTP_OK);

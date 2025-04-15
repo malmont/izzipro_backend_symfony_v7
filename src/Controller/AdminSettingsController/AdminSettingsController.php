@@ -136,7 +136,7 @@ class AdminSettingsController extends AbstractController
         $this->entityManager->flush();
 
         // Invalider le cache après la mise à jour pour que les prochaines requêtes récupèrent la nouvelle config
-        $this->cache->delete('admin_settings');
+        // $this->cache->delete('admin_settings');
 
         return new JsonResponse(['message' => 'Settings updated successfully']);
     }
