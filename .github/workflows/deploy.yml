@@ -172,9 +172,19 @@ jobs:
       # 🚀 9️⃣ Déploiement sans rebuild
       - name: 🚀 Déployer les conteneurs
         run: |
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << EOF
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.CLIENT1_SERVER_USER }}@${{ secrets.CLIENT1_SERVER_IP }} << 'EOF'
             cd /home/${{ secrets.CLIENT1_SERVER_USER }}/app/
-
+            
+            echo "🔧 Configuration du kernel: Activation de vm.overcommit_memory..."
+            # Ajoute la ligne dans /etc/sysctl.conf s'il n'existe pas déjà
+            if ! grep -q "^vm.overcommit_memory" /etc/sysctl.conf; then
+              echo "vm.overcommit_memory = 1" | sudo tee -a /etc/sysctl.conf
+            else
+              echo "La configuration vm.overcommit_memory est déjà présente dans /etc/sysctl.conf."
+            fi
+            # Applique la configuration immédiatement
+            sudo sysctl -w vm.overcommit_memory=1
+            
             echo "🔧 Ajustement des permissions sur le dossier app..."
             sudo find . -mindepth 1 -maxdepth 1 ! -name 'jwt' -exec chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} {} \;
 
