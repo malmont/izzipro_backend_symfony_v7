@@ -1,17 +1,21 @@
 naowe-backend.store {
     reverse_proxy symfony_nginx:80 {
         header_up X-Forwarded-Proto {scheme}
+        transport http {
+            dial_timeout 30s   # Temps maximum pour établir la connexion avec le backend
+            read_timeout 30s   # Temps maximum pour lire la réponse depuis le backend
+            write_timeout 30s  # Temps maximum pour écrire la requête sur le backend
+        }
     }
 
     encode gzip
 
     tls michel.almont972@gmail.com
 
-    # Configuration des en-têtes CORS
+    # Configuration CORS
     @cors_preflight {
         method OPTIONS
     }
-
     handle @cors_preflight {
         header Access-Control-Allow-Origin "https://srv703974.hstgr.cloud"
         header Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
@@ -19,7 +23,6 @@ naowe-backend.store {
         header Access-Control-Allow-Credentials "true"
         respond "" 204
     }
-
     header {
         Access-Control-Allow-Origin "https://srv703974.hstgr.cloud"
         Access-Control-Allow-Methods "GET, POST, OPTIONS, PUT, DELETE"
