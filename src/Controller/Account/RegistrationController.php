@@ -94,6 +94,17 @@ class RegistrationController extends AbstractController
         $lastName = $decoded['lastName'];
         $username = $email;
 
+         // Validation du format de l'email.
+         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $this->json(['error' => 'Invalid email format'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Vérification DNS optionnelle (enregistrements MX ou A).
+        [$local, $domain] = explode('@', $email, 2);
+        if (!checkdnsrr($domain, 'MX') && !checkdnsrr($domain, 'A')) {
+            return $this->json(['error' => 'Email domain appears invalid'], Response::HTTP_BAD_REQUEST);
+        }
+
         $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if ($existingUser) {
             return $this->json(['error' => 'User already exists'], Response::HTTP_CONFLICT);
