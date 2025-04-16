@@ -41,7 +41,9 @@ class OtpApiController extends AbstractController
         // Récupération de l'utilisateur par email
         $user = $this->entityManager->getRepository(User::class)->findOneBy(['email' => $email]);
         if (!$user instanceof UserInterface) {
-            return new Response('Unauthorized', Response::HTTP_UNAUTHORIZED);
+            return $this->json([
+                'error' => 'Unauthorized'
+            ], Response::HTTP_UNAUTHORIZED);
         }
         
         $otpCode = $this->entityManager
@@ -53,7 +55,9 @@ class OtpApiController extends AbstractController
         
         // Vérifier que le code OTP existe et n'est pas expiré
         if (!$otpCode || $otpCode->getExpiration() < new DateTime()) {
-            return new Response('Code OTP invalide ou expiré', Response::HTTP_UNAUTHORIZED);
+            return $this->json([
+                'error' => 'Code OTP invalide ou expiré'
+            ], Response::HTTP_UNAUTHORIZED);
         }
         
         // Supprimer l'OTP validé pour éviter toute réutilisation

@@ -65,21 +65,34 @@ class SecurityController extends AbstractController
         // Récupération de l'utilisateur par email
         $user = $this->entityManager->getRepository(\App\Entity\User::class)->findOneBy(['email' => $email]);
         if (!$user instanceof UserInterface) {
-            return new Response('Unauthorized', Response::HTTP_UNAUTHORIZED);
+            return $this->json(
+                ['error' => 'Unauthorized'],                     // même message qu’avant
+                Response::HTTP_UNAUTHORIZED
+            );
         }
         
 
         if (!$user->isVerified()) {
-            return new Response('Your account is not verified. Please check your email.', Response::HTTP_UNAUTHORIZED);
+            return $this->json(
+                ['error' => 'Your account is not verified. Please check your email.'],
+                Response::HTTP_UNAUTHORIZED
+            );
+            
         }
         
         if (in_array($platform, ['web', 'mobile'])) {
             if (!in_array('ROLE_USER_INTERNET', $user->getRoles(), true)) {
-                return new Response('This account is not allowed to access the web/mobile platform.', Response::HTTP_FORBIDDEN);
+               return $this->json(
+                    ['error' => 'This account is not allowed to access the web/mobile platform.'],
+                    Response::HTTP_FORBIDDEN
+                );
             }
         } elseif ($platform === 'pos') {
             if (!in_array('ROLE_USER_POS', $user->getRoles(), true)) {
-                return new Response('This account is not allowed to access the POS platform.', Response::HTTP_FORBIDDEN);
+                return $this->json(
+                    ['error' => 'This account is not allowed to access the POS platform.'],
+                    Response::HTTP_FORBIDDEN
+                );
             }
         }
 
@@ -113,17 +126,17 @@ class SecurityController extends AbstractController
     ): Response {
         $refreshToken = $request->cookies->get('refresh_token');
         if (!$refreshToken) {
-            return new Response('No refresh token found', Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'Refresh token not found'], Response::HTTP_UNAUTHORIZED);
         }
         
         $validRefreshToken = $refreshTokenManager->get($refreshToken);
         if (!$validRefreshToken || !$refreshTokenManager->isValid($validRefreshToken)) {
-            return new Response('Invalid or expired refresh token', Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'Invalid refresh token'], Response::HTTP_UNAUTHORIZED);
         }
         
         $user = $validRefreshToken->getUser();
         if (!$user instanceof UserInterface) {
-            return new Response('User not found', Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
         }
         
         $newToken = $JWTManager->create($user);

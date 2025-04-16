@@ -50,7 +50,7 @@ class EntrepriseController extends AbstractController
         });
 
         if (!$entrepriseDto) {
-            return $this->json(['message' => 'Entreprise not found'], 404);
+            return $this->json(['error' => 'Entreprise not found'], 404);
         }
 
         return $this->json($entrepriseDto);

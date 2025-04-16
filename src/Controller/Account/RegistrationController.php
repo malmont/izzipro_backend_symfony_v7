@@ -85,7 +85,7 @@ class RegistrationController extends AbstractController
         $decoded = json_decode($request->getContent(), true);
 
         if (!isset($decoded['email'], $decoded['password'], $decoded['firstName'], $decoded['lastName'])) {
-            return $this->json(['message' => 'Invalid data'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Invalid data'], Response::HTTP_BAD_REQUEST);
         }
 
         $email = $decoded['email'];
@@ -96,7 +96,7 @@ class RegistrationController extends AbstractController
 
         $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if ($existingUser) {
-            return $this->json(['message' => 'User already exists'], Response::HTTP_CONFLICT);
+            return $this->json(['error' => 'User already exists'], Response::HTTP_CONFLICT);
         }
 
         $user = new User();

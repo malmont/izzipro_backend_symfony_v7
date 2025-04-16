@@ -33,7 +33,7 @@ class ResetPasswordController extends AbstractController
     ): Response {
         $data = json_decode($request->getContent(), true);
         if (!isset($data['email'])) {
-            return $this->json(['message' => 'Email is required.'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Email is required.'], Response::HTTP_BAD_REQUEST);
         }
 
         $emailInput = $data['email'];
@@ -91,7 +91,7 @@ class ResetPasswordController extends AbstractController
         $data = json_decode($request->getContent(), true) ?: $request->request->all();
 
         if (!isset($data['token'], $data['newPassword'])) {
-            return $this->json(['message' => 'Token and new password are required.'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Token and new password are required.'], Response::HTTP_BAD_REQUEST);
         }
 
         $token = $data['token'];
@@ -100,11 +100,11 @@ class ResetPasswordController extends AbstractController
         $user = $em->getRepository(User::class)->findOneBy(['resetToken' => $token]);
 
         if (!$user) {
-            return $this->json(['message' => 'Invalid token.'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Invalid token.'], Response::HTTP_BAD_REQUEST);
         }
 
         if ($user->getResetTokenExpiresAt() < new \DateTime()) {
-            return $this->json(['message' => 'The token has expired.'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'The token has expired.'], Response::HTTP_BAD_REQUEST);
         }
 
         $hashedPassword = $passwordHasher->hashPassword($user, $newPassword);
