@@ -26,9 +26,9 @@ class AdressCrudController extends AbstractCrudController
             TextField::new('company', 'Entreprise')->hideOnIndex(),
             TextareaField::new('address', 'Adresse'),
             TextareaField::new('complement', 'Complément d\'adresse')->hideOnIndex(),
-            NumberField::new('phone', 'Téléphone'),
+            TextField::new('phone', 'Téléphone'),
             TextField::new('city', 'Ville'),
-            NumberField::new('codepostal', 'Code postal'),
+            TextField::new('codepostal', 'Code postal'),
             TextField::new('country', 'Pays'),
             AssociationField::new('userAdress', 'Utilisateur associé'),
         ];

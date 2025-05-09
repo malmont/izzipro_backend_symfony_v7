@@ -45,6 +45,8 @@ use App\Entity\PaymentType;
 use App\Entity\CashDetails;
 use App\Entity\Denomination;
 use App\Entity\TypeCash;
+use App\Entity\Feature;
+use App\Entity\ExploreCard;
 use App\Controller\Admin\OrderAllCrudController;
 use App\Controller\Admin\OrderCrudController;
 use Symfony\Component\HttpFoundation\Response;
@@ -80,6 +82,8 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('UI');
         yield MenuItem::linkToCrud('Home Slider', 'fas fa-images', HomeSlider::class);
         yield MenuItem::linkToCrud('Admin Settings', 'fas fa-cogs', AdminSettings::class);
+        yield MenuItem::linkToCrud('Features', 'fa fa-star', Feature::class);
+        yield MenuItem::linkToCrud('Explore Cards', 'fa fa-th-large', ExploreCard::class);
 
         yield MenuItem::section('Entreprise');
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);

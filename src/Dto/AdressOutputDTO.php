@@ -13,9 +13,9 @@ class AdressOutputDTO
     public string $addressLineOne;
     public ?string $addressLineTwo;
     public string $city;
-    public int $zipCode;
+    public string $zipCode;
     public string $country;
-    public int $contactNumber;
+    public string $contactNumber;
 
     public function __construct(Adress $adress)
     {

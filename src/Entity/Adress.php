@@ -34,20 +34,20 @@ class Adress
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $complement = null;
 
-    #[ORM\Column]
-    private ?int $phone = null;
+    #[ORM\Column(length: 20)]
+    private ?string $phone = null; 
 
     #[ORM\Column(length: 255)]
     private ?string $city = null;
 
-    #[ORM\Column]
-    private ?int $codepostal = null;
+    #[ORM\Column(length: 10)]
+    private ?string $codepostal = null; 
 
     #[ORM\Column(length: 255)]
     private ?string $country = null;
 
     #[ORM\ManyToOne(inversedBy: 'adresses')]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?User $userAdress = null;
 
     /**
@@ -134,12 +134,12 @@ class Adress
         return $this;
     }
 
-    public function getPhone(): ?int
+    public function getPhone(): ?string
     {
         return $this->phone;
     }
 
-    public function setPhone(int $phone): self
+    public function setPhone(string $phone): self
     {
         $this->phone = $phone;
         return $this;
@@ -156,12 +156,12 @@ class Adress
         return $this;
     }
 
-    public function getCodepostal(): ?int
+    public function getCodepostal(): ?string
     {
         return $this->codepostal;
     }
 
-    public function setCodepostal(int $codepostal): self
+    public function setCodepostal(string $codepostal): self
     {
         $this->codepostal = $codepostal;
         return $this;

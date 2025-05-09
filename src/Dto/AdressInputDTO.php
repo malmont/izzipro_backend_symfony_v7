@@ -9,9 +9,9 @@ class AdressInputDTO
     public string $addressLineOne;
     public ?string $addressLineTwo;
     public string $city;
-    public int $zipCode;
+    public string $zipCode;
     public string $country;
-    public int $contactNumber;
+    public string $contactNumber;
 
     public function __construct(array $data)
     {
@@ -21,8 +21,8 @@ class AdressInputDTO
         $this->addressLineOne = $data['addressLineOne'] ?? '';
         $this->addressLineTwo = $data['addressLineTwo'] ?? null;
         $this->city = $data['city'] ?? '';
-        $this->zipCode = (int)($data['zipCode'] ?? 0);
+        $this->zipCode = (string)($data['zipCode'] ?? 0);
         $this->country = $data['country'] ?? '';
-        $this->contactNumber = (int)($data['contactNumber'] ?? 0);
+        $this->contactNumber = (string)($data['contactNumber'] ?? 0);
     }
 }
