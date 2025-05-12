@@ -98,6 +98,9 @@ class Product
     #[ORM\Column(nullable: true)]
     private ?bool $isPos = null;
 
+    #[ORM\OneToOne(mappedBy: 'product', cascade: ['persist', 'remove'])]
+    private ?ProductShipping $productShipping = null;
+
     public function __construct()
     {
         $this->category = new ArrayCollection();
@@ -503,6 +506,28 @@ class Product
     public function setIsPos(?bool $isPos): static
     {
         $this->isPos = $isPos;
+
+        return $this;
+    }
+
+    public function getProductShipping(): ?ProductShipping
+    {
+        return $this->productShipping;
+    }
+
+    public function setProductShipping(?ProductShipping $productShipping): static
+    {
+        // unset the owning side of the relation if necessary
+        if ($productShipping === null && $this->productShipping !== null) {
+            $this->productShipping->setProduct(null);
+        }
+
+        // set the owning side of the relation if necessary
+        if ($productShipping !== null && $productShipping->getProduct() !== $this) {
+            $productShipping->setProduct($this);
+        }
+
+        $this->productShipping = $productShipping;
 
         return $this;
     }

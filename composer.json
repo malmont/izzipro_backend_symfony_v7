@@ -12,6 +12,7 @@
         "doctrine/orm": "^2.14",
         "dompdf/dompdf": "^3.1",
         "easycorp/easyadmin-bundle": "^4.7",
+        "easypost/easypost-php": "^8.0",
         "gesdinet/jwt-refresh-token-bundle": "^1.3",
         "lexik/jwt-authentication-bundle": "^2.19",
         "nelmio/cors-bundle": "^2.5",

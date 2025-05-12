@@ -47,6 +47,10 @@ use App\Entity\Denomination;
 use App\Entity\TypeCash;
 use App\Entity\Feature;
 use App\Entity\ExploreCard;
+use App\Entity\PackagingType;
+use App\Entity\ProductShipping;
+use App\Entity\EasyPostConfiguration;
+use App\Entity\ShippingClass;
 use App\Controller\Admin\OrderAllCrudController;
 use App\Controller\Admin\OrderCrudController;
 use Symfony\Component\HttpFoundation\Response;
@@ -88,6 +92,12 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Entreprise');
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
 
+        yield MenuItem::section('Livraison');
+        yield MenuItem::linkToCrud('EasyPost Configuration', 'fa fa-cogs', EasyPostConfiguration::class);
+        yield MenuItem::linkToCrud('Shipping Classes', 'fas fa-tags', ShippingClass::class);
+        yield MenuItem::linkToCrud('ProductShipping', 'fas fa-truck', ProductShipping::class);
+        yield MenuItem::linkToCrud('PackagingType', 'fas fa-box', PackagingType::class);
+
         yield MenuItem::section('IIZIMANAGER');
         yield MenuItem::linkToCrud('Collections', 'fas fa-archive', Collections::class); // Ajoutez cette ligne
         yield MenuItem::linkToCrud('Commandes', 'fas fa-shopping-cart', Commande::class);
@@ -126,6 +136,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Order Items', 'fas fa-box', OrderItems::class)->setController(OrderItemsCrudController::class);
         yield MenuItem::linkToCrud('Cart', 'fas fa-boxes', Cart::class);
         yield MenuItem::linkToCrud('Carrier', 'fas fa-truck', Carrier::class);
+        
 
         yield MenuItem::section('Payment');
         yield MenuItem::linkToCrud('Payments', 'fas fa-credit-card', Payments::class);
@@ -133,6 +144,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Statuts de Paiement', 'fas fa-credit-card', StatusPayment::class);
         yield MenuItem::linkToCrud('Méthodes de Paiement', 'fas fa-credit-card', PaymentMethod::class);
         yield MenuItem::linkToCrud('Configuration Square', 'fas fa-credit-card', SquareConfig::class);
+         
 
         yield MenuItem::section('Taxe');
         yield MenuItem::linkToCrud('Taxes', 'fas fa-percent', Tax::class);
