@@ -33,6 +33,7 @@ class AdressService
         $adress->setPhone($inputDTO->contactNumber);
         $adress->setCity($inputDTO->city);
         $adress->setCodepostal($inputDTO->zipCode);
+        $adress->setProvince($inputDTO->province);
         $adress->setCountry($inputDTO->country);
         $adress->setUserAdress($user);
 
@@ -51,6 +52,7 @@ class AdressService
         $adress->setComplement($inputDTO->addressLineTwo);
         $adress->setPhone($inputDTO->contactNumber);
         $adress->setCity($inputDTO->city);
+        $adress->setProvince($inputDTO->province);
         $adress->setCodepostal($inputDTO->zipCode);
         $adress->setCountry($inputDTO->country);
 

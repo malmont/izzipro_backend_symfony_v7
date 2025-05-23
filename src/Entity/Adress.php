@@ -56,6 +56,9 @@ class Adress
     #[ORM\OneToMany(mappedBy: 'shippingAdress', targetEntity: Order::class)]
     private Collection $orders;
 
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $province = null;
+
     public function __construct()
     {
         $this->orders = new ArrayCollection();
@@ -236,6 +239,18 @@ class Adress
                 $order->setShippingAdress(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getProvince(): ?string
+    {
+        return $this->province;
+    }
+
+    public function setProvince(?string $province): static
+    {
+        $this->province = $province;
 
         return $this;
     }

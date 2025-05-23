@@ -24,6 +24,7 @@ class CarrierCrudController extends AbstractCrudController
             IdField::new('id')->hideOnForm(),
             TextField::new('name'),
             TextField::new('description'),
+            TextField::new('carrierAccountId'),
             MoneyField::new('price')->setCurrency('USD'),
             ImageField::new('photo')->setBasePath('assets/uploads/Carrier/')
                 ->setUploadDir('public/assets/uploads/Carrier/')

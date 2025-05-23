@@ -51,6 +51,11 @@ use App\Entity\PackagingType;
 use App\Entity\ProductShipping;
 use App\Entity\EasyPostConfiguration;
 use App\Entity\ShippingClass;
+use App\Entity\GooglePlacesConfig;
+use App\Entity\ShippingLabel;
+use App\Entity\ShippingOrder;
+use App\Entity\Parcel;
+use App\Entity\AddressEntreprise;
 use App\Controller\Admin\OrderAllCrudController;
 use App\Controller\Admin\OrderCrudController;
 use Symfony\Component\HttpFoundation\Response;
@@ -91,12 +96,18 @@ class DashboardController extends AbstractDashboardController
 
         yield MenuItem::section('Entreprise');
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
+        yield MenuItem::linkToCrud('AddressEntreprise', 'fa fa-map-marker', AddressEntreprise::class);
 
         yield MenuItem::section('Livraison');
         yield MenuItem::linkToCrud('EasyPost Configuration', 'fa fa-cogs', EasyPostConfiguration::class);
         yield MenuItem::linkToCrud('Shipping Classes', 'fas fa-tags', ShippingClass::class);
         yield MenuItem::linkToCrud('ProductShipping', 'fas fa-truck', ProductShipping::class);
         yield MenuItem::linkToCrud('PackagingType', 'fas fa-box', PackagingType::class);
+        yield MenuItem::linkToCrud('GooglePlacesConfig', 'fa fa-map-marker', GooglePlacesConfig::class)
+            ->setController(GooglePlacesConfigCrudController::class);
+        yield MenuItem::linkToCrud('Shipping Orders', 'fas fa-shipping-fast', ShippingOrder::class);
+        yield MenuItem::linkToCrud('Parcels',         'fas fa-box',          Parcel::class);
+        yield MenuItem::linkToCrud('Shipping Labels', 'fas fa-tag',          ShippingLabel::class);
 
         yield MenuItem::section('IIZIMANAGER');
         yield MenuItem::linkToCrud('Collections', 'fas fa-archive', Collections::class); // Ajoutez cette ligne

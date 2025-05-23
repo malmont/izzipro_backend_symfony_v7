@@ -1,0 +1,47 @@
+{# un petit tableau qui affiche chaque Parcel #}
+<table class="table table-sm">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Dim. (L×l×H cm)</th>
+      <th>Poids (g)</th>
+      <th>Prix</th>
+      <th>Tracking</th>
+      <th>Étiquette</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for parcel in field.value %}
+      <tr>
+        <td>{{ parcel.index }}</td>
+        <td>
+          {{ parcel.length|default('–') }} ×
+          {{ parcel.width|default('–') }} ×
+          {{ parcel.height|default('–') }}
+        </td>
+        <td>{{ parcel.weight|default('–') }}</td>
+        <td>
+          {{ parcel.price is not null
+             ? parcel.price ~ ' $'
+             : '–'
+          }}
+        </td>
+        <td>
+          {{ parcel.shippingLabel
+             ? parcel.shippingLabel.trackingCode
+             : 'Aucun'
+          }}
+        </td>
+        <td>
+          {% if parcel.shippingLabel and parcel.shippingLabel.labelUrl %}
+            <a href="{{ parcel.shippingLabel.labelUrl }}" target="_blank">
+              Télécharger l’étiquette
+            </a>
+          {% else %}
+            –
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>

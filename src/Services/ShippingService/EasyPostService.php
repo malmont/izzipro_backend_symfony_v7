@@ -1,8 +1,11 @@
 <?php
+// src/Services/ShippingService/EasyPostService.php
+
 namespace App\Services\ShippingService;
 
 use App\Repository\EasyPostConfigurationRepository;
 use EasyPost\EasyPostClient;
+use LogicException;
 
 class EasyPostService
 {
@@ -11,14 +14,10 @@ class EasyPostService
     public function __construct(EasyPostConfigurationRepository $repo)
     {
         $config = $repo->findOneBy([]);
-        if (!$config) {
-            throw new LogicException('Aucune configuration EasyPost trouvée : merci d’en créer une via EasyAdmin.');
+        if (!$config || !$config->getEasypostApiKeySandbox()) {
+            throw new LogicException('Clé EasyPost manquante en base.');
         }
-        $key = $config->getEasypostApiKeySandbox();
-        if (!$key) {
-            throw new LogicException('La clé sandbox EasyPost est vide. Merci de la renseigner.');
-        }
-        $this->client = new EasyPostClient($key);
+        $this->client = new EasyPostClient($config->getEasypostApiKeySandbox());
     }
 
     public function getRates(array $data): array
@@ -26,15 +25,43 @@ class EasyPostService
         return $this->client->shipment->create($data)->rates;
     }
 
-    public function createShipment(array $data): array
+    /**
+     * Crée un shipment puis achète le label.
+     *
+     * @param array  $data              // mêmes clés que pour getRates()
+     * @param string $carrierAccountId  // ex "ca_…"
+     * @param string $service           // ex "Priority"
+     * @return array ['label_url'=>…, 'tracking_code'=>…]
+     */
+    public function createShipmentAndBuy(array $data, string $carrierAccountId, string $service): array
     {
-        $s = $this->client->shipment->createAndBuy($data);
+        // 1) création
+        $shipment = $this->client->shipment->create($data);
+        
+
+        // 2) on cherche le rate qui correspond
+        $rateToBuy = null;
+        foreach ($shipment->rates as $r) {
+            if ($r->carrier_account_id === $carrierAccountId && $r->service === $service) {
+                $rateToBuy = $r;
+                break;
+            }
+        }
+        // fallback sur le moins cher si introuvable
+        if (! $rateToBuy) {
+            $rateToBuy = $shipment->lowestRate();
+        }
+
+        // 3) on achète
+        // Note : la signature est buy($id, ['rate'=>$rateObject])
+        $bought = $this->client->shipment->buy($shipment->id, ['rate' => $rateToBuy]);
+
         return [
-            'label_url'     => $s->postage_label->label_url,
-            'tracking_code' => $s->tracking_code,
+            'label_url'     => $bought->postage_label->label_url,
+            'tracking_code' => $bought->tracking_code,
         ];
     }
-    
+
     public function track(string $code): array
     {
         return $this->client->tracker->create(['tracking_code' => $code])->status_history;

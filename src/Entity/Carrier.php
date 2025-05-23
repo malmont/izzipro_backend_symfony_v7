@@ -41,6 +41,9 @@ class Carrier
     #[ORM\OneToMany(mappedBy: 'carrier', targetEntity: Order::class)]
     private Collection $orders;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $carrierAccountId = null;
+
 
     public function __construct()
     {
@@ -161,6 +164,18 @@ class Carrier
                 $order->setCarrier(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getCarrierAccountId(): ?string
+    {
+        return $this->carrierAccountId;
+    }
+
+    public function setCarrierAccountId(?string $carrierAccountId): static
+    {
+        $this->carrierAccountId = $carrierAccountId;
 
         return $this;
     }

@@ -11,6 +11,7 @@ class CreateOrderDTO implements ICreateOrderDTO
     private int $carrierId;
     private int $typeOrder;
     private array $items;
+    private ?float $priceShipping;
 
     // 🔑 Infos liées au paiement Square
     private ?string $squarePaymentId;
@@ -29,6 +30,7 @@ class CreateOrderDTO implements ICreateOrderDTO
         int $carrierId,
         int $typeOrder,
         array $items,
+        ?float $priceShipping = null,
         ?string $squarePaymentId = null,
         ?string $squareOrderId = null,
         ?string $squareReceiptUrl = null,
@@ -44,6 +46,7 @@ class CreateOrderDTO implements ICreateOrderDTO
         $this->carrierId = $carrierId;
         $this->typeOrder = $typeOrder;
         $this->items = $items;
+        $this->priceShipping = $priceShipping;
 
         // 🟢 Infos Square
         $this->squarePaymentId = $squarePaymentId;
@@ -63,6 +66,7 @@ class CreateOrderDTO implements ICreateOrderDTO
     public function getTypeOrder(): int { return $this->typeOrder; }
     public function getItems(): array { return $this->items; }
     public function getPaymentMethod(): int { return $this->paymentMethod; }
+    public function getPriceShipping(): ?float { return $this->priceShipping; }
 
     // 🔑 Getters pour les infos de paiement Square
     public function getSquarePaymentId(): ?string { return $this->squarePaymentId; }

@@ -26,11 +26,11 @@ class ProcessOrderItemsUseCase
         $this->orderItemService = $orderItemService;
     }
 
-    public function execute(Order $order, array $items, UpdateStockAndInventoryUseCase $updateStockAndInventory, int $typeOrderId)
+    public function execute(Order $order, array $items, UpdateStockAndInventoryUseCase $updateStockAndInventory, int $typeOrderId, float $priceShipping)
     {
         $isCancel = $typeOrderId !== 1;
         $subtotal = 0;
-        $carrierPrice = $order->getCarrier()->getPrice(); 
+        $carrierPrice =$priceShipping; 
         $subtotal += $carrierPrice;
 
         foreach ($items as $itemData) {

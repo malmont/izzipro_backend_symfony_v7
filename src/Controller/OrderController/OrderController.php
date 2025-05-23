@@ -85,6 +85,7 @@ class OrderController extends AbstractController
             $data['carrierId'],
             $data['typeOrder'],
             $data['items'],
+            $data['priceShipping'],
             $paymentData['squarePaymentId'] ?? null,
             $paymentData['squareOrderId'] ?? null,
             $paymentData['squareReceiptUrl'] ?? null,
@@ -123,6 +124,7 @@ class OrderController extends AbstractController
             $data['carrierId'],
             $data['typeOrder'],
             $data['items'],
+            $data['priceShipping'],
              // 🔑 Infos Square
          $paymentData['squarePaymentId'] ?? null,
          $paymentData['squareOrderId'] ?? null,

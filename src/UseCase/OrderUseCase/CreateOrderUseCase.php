@@ -59,7 +59,7 @@ class CreateOrderUseCase
             }
 
             try {
-                $subtotal = $this->processOrderItemsUseCase->execute($order, $orderDTO->getItems(), $this->updateStockAndInventoryUseCase, $typeOrderId);
+                $subtotal = $this->processOrderItemsUseCase->execute($order, $orderDTO->getItems(), $this->updateStockAndInventoryUseCase, $typeOrderId, $orderDTO->getPriceShipping());
             } catch (BadRequestHttpException $e) {
                 throw new \Exception($e->getMessage());
             } catch (\Exception $e) {
@@ -126,7 +126,10 @@ class CreateOrderUseCase
             $this->em->flush();
             $this->em->getConnection()->commit();
 
-            return new JsonResponse(['message' => 'Order created successfully'], 201);
+            return new JsonResponse([
+                'message' => 'Order created successfully',
+                'orderId' => $order->getId(),
+            ], 201);
         } catch (\Exception $e) {
             $this->em->getConnection()->rollBack();
             return new JsonResponse(['error' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);

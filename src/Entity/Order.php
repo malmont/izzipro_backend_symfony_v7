@@ -78,6 +78,9 @@ class Order
     #[ORM\ManyToOne(inversedBy: 'orders')]
     private ?OrderType $orderType = null;
 
+    #[ORM\OneToOne(mappedBy: 'odershipping', cascade: ['persist', 'remove'])]
+    private ?ShippingOrder $shippingOrder = null;
+
    
     public function __construct()
     {
@@ -356,6 +359,28 @@ class Order
     public function setOrderType(?OrderType $orderType): static
     {
         $this->orderType = $orderType;
+
+        return $this;
+    }
+
+    public function getShippingOrder(): ?ShippingOrder
+    {
+        return $this->shippingOrder;
+    }
+
+    public function setShippingOrder(?ShippingOrder $shippingOrder): static
+    {
+        // unset the owning side of the relation if necessary
+        if ($shippingOrder === null && $this->shippingOrder !== null) {
+            $this->shippingOrder->setOdershipping(null);
+        }
+
+        // set the owning side of the relation if necessary
+        if ($shippingOrder !== null && $shippingOrder->getOdershipping() !== $this) {
+            $shippingOrder->setOdershipping($this);
+        }
+
+        $this->shippingOrder = $shippingOrder;
 
         return $this;
     }

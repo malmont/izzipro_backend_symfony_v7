@@ -8,6 +8,8 @@ use App\UseCase\AdressUseCase\GetUserAdressesUseCase;
 use App\UseCase\AdressUseCase\CreateAdressUseCase;
 use App\UseCase\AdressUseCase\EditAdressUseCase;
 use App\UseCase\AdressUseCase\DeleteAdressUseCase;
+use App\Services\AdressService\AddressVerificationService;  // ← correction d’import
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -19,24 +21,27 @@ use Symfony\Contracts\Cache\ItemInterface;
 #[Route('/api/adresses')]
 class AdressApiController extends AbstractController
 {
-    private GetUserAdressesUseCase $getUserAdressesUseCase;
-    private CreateAdressUseCase $createAdressUseCase;
-    private EditAdressUseCase $editAdressUseCase;
-    private DeleteAdressUseCase $deleteAdressUseCase;
-    private CacheInterface $cache;
+    private GetUserAdressesUseCase     $getUserAdressesUseCase;
+    private CreateAdressUseCase        $createAdressUseCase;
+    private EditAdressUseCase          $editAdressUseCase;
+    private DeleteAdressUseCase        $deleteAdressUseCase;
+    private CacheInterface             $cache;
+    private AddressVerificationService $verifier;             // ← type-hint correct
 
     public function __construct(
-        GetUserAdressesUseCase $getUserAdressesUseCase,
-        CreateAdressUseCase $createAdressUseCase,
-        EditAdressUseCase $editAdressUseCase,
-        DeleteAdressUseCase $deleteAdressUseCase,
-        CacheInterface $cache
+        GetUserAdressesUseCase     $getUserAdressesUseCase,
+        CreateAdressUseCase        $createAdressUseCase,
+        EditAdressUseCase          $editAdressUseCase,
+        DeleteAdressUseCase        $deleteAdressUseCase,
+        AddressVerificationService $verifier,                 // ← injection du bon service
+        CacheInterface             $cache
     ) {
         $this->getUserAdressesUseCase = $getUserAdressesUseCase;
-        $this->createAdressUseCase = $createAdressUseCase;
-        $this->editAdressUseCase = $editAdressUseCase;
-        $this->deleteAdressUseCase = $deleteAdressUseCase;
-        $this->cache = $cache;
+        $this->createAdressUseCase    = $createAdressUseCase;
+        $this->editAdressUseCase      = $editAdressUseCase;
+        $this->deleteAdressUseCase    = $deleteAdressUseCase;
+        $this->verifier               = $verifier;
+        $this->cache                  = $cache;
     }
 
     /**
@@ -53,9 +58,7 @@ class AdressApiController extends AbstractController
         $cacheKey = "adresses_user_" . $user->getId();
         $adresses = $this->cache->get($cacheKey, function (ItemInterface $item) use ($user) {
             $item->expiresAfter(3600);
-            // Ajoutez le tag pour pouvoir invalider en bloc
             $item->tag(['adresses_user']);
-            error_log("Cache miss for {$item->getKey()}");
             return $this->getUserAdressesUseCase->execute($user);
         });
 
@@ -66,20 +69,55 @@ class AdressApiController extends AbstractController
      * Créer une nouvelle adresse
      */
     #[Route('', name: 'create_adress', methods: ['POST'])]
-    public function createAdress(Request $request): JsonResponse
-    {
+    public function createAdress(
+        Request            $request,
+        ValidatorInterface $validator
+    ): JsonResponse {
         $user = $this->getUser();
         if (!$user) {
-            return new JsonResponse(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $data = json_decode($request->getContent(), true);
-        if (!$data) {
-            return new JsonResponse(['error' => 'Invalid JSON'], Response::HTTP_BAD_REQUEST);
+        $data = json_decode($request->getContent(), true) ?: [];
+        $dto  = new AdressInputDTO($data);
+
+        // Validation DTO
+        $violations = $validator->validate($dto);
+        if (count($violations) > 0) {
+            $errors = [];
+            foreach ($violations as $v) {
+                $errors[$v->getPropertyPath()] = $v->getMessage();
+            }
+            return $this->json(['error' => $errors], Response::HTTP_BAD_REQUEST);
         }
 
-        $inputDTO = new AdressInputDTO($data);
-        $adress = $this->createAdressUseCase->execute($inputDTO, $user);
+        // Vérification & normalisation via EasyPost
+        try {
+            $normalized = $this->verifier->verify([
+                'street1'     => $dto->addressLineOne,
+                'street2'     => $dto->addressLineTwo,
+                'city'        => $dto->city,
+                'province'    => $dto->province,
+                'postal_code' => $dto->zipCode,
+                'country'     => $dto->country,
+            ]);
+        } catch (\RuntimeException $e) {
+            return $this->json(
+                ['error' => ['address' => $e->getMessage()]],
+                Response::HTTP_BAD_REQUEST
+            );
+        }
+
+        // Injecter la version normalisée
+        $dto->addressLineOne = $normalized['street1'];
+        $dto->addressLineTwo = $normalized['street2'];
+        $dto->city           = $normalized['city'];
+        $dto->province       = $normalized['province'];
+        $dto->zipCode        = $normalized['postal_code'];
+        $dto->country        = $normalized['country'];
+
+        // Création de l’adresse
+        $this->createAdressUseCase->execute($dto, $user);
 
         return $this->json(['success' => 'Adresse créée avec succès'], Response::HTTP_CREATED);
     }
@@ -88,21 +126,56 @@ class AdressApiController extends AbstractController
      * Modifier une adresse
      */
     #[Route('/{id}', name: 'edit_adress', methods: ['PUT'])]
-    public function editAdress(Request $request, Adress $adress): JsonResponse
-    {
+    public function editAdress(
+        Request            $request,
+        ValidatorInterface $validator,
+        Adress             $adress
+    ): JsonResponse {
         $user = $this->getUser();
-        // Vérifier que l'utilisateur est authentifié et est le propriétaire de l'adresse
         if (!$user || $adress->getUserAdress() !== $user) {
-            return new JsonResponse(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $data = json_decode($request->getContent(), true);
-        if (!$data) {
-            return new JsonResponse(['error' => 'Invalid JSON'], Response::HTTP_BAD_REQUEST);
+        $data = json_decode($request->getContent(), true) ?: [];
+        $dto  = new AdressInputDTO($data);
+
+        // Validation DTO
+        $violations = $validator->validate($dto);
+        if (count($violations) > 0) {
+            $errors = [];
+            foreach ($violations as $v) {
+                $errors[$v->getPropertyPath()] = $v->getMessage();
+            }
+            return $this->json(['error' => $errors], Response::HTTP_BAD_REQUEST);
         }
 
-        $inputDTO = new AdressInputDTO($data);
-        $this->editAdressUseCase->execute($inputDTO, $adress);
+        // Vérification & normalisation via EasyPost
+        try {
+            $normalized = $this->verifier->verify([
+                'street1'     => $dto->addressLineOne,
+                'street2'     => $dto->addressLineTwo,
+                'city'        => $dto->city,
+                'province'    => $dto->province,
+                'postal_code' => $dto->zipCode,
+                'country'     => $dto->country,
+            ]);
+        } catch (\RuntimeException $e) {
+            return $this->json(
+                ['error' => ['address' => $e->getMessage()]],
+                Response::HTTP_BAD_REQUEST
+            );
+        }
+
+        // Injecter la version normalisée
+        $dto->addressLineOne = $normalized['street1'];
+        $dto->addressLineTwo = $normalized['street2'];
+        $dto->city           = $normalized['city'];
+        $dto->province       = $normalized['province'];
+        $dto->zipCode        = $normalized['postal_code'];
+        $dto->country        = $normalized['country'];
+
+        // Mise à jour de l’adresse
+        $this->editAdressUseCase->execute($dto, $adress);
 
         return $this->json(['success' => 'Adresse mise à jour avec succès'], Response::HTTP_OK);
     }
@@ -115,10 +188,10 @@ class AdressApiController extends AbstractController
     {
         $user = $this->getUser();
         if (!$user || $adress->getUserAdress() !== $user) {
-            return new JsonResponse(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
         }
 
         $this->deleteAdressUseCase->execute($adress);
-        return new JsonResponse(['success' => 'Adresse supprimée avec succès'], Response::HTTP_NO_CONTENT);
+        return $this->json(['success' => 'Adresse supprimée avec succès'], Response::HTTP_NO_CONTENT);
     }
 }

@@ -6,6 +6,7 @@ use App\Entity\OrderItems;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
@@ -14,6 +15,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use App\UseCase\OrderUseCase\CancelOrderUseCase;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 
 class OrderCrudController extends AbstractCrudController
 {
@@ -81,6 +83,25 @@ class OrderCrudController extends AbstractCrudController
                 ->renderAsHtml(),
             
             AssociationField::new('payments', 'Paiements')->onlyOnDetail(),
+            TextField::new('shippingOrder.service', 'Service livraison')
+                ->onlyOnDetail(),
+
+            TextField::new('shippingOrder.carrierAccountId', 'Transporteur')
+                ->onlyOnDetail(),
+
+            MoneyField::new('shippingOrder.totalPrice', 'Prix livraison')
+                ->setCurrency('CAD')
+                ->onlyOnDetail(),
+
+            DateTimeField::new('shippingOrder.createdAt', 'Ship créé le')
+                ->setFormat('dd/MM/yyyy HH:mm')
+                ->onlyOnDetail(),
+
+            CollectionField::new('shippingOrder.parcels', 'Colis')
+                ->onlyOnDetail()
+                ->setTemplatePath('admin/fields/colis.html.twig'),
+
+
         ];
     }
 
@@ -96,6 +117,11 @@ class OrderCrudController extends AbstractCrudController
     }
     public function configureActions(Actions $actions): Actions
         {
-            return $actions->disable(Action::NEW);
+             return $actions
+            ->disable(Action::NEW)
+            // ajoute l’icône “Voir” sur la liste
+            ->add(Crud::PAGE_INDEX, Action::DETAIL)
+        ;
+            
         }
 }

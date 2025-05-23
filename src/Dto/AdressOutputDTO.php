@@ -15,6 +15,7 @@ class AdressOutputDTO
     public string $city;
     public string $zipCode;
     public string $country;
+    public ?string $province;
     public string $contactNumber;
 
     public function __construct(Adress $adress)
@@ -28,6 +29,7 @@ class AdressOutputDTO
         $this->addressLineTwo = $adress->getComplement();
         $this->city = $adress->getCity();
         $this->zipCode = $adress->getCodepostal();
+        $this->province = $adress->getProvince();
         $this->country = $adress->getCountry();
         $this->contactNumber = $adress->getPhone();
     }

@@ -7,13 +7,15 @@ use App\Repository\ProductShippingRepository;
 use App\Repository\PackagingTypeRepository;
 use App\Services\ShippingService\ShippingService;
 use LogicException;
+use App\Services\ShippingService\ShipmentAddressBuilder;
 
 class GetShippingRatesForCart
 {
     public function __construct(
         private ProductShippingRepository $shippingRepo,
         private PackagingTypeRepository   $templateRepo,
-        private ShippingService           $shippingService
+        private ShippingService           $shippingService,
+        private ShipmentAddressBuilder    $builder
     ) {}
 
     /**
@@ -45,22 +47,8 @@ class GetShippingRatesForCart
         }
 
         // 2. Adapter les adresses au format EasyPost
-        $to = [
-            'street1' => $toAddress['street1'],
-            'street2' => $toAddress['street2'] ?? null,
-            'city'    => $toAddress['city'],
-            'state'   => $toAddress['province'],
-            'zip'     => $toAddress['postal_code'],
-            'country' => $toAddress['country'],
-        ];
-        $from = [
-            'street1' => $fromAddress['street1'],
-            'street2' => $fromAddress['street2'] ?? null,
-            'city'    => $fromAddress['city'],
-            'state'   => $fromAddress['province'],
-            'zip'     => $fromAddress['postal_code'],
-            'country' => $fromAddress['country'],
-        ];
+        $to   = $this->builder->buildTo($toAddress);
+        $from = $this->builder->buildFrom();
 
         // 3. Charger tous les templates d’emballage et calculer les colis
         $templates = $this->templateRepo->findAll();

@@ -50,6 +50,9 @@ class Entreprise
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $Apropos = null;
 
+    #[ORM\OneToOne(mappedBy: 'entreprise', targetEntity: AddressEntreprise::class, cascade: ['persist','remove'])]
+    private ?AddressEntreprise $addressEntreprise = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -197,5 +200,32 @@ class Entreprise
         $this->Apropos = $Apropos;
 
         return $this;
+    }
+
+    public function getAddressEntreprise(): ?AddressEntreprise
+    {
+        return $this->addressEntreprise;
+    }
+
+    public function setAddressEntreprise(?AddressEntreprise $addressEntreprise): static
+    {
+        // unset the owning side of the relation if necessary
+        if ($addressEntreprise === null && $this->addressEntreprise !== null) {
+            $this->addressEntreprise->setEntreprise(null);
+        }
+
+        // set the owning side of the relation if necessary
+        if ($addressEntreprise !== null && $addressEntreprise->getEntreprise() !== $this) {
+            $addressEntreprise->setEntreprise($this);
+        }
+
+        $this->addressEntreprise = $addressEntreprise;
+
+        return $this;
+    }
+
+    public function __toString(): string
+    {
+        return $this->name;
     }
 }
