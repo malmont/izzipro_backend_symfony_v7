@@ -3480,3 +3480,23 @@ ALTER TABLE ONLY public."order"
 -- PostgreSQL database dump complete
 --
 
+
+-- Auto-generated tenant demo
+CREATE DATABASE "demo_db" ENCODING='UTF8' TEMPLATE=template0;
+INSERT INTO tenants(code,name,dbname) VALUES('demo','Demo Tenant','demo_db');
+
+-- Auto-generated tenant demo
+CREATE DATABASE "demo_db" ENCODING='UTF8' TEMPLATE=template0;
+INSERT INTO tenants(code,name,dbname) VALUES('demo','Demo Tenant','demo_db');
+
+-- Auto-generated tenant demo
+CREATE DATABASE "demo_db" ENCODING='UTF8' TEMPLATE=template0;
+INSERT INTO tenants(code,name,dbname) VALUES('demo','Demo Tenant','demo_db');
+
+-- Auto-generated tenant demo
+CREATE DATABASE "demo_db" ENCODING='UTF8' TEMPLATE=template0;
+INSERT INTO tenants(code,name,dbname) VALUES('demo','Demo Tenant','demo_db');
+
+-- Auto-generated tenant demo10
+CREATE DATABASE "demo_db10" ENCODING='UTF8' TEMPLATE=template0;
+INSERT INTO tenants(code,name,dbname) VALUES('demo10','Demo Tenant 2','demo_db10');

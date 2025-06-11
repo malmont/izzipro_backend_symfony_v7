@@ -1,61 +1,50 @@
+# config/packages/monolog.yaml
 monolog:
-    channels:
-        - deprecation # Deprecations are logged in the dedicated "deprecation" channel when it exists
+    # Déclare les canaux de logging que nous utiliserons
+    channels: ['doctrine', 'security', 'deprecation']
 
-when@dev:
-    monolog:
-        handlers:
-            main:
-                type: stream
-                path: "%kernel.logs_dir%/%kernel.environment%.log"
-                level: debug
-                channels: ["!event"]
-            # uncomment to get logging in your browser
-            # you may have to allow bigger header sizes in your Web server configuration
-            #firephp:
-            #    type: firephp
-            #    level: info
-            #chromephp:
-            #    type: chromephp
-            #    level: info
-            console:
-                type: console
-                process_psr_3_messages: false
-                channels: ["!event", "!doctrine", "!console"]
+    handlers:
+        # -------------------------------------------------------------------
+        # Handler principal pour l’environnement "default" (tous canaux sauf ceux exclus)
+        # Ici, on exclut "event", "doctrine" et "security" pour ne pas mélanger les logs.
+        # Les messages DEBUG+ seront écrits dans var/log/{env}.log
+        main:
+            type: stream
+            path: "%kernel.logs_dir%/%kernel.environment%.log"
+            level: debug
+            channels: ["!event", "!doctrine", "!security"]
 
-when@test:
-    monolog:
-        handlers:
-            main:
-                type: fingers_crossed
-                action_level: error
-                handler: nested
-                excluded_http_codes: [404, 405]
-                channels: ["!event"]
-            nested:
-                type: stream
-                path: "%kernel.logs_dir%/%kernel.environment%.log"
-                level: debug
+        # -------------------------------------------------------------------
+        # Handler dédié aux requêtes Doctrine (SQL, cache, etc.)
+        # Niveau DEBUG afin de capturer chaque requête SQL exécutée.
+        doctrine:
+            type:   stream
+            path:   "%kernel.logs_dir%/dev-doctrine.log"
+            level:  debug
+            channels: ["doctrine"]
 
-when@prod:
-    monolog:
-        handlers:
-            main:
-                type: fingers_crossed
-                action_level: error
-                handler: nested
-                excluded_http_codes: [404, 405]
-                buffer_size: 50 # How many messages should be saved? Prevent memory leaks
-            nested:
-                type: stream
-                path: php://stderr
-                level: debug
-                formatter: monolog.formatter.json
-            console:
-                type: console
-                process_psr_3_messages: false
-                channels: ["!event", "!doctrine"]
-            deprecation:
-                type: stream
-                channels: [deprecation]
-                path: php://stderr
+        # -------------------------------------------------------------------
+        # Handler dédié au composant Security (firewalls, providers, voters, etc.)
+        # Niveau DEBUG pour voir quel firewall est matché et comment l’auth s’effectue.
+        security:
+            type:   stream
+            path:   "%kernel.logs_dir%/dev-security.log"
+            level:  debug
+            channels: ["security"]
+
+        # -------------------------------------------------------------------
+        # Handler pour le canal "deprecation"
+        # Permet de capturer toutes les dépréciations dans un fichier dédié.
+        deprecation:
+            type:   stream
+            path:   "%kernel.logs_dir%/deprecations.log"
+            level:  debug
+            channels: ["deprecation"]
+
+        # -------------------------------------------------------------------
+        # Handler "console" pour afficher certains logs en CLI
+        # On exclut "event", "doctrine" et "security" pour ne pas polluer la console.
+        console:
+            type: console
+            process_psr_3_messages: false
+            channels: ["!event", "!doctrine", "!security"]

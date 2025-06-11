@@ -11,6 +11,9 @@ services:
         autowire: true      # Automatically injects dependencies in your services.
         autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
 
+    Doctrine\ORM\Configuration: '@doctrine.orm.default_configuration'
+    Doctrine\Common\EventManager: '@doctrine.dbal.default_connection.event_manager'    
+
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name
     App\:
@@ -19,6 +22,12 @@ services:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'
+            - '../src/Repository/UserRepository.php'
+            - '../src/Repository/GooglePlacesConfigRepository.php'
+            - '../src/Repository/AdressRepository.php'
+            - '../src/Repository/AdminSettingsRepository.php'
+            - '../src/Repository/EasyPostConfigurationRepository.php'
+            
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
@@ -32,10 +41,45 @@ services:
         tags:
             - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest, priority: 10 }
 
-   
+
     App\EventSubscriber\CacheInvalidationSubscriber:
         tags:
             - { name: doctrine.event_subscriber }
 
+    App\Services\TenantConnectionManager:
+        arguments:
+            $masterDatabaseUrl: '%env(MASTER_DATABASE_URL)%'
+            $defaultTenantUrl:  '%env(DATABASE_URL)%'
+            $projectDir:        '%kernel.project_dir%'
+            $connection:        '@doctrine.dbal.default_connection'
+
+       
+    App\Services\TenantConnectionProvider:
+        public: true
+        shared: true
 
 
+    App\Services\TenantEntityManagerProvider:
+        public: true
+        shared: false
+
+
+    # Exemple pour TokenService :
+    App\Services\TokenService:
+        arguments:
+            $JWTManager:    '@lexik_jwt_authentication.jwt_manager'
+   
+
+    App\Services\TenantDoctrineSwitcherListener:
+        arguments:
+            $masterDatabaseUrl: '%env(resolve:MASTER_DATABASE_URL)%'
+        tags:
+            - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest, priority: 250 }
+
+      
+    App\Repository\ResetPasswordRequestRepository:
+        tags: ['doctrine.repository_service']  
+
+
+    App\Repository\GooglePlacesConfigRepository:
+        tags: ['doctrine.repository_service']
