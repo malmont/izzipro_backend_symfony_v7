@@ -2,19 +2,20 @@
 namespace App\Services\HomeSliderService;
 
 use App\Entity\HomeSlider;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider; // Ajouté
 
 class HomeSliderService 
 {
-    private EntityManagerInterface $entityManager; // Corrigé ici
+    private TenantEntityManagerProvider $tenantEmProvider;
 
-    public function __construct(EntityManagerInterface $entityManager) // Corrigé ici
+    public function __construct(TenantEntityManagerProvider $tenantEmProvider)
     {
-        $this->entityManager = $entityManager; // Corrigé ici
+        $this->tenantEmProvider = $tenantEmProvider;
     }
 
     public function getAllhomeSliders(): array
     {
-        return $this->entityManager->getRepository(HomeSlider::class)->findAll(); 
+        $em = $this->tenantEmProvider->getEntityManager();
+        return $em->getRepository(HomeSlider::class)->findAll(); 
     } 
 }

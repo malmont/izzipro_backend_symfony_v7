@@ -3,24 +3,41 @@
 namespace App\Repository;
 
 use App\Entity\HomeSlider;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // IMPORTANT : On utilise le repository de base de Doctrine
 
 /**
- * @extends ServiceEntityRepository<HomeSlider>
- *
- * @method HomeSlider|null find($id, $lockMode = null, $lockVersion = null)
- * @method HomeSlider|null findOneBy(array $criteria, array $orderBy = null)
- * @method HomeSlider[]    findAll()
- * @method HomeSlider[]    findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null)
+ * N'HÉRITE PLUS DE ServiceEntityRepository.
+ * Ce repository n'est plus un service Symfony, mais une simple classe que
+ * l'EntityManager saura créer et utiliser.
  */
-class HomeSliderRepository extends ServiceEntityRepository
+class HomeSliderRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, HomeSlider::class);
-    }
+    // LE CONSTRUCTEUR A ÉTÉ COMPLÈTEMENT SUPPRIMÉ.
+    // L'EntityManager se chargera lui-même de l'instancier.
 
+
+    /**
+     * EXEMPLE DE MÉTHODE PERSONNALISÉE :
+     * Vous pouvez toujours ajouter vos propres méthodes de recherche.
+     * Elles fonctionneront maintenant car `$this->createQueryBuilder()`
+     * utilisera le bon EntityManager (celui du tenant).
+     *
+     * @return HomeSlider[]
+     */
+    public function findAllActiveOrderedByPosition(): array
+    {
+        return $this->createQueryBuilder('h') // 'h' est l'alias pour HomeSlider
+            ->andWhere('h.isActive = :active')
+            ->setParameter('active', true)
+            ->orderBy('h.position', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+    
+    // Note : Les méthodes `save` et `remove` que vous aviez ne sont généralement
+    // pas nécessaires dans un repository car c'est le rôle de l'EntityManager,
+    // mais si vous voulez les garder pour des raisons de raccourci, elles
+    // fonctionneront aussi car $this->getEntityManager() retournera le bon.
     public function save(HomeSlider $entity, bool $flush = false): void
     {
         $this->getEntityManager()->persist($entity);
@@ -38,29 +55,4 @@ class HomeSliderRepository extends ServiceEntityRepository
             $this->getEntityManager()->flush();
         }
     }
-
-//    /**
-//     * @return HomeSlider[] Returns an array of HomeSlider objects
-//     */
-//    public function findByExampleField($value): array
-//    {
-//        return $this->createQueryBuilder('h')
-//            ->andWhere('h.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->orderBy('h.id', 'ASC')
-//            ->setMaxResults(10)
-//            ->getQuery()
-//            ->getResult()
-//        ;
-//    }
-
-//    public function findOneBySomeField($value): ?HomeSlider
-//    {
-//        return $this->createQueryBuilder('h')
-//            ->andWhere('h.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->getQuery()
-//            ->getOneOrNullResult()
-//        ;
-//    }
 }
