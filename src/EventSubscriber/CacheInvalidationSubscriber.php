@@ -32,10 +32,12 @@ use Doctrine\ORM\Event\LifecycleEventArgs;
 use Doctrine\ORM\Events;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\TagAwareCacheInterface;
+use App\Services\TenantConnectionProvider;
 
 class CacheInvalidationSubscriber implements EventSubscriber
 {
     private CacheInterface $cache;
+    private TenantConnectionProvider $tcp;
 
     /**
      * Tableau de correspondance définissant pour chaque groupe d'entités
@@ -206,9 +208,10 @@ class CacheInvalidationSubscriber implements EventSubscriber
         ],
     ];
 
-    public function __construct(CacheInterface $cache)
+    public function __construct(CacheInterface $cache, TenantConnectionProvider $tcp)
     {
         $this->cache = $cache;
+        $this->tcp = $tcp;
     }
 
     public function getSubscribedEvents(): array
@@ -242,20 +245,22 @@ class CacheInvalidationSubscriber implements EventSubscriber
     private function invalidateCache(LifecycleEventArgs $args): void
     {
         $entity = $args->getEntity();
+        $tenantCode = $this->tcp->getTenantCode() ?: 'master';
+        $prefix = $tenantCode . ':';       // Pour les clés
+        $tagPrefix = $tenantCode;          // Pour les tags (SANS les caractères interdits)
 
         foreach (self::CACHE_INVALIDATIONS as $operation) {
-            // Si l'entité correspond à l'une des classes définies
             foreach ($operation['classes'] as $class) {
                 if ($entity instanceof $class) {
-                    // Traitement des suppressions de clés
+                    // Suppression des clés préfixées par tenant
                     foreach ($operation['delete'] as $key) {
-                        $this->cache->delete($key);
+                        $this->cache->delete($prefix . $key);
                     }
-                    // Traitement de l'invalidation par tags
+                    // Invalidation des tags préfixés par tenant (sans “:” !)
                     if (!empty($operation['invalidate_tags']) && $this->cache instanceof TagAwareCacheInterface) {
-                        $this->cache->invalidateTags($operation['invalidate_tags']);
+                        $tags = array_map(fn($tag) => $tagPrefix . $tag, $operation['invalidate_tags']);
+                        $this->cache->invalidateTags($tags);
                     }
-                    // Une fois que l'opération s'applique, on passe au mapping suivant
                     break;
                 }
             }
