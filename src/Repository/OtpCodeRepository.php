@@ -3,41 +3,16 @@
 namespace App\Repository;
 
 use App\Entity\OtpCode;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIED: Use Doctrine's base repository
 
 /**
- * @extends ServiceEntityRepository<OtpCode>
+ * This is no longer a Symfony service.
+ * @extends EntityRepository<OtpCode>
  */
-class OtpCodeRepository extends ServiceEntityRepository
+class OtpCodeRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, OtpCode::class);
-    }
-
-    //    /**
-    //     * @return OtpCode[] Returns an array of OtpCode objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('o')
-    //            ->andWhere('o.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('o.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
-
-    //    public function findOneBySomeField($value): ?OtpCode
-    //    {
-    //        return $this->createQueryBuilder('o')
-    //            ->andWhere('o.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+    /**
+     * DELETED: The constructor is no longer needed.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 }

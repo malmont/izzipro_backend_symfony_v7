@@ -8,24 +8,24 @@ use App\Entity\EmailConfiguration;
 use App\Entity\Entreprise;
 use App\Entity\User;
 use DateTime;
-use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Twig\Environment;
 use Symfony\Component\HttpFoundation\Request;
+use App\Services\TenantEntityManagerProvider; // Ajout
 
 class OtpService
 {
-    private EntityManagerInterface $entityManager;
+    private TenantEntityManagerProvider $tenantEmProvider;
     private MailerInterface $mailer;
     private Environment $twig;
 
     public function __construct(
-        EntityManagerInterface $entityManager,
+        TenantEntityManagerProvider $tenantEmProvider,
         MailerInterface $mailer,
         Environment $twig
     ) {
-        $this->entityManager = $entityManager;
+        $this->tenantEmProvider = $tenantEmProvider;
         $this->mailer        = $mailer;
         $this->twig          = $twig;
     }
@@ -45,18 +45,17 @@ class OtpService
 
         // Créer et sauvegarder l'entité OtpCode
         $otpCode = new OtpCode();
-        // En fonction de votre entité, utilisez ici setUserOtp() ou setUser()
         $otpCode->setUserOtp($user);
         $otpCode->setCode((string)$otp);
-        // Le code est valable 5 minutes
         $otpCode->setExpiration((new DateTime())->modify('+5 minutes'));
 
-        $this->entityManager->persist($otpCode);
-        $this->entityManager->flush();
+        // Utilisation de l'EM multi-tenant
+        $em = $this->tenantEmProvider->getEntityManager();
+        $em->persist($otpCode);
+        $em->flush();
 
         // Récupérer la configuration d'email depuis la BDD
-        $emailConfig = $this->entityManager
-            ->getRepository(EmailConfiguration::class)
+        $emailConfig = $em->getRepository(EmailConfiguration::class)
             ->findOneBy([]);
         if (!$emailConfig) {
             $fromEmail = 'no-reply@votredomaine.com';
@@ -67,11 +66,9 @@ class OtpService
         }
 
         // Récupérer les informations de l'entreprise (supposons une seule entreprise)
-        $entreprise = $this->entityManager
-            ->getRepository(Entreprise::class)
-            ->findOneBy([]);
+        $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
 
-        // Construire le domaine pour le logo, par exemple : https://backend-strapi.online/assets/uploads/email-logos/
+        // Construire le domaine pour le logo
         $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
 
         // Préparer et envoyer l'email OTP avec le template Twig enrichi

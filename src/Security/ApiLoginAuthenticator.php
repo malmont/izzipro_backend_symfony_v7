@@ -2,7 +2,6 @@
 
 namespace App\Security;
 
-use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -13,6 +12,7 @@ use Symfony\Component\Security\Http\Authenticator\Passport\Credentials\PasswordC
 use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 use Symfony\Component\Security\Http\Util\TargetPathTrait;
 use App\Entity\User;
+use App\Services\TenantEntityManagerProvider; // Ajout
 
 class ApiLoginAuthenticator extends AbstractLoginFormAuthenticator
 {
@@ -20,28 +20,28 @@ class ApiLoginAuthenticator extends AbstractLoginFormAuthenticator
 
     public const LOGIN_ROUTE = 'api_login';
 
-    private ManagerRegistry $doctrine;
+    private TenantEntityManagerProvider $tenantEmProvider;
     private CustomAuthenticationSuccessHandler $successHandler;
 
     public function __construct(
         private UrlGeneratorInterface $urlGenerator,
-        ManagerRegistry $doctrine,
+        TenantEntityManagerProvider $tenantEmProvider,
         CustomAuthenticationSuccessHandler $successHandler
     ) {
-        $this->doctrine = $doctrine;
+        $this->tenantEmProvider = $tenantEmProvider;
         $this->successHandler = $successHandler;
     }
 
     public function authenticate(Request $request): Passport
     {
-        // Lecture des données JSON (API stateless)
         $data = json_decode($request->getContent(), true) ?? [];
         $email = $data['username'] ?? '';
         $password = $data['password'] ?? '';
         $platform = $data['platform'] ?? 'mobile';
         return new Passport(
             new UserBadge($email, function (string $userIdentifier) use ($platform) {
-                $em = $this->doctrine->getManager();
+                // Multi-tenant
+                $em = $this->tenantEmProvider->getEntityManager();
                 $user = $em->getRepository(User::class)->findOneBy(['email' => $userIdentifier]);
                 if (!$user) {
                     throw new CustomUserMessageAuthenticationException('User not found.');
@@ -62,13 +62,11 @@ class ApiLoginAuthenticator extends AbstractLoginFormAuthenticator
                 return $user;
             }),
             new PasswordCredentials($password)
-            // Note : Aucun CsrfTokenBadge ni utilisation de session dans une API stateless
         );
     }
 
     public function onAuthenticationSuccess(Request $request, \Symfony\Component\Security\Core\Authentication\Token\TokenInterface $token, string $firewallName): ?Response
     {
-        // Délégation du traitement du succès d'authentification au CustomAuthenticationSuccessHandler
         return $this->successHandler->onAuthenticationSuccess($request, $token);
     }
 

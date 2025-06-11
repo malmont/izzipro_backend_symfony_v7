@@ -2,17 +2,16 @@
 
 namespace App\Services;
 
-use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\HttpFoundation\JsonResponse;
+use App\Services\TenantEntityManagerProvider; // Ajout
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class EntityRetrieverService
 {
-    private $em;
+    private TenantEntityManagerProvider $tenantEmProvider;
 
-    public function __construct(EntityManagerInterface $em)
+    public function __construct(TenantEntityManagerProvider $tenantEmProvider)
     {
-        $this->em = $em;
+        $this->tenantEmProvider = $tenantEmProvider;
     }
 
     /**
@@ -26,7 +25,8 @@ class EntityRetrieverService
      */
     public function findOrFail(string $entityClass, $id, string $errorMessage = 'Entity not found'): ?object
     {
-        $entity = $this->em->getRepository($entityClass)->find($id);
+        $em = $this->tenantEmProvider->getEntityManager();
+        $entity = $em->getRepository($entityClass)->find($id);
         if (!$entity) {
             throw new NotFoundHttpException($errorMessage);
         }

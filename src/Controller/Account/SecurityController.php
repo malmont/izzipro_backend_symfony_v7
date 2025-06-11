@@ -11,7 +11,6 @@ use Symfony\Component\HttpFoundation\Cookie;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Gesdinet\JWTRefreshTokenBundle\Entity\RefreshToken;
-use Doctrine\ORM\EntityManagerInterface;
 use DateTime;
 use Symfony\Component\Mime\Email;
 use App\Services\TokenService;
@@ -19,18 +18,19 @@ use App\Entity\OtpCode;
 use App\Entity\Entreprise;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use App\Services\OtpService;
-
 use App\Entity\User; 
+use App\Services\AuthenticationService;
+use App\Services\TenantEntityManagerProvider; // Ajout
 
 class SecurityController extends AbstractController
 {
-    private EntityManagerInterface $entityManager;
+    private TenantEntityManagerProvider $tenantEmProvider;
     private TokenService $tokenService;
     private OtpService $otpService;
 
-    public function __construct(EntityManagerInterface $entityManager, TokenService $tokenService, OtpService $otpService)
+    public function __construct(TenantEntityManagerProvider $tenantEmProvider, TokenService $tokenService, OtpService $otpService)
     {
-        $this->entityManager = $entityManager;
+        $this->tenantEmProvider = $tenantEmProvider;
         $this->tokenService  = $tokenService;
         $this->otpService    = $otpService;
     }
@@ -52,76 +52,22 @@ class SecurityController extends AbstractController
     }
     
     #[Route(path: '/api/login', name: 'api_login', methods: ['POST'])]
-    public function loginApi(
-        Request $request,
-        JWTTokenManagerInterface $JWTManager,
-    ): Response {
-        // Lecture des données JSON envoyées par le client API
+    public function loginApi(Request $request, AuthenticationService $auth): Response
+    {
         $data = json_decode($request->getContent(), true) ?? [];
-        $email = $data['username'] ?? '';
-        $password = $data['password'] ?? '';
-        $platform = $data['platform'] ?? 'mobile';
-        
-        // Récupération de l'utilisateur par email
-        $user = $this->entityManager->getRepository(\App\Entity\User::class)->findOneBy(['email' => $email]);
-        if (!$user instanceof UserInterface) {
-            return $this->json(
-                ['error' => 'Unauthorized'],                     // même message qu’avant
-                Response::HTTP_UNAUTHORIZED
-            );
-        }
-        
-
-        if (!$user->isVerified()) {
-            return $this->json(
-                ['error' => 'Your account is not verified. Please check your email.'],
-                Response::HTTP_UNAUTHORIZED
-            );
-            
-        }
-        
-        if (in_array($platform, ['web', 'mobile'])) {
-            if (!in_array('ROLE_USER_INTERNET', $user->getRoles(), true)) {
-               return $this->json(
-                    ['error' => 'This account is not allowed to access the web/mobile platform.'],
-                    Response::HTTP_FORBIDDEN
-                );
-            }
-        } elseif ($platform === 'pos') {
-            if (!in_array('ROLE_USER_POS', $user->getRoles(), true)) {
-                return $this->json(
-                    ['error' => 'This account is not allowed to access the POS platform.'],
-                    Response::HTTP_FORBIDDEN
-                );
-            }
-        }
-
-             // Si l'OTP est activé pour cet utilisateur, on génère et envoie l'OTP via le service dédié
-        if ($user->isOtpEnabled()) {
-            $this->otpService->generateAndSendOtp($user, $request);
-            return new Response(
-                json_encode([
-                    'otp_required' => true,
-                    'message' => 'Un code OTP vous a été envoyé par email. Veuillez le saisir pour continuer.'
-                ]),
-                Response::HTTP_OK,
-                ['Content-Type' => 'application/json']
-            );
-        }
- 
-        // Sinon (si OTP n'est pas activé), générer les tokens via le service factorisé
-        $tokens = $this->tokenService->generateTokens($user);
-
-        // Construire la réponse avec tokens (cookies gérés pour 'web' via le service)
-        return $this->tokenService->createResponseWithTokens($tokens, $platform);
-
+        return $auth->login(
+            $data['username']  ?? '',
+            $data['password']  ?? '',
+            $data['platform']  ?? 'mobile',
+            $request
+        );
     }
+
     
     #[Route('/api/token/refresh', name: 'api_token_refresh', methods: ['POST'])]
     public function refreshToken(
         Request $request,
         JWTTokenManagerInterface $JWTManager,
-        // Vous pouvez injecter RefreshTokenManagerInterface ici si besoin
         RefreshTokenManagerInterface $refreshTokenManager
     ): Response {
         $refreshToken = $request->cookies->get('refresh_token');
@@ -175,16 +121,12 @@ class SecurityController extends AbstractController
     #[Route(path: '/api/logout', name: 'api_logout', methods: ['POST'])]
     public function logoutWeb(Request $request): Response {
         $domain = $request->getHost();
-        // Créez d'abord la réponse JSON
         $response = $this->json([
             'message' => 'Successfully logged out',
         ]);
 
-        // Ajoutez les headers de suppression des cookies
         $response->headers->clearCookie('jwt');
         $response->headers->clearCookie('refresh_token');
         return $response;
     }
-
-
 }

@@ -4,7 +4,7 @@
 namespace App\Services;
 
 use DateTime;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider;
 use Gesdinet\JWTRefreshTokenBundle\Entity\RefreshToken;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Component\HttpFoundation\Cookie;
@@ -14,12 +14,12 @@ use Symfony\Component\Security\Core\User\UserInterface;
 class TokenService
 {
     private JWTTokenManagerInterface $JWTManager;
-    private EntityManagerInterface $entityManager;
+    private TenantEntityManagerProvider $tenantEmProvider;
 
-    public function __construct(JWTTokenManagerInterface $JWTManager, EntityManagerInterface $entityManager)
+    public function __construct(JWTTokenManagerInterface $JWTManager, TenantEntityManagerProvider $tenantEmProvider)
     {
         $this->JWTManager = $JWTManager;
-        $this->entityManager = $entityManager;
+        $this->tenantEmProvider = $tenantEmProvider;
     }
 
     /**
@@ -33,13 +33,16 @@ class TokenService
         // Génération du token JWT
         $jwt = $this->JWTManager->create($user);
 
+        // Utilisation de l'EM multi-tenant
+        $em = $this->tenantEmProvider->getEntityManager();
+
         // Création et configuration du refresh token
         $refreshToken = new RefreshToken();
         $refreshToken->setRefreshToken(base64_encode(random_bytes(64)));
         $refreshToken->setUsername($user->getUserIdentifier());
         $refreshToken->setValid((new DateTime())->modify('+7 days'));
-        $this->entityManager->persist($refreshToken);
-        $this->entityManager->flush();
+        $em->persist($refreshToken);
+        $em->flush();
 
         return [
             'token' => $jwt,

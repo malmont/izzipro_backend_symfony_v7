@@ -3,26 +3,25 @@
 
 namespace App\Security;
 
-use App\Entity\OtpCode;
+use App\Entity\User;
+use App\Services\OtpService;
+use App\Services\TenantEntityManagerProvider;
 use DateTime;
-use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Security;
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Http\Authenticator\AbstractLoginFormAuthenticator;
-use Symfony\Component\Security\Http\Authenticator\Passport\Badge\CsrfTokenBadge;
+use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Http\Authenticator\Passport\Credentials\PasswordCredentials;
-use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
+use Symfony\Component\Security\Http\Authenticator\Passport\Badge\CsrfTokenBadge;
 use Symfony\Component\Security\Http\Util\TargetPathTrait;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Email;
 use Twig\Environment;
-use App\Services\OtpService;
 
 class LoginAuthenticator extends AbstractLoginFormAuthenticator
 {
@@ -30,25 +29,27 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
 
     public const LOGIN_ROUTE = 'app_login';
 
-    private EntityManagerInterface $entityManager;
+    private UrlGeneratorInterface $urlGenerator;
+    private TenantEntityManagerProvider $tenantEmProvider;
     private MailerInterface $mailer;
-    private $session;
+    private RequestStack $requestStack;
     private Environment $twig;
     private OtpService $otpService;
 
     public function __construct(
-        private UrlGeneratorInterface $urlGenerator,
-        EntityManagerInterface $entityManager,
+        UrlGeneratorInterface $urlGenerator,
+        TenantEntityManagerProvider $tenantEmProvider,
         MailerInterface $mailer,
         RequestStack $requestStack,
         Environment $twig,
         OtpService $otpService
     ) {
-        $this->entityManager = $entityManager;
-        $this->mailer        = $mailer;
-        $this->session       = $requestStack->getSession();
-        $this->twig          = $twig;
-        $this->otpService    = $otpService;
+        $this->urlGenerator     = $urlGenerator;
+        $this->tenantEmProvider = $tenantEmProvider;
+        $this->mailer           = $mailer;
+        $this->requestStack     = $requestStack;
+        $this->twig             = $twig;
+        $this->otpService       = $otpService;
     }
 
     public function authenticate(Request $request): Passport
@@ -57,7 +58,15 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
         $request->getSession()->set(Security::LAST_USERNAME, $email);
 
         return new Passport(
-            new UserBadge($email),
+            new UserBadge($email, function(string $userIdentifier) {
+                // Si besoin de multi-tenant ici aussi, on peut initialiser
+                $em = $this->tenantEmProvider->getEntityManager();
+                $user = $em->getRepository(User::class)->findOneBy(['email' => $userIdentifier]);
+                if (!$user) {
+                    throw new CustomUserMessageAuthenticationException('Utilisateur introuvable.');
+                }
+                return $user;
+            }),
             new PasswordCredentials($request->request->get('password', '')),
             [
                 new CsrfTokenBadge('authenticate', $request->request->get('_csrf_token')),
@@ -67,26 +76,31 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
 
     public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response
     {
+        // On récupère la session depuis la requête, désormais disponible
+        $session = $request->getSession();
+
+        /** @var User $user */
         $user = $token->getUser();
 
-        // Si l'utilisateur a activé l'OTP et qu'il n'est pas encore validé en session
-        if ($user instanceof \App\Entity\User && $user->isOtpEnabled() && !$this->session->get('otp_validated')) {
-            // Appel au service OTP qui se charge de générer le code, de créer l'entité et d'envoyer l'e-mail
+        // 1) Si OTP activé et non validé en session -> générer + rediriger vers le formulaire OTP
+        if ($user->isOtpEnabled() && !$session->get('otp_validated')) {
             $this->otpService->generateAndSendOtp($user, $request);
+            $session->set('pending_otp_user', $user->getId());
+            $session->remove('otp_validated');
 
-            // Stocker l'identifiant de l'utilisateur en attente de validation OTP
-            $this->session->set('pending_otp_user', $user->getId());
-            $this->session->remove('otp_validated');
-
-            // Rediriger vers la page de vérification OTP (par exemple 'account_otp')
-            return new RedirectResponse($this->urlGenerator->generate('account_otp'));
+            return new RedirectResponse(
+                $this->urlGenerator->generate('account_otp')
+            );
         }
 
-        if ($targetPath = $this->getTargetPath($request->getSession(), $firewallName)) {
+        // 2) Sinon, redirection vers la page demandée ou la page par défaut
+        if ($targetPath = $this->getTargetPath($session, $firewallName)) {
             return new RedirectResponse($targetPath);
         }
 
-        return new RedirectResponse($this->urlGenerator->generate('app_account'));
+        return new RedirectResponse(
+            $this->urlGenerator->generate('app_account')
+        );
     }
 
     protected function getLoginUrl(Request $request): string

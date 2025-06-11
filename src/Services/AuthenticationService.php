@@ -1,0 +1,99 @@
+<?php
+// src/Services/AuthenticationService.php
+
+namespace App\Services;
+
+use App\Entity\User;
+use App\Services\TokenService;
+use App\Services\OtpService;
+// MODIFICATION : On importe notre provider
+use App\Services\TenantEntityManagerProvider; 
+use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+
+class AuthenticationService
+{
+    // MODIFICATION 1 : Simplification du constructeur
+    // On enlève ManagerRegistry et TenantStateService
+    // On ajoute TenantEntityManagerProvider
+    public function __construct(
+        private TenantEntityManagerProvider $emProvider,
+        private UserPasswordHasherInterface $passwordHasher,
+        private OtpService $otpService,
+        private TokenService $tokenService,
+        private LoggerInterface $logger
+    ) {}
+
+    /**
+     * MODIFICATION 2 : La méthode complexe est entièrement supprimée.
+     * Elle n'est plus nécessaire grâce au TenantEntityManagerProvider.
+     */
+    // private function createIsolatedEntityManager(): EntityManagerInterface { ... }
+
+    public function login(string $email, string $password, string $platform, Request $request): Response
+    {
+ 
+        $em = $this->emProvider->getEntityManager();
+        
+        $dbName = $em->getConnection()->getDatabase();
+
+        // Cette ligne est maintenant sûre, car UserRepository est créé par le bon EM.
+        $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
+
+        if (!$user instanceof UserInterface) {
+            return new JsonResponse(
+                ['error' => 'Unauthorized'],             
+                Response::HTTP_UNAUTHORIZED
+            );
+        }
+
+        if (!$user instanceof UserInterface || !$this->passwordHasher->isPasswordValid($user, $password)) {
+            return new JsonResponse(['error' => 'Identifiants invalides'], Response::HTTP_UNAUTHORIZED);
+        }
+        
+
+        if (!$user->isVerified()) {
+            return new JsonResponse(
+                ['error' => 'Your account is not verified. Please check your email.'],
+                Response::HTTP_UNAUTHORIZED
+            );
+            
+        }
+        
+        if (in_array($platform, ['web', 'mobile'])) {
+            if (!in_array('ROLE_USER_INTERNET', $user->getRoles(), true)) {
+               return new JsonResponse(
+                    ['error' => 'This account is not allowed to access the web/mobile platform.'],
+                    Response::HTTP_FORBIDDEN
+                );
+            }
+        } elseif ($platform === 'pos') {
+            if (!in_array('ROLE_USER_POS', $user->getRoles(), true)) {
+                return new JsonResponse(
+                    ['error' => 'This account is not allowed to access the POS platform.'],
+                    Response::HTTP_FORBIDDEN
+                );
+            }
+        }
+
+             // Si l'OTP est activé pour cet utilisateur, on génère et envoie l'OTP via le service dédié
+        if ($user->isOtpEnabled()) {
+            $this->otpService->generateAndSendOtp($user, $request);
+            return new Response(
+                json_encode([
+                    'otp_required' => true,
+                    'message' => 'Un code OTP vous a été envoyé par email. Veuillez le saisir pour continuer.'
+                ]),
+                Response::HTTP_OK,
+                ['Content-Type' => 'application/json']
+            );
+        }
+        
+        $tokens = $this->tokenService->generateTokens($user);
+        return $this->tokenService->createResponseWithTokens($tokens, $platform);
+    }
+}

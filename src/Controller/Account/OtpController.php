@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Controller\Account;
 
 use App\Entity\User;
@@ -14,16 +13,17 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use App\Services\TenantEntityManagerProvider;
 
 class OtpController extends AbstractController
 {
-    private EntityManagerInterface $entityManager;
+    private TenantEntityManagerProvider $tenantEmProvider;
     private UrlGeneratorInterface $urlGenerator;
     private $session;
 
-    public function __construct(EntityManagerInterface $entityManager, RequestStack $requestStack, UrlGeneratorInterface $urlGenerator)
+    public function __construct(TenantEntityManagerProvider $tenantEmProvider, RequestStack $requestStack, UrlGeneratorInterface $urlGenerator)
     {
-        $this->entityManager = $entityManager;
+        $this->tenantEmProvider = $tenantEmProvider;
         $this->session = $requestStack->getSession();
         $this->urlGenerator = $urlGenerator;
     }
@@ -46,12 +46,13 @@ class OtpController extends AbstractController
             } else {
                 $otp = $request->request->get('otp');
                 // Récupérer l'utilisateur et son code OTP
-                $user = $this->entityManager->getRepository(User::class)->find($pendingUserId);
+                $em = $this->tenantEmProvider->getEntityManager();
+                $user = $em->getRepository(User::class)->find($pendingUserId);
                 if (!$user) {
                     return $this->redirectToRoute('app_login');
                 }
                 
-                $otpCode = $this->entityManager->getRepository(OtpCode::class)->findOneBy([
+                $otpCode = $em->getRepository(OtpCode::class)->findOneBy([
                     'userOtp' => $user,
                     'code' => $otp,
                 ]);
@@ -60,8 +61,8 @@ class OtpController extends AbstractController
                     $error = 'Code OTP invalide ou expiré';
                 } else {
                     // Le code est correct : on supprime l'OTP et on marque la session comme validée
-                    $this->entityManager->remove($otpCode);
-                    $this->entityManager->flush();
+                    $em->remove($otpCode);
+                    $em->flush();
                     $this->session->set('otp_validated', true);
                     $this->session->remove('pending_otp_user');
                     
@@ -71,7 +72,7 @@ class OtpController extends AbstractController
             }
         }
         // Récupérer les informations de l'entreprise (supposons une seule entreprise)
-        $entreprise = $this->entityManager
+        $entreprise = $em
             ->getRepository(Entreprise::class)
             ->findOneBy([]);
 

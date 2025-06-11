@@ -4,8 +4,7 @@ namespace App\Controller\Account;
 
 use App\Entity\User;
 use App\Entity\EmailConfiguration;
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\Persistence\ManagerRegistry;
+use App\Services\TenantEntityManagerProvider; // Ajouté
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,17 +16,16 @@ use Symfony\Component\Mime\Email;
 
 class ResetPasswordController extends AbstractController
 {
-    private EntityManagerInterface $entityManager;
+    private TenantEntityManagerProvider $tenantEmProvider;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    public function __construct(TenantEntityManagerProvider $tenantEmProvider)
     {
-        $this->entityManager = $entityManager;
+        $this->tenantEmProvider = $tenantEmProvider;
     }
 
     #[Route('/api/password-reset/request', name: 'app_password_reset_request', methods: ['POST'])]
     public function requestPasswordReset(
         Request $request,
-        ManagerRegistry $doctrine,
         MailerInterface $mailer,
         UrlGeneratorInterface $urlGenerator
     ): Response {
@@ -37,7 +35,7 @@ class ResetPasswordController extends AbstractController
         }
 
         $emailInput = $data['email'];
-        $em = $doctrine->getManager();
+        $em = $this->tenantEmProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['email' => $emailInput]);
 
         if (!$user) {
@@ -85,7 +83,6 @@ class ResetPasswordController extends AbstractController
     #[Route('/password-reset/confirm', name: 'app_password_reset_confirm', methods: ['POST'])]
     public function confirmPasswordReset(
         Request $request,
-        ManagerRegistry $doctrine,
         UserPasswordHasherInterface $passwordHasher
     ): Response {
         $data = json_decode($request->getContent(), true) ?: $request->request->all();
@@ -96,7 +93,7 @@ class ResetPasswordController extends AbstractController
 
         $token = $data['token'];
         $newPassword = $data['newPassword'];
-        $em = $doctrine->getManager();
+        $em = $this->tenantEmProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['resetToken' => $token]);
 
         if (!$user) {
@@ -126,16 +123,17 @@ class ResetPasswordController extends AbstractController
     }
 
     #[Route('/password-reset/form', name: 'app_password_reset_confirm_form', methods: ['GET'])]
-        public function resetPasswordForm(Request $request): Response
-        {
-            $token = $request->query->get('token');
-            $emailConfig = $this->entityManager->getRepository(EmailConfiguration::class)->findOneBy([]);
-            $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+    public function resetPasswordForm(Request $request): Response
+    {
+        $token = $request->query->get('token');
+        $em = $this->tenantEmProvider->getEntityManager();
+        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
 
-            return $this->render('reset_password/form.html.twig', [
-                'token' => $token,
-                'emailConfig' => $emailConfig,
-                'domain' => $domain,
-            ]);
-        }
+        return $this->render('reset_password/form.html.twig', [
+            'token' => $token,
+            'emailConfig' => $emailConfig,
+            'domain' => $domain,
+        ]);
+    }
 }

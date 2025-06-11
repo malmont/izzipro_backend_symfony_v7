@@ -2,12 +2,9 @@
 
 namespace App\Controller\Account;
 
-use Doctrine\Persistence\ManagerRegistry;
 use App\Entity\User;
 use App\Form\RegistrationFormType;
-use App\Repository\UserRepository;
 use App\Security\EmailVerifier;
-use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,22 +22,33 @@ use Symfony\Component\Mime\Email;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use App\Entity\EmailConfiguration;
+use App\Services\TenantEntityManagerProvider;
+
 
 class RegistrationController extends AbstractController
 {
     private EmailVerifier $emailVerifier;
+    private TenantEntityManagerProvider $tenantEmProvider;
 
-    public function __construct(EmailVerifier $emailVerifier)
-    {
+    public function __construct(
+        EmailVerifier $emailVerifier,
+        TenantEntityManagerProvider $tenantEmProvider
+    ) {
         $this->emailVerifier = $emailVerifier;
+        $this->tenantEmProvider = $tenantEmProvider;
     }
 
     #[Route('/register', name: 'app_register')]
-    public function register(Request $request, UserPasswordHasherInterface $userPasswordHasher, EntityManagerInterface $entityManager): Response
-    {
+    public function register(
+        Request $request, 
+        UserPasswordHasherInterface $userPasswordHasher
+    ): Response {
         $user = new User();
         $form = $this->createForm(RegistrationFormType::class, $user);
         $form->handleRequest($request);
+
+        // Utilisation du provider multi-tenant
+        $em = $this->tenantEmProvider->getEntityManager();
 
         if ($form->isSubmitted() && $form->isValid()) {
             // encode the plain password
@@ -51,8 +59,8 @@ class RegistrationController extends AbstractController
                 )
             );
             
-            $entityManager->persist($user);
-            $entityManager->flush();
+            $em->persist($user);
+            $em->flush();
 
             $this->emailVerifier->sendEmailConfirmation('app_verify_email', $user,
                 (new TemplatedEmail())
@@ -71,17 +79,15 @@ class RegistrationController extends AbstractController
     }
 
 
-#[Route('api/register', name: 'register', methods: ['POST'])]
+    #[Route('api/register', name: 'register', methods: ['POST'])]
     public function registerApi(
-        ManagerRegistry $doctrine,
         Request $request,
         UserPasswordHasherInterface $passwordHasher,
         JWTTokenManagerInterface $jwtManager,
-        EntityManagerInterface $entityManager,
         MailerInterface $mailer,
         UrlGeneratorInterface $urlGenerator
     ): Response {
-        $em = $doctrine->getManager();
+        $em = $this->tenantEmProvider->getEntityManager();
         $decoded = json_decode($request->getContent(), true);
 
         if (!isset($decoded['email'], $decoded['password'], $decoded['firstName'], $decoded['lastName'])) {
@@ -117,7 +123,6 @@ class RegistrationController extends AbstractController
         $user->setUsername($username);
 
         // Déterminer la plateforme et affecter le rôle correspondant.
-        // 'pos' pour le point de vente, sinon on affecte ROLE_USER_INTERNET (web et mobile)
         $platform = $decoded['platform'] ?? 'mobile';
         if ($platform === 'pos') {
             $user->setRoles(['ROLE_USER_POS']);
@@ -128,7 +133,6 @@ class RegistrationController extends AbstractController
         $hashedPassword = $passwordHasher->hashPassword($user, $password);
         $user->setPassword($hashedPassword);
 
-        // Marquer l'utilisateur comme non vérifié et générer un token de vérification
         $user->setIsVerified(false);
         $verificationToken = bin2hex(random_bytes(32));
         $user->setVerificationToken($verificationToken);
@@ -136,15 +140,13 @@ class RegistrationController extends AbstractController
         $em->persist($user);
         $em->flush();
 
-        // Générer l'URL de vérification (assurez-vous d'avoir un endpoint nommé "app_verify_email" qui traitera la validation)
         $verificationUrl = $urlGenerator->generate(
             'app_verify_email',
             ['token' => $verificationToken],
             UrlGeneratorInterface::ABSOLUTE_URL
         );
-        $emailConfig = $entityManager->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
 
-        // Définir les valeurs par défaut si aucune configuration n'est trouvée
         if (!$emailConfig) {
             $fromEmail = 'no-reply@votredomaine.com';
             $fromName  = 'Votre Société';
@@ -153,10 +155,8 @@ class RegistrationController extends AbstractController
             $fromName  = $emailConfig->getFromName();
         }
 
-        // Définir le domaine pour le logo, par exemple :
         $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
 
-        // Rendu du template via Twig
         $emailContent = $this->renderView('verification/validation_email.html.twig', [
             'user'        => $user,
             'emailConfig' => $emailConfig,
@@ -177,55 +177,45 @@ class RegistrationController extends AbstractController
         ], Response::HTTP_CREATED);
 
     }
-    
+
     #[Route('/verify/email', name: 'app_verify_email', methods: ['GET'])]
-        public function verifyEmail(Request $request, ManagerRegistry $doctrine): Response
-        {
-            $em = $doctrine->getManager();
-            $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
-            // Récupérer la configuration email depuis l'entité EmailConfiguration
-            $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
-            // Vous pouvez définir des valeurs par défaut si aucune configuration n'est trouvée
-            if (!$emailConfig) {
-                // Créez un objet ou un tableau avec des valeurs par défaut
-                $emailConfig = null;
-            }
+    public function verifyEmail(Request $request): Response
+    {
+        $em = $this->tenantEmProvider->getEntityManager();
+        $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        if (!$emailConfig) {
+            $emailConfig = null;
+        }
 
-            // Récupérer le token passé en query parameter
-            $token = $request->query->get('token');
-            if (!$token) {
-                return $this->render('verification/error.html.twig', [
-                    'message' => 'Token manquant.',
-                    'emailConfig' => $emailConfig,
-                    'domain' => $domain
-                ]);
-            }
-           
-            
-            $user = $em->getRepository(User::class)->findOneBy(['verificationToken' => $token]);
-
-            if (!$user) {
-                return $this->render('verification/error.html.twig', [
-                    'message' => 'Token invalide ou expiré.',
-                    'emailConfig' => $emailConfig,
-                    'domain' => $domain
-                ]);
-            }
-
-            // Vérifier l'utilisateur : marquer le compte comme vérifié et vider le token
-            $user->setIsVerified(true);
-            $user->setVerificationToken(null);
-            $em->flush();
-
-            
-          
-            // Puis, lors du rendu :
-            return $this->render('verification/success.html.twig', [
-                'user' => $user,
+        $token = $request->query->get('token');
+        if (!$token) {
+            return $this->render('verification/error.html.twig', [
+                'message' => 'Token manquant.',
                 'emailConfig' => $emailConfig,
                 'domain' => $domain
             ]);
         }
 
+        $user = $em->getRepository(User::class)->findOneBy(['verificationToken' => $token]);
+
+        if (!$user) {
+            return $this->render('verification/error.html.twig', [
+                'message' => 'Token invalide ou expiré.',
+                'emailConfig' => $emailConfig,
+                'domain' => $domain
+            ]);
+        }
+
+        $user->setIsVerified(true);
+        $user->setVerificationToken(null);
+        $em->flush();
+
+        return $this->render('verification/success.html.twig', [
+            'user' => $user,
+            'emailConfig' => $emailConfig,
+            'domain' => $domain
+        ]);
+    }
 
 }
