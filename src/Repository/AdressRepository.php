@@ -3,24 +3,22 @@
 namespace App\Repository;
 
 use App\Entity\Adress;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 
 /**
- * @extends ServiceEntityRepository<Adress>
- *
- * @method Adress|null find($id, $lockMode = null, $lockVersion = null)
- * @method Adress|null findOneBy(array $criteria, array $orderBy = null)
- * @method Adress[]    findAll()
- * @method Adress[]    findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null)
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<Adress>
  */
-class AdressRepository extends ServiceEntityRepository
+class AdressRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, Adress::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 
+    // Les méthodes save et remove que vous aviez sont conservées.
+    // Elles fonctionneront correctement car $this->getEntityManager()
+    // retournera maintenant l'EntityManager du tenant.
     public function save(Adress $entity, bool $flush = false): void
     {
         $this->getEntityManager()->persist($entity);
@@ -38,29 +36,4 @@ class AdressRepository extends ServiceEntityRepository
             $this->getEntityManager()->flush();
         }
     }
-
-//    /**
-//     * @return Adress[] Returns an array of Adress objects
-//     */
-//    public function findByExampleField($value): array
-//    {
-//        return $this->createQueryBuilder('a')
-//            ->andWhere('a.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->orderBy('a.id', 'ASC')
-//            ->setMaxResults(10)
-//            ->getQuery()
-//            ->getResult()
-//        ;
-//    }
-
-//    public function findOneBySomeField($value): ?Adress
-//    {
-//        return $this->createQueryBuilder('a')
-//            ->andWhere('a.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->getQuery()
-//            ->getOneOrNullResult()
-//        ;
-//    }
 }

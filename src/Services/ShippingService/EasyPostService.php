@@ -3,43 +3,57 @@
 
 namespace App\Services\ShippingService;
 
-use App\Repository\EasyPostConfigurationRepository;
+use App\Entity\EasyPostConfiguration; 
+use App\Services\TenantEntityManagerProvider;
 use EasyPost\EasyPostClient;
 use LogicException;
 
 class EasyPostService
 {
-    private EasyPostClient $client;
+    // MODIFICATION 1 : Le client n'est plus une propriété.
+    // Ou alors on le met à `private ?EasyPostClient $client = null;` pour du caching interne.
+    // Pour la simplicité, nous allons le créer à chaque fois.
+    
+    // MODIFICATION 2 : On injecte notre provider.
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(EasyPostConfigurationRepository $repo)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
+        $this->emProvider = $emProvider;
+    }
+
+    /**
+     * MODIFICATION 3 : Nouvelle méthode privée pour créer le client à la demande.
+     * C'est elle qui contient maintenant la logique qui était dans le constructeur.
+     */
+    private function getTenantClient(): EasyPostClient
+    {
+        $em = $this->emProvider->getEntityManager();
+        $repo = $em->getRepository(EasyPostConfiguration::class);
         $config = $repo->findOneBy([]);
+
         if (!$config || !$config->getEasypostApiKeySandbox()) {
-            throw new LogicException('Clé EasyPost manquante en base.');
+            throw new LogicException('Clé API EasyPost manquante pour ce tenant.');
         }
-        $this->client = new EasyPostClient($config->getEasypostApiKeySandbox());
+
+        return new EasyPostClient($config->getEasypostApiKeySandbox());
     }
 
     public function getRates(array $data): array
     {
-        return $this->client->shipment->create($data)->rates;
+        // MODIFICATION 4 : On récupère le client spécifique au tenant avant de l'utiliser.
+        $client = $this->getTenantClient();
+        return $client->shipment->create($data)->rates;
     }
 
-    /**
-     * Crée un shipment puis achète le label.
-     *
-     * @param array  $data              // mêmes clés que pour getRates()
-     * @param string $carrierAccountId  // ex "ca_…"
-     * @param string $service           // ex "Priority"
-     * @return array ['label_url'=>…, 'tracking_code'=>…]
-     */
     public function createShipmentAndBuy(array $data, string $carrierAccountId, string $service): array
     {
-        // 1) création
-        $shipment = $this->client->shipment->create($data);
-        
+        // On récupère le client spécifique au tenant.
+        $client = $this->getTenantClient();
 
-        // 2) on cherche le rate qui correspond
+        $shipment = $client->shipment->create($data);
+        
+        // ... la suite de la logique est inchangée...
         $rateToBuy = null;
         foreach ($shipment->rates as $r) {
             if ($r->carrier_account_id === $carrierAccountId && $r->service === $service) {
@@ -47,14 +61,11 @@ class EasyPostService
                 break;
             }
         }
-        // fallback sur le moins cher si introuvable
-        if (! $rateToBuy) {
+        if (!$rateToBuy) {
             $rateToBuy = $shipment->lowestRate();
         }
 
-        // 3) on achète
-        // Note : la signature est buy($id, ['rate'=>$rateObject])
-        $bought = $this->client->shipment->buy($shipment->id, ['rate' => $rateToBuy]);
+        $bought = $client->shipment->buy($shipment->id, ['rate' => $rateToBuy]);
 
         return [
             'label_url'     => $bought->postage_label->label_url,
@@ -64,6 +75,8 @@ class EasyPostService
 
     public function track(string $code): array
     {
-        return $this->client->tracker->create(['tracking_code' => $code])->status_history;
+        // On récupère le client spécifique au tenant.
+        $client = $this->getTenantClient();
+        return $client->tracker->create(['tracking_code' => $code])->status_history;
     }
 }

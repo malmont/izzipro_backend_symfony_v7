@@ -8,14 +8,14 @@ use App\UseCase\AdressUseCase\GetUserAdressesUseCase;
 use App\UseCase\AdressUseCase\CreateAdressUseCase;
 use App\UseCase\AdressUseCase\EditAdressUseCase;
 use App\UseCase\AdressUseCase\DeleteAdressUseCase;
-use App\Services\AdressService\AddressVerificationService;  // ← correction d’import
+use App\Services\AdressService\AddressVerificationService;
+use App\Services\TenantCacheService;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
 #[Route('/api/adresses')]
@@ -25,16 +25,16 @@ class AdressApiController extends AbstractController
     private CreateAdressUseCase        $createAdressUseCase;
     private EditAdressUseCase          $editAdressUseCase;
     private DeleteAdressUseCase        $deleteAdressUseCase;
-    private CacheInterface             $cache;
-    private AddressVerificationService $verifier;             // ← type-hint correct
+    private AddressVerificationService $verifier;
+    private TenantCacheService         $cache;
 
     public function __construct(
         GetUserAdressesUseCase     $getUserAdressesUseCase,
         CreateAdressUseCase        $createAdressUseCase,
         EditAdressUseCase          $editAdressUseCase,
         DeleteAdressUseCase        $deleteAdressUseCase,
-        AddressVerificationService $verifier,                 // ← injection du bon service
-        CacheInterface             $cache
+        AddressVerificationService  $verifier,
+        TenantCacheService         $cache
     ) {
         $this->getUserAdressesUseCase = $getUserAdressesUseCase;
         $this->createAdressUseCase    = $createAdressUseCase;
@@ -56,11 +56,17 @@ class AdressApiController extends AbstractController
         }
 
         $cacheKey = "adresses_user_" . $user->getId();
-        $adresses = $this->cache->get($cacheKey, function (ItemInterface $item) use ($user) {
-            $item->expiresAfter(3600);
-            $item->tag(['adresses_user']);
-            return $this->getUserAdressesUseCase->execute($user);
-        });
+        $adresses = $this->cache->get(
+            $cacheKey,
+            function(ItemInterface $item) use ($user) {
+                $item->expiresAfter(3600);
+                // Tag principal pour invalidation groupée si nécessaire
+                $item->tag(['adresses_user']);
+                return $this->getUserAdressesUseCase->execute($user);
+            },
+            /* ttl */ 3600,
+            /* extraTags */ ['adresses_user']
+        );
 
         return $this->json($adresses, Response::HTTP_OK);
     }
@@ -118,6 +124,10 @@ class AdressApiController extends AbstractController
 
         // Création de l’adresse
         $this->createAdressUseCase->execute($dto, $user);
+
+        // Invalider le cache des adresses utilisateur pour forcer rafraîchissement
+        $cacheKey = "adresses_user_" . $user->getId();
+        $this->cache->invalidate($cacheKey, ['adresses_user']);
 
         return $this->json(['success' => 'Adresse créée avec succès'], Response::HTTP_CREATED);
     }
@@ -177,6 +187,10 @@ class AdressApiController extends AbstractController
         // Mise à jour de l’adresse
         $this->editAdressUseCase->execute($dto, $adress);
 
+        // Invalider le cache des adresses utilisateur
+        $cacheKey = "adresses_user_" . $user->getId();
+        $this->cache->invalidate($cacheKey, ['adresses_user']);
+
         return $this->json(['success' => 'Adresse mise à jour avec succès'], Response::HTTP_OK);
     }
 
@@ -192,6 +206,11 @@ class AdressApiController extends AbstractController
         }
 
         $this->deleteAdressUseCase->execute($adress);
+
+        // Invalider le cache des adresses utilisateur
+        $cacheKey = "adresses_user_" . $user->getId();
+        $this->cache->invalidate($cacheKey, ['adresses_user']);
+
         return $this->json(['success' => 'Adresse supprimée avec succès'], Response::HTTP_NO_CONTENT);
     }
 }

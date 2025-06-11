@@ -4,20 +4,28 @@ namespace App\Services\AdressService;
 use App\Dto\AdressInputDTO;
 use App\Dto\AdressOutputDTO;
 use App\Entity\Adress;
-use App\Repository\AdressRepository;
+use App\Services\TenantEntityManagerProvider;
 
 class AdressService
 {
-    private AdressRepository $adressRepository;
+    private TenantEntityManagerProvider $tenantEmProvider;
 
-    public function __construct(AdressRepository $adressRepository)
+    public function __construct(TenantEntityManagerProvider $tenantEmProvider)
     {
-        $this->adressRepository = $adressRepository;
+        
+        $this->tenantEmProvider = $tenantEmProvider;
+    }
+
+    private function getAdressRepository()
+    {
+        $entityManager = $this->tenantEmProvider->getEntityManager();
+        $entityManager->clear(Adress::class); 
+        return  $entityManager->getRepository(Adress::class);
     }
 
     public function getUserAdresses($user): array
     {
-        $adresses = $this->adressRepository->findBy(['userAdress' => $user]);
+        $adresses = $this->getAdressRepository()->findBy(['userAdress' => $user]);
         return array_map(fn($adress) => new AdressOutputDTO($adress), $adresses);
     }
 
@@ -37,7 +45,8 @@ class AdressService
         $adress->setCountry($inputDTO->country);
         $adress->setUserAdress($user);
 
-        $this->adressRepository->save($adress, true);
+        $repo = $this->getAdressRepository();
+        $repo->save($adress, true);
 
         return $adress;
     }
@@ -56,13 +65,15 @@ class AdressService
         $adress->setCodepostal($inputDTO->zipCode);
         $adress->setCountry($inputDTO->country);
 
-        $this->adressRepository->save($adress, true);
+        $repo = $this->getAdressRepository();
+        $repo->save($adress, true);
 
         return $adress;
     }
 
     public function deleteAdress(Adress $adress): void
     {
-        $this->adressRepository->remove($adress, true);
+        $repo = $this->getAdressRepository();
+        $repo->remove($adress, true);
     }
 }

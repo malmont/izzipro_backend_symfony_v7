@@ -2,20 +2,23 @@
 namespace App\Services\ShippingService;
 
 use App\Entity\AddressEntreprise;
-use App\Repository\EntrepriseRepository;
+use App\Entity\Entreprise; 
+use App\Services\TenantEntityManagerProvider; 
 use LogicException;
 
 class ShipmentAddressBuilder
 {
-    private EntrepriseRepository $entrepriseRepo;
+    // MODIFICATION 1 : La propriété change pour stocker le provider
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(EntrepriseRepository $entrepriseRepo)
+    // MODIFICATION 2 : Le constructeur injecte notre provider
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entrepriseRepo = $entrepriseRepo;
+        $this->emProvider = $emProvider;
     }
 
     /**
-     * Construit le « to » à partir du payload reçu.
+     * Cette méthode ne touche pas à la base de données, elle reste INCHANGÉE.
      */
     public function buildTo(array $toAddress): array
     {
@@ -32,20 +35,25 @@ class ShipmentAddressBuilder
     }
 
     /**
-     * Récupère l'Entreprise (la première trouvée) et son AddressEntreprise,
-     * puis construit le « from ».
+     * Récupère l'Entreprise et son adresse depuis la BDD du tenant.
      */
     public function buildFrom(): array
     {
-        $ent = $this->entrepriseRepo->findOneBy([]);
+        // MODIFICATION 3 : On obtient l'EM et le repository ici
+        $em = $this->emProvider->getEntityManager();
+        $entrepriseRepo = $em->getRepository(Entreprise::class);
+
+        // Cette ligne est maintenant correcte car elle utilise le bon repository
+        $ent = $entrepriseRepo->findOneBy([]);
         if (!$ent) {
-            throw new LogicException('Pas d\'entreprise configurée.');
+            throw new LogicException('Pas d\'entreprise configurée pour ce tenant.');
         }
 
+        // Le reste de la logique est INCHANGÉ
         /** @var AddressEntreprise|null $addr */
         $addr = $ent->getAddressEntreprise();
         if (!$addr) {
-            throw new LogicException('Pas d\'adresse entreprise configurée.');
+            throw new LogicException('Pas d\'adresse entreprise configurée pour cette entreprise.');
         }
 
         return [
