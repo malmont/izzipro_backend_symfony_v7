@@ -6,24 +6,30 @@ use App\Dto\CollectionInputDTO;
 use App\Dto\CollectionOutputDTO;
 use App\Entity\Collections;
 use App\Entity\CollectionPicture;
-use App\Repository\UserRepository;
+use App\Entity\User; // <-- On importe l'entité User
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query\ResultSetMapping;
 
 class CollectionService
 {
-    private EntityManagerInterface $entityManager;
-    private UserRepository $userRepository;
+    // MODIFICATION 1 : On ne garde qu'une seule dépendance, notre provider.
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(EntityManagerInterface $entityManager, UserRepository $userRepository)
+    // MODIFICATION 2 : Le constructeur n'injecte plus que le provider.
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entityManager = $entityManager;
-        $this->userRepository = $userRepository;
+        $this->emProvider = $emProvider;
     }
 
     public function createCollection(CollectionInputDTO $inputDTO): Collections
     {
-        $user = $this->userRepository->find($inputDTO->userId);
+        // MODIFICATION 3 : On récupère l'EntityManager du tenant au début de la méthode.
+        $em = $this->emProvider->getEntityManager();
+
+        // On récupère le UserRepository à partir de l'EM du tenant.
+        $userRepository = $em->getRepository(User::class);
+        $user = $userRepository->find($inputDTO->userId);
         if (!$user) {
             throw new \Exception('User not found');
         }
@@ -34,45 +40,56 @@ class CollectionService
         $collection->setEndDateCollection($inputDTO->endDateCollection);
         $collection->setDel($inputDTO->del);
         $collection->setNomCollection($inputDTO->nomCollection);
-
-
-        $randomPicture = $this->getRandomCollectionPicture();
+        
+        // On passe l'EM du tenant à la méthode privée.
+        $randomPicture = $this->getRandomCollectionPicture($em);
         $collection->setPhotoCollections($randomPicture);
-
+        
         $collection->setUserCollections($user);
 
-        $this->entityManager->persist($collection);
-        $this->entityManager->flush();
+        // On utilise l'EM du tenant pour persister les données.
+        $em->persist($collection);
+        $em->flush();
 
         return $collection;
     }
 
     public function getCollections(string $host): array
     {
-        $collections = $this->entityManager->getRepository(Collections::class)->findAll();
+        // On récupère l'EntityManager du tenant.
+        $em = $this->emProvider->getEntityManager();
+
+        // On utilise l'EM du tenant pour obtenir le repository et les données.
+        $collections = $em->getRepository(Collections::class)->findAll();
+        
         return array_map(fn($collection) => new CollectionOutputDTO($collection, $host), $collections);
     }
 
     public function deleteCollection(Collections $collection): void
     {
-        $this->entityManager->remove($collection);
-        $this->entityManager->flush();
+        // On récupère l'EntityManager du tenant.
+        $em = $this->emProvider->getEntityManager();
+
+        // On utilise l'EM du tenant pour supprimer.
+        $em->remove($collection);
+        $em->flush();
     }
     
     /**
-     * Sélectionne aléatoirement une CollectionPicture depuis la base de données.
-     * Cette méthode utilise une requête native PostgreSQL qui trie les enregistrements par RANDOM().
+     * MODIFICATION 4 : La méthode privée reçoit maintenant l'EntityManager en paramètre
+     * pour s'assurer qu'elle utilise bien la connexion du tenant.
      */
-    private function getRandomCollectionPicture(): ?CollectionPicture
+    private function getRandomCollectionPicture(EntityManagerInterface $em): ?CollectionPicture
     {
+        // Note: cette requête suppose que la table `collection_picture` existe dans chaque BDD de tenant.
         $sql = 'SELECT * FROM collection_picture ORDER BY RANDOM() LIMIT 1';
         $rsm = new ResultSetMapping();
         $rsm->addEntityResult(CollectionPicture::class, 'cp');
         $rsm->addFieldResult('cp', 'id', 'id');
-        // Assurez-vous que le nom de la colonne dans votre table est bien « image_url ».
         $rsm->addFieldResult('cp', 'image_url', 'imageUrl');
 
-        return $this->entityManager->createNativeQuery($sql, $rsm)
+        // On utilise l'EM qui a été passé en argument.
+        return $em->createNativeQuery($sql, $rsm)
             ->getOneOrNullResult();
     }
 }
