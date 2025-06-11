@@ -3,81 +3,86 @@
 namespace App\Controller\AdminSettingsController;
 
 use App\Entity\AdminSettings;
-use App\Repository\AdminSettingsRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\DBAL\LockMode;
+
+use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 
 class AdminSettingsController extends AbstractController
 {
-    private EntityManagerInterface $entityManager;
-    private AdminSettingsRepository $repository;
-    private CacheInterface $cache;
+    private TenantEntityManagerProvider $tenantEmProvider;
+    private TenantCacheService $cache;
 
-    public function __construct(EntityManagerInterface $entityManager, AdminSettingsRepository $repository, CacheInterface $cache)
-    {
-        $this->entityManager = $entityManager;
-        $this->repository = $repository;
+
+    public function __construct(
+        TenantEntityManagerProvider $tenantEmProvider,
+        TenantCacheService $cache,
+
+    ) {
+        $this->tenantEmProvider = $tenantEmProvider;
         $this->cache = $cache;
     }
 
     /**
-     * Récupérer la configuration d'admin (thèmes, couleurs, UI, etc.)
-     *
      * @Route("/api/admin-settings", name="get_admin_settings", methods={"GET"})
      */
-    public function getAdminSettings(): JsonResponse
+     public function getAdminSettings(): JsonResponse
     {
-        // Utiliser le cache pour la configuration d'admin, qui change rarement.
-        $settingsData = $this->cache->get('admin_settings', function (ItemInterface $item) {
-            // Vous pouvez définir une durée d'expiration longue, par exemple 12 heures (43200 secondes)
-            $item->expiresAfter(43200);
-            
-            $settings = $this->repository->find(1); // On récupère les paramètres (id = 1)
-            if (!$settings) {
-                return null;
-            }
-            
-            return [
-                'navbarComponent' => $settings->getNavbarComponent(),
-                'styleChoice' => $settings->getStyleChoice(),
-                'themeChoice' => $settings->getThemeChoice(),
-                'section1Component' => $settings->getSection1Component(),
-                'typeComponentSection1' => $settings->getTypeComponentSection1(),
-                'selectTypeProductFetch'  => $settings->getSelectTypeProductFetch(),
-                'typeComponentSection2'  => $settings->getTypeComponentSection2(),
-                'section2Component' => $settings->getSection2Component(),
-                'typeComponentSection3' => $settings->getTypeComponentSection3(),
-                'section3Component' => $settings->getSection3Component(),
-                'typeComponentSection4' => $settings->getTypeComponentSection4(),
-                'section4Component' => $settings->getSection4Component(),
-                'typeComponentSection5' => $settings->getTypeComponentSection5(),
-                'section5Component' => $settings->getSection5Component(),
-                'typeComponentSection6' => $settings->getTypeComponentSection6(),
-                'section6Component' => $settings->getSection6Component(),
-                'typeComponentSection7' => $settings->getTypeComponentSection7(),
-                'section7Component' => $settings->getSection7Component(),
-                'selectTypeProductFetchSection2' => $settings->getSelectTypeProductFetchSection2(),
-                'selectTypeProductFetchSection3' => $settings->getSelectTypeProductFetchSection3(),
-                'selectTypeProductFetchSection4' => $settings->getSelectTypeProductFetchSection4(),
-                'selectTypeProductFetchSection5' => $settings->getSelectTypeProductFetchSection5(),
-                'selectTypeProductFetchSection6' => $settings->getSelectTypeProductFetchSection6(),
-                'selectTypeProductFetchSection7' => $settings->getSelectTypeProductFetchSection7(),
-                'typeCategoryCard' => $settings->getTypeCategoryCard(),
-                'detailsProductCardComponent' => $settings->getDetailsProductCardComponent(),
-                'cartItemCardComponent' => $settings->getCartItemCardComponent(),
-                'totalCardComponent' => $settings->getTotalCardComponent(),
-                'checkoutCardComponent' => $settings->getCheckoutCardComponent(),
-                'accountDashboardComponent' => $settings->getAccountDashboardComponent(),
-                'orderListCardComponent' => $settings->getOrderListCardComponent(),
-                'adressListCardComponent' => $settings->getAdressListCardComponent(),
-                'carrierListCardComponent' => $settings->getCarrierListCardComponent(),
-            ];
-        });
+        $settingsData = $this->cache->get(
+            'admin_settings',
+            function(ItemInterface $item) {
+                $item->expiresAfter(43200);
+
+                $entityManager = $this->tenantEmProvider->getEntityManager();
+                $entityManager->clear(AdminSettings::class); 
+                $settings = $entityManager->find(AdminSettings::class, 1, LockMode::NONE, true);
+                if (!$settings) {
+                    return null;
+                }
+
+                return [
+                    'navbarComponent' => $settings->getNavbarComponent(),
+                    'styleChoice' => $settings->getStyleChoice(),
+                    'themeChoice' => $settings->getThemeChoice(),
+                    'section1Component' => $settings->getSection1Component(),
+                    'typeComponentSection1' => $settings->getTypeComponentSection1(),
+                    'selectTypeProductFetch'  => $settings->getSelectTypeProductFetch(),
+                    'typeComponentSection2'  => $settings->getTypeComponentSection2(),
+                    'section2Component' => $settings->getSection2Component(),
+                    'typeComponentSection3' => $settings->getTypeComponentSection3(),
+                    'section3Component' => $settings->getSection3Component(),
+                    'typeComponentSection4' => $settings->getTypeComponentSection4(),
+                    'section4Component' => $settings->getSection4Component(),
+                    'typeComponentSection5' => $settings->getTypeComponentSection5(),
+                    'section5Component' => $settings->getSection5Component(),
+                    'typeComponentSection6' => $settings->getTypeComponentSection6(),
+                    'section6Component' => $settings->getSection6Component(),
+                    'typeComponentSection7' => $settings->getTypeComponentSection7(),
+                    'section7Component' => $settings->getSection7Component(),
+                    'selectTypeProductFetchSection2' => $settings->getSelectTypeProductFetchSection2(),
+                    'selectTypeProductFetchSection3' => $settings->getSelectTypeProductFetchSection3(),
+                    'selectTypeProductFetchSection4' => $settings->getSelectTypeProductFetchSection4(),
+                    'selectTypeProductFetchSection5' => $settings->getSelectTypeProductFetchSection5(),
+                    'selectTypeProductFetchSection6' => $settings->getSelectTypeProductFetchSection6(),
+                    'selectTypeProductFetchSection7' => $settings->getSelectTypeProductFetchSection7(),
+                    'typeCategoryCard' => $settings->getTypeCategoryCard(),
+                    'detailsProductCardComponent' => $settings->getDetailsProductCardComponent(),
+                    'cartItemCardComponent' => $settings->getCartItemCardComponent(),
+                    'totalCardComponent' => $settings->getTotalCardComponent(),
+                    'checkoutCardComponent' => $settings->getCheckoutCardComponent(),
+                    'accountDashboardComponent' => $settings->getAccountDashboardComponent(),
+                    'orderListCardComponent' => $settings->getOrderListCardComponent(),
+                    'adressListCardComponent' => $settings->getAdressListCardComponent(),
+                    'carrierListCardComponent' => $settings->getCarrierListCardComponent(),
+                ];
+            },
+            /* ttl */ 43200
+        );
 
         if (!$settingsData) {
             return new JsonResponse(['error' => 'Settings not found'], 404);
@@ -85,7 +90,6 @@ class AdminSettingsController extends AbstractController
 
         return new JsonResponse($settingsData);
     }
-
     /**
      * Mettre à jour la configuration d'admin (thèmes, couleurs, UI, etc.)
      *
@@ -93,8 +97,10 @@ class AdminSettingsController extends AbstractController
      */
     public function updateAdminSettings(Request $request): JsonResponse
     {
+        $entityManager = $this->tenantEmProvider->getEntityManager();
+
         $data = json_decode($request->getContent(), true);
-        $settings = $this->repository->find(1); // On met à jour les paramètres (id = 1)
+        $settings = $entityManager->getRepository(AdminSettings::class)->find(1); // On met à jour les paramètres (id = 1)
         if (!$settings) {
             return new JsonResponse(['error' => 'Settings not found'], 404);
         }
@@ -113,7 +119,7 @@ class AdminSettingsController extends AbstractController
         $settings->setSection4Component($data['section4Component'] ?? $settings->getSection4Component());
         $settings->setTypeComponentSection5($data['typeComponentSection5'] ?? $settings->getTypeComponentSection5());
         $settings->setSection5Component($data['section5Component'] ?? $settings->getSection5Component());
-        $settings->setTypeComponentSection6($data['typeComponentSection6'] ?? $settings->getTypeComponentSection6());
+        $settings->setTypeComponentSection6($data['typeComponentSection6'] ?? $settings->getSection6Component());
         $settings->setSection6Component($data['section6Component'] ?? $settings->getSection6Component());
         $settings->setTypeComponentSection7($data['typeComponentSection7'] ?? $settings->getTypeComponentSection7());
         $settings->setSection7Component($data['section7Component'] ?? $settings->getSection7Component());
@@ -133,10 +139,7 @@ class AdminSettingsController extends AbstractController
         $settings->setAdressListCardComponent($data['adressListCardComponent'] ?? $settings->getAdressListCardComponent());
         $settings->setCarrierListCardComponent($data['carrierListCardComponent'] ?? $settings->getCarrierListCardComponent());
         
-        $this->entityManager->flush();
-
-        // Invalider le cache après la mise à jour pour que les prochaines requêtes récupèrent la nouvelle config
-        // $this->cache->delete('admin_settings');
+        $entityManager->flush();
 
         return new JsonResponse(['message' => 'Settings updated successfully']);
     }
