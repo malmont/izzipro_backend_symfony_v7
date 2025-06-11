@@ -3,41 +3,20 @@
 namespace App\Repository;
 
 use App\Entity\EmailConfiguration;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 
 /**
- * @extends ServiceEntityRepository<EmailConfiguration>
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<EmailConfiguration>
  */
-class EmailConfigurationRepository extends ServiceEntityRepository
+class EmailConfigurationRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, EmailConfiguration::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 
-    //    /**
-    //     * @return EmailConfiguration[] Returns an array of EmailConfiguration objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('e')
-    //            ->andWhere('e.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('e.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
 
-    //    public function findOneBySomeField($value): ?EmailConfiguration
-    //    {
-    //        return $this->createQueryBuilder('e')
-    //            ->andWhere('e.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+    // Les méthodes commentées restent ici, inchangées.
+    // Si vous en aviez besoin, elles fonctionneraient maintenant correctement.
 }

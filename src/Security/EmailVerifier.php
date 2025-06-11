@@ -2,7 +2,7 @@
 
 namespace App\Security;
 
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Mailer\MailerInterface;
@@ -12,11 +12,18 @@ use SymfonyCasts\Bundle\VerifyEmail\VerifyEmailHelperInterface;
 
 class EmailVerifier
 {
+    private TenantEntityManagerProvider $tenantEmProvider;
+    private VerifyEmailHelperInterface $verifyEmailHelper;
+    private MailerInterface $mailer;
+
     public function __construct(
-        private VerifyEmailHelperInterface $verifyEmailHelper,
-        private MailerInterface $mailer,
-        private EntityManagerInterface $entityManager
+        VerifyEmailHelperInterface $verifyEmailHelper,
+        MailerInterface $mailer,
+        TenantEntityManagerProvider $tenantEmProvider //
     ) {
+        $this->verifyEmailHelper = $verifyEmailHelper;
+        $this->mailer = $mailer;
+        $this->tenantEmProvider = $tenantEmProvider;
     }
 
     public function sendEmailConfirmation(string $verifyEmailRouteName, UserInterface $user, TemplatedEmail $email): void
@@ -47,7 +54,9 @@ class EmailVerifier
 
         $user->setIsVerified(true);
 
-        $this->entityManager->persist($user);
-        $this->entityManager->flush();
+        // Utilisation du provider multi-tenant à chaque appel
+        $em = $this->tenantEmProvider->getEntityManager();
+        $em->persist($user);
+        $em->flush();
     }
 }
