@@ -9,13 +9,12 @@ use App\UseCase\NoteDeFraisUseCase\GetNotesDeFraisByCollectionUseCase;
 use App\UseCase\NoteDeFraisUseCase\CreateNoteDeFraisUseCase;
 use App\UseCase\NoteDeFraisUseCase\UpdateNoteDeFraisUseCase;
 use App\UseCase\NoteDeFraisUseCase\DeleteNoteDeFraisUseCase;
+use App\Services\TenantCacheService;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
-
 
 class NoteDeFraisController extends AbstractController
 {
@@ -23,14 +22,14 @@ class NoteDeFraisController extends AbstractController
     private CreateNoteDeFraisUseCase $createNoteDeFraisUseCase;
     private UpdateNoteDeFraisUseCase $updateNoteDeFraisUseCase;
     private DeleteNoteDeFraisUseCase $deleteNoteDeFraisUseCase;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
     public function __construct(
         GetNotesDeFraisByCollectionUseCase $getNotesDeFraisByCollectionUseCase,
         CreateNoteDeFraisUseCase $createNoteDeFraisUseCase,
         UpdateNoteDeFraisUseCase $updateNoteDeFraisUseCase,
         DeleteNoteDeFraisUseCase $deleteNoteDeFraisUseCase,
-        CacheInterface $cache
+        TenantCacheService $cache
     ) {
         $this->getNotesDeFraisByCollectionUseCase = $getNotesDeFraisByCollectionUseCase;
         $this->createNoteDeFraisUseCase = $createNoteDeFraisUseCase;
@@ -43,14 +42,18 @@ class NoteDeFraisController extends AbstractController
     public function getNotesDeFraisByCollection(Collections $collection, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        // Construction d'une clé de cache basée sur l'ID de la collection
         $cacheKey = 'notes_de_frais_collection_' . $collection->getId();
 
-        $notes = $this->cache->get($cacheKey, function (ItemInterface $item) use ($collection, $host) {
-            $item->expiresAfter(3600); // Cache expire après 1 heure
-            $item->tag(['notes_de_frais']);
-            return $this->getNotesDeFraisByCollectionUseCase->execute($collection, $host);
-        });
+        $notes = $this->cache->get(
+            $cacheKey,
+            function(ItemInterface $item) use ($collection, $host) {
+                $item->expiresAfter(3600);
+                $item->tag(['notes_de_frais']);
+                return $this->getNotesDeFraisByCollectionUseCase->execute($collection, $host);
+            },
+            /* ttl */ 3600,
+            /* extraTags */ ['notes_de_frais']
+        );
 
         return new JsonResponse($notes, JsonResponse::HTTP_OK);
     }
@@ -64,13 +67,15 @@ class NoteDeFraisController extends AbstractController
         }
 
         $inputDTO = new NoteDeFraisInputDTO(
-            $data['description'],
-            (float)$data['montant'],
-            $data['date'],
-            $data['typeNoteDeFraisId']
+            $data['description'] ?? '',
+            isset($data['montant']) ? (float)$data['montant'] : 0.0,
+            $data['date'] ?? null,
+            $data['typeNoteDeFraisId'] ?? null
         );
 
         $this->createNoteDeFraisUseCase->execute($collection, $inputDTO);
+
+        // L'invalidation est gérée par l'event subscriber existant, donc on ne l'ajoute pas ici.
 
         return new JsonResponse(['success' => 'Note de frais created'], JsonResponse::HTTP_CREATED);
     }
@@ -84,14 +89,15 @@ class NoteDeFraisController extends AbstractController
         }
 
         $inputDTO = new NoteDeFraisInputDTO(
-            $data['description'],
-            (float)$data['montant'],
-            $data['date'],
-            $data['typeNoteDeFraisId']
+            $data['description'] ?? '',
+            isset($data['montant']) ? (float)$data['montant'] : 0.0,
+            $data['date'] ?? null,
+            $data['typeNoteDeFraisId'] ?? null
         );
 
         $this->updateNoteDeFraisUseCase->execute($note, $inputDTO);
 
+        // Invalidation gérée ailleurs
         return new JsonResponse(['success' => 'Note de frais updated'], JsonResponse::HTTP_OK);
     }
 
@@ -99,6 +105,8 @@ class NoteDeFraisController extends AbstractController
     public function deleteNoteDeFrais(NoteDeFrais $note): JsonResponse
     {
         $this->deleteNoteDeFraisUseCase->execute($note);
+
+        // Invalidation gérée par l'event subscriber existant
         return new JsonResponse(['success' => 'Note de frais deleted'], JsonResponse::HTTP_NO_CONTENT);
     }
 }

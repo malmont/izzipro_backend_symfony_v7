@@ -124,11 +124,6 @@ class AdressApiController extends AbstractController
 
         // Création de l’adresse
         $this->createAdressUseCase->execute($dto, $user);
-
-        // Invalider le cache des adresses utilisateur pour forcer rafraîchissement
-        $cacheKey = "adresses_user_" . $user->getId();
-        $this->cache->invalidate($cacheKey, ['adresses_user']);
-
         return $this->json(['success' => 'Adresse créée avec succès'], Response::HTTP_CREATED);
     }
 
@@ -186,11 +181,6 @@ class AdressApiController extends AbstractController
 
         // Mise à jour de l’adresse
         $this->editAdressUseCase->execute($dto, $adress);
-
-        // Invalider le cache des adresses utilisateur
-        $cacheKey = "adresses_user_" . $user->getId();
-        $this->cache->invalidate($cacheKey, ['adresses_user']);
-
         return $this->json(['success' => 'Adresse mise à jour avec succès'], Response::HTTP_OK);
     }
 
@@ -206,11 +196,6 @@ class AdressApiController extends AbstractController
         }
 
         $this->deleteAdressUseCase->execute($adress);
-
-        // Invalider le cache des adresses utilisateur
-        $cacheKey = "adresses_user_" . $user->getId();
-        $this->cache->invalidate($cacheKey, ['adresses_user']);
-
         return $this->json(['success' => 'Adresse supprimée avec succès'], Response::HTTP_NO_CONTENT);
     }
 }
