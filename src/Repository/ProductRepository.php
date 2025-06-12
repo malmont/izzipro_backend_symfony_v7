@@ -3,23 +3,18 @@
 namespace App\Repository;
 
 use App\Entity\Product;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 
 /**
- * @extends ServiceEntityRepository<Product>
- *
- * @method Product|null find($id, $lockMode = null, $lockVersion = null)
- * @method Product|null findOneBy(array $criteria, array $orderBy = null)
- * @method Product[]    findAll()
- * @method Product[]    findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null)
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<Product>
  */
-class ProductRepository extends ServiceEntityRepository
+class ProductRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, Product::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 
     public function save(Product $entity, bool $flush = false): void
     {
@@ -39,30 +34,29 @@ class ProductRepository extends ServiceEntityRepository
         }
     }
 
-    public function findWithSearch($search){
-       
+    public function findWithSearch($search)
+    {
         $query = $this->createQueryBuilder('p');
             
-        if($search->getMinPrice()){
-            $query = $query->andWhere('p.price > '.$search->getMinPrice()*100);
-           
+        if ($search->getMinPrice()) {
+            // SÉCURISÉ : Utilisation d'un paramètre nommé pour éviter l'injection SQL
+            $query->andWhere('p.price > :minPrice')
+                  ->setParameter('minPrice', $search->getMinPrice() * 100);
         }
-        if($search->getMaxPrice()){
-            $query = $query->andWhere('p.price < '.$search->getMaxPrice()*100);
-           
+        if ($search->getMaxPrice()) {
+            // SÉCURISÉ : Utilisation d'un paramètre nommé
+            $query->andWhere('p.price < :maxPrice')
+                  ->setParameter('maxPrice', $search->getMaxPrice() * 100);
         }
-        if($search->getCategories()){
-            $query = $query->join('p.category', 'c')
-                                    ->andWhere('c.id IN (:categories)')
-                                    ->setParameter('categories', $search->getCategories());
-           
+        if ($search->getCategories()) {
+            $query->join('p.category', 'c')
+                  ->andWhere('c.id IN (:categories)')
+                  ->setParameter('categories', $search->getCategories());
         }
-        if($search->getTags()){
-            $query = $query->andWhere('p.tags like :val')
-                                    ->setParameter('val', "%{$search->getTags()}%") ;
-           
+        if ($search->getTags()) {
+            $query->andWhere('p.tags LIKE :val') // LIKE est souvent écrit avec LIKE
+                  ->setParameter('val', "%" . $search->getTags() . "%");
         }
-
 
         return $query->getQuery()->getResult();
     }
@@ -78,29 +72,4 @@ class ProductRepository extends ServiceEntityRepository
 
         return (float) $result;
     }
-
-//    /**
-//     * @return Product[] Returns an array of Product objects
-//     */
-//    public function findByExampleField($value): array
-//    {
-//        return $this->createQueryBuilder('p')
-//            ->andWhere('p.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->orderBy('p.id', 'ASC')
-//            ->setMaxResults(10)
-//            ->getQuery()
-//            ->getResult()
-//        ;
-//    }
-
-//    public function findOneBySomeField($value): ?Product
-//    {
-//        return $this->createQueryBuilder('p')
-//            ->andWhere('p.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->getQuery()
-//            ->getOneOrNullResult()
-//        ;
-//    }
 }

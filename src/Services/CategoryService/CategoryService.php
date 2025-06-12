@@ -3,46 +3,47 @@ namespace App\Services\CategoryService;
 
 use App\Entity\Categories;
 use App\Entity\Product;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
 
 class CategoryService
 {
-    private EntityManagerInterface $entityManager;
+    // MODIFICATION 1 : Le service ne dépend plus que du provider
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
     }
 
     public function getAllCategories(): array
     {
-        return $this->entityManager->getRepository(Categories::class)->findAll();
+        // MODIFICATION 2 : On récupère l'EM du tenant ici
+        $em = $this->emProvider->getEntityManager();
+        return $em->getRepository(Categories::class)->findAll();
     }
 
     public function getProductsByCategory(?array $categoryIds, ?string $keyword, int $page, int $pageSize, ?string $barcode, ?bool $isWeb, ?bool $isPos): array
     {
-        $queryBuilder = $this->entityManager->getRepository(Product::class)->createQueryBuilder('p');
+        $em = $this->emProvider->getEntityManager();
+        $queryBuilder = $em->getRepository(Product::class)->createQueryBuilder('p');
 
-        // Filtrer par catégorie
+        // Votre logique métier et de requête, sécurisée et inchangée, est parfaite.
         if ($categoryIds) {
             $queryBuilder->join('p.category', 'c')
                         ->andWhere('c.id IN (:categoryIds)')
                         ->setParameter('categoryIds', $categoryIds);
         }
 
-        // Filtrer par mot-clé (nom ou description)
         if ($keyword) {
             $queryBuilder->andWhere('(p.name LIKE :keyword OR p.description LIKE :keyword)')
                         ->setParameter('keyword', '%' . $keyword . '%');
         }
 
-        // Filtrer par code-barres (exact match)
         if ($barcode) {
             $queryBuilder->andWhere('p.barcode = :barcode')
                         ->setParameter('barcode', $barcode);
         }
-
-        // Filtrer par is_web uniquement si la valeur est définie
+        
         if ($isWeb !== null) {
             $queryBuilder->andWhere('p.isWeb = :isWeb')
                         ->setParameter('isWeb', $isWeb);
@@ -53,18 +54,16 @@ class CategoryService
                         ->setParameter('isPos', $isPos);
         }
 
-        // Gérer la pagination
         $queryBuilder->setFirstResult(($page - 1) * $pageSize)
                     ->setMaxResults($pageSize);
 
         return $queryBuilder->getQuery()->getResult();
     }
 
-
-
     public function countTotalProducts(?array $categoryIds = null): int
     {
-        $queryBuilder = $this->entityManager->getRepository(Product::class)->createQueryBuilder('p');
+        $em = $this->emProvider->getEntityManager();
+        $queryBuilder = $em->getRepository(Product::class)->createQueryBuilder('p');
 
         if ($categoryIds) {
             $queryBuilder->join('p.category', 'c')
