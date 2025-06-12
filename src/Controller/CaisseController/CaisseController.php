@@ -10,9 +10,9 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use App\UseCase\CaisseUseCase\GestCaisseUseCase;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider;
 use App\UseCase\CaisseUseCase\GetTransactionsForOpenCaisseUseCase;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 
 class CaisseController extends AbstractController
@@ -20,22 +20,22 @@ class CaisseController extends AbstractController
     private HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase;
     private CaisseService $caisseService;
     private GestCaisseUseCase $gestCaisseUseCase;
-    private EntityManagerInterface $entityManager;
+    private TenantEntityManagerProvider $emProvider;
     private GetTransactionsForOpenCaisseUseCase $getTransactionsForOpenCaisseUseCase;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
     public function __construct(
         HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase,
         CaisseService $caisseService,
         GestCaisseUseCase $gestCaisseUseCase,
-        EntityManagerInterface $entityManager,
+        TenantEntityManagerProvider $emProvider,
         GetTransactionsForOpenCaisseUseCase $getTransactionsForOpenCaisseUseCase,
-        CacheInterface $cache
+        TenantCacheService $cache
     ) {
         $this->handleCaisseTransactionUseCase = $handleCaisseTransactionUseCase;
         $this->caisseService = $caisseService;
         $this->gestCaisseUseCase = $gestCaisseUseCase;
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
         $this->getTransactionsForOpenCaisseUseCase = $getTransactionsForOpenCaisseUseCase;
         $this->cache = $cache;
     }
@@ -62,8 +62,9 @@ class CaisseController extends AbstractController
         $caisse->setCreatedAt(new \DateTime());
         $caisse->setOpen(true);
 
-        $this->entityManager->persist($caisse);
-        $this->entityManager->flush();
+        $em = $this->emProvider->getEntityManager();
+        $em->persist($caisse);
+        $em->flush();
 
         // Gérer l'ouverture de la caisse via le UseCase (par exemple, en enregistrant une transaction d'ouverture)
         $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $initialAmount, 4, []);
@@ -83,6 +84,10 @@ class CaisseController extends AbstractController
 
         $caisse->setOpen(false);
 
+        // Persist change: use EntityManager from provider
+        $em = $this->emProvider->getEntityManager();
+        $em->flush();
+
         $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $caisse->getAmountTotal(), 5, []);
 
         return new JsonResponse(['message' => 'Caisse closed successfully', 'caisse_id' => $caisse->getId()], 200);
@@ -97,7 +102,7 @@ class CaisseController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $amount = $data['amount'] ?? null;
         $cashDetails = $data['cashDetails'] ?? [];
-        if ($amount <= 0) {
+        if ($amount === null || $amount <= 0) {
             return new JsonResponse(['error' => 'Invalid amount'], 400);
         }
 
@@ -107,6 +112,9 @@ class CaisseController extends AbstractController
         }
 
         $this->handleCaisseTransactionUseCase->execute(null, $this->getUser(), $amount, 3, $cashDetails);
+
+        // Le service CaisseService devrait mettre à jour le montant total en interne ou via event subscriber
+        // Ici on suppose que la mise à jour de l'entité est faite via le UseCase ou listener
 
         return new JsonResponse(['message' => 'Deposit successful', 'new_total' => $caisse->getAmountTotal()], 201);
     }
@@ -120,7 +128,7 @@ class CaisseController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $amount = $data['amount'] ?? null;
         $cashDetails = $data['cashDetails'] ?? [];
-        if ($amount <= 0) {
+        if ($amount === null || $amount <= 0) {
             return new JsonResponse(['error' => 'Invalid amount'], 400);
         }
 
@@ -143,7 +151,7 @@ class CaisseController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $amount = $data['amount'] ?? null;
         $cashDetails = $data['cashDetails'] ?? [];
-        if ($amount <= 0) {
+        if ($amount === null || $amount <= 0) {
             return new JsonResponse(['error' => 'Invalid amount'], 400);
         }
 
@@ -170,7 +178,7 @@ class CaisseController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $amount = $data['amount'] ?? null;
         $cashDetails = $data['cashDetails'] ?? [];
-        if ($amount <= 0) {
+        if ($amount === null || $amount <= 0) {
             return new JsonResponse(['error' => 'Invalid amount'], 400);
         }
 
@@ -200,13 +208,17 @@ class CaisseController extends AbstractController
         // On construit la clé de cache basée sur la valeur du paramètre days.
         $cacheKey = "caisse_data_{$days}";
 
-        $caisseDTOs = $this->cache->get($cacheKey, function (ItemInterface $item) use ($days) {
-            $item->expiresAfter(3600);
-            $item->tag(['caisses_tag']); // Ajoutez le tag ici
-            $dtoCollection = $this->gestCaisseUseCase->execute($days);
-            return array_map(fn($dto) => $dto->toArray(), $dtoCollection);
-        });
-        
+        $caisseDTOs = $this->cache->get(
+            $cacheKey,
+            function(ItemInterface $item) use ($days) {
+                $item->expiresAfter(3600);
+                $item->tag(['caisses_tag']);
+                $dtoCollection = $this->gestCaisseUseCase->execute($days);
+                return array_map(fn($dto) => $dto->toArray(), $dtoCollection);
+            },
+            /* ttl */ 3600,
+            /* extraTags */ ['caisses_tag']
+        );
 
         return new JsonResponse($caisseDTOs, JsonResponse::HTTP_OK);
     }
@@ -218,18 +230,23 @@ class CaisseController extends AbstractController
     public function getOpenCaisseTransactions(): JsonResponse
     {
         $cacheKey = "open_caisse_transactions";
-        
-        $transactions = $this->cache->get($cacheKey, function (ItemInterface $item) {
-            // Pour les transactions, on définit un TTL plus court, par exemple 1 minute (60 secondes), car elles peuvent évoluer rapidement.
-            $item->expiresAfter(3600);
-            $transactionsCollection = $this->getTransactionsForOpenCaisseUseCase->execute();
-            return array_map(fn($transaction) => [
-                'id'                => $transaction->getId(),
-                'amount'            => $transaction->getAmount(),
-                'transactionDate'   => $transaction->getTransactionDate()->format('Y-m-d H:i:s'),
-                'transactionType'   => $transaction->getTransactionType()->getName(),
-            ], $transactionsCollection);
-        });
+
+        $transactions = $this->cache->get(
+            $cacheKey,
+            function(ItemInterface $item) {
+                // TTL pour transactions: 1 heure (ajuster si nécessaire)
+                $item->expiresAfter(3600);
+                $transactionsCollection = $this->getTransactionsForOpenCaisseUseCase->execute();
+                return array_map(fn($transaction) => [
+                    'id'                => $transaction->getId(),
+                    'amount'            => $transaction->getAmount(),
+                    'transactionDate'   => $transaction->getTransactionDate()->format('Y-m-d H:i:s'),
+                    'transactionType'   => $transaction->getTransactionType()->getName(),
+                ], $transactionsCollection);
+            },
+            /* ttl */ 3600,
+            /* extraTags */ ['open_caisse_transactions']
+        );
 
         if (empty($transactions)) {
             return new JsonResponse(['message' => 'Aucune transaction trouvée pour la caisse ouverte'], 404);

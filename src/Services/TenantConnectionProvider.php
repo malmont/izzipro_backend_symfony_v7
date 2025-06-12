@@ -33,7 +33,6 @@ class TenantConnectionProvider
         $params = $this->baseParams;
         $params['dbname'] = $tenantDbName;
         $this->tenantCode = $tenantCode;
-        $this->logger->info("TenantConnectionProvider: Switch to DB [$tenantDbName]");
         $this->connection = DriverManager::getConnection($params, $this->config, $this->eventManager);
     }
 

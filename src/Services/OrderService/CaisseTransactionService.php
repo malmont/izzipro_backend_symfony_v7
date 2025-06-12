@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Services\OrderService;
 
 use App\Entity\Caisse;
@@ -9,20 +8,16 @@ use App\Entity\TransactionType;
 use App\Entity\CashDetails;
 use App\Entity\TypeCash;
 use App\Entity\User;
-use Doctrine\ORM\EntityManagerInterface;
-use App\Repository\TypeCashRepository;
+use App\Services\TenantEntityManagerProvider; 
 
 class CaisseTransactionService
 {
-    private EntityManagerInterface $em;
-    private TypeCashRepository $typeCashRepository;
 
-    public function __construct(
-        EntityManagerInterface $em,
-        TypeCashRepository $typeCashRepository
-    ) {
-        $this->em = $em;
-        $this->typeCashRepository = $typeCashRepository;
+    private TenantEntityManagerProvider $emProvider;
+
+    public function __construct(TenantEntityManagerProvider $emProvider)
+    {
+        $this->emProvider = $emProvider;
     }
 
     public function createTransaction(
@@ -33,6 +28,10 @@ class CaisseTransactionService
         TransactionType $transactionType,
         array $cashDetails = []
     ): TransactionCaisse {
+
+        $em = $this->emProvider->getEntityManager();
+        $typeCashRepository = $em->getRepository(TypeCash::class);
+
         $transactionCaisse = new TransactionCaisse();
         $transactionCaisse->setCaisse($caisse);
         $transactionCaisse->setUserCaisse($user);
@@ -41,9 +40,8 @@ class CaisseTransactionService
         $transactionCaisse->setTransactionType($transactionType);
         $transactionCaisse->setAmount($amount);
         
-        // Gérer les détails en cash s'ils sont fournis
         foreach ($cashDetails as $detail) {
-            $typeCash = $this->typeCashRepository->find($detail['typeCash']);
+            $typeCash = $typeCashRepository->find($detail['typeCash']);
             if (!$typeCash) {
                 throw new \Exception('Invalid TypeCash ID');
             }
@@ -51,14 +49,12 @@ class CaisseTransactionService
             $cashDetail->setTransactionCaisse($transactionCaisse);
             $cashDetail->setTypeCash($typeCash);
             $cashDetail->setNombreItems($detail['nombreItems']);
-
-            // Ajouter CashDetail à la transaction
             $transactionCaisse->addCashDetail($cashDetail);
-            $this->em->persist($cashDetail);
+            $em->persist($cashDetail);
         }
+        $em->persist($transactionCaisse);
 
-        $this->em->persist($transactionCaisse);
-        $this->em->flush();
+        $em->flush();
 
         return $transactionCaisse;
     }

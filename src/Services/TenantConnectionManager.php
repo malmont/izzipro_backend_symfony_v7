@@ -93,15 +93,11 @@ class TenantConnectionManager
 
         try {
             // 1) créer la base
-            $this->logger->info("CREATE DATABASE \"{$dbname}\" ENCODING='UTF8' TEMPLATE=template0");
             $this->pdoMaster->exec(
                 sprintf('CREATE DATABASE "%s" ENCODING=\'UTF8\' TEMPLATE=template0', $dbname)
             );
 
             // 2) enregistrer dans master.tenants
-            $this->logger->info("INSERT INTO tenants(code,name,dbname) VALUES(:c,:n,:d)", [
-                'c' => $code, 'n' => $name, 'd' => $dbname
-            ]);
             $stmt = $this->pdoMaster->prepare('INSERT INTO tenants(code,name,dbname) VALUES(:c,:n,:d)');
             $stmt->execute(['c' => $code, 'n' => $name, 'd' => $dbname]);
 
@@ -170,13 +166,11 @@ class TenantConnectionManager
     {
         $params = $this->tenantParams;
         $params['dbname'] = $tenant->getDbname();
-        $this->logger->info("Switching DBAL connection to tenant '{$params['dbname']}'");
         $this->reconnect($params);
     }
 
     public function switchToMaster(): void
     {
-        $this->logger->info("Switching DBAL connection back to master '{$this->masterParams['dbname']}'");
         $this->reconnect($this->masterParams);
     }
 
@@ -208,7 +202,6 @@ private function runMigrations(string $dbname): void
 
     // Log la base utilisée
     $currentDb = $this->connection->fetchOne('SELECT current_database()');
-    $this->logger->info("runMigrations(): Connexion APRES switch sur la base : {$currentDb}");
 
     // 2. Initialise la table de tracking des migrations
     $configuration = new ConfigurationArray([
@@ -224,11 +217,9 @@ private function runMigrations(string $dbname): void
         new ExistingConnection($this->connection)
     );
     $dependencyFactory->getMetadataStorage()->ensureInitialized();
-    $this->logger->info("Table doctrine_migration_version initialisée sur {$currentDb}.");
 
     // 3. Log tables avant migration
     $tables = $this->connection->fetchFirstColumn("SELECT tablename FROM pg_tables WHERE schemaname='public'");
-    $this->logger->info("Tables avant migration dans '{$currentDb}': " . implode(', ', $tables));
 
     // 4. Récupère les migrations disponibles
     $availableMigrationObjects = $dependencyFactory
@@ -268,7 +259,6 @@ private function runMigrations(string $dbname): void
 
     // 8. Log les tables après migration
     $tablesAfter = $this->connection->fetchFirstColumn("SELECT tablename FROM pg_tables WHERE schemaname='public'");
-    $this->logger->info("Tables APRÈS migration dans '{$currentDb}': " . implode(', ', $tablesAfter));
 
     // 9. Récupère les versions migrées (compatible toutes versions)
     $migratedVersions = [];

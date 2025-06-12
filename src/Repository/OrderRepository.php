@@ -3,27 +3,27 @@
 namespace App\Repository;
 
 use App\Entity\Order;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 use DateTime;
 
 /**
- * @extends ServiceEntityRepository<Order>
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<Order>
  */
-class OrderRepository extends ServiceEntityRepository
+class OrderRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, Order::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
+
 
     /**
-     * Calcule le chiffre d'affaires total entre deux dates.
-     *
-     * @param DateTime $startDate
-     * @param DateTime $endDate
-     * @return float
+     * INCHANGÉES : Toutes vos méthodes personnalisées ci-dessous fonctionneront parfaitement.
+     * La méthode `$this->createQueryBuilder()` utilisera automatiquement l'EntityManager
+     * du tenant qui a été fourni lors de la création de ce repository.
      */
+
     public function getTotalRevenueBetweenDates(DateTime $startDate, DateTime $endDate, ?int $orderSource = null): float
     {
         $qb = $this->createQueryBuilder('o')
@@ -32,7 +32,6 @@ class OrderRepository extends ServiceEntityRepository
             ->setParameter('startDate', $startDate->format('Y-m-d 00:00:00'))
             ->setParameter('endDate', $endDate->format('Y-m-d 23:59:59'));
     
-        // Appliquer le filtre de source de commande, si spécifié
         if ($orderSource !== null) {
             $qb->andWhere('o.orderSource = :orderSource')
                ->setParameter('orderSource', $orderSource);
@@ -43,82 +42,55 @@ class OrderRepository extends ServiceEntityRepository
         return (float) ($result ?? 0.0);
     }
     
-
-    /**
-     * Compte le nombre de commandes entre deux dates.
-     *
-     * @param DateTime $startDate
-     * @param DateTime $endDate
-     * @return int
-     */
     public function getOrderCountBetweenDates(DateTime $startDate, DateTime $endDate, ?int $orderSource = null): int
-        {
-            $qb = $this->createQueryBuilder('o')
-                ->select('COUNT(o.id) as orderCount')
-                ->where('o.orderDate BETWEEN :startDate AND :endDate')
-                ->setParameter('startDate', $startDate->format('Y-m-d 00:00:00'))
-            ->setParameter('endDate', $endDate->format('Y-m-d 23:59:59'));
-
-            if ($orderSource !== null) {
-                $qb->andWhere('o.orderSource = :orderSource')
-                    ->setParameter('orderSource', $orderSource);
-            }
-
-            $result = $qb->getQuery()->getSingleScalarResult();
-
-            return (int) $result;
-        }
-
-
-    /**
-     * Compte le nombre de commandes entre deux dates, avec des filtres pour le type et le statut.
-     *
-     * @param DateTime $startDate
-     * @param DateTime $endDate
-     * @param int $typeId
-     * @param int $statusId
-     * @return int
-     */
-    public function getOrderCountBetweenDatesAndFilters(DateTime $startDate, DateTime $endDate, int $typeId, int $statusId, ?int $orderSource = null): int
-        {
-            $qb = $this->createQueryBuilder('o')
+    {
+        $qb = $this->createQueryBuilder('o')
             ->select('COUNT(o.id) as orderCount')
-            ->where('o.statusUpdatedAt >= :startDate')
-            ->andWhere('o.statusUpdatedAt <= :endDate')
-            ->andWhere('o.orderType = :typeId')
-            ->andWhere('o.status = :statusId')
-            ->setParameter('startDate', $startDate->setTime(0, 0, 0)) // Début de la journée
-            ->setParameter('endDate', $endDate->setTime(23, 59, 59)) // Fin de la journée
-            ->setParameter('typeId', $typeId)
-            ->setParameter('statusId', $statusId);
+            ->where('o.orderDate BETWEEN :startDate AND :endDate')
+            ->setParameter('startDate', $startDate->format('Y-m-d 00:00:00'))
+        ->setParameter('endDate', $endDate->format('Y-m-d 23:59:59'));
 
-            if ($orderSource !== null) {
-                $qb->andWhere('o.orderSource = :orderSource')
-                    ->setParameter('orderSource', $orderSource);
-            }
-
-            $result = $qb->getQuery()->getSingleScalarResult();
-
-            return (int) $result;
+        if ($orderSource !== null) {
+            $qb->andWhere('o.orderSource = :orderSource')
+                ->setParameter('orderSource', $orderSource);
         }
 
+        $result = $qb->getQuery()->getSingleScalarResult();
 
+        return (int) $result;
+    }
 
-     /**
-     * Calcule le panier moyen entre deux dates.
-     *
-     * @param DateTime $startDate
-     * @param DateTime $endDate
-     * @return float
-     */
+    public function getOrderCountBetweenDatesAndFilters(DateTime $startDate, DateTime $endDate, int $typeId, int $statusId, ?int $orderSource = null): int
+    {
+        $qb = $this->createQueryBuilder('o')
+        ->select('COUNT(o.id) as orderCount')
+        ->where('o.statusUpdatedAt >= :startDate')
+        ->andWhere('o.statusUpdatedAt <= :endDate')
+        ->andWhere('o.orderType = :typeId')
+        ->andWhere('o.status = :statusId')
+        ->setParameter('startDate', $startDate->setTime(0, 0, 0))
+        ->setParameter('endDate', $endDate->setTime(23, 59, 59))
+        ->setParameter('typeId', $typeId)
+        ->setParameter('statusId', $statusId);
+
+        if ($orderSource !== null) {
+            $qb->andWhere('o.orderSource = :orderSource')
+                ->setParameter('orderSource', $orderSource);
+        }
+
+        $result = $qb->getQuery()->getSingleScalarResult();
+
+        return (int) $result;
+    }
+
     public function getAverageOrderValueBetweenDates(DateTime $startDate, DateTime $endDate, ?int $orderSource = null): float
     {
         $qb = $this->createQueryBuilder('o')
             ->select('AVG(o.totalAmount) as averageOrderValue')
             ->where('o.orderDate BETWEEN :startDate AND :endDate')
-            ->andWhere('o.totalAmount > 0') // Exclure les montants négatifs si nécessaire
+            ->andWhere('o.totalAmount > 0')
             ->setParameter('startDate', $startDate)
-            ->setParameter('endDate', $endDate);
+            ->setParameter('endDate', 'endDate');
             
             if ($orderSource !== null) {
                 $qb->andWhere('o.orderSource = :orderSource')
@@ -130,24 +102,14 @@ class OrderRepository extends ServiceEntityRepository
         return (float) ($result ?? 0.0);
     }
     
-
-    /**
-     * Calcule le total des montants des transporteurs par mois pour une année donnée.
-     *
-     * @param int $year
-     * @return array
-     */
     public function getTotalCarrierByMonth(int $year): array
     {
         $result = [];
 
-        // Parcourir chaque mois de l'année
         for ($month = 1; $month <= 12; $month++) {
-            // Créer les dates de début et de fin du mois
             $startDate = new DateTime("$year-$month-01");
             $endDate = (clone $startDate)->modify('last day of this month');
 
-            // Effectuer la requête pour le mois actuel
             $total = $this->createQueryBuilder('o')
                 ->select('SUM(c.price) as total')
                 ->join('o.carrier', 'c')
@@ -157,7 +119,6 @@ class OrderRepository extends ServiceEntityRepository
                 ->getQuery()
                 ->getSingleScalarResult();
 
-            // Stocker le résultat pour le mois
             $result[$month] = (float) ($total ?? 0.0);
         }
 

@@ -2,52 +2,67 @@
 namespace App\Services\CaisseService;
 
 use App\Entity\Caisse;
-use App\Repository\CaisseRepository;
-use App\Repository\TransactionCaisseRepository;
+use App\Entity\TransactionCaisse; 
+use App\Services\TenantEntityManagerProvider; 
 use DateTime;
 
 class CaisseService
 {
-    private $caisseRepository;
-    private $transactionCaisseRepository;
 
-    public function __construct(CaisseRepository $caisseRepository, TransactionCaisseRepository $transactionCaisseRepository)
+    private TenantEntityManagerProvider $emProvider;
+
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->caisseRepository = $caisseRepository;
-        $this->transactionCaisseRepository = $transactionCaisseRepository;
+        $this->emProvider = $emProvider;
     }
 
     public function getOpenCaisse(): ?Caisse
     {
-        return $this->caisseRepository->findOneBy(['isOpen' => true]);
+        // MODIFICATION 2 : On récupère l'EM et le repository ici
+        $em = $this->emProvider->getEntityManager();
+        $caisseRepository = $em->getRepository(Caisse::class);
+
+        return $caisseRepository->findOneBy(['isOpen' => true]);
     }
 
     public function getLastClosedCaisse(): ?Caisse
     {
-        return $this->caisseRepository->getLastClosedCaisse();
+        $em = $this->emProvider->getEntityManager();
+        $caisseRepository = $em->getRepository(Caisse::class);
+
+        return $caisseRepository->getLastClosedCaisse();
     }
 
     public function getCaisse(?int $days = null)
     {
+        $em = $this->emProvider->getEntityManager();
+        $caisseRepository = $em->getRepository(Caisse::class);
+
         if ($days) {
             $date = new \DateTime();
             $date->modify("-$days days");
 
-            return $this->caisseRepository->createQueryBuilder('o')
+            // On utilise la variable locale $caisseRepository
+            return $caisseRepository->createQueryBuilder('o')
                 ->where('o.createdAt >= :date')
                 ->setParameter('date', $date)
                 ->getQuery()
                 ->getResult();
         }
 
-        return $this->caisseRepository->findAll();
+        return $caisseRepository->findAll();
     }
 
     public function getTransactionsForOpenCaisse(): array
     {
+
         $openCaisse = $this->getOpenCaisse();
         if ($openCaisse) {
-            return $this->transactionCaisseRepository->findBy(['caisse' => $openCaisse]);
+
+            $em = $this->emProvider->getEntityManager();
+            $transactionCaisseRepository = $em->getRepository(TransactionCaisse::class);
+            
+            return $transactionCaisseRepository->findBy(['caisse' => $openCaisse]);
         }
         return [];
     }

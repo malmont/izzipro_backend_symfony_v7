@@ -66,7 +66,6 @@ class TenantDoctrineSwitcherListener
 
         // 3. Si besoin, switch sur la bonne DB
         if ($targetDb !== $currentDb) {
-            $this->logger->info("Switch DBAL : $currentDb → $targetDb pour tenant $tenantCode");
             $this->tenantConnectionProvider->switchTenant($targetDb,$tenantCode);
 
             // --- Test : Affiche la base courante après switch ---

@@ -27,6 +27,12 @@ services:
             - '../src/Repository/AdressRepository.php'
             - '../src/Repository/AdminSettingsRepository.php'
             - '../src/Repository/EasyPostConfigurationRepository.php'
+            - '../src/Repository/CaisseRepository.php'
+            - '../src/Repository/TransactionCaisseRepository.php'
+            - '../src/Repository/TransactionTypeRepository.php'
+            - '../src/Repository/TypeCashRepository.php'
+            - '../src/Repository/OrderRepository.php'
+            - '../src/Repository/CashDetailsRepository.php'
             
 
     # add more service definitions when explicit configuration is needed
@@ -61,7 +67,8 @@ services:
 
     App\Services\TenantEntityManagerProvider:
         public: true
-        shared: false
+        shared: true
+
 
 
     # Exemple pour TokenService :
