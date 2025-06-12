@@ -2,19 +2,21 @@
 namespace App\Services\CarrierService;
 
 use App\Entity\Carrier;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider; 
 
 class CarrierService
 {
-    private EntityManagerInterface $entityManager;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    private TenantEntityManagerProvider $emProvider;
+
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
     }
 
     public function getAllCarriers(): array
     {
-        return $this->entityManager->getRepository(Carrier::class)->findAll();
+        $em = $this->emProvider->getEntityManager();
+        return $em->getRepository(Carrier::class)->findAll();
     }
 }

@@ -7,15 +7,15 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 
 class CarrierControleur extends AbstractController
 {
     private GetAllCarriersUseCase $getAllCarriersUseCase;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
-    public function __construct(GetAllCarriersUseCase $getAllCarriersUseCase, CacheInterface $cache)
+    public function __construct(GetAllCarriersUseCase $getAllCarriersUseCase, TenantCacheService $cache)
     {
         $this->getAllCarriersUseCase = $getAllCarriersUseCase;
         $this->cache = $cache;
@@ -25,12 +25,18 @@ class CarrierControleur extends AbstractController
     public function getCarrier(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
+        $cacheKey = 'carriers';
 
-        $carriers = $this->cache->get('carriers', function (ItemInterface $item) use ($host) {
-            $item->expiresAfter(3600);
-            error_log("Cache miss for carriers");
-            return $this->getAllCarriersUseCase->execute($host);
-        });
+        $carriers = $this->cache->get(
+            $cacheKey,
+            function(ItemInterface $item) use ($host) {
+                $item->expiresAfter(3600);
+                error_log("Cache miss for carriers");
+                return $this->getAllCarriersUseCase->execute($host);
+            },
+            /* ttl */ 3600,
+            /* extraTags */ ['carriers']
+        );
 
         return $this->json($carriers, JsonResponse::HTTP_OK);
     }

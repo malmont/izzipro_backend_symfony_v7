@@ -33,6 +33,7 @@ services:
             - '../src/Repository/TypeCashRepository.php'
             - '../src/Repository/OrderRepository.php'
             - '../src/Repository/CashDetailsRepository.php'
+            - '../src/Repository/CarrierRepository.php'
             
 
     # add more service definitions when explicit configuration is needed
