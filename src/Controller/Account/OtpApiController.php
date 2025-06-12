@@ -41,7 +41,7 @@ class OtpApiController extends AbstractController
         $platform = $data['platform'] ?? 'mobile';
 
         // Récupérer l'EntityManager pour le tenant courant
-        $em = $this->emProvider->getManager();
+        $em = $this->emProvider->getEntityManager();
 
         // Récupération de l'utilisateur par email
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
