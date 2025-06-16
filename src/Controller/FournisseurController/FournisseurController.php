@@ -12,22 +12,21 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
-use Symfony\Contracts\Cache\TagAwareCacheInterface;
 
 class FournisseurController extends AbstractController
 {
     private GetAllFournisseursUseCase $getAllFournisseursUseCase;
     private CreateFournisseurUseCase $createFournisseurUseCase;
     private DeleteFournisseurUseCase $deleteFournisseurUseCase;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
     public function __construct(
         GetAllFournisseursUseCase $getAllFournisseursUseCase,
         CreateFournisseurUseCase $createFournisseurUseCase,
         DeleteFournisseurUseCase $deleteFournisseurUseCase,
-        CacheInterface $cache
+        TenantCacheService $cache
     ) {
         $this->getAllFournisseursUseCase = $getAllFournisseursUseCase;
         $this->createFournisseurUseCase = $createFournisseurUseCase;
@@ -39,19 +38,22 @@ class FournisseurController extends AbstractController
     public function getAllFournisseurs(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        // Utiliser une clé statique pour les fournisseurs
         $cacheKey = 'fournisseurs_all';
 
-        $fournisseursArray = $this->cache->get($cacheKey, function (ItemInterface $item) use ($host) {
-            // Définir un TTL d'une heure
-            $item->expiresAfter(3600);
-            $fournisseurs = $this->getAllFournisseursUseCase->execute();
-            return array_map(function ($fournisseur) use ($host) {
-                // Transforme en DTO et retourne un tableau via toArray()
-                $dto = new FournisseurOutputDTO($fournisseur, $host);
-                return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
-            }, $fournisseurs);
-        });
+        $fournisseursArray = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($host) {
+                $item->expiresAfter(3600);
+                $item->tag(['fournisseurs_all']);
+                $fournisseurs = $this->getAllFournisseursUseCase->execute();
+                return array_map(function ($fournisseur) use ($host) {
+                    $dto = new FournisseurOutputDTO($fournisseur, $host);
+                    return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
+                }, $fournisseur = $fournisseurs);
+            },
+            /* ttl */ 3600,
+            /* extraTags */ ['fournisseurs_all']
+        );
 
         return new JsonResponse($fournisseursArray, JsonResponse::HTTP_OK);
     }
@@ -62,6 +64,7 @@ class FournisseurController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $fournisseurInputDTO = new FournisseurInputDTO($data);
         $fournisseur = $this->createFournisseurUseCase->execute($fournisseurInputDTO);
+        // Invalidation gérée ailleurs si nécessaire
         return new JsonResponse(
             ['success' => 'Fournisseur créé avec succès', 'fournisseur_id' => $fournisseur->getId()],
             JsonResponse::HTTP_CREATED
@@ -72,6 +75,7 @@ class FournisseurController extends AbstractController
     public function deleteFournisseur(Fournisseur $fournisseur): JsonResponse
     {
         $this->deleteFournisseurUseCase->execute($fournisseur);
+        // Invalidation gérée ailleurs si nécessaire
         return new JsonResponse(['success' => 'Fournisseur supprimé avec succès'], JsonResponse::HTTP_NO_CONTENT);
     }
 }
