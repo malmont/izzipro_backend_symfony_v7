@@ -34,6 +34,10 @@ services:
             - '../src/Repository/OrderRepository.php'
             - '../src/Repository/CashDetailsRepository.php'
             - '../src/Repository/CarrierRepository.php'
+            - '../src/Repository/ProductRepository.php'
+            - '../src/Repository/CategoriesRepository.php'
+            - '../src/Repository/CollectionsRepository.php'
+            - '../src/Repository/CollectionPictureRepository.php'
             
 
     # add more service definitions when explicit configuration is needed

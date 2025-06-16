@@ -6,8 +6,8 @@ use App\Dto\CollectionInputDTO;
 use App\Dto\CollectionOutputDTO;
 use App\Entity\Collections;
 use App\Entity\CollectionPicture;
-use App\Entity\User; // <-- On importe l'entité User
-use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
+use App\Entity\User;
+use App\Services\TenantEntityManagerProvider; 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query\ResultSetMapping;
 
