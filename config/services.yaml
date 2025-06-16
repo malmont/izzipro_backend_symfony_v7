@@ -43,6 +43,7 @@ services:
             - '../src/Repository/FournisseurRepository.php'
             - '../src/Repository/TypeFournisseurRepository.php'
             - '../src/Repository/CommandeStatistiquesRepository.php'
+            - '../src/Repository/CollectionStatistiquesRepository.php'
 
             
 

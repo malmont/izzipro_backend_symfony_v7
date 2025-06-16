@@ -1,22 +1,26 @@
 <?php
 
 namespace App\Repository;
+
 use App\Entity\Collections;
 use App\Entity\CollectionStatistiques;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 
 /**
- * @extends ServiceEntityRepository<CollectionStatistiques>
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<CollectionStatistiques>
  */
-class CollectionStatistiquesRepository extends ServiceEntityRepository
+class CollectionStatistiquesRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, CollectionStatistiques::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 
-
+    /**
+     * INCHANGÉ : Votre méthode personnalisée fonctionnera parfaitement car
+     * $this->createQueryBuilder() utilisera maintenant l'EntityManager du tenant.
+     */
     public function findLatestByCollection(Collections $collection): ?CollectionStatistiques
     {
         return $this->createQueryBuilder('cs')
@@ -27,29 +31,4 @@ class CollectionStatistiquesRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
     }
-
-    //    /**
-    //     * @return CollectionStatistiques[] Returns an array of CollectionStatistiques objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('c')
-    //            ->andWhere('c.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('c.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
-
-    //    public function findOneBySomeField($value): ?CollectionStatistiques
-    //    {
-    //        return $this->createQueryBuilder('c')
-    //            ->andWhere('c.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
 }

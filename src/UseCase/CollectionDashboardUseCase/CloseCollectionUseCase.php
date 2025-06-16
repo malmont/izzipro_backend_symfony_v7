@@ -5,29 +5,25 @@ use App\Entity\Collections;
 use App\Services\CollectionDashboardService\CollectionStatistiquesService;
 use App\Services\CommandeDashboardService\CommandeStatistiquesService;
 use App\UseCase\CommandeDashboardUseCase\DashboardCommandeUseCase; 
-use Doctrine\ORM\EntityManagerInterface;
-use App\Dto\DashboardCollectionDTO;
+use App\Services\TenantEntityManagerProvider; 
 
 class CloseCollectionUseCase
 {
     private CollectionStatistiquesService $collectionStatistiquesService;
     private CommandeStatistiquesService $commandeStatistiquesService;
-    private DashboardCollectionUseCase $dashboardCollectionUseCase;
-    private EntityManagerInterface $entityManager;
-    private DashboardCommandeUseCase $dashboardCommandeUseCase; 
+    private DashboardCommandeUseCase $dashboardCommandeUseCase;
+    private TenantEntityManagerProvider $emProvider; 
 
     public function __construct(
         CollectionStatistiquesService $collectionStatistiquesService,
         CommandeStatistiquesService $commandeStatistiquesService,
-        DashboardCollectionUseCase $dashboardCollectionUseCase,
-        EntityManagerInterface $entityManager,
         DashboardCommandeUseCase $dashboardCommandeUseCase,
+        TenantEntityManagerProvider $emProvider 
     ) {
         $this->collectionStatistiquesService = $collectionStatistiquesService;
         $this->commandeStatistiquesService = $commandeStatistiquesService;
-        $this->dashboardCollectionUseCase = $dashboardCollectionUseCase;
-        $this->entityManager = $entityManager;
-        $this->dashboardCommandeUseCase = $dashboardCommandeUseCase; 
+        $this->dashboardCommandeUseCase = $dashboardCommandeUseCase;
+        $this->emProvider = $emProvider;
     }
 
     public function execute(Collections $collection): void
@@ -35,7 +31,11 @@ class CloseCollectionUseCase
         if ($collection->getIsClosed()) {
             throw new \Exception('La collection est déjà figée.');
         }
+        
+        // On récupère l'EM du tenant une seule fois au début de l'opération
+        $em = $this->emProvider->getEntityManager();
 
+        // Les appels aux autres services sont corrects
         $metricsDTO = $this->dashboardCollectionUseCase->execute($collection);
         $this->collectionStatistiquesService->createAndSaveMetrics($collection, $metricsDTO);
 
@@ -45,18 +45,22 @@ class CloseCollectionUseCase
                 $this->commandeStatistiquesService->createAndSaveMetrics($commande, $commandeMetricsDTO);
                 
                 $commande->setIsClosed(true);
-                $this->entityManager->persist($commande);
+                // On utilise l'EM du tenant
+                $em->persist($commande);
 
                 foreach ($commande->getProducts() as $product) {
                     $product->setFreezeQuantity($product->getQuantity());
-                    $this->entityManager->persist($product);
+                    // On utilise l'EM du tenant
+                    $em->persist($product);
                 }
             }
         }
 
         $collection->setIsClosed(true);
-        $this->entityManager->persist($collection);
+        // On utilise l'EM du tenant
+        $em->persist($collection);
 
-        $this->entityManager->flush();
+        // Le flush final sauvegarde toutes les modifications dans la BDD du tenant
+        $em->flush();
     }
 }

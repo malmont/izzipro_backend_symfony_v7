@@ -1,35 +1,38 @@
 <?php
-
 namespace App\Services\CollectionDashboardService;
 
 use App\Entity\Collections;
 use App\Entity\CollectionStatistiques;
 use App\Dto\DashboardCollectionDTO;
-use Doctrine\ORM\EntityManagerInterface;
-use App\Repository\CollectionStatistiquesRepository;
+use App\Services\TenantEntityManagerProvider; 
 
 class CollectionStatistiquesService
 {
-    private EntityManagerInterface $entityManager;
-    private CollectionStatistiquesRepository $collectionStatistiquesRepository;
+    // MODIFICATION 1 : Le service ne dépend plus que du provider
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(EntityManagerInterface $entityManager, CollectionStatistiquesRepository $collectionStatistiquesRepository)
-    
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entityManager = $entityManager;
-        $this->collectionStatistiquesRepository = $collectionStatistiquesRepository;
+        $this->emProvider = $emProvider;
     }
 
     public function getLatestStatistiqueForCollection(Collections $collection): ?CollectionStatistiques
     {
-        return $this->collectionStatistiquesRepository->findLatestByCollection($collection);
-    }
 
+        $em = $this->emProvider->getEntityManager();
+        $repo = $em->getRepository(CollectionStatistiques::class);
+
+        return $repo->findLatestByCollection($collection);
+    }
 
     public function createAndSaveMetrics(Collections $collection, DashboardCollectionDTO $metricsDTO): CollectionStatistiques
     {
+        $em = $this->emProvider->getEntityManager();
+
         $collectionStatistiques = new CollectionStatistiques();
         $collectionStatistiques->setCollection($collection);
+        
+        // ... (toute votre logique de set... est inchangée)
         $collectionStatistiques->setGeneralBudget($metricsDTO->budgetGeneral['generalBudget']);
         $collectionStatistiques->setUsedBudget($metricsDTO->budgetGeneral['usedBudget']);
         $collectionStatistiques->setRemainingBudget($metricsDTO->budgetGeneral['remainingBudget']);
@@ -48,10 +51,10 @@ class CollectionStatistiquesService
         $collectionStatistiques->setEndDate(new \DateTime($metricsDTO->collectionDuration['endDate']));
         $collectionStatistiques->setDurationDays($metricsDTO->collectionDuration['days']);
     
-        $this->entityManager->persist($collectionStatistiques);
-        $this->entityManager->flush();
+       
+        $em->persist($collectionStatistiques);
+        $em->flush();
     
         return $collectionStatistiques;
     }
-    
 }
