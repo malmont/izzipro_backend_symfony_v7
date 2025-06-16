@@ -4,19 +4,24 @@ namespace App\Repository;
 
 use App\Entity\Commande;
 use App\Entity\CommandeStatistiques;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 
 /**
- * @extends ServiceEntityRepository<CommandeStatistiques>
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<CommandeStatistiques>
  */
-class CommandeStatistiquesRepository extends ServiceEntityRepository
+class CommandeStatistiquesRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, CommandeStatistiques::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 
+
+    /**
+     * INCHANGÉ : Votre méthode personnalisée fonctionnera parfaitement car
+     * $this->createQueryBuilder() utilisera maintenant l'EntityManager du tenant.
+     */
     public function findLatestByCommande(Commande $commande): ?CommandeStatistiques
     {
         return $this->createQueryBuilder('cs')
@@ -27,29 +32,4 @@ class CommandeStatistiquesRepository extends ServiceEntityRepository
             ->getQuery()
             ->getOneOrNullResult();
     }
-
-    //    /**
-    //     * @return CommandeStatistiques[] Returns an array of CommandeStatistiques objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('c')
-    //            ->andWhere('c.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('c.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
-
-    //    public function findOneBySomeField($value): ?CommandeStatistiques
-    //    {
-    //        return $this->createQueryBuilder('c')
-    //            ->andWhere('c.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
 }

@@ -42,6 +42,8 @@ services:
             - '../src/Repository/CommandeRepository.php'
             - '../src/Repository/FournisseurRepository.php'
             - '../src/Repository/TypeFournisseurRepository.php'
+            - '../src/Repository/CommandeStatistiquesRepository.php'
+
             
 
     # add more service definitions when explicit configuration is needed

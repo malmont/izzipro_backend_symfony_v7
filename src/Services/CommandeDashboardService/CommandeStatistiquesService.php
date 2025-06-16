@@ -1,33 +1,38 @@
 <?php
-
 namespace App\Services\CommandeDashboardService;
 
+use App\Dto\DashboardCommandeDTO;
 use App\Entity\Commande;
 use App\Entity\CommandeStatistiques;
-use App\Dto\DashboardCommandeDTO;
-use Doctrine\ORM\EntityManagerInterface;
-use App\Repository\CommandeStatistiquesRepository;
+use App\Services\TenantEntityManagerProvider; 
 
 class CommandeStatistiquesService
 {
-    private EntityManagerInterface $entityManager;
-    private CommandeStatistiquesRepository $commandeStatistiquesRepository;
 
-    public function __construct(EntityManagerInterface $entityManager,CommandeStatistiquesRepository $commandeStatistiquesRepository)
+    private TenantEntityManagerProvider $emProvider;
+
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entityManager = $entityManager;
-        $this->commandeStatistiquesRepository = $commandeStatistiquesRepository;
+        $this->emProvider = $emProvider;
     }
 
     public function getLatestCommandeStatistiques(Commande $commande): ?CommandeStatistiques
     {
-        return $this->commandeStatistiquesRepository->findLatestByCommande($commande);
+        // MODIFICATION 2 : On récupère l'EM et le repository ici
+        $em = $this->emProvider->getEntityManager();
+        $commandeStatistiquesRepository = $em->getRepository(CommandeStatistiques::class);
+        
+        return $commandeStatistiquesRepository->findLatestByCommande($commande);
     }
 
     public function createAndSaveMetrics(Commande $commande, DashboardCommandeDTO $metricsDTO): CommandeStatistiques
     {
+        $em = $this->emProvider->getEntityManager();
+
         $commandeStatistiques = new CommandeStatistiques();
         $commandeStatistiques->setCommande($commande);
+        
+        // ... (toute votre logique de set... est inchangée)
         $commandeStatistiques->setAverageMultiplier($metricsDTO->averageMultiplier);
         $commandeStatistiques->setGeneralBudget($metricsDTO->budgetGeneral['generalBudget']);
         $commandeStatistiques->setUsedBudget($metricsDTO->budgetGeneral['usedBudget']);
@@ -41,12 +46,13 @@ class CommandeStatistiquesService
         $commandeStatistiques->setTauxMarge($metricsDTO->tauxMarge['tauxMarge']);
         $commandeStatistiques->setTauxMarque($metricsDTO->tauxMarge['tauxMarque']);
 
-        if ($commande->getFraisDePort() && $commande->getFraisDePort()->getTransporteur()) {
-            $commandeStatistiques->setTransporteur($commande->getFraisDePort()->getTransporteur());
+        $transporteur = $commande->getFraisDePort()?->getTransporteur();
+        if ($transporteur) {
+            $commandeStatistiques->setTransporteur($transporteur);
         }
 
-        $this->entityManager->persist($commandeStatistiques);
-        $this->entityManager->flush();
+        $em->persist($commandeStatistiques);
+        $em->flush();
 
         return $commandeStatistiques;
     }
