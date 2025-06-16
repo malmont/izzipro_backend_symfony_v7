@@ -1,32 +1,37 @@
 <?php
 namespace App\Services\ProductVariantService;
 
-use App\Repository\ProductVariantRepository;
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
 use App\Entity\ProductVariant;
 
 class ProductVariantExistenceService
 {
-    private $productVariantRepository;
+    // MODIFICATION 1 : Le service ne dépend plus que du provider
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(ProductVariantRepository $productVariantRepository)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->productVariantRepository = $productVariantRepository;
+        $this->emProvider = $emProvider;
     }
 
     public function doesVariantExist(ProductVariant $productVariant): bool
     {
-        // Recherche d'un variant avec la même couleur et taille mais un ID différent
-        $existingVariant = $this->productVariantRepository->findOneBy([
+        // MODIFICATION 2 : On récupère l'EM et le repository ici
+        $em = $this->emProvider->getEntityManager();
+        $repo = $em->getRepository(ProductVariant::class);
+
+        // On utilise le repository obtenu depuis l'EM du tenant
+        $existingVariant = $repo->findOneBy([
             'color' => $productVariant->getColor(),
             'size' => $productVariant->getSize(),
-            'product' => $productVariant->getProduct(), // Facultatif si vous voulez vérifier dans un produit spécifique
+            'product' => $productVariant->getProduct(),
         ]);
 
-        // Vérifier que l'ID du produit trouvé est différent de l'ID du produit actuel
+        // Le reste de votre logique est inchangée
         if ($existingVariant && $existingVariant->getId() !== $productVariant->getId()) {
-            return true; // Le variant existe déjà
+            return true;
         }
 
-        return false; // Le variant n'existe pas
+        return false;
     }
 }

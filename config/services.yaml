@@ -50,6 +50,18 @@ services:
             - '../src/Repository/TransporteurRepository.php'
             - '../src/Repository/NoteDeFraisRepository.php'
             - '../src/Repository/TypeNoteDeFraisRepository.php'
+            - '../src/Repository/OrderTaxRepository.php'
+            - '../src/Repository/TaxRepository.php'
+            - '../src/Repository/StatusCommandeRepository.php'
+            - '../src/Repository/OrderSourceRepository.php'
+            - '../src/Repository/OrderTypeRepository.php'
+            - '../src/Repository/PaymentsRepository.php'
+            - '../src/Repository/PaymentMethodRepository.php'
+            - '../src/Repository/PaymentTypeRepository.php'
+            - '../src/Repository/StatusPaymentRepository.php'
+            - '../src/Repository/OrderItemsRepository.php'
+            - '../src/Repository/ProductVariantRepository.php'
+            - '../src/Repository/MovementTypeRepository.php'
 
             
 

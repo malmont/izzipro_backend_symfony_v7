@@ -1,25 +1,36 @@
 <?php
+
 namespace App\UseCase\OrderUseCase;
 
 use App\Dto\CreateOrderDTO;
 use App\Dto\CreateOrderMultiPaymentDTO;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\Security\Core\Security;
+use App\Dto\ICreateOrderDTO;
+use App\Services\TenantEntityManagerProvider;
 use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
-use App\Dto\ICreateOrderDTO; 
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\Security\Core\Security;
+
+use App\UseCase\OrderUseCase\CreateOrderCommandUseCase;
+use App\UseCase\OrderUseCase\ProcessOrderItemsUseCase;
+use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
+use App\UseCase\OrderUseCase\CalculateTaxesUseCase;
+use App\UseCase\OrderUseCase\PaymentHandlerUseCase;
+use App\UseCase\OrderUseCase\CalculateTotalAmountUseCase;
+
 
 class CreateOrderUseCase
 {
-    private $createOrderCommandUseCase;
-    private $processOrderItemsUseCase;
-    private $updateStockAndInventoryUseCase;
-    private $calculateTaxesUseCase;
-    private $paymentHandlerUseCase;
-    private $calculateTotalAmountUseCase;
-    private $handleCaisseTransactionUseCase;
-    private $em;
-    private $security;
+    private CreateOrderCommandUseCase $createOrderCommandUseCase;
+    private ProcessOrderItemsUseCase $processOrderItemsUseCase;
+    private UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase;
+    private CalculateTaxesUseCase $calculateTaxesUseCase;
+    private PaymentHandlerUseCase $paymentHandlerUseCase;
+    private CalculateTotalAmountUseCase $calculateTotalAmountUseCase;
+    private HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase;
+    private TenantEntityManagerProvider $emProvider;
+    private Security $security;
 
     public function __construct(
         CreateOrderCommandUseCase $createOrderCommandUseCase,
@@ -29,7 +40,7 @@ class CreateOrderUseCase
         PaymentHandlerUseCase $paymentHandlerUseCase,
         CalculateTotalAmountUseCase $calculateTotalAmountUseCase,
         HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase,
-        EntityManagerInterface $em,
+        TenantEntityManagerProvider $emProvider,
         Security $security
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
@@ -39,23 +50,24 @@ class CreateOrderUseCase
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->calculateTotalAmountUseCase = $calculateTotalAmountUseCase;
         $this->handleCaisseTransactionUseCase = $handleCaisseTransactionUseCase;
-        $this->em = $em;
+        $this->emProvider = $emProvider;
         $this->security = $security;
     }
 
     public function execute(ICreateOrderDTO $orderDTO): JsonResponse
     {
-        $this->em->getConnection()->beginTransaction();
+        $em = $this->emProvider->getEntityManager();
+        $em->getConnection()->beginTransaction();
+        
         $caisseAmount = 0;
         try {
             $user = $this->security->getUser();
             $typeOrderId = $orderDTO->getTypeOrder();
             $statusPaymentId = 2;
 
-            // Pass the entire DTO to the CreateOrderCommandUseCase
             $order = $this->createOrderCommandUseCase->execute($orderDTO, $user);
             if ($order instanceof JsonResponse) {
-                throw new \Exception('Order creation failed');
+                throw new \Exception($order->getContent());
             }
 
             try {
@@ -67,7 +79,7 @@ class CreateOrderUseCase
             }
             
             $subtotal = $typeOrderId === 1 ? $subtotal : -$subtotal;
-            ;
+            
             $totalTax = $this->calculateTaxesUseCase->execute($order, $subtotal);
             if ($totalTax instanceof JsonResponse) {
                 throw new \Exception('Tax calculation failed');
@@ -77,11 +89,11 @@ class CreateOrderUseCase
 
             if ($orderDTO instanceof CreateOrderMultiPaymentDTO) {
                 foreach ($orderDTO->getPaymentMethods() as $paymentMethod) {
-                    $orderDtoValue = $orderDTO;  // 🟢 On initialise à chaque boucle
+                    $orderDtoValue = $orderDTO;
             
                     if ($paymentMethod->getType() == 2) {
                         $caisseAmount += $paymentMethod->getAmount();
-                        $orderDtoValue = null;  // 🔴 Mettre à null uniquement si type == 2
+                        $orderDtoValue = null;
                     }
             
                     $amountPaymentMethod = $typeOrderId === 1 
@@ -95,11 +107,10 @@ class CreateOrderUseCase
                         $paymentTypeId,
                         $statusPaymentId,
                         new \DateTime(),
-                        $orderDtoValue  // ✅ Null si type == 2, sinon $orderDTO
+                        $orderDtoValue
                     );
                 }
-            }
-             else {
+            } else {
                 $this->paymentHandlerUseCase->handlePayment(
                     $order,
                     $totalAmount,
@@ -110,29 +121,33 @@ class CreateOrderUseCase
                     $orderDTO
                 );
             }
-            // $this->paymentHandlerUseCase->handlePayment($order, $totalAmount, $orderDTO->getPaymentMethod(), $paymentTypeId, $statusPaymentId);
 
             $order->setSubTotal($subtotal);
             $order->setTotalTax($totalTax);
             $order->setTotalAmount($totalAmount);
 
-            $this->em->persist($order);
-            $caisseAmount=$caisseAmount*100;
+            $em->persist($order);
+            
+            $caisseAmount = $caisseAmount * 100;
             if ($order->getOrderSource()->getId() === 2) {
                 $transactionTypeId = $typeOrderId === 1 ? 1 : 2;
-                $this->handleCaisseTransactionUseCase->execute($order, $user, $totalAmount, $transactionTypeId,[],$caisseAmount);
+                $this->handleCaisseTransactionUseCase->execute($order, $user, $totalAmount, $transactionTypeId, [], $caisseAmount);
             }
 
-            $this->em->flush();
-            $this->em->getConnection()->commit();
+            $em->flush();
+            $em->getConnection()->commit();
 
             return new JsonResponse([
                 'message' => 'Order created successfully',
                 'orderId' => $order->getId(),
-            ], 201);
+            ], Response::HTTP_CREATED);
+
         } catch (\Exception $e) {
-            $this->em->getConnection()->rollBack();
-            return new JsonResponse(['error' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+            // S'assurer que la connexion est toujours ouverte avant de faire un rollback
+            if ($em->getConnection()->isTransactionActive()) {
+                $em->getConnection()->rollBack();
+            }
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
     }
 }

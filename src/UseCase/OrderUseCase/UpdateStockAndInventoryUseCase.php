@@ -1,42 +1,42 @@
 <?php
 namespace App\UseCase\OrderUseCase;
 
-use App\Services\OrderService\InventoryMovementService;
 use App\Entity\ProductVariant;
-use App\Entity\InventoryMovements;
-use App\Entity\OrderItems;
-use Doctrine\ORM\EntityManagerInterface;
-use App\Repository\MovementTypeRepository;
+use App\Entity\MovementType;
+use App\Services\InventoryMovementService;
+use App\Services\TenantEntityManagerProvider; 
 
 class UpdateStockAndInventoryUseCase
 {
-    private $em;
-    private $movementTypeRepository;
-    private $inventoryMovementService;
+    // MODIFICATION 1 : Le constructeur est refactorisé
+    private TenantEntityManagerProvider $emProvider;
+    private InventoryMovementService $inventoryMovementService;
 
     public function __construct(
-        EntityManagerInterface $em,
-        MovementTypeRepository $movementTypeRepository,
+        TenantEntityManagerProvider $emProvider,
         InventoryMovementService $inventoryMovementService
     ) {
-        $this->em = $em;
-        $this->movementTypeRepository = $movementTypeRepository;
+        $this->emProvider = $emProvider;
         $this->inventoryMovementService = $inventoryMovementService;
     }
 
     public function execute(ProductVariant $productVariant, int $quantity, bool $isCancellation = false): void
     {
+        // MODIFICATION 2 : On récupère l'EM du tenant ici
+        $em = $this->emProvider->getEntityManager();
+        $movementTypeRepository = $em->getRepository(MovementType::class);
+
         $stockBeforeMovement = $productVariant->getStockQuantity();
         $newQuantity = $isCancellation ? $quantity : -$quantity;
         $productVariant->setStockQuantity($stockBeforeMovement + $newQuantity);
 
-        // Persister la mise à jour du produit
-        $this->em->persist($productVariant);
+        // On utilise l'EM du tenant pour la persistance
+        $em->persist($productVariant);
 
         $stockAfterMovement = $productVariant->getStockQuantity();
-        $movementType = $this->movementTypeRepository->find($isCancellation ? 1 : 2);
+        // On récupère le type de mouvement depuis le bon repository
+        $movementType = $movementTypeRepository->find($isCancellation ? 1 : 2);
 
-        // Création du mouvement d'inventaire via le service
         $inventoryMovement = $this->inventoryMovementService->createInventoryMovement(
             $productVariant,
             $stockBeforeMovement,
@@ -46,25 +46,26 @@ class UpdateStockAndInventoryUseCase
             $isCancellation,
         );
 
-        // Persister le mouvement d'inventaire
-        $this->em->persist($inventoryMovement);
+        // On utilise l'EM du tenant pour la persistance
+        $em->persist($inventoryMovement);
     }
+
     public function executeNewProductVariant(ProductVariant $productVariant, int $stockBeforeMovement, int $movementTypeId): void
     {
-        
+        $em = $this->emProvider->getEntityManager();
+        $movementTypeRepository = $em->getRepository(MovementType::class);
+
         $stockAfterMovement = $productVariant->getStockQuantity();
 
-        if($stockBeforeMovement>$stockAfterMovement)
-        {
-            $quantity=$stockBeforeMovement -$stockAfterMovement;
-            $quantity=$quantity* -1;
-        }else
-        {
-            $quantity=$stockBeforeMovement+$stockAfterMovement;
-
+        if ($stockBeforeMovement > $stockAfterMovement) {
+            $quantity = $stockBeforeMovement - $stockAfterMovement;
+            $quantity = $quantity * -1;
+        } else {
+            $quantity = $stockAfterMovement - $stockBeforeMovement;
         }
-        $movementType = $this->movementTypeRepository->find($movementTypeId);
-        // Création du mouvement d'inventaire via le service
+        
+        $movementType = $movementTypeRepository->find($movementTypeId);
+
         $inventoryMovement = $this->inventoryMovementService->createInventoryMovement(
             $productVariant,
             $stockBeforeMovement,
@@ -73,8 +74,6 @@ class UpdateStockAndInventoryUseCase
             $movementType,
             false,
         );
-       
-        // Persister le mouvement d'inventaire
-        $this->em->persist($inventoryMovement);
+        $em->persist($inventoryMovement);
     }
 }

@@ -3,17 +3,24 @@
 namespace App\Repository;
 
 use App\Entity\Payments;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 use DateTime;
 
-class PaymentsRepository extends ServiceEntityRepository
+/**
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<Payments>
+ */
+class PaymentsRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, Payments::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 
+    /**
+     * INCHANGÉES : Toutes vos méthodes personnalisées fonctionneront parfaitement car
+     * $this->createQueryBuilder() utilisera l'EntityManager du tenant.
+     */
     public function getTotalPaymentsForCurrentWeek(string $paymentType, ?int $orderSource = null): float
     {
         $now = new DateTime();

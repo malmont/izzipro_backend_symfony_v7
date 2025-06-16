@@ -4,26 +4,23 @@ namespace App\Repository;
 
 use App\Entity\InventoryMovements;
 use App\Entity\Product;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 use DateTime;
 
 /**
- * @extends ServiceEntityRepository<InventoryMovements>
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<InventoryMovements>
  */
-class InventoryMovementsRepository extends ServiceEntityRepository
+class InventoryMovementsRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, InventoryMovements::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 
     /**
-     * Trouve les mouvements de stock entre deux dates.
-     *
-     * @param DateTime $startDate
-     * @param DateTime $endDate
-     * @return InventoryMovements[]
+     * INCHANGÉES : Toutes vos méthodes personnalisées fonctionneront parfaitement car
+     * $this->createQueryBuilder() utilisera l'EntityManager du tenant.
      */
     public function findByDateRange(DateTime $startDate, DateTime $endDate): array
     {
@@ -36,14 +33,6 @@ class InventoryMovementsRepository extends ServiceEntityRepository
             ->getResult();
     }
 
-    /**
-     * Trouve les mouvements de stock par type de mouvement entre deux dates.
-     *
-     * @param DateTime $startDate
-     * @param DateTime $endDate
-     * @param string $movementTypeName
-     * @return InventoryMovements[]
-     */
     public function findByDateRangeAndMovementType(DateTime $startDate, DateTime $endDate, string $movementTypeName): array
     {
         return $this->createQueryBuilder('im')
@@ -58,14 +47,6 @@ class InventoryMovementsRepository extends ServiceEntityRepository
             ->getResult();
     }
 
-    /**
-     * Calcule la quantité totale de stock pour un type de mouvement spécifique entre deux dates.
-     *
-     * @param DateTime $startDate
-     * @param DateTime $endDate
-     * @param string $movementTypeName
-     * @return int
-     */
     public function getTotalQuantityByMovementType(DateTime $startDate, DateTime $endDate, string $movementTypeName): int
     {
         return (int) $this->createQueryBuilder('im')
@@ -80,13 +61,6 @@ class InventoryMovementsRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
-    /**
-     * Calcule la quantité de stock à une date spécifique pour un produit donné.
-     *
-     * @param Product $product
-     * @param DateTime $date
-     * @return int
-     */
     public function getStockQuantityAtDate(Product $product, DateTime $date): int
     {
         return (int) $this->createQueryBuilder('im')
@@ -100,13 +74,6 @@ class InventoryMovementsRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
-    /**
-     * Calcule la quantité totale de stock pour chaque type de mouvement à une date donnée.
-     *
-     * @param Product $product
-     * @param DateTime $date
-     * @return array
-     */
     public function getTotalQuantityByMovementTypeAtDate(Product $product, DateTime $date): array
     {
         $qb = $this->createQueryBuilder('im')
