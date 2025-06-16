@@ -39,6 +39,9 @@ services:
             - '../src/Repository/CollectionsRepository.php'
             - '../src/Repository/CollectionPictureRepository.php'
             - '../src/Repository/ColorRepository.php'
+            - '../src/Repository/CommandeRepository.php'
+            - '../src/Repository/FournisseurRepository.php'
+            - '../src/Repository/TypeFournisseurRepository.php'
             
 
     # add more service definitions when explicit configuration is needed

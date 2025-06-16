@@ -4,65 +4,79 @@ namespace App\Services\CommandeService;
 use App\Entity\Collections;
 use App\Entity\Commande;
 use App\Entity\Fournisseur;
-use App\Entity\TypeFournisseur;
-use Doctrine\ORM\EntityManagerInterface;
-use App\Dto\FournisseurInputDTO;
 use App\Entity\CollectionPicture;
+use App\Services\TenantEntityManagerProvider; 
+use App\Dto\FournisseurInputDTO;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query\ResultSetMapping;
 
 class CommandeService
 {
-    private $entityManager;
+    // MODIFICATION 1 : Le service ne dépend plus que du provider
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
     }
 
     public function getCommandesByCollection(Collections $collection)
     {
-        return $this->entityManager->getRepository(Collections::class)
-            ->find($collection->getId())
-            ->getCommandes();
+        // MODIFICATION 2 : On récupère l'EM du tenant ici
+        $em = $this->emProvider->getEntityManager();
+        
+        // On s'assure que l'entité $collection est bien gérée par cet EM
+        $managedCollection = $em->merge($collection);
+
+        return $managedCollection->getCommandes();
     }
 
     public function createCommande(array $data, Collections $collection, Fournisseur $fournisseur): Commande
     {
+        $em = $this->emProvider->getEntityManager();
+
         $commande = new Commande();
         $commande->setBudget($data['budget']);
         $commande->setDate(new \DateTime($data['date']));
         $commande->setName($data['name']);
         $commande->setCollections($collection);
         $commande->setFournisseur($fournisseur);
-        $randomPicture = $this->getRandomCollectionPicture();
+        
+        // On passe l'EM du tenant à la méthode privée
+        $randomPicture = $this->getRandomCollectionPicture($em);
         $commande->setCommandepictures($randomPicture);
 
-        $this->entityManager->persist($commande);
-        $this->entityManager->flush();
+        // GARDE-FOU : On s'assure que les entités liées sont bien gérées par l'EM
+        $em->persist($collection);
+        $em->persist($fournisseur);
+
+        $em->persist($commande);
+        $em->flush();
 
         return $commande;
     }
 
     public function findOrCreateFournisseur(FournisseurInputDTO $fournisseurDTO): Fournisseur
     {
-        $fournisseur = $this->entityManager->getRepository(Fournisseur::class)->find($fournisseurDTO->id);
+        $em = $this->emProvider->getEntityManager();
+        $fournisseur = $em->getRepository(Fournisseur::class)->find($fournisseurDTO->id);
+        
+        // Note: La logique "ou Créer" n'est pas implémentée ici, mais la recherche est maintenant correcte.
         return $fournisseur;
     }
 
     /**
-     * Sélectionne aléatoirement une CollectionPicture depuis la base de données.
-     * Cette méthode utilise une requête native PostgreSQL qui trie les enregistrements par RANDOM().
+     * MODIFICATION 3 : La méthode privée reçoit l'EntityManager en paramètre
      */
-    private function getRandomCollectionPicture(): ?CollectionPicture
+    private function getRandomCollectionPicture(EntityManagerInterface $em): ?CollectionPicture
     {
         $sql = 'SELECT * FROM collection_picture ORDER BY RANDOM() LIMIT 1';
         $rsm = new ResultSetMapping();
         $rsm->addEntityResult(CollectionPicture::class, 'cp');
         $rsm->addFieldResult('cp', 'id', 'id');
-        // Assurez-vous que le nom de la colonne dans votre table est bien « image_url ».
         $rsm->addFieldResult('cp', 'image_url', 'imageUrl');
 
-        return $this->entityManager->createNativeQuery($sql, $rsm)
+        return $em->createNativeQuery($sql, $rsm)
             ->getOneOrNullResult();
     }
 }

@@ -12,22 +12,21 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Core\Security;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
-use Symfony\Contracts\Cache\TagAwareCacheInterface;
 
 class CommandeController extends AbstractController
 {
     private GetCommandesByCollectionUseCase $getCommandesByCollectionUseCase;
     private CreateCommandeUseCase $createCommandeUseCase;
     private Security $security;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
     public function __construct(
         GetCommandesByCollectionUseCase $getCommandesByCollectionUseCase,
         CreateCommandeUseCase $createCommandeUseCase,
         Security $security,
-        CacheInterface $cache
+        TenantCacheService $cache
     ) {
         $this->getCommandesByCollectionUseCase = $getCommandesByCollectionUseCase;
         $this->createCommandeUseCase = $createCommandeUseCase;
@@ -39,24 +38,25 @@ class CommandeController extends AbstractController
     public function getCommandesByCollection(Collections $collection, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        // Construire une clé de cache basée sur l'ID de la collection
         $cacheKey = 'commandes_collection_' . $collection->getId();
 
-        // Utilisation du cache avec TTL de 5 minutes et ajout d'un tag "commandes_by_collection"
-        $commandesDTO = $this->cache->get($cacheKey, function (ItemInterface $item) use ($collection, $host) {
-            $item->expiresAfter(600); // Cache expire après 5 minutes
+        $commandesDTO = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($collection, $host) {
+                $item->expiresAfter(600); // Cache expire après 5 minutes
                 $item->tag(['commandes_by_collection']);
-            // Récupérer les entités Commande via le use case
-            $commandes = $this->getCommandesByCollectionUseCase->execute($collection);
-            // Convertir la collection en tableau et transformer chaque commande en DTO
-            $commandesArray = $commandes->toArray();
-            return array_map(function ($commande) use ($host) {
-                $dto = new CommandeOutputDTO($commande, $host);
-                // Si le DTO possède une méthode toArray(), on peut l'appeler pour obtenir un tableau simple
-                return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
-            }, $commandesArray);
-        });
-        return $this->json($commandesDTO, 200);
+                $commandes = $this->getCommandesByCollectionUseCase->execute($collection);
+                $commandesArray = $commandes->toArray();
+                return array_map(function ($commande) use ($host) {
+                    $dto = new CommandeOutputDTO($commande, $host);
+                    return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
+                }, $commandesArray);
+            },
+            /* ttl */ 600,
+            /* extraTags */ ['commandes_by_collection']
+        );
+
+        return $this->json($commandesDTO, JsonResponse::HTTP_OK);
     }
 
     #[Route('/api/collections/{id}/commandes', name: 'create_commande', methods: ['POST'])]
