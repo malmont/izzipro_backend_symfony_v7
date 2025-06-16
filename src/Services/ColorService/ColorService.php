@@ -1,20 +1,22 @@
 <?php
+
 namespace App\Services\ColorService;
 
 use App\Entity\Color;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider;
 
 class ColorService
 {
-    private EntityManagerInterface $entityManager;
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
     }
 
     public function getAllColors(): array
     {
-        return $this->entityManager->getRepository(Color::class)->findAll();
+        $em = $this->emProvider->getEntityManager();
+        return $em->getRepository(Color::class)->findAll();
     }
 }
