@@ -8,19 +8,19 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 
 class EntrepriseController extends AbstractController
 {
     private CreateEntrepriseUseCase $createEntrepriseUseCase;
     private GetEntrepriseUseCase $getEntrepriseUseCase;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
     public function __construct(
         CreateEntrepriseUseCase $createEntrepriseUseCase,
         GetEntrepriseUseCase $getEntrepriseUseCase,
-        CacheInterface $cache
+        TenantCacheService $cache
     ) {
         $this->createEntrepriseUseCase = $createEntrepriseUseCase;
         $this->getEntrepriseUseCase = $getEntrepriseUseCase;
@@ -43,14 +43,21 @@ class EntrepriseController extends AbstractController
     public function getEntreprise(int $id, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $entrepriseDto = $this->cache->get("entreprise_$id", function (ItemInterface $item) use ($id, $host) {
-            $item->expiresAfter(3600);
-            error_log("Cache miss for entreprise_$id");
-            return $this->getEntrepriseUseCase->execute($id, $host);
-        });
+        $cacheKey = "entreprise_$id";
+
+        $entrepriseDto = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($id, $host) {
+                $item->expiresAfter(3600);
+                error_log("Cache miss for entreprise_$id");
+                return $this->getEntrepriseUseCase->execute($id, $host);
+            },
+            /* ttl */ 3600,
+            /* extraTags */ ['entreprise']
+        );
 
         if (!$entrepriseDto) {
-            return $this->json(['error' => 'Entreprise not found'], 404);
+            return $this->json(['error' => 'Entreprise not found'], JsonResponse::HTTP_NOT_FOUND);
         }
 
         return $this->json($entrepriseDto);

@@ -1,20 +1,25 @@
 <?php
-
 namespace App\Services\EntrepriseService;
 
 use App\Entity\Entreprise;
 use App\Dto\EntrepriseDto;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider; 
 
 class EntrepriseService
 {
-    private EntityManagerInterface $em;
-    public function __construct( EntityManagerInterface $em) {
-        $this->em = $em;
+    // MODIFICATION 1 : Le service ne dépend plus que du provider
+    private TenantEntityManagerProvider $emProvider;
+
+    public function __construct(TenantEntityManagerProvider $emProvider)
+    {
+        $this->emProvider = $emProvider;
     }
 
     public function createEntreprise(EntrepriseDto $dto): EntrepriseDto
     {
+        // MODIFICATION 2 : On récupère l'EM du tenant ici
+        $em = $this->emProvider->getEntityManager();
+
         $entreprise = new Entreprise();
         $entreprise->setName($dto->name);
         $entreprise->setLogo($dto->logo);
@@ -28,20 +33,26 @@ class EntrepriseService
         $entreprise->setPrivacyPolicy($dto->privacyPolicy);
         $entreprise->setAdress($dto->adress);
 
-        $this->em->persist($entreprise);
-        $this->em->flush();
+        // On utilise l'EM du tenant
+        $em->persist($entreprise);
+        $em->flush();
 
-        // Retourner le DTO enrichi (avec l'ID généré par exemple)
         $dto->id = $entreprise->getId();
         return $dto;
     }
 
-    public function getEntrepriseById(int $id,string $host): ?EntrepriseDto
+    public function getEntrepriseById(int $id, string $host): ?EntrepriseDto
     {
-        $entreprise = $this->em->getRepository(Entreprise::class)->find($id);
+        $em = $this->emProvider->getEntityManager();
+
+        // On utilise l'EM du tenant pour obtenir le repository et les données
+        $entreprise = $em->getRepository(Entreprise::class)->find($id);
+        
         if (!$entreprise) {
             return null;
         }
+
+        // Le reste de la logique de création du DTO est inchangée
         $dto = new EntrepriseDto();
         $dto->id = $entreprise->getId();
         $dto->name = $entreprise->getName();
