@@ -3,41 +3,16 @@
 namespace App\Repository;
 
 use App\Entity\ExploreCard;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 
 /**
- * @extends ServiceEntityRepository<ExploreCard>
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<ExploreCard>
  */
-class ExploreCardRepository extends ServiceEntityRepository
+class ExploreCardRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, ExploreCard::class);
-    }
-
-    //    /**
-    //     * @return ExploreCard[] Returns an array of ExploreCard objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('e')
-    //            ->andWhere('e.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('e.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
-
-    //    public function findOneBySomeField($value): ?ExploreCard
-    //    {
-    //        return $this->createQueryBuilder('e')
-    //            ->andWhere('e.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 }

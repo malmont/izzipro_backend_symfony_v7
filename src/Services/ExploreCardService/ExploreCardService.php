@@ -1,13 +1,14 @@
 <?php
-
 namespace App\Services\ExploreCardService;
 
 use App\Dto\ExploreCardDto;
-use App\Repository\ExploreCardRepository;
+use App\Entity\ExploreCard; // <-- On importe l'entité
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
 
 class ExploreCardService
 {
-    public function __construct(private ExploreCardRepository $repo) {}
+    // MODIFICATION 1 : Le service ne dépend plus que du provider
+    public function __construct(private TenantEntityManagerProvider $emProvider) {}
 
     /**
      * @param string $host  ex. "https://mon-domaine.com"
@@ -15,9 +16,15 @@ class ExploreCardService
      */
     public function getAllCards(string $host): array
     {
-        $cards = $this->repo->findAll();
+        // MODIFICATION 2 : On récupère l'EM et le repository ici
+        $em = $this->emProvider->getEntityManager();
+        $repo = $em->getRepository(ExploreCard::class);
+
+        // On utilise le repository obtenu depuis l'EM du tenant
+        $cards = $repo->findAll();
         $dtos = [];
 
+        // Le reste de votre logique de création de DTO est inchangée et parfaite.
         foreach ($cards as $card) {
             $base = rtrim($host, '/').'/assets/uploads/explore/';
             $imageUrl = $card->getImagePath() ? $base . $card->getImagePath() : null;
