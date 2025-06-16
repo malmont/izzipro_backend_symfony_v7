@@ -45,13 +45,6 @@ class FraisDePortService
         if ($transporteur) {
             $fraisDePort->setTransporteur($transporteur);
         }
-
-        // GARDE-FOU : On s'assure que les entités liées sont bien gérées par l'EM
-        $em->persist($commande);
-        if ($transporteur) {
-            $em->persist($transporteur);
-        }
-
         $em->persist($fraisDePort);
         $em->flush();
     }

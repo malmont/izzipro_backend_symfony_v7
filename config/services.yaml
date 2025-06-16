@@ -48,6 +48,8 @@ services:
             - '../src/Repository/FeatureRepository.php'
             - '../src/Repository/FraisDePortRepository.php'
             - '../src/Repository/TransporteurRepository.php'
+            - '../src/Repository/NoteDeFraisRepository.php'
+            - '../src/Repository/TypeNoteDeFraisRepository.php'
 
             
 

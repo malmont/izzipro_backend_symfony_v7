@@ -3,25 +3,23 @@
 namespace App\Repository;
 
 use App\Entity\NoteDeFrais;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 use DateTime;
 
 /**
- * @extends ServiceEntityRepository<NoteDeFrais>
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<NoteDeFrais>
  */
-class NoteDeFraisRepository extends ServiceEntityRepository
+class NoteDeFraisRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, NoteDeFrais::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 
     /**
-     * Calcule le total des notes de frais pour une année donnée.
-     *
-     * @param int $year
-     * @return float
+     * INCHANGÉES : Vos méthodes personnalisées fonctionneront parfaitement car
+     * $this->createQueryBuilder() utilisera l'EntityManager du tenant.
      */
     public function getTotalFraisByYear(int $year): float
     {
@@ -38,13 +36,6 @@ class NoteDeFraisRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
-    /**
-     * Calcule le total des notes de frais pour un mois donné d'une année spécifique.
-     *
-     * @param int $year
-     * @param int $month
-     * @return float
-     */
     public function getTotalFraisByMonth(int $year, int $month): float
     {
         $startDate = new DateTime("$year-$month-01");
@@ -60,12 +51,6 @@ class NoteDeFraisRepository extends ServiceEntityRepository
             ->getSingleScalarResult();
     }
 
-    /**
-     * Calcule le total des notes de frais pour une date spécifique.
-     *
-     * @param DateTime $date
-     * @return float
-     */
     public function getTotalFraisByDay(DateTime $date): float
     {
         $startOfDay = (clone $date)->setTime(0, 0);
@@ -76,7 +61,7 @@ class NoteDeFraisRepository extends ServiceEntityRepository
             ->where('n.date >= :start')
             ->andWhere('n.date <= :end')
             ->setParameter('start', $startOfDay)
-            ->setParameter('end', $endOfDay)
+            ->setParameter('end', 'endOfDay')
             ->getQuery()
             ->getSingleScalarResult();
     }

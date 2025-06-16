@@ -5,17 +5,21 @@ use App\Entity\Collections;
 use App\Entity\NoteDeFrais;
 use App\Entity\TypeNoteDeFrais;
 use App\Dto\NoteDeFraisInputDTO;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
 
 class NoteDeFraisService
 {
-    private EntityManagerInterface $entityManager;
+    // MODIFICATION 1 : Le service ne dépend plus que du provider
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
     }
 
+    /**
+     * INCHANGÉ : Cette méthode ne touche pas à la base de données.
+     */
     public function getNotesByCollection(Collections $collection): array
     {
         return $collection->getNoteDeFrais()->toArray();
@@ -23,31 +27,40 @@ class NoteDeFraisService
 
     public function createNoteDeFrais(Collections $collection, NoteDeFraisInputDTO $inputDTO): void
     {
+        // MODIFICATION 2 : On récupère l'EM et les dépendances ici
+        $em = $this->emProvider->getEntityManager();
+        $typeNoteDeFraisRepository = $em->getRepository(TypeNoteDeFrais::class);
+
         $note = new NoteDeFrais();
         $note->setDescription($inputDTO->description);
         $note->setMontant($inputDTO->montant);
         $note->setDate(new \DateTime($inputDTO->date));
-        $typeNoteDeFrais = $this->entityManager->getRepository(TypeNoteDeFrais::class)->find($inputDTO->typeNoteDeFraisId);
+        
+        $typeNoteDeFrais = $typeNoteDeFraisRepository->find($inputDTO->typeNoteDeFraisId);
         $note->setTypeNoteDeFrais($typeNoteDeFrais);
         $note->setCollection($collection);
-
-        $this->entityManager->persist($note);
-        $this->entityManager->flush();
+        $em->persist($note);
+        $em->flush();
     }
 
     public function updateNoteDeFrais(NoteDeFrais $note, NoteDeFraisInputDTO $inputDTO): void
     {
+        $em = $this->emProvider->getEntityManager();
+        $typeNoteDeFraisRepository = $em->getRepository(TypeNoteDeFrais::class);
         $note->setDescription($inputDTO->description);
         $note->setMontant($inputDTO->montant);
         $note->setDate(new \DateTime($inputDTO->date));
-        $typeNoteDeFrais = $this->entityManager->getRepository(TypeNoteDeFrais::class)->find($inputDTO->typeNoteDeFraisId);
+        $typeNoteDeFrais = $typeNoteDeFraisRepository->find($inputDTO->typeNoteDeFraisId);
         $note->setTypeNoteDeFrais($typeNoteDeFrais);
-        $this->entityManager->flush();
+
+ 
+        $em->flush();
     }
 
     public function deleteNoteDeFrais(NoteDeFrais $note): void
     {
-        $this->entityManager->remove($note);
-        $this->entityManager->flush();
+        $em = $this->emProvider->getEntityManager();
+        $em->remove($note);
+        $em->flush();
     }
 }
