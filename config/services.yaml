@@ -45,6 +45,7 @@ services:
             - '../src/Repository/CommandeStatistiquesRepository.php'
             - '../src/Repository/CollectionStatistiquesRepository.php'
             - '../src/Repository/ExploreCardRepository.php'
+            - '../src/Repository/FeatureRepository.php'
 
             
 
