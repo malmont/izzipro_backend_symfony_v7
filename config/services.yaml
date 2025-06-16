@@ -46,6 +46,8 @@ services:
             - '../src/Repository/CollectionStatistiquesRepository.php'
             - '../src/Repository/ExploreCardRepository.php'
             - '../src/Repository/FeatureRepository.php'
+            - '../src/Repository/FraisDePortRepository.php'
+            - '../src/Repository/TransporteurRepository.php'
 
             
 

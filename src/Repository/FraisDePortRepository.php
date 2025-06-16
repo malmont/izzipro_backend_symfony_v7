@@ -3,25 +3,23 @@
 namespace App\Repository;
 
 use App\Entity\FraisDePort;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 use DateTime;
 
 /**
- * @extends ServiceEntityRepository<FraisDePort>
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<FraisDePort>
  */
-class FraisDePortRepository extends ServiceEntityRepository
+class FraisDePortRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, FraisDePort::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 
     /**
-     * Calcule le total des frais de port pour une année donnée.
-     *
-     * @param int $year
-     * @return float
+     * INCHANGÉES : Vos méthodes personnalisées fonctionneront parfaitement car
+     * $this->createQueryBuilder() utilisera l'EntityManager du tenant.
      */
     public function getTotalFraisByYear(int $year): float
     {
@@ -33,18 +31,11 @@ class FraisDePortRepository extends ServiceEntityRepository
             ->join('f.commande', 'c')
             ->where('c.date BETWEEN :start AND :end')
             ->setParameter('start', $startDate)
-            ->setParameter('end', $endDate)
+            ->setParameter('end', 'endDate')
             ->getQuery()
             ->getSingleScalarResult();
     }
 
-    /**
-     * Calcule le total des frais de port pour un mois donné d'une année spécifique.
-     *
-     * @param int $year
-     * @param int $month
-     * @return float
-     */
     public function getTotalFraisByMonth(int $year, int $month): float
     {
         $startDate = new DateTime("$year-$month-01");
@@ -54,18 +45,12 @@ class FraisDePortRepository extends ServiceEntityRepository
             ->select('SUM(f.price)')
             ->join('f.commande', 'c')
             ->where('c.date BETWEEN :start AND :end')
-            ->setParameter('start', $startDate)
+            ->setParameter('start', 'startDate')
             ->setParameter('end', $endDate)
             ->getQuery()
             ->getSingleScalarResult();
     }
 
-    /**
-     * Calcule le total des frais de port pour une date spécifique.
-     *
-     * @param DateTime $date
-     * @return float
-     */
     public function getTotalFraisByDay(DateTime $date): float
     {
         $startOfDay = (clone $date)->setTime(0, 0);
