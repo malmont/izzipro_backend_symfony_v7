@@ -1,16 +1,26 @@
 <?php
-
 namespace App\Services\StatistiqueService;
 
-use App\Repository\OrderTaxRepository;
+use App\Entity\OrderTax; // <-- On importe l'entité
+use App\Repository\OrderTaxRepository; // <-- On importe le repository pour le type-hint
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
 
 class TaxService
 {
-    private $orderTaxRepository;
+    // MODIFICATION 1 : Le service ne dépend plus que du provider
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(OrderTaxRepository $orderTaxRepository)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->orderTaxRepository = $orderTaxRepository;
+        $this->emProvider = $emProvider;
+    }
+
+    /**
+     * MODIFICATION 2 : On crée une méthode privée pour récupérer le repository du tenant.
+     */
+    private function getOrderTaxRepository(): OrderTaxRepository
+    {
+        return $this->emProvider->getEntityManager()->getRepository(OrderTax::class);
     }
 
     /**
@@ -21,6 +31,9 @@ class TaxService
      */
     public function getMonthlyTaxesForYear(int $year): array
     {
+        // MODIFICATION 3 : On utilise notre nouvelle méthode privée
+        $orderTaxRepository = $this->getOrderTaxRepository();
+        
         $taxesParMois = [];
         $moisNoms = [
             1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
@@ -29,7 +42,8 @@ class TaxService
         ];
 
         foreach ($moisNoms as $month => $nom) {
-            $totalTax = $this->orderTaxRepository->getTotalTaxByMonth($year, $month);
+            // On utilise la variable locale $orderTaxRepository
+            $totalTax = $orderTaxRepository->getTotalTaxByMonth($year, $month);
             $taxesParMois[] = $this->transformToMonthlyTaxObject($nom, $totalTax);
         }
 
@@ -37,11 +51,7 @@ class TaxService
     }
 
     /**
-     * Transforme les données de taxe mensuelle en un objet structuré.
-     *
-     * @param string $month Nom du mois
-     * @param float $totalTax Total des taxes pour le mois
-     * @return array
+     * INCHANGÉ : Cette méthode privée est une logique pure, pas de modification nécessaire.
      */
     private function transformToMonthlyTaxObject(string $month, float $totalTax): array
     {

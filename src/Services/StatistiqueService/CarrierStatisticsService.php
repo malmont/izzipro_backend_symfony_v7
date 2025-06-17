@@ -1,22 +1,27 @@
 <?php
-
 namespace App\Services\StatistiqueService;
 
-use App\Repository\OrderRepository;
+use App\Entity\Order; 
+use App\Services\TenantEntityManagerProvider; 
 
 class CarrierStatisticsService
 {
-    private $orderRepository;
 
-    public function __construct(OrderRepository $orderRepository)
+    private TenantEntityManagerProvider $emProvider;
+
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->orderRepository = $orderRepository;
+        $this->emProvider = $emProvider;
     }
 
     public function getMonthlyCarrierStatisticsForCurrentYear(): array
     {
+
+        $em = $this->emProvider->getEntityManager();
+        $orderRepository = $em->getRepository(Order::class);
+
         $currentYear = (int)date('Y');
-        $carrierData = $this->orderRepository->getTotalCarrierByMonth($currentYear);
+        $carrierData = $orderRepository->getTotalCarrierByMonth($currentYear);
 
         $monthlyCarrierData = [];
         $moisNoms = [
@@ -33,11 +38,7 @@ class CarrierStatisticsService
     }
 
     /**
-     * Transforme les données de transport mensuelles en un objet structuré.
-     *
-     * @param string $month Nom du mois
-     * @param int $carrierCount Nombre de transporteurs pour le mois
-     * @return array
+     * INCHANGÉ : Cette méthode privée est une logique pure, pas de modification nécessaire.
      */
     private function transformToMonthlyCarrierObject(string $month, int $carrierCount): array
     {

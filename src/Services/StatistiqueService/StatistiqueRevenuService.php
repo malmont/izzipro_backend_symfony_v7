@@ -2,21 +2,29 @@
 
 namespace App\Services\StatistiqueService;
 
+use App\Entity\Order;
 use App\Repository\OrderRepository;
+use App\Services\TenantEntityManagerProvider;
 use DateTime;
 
 class StatistiqueRevenuService
 {
-    private $orderRepository;
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(OrderRepository $orderRepository)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->orderRepository = $orderRepository;
+        $this->emProvider = $emProvider;
+    }
+
+    private function getOrderRepository(): OrderRepository
+    {
+        return $this->emProvider->getEntityManager()->getRepository(Order::class);
     }
 
     // Méthode de calcul pour les revenus journaliers de la semaine en cours
     public function getDailyRevenueForCurrentWeek(?int $orderSource = null): array
     {
+        $orderRepository = $this->getOrderRepository();
         $now = new DateTime();
         $startOfWeek = (clone $now)->modify('monday this week');
         $dailyRevenues = [];
@@ -26,7 +34,7 @@ class StatistiqueRevenuService
             $startDate = (clone $currentDay)->setTime(0, 0, 0);
             $endDate = (clone $currentDay)->setTime(23, 59, 59);
             
-            $revenue = $this->orderRepository->getTotalRevenueBetweenDates($startDate, $endDate, $orderSource);
+            $revenue = $orderRepository->getTotalRevenueBetweenDates($startDate, $endDate, $orderSource);
             $dailyRevenues[$currentDay->format('Y-m-d')] = $revenue;
         }
 
@@ -36,6 +44,7 @@ class StatistiqueRevenuService
     // Méthode de calcul pour les revenus hebdomadaires du mois en cours
     public function getWeeklyRevenueForCurrentMonth(?int $orderSource = null): array
     {
+        $orderRepository = $this->getOrderRepository();
         $now = new DateTime();
         $startOfMonth = (clone $now)->modify('first day of this month');
         $weeklyRevenues = [];
@@ -47,7 +56,7 @@ class StatistiqueRevenuService
                 $currentWeekEnd = (clone $now)->modify('last day of this month');
             }
 
-            $revenue = $this->orderRepository->getTotalRevenueBetweenDates($currentWeekStart, $currentWeekEnd, $orderSource);
+            $revenue = $orderRepository->getTotalRevenueBetweenDates($currentWeekStart, $currentWeekEnd, $orderSource);
             $weekNumber = (int) $currentWeekStart->format('W');
             $weeklyRevenues[$weekNumber] = $revenue;
 
@@ -60,6 +69,7 @@ class StatistiqueRevenuService
     // Méthode de calcul pour les revenus mensuels de l'année en cours
     public function getMonthlyRevenueForCurrentYear(?int $orderSource = null): array
     {
+        $orderRepository = $this->getOrderRepository();
         $now = new DateTime();
         $startOfYear = (clone $now)->modify('first day of January');
         $monthlyRevenues = [];
@@ -72,7 +82,7 @@ class StatistiqueRevenuService
                 break; 
             }
 
-            $revenue = $this->orderRepository->getTotalRevenueBetweenDates($currentMonthStart, $currentMonthEnd, $orderSource);
+            $revenue = $orderRepository->getTotalRevenueBetweenDates($currentMonthStart, $currentMonthEnd, $orderSource);
             $monthlyRevenues[$currentMonthStart->format('F')] = $revenue;
         }
 
@@ -82,37 +92,41 @@ class StatistiqueRevenuService
     // Méthode de calcul pour le revenu de la semaine donnée
     public function getRevenueForWeek(int $weeksAgo, ?int $orderSource = null): float
     {
+        $orderRepository = $this->getOrderRepository();
         $now = new DateTime();
         $startOfWeek = (clone $now)->modify('monday this week')->modify("-$weeksAgo week");
         $endOfWeek = (clone $startOfWeek)->modify('sunday this week');
 
-        return $this->orderRepository->getTotalRevenueBetweenDates($startOfWeek, $endOfWeek, $orderSource);
+        return $orderRepository->getTotalRevenueBetweenDates($startOfWeek, $endOfWeek, $orderSource);
     }
 
     // Méthode de calcul pour le revenu du mois donné
     public function getRevenueForMonth(int $monthsAgo, ?int $orderSource = null): float
     {
+        $orderRepository = $this->getOrderRepository();
         $now = new DateTime();
         $startOfMonth = (clone $now)->modify('first day of this month')->modify("-$monthsAgo month");
         $endOfMonth = (clone $startOfMonth)->modify('last day of this month');
 
-        return $this->orderRepository->getTotalRevenueBetweenDates($startOfMonth, $endOfMonth, $orderSource);
+        return $orderRepository->getTotalRevenueBetweenDates($startOfMonth, $endOfMonth, $orderSource);
     }
 
     // Méthode de calcul pour le revenu de l'année donnée
     public function getRevenueForYear(int $yearsAgo, ?int $orderSource = null): float
     {
+        $orderRepository = $this->getOrderRepository();
         $now = new DateTime();
         $startOfYear = (clone $now)->modify('first day of January')->modify("-$yearsAgo year");
         $endOfYear = (clone $startOfYear)->modify('last day of December');
 
-        return $this->orderRepository->getTotalRevenueBetweenDates($startOfYear, $endOfYear);
+        return $orderRepository->getTotalRevenueBetweenDates($startOfYear, $endOfYear, $orderSource);
     }
 
     // Méthode de calcul pour un intervalle personnalisé
     public function getRevenueForCustomInterval(DateTime $startDate, DateTime $endDate, ?int $orderSource = null): float
     {
-        return $this->orderRepository->getTotalRevenueBetweenDates($startDate, $endDate, $orderSource);
+        $orderRepository = $this->getOrderRepository();
+        return $orderRepository->getTotalRevenueBetweenDates($startDate, $endDate, $orderSource);
     }
 
     // Méthodes de transformation en listes typées

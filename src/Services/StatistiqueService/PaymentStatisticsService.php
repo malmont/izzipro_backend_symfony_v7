@@ -1,39 +1,43 @@
 <?php
 namespace App\Services\StatistiqueService;
 
-use App\Repository\PaymentsRepository;
+use App\Entity\Payments; // <-- On importe l'entité
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
 
 class PaymentStatisticsService
 {
-    private $paymentsRepository;
+    // MODIFICATION 1 : Le service ne dépend plus que du provider
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(PaymentsRepository $paymentsRepository)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->paymentsRepository = $paymentsRepository;
+        $this->emProvider = $emProvider;
     }
 
     public function getPaymentStatistics(?int $orderSource = null): array
     {
-        // Paiements pour la semaine en cours
-        $currentWeekPayment = $this->paymentsRepository->getTotalPaymentsForCurrentWeek('PaiementClient',$orderSource);
+        // MODIFICATION 2 : On récupère l'EM et le repository ici
+        $em = $this->emProvider->getEntityManager();
+        $paymentsRepository = $em->getRepository(Payments::class);
+
+        // On utilise le repository obtenu depuis l'EM du tenant
+        $currentWeekPayment = $paymentsRepository->getTotalPaymentsForCurrentWeek('PaiementClient', $orderSource);
         $dailyPaymentsForCurrentWeek = $this->transformToDailyPaymentList(
-            $this->paymentsRepository->getDailyPaymentsForCurrentWeek('PaiementClient',$orderSource)
+            $paymentsRepository->getDailyPaymentsForCurrentWeek('PaiementClient', $orderSource)
         );
 
-        // Remboursements pour la semaine en cours
-        $currentWeekRefund = $this->paymentsRepository->getTotalPaymentsForCurrentWeek('RemboursementClient',$orderSource);
+        $currentWeekRefund = $paymentsRepository->getTotalPaymentsForCurrentWeek('RemboursementClient', $orderSource);
         $dailyRefundsForCurrentWeek = $this->transformToDailyPaymentList(
-            $this->paymentsRepository->getDailyPaymentsForCurrentWeek('RemboursementClient',$orderSource)
+            $paymentsRepository->getDailyPaymentsForCurrentWeek('RemboursementClient', $orderSource)
         );
 
-        // Paiements pour le mois en cours
-        $currentMonthPayment = $this->paymentsRepository->getTotalPaymentsForCurrentMonth('PaiementClient',$orderSource);
-        $currentMonthRefund = $this->paymentsRepository->getTotalPaymentsForCurrentMonth('RemboursementClient',$orderSource);
+        $currentMonthPayment = $paymentsRepository->getTotalPaymentsForCurrentMonth('PaiementClient', $orderSource);
+        $currentMonthRefund = $paymentsRepository->getTotalPaymentsForCurrentMonth('RemboursementClient', $orderSource);
 
-        // Paiements pour l'année en cours
-        $currentYearPayment = $this->paymentsRepository->getTotalPaymentsForCurrentYear('PaiementClient',$orderSource);
-        $currentYearRefund = $this->paymentsRepository->getTotalPaymentsForCurrentYear('RemboursementClient',$orderSource);
+        $currentYearPayment = $paymentsRepository->getTotalPaymentsForCurrentYear('PaiementClient', $orderSource);
+        $currentYearRefund = $paymentsRepository->getTotalPaymentsForCurrentYear('RemboursementClient', $orderSource);
 
+        // Le reste de votre logique de construction de tableau est inchangée
         return [
             'current_week' => [
                 'PaiementClient' => [
@@ -56,7 +60,9 @@ class PaymentStatisticsService
         ];
     }
 
-    // Transforme les données de paiements journaliers en une liste structurée
+    /**
+     * INCHANGÉ : Cette méthode privée est une logique pure, pas de modification nécessaire.
+     */
     private function transformToDailyPaymentList(array $dailyData): array
     {
         $dailyPaymentList = [];
