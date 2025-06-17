@@ -2,28 +2,30 @@
 
 namespace App\Services\CollectionDashboardService;
 
-use App\Repository\CollectionsRepository;
+use App\Entity\Collections;
 use App\Services\CollectionDashboardService\CollectionDashboardService;
+use App\Services\TenantEntityManagerProvider;
 
 class CombinedCollectionDashboardService
 {
-    private CollectionsRepository $collectionRepository;
+    private TenantEntityManagerProvider $emProvider;
     private CollectionDashboardService $collectionDashboardService;
 
     public function __construct(
-        CollectionsRepository $collectionRepository,
+        TenantEntityManagerProvider $emProvider,
         CollectionDashboardService $collectionDashboardService
     ) {
-        $this->collectionRepository = $collectionRepository;
+        $this->emProvider = $emProvider;
         $this->collectionDashboardService = $collectionDashboardService;
     }
 
     public function getCombinedCollectionsData(): array
     {
-        // Récupérer toutes les collections
-        $collections = $this->collectionRepository->findAll();
+        $em = $this->emProvider->getEntityManager();
+        $collectionRepository = $em->getRepository(Collections::class);
 
-        // Initialiser les variables pour accumuler les données combinées
+        $collections = $collectionRepository->findAll();
+
         $combinedData = [
             'averageMultiplier' => 0,
             'BudgetGeneral' => [
@@ -60,12 +62,10 @@ class CombinedCollectionDashboardService
         $totalCollections = count($collections);
         $totalDurationDays = 0;
 
-        // Accumuler les données de chaque collection
         foreach ($collections as $collection) {
             $dashboardMetrics = $this->collectionDashboardService->calculateDashboardMetrics($collection);
             $data = $dashboardMetrics->toArray();
 
-            // Accumuler les valeurs
             $combinedData['averageMultiplier'] += $data['averageMultiplier'];
             $combinedData['BudgetGeneral']['generalBudget'] += $data['BudgetGeneral']['generalBudget'];
             $combinedData['BudgetGeneral']['usedBudget'] += $data['BudgetGeneral']['usedBudget'];
@@ -85,6 +85,7 @@ class CombinedCollectionDashboardService
 
             $collectionStartDate = new \DateTime($data['CollectionDuration']['startDate']);
             $collectionEndDate = new \DateTime($data['CollectionDuration']['endDate']);
+            
             if (!$combinedData['CollectionDuration']['startDate'] || $collectionStartDate < new \DateTime($combinedData['CollectionDuration']['startDate'])) {
                 $combinedData['CollectionDuration']['startDate'] = $collectionStartDate->format('Y-m-d');
             }
@@ -93,10 +94,15 @@ class CombinedCollectionDashboardService
             }
         }
 
-        // Calculer les moyennes
-        $combinedData['averageMultiplier'] = $totalCollections > 0 ? $combinedData['averageMultiplier'] / $totalCollections : 0;
-        $combinedData['TauxMarge']['tauxMarge'] = $combinedData['ValeurStock']['stockValue'] > 0 ? ($combinedData['ValeurStock']['marge'] / $combinedData['ValeurStock']['stockValue']) * 100 : 0;
-        $combinedData['TauxMarge']['tauxMarque'] = $combinedData['BudgetGeneral']['usedBudget'] > 0 ? ($combinedData['ValeurStock']['marge'] / $combinedData['BudgetGeneral']['usedBudget']) * 100 : 0;
+        if ($totalCollections > 0) {
+            $combinedData['averageMultiplier'] = $combinedData['averageMultiplier'] / $totalCollections;
+        }
+        if ($combinedData['ValeurStock']['stockValue'] > 0) {
+            $combinedData['TauxMarge']['tauxMarge'] = ($combinedData['ValeurStock']['marge'] / $combinedData['ValeurStock']['stockValue']) * 100;
+        }
+        if ($combinedData['BudgetGeneral']['usedBudget'] > 0) {
+            $combinedData['TauxMarge']['tauxMarque'] = ($combinedData['ValeurStock']['marge'] / $combinedData['BudgetGeneral']['usedBudget']) * 100;
+        }
         $combinedData['CollectionDuration']['days'] = $totalDurationDays;
 
         return $combinedData;

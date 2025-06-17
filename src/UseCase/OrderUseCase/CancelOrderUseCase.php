@@ -11,8 +11,8 @@ use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
 use Exception;
 
 // Assurez-vous d'importer les autres UseCases si ce n'est pas déjà fait
-use App\UseCase\PaymentUseCase\PaymentHandlerUseCase;
-use App\UseCase\StockUseCase\UpdateStockAndInventoryUseCase;
+use App\UseCase\OrderUseCase\PaymentHandlerUseCase;
+use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
 
 class CancelOrderUseCase
 {

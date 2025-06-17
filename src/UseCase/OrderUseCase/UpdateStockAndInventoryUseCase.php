@@ -3,7 +3,7 @@ namespace App\UseCase\OrderUseCase;
 
 use App\Entity\ProductVariant;
 use App\Entity\MovementType;
-use App\Services\InventoryMovementService;
+use App\Services\OrderService\InventoryMovementService;
 use App\Services\TenantEntityManagerProvider; 
 
 class UpdateStockAndInventoryUseCase

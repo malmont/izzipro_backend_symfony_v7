@@ -2,20 +2,21 @@
 
 namespace App\Services;
 
-use App\Repository\ProductRepository;
+use App\Entity\Product;
+use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpFoundation\RequestStack;
-
-
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
 
 class CartServices
 {
-    private $session;
-    private $repoProduct;
-    private $tva = 0.2;
-    public function __construct(RequestStack $requestStack,ProductRepository $repoProduct)
+    private SessionInterface $session;
+    private TenantEntityManagerProvider $emProvider;
+    private float $tva = 0.2;
+
+    public function __construct(RequestStack $requestStack, TenantEntityManagerProvider $emProvider)
     {
         $this->session = $requestStack->getSession();
-        $this->repoProduct=$repoProduct;
+        $this->emProvider = $emProvider;
     }
 
     public function addToCart($id)
@@ -28,7 +29,6 @@ class CartServices
         }
         $this->updateCart($cart);
     }
-
 
     public function deleteFromCart($id)
     {
@@ -44,25 +44,20 @@ class CartServices
         }
     }
 
-
     public function deleteCart()
     {
         $this->updateCart([]);
     }
-
 
     public function deleteAllToCart($id)
     {
         $cart = $this->getCart();
 
         if (isset($cart[$id])) {
-         
             unset($cart[$id]);
-            
             $this->updateCart($cart);
         }
     }
-
 
     public function updateCart($cart)
     {
@@ -75,30 +70,38 @@ class CartServices
         return $this->session->get('cart', []);
     }
 
-    public function getFullCart(){
+    public function getFullCart()
+    {
+        $em = $this->emProvider->getEntityManager();
+        $repoProduct = $em->getRepository(Product::class);
+
         $cart = $this->getCart();
         $fullCart = [];
         $quantity_cart = 0;
         $subTotal = 0;
-        foreach($cart as $id => $quantity){
-            $product = $this->repoProduct->find($id);
-            if($product){
-                $fullCart["products"][]=[
-                    "quantity"=>$quantity,
-                    "product"=>$product
+        
+        foreach ($cart as $id => $quantity) {
+            $product = $repoProduct->find($id);
+            if ($product) {
+                $fullCart["products"][] = [
+                    "quantity" => $quantity,
+                    "product" => $product
                 ];
                 $quantity_cart += $quantity;
-                $subTotal +=  $quantity * $product->getPrice()/100;
-            }else{
+                $subTotal += $quantity * $product->getPrice() / 100;
+            } else {
+                // Si le produit n'existe plus en base, on le retire du panier
                 $this->deleteFromCart($id);
             }
         }
+
         $fullCart['data'] = [
             "quantity_cart" => $quantity_cart,
-            "subTotalHT" =>  $subTotal ,
-            "Taxe" => round( $subTotal * $this->tva,2),
-            "subTotalTTC" =>round( $subTotal + ($subTotal * $this->tva),2) 
+            "subTotalHT" =>  $subTotal,
+            "Taxe" => round($subTotal * $this->tva, 2),
+            "subTotalTTC" => round($subTotal + ($subTotal * $this->tva), 2)
         ];
+
         return $fullCart;
     }
 }

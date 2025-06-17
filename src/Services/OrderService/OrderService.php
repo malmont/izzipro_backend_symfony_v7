@@ -1,26 +1,39 @@
 <?php
-
 namespace App\Services\OrderService;
 
-use App\Repository\OrderRepository;
+use App\Entity\Order; // <-- On importe l'entité
+use App\Repository\OrderRepository; // <-- On importe le repository pour le type-hint
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
 use DateTime;
 
 class OrderService
 {
-    private $orderRepository;
+    // MODIFICATION 1 : Le service ne dépend plus que du provider
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(OrderRepository $orderRepository)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->orderRepository = $orderRepository;
+        $this->emProvider = $emProvider;
+    }
+
+    /**
+     * MODIFICATION 2 : On crée une méthode privée pour récupérer le repository du tenant.
+     */
+    private function getOrderRepository(): OrderRepository
+    {
+        return $this->emProvider->getEntityManager()->getRepository(Order::class);
     }
 
     public function getOrdersByOrderSource(int $orderSourceId, ?int $days = null)
     {
+        // MODIFICATION 3 : On utilise notre nouvelle méthode privée
+        $orderRepository = $this->getOrderRepository();
+
         if ($days) {
             $date = new DateTime();
             $date->modify("-$days days");
 
-            return $this->orderRepository->createQueryBuilder('o')
+            return $orderRepository->createQueryBuilder('o')
                 ->where('o.orderSource = :orderSourceId')
                 ->andWhere('o.orderDate >= :date')
                 ->setParameter('orderSourceId', $orderSourceId)
@@ -28,11 +41,12 @@ class OrderService
                 ->getQuery()
                 ->getResult();
         }
-        return $this->orderRepository->findBy(['orderSource' => $orderSourceId]);
+        return $orderRepository->findBy(['orderSource' => $orderSourceId]);
     }
 
     public function getOrdersByUser(int $userId)
     {
-        return $this->orderRepository->findBy(['userId' => $userId]);
+        $orderRepository = $this->getOrderRepository();
+        return $orderRepository->findBy(['userId' => $userId]);
     }
 }

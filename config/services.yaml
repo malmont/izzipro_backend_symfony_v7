@@ -23,7 +23,6 @@ services:
             - '../src/Entity/'
             - '../src/Kernel.php'
             - '../src/Repository/UserRepository.php'
-            - '../src/Repository/GooglePlacesConfigRepository.php'
             - '../src/Repository/AdressRepository.php'
             - '../src/Repository/AdminSettingsRepository.php'
             - '../src/Repository/EasyPostConfigurationRepository.php'
@@ -133,5 +132,4 @@ services:
         tags: ['doctrine.repository_service']  
 
 
-    App\Repository\GooglePlacesConfigRepository:
-        tags: ['doctrine.repository_service']
+    
