@@ -6,16 +6,15 @@ use App\UseCase\TypeFournisseurUseCase\GetListTypeFournisseurUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
-
 
 class TypeFournisseurController extends AbstractController
 {
     private GetListTypeFournisseurUseCase $useCase;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
-    public function __construct(GetListTypeFournisseurUseCase $useCase, CacheInterface $cache)
+    public function __construct(GetListTypeFournisseurUseCase $useCase, TenantCacheService $cache)
     {
         $this->useCase = $useCase;
         $this->cache = $cache;
@@ -26,17 +25,22 @@ class TypeFournisseurController extends AbstractController
     {
         $cacheKey = 'api_type_fournisseurs_all';
 
-        $data = $this->cache->get($cacheKey, function (ItemInterface $item) {
-            $item->expiresAfter(3600); // 1 heure
-            $dtoList = $this->useCase->execute();
-            return array_map(function ($dto) {
-                return [
-                    'id'    => $dto->id,
-                    'name'  => $dto->name,
-                    'photo' => $dto->photo,
-                ];
-            }, $dtoList);
-        });
+        $data = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) {
+                $item->expiresAfter(3600); // 1 heure
+                $dtoList = $this->useCase->execute();
+                return array_map(function ($dto) {
+                    return [
+                        'id'    => $dto->id,
+                        'name'  => $dto->name,
+                        'photo' => $dto->photo,
+                    ];
+                }, $dtoList);
+            },
+            /* ttl */ 3600,
+            /* extraTags */ ['type_fournisseurs_all']
+        );
 
         return $this->json($data, JsonResponse::HTTP_OK);
     }

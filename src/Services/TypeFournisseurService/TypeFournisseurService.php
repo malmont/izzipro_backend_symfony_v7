@@ -1,16 +1,18 @@
 <?php
 
 namespace App\Services\TypeFournisseurService;
-use App\Repository\TypeFournisseurRepository;
+
 use App\Dto\TypeFournisseurDTO;
+use App\Entity\TypeFournisseur;
+use App\Services\TenantEntityManagerProvider;
 
 class TypeFournisseurService
 {
-    private TypeFournisseurRepository $repository;
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TypeFournisseurRepository $repository)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->repository = $repository;
+        $this->emProvider = $emProvider;
     }
 
     /**
@@ -18,7 +20,8 @@ class TypeFournisseurService
      */
     public function getAllDTOs(): array
     {
-        $entities = $this->repository->findAll();
+        $em = $this->emProvider->getEntityManager();
+        $entities = $em->getRepository(TypeFournisseur::class)->findAll();
 
         return array_map(function ($entity) {
             return TypeFournisseurDTO::fromEntity($entity);
