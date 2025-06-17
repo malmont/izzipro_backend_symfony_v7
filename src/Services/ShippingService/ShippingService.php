@@ -5,14 +5,21 @@ namespace App\Services\ShippingService;
 
 use App\Dto\ParcelDto;
 use App\Dto\RateOptionDto;
-use App\Repository\PackagingTypeRepository;
+use App\Entity\PackagingType;
+use App\Services\TenantEntityManagerProvider;
+
+// Assurez-vous d'importer les DTO et Services nécessaires
+use App\Dto\CartItemDto;
+use App\Services\ShippingService\EasyPostService;
+use App\Services\ShippingService\PackagingService;
+
 
 class ShippingService
 {
     public function __construct(
+        private TenantEntityManagerProvider $emProvider,
         private EasyPostService           $easyPostService,
-        private PackagingService          $packager,
-        private PackagingTypeRepository   $templateRepo
+        private PackagingService          $packager
     ) {}
 
     /**
@@ -73,7 +80,7 @@ class ShippingService
                             $r->service,
                             (float)$r->rate,
                             $r->currency,
-                            (int)$r->delivery_days
+                            (int)($r->delivery_days ?? $r->est_delivery_days ?? 0)
                         );
                     }
                 }
@@ -87,17 +94,13 @@ class ShippingService
                     $r->service,
                     (float)$r->rate,
                     $r->currency,
-                    (int)$r->delivery_days
+                    (int)($r->delivery_days ?? $r->est_delivery_days ?? 0)
                 );
             }
         }
 
         return $all;
     }
-
-    // ——————————————————————————————————————————
-    // Nouvelle fonctionnalité : agrégation des prix
-    // ——————————————————————————————————————————
 
     /**
      * Agrège un tableau de RateOptionDto pour obtenir
@@ -132,26 +135,19 @@ class ShippingService
                 $v['currency'],
                 $v['estimatedDays']
             ),
-            $agg
+            array_values($agg)
         );
     }
 
-    // ——————————————————————————————————————————
-    // Nouvelle fonctionnalité : résumé des colis
-    // ——————————————————————————————————————————
-
     /**
      * Renvoie les dimensions & poids de chaque colis à créer.
-     *
-     * @param array $items            // tableau de CartItemDto
-     * @param array $to
-     * @param array $from
-     * @param string[] $carrierAccountIds
-     * @return array<int,array{index:int,weight:float,length:float,width:float,height:float}>
      */
     public function getParcelSummaries(array $items, array $to, array $from, array $carrierAccountIds): array
     {
-        $templates = $this->templateRepo->findAll();
+        $em = $this->emProvider->getEntityManager();
+        $templateRepo = $em->getRepository(PackagingType::class);
+        $templates = $templateRepo->findAll();
+        
         $parcels   = $this->getParcelsFromItems($items, $templates);
 
         return array_map(
@@ -167,19 +163,8 @@ class ShippingService
         );
     }
 
-    // ——————————————————————————————————————————
-    // Nouvelle fonctionnalité : achat d’étiquettes
-    // ——————————————————————————————————————————
-
     /**
      * Achète les étiquettes pour chaque colis selon le carrierAccount & le service choisis.
-     *
-     * @param array  $items             // tableau de CartItemDto
-     * @param array  $to
-     * @param array  $from
-     * @param string $carrierAccountId
-     * @param string $service
-     * @return array<int,array{label_url:string,tracking_code:string}>
      */
     public function purchase(
         array  $items,
@@ -188,27 +173,30 @@ class ShippingService
         string $carrierAccountId,
         string $service
     ): array {
-        $templates = $this->templateRepo->findAll();
+        $em = $this->emProvider->getEntityManager();
+        $templateRepo = $em->getRepository(PackagingType::class);
+        $templates = $templateRepo->findAll();
+
         $parcels   = $this->getParcelsFromItems($items, $templates);
         $labels    = [];
 
         foreach ($parcels as $p) {
-        $payload = [
-            'to_address'       => $to,
-            'from_address'     => $from,
-            'parcel'           => [
-                'weight' => $p->weight * 35.274,
-                'length' => $p->length,
-                'width'  => $p->width,
-                'height' => $p->height,
-            ],
-            'carrier_accounts' => [$carrierAccountId],
-        ];
+            $payload = [
+                'to_address'       => $to,
+                'from_address'     => $from,
+                'parcel'           => [
+                    'weight' => $p->weight * 35.274,
+                    'length' => $p->length,
+                    'width'  => $p->width,
+                    'height' => $p->height,
+                ],
+                'carrier_accounts' => [$carrierAccountId],
+            ];
 
-        $labels[] = $this->easyPostService
-                         ->createShipmentAndBuy($payload, $carrierAccountId, $service);
+            $labels[] = $this->easyPostService
+                             ->createShipmentAndBuy($payload, $carrierAccountId, $service);
+        }
+
+        return $labels;
     }
-
-    return $labels;
-}
 }

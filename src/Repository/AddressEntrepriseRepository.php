@@ -3,41 +3,16 @@
 namespace App\Repository;
 
 use App\Entity\AddressEntreprise;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 
 /**
- * @extends ServiceEntityRepository<AddressEntreprise>
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<AddressEntreprise>
  */
-class AddressEntrepriseRepository extends ServiceEntityRepository
+class AddressEntrepriseRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, AddressEntreprise::class);
-    }
-
-    //    /**
-    //     * @return AddressEntreprise[] Returns an array of AddressEntreprise objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('a')
-    //            ->andWhere('a.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('a.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
-
-    //    public function findOneBySomeField($value): ?AddressEntreprise
-    //    {
-    //        return $this->createQueryBuilder('a')
-    //            ->andWhere('a.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 }

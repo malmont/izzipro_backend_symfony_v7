@@ -3,41 +3,16 @@
 namespace App\Repository;
 
 use App\Entity\PackagingType;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 
 /**
- * @extends ServiceEntityRepository<PackagingType>
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<PackagingType>
  */
-class PackagingTypeRepository extends ServiceEntityRepository
+class PackagingTypeRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, PackagingType::class);
-    }
-
-    //    /**
-    //     * @return PackagingType[] Returns an array of PackagingType objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('p')
-    //            ->andWhere('p.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('p.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
-
-    //    public function findOneBySomeField($value): ?PackagingType
-    //    {
-    //        return $this->createQueryBuilder('p')
-    //            ->andWhere('p.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 }

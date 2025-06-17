@@ -3,13 +3,15 @@ namespace App\UseCase\ShippingUseCase;
 
 use App\Dto\CartItemDto;
 use App\Dto\ParcelSummaryDto;
-use App\Repository\ProductShippingRepository;
+use App\Entity\ProductShipping; // <-- On importe l'entité
 use App\Services\ShippingService\ShippingService;
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
 
 class GetParcelSummariesForCart
 {
+    // MODIFICATION 1 : Le constructeur est refactorisé
     public function __construct(
-        private ProductShippingRepository $shippingRepo,
+        private TenantEntityManagerProvider $emProvider,
         private ShippingService           $shippingService
     ) {}
 
@@ -23,14 +25,20 @@ class GetParcelSummariesForCart
         array $from,
         array $carrierAccountIds
     ): array {
+        // MODIFICATION 2 : On récupère l'EM et le repository ici
+        $em = $this->emProvider->getEntityManager();
+        $shippingRepo = $em->getRepository(ProductShipping::class);
+
         $items = [];
         foreach ($cartItems as $ci) {
-            $ps = $this->shippingRepo->findOneBy(['product' => $ci->productId]);
+            // On utilise le repository obtenu depuis l'EM du tenant
+            $ps = $shippingRepo->findOneBy(['product' => $ci->productId]);
             for ($i = 0; $i < $ci->quantity; $i++) {
                 $items[] = $ps;
             }
         }
 
+        // Le reste de votre logique est inchangée
         $raw = $this->shippingService->getParcelSummaries(
             $items,
             $to,

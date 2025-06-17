@@ -65,6 +65,12 @@ services:
             - '../src/Repository/SquareConfigRepository.php'
             - '../src/Repository/StyleRepository.php'
             - '../src/Repository/SizeRepository.php'
+            - '../src/Repository/ProductShippingRepository.php'
+            - '../src/Repository/PackagingTypeRepository.php'
+            - '../src/Repository/ShippingOrderRepository.php'
+            - '../src/Repository/ParcelRepository.php'
+            - '../src/Repository/ShippingLabelRepository.php'
+            - '../src/Repository/AddressEntrepriseRepository.php'
 
             
 

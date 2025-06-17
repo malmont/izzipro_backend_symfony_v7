@@ -1,21 +1,20 @@
 <?php
-// src/UseCase/ShippingUseCase/GetShippingSummaryForCart.php
 
 namespace App\UseCase\ShippingUseCase;
 
 use App\Dto\CartItemDto;
 use App\Dto\RateSummaryDto;
-use App\Repository\ProductShippingRepository;
-use App\Repository\PackagingTypeRepository;
+use App\Entity\ProductShipping;
+use App\Entity\PackagingType;
 use App\Services\ShippingService\ShippingService;
-use LogicException;
 use App\Services\ShippingService\ShipmentAddressBuilder;
+use App\Services\TenantEntityManagerProvider;
+use LogicException;
 
 class GetShippingSummaryForCart
 {
     public function __construct(
-        private ProductShippingRepository $shippingRepo,
-        private PackagingTypeRepository   $templateRepo,
+        private TenantEntityManagerProvider $emProvider,
         private ShippingService           $shippingService,
         private ShipmentAddressBuilder    $builder
     ) {}
@@ -33,10 +32,14 @@ class GetShippingSummaryForCart
         array  $fromAddress,
         array  $carrierAccountIds
     ): array {
+        $em = $this->emProvider->getEntityManager();
+        $shippingRepo = $em->getRepository(ProductShipping::class);
+        $templateRepo = $em->getRepository(PackagingType::class);
+
         // 1) Charger et dupliquer les configs ProductShipping
         $items = [];
         foreach ($cartItems as $ci) {
-            $ps = $this->shippingRepo->findOneBy(['product' => $ci->productId]);
+            $ps = $shippingRepo->findOneBy(['product' => $ci->productId]);
             if (! $ps) {
                 throw new LogicException("Pas de config shipping pour le produit ID {$ci->productId}");
             }
@@ -50,7 +53,7 @@ class GetShippingSummaryForCart
         $from = $this->builder->buildFrom();
 
         // 3) Calculer les colis
-        $templates = $this->templateRepo->findAll();
+        $templates = $templateRepo->findAll();
         $parcels   = $this->shippingService->getParcelsFromItems($items, $templates);
 
         // 4) Récupérer tous les tarifs

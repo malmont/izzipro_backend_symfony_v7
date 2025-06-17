@@ -1,29 +1,31 @@
 <?php
-
 namespace App\UseCase\ShippingUseCase;
 
 use App\Dto\CartItemDto;
-use App\Repository\ProductShippingRepository;
-use App\Repository\PackagingTypeRepository;
+use App\Dto\ParcelSummaryDto;
+use App\Entity\ProductShipping; // <-- On importe les entités
+use App\Entity\PackagingType;
 use App\Services\ShippingService\ShippingService;
-use LogicException;
 use App\Services\ShippingService\ShipmentAddressBuilder;
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
+use LogicException;
+
 
 class GetShippingRatesForCart
 {
+    // MODIFICATION 1 : Le constructeur est refactorisé
     public function __construct(
-        private ProductShippingRepository $shippingRepo,
-        private PackagingTypeRepository   $templateRepo,
+        private TenantEntityManagerProvider $emProvider,
         private ShippingService           $shippingService,
         private ShipmentAddressBuilder    $builder
     ) {}
 
     /**
      * @param CartItemDto[] $cartItems
-     * @param array         $toAddress      // attend keys : street1, street2, city, province, postal_code, country
-     * @param array         $fromAddress    // mêmes clés que $toAddress
+     * @param array         $toAddress
+     * @param array         $fromAddress
      * @param string[]      $carrierAccountIds
-     * @return array        tableau de RateOptionDto
+     * @return array
      */
     public function execute(
         array $cartItems,
@@ -31,12 +33,18 @@ class GetShippingRatesForCart
         array $fromAddress,
         array $carrierAccountIds
     ): array {
+        // MODIFICATION 2 : On récupère l'EM et les repositories ici
+        $em = $this->emProvider->getEntityManager();
+        $shippingRepo = $em->getRepository(ProductShipping::class);
+        $templateRepo = $em->getRepository(PackagingType::class);
+
         // 1. Récupérer et valider ProductShipping pour chaque item
         $items = [];
         foreach ($cartItems as $ci) {
-            $ps = $this->shippingRepo->findOneBy(['product' => $ci->productId]);
+            // On utilise le repository obtenu depuis l'EM du tenant
+            $ps = $shippingRepo->findOneBy(['product' => $ci->productId]);
             if (! $ps) {
-                throw new \LogicException(
+                throw new LogicException(
                     "Aucune configuration d'expédition trouvée pour le produit ID {$ci->productId}. "
                   . "Merci de créer une ProductShipping pour ce produit."
                 );
@@ -50,8 +58,8 @@ class GetShippingRatesForCart
         $to   = $this->builder->buildTo($toAddress);
         $from = $this->builder->buildFrom();
 
-        // 3. Charger tous les templates d’emballage et calculer les colis
-        $templates = $this->templateRepo->findAll();
+        // 3. Charger tous les templates d’emballage
+        $templates = $templateRepo->findAll();
         $parcels   = $this->shippingService->getParcelsFromItems($items, $templates);
 
         // 4. Récupérer les tarifs EasyPost

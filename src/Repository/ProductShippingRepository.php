@@ -3,41 +3,16 @@
 namespace App\Repository;
 
 use App\Entity\ProductShipping;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 
 /**
- * @extends ServiceEntityRepository<ProductShipping>
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<ProductShipping>
  */
-class ProductShippingRepository extends ServiceEntityRepository
+class ProductShippingRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, ProductShipping::class);
-    }
-
-    //    /**
-    //     * @return ProductShipping[] Returns an array of ProductShipping objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('p')
-    //            ->andWhere('p.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('p.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
-
-    //    public function findOneBySomeField($value): ?ProductShipping
-    //    {
-    //        return $this->createQueryBuilder('p')
-    //            ->andWhere('p.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 }
