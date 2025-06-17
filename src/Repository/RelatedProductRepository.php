@@ -3,24 +3,22 @@
 namespace App\Repository;
 
 use App\Entity\RelatedProduct;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 
 /**
- * @extends ServiceEntityRepository<RelatedProduct>
- *
- * @method RelatedProduct|null find($id, $lockMode = null, $lockVersion = null)
- * @method RelatedProduct|null findOneBy(array $criteria, array $orderBy = null)
- * @method RelatedProduct[]    findAll()
- * @method RelatedProduct[]    findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null)
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<RelatedProduct>
  */
-class RelatedProductRepository extends ServiceEntityRepository
+class RelatedProductRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, RelatedProduct::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 
+    /**
+     * INCHANGÉ : Ces méthodes fonctionneront maintenant avec l'EntityManager du tenant.
+     */
     public function save(RelatedProduct $entity, bool $flush = false): void
     {
         $this->getEntityManager()->persist($entity);
@@ -38,29 +36,4 @@ class RelatedProductRepository extends ServiceEntityRepository
             $this->getEntityManager()->flush();
         }
     }
-
-//    /**
-//     * @return RelatedProduct[] Returns an array of RelatedProduct objects
-//     */
-//    public function findByExampleField($value): array
-//    {
-//        return $this->createQueryBuilder('r')
-//            ->andWhere('r.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->orderBy('r.id', 'ASC')
-//            ->setMaxResults(10)
-//            ->getQuery()
-//            ->getResult()
-//        ;
-//    }
-
-//    public function findOneBySomeField($value): ?RelatedProduct
-//    {
-//        return $this->createQueryBuilder('r')
-//            ->andWhere('r.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->getQuery()
-//            ->getOneOrNullResult()
-//        ;
-//    }
 }

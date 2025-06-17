@@ -71,6 +71,12 @@ services:
             - '../src/Repository/ParcelRepository.php'
             - '../src/Repository/ShippingLabelRepository.php'
             - '../src/Repository/AddressEntrepriseRepository.php'
+            - '../src/Repository/ContactRepository.php'
+            - '../src/Repository/GooglePlacesConfigRepository.php'
+            - '../src/Repository/OrderDetailsRepository.php'
+            - '../src/Repository/RelatedProductRepository.php'
+            - '../src/Repository/ReviewsProductRepository.php'
+            - '../src/Repository/ShippingClassRepository.php'
 
             
 

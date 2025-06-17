@@ -3,24 +3,22 @@
 namespace App\Repository;
 
 use App\Entity\OrderDetails;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
 
 /**
- * @extends ServiceEntityRepository<OrderDetails>
- *
- * @method OrderDetails|null find($id, $lockMode = null, $lockVersion = null)
- * @method OrderDetails|null findOneBy(array $criteria, array $orderBy = null)
- * @method OrderDetails[]    findAll()
- * @method OrderDetails[]    findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null)
+ * N'est plus un service Symfony.
+ * @extends EntityRepository<OrderDetails>
  */
-class OrderDetailsRepository extends ServiceEntityRepository
+class OrderDetailsRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, OrderDetails::class);
-    }
+    /**
+     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
+     */
+    // public function __construct(ManagerRegistry $registry) { ... }
 
+    /**
+     * INCHANGÉ : Ces méthodes fonctionneront maintenant avec l'EntityManager du tenant.
+     */
     public function save(OrderDetails $entity, bool $flush = false): void
     {
         $this->getEntityManager()->persist($entity);
@@ -38,29 +36,4 @@ class OrderDetailsRepository extends ServiceEntityRepository
             $this->getEntityManager()->flush();
         }
     }
-
-//    /**
-//     * @return OrderDetails[] Returns an array of OrderDetails objects
-//     */
-//    public function findByExampleField($value): array
-//    {
-//        return $this->createQueryBuilder('o')
-//            ->andWhere('o.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->orderBy('o.id', 'ASC')
-//            ->setMaxResults(10)
-//            ->getQuery()
-//            ->getResult()
-//        ;
-//    }
-
-//    public function findOneBySomeField($value): ?OrderDetails
-//    {
-//        return $this->createQueryBuilder('o')
-//            ->andWhere('o.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->getQuery()
-//            ->getOneOrNullResult()
-//        ;
-//    }
 }
