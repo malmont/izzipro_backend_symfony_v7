@@ -63,6 +63,7 @@ services:
             - '../src/Repository/ProductVariantRepository.php'
             - '../src/Repository/MovementTypeRepository.php'
             - '../src/Repository/SquareConfigRepository.php'
+            - '../src/Repository/StyleRepository.php'
 
             
 

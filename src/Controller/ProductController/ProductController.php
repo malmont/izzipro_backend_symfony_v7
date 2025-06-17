@@ -14,34 +14,33 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
-use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantEntityManagerProvider;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
-
 
 class ProductController extends AbstractController
 {
     private GetProductsByCommandeUseCase $getProductsByCommandeUseCase;
     private CreateProductByCommandeUseCase $createProductByCommandeUseCase;
     private DeleteProductUseCase $deleteProductUseCase;
-    private EntityManagerInterface $entityManager;
+    private TenantEntityManagerProvider $emProvider;
     private GetAllProductsUseCase $getAllProductsUseCase;
     private GetProductsByOfferUseCase $getProductsByOfferUseCase;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
     public function __construct(
         GetProductsByCommandeUseCase $getProductsByCommandeUseCase,
         CreateProductByCommandeUseCase $createProductByCommandeUseCase,
         DeleteProductUseCase $deleteProductUseCase,
-        EntityManagerInterface $entityManager,
+        TenantEntityManagerProvider $emProvider,
         GetAllProductsUseCase $getAllProductsUseCase,
         GetProductsByOfferUseCase $getProductsByOfferUseCase,
-        CacheInterface $cache
+        TenantCacheService $cache
     ) {
         $this->getProductsByCommandeUseCase = $getProductsByCommandeUseCase;
         $this->createProductByCommandeUseCase = $createProductByCommandeUseCase;
         $this->deleteProductUseCase = $deleteProductUseCase;
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
         $this->getAllProductsUseCase = $getAllProductsUseCase;
         $this->getProductsByOfferUseCase = $getProductsByOfferUseCase;
         $this->cache = $cache;
@@ -53,11 +52,16 @@ class ProductController extends AbstractController
         $host = $request->getSchemeAndHttpHost();
         $cacheKey = 'products_by_commande_' . $commande->getId();
 
-        $products = $this->cache->get($cacheKey, function (ItemInterface $item) use ($commande, $host) {
-            $item->expiresAfter(300); // Cache expire après 5 minutes
-            $item->tag(['products_command']);
-            return $this->getProductsByCommandeUseCase->execute($commande, $host);
-        });
+        $products = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($commande, $host) {
+                $item->expiresAfter(300); // Cache expire après 5 minutes
+                $item->tag(['products_command']);
+                return $this->getProductsByCommandeUseCase->execute($commande, $host);
+            },
+            /* ttl */ 300,
+            /* extraTags */ ['products_command']
+        );
 
         return $this->json($products, JsonResponse::HTTP_OK);
     }
@@ -68,7 +72,6 @@ class ProductController extends AbstractController
         try {
             // Récupération du répertoire d'upload
             $uploadDir = $this->getParameter('kernel.project_dir') . '/public/assets/uploads/products/';
-            
             $product = $this->createProductByCommandeUseCase->execute($commande, $request, $uploadDir);
 
             $host = $request->getSchemeAndHttpHost();
@@ -95,14 +98,18 @@ class ProductController extends AbstractController
     public function getAllProducts(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        // Utilisation d'une clé statique pour tous les produits (ajustez si besoin)
         $cacheKey = 'all_products';
 
-        $products = $this->cache->get($cacheKey, function (ItemInterface $item) use ($host) {
-            $item->expiresAfter(300); // 5 minutes
-            $item->tag(['products_all']);
-            return $this->getAllProductsUseCase->execute($host);
-        });
+        $products = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($host) {
+                $item->expiresAfter(300); // 5 minutes
+                $item->tag(['products_all']);
+                return $this->getAllProductsUseCase->execute($host);
+            },
+            /* ttl */ 300,
+            /* extraTags */ ['products_all']
+        );
 
         return $this->json($products, JsonResponse::HTTP_OK);
     }
@@ -113,11 +120,16 @@ class ProductController extends AbstractController
         $host = $request->getSchemeAndHttpHost();
         $cacheKey = 'products_by_offer_' . $offer;
 
-        $products = $this->cache->get($cacheKey, function (ItemInterface $item) use ($offer, $host) {
-            $item->expiresAfter(300); // 5 minutes
-            $item->tag(['products_by_offer']);
-            return $this->getProductsByOfferUseCase->execute($offer, $host);
-        });
+        $products = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($offer, $host) {
+                $item->expiresAfter(300); // 5 minutes
+                $item->tag(['products_by_offer']);
+                return $this->getProductsByOfferUseCase->execute($offer, $host);
+            },
+            /* ttl */ 300,
+            /* extraTags */ ['products_by_offer']
+        );
 
         return $this->json($products, JsonResponse::HTTP_OK);
     }
