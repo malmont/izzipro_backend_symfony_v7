@@ -64,6 +64,7 @@ services:
             - '../src/Repository/MovementTypeRepository.php'
             - '../src/Repository/SquareConfigRepository.php'
             - '../src/Repository/StyleRepository.php'
+            - '../src/Repository/SizeRepository.php'
 
             
 

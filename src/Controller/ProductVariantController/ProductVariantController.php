@@ -12,22 +12,21 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use App\Entity\Product;
 use App\Entity\ProductVariant;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
-
 
 class ProductVariantController extends AbstractController
 {
     private GetProductVariantsUseCase $getProductVariantsUseCase;
     private CreateProductVariantUseCase $createProductVariantUseCase;
     private DeleteProductVariantUseCase $deleteProductVariantUseCase;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
     public function __construct(
         GetProductVariantsUseCase $getProductVariantsUseCase,
         CreateProductVariantUseCase $createProductVariantUseCase,
         DeleteProductVariantUseCase $deleteProductVariantUseCase,
-        CacheInterface $cache
+        TenantCacheService $cache
     ) {
         $this->getProductVariantsUseCase = $getProductVariantsUseCase;
         $this->createProductVariantUseCase = $createProductVariantUseCase;
@@ -40,11 +39,16 @@ class ProductVariantController extends AbstractController
     {
         $cacheKey = 'product_variants_' . $product->getId();
 
-        $variants = $this->cache->get($cacheKey, function (ItemInterface $item) use ($product) {
-            $item->expiresAfter(300); // Cache expire après 5 minutes
-            $item->tag(['product_variants']);
-            return $this->getProductVariantsUseCase->execute($product);
-        });
+        $variants = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($product) {
+                $item->expiresAfter(300); // Cache expire après 5 minutes
+                $item->tag(['product_variants']);
+                return $this->getProductVariantsUseCase->execute($product);
+            },
+            /* ttl */ 300,
+            /* extraTags */ ['product_variants']
+        );
 
         return $this->json($variants, JsonResponse::HTTP_OK);
     }
@@ -56,6 +60,7 @@ class ProductVariantController extends AbstractController
         $inputDTO = ProductVariantInputDTO::fromArray($data);
         $variant = $this->createProductVariantUseCase->execute($product, $inputDTO);
 
+        // Invalidation gérée par un subscriber/event si nécessaire
         return $this->json($variant, JsonResponse::HTTP_CREATED);
     }
 
@@ -63,6 +68,7 @@ class ProductVariantController extends AbstractController
     public function deleteProductVariant(ProductVariant $variant): JsonResponse
     {
         $this->deleteProductVariantUseCase->execute($variant);
+        // Invalidation gérée par un subscriber/event si nécessaire
         return new JsonResponse(['success' => 'Product variant deleted'], JsonResponse::HTTP_NO_CONTENT);
     }
 }

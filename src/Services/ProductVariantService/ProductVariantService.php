@@ -8,25 +8,30 @@ use App\Entity\ProductVariant;
 use App\Dto\ProductVariantInputDTO;
 use App\Dto\ProductVariantDTO;
 use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
 use App\Services\EntityRetrieverService;
 
 class ProductVariantService
 {
-    private $entityManager;
-    private $updateStockAndInventoryUseCase;
-    private $entityRetrieverService;
+    // MODIFICATION 1 : Remplacement de l'EntityManager par le Provider
+    private TenantEntityManagerProvider $emProvider;
+    private UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase;
+    private EntityRetrieverService $entityRetrieverService;
 
     public function __construct(
-        EntityManagerInterface $entityManager,
+        TenantEntityManagerProvider $emProvider,
         UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase,
         EntityRetrieverService $entityRetrieverService
     ) {
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
         $this->entityRetrieverService = $entityRetrieverService;
     }
 
+    /**
+     * INCHANGÉ : Cette méthode ne touche pas à la base de données.
+     * Elle lit simplement une propriété d'un objet déjà chargé.
+     */
     public function getProductVariants(Product $product): array
     {
         $variants = $product->getVariants();
@@ -41,39 +46,42 @@ class ProductVariantService
 
     public function createProductVariant(Product $product, ProductVariantInputDTO $inputDTO): ProductVariantDTO
     {
+        // MODIFICATION 2 : On récupère l'EM du tenant ici
+        $em = $this->emProvider->getEntityManager();
+
         $variant = new ProductVariant();
         $variant->setProduct($product);
         $variant->setStockQuantity(0);
 
-        // Utilisation du service EntityRetrieverService pour vérifier et obtenir la couleur
+        // INCHANGÉ : On conserve l'utilisation de votre service
         if ($inputDTO->colorId) {
             $color = $this->entityRetrieverService->findOrFail(Color::class, $inputDTO->colorId, 'Color not found');
             $variant->setColor($color);
         }
 
-        // Utilisation du service EntityRetrieverService pour vérifier et obtenir la taille
         if ($inputDTO->sizeId) {
             $size = $this->entityRetrieverService->findOrFail(Size::class, $inputDTO->sizeId, 'Size not found');
             $variant->setSize($size);
         }
  
-        // Enregistrer la variante
-        $this->entityManager->persist($variant);
+
+        $em->persist($variant);
         
+        $this->updateStockAndInventoryUseCase->execute($variant, $inputDTO->stockQuantity, true);
 
-        // Mise à jour du stock et création du mouvement d'inventaire
-        $this->updateStockAndInventoryUseCase->execute($variant, $inputDTO->stockQuantity,true);
-
-        $this->entityManager->flush();
+        // On utilise l'EM du tenant pour la sauvegarde finale
+        $em->flush();
         return ProductVariantDTO::fromEntity($variant);
     }
 
     public function deleteProductVariant(ProductVariant $variant): void
     {
-        // Supprimer la variante et créer un mouvement de stock
+        $em = $this->emProvider->getEntityManager();
+        
+        // On appelle le UseCase avant de supprimer
         $this->updateStockAndInventoryUseCase->execute($variant, $variant->getStockQuantity());
-
-        $this->entityManager->remove($variant);
-        $this->entityManager->flush();
+        $em->remove($variant);
+        
+        $em->flush();
     }
 }
