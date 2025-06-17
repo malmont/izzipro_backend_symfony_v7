@@ -3,19 +3,20 @@
 namespace App\Services\StyleService;
 
 use App\Entity\Style;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider;
 
 class StyleService
 {
-    private EntityManagerInterface $entityManager;
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
     }
 
     public function getAllStyles(): array
     {
-        return $this->entityManager->getRepository(Style::class)->findAll();
+        $em = $this->emProvider->getEntityManager();
+        return $em->getRepository(Style::class)->findAll();
     }
 }
