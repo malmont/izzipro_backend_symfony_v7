@@ -6,16 +6,15 @@ use App\UseCase\SizesUseCase\GetSizesUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
-
 
 class SizeController extends AbstractController
 {
     private GetSizesUseCase $getSizesUseCase;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
-    public function __construct(GetSizesUseCase $getSizesUseCase, CacheInterface $cache)
+    public function __construct(GetSizesUseCase $getSizesUseCase, TenantCacheService $cache)
     {
         $this->getSizesUseCase = $getSizesUseCase;
         $this->cache = $cache;
@@ -25,10 +24,16 @@ class SizeController extends AbstractController
     public function getSizes(): JsonResponse
     {
         $cacheKey = 'sizes_all';
-        $sizesArray = $this->cache->get($cacheKey, function (ItemInterface $item) {
-            $item->expiresAfter(3600); // 1 heure
-            return $this->getSizesUseCase->execute();
-        });
+
+        $sizesArray = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) {
+                $item->expiresAfter(3600); // 1 heure
+                return $this->getSizesUseCase->execute();
+            },
+            /* ttl */ 3600,
+            /* extraTags */ ['sizes_all']
+        );
 
         return new JsonResponse($sizesArray, JsonResponse::HTTP_OK);
     }

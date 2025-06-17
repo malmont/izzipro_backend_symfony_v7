@@ -2,19 +2,22 @@
 namespace App\Services\SizesService;
 
 use App\Entity\Size;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider; 
 
 class SizeService
 {
-    private EntityManagerInterface $entityManager;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    private TenantEntityManagerProvider $emProvider;
+
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
     }
 
     public function getAllSizes(): array
     {
-        return $this->entityManager->getRepository(Size::class)->findAll();
+        $em = $this->emProvider->getEntityManager();
+        
+        return $em->getRepository(Size::class)->findAll();
     }
 }
