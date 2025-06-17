@@ -1,17 +1,27 @@
 <?php
-
 namespace App\Services\StockEvolutionService;
 
-use App\Repository\InventoryMovementsRepository;
+use App\Entity\InventoryMovements; // <-- On importe l'entité
+use App\Repository\InventoryMovementsRepository; // <-- On importe le repository pour le type-hint
+use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
 use DateTime;
 
 class StockEvolutionService
 {
-    private $inventoryMovementsRepository;
+    // MODIFICATION 1 : Le service ne dépend plus que du provider
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(InventoryMovementsRepository $inventoryMovementsRepository)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->inventoryMovementsRepository = $inventoryMovementsRepository;
+        $this->emProvider = $emProvider;
+    }
+
+    /**
+     * MODIFICATION 2 : On crée une méthode privée pour récupérer le repository du tenant.
+     */
+    private function getInventoryMovementsRepository(): InventoryMovementsRepository
+    {
+        return $this->emProvider->getEntityManager()->getRepository(InventoryMovements::class);
     }
 
     public function getStockEvolutionForCurrentWeek(): array
@@ -46,11 +56,14 @@ class StockEvolutionService
 
     private function getStockEvolutionBetweenDates(DateTime $startDate, DateTime $endDate): array
     {
-        // Calculer les quantités pour chaque type de mouvement
-        $entrant = $this->inventoryMovementsRepository->getTotalQuantityByMovementType($startDate, $endDate, 'Entrant');
-        $sortant = $this->inventoryMovementsRepository->getTotalQuantityByMovementType($startDate, $endDate, 'Sortant');
-        $return = $this->inventoryMovementsRepository->getTotalQuantityByMovementType($startDate, $endDate, 'Return');
-        $ajustement = $this->inventoryMovementsRepository->getTotalQuantityByMovementType($startDate, $endDate, 'Ajustement');
+        // MODIFICATION 3 : On utilise notre nouvelle méthode privée
+        $inventoryMovementsRepository = $this->getInventoryMovementsRepository();
+        
+        // On utilise la variable locale $inventoryMovementsRepository
+        $entrant = $inventoryMovementsRepository->getTotalQuantityByMovementType($startDate, $endDate, 'Entrant');
+        $sortant = $inventoryMovementsRepository->getTotalQuantityByMovementType($startDate, $endDate, 'Sortant');
+        $return = $inventoryMovementsRepository->getTotalQuantityByMovementType($startDate, $endDate, 'Return');
+        $ajustement = $inventoryMovementsRepository->getTotalQuantityByMovementType($startDate, $endDate, 'Ajustement');
 
         return [
             'Entrant' => $entrant,
@@ -60,7 +73,9 @@ class StockEvolutionService
         ];
     }
 
-    // Méthode de transformation pour formater les résultats en liste typée
+    /**
+     * INCHANGÉ : Cette méthode privée est une logique pure, pas de modification nécessaire.
+     */
     private function transformToStockEvolutionList(array $stockData): array
     {
         $stockEvolutionList = [];

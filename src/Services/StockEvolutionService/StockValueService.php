@@ -1,22 +1,38 @@
 <?php
-
 namespace App\Services\StockEvolutionService;
 
-use App\Repository\InventoryMovementsRepository;
+use App\Entity\Product;
+use App\Entity\InventoryMovements;
 use App\Repository\ProductRepository;
+use App\Repository\InventoryMovementsRepository;
+use App\Services\TenantEntityManagerProvider;
 use DateTime;
 
 class StockValueService
 {
-    private $productRepository;
-    private $inventoryMovementsRepository;
+    /**
+     * MODIFICATION 1 : Le service ne dépend plus que du provider.
+     */
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(ProductRepository $productRepository, InventoryMovementsRepository $inventoryMovementsRepository)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->productRepository = $productRepository;
-        $this->inventoryMovementsRepository = $inventoryMovementsRepository;
+        $this->emProvider = $emProvider;
     }
 
+    /**
+     * MODIFICATION 2 : On crée des méthodes privées pour récupérer les repositories du tenant.
+     */
+    private function getProductRepository(): ProductRepository
+    {
+        return $this->emProvider->getEntityManager()->getRepository(Product::class);
+    }
+
+    private function getInventoryMovementsRepository(): InventoryMovementsRepository
+    {
+        return $this->emProvider->getEntityManager()->getRepository(InventoryMovements::class);
+    }
+    
     // Renvoie la valeur de stock pour le mois actuel au format objet
     public function getStockValueForCurrentMonth(): array
     {
@@ -44,11 +60,15 @@ class StockValueService
     // Calcule la valeur de stock pour une date donnée
     private function calculateStockValueForDate(DateTime $date): float
     {
-        $products = $this->productRepository->findAll();
+        // MODIFICATION 3 : On utilise nos nouvelles méthodes privées
+        $productRepository = $this->getProductRepository();
+        $inventoryMovementsRepository = $this->getInventoryMovementsRepository();
+
+        $products = $productRepository->findAll();
         $totalValue = 0.0;
 
         foreach ($products as $product) {
-            $quantityAtDate = $this->inventoryMovementsRepository->getStockQuantityAtDate($product, $date);
+            $quantityAtDate = $inventoryMovementsRepository->getStockQuantityAtDate($product, $date);
             if ($product->getPurchasePrice() !== null && $product->getCoefficientMultiplier() !== null) {
                 $price = $product->getPurchasePrice() * $product->getCoefficientMultiplier();
                 $totalValue += $price * $quantityAtDate;
@@ -69,15 +89,14 @@ class StockValueService
         ];
     }
 
-         /**
+    /**
      * Renvoie la valeur de stock formatée pour le mois actuel.
-     *
-     * @return array
      */
     public function getStockValueCurrentMonth(): array
     {
+        $productRepository = $this->getProductRepository();
         $currentDate = new DateTime('last day of this month');
-        $totalValue = $this->productRepository->calculateCurrentStockValue();
+        $totalValue = $productRepository->calculateCurrentStockValue();
 
         return [
             'stock_value_current_month' => [
