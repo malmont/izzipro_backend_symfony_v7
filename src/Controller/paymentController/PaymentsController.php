@@ -10,30 +10,29 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use App\Entity\SquareConfig;
 use App\Entity\Order;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\Security\Core\Security;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
-
 
 class PaymentsController extends AbstractController
 {
     private GetPaymentsByOrderSourceUseCase $getPaymentsByOrderSourceUseCase;
     private CreatePaymentUseCase $createPaymentUseCase;
-    private EntityManagerInterface $entityManager;
+    private TenantEntityManagerProvider $emProvider;
     private Security $security;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
     public function __construct(
         GetPaymentsByOrderSourceUseCase $getPaymentsByOrderSourceUseCase,
         CreatePaymentUseCase $createPaymentUseCase,
-        EntityManagerInterface $entityManager,
+        TenantEntityManagerProvider $emProvider,
         Security $security,
-        CacheInterface $cache
+        TenantCacheService $cache
     ) {
         $this->getPaymentsByOrderSourceUseCase = $getPaymentsByOrderSourceUseCase;
         $this->createPaymentUseCase = $createPaymentUseCase;
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
         $this->security = $security;
         $this->cache = $cache;
     }
@@ -55,7 +54,8 @@ class PaymentsController extends AbstractController
         $host = $request->getSchemeAndHttpHost();
 
         // Vérifier que l'utilisateur a bien accès aux paiements liés à ses commandes
-        $userOrders = $this->entityManager->getRepository(Order::class)->findBy(['userId' => $user]);
+        $em = $this->emProvider->getEntityManager();
+        $userOrders = $em->getRepository(Order::class)->findBy(['user' => $user]);
         if (!$userOrders) {
             return $this->json(['error' => 'Unauthorized access to payments'], JsonResponse::HTTP_FORBIDDEN);
         }
@@ -63,11 +63,16 @@ class PaymentsController extends AbstractController
         // Construction d'une clé de cache dynamique basée sur orderSource et jours
         $cacheKey = 'payments_orderSource_' . $orderSourceId . ($days ? '_days_' . (int)$days : '');
 
-        $paymentDTOs = $this->cache->get($cacheKey, function (ItemInterface $item) use ($orderSourceId, $host, $days) {
-            $item->expiresAfter(300); // 5 minutes
-            $item->tag(['payments']);
-            return $this->getPaymentsByOrderSourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
-        });
+        $paymentDTOs = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($orderSourceId, $host, $days) {
+                $item->expiresAfter(300); // 5 minutes
+                $item->tag(['payments']);
+                return $this->getPaymentsByOrderSourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
+            },
+            /* ttl */ 300,
+            /* extraTags */ ['payments']
+        );
 
         $paymentData = array_map(fn($dto) => $dto->toArray(), $paymentDTOs);
         return $this->json($paymentData);
@@ -126,20 +131,29 @@ class PaymentsController extends AbstractController
             return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
-        $squareConfigData = $this->cache->get('square_config', function (ItemInterface $item) {
-            $item->expiresAfter(3600); // 1 heure
-            // Récupération de la configuration active depuis la base
-            $squareConfig = $this->entityManager
-                ->getRepository(SquareConfig::class)
-                ->findOneBy(['isActive' => true]);
-            if (!$squareConfig) {
-                return null;
-            }
-            return [
-                'applicationId' => $squareConfig->getApplicationId(),
-                'locationId'    => $squareConfig->getLocationId(),
-            ];
-        });
+        $cacheKey = 'square_config';
+        $host = $request->getSchemeAndHttpHost();
+
+        $squareConfigData = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($host) {
+                $item->expiresAfter(3600); // 1 heure
+                $item->tag(['square_config']);
+                $em = $this->emProvider->getEntityManager();
+                $squareConfig = $em
+                    ->getRepository(SquareConfig::class)
+                    ->findOneBy(['isActive' => true]);
+                if (!$squareConfig) {
+                    return null;
+                }
+                return [
+                    'applicationId' => $squareConfig->getApplicationId(),
+                    'locationId'    => $squareConfig->getLocationId(),
+                ];
+            },
+            /* ttl */ 3600,
+            /* extraTags */ ['square_config']
+        );
 
         if (!$squareConfigData) {
             return $this->json(['success' => false, 'error' => 'Configuration Square introuvable.'], JsonResponse::HTTP_NOT_FOUND);
