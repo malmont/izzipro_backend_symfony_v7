@@ -1,40 +1,44 @@
 <?php
 namespace App\Services\TransporteurService;
 
-
 use App\Entity\Transporteur;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Services\TenantEntityManagerProvider; 
 
 class TransporteurService
 {
-    private EntityManagerInterface $entityManager;
+    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->entityManager = $entityManager;
+        $this->emProvider = $emProvider;
     }
 
     public function getAllTransporteurs(): array
     {
-        return $this->entityManager->getRepository(Transporteur::class)->findAll();
+        // MODIFICATION 2 : On récupère l'EM du tenant ici
+        $em = $this->emProvider->getEntityManager();
+        return $em->getRepository(Transporteur::class)->findAll();
     }
 
     public function createTransporteur(string $name, ?string $logo, ?string $contact): Transporteur
     {
+        $em = $this->emProvider->getEntityManager();
+
         $transporteur = new Transporteur();
         $transporteur->setName($name);
         $transporteur->setLogo($logo);
         $transporteur->setContact($contact);
 
-        $this->entityManager->persist($transporteur);
-        $this->entityManager->flush();
+        $em->persist($transporteur);
+        $em->flush();
 
         return $transporteur;
     }
 
     public function deleteTransporteur(Transporteur $transporteur): void
     {
-        $this->entityManager->remove($transporteur);
-        $this->entityManager->flush();
+        $em = $this->emProvider->getEntityManager();
+        $em->remove($transporteur);
+        $em->flush();
     }
 }

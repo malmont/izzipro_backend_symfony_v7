@@ -10,22 +10,21 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\CacheInterface;
+use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
-
 
 class TransporteurController extends AbstractController
 {
     private GetTransporteursUseCase $getTransporteursUseCase;
     private CreateTransporteurUseCase $createTransporteurUseCase;
     private DeleteTransporteurUseCase $deleteTransporteurUseCase;
-    private CacheInterface $cache;
+    private TenantCacheService $cache;
 
     public function __construct(
         GetTransporteursUseCase $getTransporteursUseCase,
         CreateTransporteurUseCase $createTransporteurUseCase,
         DeleteTransporteurUseCase $deleteTransporteurUseCase,
-        CacheInterface $cache
+        TenantCacheService $cache
     ) {
         $this->getTransporteursUseCase = $getTransporteursUseCase;
         $this->createTransporteurUseCase = $createTransporteurUseCase;
@@ -38,11 +37,16 @@ class TransporteurController extends AbstractController
     {
         $cacheKey = 'transporteurs_all';
 
-        $transporteursData = $this->cache->get($cacheKey, function (ItemInterface $item) {
-            // On définit un TTL, ici 1 heure (3600 secondes)
-            $item->expiresAfter(3600);
-            return $this->getTransporteursUseCase->execute();
-        });
+        $transporteursData = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) {
+                $item->expiresAfter(3600);
+                $item->tag(['transporteurs_all']);
+                return $this->getTransporteursUseCase->execute();
+            },
+            /* ttl */ 3600,
+            /* extraTags */ ['transporteurs_all']
+        );
 
         return new JsonResponse($transporteursData, JsonResponse::HTTP_OK);
     }
@@ -52,9 +56,9 @@ class TransporteurController extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
         $transporteurDTO = TransporteurDTO::fromArray($data);
-
         $transporteur = $this->createTransporteurUseCase->execute($transporteurDTO);
 
+        // Invalidation du cache gérée ailleurs si nécessaire
         return $this->json([
             'success' => 'Transporteur created',
             'transporteur_id' => $transporteur->getId(),
@@ -65,6 +69,7 @@ class TransporteurController extends AbstractController
     public function deleteTransporteur(\App\Entity\Transporteur $transporteur): JsonResponse
     {
         $this->deleteTransporteurUseCase->execute($transporteur);
+        // Invalidation du cache gérée ailleurs si nécessaire
         return new JsonResponse(['success' => 'Transporteur deleted'], JsonResponse::HTTP_NO_CONTENT);
     }
 }
