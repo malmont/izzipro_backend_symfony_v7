@@ -3,22 +3,30 @@
 namespace App\Controller\Admin;
 
 use App\Entity\User;
+use App\Services\TenantEntityManagerProvider;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
+use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ArrayField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\EmailField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use Symfony\Component\Form\Extension\Core\Type\PasswordType;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Doctrine\ORM\EntityManagerInterface;
 
-class UserCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class UserCrudController extends BaseTenantCrudController
 {
-    private $userPasswordHasher;
+    private UserPasswordHasherInterface $userPasswordHasher;
 
-    public function __construct(UserPasswordHasherInterface $userPasswordHasher)
-    {
+    // 3. Le constructeur reçoit maintenant SES dépendances ET celles du parent
+    public function __construct(
+        UserPasswordHasherInterface $userPasswordHasher,
+        TenantEntityManagerProvider $emProvider
+    ) {
+        // On passe le provider au constructeur du parent
+        parent::__construct($emProvider);
+        // On garde le hasher pour ce contrôleur
         $this->userPasswordHasher = $userPasswordHasher;
     }
 
@@ -29,6 +37,7 @@ class UserCrudController extends AbstractCrudController
 
     public function configureFields(string $pageName): iterable
     {
+        // La configuration des champs ne change pas
         return [
             IdField::new('id')->hideOnForm(),
             EmailField::new('email'),
@@ -44,6 +53,10 @@ class UserCrudController extends AbstractCrudController
         ];
     }
 
+    // La méthode createIndexQueryBuilder a été SUPPRIMÉE. Le parent s'en charge.
+
+    // 4. Les méthodes d'écriture sont SIMPLIFIÉES.
+    // Elles ajoutent leur logique spécifique PUIS appellent le parent.
     public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         $this->hashPassword($entityInstance);
@@ -55,7 +68,8 @@ class UserCrudController extends AbstractCrudController
         $this->hashPassword($entityInstance);
         parent::updateEntity($entityManager, $entityInstance);
     }
-
+    
+    // La logique de hachage reste ici car elle est spécifique à l'entité User.
     private function hashPassword($entityInstance): void
     {
         if ($entityInstance instanceof User && $entityInstance->getPlainPassword()) {
@@ -64,7 +78,6 @@ class UserCrudController extends AbstractCrudController
                 $entityInstance->getPlainPassword()
             );
             $entityInstance->setPassword($hashedPassword);
-            // On s'assure que plainPassword ne sera pas persisté
             $entityInstance->setPlainPassword(null);
         }
     }

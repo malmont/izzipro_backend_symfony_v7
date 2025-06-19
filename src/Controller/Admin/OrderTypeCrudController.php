@@ -2,12 +2,12 @@
 namespace App\Controller\Admin;
 
 use App\Entity\OrderType;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 
-class OrderTypeCrudController extends AbstractCrudController
+class OrderTypeCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

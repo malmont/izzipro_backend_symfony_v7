@@ -2,30 +2,34 @@
 namespace App\Controller\Admin;
 
 use App\Entity\OrderItems;
+use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\EntityManagerInterface;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
-use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use Doctrine\ORM\QueryBuilder;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
+use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
-use Doctrine\ORM\QueryBuilder;
+use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
+use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use Symfony\Component\HttpFoundation\RequestStack;
-use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
-use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 
 class OrderItemsListController extends AbstractCrudController
 {
-    private $em;
-    private $requestStack;
+    // MODIFICATION 1 : On injecte notre provider
+    private TenantEntityManagerProvider $emProvider;
+    private RequestStack $requestStack;
 
-    public function __construct(EntityManagerInterface $em, RequestStack $requestStack)
-    {
-        $this->em = $em;
+    public function __construct(
+        TenantEntityManagerProvider $emProvider,
+        RequestStack $requestStack
+    ) {
+        $this->emProvider = $emProvider;
         $this->requestStack = $requestStack;
     }
 
@@ -36,48 +40,81 @@ class OrderItemsListController extends AbstractCrudController
 
     public function configureActions(Actions $actions): Actions
     {
-        // Désactiver le bouton "Add Order Item"
+        // La logique pour désactiver l'action "new" est conservée
         return $actions
-            ->disable(Action::NEW); // Désactiver l'action "new"
+            ->disable(Action::NEW);
     }
 
     /**
-     * Cette méthode est utilisée pour filtrer les articles de commande par l'ID de commande passé via l'URL.
+     * MODIFICATION 2 : La méthode utilise maintenant l'EM du tenant.
      */
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
     {
-        // Récupérer la requête actuelle
+        $tenantEm = $this->emProvider->getEntityManager();
         $request = $this->requestStack->getCurrentRequest();
         $orderId = $request->query->get('orderId');
         
-        return $this->em->getRepository(OrderItems::class)
-            ->createQueryBuilder('oi')
-            ->where('oi.orderAssociated = :orderId')
-            ->setParameter('orderId', $orderId);
+        $qb = $tenantEm->getRepository(OrderItems::class)
+            ->createQueryBuilder('oi');
+
+        if ($orderId) {
+            $qb->where('oi.orderAssociated = :orderId')
+               ->setParameter('orderId', $orderId);
+        }
+
+        return $qb;
     }
 
     public function configureFields(string $pageName): iterable
-        {
-            return [
-                TextField::new('productVariant.product.name', 'Produit'),
-                TextField::new('productVariant.size', 'Taille'),
-                TextField::new('productVariant.color', 'Couleur'),
-                ImageField::new('productVariant.product.image', 'Image')
-                    ->setBasePath('assets/uploads/products/')
-                    ->setUploadDir('public/assets/uploads/products/')
-                    ->setUploadedFileNamePattern('[randomhash].[extension]')
-                    ->setRequired(false),
-                NumberField::new('quantity', 'Quantité'),
-                MoneyField::new('unitPrice', 'Prix unitaire')->setCurrency('USD'),
-                MoneyField::new('totalPrice', 'Total')->setCurrency('USD'),
-            ];
-        }
-
+    {
+        // La configuration des champs reste la même
+        return [
+            TextField::new('productVariant.product.name', 'Produit'),
+            TextField::new('productVariant.size', 'Taille'),
+            TextField::new('productVariant.color', 'Couleur'),
+            ImageField::new('productVariant.product.image', 'Image')
+                ->setBasePath('assets/uploads/products/')
+                ->setUploadDir('public/assets/uploads/products/')
+                ->setUploadedFileNamePattern('[randomhash].[extension]')
+                ->setRequired(false),
+            NumberField::new('quantity', 'Quantité'),
+            MoneyField::new('unitPrice', 'Prix unitaire')->setCurrency('USD')->setStoredAsCents(false),
+            MoneyField::new('totalPrice', 'Total')->setCurrency('USD')->setStoredAsCents(false),
+        ];
+    }
+    
     /**
-     * Cette méthode récupère les articles de commande associés à une commande spécifique.
+     * MODIFICATION 3 : La méthode privée est aussi mise à jour
      */
     private function getOrderItemsByOrderId(int $orderId): array
     {
-        return $this->em->getRepository(OrderItems::class)->findBy(['orderAssociated' => $orderId]);
+        $tenantEm = $this->emProvider->getEntityManager();
+        return $tenantEm->getRepository(OrderItems::class)->findBy(['orderAssociated' => $orderId]);
+    }
+    
+    /**
+     * MODIFICATION 4 : On ajoute les méthodes d'écriture par sécurité (programmation défensive)
+     * au cas où vous réactiveriez les actions d'écriture plus tard.
+     */
+    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $tenantEm->persist($entityInstance);
+        $tenantEm->flush();
+    }
+
+    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $tenantEm->merge($entityInstance);
+        $tenantEm->flush();
+    }
+    
+    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $managedEntity = $tenantEm->merge($entityInstance);
+        $tenantEm->remove($managedEntity);
+        $tenantEm->flush();
     }
 }

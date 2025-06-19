@@ -3,13 +3,20 @@
 namespace App\Controller\Admin;
 
 use App\Entity\TypeNoteDeFrais;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 
-class TypeNoteDeFraisCrudController extends AbstractCrudController
+// On étend notre contrôleur de base !
+class TypeNoteDeFraisCrudController extends BaseTenantCrudController
 {
+    // Le constructeur est hérité du parent.
+    // Toutes les méthodes CRUD (liste, création, mise à jour, suppression)
+    // sont héritées du parent.
+    //
+    // Il ne reste que la configuration spécifique à CETTE entité.
+
     public static function getEntityFqcn(): string
     {
         return TypeNoteDeFrais::class;

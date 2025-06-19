@@ -2,12 +2,12 @@
 namespace App\Controller\Admin;
 
 use App\Entity\MovementType;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 
-class MovementTypeCrudController extends AbstractCrudController
+class MovementTypeCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

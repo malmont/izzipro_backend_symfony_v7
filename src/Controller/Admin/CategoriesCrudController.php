@@ -7,9 +7,9 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 
-class CategoriesCrudController extends AbstractCrudController
+class CategoriesCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

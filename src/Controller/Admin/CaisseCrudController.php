@@ -1,31 +1,41 @@
 <?php
+
 namespace App\Controller\Admin;
 
 use App\Entity\Caisse;
 use App\Entity\TransactionCaisse;
 use App\Entity\TransactionType;
+use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\EntityManagerInterface;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use Doctrine\ORM\QueryBuilder;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
+use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
+use Symfony\Component\Security\Core\Security;
+// ✅ DÉBUT DU BLOC DE USE CORRIGÉ
+use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
+use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
+use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
+use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Security\Core\Security;
-use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
-use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
+// ✅ FIN DU BLOC DE USE CORRIGÉ
 
 class CaisseCrudController extends AbstractCrudController
 {
-    private $em;
-    private $security;
-    private $adminUrlGenerator;
+    private TenantEntityManagerProvider $emProvider;
+    private Security $security;
+    private AdminUrlGenerator $adminUrlGenerator;
 
-    public function __construct(EntityManagerInterface $em, Security $security,AdminUrlGenerator $adminUrlGenerator)
-    {
-        $this->em = $em;
+    public function __construct(
+        TenantEntityManagerProvider $emProvider,
+        Security $security,
+        AdminUrlGenerator $adminUrlGenerator
+    ) {
+        $this->emProvider = $emProvider;
         $this->security = $security;
         $this->adminUrlGenerator = $adminUrlGenerator;
     }
@@ -46,9 +56,9 @@ class CaisseCrudController extends AbstractCrudController
     public function configureFields(string $pageName): iterable
     {
         return [
-            MoneyField::new('amountTotal', 'Montant Total')->setCurrency('USD'),
+            MoneyField::new('amountTotal', 'Montant Total')->setCurrency('USD')->setStoredAsCents(false),
             DateField::new('createdAt', 'Date de Création')->setFormat('dd/MM/yyyy')->hideOnForm(),
-            MoneyField::new('fonDeCaisse', 'Fond de Caisse')->setCurrency('USD'),
+            MoneyField::new('fonDeCaisse', 'Fond de Caisse')->setCurrency('USD')->setStoredAsCents(false),
             BooleanField::new('isOpen', 'Ouverte')->renderAsSwitch(false),
 
             AssociationField::new('transactionCaisses', 'Transactions')
@@ -75,48 +85,67 @@ class CaisseCrudController extends AbstractCrudController
             ->add('createdAt');
     }
 
-    public function persistEntity(EntityManagerInterface $em, $entityInstance): void
+    public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
     {
+        $tenantEm = $this->emProvider->getEntityManager();
+        return $tenantEm->getRepository(Caisse::class)->createQueryBuilder('c');
+    }
+
+    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+
         if ($entityInstance instanceof Caisse) {
-            // Vérifier s'il existe déjà une caisse ouverte
             $existingCaisse = $this->getOpenCaisse();
             if ($existingCaisse) {
-                // Empêcher la création d'une nouvelle caisse si une caisse est déjà ouverte
                 throw new \Exception('A caisse is already open. Please close it before opening a new one.');
             }
 
-            // Définir isOpen à true
             $entityInstance->setOpen(true);
             $entityInstance->setCreatedAt(new \DateTime());
 
-            // Persister la caisse avant de créer la transaction
-            $this->em->persist($entityInstance);
-            $this->em->flush();
+            $tenantEm->persist($entityInstance);
+            $tenantEm->flush();
 
-            // Créer une transaction d'ouverture de caisse
-            $transactionType = $this->em->getRepository(TransactionType::class)->findOneBy(['name' => 'Ouverture']);
+            $transactionType = $tenantEm->getRepository(TransactionType::class)->findOneBy(['name' => 'Ouverture']);
+            if (!$transactionType) {
+                throw new \Exception("Le type de transaction 'Ouverture' est introuvable.");
+            }
+            $user = $this->security->getUser();
+
             $transactionCaisse = new TransactionCaisse();
             $transactionCaisse->setCaisse($entityInstance);
-            $transactionCaisse->setUserCaisse($this->security->getUser());
+            $transactionCaisse->setUserCaisse($user);
             $transactionCaisse->setTransactionDate(new \DateTime());
             $transactionCaisse->setTransactionType($transactionType);
-            $transactionCaisse->setAmount(0.0); // Pas de montant pour l'ouverture
+            $transactionCaisse->setAmount(0.0);
 
-            $this->em->persist($transactionCaisse);
-            $this->em->flush();
+            $tenantEm->persist($user);
+            $tenantEm->persist($transactionType);
+            
+            $tenantEm->persist($transactionCaisse);
+            $tenantEm->flush();
         }
-
-        parent::persistEntity($em, $entityInstance);
     }
 
-    /**
-     * Méthode pour obtenir la caisse ouverte.
-     *
-     * @return Caisse|null
-     */
+    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $tenantEm->merge($entityInstance);
+        $tenantEm->flush();
+    }
+    
+    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $managedEntity = $tenantEm->merge($entityInstance);
+        $tenantEm->remove($managedEntity);
+        $tenantEm->flush();
+    }
+
     private function getOpenCaisse(): ?Caisse
     {
-        return $this->em->getRepository(Caisse::class)->findOneBy(['isOpen' => true]);
+        $tenantEm = $this->emProvider->getEntityManager();
+        return $tenantEm->getRepository(Caisse::class)->findOneBy(['isOpen' => true]);
     }
 }
-

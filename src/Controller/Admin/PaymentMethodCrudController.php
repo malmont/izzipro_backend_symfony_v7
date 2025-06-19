@@ -2,12 +2,12 @@
 namespace App\Controller\Admin;
 
 use App\Entity\PaymentMethod;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
 
-class PaymentMethodCrudController extends AbstractCrudController
+class PaymentMethodCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

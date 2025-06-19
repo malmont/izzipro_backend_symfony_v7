@@ -2,11 +2,12 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Style;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
-class StyleCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class StyleCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {
@@ -18,7 +19,6 @@ class StyleCrudController extends AbstractCrudController
         return [
             IdField::new('id')->hideOnForm(),
             TextField::new('name', 'Style Name'),
-            // Ajoutez d'autres champs ici si nécessaire
         ];
     }
 }

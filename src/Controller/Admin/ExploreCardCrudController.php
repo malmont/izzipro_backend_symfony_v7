@@ -1,9 +1,8 @@
 <?php
-
 namespace App\Controller\Admin;
 
 use App\Entity\ExploreCard;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\{
     IdField,
@@ -14,7 +13,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\{
 };
 use Symfony\Component\Form\Extension\Core\Type\FileType;
 
-class ExploreCardCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class ExploreCardCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

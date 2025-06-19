@@ -2,15 +2,15 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Tax;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 
-class TaxCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class TaxCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

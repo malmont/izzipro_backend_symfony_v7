@@ -3,11 +3,11 @@
 namespace App\Controller\Admin;
 
 use App\Entity\AdminSettings;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
-class AdminSettingsCrudController extends AbstractCrudController
+class AdminSettingsCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

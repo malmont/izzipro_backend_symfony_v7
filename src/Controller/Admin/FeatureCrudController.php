@@ -3,10 +3,10 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Feature;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\{IdField, TextField, ImageField};
 
-class FeatureCrudController extends AbstractCrudController
+class FeatureCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

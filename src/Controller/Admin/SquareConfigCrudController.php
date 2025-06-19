@@ -1,13 +1,13 @@
 <?php
-
 namespace App\Controller\Admin;
 
 use App\Entity\SquareConfig;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 
-class SquareConfigCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class SquareConfigCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {
@@ -19,7 +19,7 @@ class SquareConfigCrudController extends AbstractCrudController
         return [
             TextField::new('accessToken', 'Access Token')->hideOnIndex(),
             TextField::new('applicationId', 'Application ID'),
-            TextField::new('locationId', 'Location ID'), // Ajout du champ locationId
+            TextField::new('locationId', 'Location ID'),
             BooleanField::new('isActive', 'Actif'),
         ];
     }

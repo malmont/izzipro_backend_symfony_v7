@@ -3,13 +3,13 @@
 namespace App\Controller\Admin;
 
 use App\Entity\EmailConfiguration;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
 
-class EmailConfigurationCrudController extends AbstractCrudController
+class EmailConfigurationCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

@@ -3,10 +3,10 @@
 namespace App\Controller\Admin;
 
 use App\Entity\CollectionPicture;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 
-class CollectionPictureCrudController extends AbstractCrudController
+class CollectionPictureCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

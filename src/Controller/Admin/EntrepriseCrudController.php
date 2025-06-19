@@ -1,33 +1,39 @@
 <?php
-
 namespace App\Controller\Admin;
 
 use App\Entity\Entreprise;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\EmailField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\UrlField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\JsonField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
-use App\Controller\Admin\AddressEntrepriseCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
-use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
+use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\EmailField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\UrlField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 
 
-
-class EntrepriseCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class EntrepriseCrudController extends BaseTenantCrudController
 {
     private AdminUrlGenerator $adminUrlGenerator;
 
-       public function __construct(AdminUrlGenerator $adminUrlGenerator)
-    {
+    /**
+     * 3. Le constructeur reçoit maintenant SES dépendances ET celles du parent
+     */
+    public function __construct(
+        AdminUrlGenerator $adminUrlGenerator,
+        TenantEntityManagerProvider $emProvider // Requis par le parent
+    ) {
+        // On n'oublie pas d'appeler le constructeur parent !
+        parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
     }
+
     public static function getEntityFqcn(): string
     {
         return Entreprise::class;
@@ -69,8 +75,6 @@ class EntrepriseCrudController extends AbstractCrudController
                 })
                 ->renderAsHtml()
                 ->onlyOnIndex(),
-            
-                
         ];
     }
 }

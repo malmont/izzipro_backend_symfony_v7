@@ -3,11 +3,11 @@
 namespace App\Controller\Admin;
 
 use App\Entity\GooglePlacesConfig;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
-class GooglePlacesConfigCrudController extends AbstractCrudController
+class GooglePlacesConfigCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

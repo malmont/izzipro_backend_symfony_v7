@@ -1,61 +1,69 @@
 <?php
-// src/Services/TenantEntityManagerProvider.php
 
 namespace App\Services;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityManager;
-use Doctrine\ORM\Configuration as ORMConfiguration;
-use Doctrine\Common\EventManager;
-use App\Services\TenantConnectionProvider;
-use Symfony\Component\Cache\Adapter\ArrayAdapter;
-use Symfony\Component\Cache\Adapter\RedisAdapter;
-use Symfony\Component\Cache\Adapter\FilesystemAdapter;
-
+use Doctrine\ORM\Configuration;
+use Psr\Log\LoggerInterface;
 
 class TenantEntityManagerProvider
 {
+    /**
+     * @var EntityManagerInterface|null Le cache de notre instance d'EntityManager.
+     */
+    private ?EntityManagerInterface $em = null;
+
+    /**
+     * @var string|null Le nom de la base de données pour laquelle l'EM en cache a été créé.
+     */
+    private ?string $currentDbName = null;
+
     public function __construct(
         private TenantConnectionProvider $connectionProvider,
-        private ORMConfiguration $ormConfig,
-        private EventManager $eventManager
+        private Configuration $ormConfig, // On injecte la configuration ORM globale de Doctrine
+        private LoggerInterface $logger
     ) {}
 
     /**
-     * Retourne un nouvel EntityManager pour la connexion courante (déjà swappée)
+     * Retourne une instance partagée de l'EntityManager pour le tenant courant.
+     * Ne crée une nouvelle instance que si c'est la première fois ou si le tenant a changé.
      */
-
     public function getEntityManager(): EntityManagerInterface
     {
         $connection = $this->connectionProvider->getConnection();
-        $tenantCode = $this->connectionProvider->getTenantCode() ?? 'master';
-        $config = clone $this->ormConfig;
         
-
-        // Utilise un cache en mémoire, non persistant (aucun partage entre requêtes ni tenants)
-        $metadataCache = new ArrayAdapter();
-        $queryCache    = new ArrayAdapter();
-        $resultCache   = new ArrayAdapter();
-
-        $config->setMetadataCache($metadataCache);
-        $config->setQueryCache($queryCache);
-        $config->setResultCache($resultCache);
-
-        $em = EntityManager::create($connection, $config, $connection->getEventManager());
-        if (method_exists($em->getMetadataFactory(), 'clearLoadedMetadata')) {
-            $em->getMetadataFactory()->clearLoadedMetadata();
+        // On s'assure que la connexion est active pour pouvoir lire le nom de la BDD.
+        if (!$connection->isConnected()) {
+            $connection->connect();
         }
-        return $em;
+        $targetDbName = $connection->getDatabase();
+
+        // Si un EM existe déjà, qu'il est ouvert et qu'il a été créé pour la BDD actuelle,
+        // alors on le réutilise.
+        if ($this->em instanceof EntityManagerInterface && $this->em->isOpen() && $this->currentDbName === $targetDbName) {
+            $this->logger->info("PROVIDER: Réutilisation de l'EntityManager existant pour la BDD: " . $targetDbName);
+            return $this->em;
+        }
+
+        $this->logger->warning("PROVIDER: CRÉATION D'UN NOUVEL ENTITYMANAGER pour la BDD: " . $targetDbName);
+
+        // On utilise la configuration globale de Doctrine (qui inclut vos vrais caches, Redis, etc.)
+        // On ne la modifie plus avec ArrayAdapter.
+        $config = $this->ormConfig;
+
+        // On crée le nouvel EM. On utilise `new EntityManager` car c'est plus direct
+        // quand on a déjà la connexion et la config.
+        $this->em = new EntityManager($connection, $config);
+        
+        // On mémorise pour quelle BDD cet EM a été créé.
+        $this->currentDbName = $targetDbName;
+
+        return $this->em;
     }
-
-
-
-    // Optionnel : si tu veux forcer un switch manuellement (rare, car normalement fait par le listener)
-    public function switchTenant(string $tenantDbName, ?string $tenantCode = null): void
+      public function switchTenant(string $tenantDbName, ?string $tenantCode = null): void
     {
         $this->connectionProvider->switchTenant($tenantDbName, $tenantCode);
         // Ici, pas besoin de stocker d'EM : getEntityManager() le fera sur la bonne connexion ensuite
     }
-    
 }
-

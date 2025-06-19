@@ -1,15 +1,15 @@
 <?php
-
 namespace App\Controller\Admin;
 
 use App\Entity\ShippingClass;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 
-class ShippingClassCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class ShippingClassCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {
@@ -20,13 +20,10 @@ class ShippingClassCrudController extends AbstractCrudController
     {
         return [
             IdField::new('id')->hideOnForm(),
-
             TextField::new('name', 'Nom')
                 ->setRequired(true),
-
             TextareaField::new('description', 'Description')
                 ->setRequired(false),
-
         ];
     }
 }

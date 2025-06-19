@@ -1,30 +1,43 @@
 <?php
+
 namespace App\Controller\Admin;
 
+use App\Entity\Caisse;
+use App\Entity\Order;
+use App\Entity\Payments;
 use App\Entity\TransactionCaisse;
-use Doctrine\ORM\EntityManagerInterface;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
-use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
+use App\Entity\TransactionType;
+use App\Entity\User;
+use App\Services\TenantEntityManagerProvider;
+use App\Controller\Admin\BaseTenantCrudController; // <-- On importe notre base
+use App\Repository\CaisseRepository;
+use App\Repository\TransactionTypeRepository;
+use App\Repository\UserRepository;
+use Doctrine\ORM\QueryBuilder;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
-use Doctrine\ORM\QueryBuilder;
-use Symfony\Component\HttpFoundation\RequestStack;
+use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
+use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
-use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use Symfony\Component\HttpFoundation\RequestStack;
 
-class TransactionCaisseListController extends AbstractCrudController
+// 1. On étend notre contrôleur de base
+class TransactionCaisseListController extends BaseTenantCrudController
 {
-    private $em;
-    private $requestStack;
+    private RequestStack $requestStack;
     private AdminUrlGenerator $adminUrlGenerator;
 
-    public function __construct(EntityManagerInterface $em, RequestStack $requestStack,AdminUrlGenerator $adminUrlGenerator)
-    {
-        $this->em = $em;
+    // 2. Le constructeur appelle le parent et stocke ses propres dépendances
+    public function __construct(
+        TenantEntityManagerProvider $emProvider, // Requis par le parent
+        RequestStack $requestStack,
+        AdminUrlGenerator $adminUrlGenerator
+    ) {
+        parent::__construct($emProvider);
         $this->requestStack = $requestStack;
         $this->adminUrlGenerator = $adminUrlGenerator;
     }
@@ -34,45 +47,63 @@ class TransactionCaisseListController extends AbstractCrudController
         return TransactionCaisse::class;
     }
 
-    /**
-     * Cette méthode est utilisée pour filtrer les transactions de caisse par l'ID de caisse passé via l'URL.
-     */
+    // 3. On conserve NOTRE surcharge car elle a une logique personnalisée
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
     {
-        // Récupérer la requête actuelle
+        $tenantEm = $this->emProvider->getEntityManager();
         $request = $this->requestStack->getCurrentRequest();
         $caisseId = $request->query->get('caisseId');
         
-        return $this->em->getRepository(TransactionCaisse::class)
-            ->createQueryBuilder('tc')
-            ->where('tc.caisse = :caisseId')
-            ->setParameter('caisseId', $caisseId);
-    }
+        $qb = $tenantEm->getRepository(TransactionCaisse::class)
+            ->createQueryBuilder('tc');
 
+        if ($caisseId) {
+            $qb->where('tc.caisse = :caisseId')
+               ->setParameter('caisseId', $caisseId);
+        }
+
+        return $qb;
+    }
+    
+    // 4. On conserve configureFields car il est spécifique à cette entité
     public function configureFields(string $pageName): iterable
     {
+        $tenantEm = $this->emProvider->getEntityManager();
+
         return [
-            AssociationField::new('caisse'),
-            AssociationField::new('userCaisse')->setLabel('User'),
-            AssociationField::new('transactionType', 'Type de Transaction'),
+            AssociationField::new('caisse', 'Caisse')
+                ->setFormTypeOptions([
+                    'em' => $tenantEm,
+                    'query_builder' => function (CaisseRepository $repo) {
+                        return $repo->createQueryBuilder('c')->orderBy('c.createdAt', 'DESC');
+                    },
+                    'choice_label' => 'id',
+                ]),
+            AssociationField::new('userCaisse', 'Utilisateur')
+                ->setFormTypeOptions([
+                    'em' => $tenantEm,
+                    'query_builder' => function (UserRepository $repo) {
+                        return $repo->createQueryBuilder('u')->orderBy('u.email', 'ASC');
+                    },
+                    'choice_label' => 'email',
+                ]),
+            AssociationField::new('transactionType', 'Type de transaction')
+                ->setFormTypeOptions([
+                    'em' => $tenantEm,
+                    'query_builder' => function (TransactionTypeRepository $repo) {
+                        return $repo->createQueryBuilder('tt')->orderBy('tt.name', 'ASC');
+                    },
+                    'choice_label' => 'name',
+                ]),
             DateField::new('transactionDate', 'Date de Transaction'),
-            MoneyField::new('amount', 'Montant')->setCurrency('USD'),      
-            AssociationField::new('orderCaisse', 'Commande')->hideOnIndex(),
-            AssociationField::new('payment', 'Paiement')->hideOnIndex(),
+            MoneyField::new('amount', 'Montant')->setCurrency('USD')->setStoredAsCents(false),      
             AssociationField::new('cashdetails', 'Détails de cash')
                 ->formatValue(function ($value, $entity) {
-                    $cashDetailsUrl = $this->adminUrlGenerator
-                        ->setController(CashDetailsListController::class)
-                        ->setAction(Crud::PAGE_INDEX)
-                        ->set('transactionId', $entity->getId())
-                        ->generateUrl();
-
-                    return sprintf(
-                        '<a href="%s" style="text-decoration: none; color: #007bff;">Voir les détails de cash</a>',
-                        $cashDetailsUrl
-                    );
-                })
-                ->renderAsHtml(),
+                    // ...
+                })->renderAsHtml(),
         ];
     }
+    
+    // 5. Les méthodes persistEntity, updateEntity, et deleteEntity ont été SUPPRIMÉES.
+    // Le BaseTenantCrudController s'en occupe maintenant pour nous !
 }

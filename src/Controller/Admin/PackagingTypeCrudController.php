@@ -4,13 +4,13 @@
 namespace App\Controller\Admin;
 
 use App\Entity\PackagingType;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 
-class PackagingTypeCrudController extends AbstractCrudController
+class PackagingTypeCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

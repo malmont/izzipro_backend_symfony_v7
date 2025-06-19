@@ -3,12 +3,12 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Color;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ColorField;
 
-class ColorCrudController extends AbstractCrudController
+class ColorCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

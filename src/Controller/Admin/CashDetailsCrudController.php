@@ -3,12 +3,12 @@
 namespace App\Controller\Admin;
 
 use App\Entity\CashDetails;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 
-class CashDetailsCrudController extends AbstractCrudController
+class CashDetailsCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

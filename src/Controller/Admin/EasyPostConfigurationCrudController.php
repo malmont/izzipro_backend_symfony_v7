@@ -3,11 +3,11 @@
 namespace App\Controller\Admin;
 
 use App\Entity\EasyPostConfiguration;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
-class EasyPostConfigurationCrudController extends AbstractCrudController
+class EasyPostConfigurationCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {

@@ -2,12 +2,13 @@
 namespace App\Controller\Admin;
 
 use App\Entity\PaymentType;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 
-class PaymentTypeCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class PaymentTypeCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {
