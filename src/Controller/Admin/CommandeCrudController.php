@@ -8,14 +8,7 @@ use App\Entity\CollectionPicture;
 use App\Repository\CollectionsRepository;
 use App\Repository\FournisseurRepository;
 use App\Repository\CollectionPictureRepository;
-use App\Services\TenantEntityManagerProvider;
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\QueryBuilder;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
+use App\Controller\Admin\BaseTenantCrudController; 
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
@@ -24,22 +17,15 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
-class CommandeCrudController extends AbstractCrudController
-{
-    /**
-     * 1. On injecte notre provider
-     */
-    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TenantEntityManagerProvider $emProvider)
-    {
-        $this->emProvider = $emProvider;
-    }
+class CommandeCrudController extends BaseTenantCrudController
+{
 
     public static function getEntityFqcn(): string
     {
         return Commande::class;
     }
+
 
     public function configureFields(string $pageName): iterable
     {
@@ -52,7 +38,6 @@ class CommandeCrudController extends AbstractCrudController
             TextField::new('name', 'Nom de la Commande'),
             BooleanField::new('isClosed', 'isClosed'),
 
-            // ✅ On force le QueryBuilder et l'EM pour les champs de relation
             AssociationField::new('collections', 'Collections')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
@@ -83,35 +68,5 @@ class CommandeCrudController extends AbstractCrudController
                 ->onlyOnIndex(),
         ];
     }
-
-    /**
-     * 2. On surcharge les méthodes CRUD pour utiliser l'EM du tenant
-     */
-    public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Commande::class)->createQueryBuilder('entity');
-    }
-
-    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->persist($entityInstance);
-        $tenantEm->flush();
-    }
-
-    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->merge($entityInstance);
-        $tenantEm->flush();
-    }
-
-    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $managedEntity = $tenantEm->merge($entityInstance);
-        $tenantEm->remove($managedEntity);
-        $tenantEm->flush();
-    }
+    
 }

@@ -4,44 +4,32 @@ namespace App\Controller\Admin;
 use App\Entity\Parcel;
 use App\Entity\ShippingLabel;
 use App\Repository\ParcelRepository;
-use App\Services\TenantEntityManagerProvider;
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\QueryBuilder;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\UrlField;
 
-class ShippingLabelCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class ShippingLabelCrudController extends BaseTenantCrudController
 {
-    /**
-     * 1. On injecte notre provider
-     */
-    private TenantEntityManagerProvider $emProvider;
-
-    public function __construct(TenantEntityManagerProvider $emProvider)
-    {
-        $this->emProvider = $emProvider;
-    }
+    // 3. Le constructeur est SUPPRIMÉ. Le parent s'en occupe !
+    //    Symfony injectera automatiquement TenantEntityManagerProvider dans le constructeur du parent.
 
     public static function getEntityFqcn(): string
     {
         return ShippingLabel::class;
     }
 
+    // 4. On conserve configureFields car il est spécifique ET il a besoin de l'emProvider du parent
     public function configureFields(string $pageName): iterable
     {
+        // $this->emProvider est accessible car il est 'protected' dans le parent
         $tenantEm = $this->emProvider->getEntityManager();
 
         return [
             IdField::new('id')->onlyOnIndex(),
-            // ✅ On force le QueryBuilder et l'EM pour ce champ
             AssociationField::new('parcel', 'Colis')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
@@ -56,34 +44,6 @@ class ShippingLabelCrudController extends AbstractCrudController
         ];
     }
     
-    /**
-     * 2. On surcharge les méthodes CRUD pour utiliser l'EM du tenant
-     */
-    public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(ShippingLabel::class)->createQueryBuilder('entity');
-    }
-
-    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->persist($entityInstance);
-        $tenantEm->flush();
-    }
-
-    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->merge($entityInstance);
-        $tenantEm->flush();
-    }
-
-    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $managedEntity = $tenantEm->merge($entityInstance);
-        $tenantEm->remove($managedEntity);
-        $tenantEm->flush();
-    }
+    // 5. Les méthodes createIndexQueryBuilder, persistEntity, updateEntity, et deleteEntity
+    //    ont été SUPPRIMÉES car la logique de base du parent est suffisante.
 }

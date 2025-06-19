@@ -227,11 +227,6 @@ private function runMigrations(string $dbname): void
         ->getMigrations()
         ->getItems();
 
-    $this->logger->info('Migrations détectées : ' . implode(', ', array_map(
-        fn($am) => (string)$am->getVersion(),
-        $availableMigrationObjects
-    )));
-
     // 5. Prépare le plan UP
     $migrationVersions = [];
     foreach ($availableMigrationObjects as $availableMigration) {
@@ -242,16 +237,11 @@ private function runMigrations(string $dbname): void
         ->getMigrationPlanCalculator()
         ->getPlanForVersions($migrationVersions, Direction::UP);
 
-    $this->logger->info("Plan de migrations à appliquer pour '{$dbname}' : " .
-        implode(', ', array_map(fn($mv) => (string)$mv, $migrationVersions))
-    );
 
     // 6. Config du migrator
     $migratorConfiguration = (new MigratorConfiguration())
         ->setAllOrNothing(true);
 
-    // 7. Migration !
-    $this->logger->info("DÉBUT migration sur la base : {$currentDb}");
 
     $result = $dependencyFactory
         ->getMigrator()
@@ -277,20 +267,7 @@ private function runMigrations(string $dbname): void
         }
     }
 
-    // Affichage robustes des versions migrées
-    if (count($migratedVersions) > 0) {
-        $versionsStr = implode(', ', $migratedVersions);
-        $this->logger->info(sprintf(
-            "Migrations appliquées pour '%s' : %s",
-            $dbname,
-            $versionsStr
-        ));
-    } else {
-        $this->logger->info(sprintf(
-            "Aucune migration à appliquer pour '%s'.",
-            $dbname
-        ));
-    }
+
 }
 
 

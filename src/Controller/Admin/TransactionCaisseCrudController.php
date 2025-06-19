@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Controller\Admin;
 
 use App\Entity\Caisse;
@@ -10,30 +9,34 @@ use App\Repository\CaisseRepository;
 use App\Repository\TransactionTypeRepository;
 use App\Repository\UserRepository;
 use App\Services\TenantEntityManagerProvider;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use Doctrine\ORM\QueryBuilder;
-use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
+use Symfony\Component\HttpFoundation\RequestStack;
 
-class TransactionCaisseCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class TransactionCaisseCrudController extends BaseTenantCrudController
 {
-    private TenantEntityManagerProvider $emProvider;
     private AdminUrlGenerator $adminUrlGenerator;
+    private RequestStack $requestStack;
 
+    // 3. Le constructeur gère ses dépendances et appelle le parent
     public function __construct(
-        TenantEntityManagerProvider $emProvider,
-        AdminUrlGenerator $adminUrlGenerator
+        TenantEntityManagerProvider $emProvider, // Requis par le parent
+        AdminUrlGenerator $adminUrlGenerator,
+        RequestStack $requestStack
     ) {
-        $this->emProvider = $emProvider;
+        parent::__construct($emProvider); // On passe la dépendance au parent
         $this->adminUrlGenerator = $adminUrlGenerator;
+        $this->requestStack = $requestStack;
     }
 
     public static function getEntityFqcn(): string
@@ -41,12 +44,25 @@ class TransactionCaisseCrudController extends AbstractCrudController
         return TransactionCaisse::class;
     }
 
+    // 4. On CONSERVE cette méthode car elle a une logique personnalisée
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
     {
         $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(TransactionCaisse::class)->createQueryBuilder('tc');
+        $request = $this->requestStack->getCurrentRequest();
+        $caisseId = $request->query->get('caisseId');
+        
+        $qb = $tenantEm->getRepository(TransactionCaisse::class)
+            ->createQueryBuilder('tc');
+
+        if ($caisseId) {
+            $qb->where('tc.caisse = :caisseId')
+               ->setParameter('caisseId', $caisseId);
+        }
+
+        return $qb;
     }
 
+    // 5. On CONSERVE configureFields car il est toujours spécifique
     public function configureFields(string $pageName): iterable
     {
         $tenantEm = $this->emProvider->getEntityManager();
@@ -86,33 +102,11 @@ class TransactionCaisseCrudController extends AbstractCrudController
                         ->set('transactionId', $entity->getId())
                         ->generateUrl();
 
-                    return sprintf(
-                        '<a href="%s" style="text-decoration: none; color: #007bff;">Voir les détails de cash</a>',
-                        $cashDetailsUrl
-                    );
+                    return sprintf('<a href="%s" style="text-decoration: none; color: #007bff;">Voir les détails de cash</a>', $cashDetailsUrl);
                 })
                 ->renderAsHtml(),
         ];
     }
 
-    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->persist($entityInstance);
-        $tenantEm->flush();
-    }
 
-    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->flush();
-    }
-
-    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $managedEntity = $tenantEm->merge($entityInstance);
-        $tenantEm->remove($managedEntity);
-        $tenantEm->flush();
-    }
 }

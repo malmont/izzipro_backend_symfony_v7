@@ -10,30 +10,30 @@ use App\Repository\ColorRepository;
 use App\Repository\SizeRepository;
 use App\Services\TenantEntityManagerProvider;
 use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use Symfony\Component\HttpFoundation\RequestStack;
 
-class ProductVariantListController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class ProductVariantListController extends BaseTenantCrudController
 {
-    // MODIFICATION 1 : On injecte notre provider
-    private TenantEntityManagerProvider $emProvider;
     private RequestStack $requestStack;
     private UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase;
 
+    // 3. Le constructeur appelle le parent et stocke ses propres dépendances
     public function __construct(
-        TenantEntityManagerProvider $emProvider,
+        TenantEntityManagerProvider $emProvider, // Requis par le parent
         RequestStack $requestStack,
         UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase
     ) {
-        $this->emProvider = $emProvider;
+        parent::__construct($emProvider); // On passe la dépendance au parent
         $this->requestStack = $requestStack;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
     }
@@ -43,7 +43,7 @@ class ProductVariantListController extends AbstractCrudController
         return ProductVariant::class;
     }
 
-    // MODIFICATION 2 : La requête de liste utilise l'EM du tenant
+    // 4. On CONSERVE createIndexQueryBuilder car il a une logique de filtre personnalisée
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
     {
         $tenantEm = $this->emProvider->getEntityManager();
@@ -61,9 +61,9 @@ class ProductVariantListController extends AbstractCrudController
         return $qb;
     }
 
+    // 5. On CONSERVE configureFields car il est spécifique à cette entité
     public function configureFields(string $pageName): iterable
     {
-        // MODIFICATION 3 : Les champs d'association sont rendus "tenant-aware"
         $tenantEm = $this->emProvider->getEntityManager();
 
         return [
@@ -89,41 +89,38 @@ class ProductVariantListController extends AbstractCrudController
         ];
     }
 
-    // MODIFICATION 4 : La création utilise l'EM du tenant
+    // 6. On CONSERVE les méthodes d'écriture car elles ont une logique métier personnalisée
     public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-
         $stockBeforeMovement = 0;
         $movementTypeId = 1; // Entrée de stock
 
         if ($entityInstance instanceof ProductVariant) {
-            // L'UseCase est maintenant appelé dans un contexte où l'EM sera celui du tenant
             $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, $movementTypeId);
         }
         
-        // On persiste et flush avec l'EM du tenant, on n'appelle pas le parent.
-        $tenantEm->persist($entityInstance);
-        $tenantEm->flush();
+        // On appelle le parent pour faire le persist et le flush
+        parent::persistEntity($entityManager, $entityInstance);
     }
 
-    // MODIFICATION 5 : La mise à jour utilise l'EM du tenant
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         $tenantEm = $this->emProvider->getEntityManager();
+        $stockBeforeMovement = 0;
+        $movementTypeId = 4; // Ajustement de stock
 
         if ($entityInstance instanceof ProductVariant) {
             $unitOfWork = $tenantEm->getUnitOfWork();
             $originalData = $unitOfWork->getOriginalEntityData($entityInstance);
 
-            $stockBeforeMovement = $originalData['stockQuantity'] ?? 0;
-            $movementTypeId = 4; // Ajustement de stock
+            if ($originalData && isset($originalData['stockQuantity'])) {
+                $stockBeforeMovement = $originalData['stockQuantity'];
+            }
 
             $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, $movementTypeId);
         }
 
-        // On s'assure que l'entité est bien gérée par notre EM et on sauvegarde
-        $tenantEm->merge($entityInstance);
-        $tenantEm->flush();
+        // On appelle le parent pour faire le merge et le flush
+        parent::updateEntity($entityManager, $entityInstance);
     }
 }

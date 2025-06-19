@@ -8,7 +8,6 @@ use App\Services\TokenService;
 use App\Services\OtpService;
 // MODIFICATION : On importe notre provider
 use App\Services\TenantEntityManagerProvider; 
-use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,7 +24,6 @@ class AuthenticationService
         private UserPasswordHasherInterface $passwordHasher,
         private OtpService $otpService,
         private TokenService $tokenService,
-        private LoggerInterface $logger
     ) {}
 
     /**

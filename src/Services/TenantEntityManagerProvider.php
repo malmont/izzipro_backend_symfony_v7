@@ -5,7 +5,7 @@ namespace App\Services;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\Configuration;
-use Psr\Log\LoggerInterface;
+
 
 class TenantEntityManagerProvider
 {
@@ -22,7 +22,7 @@ class TenantEntityManagerProvider
     public function __construct(
         private TenantConnectionProvider $connectionProvider,
         private Configuration $ormConfig, // On injecte la configuration ORM globale de Doctrine
-        private LoggerInterface $logger
+
     ) {}
 
     /**
@@ -42,11 +42,8 @@ class TenantEntityManagerProvider
         // Si un EM existe déjà, qu'il est ouvert et qu'il a été créé pour la BDD actuelle,
         // alors on le réutilise.
         if ($this->em instanceof EntityManagerInterface && $this->em->isOpen() && $this->currentDbName === $targetDbName) {
-            $this->logger->info("PROVIDER: Réutilisation de l'EntityManager existant pour la BDD: " . $targetDbName);
             return $this->em;
         }
-
-        $this->logger->warning("PROVIDER: CRÉATION D'UN NOUVEL ENTITYMANAGER pour la BDD: " . $targetDbName);
 
         // On utilise la configuration globale de Doctrine (qui inclut vos vrais caches, Redis, etc.)
         // On ne la modifie plus avec ArrayAdapter.

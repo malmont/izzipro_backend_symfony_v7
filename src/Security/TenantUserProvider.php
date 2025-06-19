@@ -24,10 +24,6 @@ class TenantUserProvider implements UserProviderInterface
         $em = $this->tenantEmProvider->getEntityManager();
 
         $dbName = $em->getConnection()->getDatabase();
-        $this->logger->info(
-            "Authentication: recherche de '{user}' sur la base '{db}'",
-            ['user' => $identifier, 'db' => $dbName]
-        );
 
         $user = $em->getRepository(User::class)
                    ->findOneBy(['email' => $identifier]);
@@ -41,11 +37,6 @@ class TenantUserProvider implements UserProviderInterface
                 sprintf('User "%s" not found.', $identifier)
             );
         }
-
-        $this->logger->info(
-            "Authentication: utilisateur '{user}' TROUVÉ sur '{db}'",
-            ['user' => $identifier, 'db' => $dbName]
-        );
 
         return $user;
     }

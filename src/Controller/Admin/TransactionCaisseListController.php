@@ -104,6 +104,4 @@ class TransactionCaisseListController extends BaseTenantCrudController
         ];
     }
     
-    // 5. Les méthodes persistEntity, updateEntity, et deleteEntity ont été SUPPRIMÉES.
-    // Le BaseTenantCrudController s'en occupe maintenant pour nous !
 }

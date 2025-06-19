@@ -2,7 +2,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Entreprise;
-use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
+use App\Controller\Admin\BaseTenantCrudController; 
 use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
@@ -17,7 +17,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\UrlField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 
 
-// 2. On étend notre contrôleur de base
+
 class EntrepriseCrudController extends BaseTenantCrudController
 {
     private AdminUrlGenerator $adminUrlGenerator;
@@ -29,7 +29,6 @@ class EntrepriseCrudController extends BaseTenantCrudController
         AdminUrlGenerator $adminUrlGenerator,
         TenantEntityManagerProvider $emProvider // Requis par le parent
     ) {
-        // On n'oublie pas d'appeler le constructeur parent !
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
     }

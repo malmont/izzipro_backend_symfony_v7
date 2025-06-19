@@ -10,15 +10,8 @@ use App\Repository\OrderRepository;
 use App\Repository\PaymentMethodRepository;
 use App\Repository\PaymentTypeRepository;
 use App\Repository\StatusPaymentRepository;
-use App\Services\TenantEntityManagerProvider;
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\QueryBuilder;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
@@ -27,18 +20,10 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\UrlField;
 
-
-class PaymentsCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class PaymentsCrudController extends BaseTenantCrudController
 {
-    /**
-     * 1. On injecte notre provider
-     */
-    private TenantEntityManagerProvider $emProvider;
-
-    public function __construct(TenantEntityManagerProvider $emProvider)
-    {
-        $this->emProvider = $emProvider;
-    }
+    // 3. Le constructeur est SUPPRIMÉ. Le parent s'en occupe !
 
     public static function getEntityFqcn(): string
     {
@@ -52,14 +37,14 @@ class PaymentsCrudController extends AbstractCrudController
                     ->setSearchFields(['id', 'amount', 'paymentDate', 'squarePaymentId', 'squareStatus']);
     }
 
+    // 4. On conserve configureFields car il est spécifique ET il a besoin de l'emProvider du parent
     public function configureFields(string $pageName): iterable
     {
+        // $this->emProvider est accessible car il est 'protected' dans le parent
         $tenantEm = $this->emProvider->getEntityManager();
 
         $fields = [
             IdField::new('id')->hideOnForm(),
-
-            // ✅ On force le QueryBuilder et l'EM pour les champs de relation
             AssociationField::new('orderPayment', 'Order')
                 ->setRequired(true)
                 ->setFormTypeOptions([
@@ -67,10 +52,8 @@ class PaymentsCrudController extends AbstractCrudController
                     'query_builder' => fn(OrderRepository $repo) => $repo->createQueryBuilder('o')->orderBy('o.orderDate', 'DESC'),
                     'choice_label' => 'reference'
                 ]),
-
             MoneyField::new('amount', 'Amount')->setCurrency('USD')->setStoredAsCents(false),
             DateTimeField::new('paymentDate', 'Payment Date'),
-
             AssociationField::new('paymentMethod', 'Payment Method')
                 ->setRequired(true)
                 ->setFormTypeOptions([
@@ -92,7 +75,6 @@ class PaymentsCrudController extends AbstractCrudController
                     'query_builder' => fn(PaymentTypeRepository $repo) => $repo->createQueryBuilder('pt')->orderBy('pt.name', 'ASC'),
                     'choice_label' => 'name'
                 ]),
-
             TextField::new('squarePaymentId', 'Square Payment ID')->hideOnForm(),
             TextField::new('squareOrderId', 'Square Order ID')->hideOnForm(),
             UrlField::new('squareReceiptUrl', 'Receipt URL')->hideOnIndex(),
@@ -102,6 +84,7 @@ class PaymentsCrudController extends AbstractCrudController
             TextField::new('squareRiskLevel', 'Risk Level')->hideOnForm(),
         ];
 
+        // Cette logique conditionnelle doit rester ici car elle est spécifique
         if ($pageName === Crud::PAGE_DETAIL && $this->getContext()->getEntity()->getInstance()->getTransactionCaisses()->count() > 0) {
             $fields[] = CollectionField::new('transactionCaisses', 'Transaction Caisse')
                 ->hideOnForm()
@@ -111,35 +94,7 @@ class PaymentsCrudController extends AbstractCrudController
 
         return $fields;
     }
-
-    /**
-     * 2. On surcharge les méthodes CRUD pour utiliser l'EM du tenant
-     */
-    public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Payments::class)->createQueryBuilder('entity');
-    }
-
-    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->persist($entityInstance);
-        $tenantEm->flush();
-    }
-
-    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->merge($entityInstance);
-        $tenantEm->flush();
-    }
-
-    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $managedEntity = $tenantEm->merge($entityInstance);
-        $tenantEm->remove($managedEntity);
-        $tenantEm->flush();
-    }
+    
+    // 5. Les méthodes createIndexQueryBuilder, persistEntity, updateEntity, et deleteEntity
+    //    ont été SUPPRIMÉES car la logique de base du parent est suffisante.
 }

@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Controller\Admin;
 
 use App\Entity\Product;
@@ -10,20 +9,12 @@ use App\Repository\CategoriesRepository;
 use App\Repository\StyleRepository;
 use App\Repository\CommandeRepository;
 use App\Services\TenantEntityManagerProvider;
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\QueryBuilder;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
-use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
-use Symfony\Component\HttpFoundation\RedirectResponse;
-// ✅ DÉBUT DU BLOC MANQUANT
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
@@ -34,18 +25,19 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
-// ✅ FIN DU BLOC MANQUANT
+use Symfony\Component\HttpFoundation\RedirectResponse;
 
-class ProductCrudController extends AbstractCrudController
+// 2. On étend notre contrôleur de base
+class ProductCrudController extends BaseTenantCrudController
 {
-    private TenantEntityManagerProvider $emProvider;
     private AdminUrlGenerator $adminUrlGenerator;
 
+    // 3. Le constructeur appelle le parent et stocke ses propres dépendances
     public function __construct(
-        TenantEntityManagerProvider $emProvider,
+        TenantEntityManagerProvider $emProvider, // Requis par le parent
         AdminUrlGenerator $adminUrlGenerator
     ) {
-        $this->emProvider = $emProvider;
+        parent::__construct($emProvider); // On passe la dépendance au parent
         $this->adminUrlGenerator = $adminUrlGenerator;
     }
 
@@ -54,8 +46,10 @@ class ProductCrudController extends AbstractCrudController
         return Product::class;
     }
 
+    // 4. On CONSERVE configureFields et configureActions car ils sont spécifiques
     public function configureFields(string $pageName): iterable
     {
+        // $this->emProvider est accessible car il est 'protected' dans le parent
         $tenantEm = $this->emProvider->getEntityManager();
 
         return [
@@ -92,10 +86,7 @@ class ProductCrudController extends AbstractCrudController
             AssociationField::new('commande', 'Commande')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
-                    'query_builder' => fn(CommandeRepository $repo) => $repo->createQueryBuilder('cmd')
-                        // CORRECTION ICI : Remplacez 'orderDate' par le vrai nom de votre champ date,
-                        // qui est très probablement 'createdAt'.
-                        ->orderBy('cmd.date', 'DESC'), 
+                    'query_builder' => fn(CommandeRepository $repo) => $repo->createQueryBuilder('cmd')->orderBy('cmd.date', 'DESC'), 
                     'choice_label' => 'reference',
                 ]),
             ImageField::new('image')
@@ -116,7 +107,6 @@ class ProductCrudController extends AbstractCrudController
         ];
     }
     
-    // ... le reste de vos méthodes (configureActions, generateBarcode, et les surcharges CRUD) ...
     public function configureActions(Actions $actions): Actions
     {
         $generateBarcode = Action::new('generateBarcode', 'Générer Code Barre')
@@ -144,7 +134,6 @@ class ProductCrudController extends AbstractCrudController
         $managedProduct->setBarcode($generatedBarcode);
 
         $tenantEm->flush();
-
         $this->addFlash('success', 'Code barre généré avec succès : ' . $generatedBarcode);
 
         $url = $this->adminUrlGenerator
@@ -156,31 +145,4 @@ class ProductCrudController extends AbstractCrudController
         return $this->redirect($url);
     }
 
-    public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Product::class)->createQueryBuilder('p');
-    }
-
-    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->persist($entityInstance);
-        $tenantEm->flush();
-    }
-
-    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->merge($entityInstance);
-        $tenantEm->flush();
-    }
-
-    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $managedEntity = $tenantEm->merge($entityInstance);
-        $tenantEm->remove($managedEntity);
-        $tenantEm->flush();
-    }
 }

@@ -13,17 +13,9 @@ use App\Repository\OrderTypeRepository;
 use App\Repository\StatusCommandeRepository;
 use App\Repository\UserRepository;
 use App\Services\TenantEntityManagerProvider;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use App\UseCase\OrderUseCase\CancelOrderUseCase;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\QueryBuilder;
-use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
-use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
-use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
@@ -32,19 +24,20 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 
-class OrderCrudController extends AbstractCrudController
+
+// 2. On étend notre contrôleur de base
+class OrderCrudController extends BaseTenantCrudController
 {
-    // MODIFICATION 1 : On injecte notre provider
-    private TenantEntityManagerProvider $emProvider;
     private AdminUrlGenerator $adminUrlGenerator;
     private CancelOrderUseCase $cancelOrderUseCase;
 
+    // 3. Le constructeur appelle le parent et stocke ses propres dépendances
     public function __construct(
-        TenantEntityManagerProvider $emProvider,
+        TenantEntityManagerProvider $emProvider, // Requis par le parent
         AdminUrlGenerator $adminUrlGenerator,
         CancelOrderUseCase $cancelOrderUseCase
     ) {
-        $this->emProvider = $emProvider;
+        parent::__construct($emProvider); // On passe la dépendance au parent
         $this->adminUrlGenerator = $adminUrlGenerator;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
     }
@@ -53,10 +46,10 @@ class OrderCrudController extends AbstractCrudController
     {
         return Order::class;
     }
-
+    
+    // 4. On CONSERVE configureFields car il est spécifique
     public function configureFields(string $pageName): iterable
     {
-        // MODIFICATION 2 : On rend les champs d'association "tenant-aware"
         $tenantEm = $this->emProvider->getEntityManager();
 
         return [
@@ -74,7 +67,7 @@ class OrderCrudController extends AbstractCrudController
                     'query_builder' => fn(CarrierRepository $repo) => $repo->createQueryBuilder('c')->orderBy('c.name', 'ASC'),
                     'choice_label' => 'name'
                 ]),
-            AssociationField::new('shippingAdress', 'Adresse de livraison')->onlyOnDetail(), // Pas de sélection
+            AssociationField::new('shippingAdress', 'Adresse de livraison')->onlyOnDetail(),
             AssociationField::new('orderSource', 'Source de la commande')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
@@ -97,37 +90,17 @@ class OrderCrudController extends AbstractCrudController
             DateTimeField::new('statusUpdatedAt', 'Date de updateStatut')->setFormat('dd/MM/yyyy HH:mm'),
             MoneyField::new('totalAmount', 'Montant total')->setCurrency('USD')->setStoredAsCents(false),
             AssociationField::new('payments', 'Paiements')->onlyOnDetail(),
-            // ... autres champs
         ];
     }
     
-    // ... configureActions reste inchangé ...
-
-    // MODIFICATION 3 : On surcharge toutes les méthodes CRUD
-    public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Order::class)->createQueryBuilder('entity');
-    }
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-
         if ($entityInstance instanceof Order && $entityInstance->getStatus()?->getId() === 7) {
-            // Le UseCase est déjà tenant-aware
-            $this->cancelOrderUseCase->execute($entityInstance->getId(), /* paymentMethod? */);
+            $this->cancelOrderUseCase->execute($entityInstance->getId(), /* paymentMethodId? */);
         }
-
-        $tenantEm->merge($entityInstance);
-        $tenantEm->flush();
+        parent::updateEntity($entityManager, $entityInstance);
     }
+    
 
-    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $managedEntity = $tenantEm->merge($entityInstance);
-        $tenantEm->remove($managedEntity);
-        $tenantEm->flush();
-    }
 }

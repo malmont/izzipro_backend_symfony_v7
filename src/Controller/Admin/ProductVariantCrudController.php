@@ -2,37 +2,33 @@
 
 namespace App\Controller\Admin;
 
+use App\Entity\Color;
 use App\Entity\Product;
 use App\Entity\ProductVariant;
-use App\Entity\Color;
 use App\Entity\Size;
-use App\Repository\ProductRepository;
 use App\Repository\ColorRepository;
+use App\Repository\ProductRepository;
 use App\Repository\SizeRepository;
 use App\Services\TenantEntityManagerProvider;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\QueryBuilder;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
-use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 
-class ProductVariantCrudController extends AbstractCrudController
+
+// 2. On étend notre contrôleur de base
+class ProductVariantCrudController extends BaseTenantCrudController
 {
-    // MODIFICATION 1 : On injecte notre provider
-    private TenantEntityManagerProvider $emProvider;
     private UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase;
 
+    // 3. Le constructeur appelle le parent et stocke ses propres dépendances
     public function __construct(
-        TenantEntityManagerProvider $emProvider,
+        TenantEntityManagerProvider $emProvider, // Requis par le parent
         UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase
     ) {
-        $this->emProvider = $emProvider;
+        parent::__construct($emProvider); // On passe la dépendance au parent
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
     }
 
@@ -41,9 +37,9 @@ class ProductVariantCrudController extends AbstractCrudController
         return ProductVariant::class;
     }
 
+    // 4. On conserve configureFields car il est spécifique
     public function configureFields(string $pageName): iterable
     {
-        // MODIFICATION 2 : Les champs d'association sont rendus "tenant-aware"
         $tenantEm = $this->emProvider->getEntityManager();
 
         return [
@@ -70,63 +66,45 @@ class ProductVariantCrudController extends AbstractCrudController
         ];
     }
     
-    // MODIFICATION 3 : On surcharge toutes les méthodes CRUD
-    public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(ProductVariant::class)->createQueryBuilder('pv');
-    }
+    // La méthode createIndexQueryBuilder est SUPPRIMÉE (le parent s'en occupe bien)
 
+    // 5. On CONSERVE les méthodes d'écriture car elles ont une logique métier,
+    //    mais on les simplifie en appelant le parent pour la sauvegarde.
     public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $stockBeforeMovement = 0;
-        $movementTypeId = 1; // Entrée de stock
-
         if ($entityInstance instanceof ProductVariant) {
-            $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, $movementTypeId);
+            // Logique métier personnalisée
+            $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, 0, 1);
         }
-
-        $tenantEm->persist($entityInstance);
-        $tenantEm->flush();
+        
+        // On laisse le parent gérer le persist et le flush
+        parent::persistEntity($entityManager, $entityInstance);
     }
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $stockBeforeMovement = 0;
-        $movementTypeId = 4; // Ajustement de stock
-
         if ($entityInstance instanceof ProductVariant) {
-            // Pour obtenir l'ancienne valeur, on recharge l'entité depuis la BDD du tenant
-            $originalVariant = $tenantEm->getUnitOfWork()->getOriginalEntityData($entityInstance);
-            if ($originalVariant && isset($originalVariant['stockQuantity'])) {
-                $stockBeforeMovement = $originalVariant['stockQuantity'];
-            }
+            $tenantEm = $this->emProvider->getEntityManager();
+            $unitOfWork = $tenantEm->getUnitOfWork();
+            $originalData = $unitOfWork->getOriginalEntityData($entityInstance);
+            $stockBeforeMovement = $originalData['stockQuantity'] ?? 0;
 
-            $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, $movementTypeId);
+            // Logique métier personnalisée
+            $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, 4);
         }
 
-        $tenantEm->merge($entityInstance); // On utilise merge pour la mise à jour
-        $tenantEm->flush();
+        // On laisse le parent gérer le merge et le flush
+        parent::updateEntity($entityManager, $entityInstance);
     }
 
     public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $movementTypeId = 2; // Sortie de stock
-
         if ($entityInstance instanceof ProductVariant) {
-            // On s'assure que l'entité est bien gérée par l'EM du tenant avant de lire ses propriétés
-            $managedVariant = $tenantEm->merge($entityInstance);
-            $stockBeforeMovement = $managedVariant->getStockQuantity();
-            
-            // On passe l'entité managée au UseCase
-            $this->updateStockAndInventoryUseCase->executeNewProductVariant($managedVariant, $stockBeforeMovement, $movementTypeId);
-            
-            // On supprime l'entité
-            $tenantEm->remove($managedVariant);
-            $tenantEm->flush();
+            // Logique métier personnalisée AVANT la suppression
+            $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $entityInstance->getStockQuantity(), 2);
         }
+
+        // On laisse le parent gérer la suppression
+        parent::deleteEntity($entityManager, $entityInstance);
     }
 }

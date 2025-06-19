@@ -32,11 +32,6 @@ class TenantDoctrineSwitcherListener
 
     public function onKernelRequest(RequestEvent $event): void
     {
-        // --- LE LOG DE TEST ---
-        // Si vous ne voyez pas ce message dans vos logs lors d'une requête,
-        // c'est que le listener n'est pas correctement tagué comme un service écoutant kernel.request.
-        $this->logger->critical('>>>> [LISTENER-TEST] La méthode onKernelRequest a été déclenchée.');
-        // --- FIN DU LOG DE TEST ---
 
         if (!$event->isMainRequest()) {
             return;

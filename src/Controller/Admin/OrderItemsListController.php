@@ -3,33 +3,30 @@ namespace App\Controller\Admin;
 
 use App\Entity\OrderItems;
 use App\Services\TenantEntityManagerProvider;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
 use Doctrine\ORM\QueryBuilder;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FilterCollection;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\EntityDto;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
-use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use Symfony\Component\HttpFoundation\RequestStack;
 
-class OrderItemsListController extends AbstractCrudController
+
+class OrderItemsListController extends BaseTenantCrudController
 {
-    // MODIFICATION 1 : On injecte notre provider
-    private TenantEntityManagerProvider $emProvider;
     private RequestStack $requestStack;
 
     public function __construct(
-        TenantEntityManagerProvider $emProvider,
+        TenantEntityManagerProvider $emProvider, 
         RequestStack $requestStack
     ) {
-        $this->emProvider = $emProvider;
+        parent::__construct($emProvider); 
         $this->requestStack = $requestStack;
     }
 
@@ -38,16 +35,12 @@ class OrderItemsListController extends AbstractCrudController
         return OrderItems::class;
     }
 
+
     public function configureActions(Actions $actions): Actions
     {
-        // La logique pour désactiver l'action "new" est conservée
-        return $actions
-            ->disable(Action::NEW);
+        return $actions->disable(Action::NEW);
     }
 
-    /**
-     * MODIFICATION 2 : La méthode utilise maintenant l'EM du tenant.
-     */
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
     {
         $tenantEm = $this->emProvider->getEntityManager();
@@ -65,9 +58,9 @@ class OrderItemsListController extends AbstractCrudController
         return $qb;
     }
 
+    // On CONSERVE configureFields car il est spécifique
     public function configureFields(string $pageName): iterable
     {
-        // La configuration des champs reste la même
         return [
             TextField::new('productVariant.product.name', 'Produit'),
             TextField::new('productVariant.size', 'Taille'),
@@ -83,38 +76,11 @@ class OrderItemsListController extends AbstractCrudController
         ];
     }
     
-    /**
-     * MODIFICATION 3 : La méthode privée est aussi mise à jour
-     */
+    // On CONSERVE cette méthode privée car elle est spécifique
     private function getOrderItemsByOrderId(int $orderId): array
     {
         $tenantEm = $this->emProvider->getEntityManager();
         return $tenantEm->getRepository(OrderItems::class)->findBy(['orderAssociated' => $orderId]);
     }
-    
-    /**
-     * MODIFICATION 4 : On ajoute les méthodes d'écriture par sécurité (programmation défensive)
-     * au cas où vous réactiveriez les actions d'écriture plus tard.
-     */
-    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->persist($entityInstance);
-        $tenantEm->flush();
-    }
 
-    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->merge($entityInstance);
-        $tenantEm->flush();
-    }
-    
-    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
-    {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $managedEntity = $tenantEm->merge($entityInstance);
-        $tenantEm->remove($managedEntity);
-        $tenantEm->flush();
-    }
 }
