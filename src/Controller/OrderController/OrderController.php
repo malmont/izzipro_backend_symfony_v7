@@ -182,8 +182,6 @@ class OrderController extends AbstractController
                 $item->tag(['orders_source']);
                 return $this->getOrdersBySourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
             },
-            /* ttl */ 300,
-            /* extraTags */ ['orders_source']
         );
 
         $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);

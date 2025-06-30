@@ -41,11 +41,8 @@ class TransporteurController extends AbstractController
             $cacheKey,
             function (ItemInterface $item) {
                 $item->expiresAfter(3600);
-                $item->tag(['transporteurs_all']);
                 return $this->getTransporteursUseCase->execute();
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['transporteurs_all']
         );
 
         return new JsonResponse($transporteursData, JsonResponse::HTTP_OK);

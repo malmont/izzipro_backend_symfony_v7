@@ -205,7 +205,6 @@ class CaisseController extends AbstractController
         $days = $request->query->get('days');
         $days = $days !== null ? (int) $days : 'all';
 
-        // On construit la clé de cache basée sur la valeur du paramètre days.
         $cacheKey = "caisse_data_{$days}";
 
         $caisseDTOs = $this->cache->get(
@@ -231,11 +230,13 @@ class CaisseController extends AbstractController
     {
         $cacheKey = "open_caisse_transactions";
 
+        $tags = ['caisses_tag'];
+
         $transactions = $this->cache->get(
             $cacheKey,
-            function(ItemInterface $item) {
-                // TTL pour transactions: 1 heure (ajuster si nécessaire)
+            function(ItemInterface $item) use ($tags) {
                 $item->expiresAfter(3600);
+                $item->tag($tags);
                 $transactionsCollection = $this->getTransactionsForOpenCaisseUseCase->execute();
                 return array_map(fn($transaction) => [
                     'id'                => $transaction->getId(),
@@ -243,9 +244,7 @@ class CaisseController extends AbstractController
                     'transactionDate'   => $transaction->getTransactionDate()->format('Y-m-d H:i:s'),
                     'transactionType'   => $transaction->getTransactionType()->getName(),
                 ], $transactionsCollection);
-            },
-            /* ttl */ 3600,
-            /* extraTags */ ['open_caisse_transactions']
+            }
         );
 
         if (empty($transactions)) {
@@ -254,4 +253,5 @@ class CaisseController extends AbstractController
 
         return new JsonResponse($transactions);
     }
+
 }

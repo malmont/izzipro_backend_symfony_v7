@@ -31,8 +31,6 @@ class SizeController extends AbstractController
                 $item->expiresAfter(3600); // 1 heure
                 return $this->getSizesUseCase->execute();
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['sizes_all']
         );
 
         return new JsonResponse($sizesArray, JsonResponse::HTTP_OK);

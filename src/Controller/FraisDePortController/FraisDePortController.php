@@ -51,7 +51,6 @@ class FraisDePortController extends AbstractController
         );
 
         $this->createFraisDePortUseCase->execute($commande, $inputDTO);
-        // Invalidation du cache gérée par listener/event subscriber si configuré
         return $this->json(['success' => 'Frais de port created'], JsonResponse::HTTP_CREATED);
     }
 
@@ -65,20 +64,15 @@ class FraisDePortController extends AbstractController
             $cacheKey,
             function (ItemInterface $item) use ($commande, $host) {
                 $item->expiresAfter(3600);
-                $item->tag(['frais_de_port']);
                 return $this->getFraisDePortByCommandeUseCase->execute($commande, $host);
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['frais_de_port']
         );
-
         if (!$fraisDePort) {
             return $this->json(
                 ['error' => 'No shipping cost associated with this order'],
                 JsonResponse::HTTP_NOT_FOUND
             );
         }
-
         return $this->json($fraisDePort, JsonResponse::HTTP_OK);
     }
 
@@ -86,7 +80,6 @@ class FraisDePortController extends AbstractController
     public function deleteFraisDePort(Commande $commande): JsonResponse
     {
         $this->deleteFraisDePortUseCase->execute($commande);
-        // Invalidation du cache gérée par listener/event subscriber si configuré
         return $this->json(['success' => 'Frais de port deleted'], JsonResponse::HTTP_NO_CONTENT);
     }
 }

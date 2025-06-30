@@ -60,7 +60,6 @@ class AdressApiController extends AbstractController
             $cacheKey,
             function(ItemInterface $item) use ($user) {
                 $item->expiresAfter(3600);
-                // Tag principal pour invalidation groupée si nécessaire
                 $item->tag(['adresses_user']);
                 return $this->getUserAdressesUseCase->execute($user);
             },

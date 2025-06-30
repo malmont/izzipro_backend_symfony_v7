@@ -37,7 +37,6 @@ class AdminSettingsController extends AbstractController
             'admin_settings',
             function(ItemInterface $item) {
                 $item->expiresAfter(43200);
-
                 $entityManager = $this->tenantEmProvider->getEntityManager();
                 $entityManager->clear(AdminSettings::class); 
                 $settings = $entityManager->find(AdminSettings::class, 1, LockMode::NONE, true);

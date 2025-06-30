@@ -38,16 +38,13 @@ class ProductVariantController extends AbstractController
     public function getProductVariants(Product $product): JsonResponse
     {
         $cacheKey = 'product_variants_' . $product->getId();
-
         $variants = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($product) {
-                $item->expiresAfter(300); // Cache expire après 5 minutes
+                $item->expiresAfter(300); 
                 $item->tag(['product_variants']);
                 return $this->getProductVariantsUseCase->execute($product);
             },
-            /* ttl */ 300,
-            /* extraTags */ ['product_variants']
         );
 
         return $this->json($variants, JsonResponse::HTTP_OK);
@@ -59,8 +56,6 @@ class ProductVariantController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $inputDTO = ProductVariantInputDTO::fromArray($data);
         $variant = $this->createProductVariantUseCase->execute($product, $inputDTO);
-
-        // Invalidation gérée par un subscriber/event si nécessaire
         return $this->json($variant, JsonResponse::HTTP_CREATED);
     }
 
@@ -68,7 +63,6 @@ class ProductVariantController extends AbstractController
     public function deleteProductVariant(ProductVariant $variant): JsonResponse
     {
         $this->deleteProductVariantUseCase->execute($variant);
-        // Invalidation gérée par un subscriber/event si nécessaire
         return new JsonResponse(['success' => 'Product variant deleted'], JsonResponse::HTTP_NO_CONTENT);
     }
 }

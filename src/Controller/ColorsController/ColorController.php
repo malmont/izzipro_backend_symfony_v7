@@ -28,15 +28,14 @@ class ColorController extends AbstractController
         $colorsArray = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) {
-                $item->expiresAfter(3600); // Le cache expire après 1 heure
+                $item->expiresAfter(3600); 
                 $colors = $this->getAllColorsUseCase->execute();
                 return array_map(function ($color) {
                     $dto = new ColorOutputDTO($color);
                     return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
                 }, $colors);
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['colors_all']
+
         );
         
         return new JsonResponse($colorsArray, JsonResponse::HTTP_OK);

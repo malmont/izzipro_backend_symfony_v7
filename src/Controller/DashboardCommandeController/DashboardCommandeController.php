@@ -60,7 +60,6 @@ class DashboardCommandeController extends AbstractController
                 $ttl = $commande->getIsClosed() ? 3600 : 60;
                 $item->expiresAfter($ttl);
                 $item->tag(['dashboard_commande']);
-
                 if ($commande->getIsClosed()) {
                     $frozenMetrics = $this->getLatestCommandeStatistiquesUseCase->execute($commande);
                     if (!$frozenMetrics) {
@@ -72,8 +71,6 @@ class DashboardCommandeController extends AbstractController
                 }
                 return $metricsDTO->toArray();
             },
-            /* ttl */ ($commande->getIsClosed() ? 3600 : 60),
-            /* extraTags */ ['dashboard_commande']
         );
 
         return new JsonResponse($data, JsonResponse::HTTP_OK);

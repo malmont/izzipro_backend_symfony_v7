@@ -71,7 +71,6 @@ class CategoryController extends AbstractController
             function (ItemInterface $item) use ($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos, $host) {
                 $item->expiresAfter(300); // 5 minutes
                 $item->tag(['products_by_category']);
-                // Récupère les entités Product
                 $products = $this->getProductsByCategoryUseCase->execute(
                     $categoryIds,
                     $keyword,
@@ -87,8 +86,6 @@ class CategoryController extends AbstractController
                     return $dto;
                 }, $products);
             },
-            /* ttl */ 300,
-            /* extraTags */ ['products_by_category']
         );
 
         // Obtenir le nombre total de produits
@@ -107,7 +104,6 @@ class CategoryController extends AbstractController
     #[Route('/api/category', name: 'get_categories', methods: ['GET'])]
     public function getCategories(Request $request): JsonResponse
     {
-        // Utilisation d'une clé statique car les catégories changent rarement
         $cacheKey = 'categories_all';
         $host = $request->getSchemeAndHttpHost();
 
@@ -131,8 +127,6 @@ class CategoryController extends AbstractController
                 }
                 return $result;
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['categories_all']
         );
 
         return new JsonResponse($categoriesArray, JsonResponse::HTTP_OK);

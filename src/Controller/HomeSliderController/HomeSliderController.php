@@ -32,7 +32,6 @@ class HomeSliderController extends AbstractController
             'homeslider',
             function(ItemInterface $item) use ($host) {
                 $item->expiresAfter(3600);
-                error_log("Cache miss for homeslider");
                 return $this->getAllHomeSliderUseCase->execute($host);
             },
             /* ttl */ 3600

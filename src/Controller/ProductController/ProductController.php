@@ -55,7 +55,7 @@ class ProductController extends AbstractController
         $products = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($commande, $host) {
-                $item->expiresAfter(300); // Cache expire après 5 minutes
+                $item->expiresAfter(300);
                 $item->tag(['products_command']);
                 return $this->getProductsByCommandeUseCase->execute($commande, $host);
             },

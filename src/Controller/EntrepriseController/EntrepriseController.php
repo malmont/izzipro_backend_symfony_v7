@@ -32,8 +32,6 @@ class EntrepriseController extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
 
-        // Vous pouvez ajouter ici des validations sur les données
-
         $entrepriseDto = $this->createEntrepriseUseCase->execute($data);
 
         return $this->json($entrepriseDto);

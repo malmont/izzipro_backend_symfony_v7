@@ -28,12 +28,9 @@ class StyleController extends AbstractController
         $stylesArray = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) {
-                $item->expiresAfter(3600); // 1 heure
-                $item->tag(['styles_all']);
+                $item->expiresAfter(3600); 
                 return $this->getStylesUseCase->execute();
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['styles_all']
         );
 
         return new JsonResponse($stylesArray, JsonResponse::HTTP_OK);

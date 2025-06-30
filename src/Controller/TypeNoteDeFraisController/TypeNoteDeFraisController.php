@@ -24,12 +24,10 @@ class TypeNoteDeFraisController extends AbstractController
     public function list(): JsonResponse
     {
         $cacheKey = 'api_type_note_de_frais_all';
-
         $data = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) {
-                $item->expiresAfter(3600); // Cache expire après 1 heure
-                $item->tag(['type_note_de_frais']);
+                $item->expiresAfter(3600);
                 $dtoList = $this->useCase->execute();
                 return array_map(function ($dto) {
                     return [
@@ -39,10 +37,7 @@ class TypeNoteDeFraisController extends AbstractController
                     ];
                 }, $dtoList);
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['type_note_de_frais']
         );
-
         return new JsonResponse($data, JsonResponse::HTTP_OK);
     }
 }

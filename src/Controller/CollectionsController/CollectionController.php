@@ -54,15 +54,12 @@ class CollectionController extends AbstractController
     {
         $host = $request->getSchemeAndHttpHost();
         $cacheKey = 'collections_all';
-
         $collections = $this->cache->get(
             $cacheKey,
             function(ItemInterface $item) use ($host) {
                 $item->expiresAfter(600); 
                 return $this->getCollectionsUseCase->execute($host);
             },
-            /* ttl */ 600,
-            /* extraTags */ ['collections_all']
         );
 
         return new JsonResponse($collections, JsonResponse::HTTP_OK);
@@ -72,7 +69,6 @@ class CollectionController extends AbstractController
     public function deleteCollection(Collections $collection): JsonResponse
     {
         $this->deleteCollectionUseCase->execute($collection);
-        // L’invalidation du cache est gérée ailleurs si besoin (ex: event subscriber)
         return $this->json(['message' => 'Collection deleted successfully'], Response::HTTP_OK);
     }
 }

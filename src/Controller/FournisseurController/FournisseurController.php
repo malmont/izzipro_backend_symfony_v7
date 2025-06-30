@@ -44,15 +44,12 @@ class FournisseurController extends AbstractController
             $cacheKey,
             function (ItemInterface $item) use ($host) {
                 $item->expiresAfter(3600);
-                $item->tag(['fournisseurs_all']);
                 $fournisseurs = $this->getAllFournisseursUseCase->execute();
                 return array_map(function ($fournisseur) use ($host) {
                     $dto = new FournisseurOutputDTO($fournisseur, $host);
                     return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
                 }, $fournisseur = $fournisseurs);
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['fournisseurs_all']
         );
 
         return new JsonResponse($fournisseursArray, JsonResponse::HTTP_OK);

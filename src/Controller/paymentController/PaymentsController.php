@@ -53,25 +53,21 @@ class PaymentsController extends AbstractController
         $days = $request->query->get('days');
         $host = $request->getSchemeAndHttpHost();
 
-        // Vérifier que l'utilisateur a bien accès aux paiements liés à ses commandes
         $em = $this->emProvider->getEntityManager();
         $userOrders = $em->getRepository(Order::class)->findBy(['user' => $user]);
         if (!$userOrders) {
             return $this->json(['error' => 'Unauthorized access to payments'], JsonResponse::HTTP_FORBIDDEN);
         }
 
-        // Construction d'une clé de cache dynamique basée sur orderSource et jours
         $cacheKey = 'payments_orderSource_' . $orderSourceId . ($days ? '_days_' . (int)$days : '');
 
         $paymentDTOs = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($orderSourceId, $host, $days) {
-                $item->expiresAfter(300); // 5 minutes
+                $item->expiresAfter(300);
                 $item->tag(['payments']);
                 return $this->getPaymentsByOrderSourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
             },
-            /* ttl */ 300,
-            /* extraTags */ ['payments']
         );
 
         $paymentData = array_map(fn($dto) => $dto->toArray(), $paymentDTOs);
@@ -137,7 +133,7 @@ class PaymentsController extends AbstractController
         $squareConfigData = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($host) {
-                $item->expiresAfter(3600); // 1 heure
+                $item->expiresAfter(3600); 
                 $item->tag(['square_config']);
                 $em = $this->emProvider->getEntityManager();
                 $squareConfig = $em

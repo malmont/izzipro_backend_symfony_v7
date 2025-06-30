@@ -38,8 +38,6 @@ class TypeFournisseurController extends AbstractController
                     ];
                 }, $dtoList);
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['type_fournisseurs_all']
         );
 
         return $this->json($data, JsonResponse::HTTP_OK);

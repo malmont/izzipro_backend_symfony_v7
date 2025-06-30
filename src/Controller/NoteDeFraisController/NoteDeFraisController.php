@@ -51,8 +51,6 @@ class NoteDeFraisController extends AbstractController
                 $item->tag(['notes_de_frais']);
                 return $this->getNotesDeFraisByCollectionUseCase->execute($collection, $host);
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['notes_de_frais']
         );
 
         return new JsonResponse($notes, JsonResponse::HTTP_OK);

@@ -39,11 +39,10 @@ class CommandeController extends AbstractController
     {
         $host = $request->getSchemeAndHttpHost();
         $cacheKey = 'commandes_collection_' . $collection->getId();
-
         $commandesDTO = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($collection, $host) {
-                $item->expiresAfter(600); // Cache expire après 5 minutes
+                $item->expiresAfter(600); 
                 $item->tag(['commandes_by_collection']);
                 $commandes = $this->getCommandesByCollectionUseCase->execute($collection);
                 $commandesArray = $commandes->toArray();
@@ -52,8 +51,6 @@ class CommandeController extends AbstractController
                     return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
                 }, $commandesArray);
             },
-            /* ttl */ 600,
-            /* extraTags */ ['commandes_by_collection']
         );
 
         return $this->json($commandesDTO, JsonResponse::HTTP_OK);
