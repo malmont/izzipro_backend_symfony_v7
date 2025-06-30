@@ -44,10 +44,17 @@ class ProductVariant
     #[ORM\OneToMany(mappedBy: 'productVariant', targetEntity: InventoryMovements::class)]
     private Collection $inventoryMovements;
 
+    /**
+     * @var Collection<int, ProductOptionValue>
+     */
+    #[ORM\ManyToMany(targetEntity: ProductOptionValue::class, inversedBy: 'productVariants')]
+    private Collection $optionValues;
+
     public function __construct()
     {
         $this->orderItems = new ArrayCollection();
         $this->inventoryMovements = new ArrayCollection();
+        $this->optionValues = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -194,5 +201,29 @@ class ProductVariant
     public function __toString(): string
     {
         return (string)  ' id: ' .$this->id . ' - ' .' qt: ' .$this->stockQuantity. ' - '. ($this->product ? $this->product->getName(). ' - ' .$this->color. ' taille ' .$this->size  : 'Sans produit associé');
+    }
+
+    /**
+     * @return Collection<int, ProductOptionValue>
+     */
+    public function getOptionValues(): Collection
+    {
+        return $this->optionValues;
+    }
+
+    public function addOptionValue(ProductOptionValue $optionValue): static
+    {
+        if (!$this->optionValues->contains($optionValue)) {
+            $this->optionValues->add($optionValue);
+        }
+
+        return $this;
+    }
+
+    public function removeOptionValue(ProductOptionValue $optionValue): static
+    {
+        $this->optionValues->removeElement($optionValue);
+
+        return $this;
     }
 }

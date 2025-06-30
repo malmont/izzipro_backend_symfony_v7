@@ -56,6 +56,10 @@ use App\Entity\ShippingLabel;
 use App\Entity\ShippingOrder;
 use App\Entity\Parcel;
 use App\Entity\AddressEntreprise;
+use App\Entity\ProductOption;
+use App\Entity\ProductOptionValue;
+
+
 use App\Controller\Admin\OrderAllCrudController;
 use App\Controller\Admin\OrderCrudController;
 use Symfony\Component\HttpFoundation\Response;
@@ -110,7 +114,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Shipping Labels', 'fas fa-tag',          ShippingLabel::class);
 
         yield MenuItem::section('IIZIMANAGER');
-        yield MenuItem::linkToCrud('Collections', 'fas fa-archive', Collections::class); // Ajoutez cette ligne
+        yield MenuItem::linkToCrud('Collections', 'fas fa-archive', Collections::class);
         yield MenuItem::linkToCrud('Commandes', 'fas fa-shopping-cart', Commande::class);
         yield MenuItem::linkToCrud('Notes de Frais', 'fas fa-receipt', NoteDeFrais::class);
         yield MenuItem::linkToCrud('Fournisseurs', 'fas fa-truck', Fournisseur::class);
@@ -169,6 +173,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Sizes', 'fas fa-ruler', Size::class);
         yield MenuItem::linkToCrud('Categories', 'fas fa-list', Categories::class);
         yield MenuItem::linkToRoute('Gestion des Codes-Barres', 'fa fa-barcode', 'admin_barcode_management');
+        yield MenuItem::linkToCrud('Types d\'options', 'fas fa-tag', ProductOption::class);
+        yield MenuItem::linkToCrud('Valeurs d\'options', 'fas fa-palette', ProductOptionValue::class)->setController(ProductOptionValueCrudController::class);;
+
 
 
     }

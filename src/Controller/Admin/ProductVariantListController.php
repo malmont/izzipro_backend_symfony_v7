@@ -10,7 +10,7 @@ use App\Repository\ColorRepository;
 use App\Repository\SizeRepository;
 use App\Services\TenantEntityManagerProvider;
 use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
-use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
+use App\Controller\Admin\BaseTenantCrudController;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
@@ -20,22 +20,27 @@ use EasyCorp\Bundle\EasyAdminBundle\Dto\SearchDto;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use Symfony\Component\HttpFoundation\RequestStack;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
+use App\Repository\ProductOptionValueRepository;
 
 // 2. On étend notre contrôleur de base
 class ProductVariantListController extends BaseTenantCrudController
 {
     private RequestStack $requestStack;
     private UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase;
+    private AdminUrlGenerator $adminUrlGenerator;
 
-    // 3. Le constructeur appelle le parent et stocke ses propres dépendances
+
     public function __construct(
-        TenantEntityManagerProvider $emProvider, // Requis par le parent
+        TenantEntityManagerProvider $emProvider, 
         RequestStack $requestStack,
-        UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase
+        UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase,
+        AdminUrlGenerator $adminUrlGenerator 
     ) {
-        parent::__construct($emProvider); // On passe la dépendance au parent
+        parent::__construct($emProvider); 
         $this->requestStack = $requestStack;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
+        $this->adminUrlGenerator = $adminUrlGenerator;
     }
 
     public static function getEntityFqcn(): string
@@ -43,7 +48,6 @@ class ProductVariantListController extends BaseTenantCrudController
         return ProductVariant::class;
     }
 
-    // 4. On CONSERVE createIndexQueryBuilder car il a une logique de filtre personnalisée
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
     {
         $tenantEm = $this->emProvider->getEntityManager();
@@ -61,7 +65,6 @@ class ProductVariantListController extends BaseTenantCrudController
         return $qb;
     }
 
-    // 5. On CONSERVE configureFields car il est spécifique à cette entité
     public function configureFields(string $pageName): iterable
     {
         $tenantEm = $this->emProvider->getEntityManager();
@@ -86,20 +89,45 @@ class ProductVariantListController extends BaseTenantCrudController
                     'choice_label' => 'name',
                 ]),
             IntegerField::new('stockQuantity', 'Stock Quantity'),
+             AssociationField::new('optionValues', 'Valeurs de cette variante')
+                ->setHelp('Sélectionnez la combinaison exacte de valeurs pour cette variante (ex: "Rouge" et "XL").')
+                ->setFormTypeOption('by_reference', false) 
+                ->setFormTypeOptions([
+                    'em' => $tenantEm, 
+                    'query_builder' => fn(ProductOptionValueRepository $repo) => $repo->createQueryBuilder('pov')
+                        ->join('pov.productOption', 'po')
+                        ->orderBy('po.name', 'ASC')
+                        ->addOrderBy('pov.value', 'ASC'),
+                ])->onlyOnForms(),
+                 AssociationField::new('optionValues', 'Valeurs')
+                ->formatValue(function ($value, ProductVariant $variant) {
+                    $count = count($variant->getOptionValues());
+                    if ($count === 0) {
+                        return 'Aucune';
+                    }
+                    
+                    $url = $this->adminUrlGenerator
+                        ->setController(ProductOptionValueListController::class)
+                        ->setAction('index')
+                        ->set('variantId', $variant->getId()) 
+                        ->generateUrl();
+                    
+                    return sprintf('<a href="%s">Voir les valeurs (%d)</a>', $url, $count);
+                })
+                ->renderAsHtml()->hideOnForm(),
+            
         ];
     }
 
-    // 6. On CONSERVE les méthodes d'écriture car elles ont une logique métier personnalisée
     public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         $stockBeforeMovement = 0;
-        $movementTypeId = 1; // Entrée de stock
+        $movementTypeId = 1;
 
         if ($entityInstance instanceof ProductVariant) {
             $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, $movementTypeId);
         }
         
-        // On appelle le parent pour faire le persist et le flush
         parent::persistEntity($entityManager, $entityInstance);
     }
 
@@ -119,8 +147,6 @@ class ProductVariantListController extends BaseTenantCrudController
 
             $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, $movementTypeId);
         }
-
-        // On appelle le parent pour faire le merge et le flush
         parent::updateEntity($entityManager, $entityInstance);
     }
 }

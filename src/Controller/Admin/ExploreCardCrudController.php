@@ -62,5 +62,9 @@ class ExploreCardCrudController extends BaseTenantCrudController
                 'attr'     => ['accept'=>'video/mp4']
             ])
             ->onlyOnForms();
+
+        yield TextField::new('videoPath', 'Lien vidéo')
+            ->setRequired(false)
+            ->onlyOnForms();    
     }
 }

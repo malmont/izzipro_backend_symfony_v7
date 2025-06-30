@@ -9,7 +9,7 @@ use App\Repository\CategoriesRepository;
 use App\Repository\StyleRepository;
 use App\Repository\CommandeRepository;
 use App\Services\TenantEntityManagerProvider;
-use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
+use App\Controller\Admin\BaseTenantCrudController; 
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
@@ -27,17 +27,17 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 
-// 2. On étend notre contrôleur de base
+
 class ProductCrudController extends BaseTenantCrudController
 {
     private AdminUrlGenerator $adminUrlGenerator;
 
-    // 3. Le constructeur appelle le parent et stocke ses propres dépendances
+
     public function __construct(
-        TenantEntityManagerProvider $emProvider, // Requis par le parent
+        TenantEntityManagerProvider $emProvider, 
         AdminUrlGenerator $adminUrlGenerator
     ) {
-        parent::__construct($emProvider); // On passe la dépendance au parent
+        parent::__construct($emProvider); 
         $this->adminUrlGenerator = $adminUrlGenerator;
     }
 
@@ -46,10 +46,8 @@ class ProductCrudController extends BaseTenantCrudController
         return Product::class;
     }
 
-    // 4. On CONSERVE configureFields et configureActions car ils sont spécifiques
     public function configureFields(string $pageName): iterable
     {
-        // $this->emProvider est accessible car il est 'protected' dans le parent
         $tenantEm = $this->emProvider->getEntityManager();
 
         return [
@@ -59,7 +57,7 @@ class ProductCrudController extends BaseTenantCrudController
             TextEditorField::new('description')->setLabel('Description'),
             TextEditorField::new('moreinformations')->hideOnIndex()->setLabel('moreinformations'),
             MoneyField::new('price')->setCurrency('USD')->onlyOnIndex(), 
-            MoneyField::new('purchasePrice', "Prix d'achat de l'article")->setCurrency('USD')->setStoredAsCents(false),
+            MoneyField::new('purchasePrice', "Prix d'achat de l'article")->setCurrency('USD'), 
             NumberField::new('coefficientMultiplier', 'Coefficient Multiplier'),
             TextField::new('barcode', 'Barcode'),
             IntegerField::new('quantity')->onlyOnIndex(),
@@ -95,13 +93,17 @@ class ProductCrudController extends BaseTenantCrudController
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
             AssociationField::new('variants', 'Variantes de Produit')
+                ->setFormTypeOptions([
+                    'em' => $tenantEm,
+                    'by_reference' => false, 
+                ])
                 ->formatValue(function ($value, $entity) {
                     $url = $this->adminUrlGenerator
                         ->setController(ProductVariantListController::class)
                         ->setAction('index')
                         ->set('productId', $entity->getId())
                         ->generateUrl();
-                    return sprintf('<a href="%s">Voir les variantes</a>', $url);
+                    return sprintf('<a href="%s">Voir les variantes (%d)</a>', $url, count($value));
                 })
                 ->renderAsHtml(),
         ];

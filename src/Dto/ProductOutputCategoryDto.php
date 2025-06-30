@@ -3,6 +3,10 @@
 namespace App\Dto;
 
 use App\Entity\Product;
+use App\Entity\ProductVariant;
+use App\Entity\ProductOptionValue;
+use App\Entity\Category;
+use App\Entity\Style;
 
 class ProductOutputCategoryDto
 {
@@ -36,7 +40,6 @@ class ProductOutputCategoryDto
      */
     public function __construct(Product $product, string $host)
     {
-        // Champs simples
         $this->id = $product->getId();
         $this->name = $product->getName();
         $this->description = $product->getDescription();
@@ -58,16 +61,12 @@ class ProductOutputCategoryDto
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->barcode = $product->getBarcode();
 
-        // Force l'initialisation du proxy pour la relation Style
         $style = $product->getStyle();
         if ($style) {
-            // Si le proxy n'est pas initialisé, on tente de forcer le chargement
             if (method_exists($style, '__isInitialized') && !$style->__isInitialized()) {
-                // Si la méthode __load existe, nous l'utilisons pour charger l'objet
                 if (method_exists($style, '__load')) {
                     $style->__load();
                 } else {
-                    // Sinon, accéder à une propriété pour forcer l'initialisation
                     $style->getName();
                 }
             }
@@ -80,9 +79,22 @@ class ProductOutputCategoryDto
         }
 
         // Transformation des Variants
-        $this->variants = array_map(function ($variant) {
+         $this->variants = array_map(function (ProductVariant $variant) {
             $color = $variant->getColor();
             $size = $variant->getSize();
+            
+            // On transforme la collection de ProductOptionValue en un tableau simple
+            $options = array_map(function (ProductOptionValue $optionValue) {
+                $parentOption = $optionValue->getProductOption();
+                return [
+                    'value_id'    => $optionValue->getId(),
+                    'value'       => $optionValue->getValue(),
+                    // On inclut le nom et l'id du type d'option pour le contexte
+                    'option_name' => $parentOption ? $parentOption->getName() : null,
+                    'option_id'   => $parentOption ? $parentOption->getId() : null,
+                ];
+            }, $variant->getOptionValues()->toArray());
+
             return [
                 'id' => $variant->getId(),
                 'color' => $color ? [
@@ -95,6 +107,7 @@ class ProductOutputCategoryDto
                     'name' => $size->getName(),
                 ] : null,
                 'stockQuantity' => $variant->getStockQuantity(),
+                'options' => $options, // <-- On ajoute le tableau d'options ici
             ];
         }, $product->getVariants()->toArray());
 

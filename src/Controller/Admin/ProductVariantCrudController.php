@@ -9,27 +9,34 @@ use App\Entity\Size;
 use App\Repository\ColorRepository;
 use App\Repository\ProductRepository;
 use App\Repository\SizeRepository;
+use App\Repository\ProductOptionValueRepository;
 use App\Services\TenantEntityManagerProvider;
-use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
+use App\Controller\Admin\BaseTenantCrudController; 
 use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 
 
-// 2. On étend notre contrôleur de base
+
+
 class ProductVariantCrudController extends BaseTenantCrudController
 {
     private UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase;
-
-    // 3. Le constructeur appelle le parent et stocke ses propres dépendances
+    private AdminUrlGenerator $adminUrlGenerator;
     public function __construct(
-        TenantEntityManagerProvider $emProvider, // Requis par le parent
-        UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase
+        TenantEntityManagerProvider $emProvider, 
+        UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase,
+        AdminUrlGenerator $adminUrlGenerator 
     ) {
-        parent::__construct($emProvider); // On passe la dépendance au parent
+        parent::__construct($emProvider); 
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
+        $this->adminUrlGenerator = $adminUrlGenerator; 
     }
 
     public static function getEntityFqcn(): string
@@ -37,7 +44,6 @@ class ProductVariantCrudController extends BaseTenantCrudController
         return ProductVariant::class;
     }
 
-    // 4. On conserve configureFields car il est spécifique
     public function configureFields(string $pageName): iterable
     {
         $tenantEm = $this->emProvider->getEntityManager();
@@ -63,48 +69,107 @@ class ProductVariantCrudController extends BaseTenantCrudController
                     'choice_label' => 'name',
                 ]),
             IntegerField::new('stockQuantity', 'Stock Quantity'),
+            AssociationField::new('optionValues', 'Valeurs de cette variante')
+                ->setHelp('Sélectionnez la combinaison exacte de valeurs pour cette variante (ex: "Rouge" et "XL").')
+                ->setFormTypeOption('by_reference', false) 
+                ->setFormTypeOptions([
+                    'em' => $tenantEm, 
+                    'query_builder' => fn(ProductOptionValueRepository $repo) => $repo->createQueryBuilder('pov')
+                        ->join('pov.productOption', 'po')
+                        ->orderBy('po.name', 'ASC')
+                        ->addOrderBy('pov.value', 'ASC'),
+                ])->onlyOnForms(),
+                 AssociationField::new('optionValues', 'Valeurs')
+                ->formatValue(function ($value, ProductVariant $variant) {
+                    $count = count($variant->getOptionValues());
+                    if ($count === 0) {
+                        return 'Aucune';
+                    }
+                    
+                    $url = $this->adminUrlGenerator
+                        ->setController(ProductOptionValueListController::class)
+                        ->setAction('index')
+                        ->set('variantId', $variant->getId())
+                        ->generateUrl();
+                    
+                    return sprintf('<a href="%s">Voir les valeurs (%d)</a>', $url, $count);
+                })
+                ->renderAsHtml()->hideOnForm(),
         ];
     }
     
-    // La méthode createIndexQueryBuilder est SUPPRIMÉE (le parent s'en occupe bien)
-
-    // 5. On CONSERVE les méthodes d'écriture car elles ont une logique métier,
-    //    mais on les simplifie en appelant le parent pour la sauvegarde.
-    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
+     public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         if ($entityInstance instanceof ProductVariant) {
-            // Logique métier personnalisée
+            $tenantEm = $this->emProvider->getEntityManager();
+            if ($product = $entityInstance->getProduct()) {
+                $entityInstance->setProduct($tenantEm->merge($product));
+            }
+            if ($color = $entityInstance->getColor()) {
+                $entityInstance->setColor($tenantEm->merge($color));
+            }
+            if ($size = $entityInstance->getSize()) {
+                $entityInstance->setSize($tenantEm->merge($size));
+            }
+            foreach ($entityInstance->getOptionValues() as $optionValue) {
+                $tenantEm->merge($optionValue);
+            }
             $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, 0, 1);
         }
-        
-        // On laisse le parent gérer le persist et le flush
         parent::persistEntity($entityManager, $entityInstance);
     }
 
+    /**
+     * Correction pour la MISE À JOUR
+     */
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         if ($entityInstance instanceof ProductVariant) {
             $tenantEm = $this->emProvider->getEntityManager();
+
+             if ($product = $entityInstance->getProduct()) {
+                $entityInstance->setProduct($tenantEm->merge($product));
+            }
+            if ($color = $entityInstance->getColor()) {
+                $entityInstance->setColor($tenantEm->merge($color));
+            }
+            if ($size = $entityInstance->getSize()) {
+                $entityInstance->setSize($tenantEm->merge($size));
+            }
+            foreach ($entityInstance->getOptionValues() as $optionValue) {
+                $tenantEm->merge($optionValue);
+            }
             $unitOfWork = $tenantEm->getUnitOfWork();
             $originalData = $unitOfWork->getOriginalEntityData($entityInstance);
             $stockBeforeMovement = $originalData['stockQuantity'] ?? 0;
-
-            // Logique métier personnalisée
             $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $stockBeforeMovement, 4);
         }
-
-        // On laisse le parent gérer le merge et le flush
         parent::updateEntity($entityManager, $entityInstance);
     }
 
     public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         if ($entityInstance instanceof ProductVariant) {
-            // Logique métier personnalisée AVANT la suppression
-            $this->updateStockAndInventoryUseCase->executeNewProductVariant($entityInstance, $entityInstance->getStockQuantity(), 2);
-        }
+             $tenantEm = $this->emProvider->getEntityManager();
+             $managedVariant = $tenantEm->merge($entityInstance); 
 
-        // On laisse le parent gérer la suppression
+            $this->updateStockAndInventoryUseCase->executeNewProductVariant($managedVariant, $managedVariant->getStockQuantity(), 2);
+        }
         parent::deleteEntity($entityManager, $entityInstance);
+    }
+
+    public function configureActions(Actions $actions): Actions
+    {
+        $editCustom = Action::new('edit_custom', 'Modifier', 'fa fa-pencil')
+            ->linkToRoute('admin_product_variant_edit_custom', function (ProductVariant $variant): array {
+                return ['id' => $variant->getId()];
+            });
+
+        return $actions
+            // On remplace l'action 'edit' par la nôtre sur la page de liste
+            ->remove(Crud::PAGE_INDEX, Action::EDIT)
+            ->add(Crud::PAGE_INDEX, $editCustom)
+            // On peut aussi la retirer de la page de détail si besoin
+            ->remove(Crud::PAGE_DETAIL, Action::EDIT);
     }
 }

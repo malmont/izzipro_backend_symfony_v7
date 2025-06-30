@@ -40,7 +40,7 @@ class ParcelCrudController extends BaseTenantCrudController
             NumberField::new('length', 'Longueur (cm)'),
             NumberField::new('width', 'Largeur (cm)'),
             NumberField::new('height', 'Hauteur (cm)'),
-            NumberField::new('price', 'Prix')->setStoredAsCents(false)->onlyOnIndex(),
+            NumberField::new('price', 'Prix')->onlyOnIndex(),
             AssociationField::new('shippingLabel', 'Étiquette')->hideOnForm(),
         ];
     }
