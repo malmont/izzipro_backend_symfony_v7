@@ -38,8 +38,6 @@ class AuthenticationService
         $em = $this->emProvider->getEntityManager();
         
         $dbName = $em->getConnection()->getDatabase();
-
-        // Cette ligne est maintenant sûre, car UserRepository est créé par le bon EM.
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
 
         if (!$user instanceof UserInterface) {
@@ -78,7 +76,6 @@ class AuthenticationService
             }
         }
 
-             // Si l'OTP est activé pour cet utilisateur, on génère et envoie l'OTP via le service dédié
         if ($user->isOtpEnabled()) {
             $this->otpService->generateAndSendOtp($user, $request);
             return new Response(
@@ -92,6 +89,7 @@ class AuthenticationService
         }
         
         $tokens = $this->tokenService->generateTokens($user);
-        return $this->tokenService->createResponseWithTokens($tokens, $platform);
+        $host = $request->getHost();
+        return $this->tokenService->createResponseWithTokens($tokens, $platform,$host);
     }
 }

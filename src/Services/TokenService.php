@@ -30,13 +30,12 @@ class TokenService
      */
     public function generateTokens(UserInterface $user): array
     {
-        // Génération du token JWT
+
         $jwt = $this->JWTManager->create($user);
 
-        // Utilisation de l'EM multi-tenant
         $em = $this->tenantEmProvider->getEntityManager();
 
-        // Création et configuration du refresh token
+ 
         $refreshToken = new RefreshToken();
         $refreshToken->setRefreshToken(base64_encode(random_bytes(64)));
         $refreshToken->setUsername($user->getUserIdentifier());
@@ -60,7 +59,14 @@ class TokenService
      * @param string $cookiePath Chemin du cookie (par défaut "/")
      * @return Response
      */
-    public function createResponseWithTokens(array $tokens, string $platform, int $ttlJwt = 3600, int $ttlRefresh = 604800, string $cookiePath = '/'): Response
+     public function createResponseWithTokens(
+        array $tokens, 
+        string $platform,
+        string $host, 
+        int $ttlJwt = 3600, 
+        int $ttlRefresh = 604800, 
+        string $cookiePath = '/'
+    ): Response
     {
         $response = new Response();
 
@@ -69,9 +75,10 @@ class TokenService
                 ->withValue($tokens['token'])
                 ->withHttpOnly(true)
                 ->withSecure(true)
-                ->withSameSite(Cookie::SAMESITE_NONE)
+                ->withSameSite(Cookie::SAMESITE_NONE) 
                 ->withExpires(time() + $ttlJwt)
-                ->withPath($cookiePath);
+                ->withPath($cookiePath)
+                ->withDomain($host); 
             
             $refreshCookie = Cookie::create('refresh_token')
                 ->withValue($tokens['refresh_token'])
@@ -79,7 +86,8 @@ class TokenService
                 ->withSecure(true)
                 ->withSameSite(Cookie::SAMESITE_NONE)
                 ->withExpires(time() + $ttlRefresh)
-                ->withPath($cookiePath);
+                ->withPath($cookiePath)
+                ->withDomain($host); 
 
             $response->headers->setCookie($jwtCookie);
             $response->headers->setCookie($refreshCookie);
