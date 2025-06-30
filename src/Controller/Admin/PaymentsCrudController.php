@@ -52,7 +52,7 @@ class PaymentsCrudController extends BaseTenantCrudController
                     'query_builder' => fn(OrderRepository $repo) => $repo->createQueryBuilder('o')->orderBy('o.orderDate', 'DESC'),
                     'choice_label' => 'reference'
                 ]),
-            MoneyField::new('amount', 'Amount')->setCurrency('USD')->setStoredAsCents(false),
+            MoneyField::new('amount', 'Amount')->setCurrency('USD'),
             DateTimeField::new('paymentDate', 'Payment Date'),
             AssociationField::new('paymentMethod', 'Payment Method')
                 ->setRequired(true)

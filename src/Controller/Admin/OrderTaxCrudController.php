@@ -54,7 +54,7 @@ class OrderTaxCrudController extends BaseTenantCrudController
                     'choice_label' => 'name',
                 ]),
 
-            MoneyField::new('amount', 'Amount')->setCurrency('USD')->setStoredAsCents(false),
+            MoneyField::new('amount', 'Amount')->setCurrency('USD')
         ];
     }
 }
