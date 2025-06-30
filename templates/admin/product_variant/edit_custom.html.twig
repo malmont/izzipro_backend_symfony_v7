@@ -1,0 +1,25 @@
+{# templates/admin/product_variant/edit_custom.html.twig #}
+
+{# On hérite du layout d'EasyAdmin pour garder le même design #}
+{% extends '@EasyAdmin/layout.html.twig' %}
+
+{% block content_title %}
+    Modifier la variante #{{ variant.id }}
+{% endblock %}
+
+{% block main %}
+    {# C'est ici que vous mettez votre formulaire et votre logique JS #}
+    {{ form_start(form) }}
+        {{ form_row(form.product) }}
+        {{ form_row(form.color) }}
+        {{ form_row(form.size) }}
+        {{ form_row(form.stockQuantity) }}
+        
+        {# Ici, votre logique personnalisée pour les options #}
+        <div data-controller="your-stimulus-controller">
+            {# ... #}
+        </div>
+
+        <button type="submit" class="btn btn-primary">Enregistrer les modifications</button>
+    {{ form_end(form) }}
+{% endblock %}
