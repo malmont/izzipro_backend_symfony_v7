@@ -28,7 +28,6 @@ class ExploreCardService
         foreach ($cards as $card) {
             $base = rtrim($host, '/').'/assets/uploads/explore/';
             $imageUrl = $card->getImagePath() ? $base . $card->getImagePath() : null;
-            $videoUrl = $card->getVideoPath() ? $base . $card->getVideoPath() : null;
 
             $dtos[] = new ExploreCardDto(
                 $card->getId(),
@@ -38,7 +37,7 @@ class ExploreCardService
                 $card->getDescription(),
                 $card->getLink(),
                 $imageUrl,
-                $videoUrl
+                $card->getVideoPath()
             );
         }
 
