@@ -1,70 +1,56 @@
 # deploy.yml
 
-# ===================================================================
-# JOB ORIGINAL (INCHANGÉ) - POUR RUNNER CLOUD GITHUB
-# Votre job existant reste ici, intact.
-# ===================================================================
-name: Build and Deploy Docker Image to GHCR and Server
+# Nom du workflow qui apparaît dans l'interface de GitHub Actions
+name: Build and Deploy (Self-Hosted QA)
 
+# Déclencheur du workflow : s'exécute à chaque push sur la branche "qa"
 on:
   push:
     branches:
       - qa
 
-permissions:
-  contents: read
-
+# La clé "jobs" contient tous les travaux à exécuter
 jobs:
-  # Votre job 'build-and-deploy' reste ici si vous le souhaitez...
-
   # ===================================================================
-  # NOUVEAU JOB - POUR RUNNER SELF-HOSTED
-  # Ce job est optimisé pour s'exécuter directement sur votre serveur.
+  # JOB POUR RUNNER SELF-HOSTED (CORRIGÉ)
   # ===================================================================
   build-and-deploy-self-hosted:
     name: Build and Deploy (Self-Hosted)
-    # On accorde les permissions nécessaires au GITHUB_TOKEN pour écrire sur GHCR.
     permissions:
       contents: read
       packages: write
-    # Étape la plus importante : on cible votre runner local.
     runs-on: self-hosted 
 
-    # On définit le répertoire de travail une seule fois.
-    # Assurez-vous que ce chemin correspond à l'endroit où vous voulez que votre application soit.
-    # Le runner clonera le code dans ce dossier.
+    env:
+      APP_PATH: /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+
     defaults:
       run:
-        working-directory: /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+        working-directory: ${{ env.APP_PATH }}
 
     steps:
       # 🔑 1️⃣ Configuration de la clé SSH pour cloner le dépôt
-      # Le rôle de la clé a changé : elle sert maintenant à s'authentifier auprès de GitHub.com
       - name: 🔑 Configure SSH for Git Checkout
         uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       # 📥 2️⃣ Checkout du repository
-      # L'action checkout va maintenant utiliser la clé configurée ci-dessus pour cloner.
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
       # 🛠️ 3️⃣ Création des dossiers nécessaires (si absents)
-      # Plus de SSH. On exécute les commandes directement sur le serveur.
       - name: 🛠️ Create required directories
         run: |
           echo "📂 Création des dossiers app, public, et jwt si nécessaire..."
-          sudo mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/public
-          sudo mkdir -p /home/${{ secrets.CLIENT1_SERVER_USER }}/app/jwt
-          # On s'assure que l'utilisateur du runner est propriétaire du dossier de l'app
-          sudo chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+          sudo mkdir -p ${{ env.APP_PATH }}/public
+          sudo mkdir -p ${{ env.APP_PATH }}/jwt
+          sudo chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} ${{ env.APP_PATH }}
           echo "✅ Dossiers vérifiés."
 
       # 🔄 4️⃣ Générer le fichier .env
-      # La commande est identique, mais s'exécute localement sans SSH.
       - name: 🔄 Generate .env file
         run: |
           echo "📄 Génération du fichier .env..."
@@ -88,8 +74,7 @@ jobs:
           EOL
           echo "✅ Fichier .env généré."
 
-      # � 5️⃣ Générer les clés JWT (si absentes)
-      # La logique est la même, mais exécutée directement.
+      # 🔑 5️⃣ Générer les clés JWT (si absentes)
       - name: 🔑 Generate JWT Keys if not present
         run: |
           JWT_DIR="jwt"
@@ -98,7 +83,6 @@ jobs:
             sudo openssl genrsa -out "$JWT_DIR/private.pem" 2048
             sudo openssl rsa -pubout -in "$JWT_DIR/private.pem" -out "$JWT_DIR/public.pem"
             sudo chmod 600 "$JWT_DIR/private.pem" "$JWT_DIR/public.pem"
-            # Ajustement des permissions pour le conteneur PHP/Symfony
             sudo chown -R www-data:www-data "$JWT_DIR"
             sudo chmod -R 750 "$JWT_DIR"
             echo "✅ Clés JWT générées."
@@ -115,15 +99,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # 🏗️ 7️⃣ Construire et Pousser les images Docker
-      # On peut combiner build et push pour plus de clarté.
       - name: 🏗️ Build and Push Docker Images
         run: |
-          # Build, tag, and push Symfony image
           echo "📦 Construction et push de l'image Symfony..."
           docker build --build-arg APP_ENV=prod -t ghcr.io/${{ github.repository_owner }}/symfony-backend:latest -f Dockerfile .
           docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
           
-          # Build, tag, and push Nginx image
           echo "📦 Construction et push de l'image Nginx..."
           docker build -t ghcr.io/${{ github.repository_owner }}/symfony-nginx:latest -f Dockerfile.nginx .
           docker push ghcr.io/${{ github.repository_owner }}/symfony-nginx:latest
@@ -131,7 +112,6 @@ jobs:
           echo "✅ Images Docker poussées vers GHCR."
 
       # 🚀 8️⃣ Déployer les conteneurs avec Docker Compose
-      # Toutes les commandes de déploiement sont maintenant directes, avec sudo.
       - name: 🚀 Deploy containers
         run: |
           echo "🔧 Configuration du kernel: vm.overcommit_memory..."
@@ -167,10 +147,8 @@ jobs:
           sudo docker exec symfony_app php bin/console assets:install public
 
           echo "🔧 Réajustement des permissions sur les dossiers d'upload..."
-          # On s'assure que les dossiers existent avant de changer les permissions
           sudo mkdir -p public/assets/uploads
           sudo mkdir -p public/assets/images
-          # On applique les permissions nécessaires pour que le serveur web (www-data) puisse écrire
           sudo chown -R www-data:www-data public/assets/uploads public/assets/images
           sudo chmod -R 775 public/assets/uploads public/assets/images
 
