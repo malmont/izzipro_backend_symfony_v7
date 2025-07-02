@@ -110,10 +110,12 @@ jobs:
           # On suppose qu'ils y sont déjà suite à la configuration manuelle.
 
           echo "📥 Pull des dernières images..."
-          sudo docker compose pull
+          # --- CORRECTION ICI ---
+          sudo docker-compose pull
 
           echo "🚀 Lancement des conteneurs..."
-          sudo docker compose up -d --force-recreate
+          # --- CORRECTION ICI ---
+          sudo docker-compose up -d --force-recreate
 
           echo "✅ Déploiement terminé."
 
