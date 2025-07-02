@@ -32,7 +32,7 @@ services:
     healthcheck:
       disable: true
 
-  # Redis (🆕)
+  # Redis
   redis:
     image: redis:7
     container_name: redis_cache
@@ -65,7 +65,13 @@ services:
       - "80:80"
       - "443:443"
     volumes:
+      # Chemin vers votre Caddyfile
       - ./caddyfile/Caddyfile:/etc/caddy/Caddyfile:ro
+      # --- MODIFICATION ICI ---
+      # Ajout des certificats SSL locaux générés avec mkcert
+      - ./64.187.182.48.pem:/etc/caddy/certs/64.187.182.48.pem:ro
+      - ./64.187.182.48-key.pem:/etc/caddy/certs/64.187.182.48-key.pem:ro
+      # --- FIN DE LA MODIFICATION ---
       - caddy_data:/data
       - caddy_config:/config
     networks:
@@ -75,7 +81,7 @@ services:
 
 volumes:
   db_data:
-  redis_data:         # 🆕 volume pour Redis
+  redis_data:
   caddy_data:
   caddy_config:
   public_data:
