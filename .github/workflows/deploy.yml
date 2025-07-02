@@ -1,19 +1,13 @@
 # deploy.yml
 
-# Nom du workflow qui apparaît dans l'interface de GitHub Actions
 name: Build and Deploy (Self-Hosted QA)
 
-# Déclencheur du workflow : s'exécute à chaque push sur la branche "qa"
 on:
   push:
     branches:
       - qa
 
-# La clé "jobs" contient tous les travaux à exécuter
 jobs:
-  # ===================================================================
-  # JOB POUR RUNNER SELF-HOSTED (CORRIGÉ)
-  # ===================================================================
   build-and-deploy-self-hosted:
     name: Build and Deploy (Self-Hosted)
     permissions:
@@ -22,39 +16,29 @@ jobs:
     runs-on: self-hosted 
 
     env:
+      # On définit le chemin de déploiement final dans une variable
       APP_PATH: /home/${{ secrets.CLIENT1_SERVER_USER }}/app
 
-    defaults:
-      run:
-        working-directory: ${{ env.APP_PATH }}
+    # PAS de "defaults.run.working-directory" ici. Les étapes s'exécuteront
+    # dans le dossier de checkout par défaut, où se trouve le code.
 
     steps:
-      # 🔑 1️⃣ Configuration de la clé SSH pour cloner le dépôt
+      # 1. Checkout du code dans un dossier de travail temporaire
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Configuration de la clé SSH (si nécessaire pour des sous-modules privés)
       - name: 🔑 Configure SSH for Git Checkout
         uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      # 📥 2️⃣ Checkout du repository
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       
-      # 🛠️ 3️⃣ Création des dossiers nécessaires (si absents)
-      - name: 🛠️ Create required directories
-        run: |
-          echo "📂 Création des dossiers app, public, et jwt si nécessaire..."
-          sudo mkdir -p ${{ env.APP_PATH }}/public
-          sudo mkdir -p ${{ env.APP_PATH }}/jwt
-          sudo chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} ${{ env.APP_PATH }}
-          echo "✅ Dossiers vérifiés."
-
-      # 🔄 4️⃣ Générer le fichier .env
+      # 3. Génération du fichier .env (dans le dossier de travail temporaire)
       - name: 🔄 Generate .env file
         run: |
           echo "📄 Génération du fichier .env..."
           cat <<EOL > .env
+          # ... (contenu de votre .env) ...
           POSTGRES_USER=${{ secrets.DB_USER }}
           POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
           POSTGRES_DB=${{ secrets.DB_NAME }}
@@ -74,23 +58,7 @@ jobs:
           EOL
           echo "✅ Fichier .env généré."
 
-      # 🔑 5️⃣ Générer les clés JWT (si absentes)
-      - name: 🔑 Generate JWT Keys if not present
-        run: |
-          JWT_DIR="jwt"
-          if [ ! -f "$JWT_DIR/private.pem" ]; then
-            echo "🔑 Génération des clés JWT..."
-            sudo openssl genrsa -out "$JWT_DIR/private.pem" 2048
-            sudo openssl rsa -pubout -in "$JWT_DIR/private.pem" -out "$JWT_DIR/public.pem"
-            sudo chmod 600 "$JWT_DIR/private.pem" "$JWT_DIR/public.pem"
-            sudo chown -R www-data:www-data "$JWT_DIR"
-            sudo chmod -R 750 "$JWT_DIR"
-            echo "✅ Clés JWT générées."
-          else
-            echo "✅ Clés JWT déjà présentes."
-          fi
-
-      # 🔑 6️⃣ Connexion à GHCR avec le GITHUB_TOKEN
+      # 4. Connexion à GHCR
       - name: 🔑 Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -98,7 +66,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 🏗️ 7️⃣ Construire et Pousser les images Docker
+      # 5. Construction des images Docker (depuis le dossier de travail temporaire)
+      # Cette étape va maintenant trouver le Dockerfile
       - name: 🏗️ Build and Push Docker Images
         run: |
           echo "📦 Construction et push de l'image Symfony..."
@@ -111,8 +80,21 @@ jobs:
           
           echo "✅ Images Docker poussées vers GHCR."
 
-      # 🚀 8️⃣ Déployer les conteneurs avec Docker Compose
+      # 6. NOUVELLE ÉTAPE : Synchronisation vers le dossier de déploiement final
+      - name: 🚚 Synchronize files to deployment directory
+        run: |
+          echo "Synchronisation des fichiers vers ${{ env.APP_PATH }}"
+          # On s'assure que le dossier de destination existe
+          sudo mkdir -p ${{ env.APP_PATH }}
+          # On copie tous les fichiers du checkout vers la destination finale
+          sudo rsync -a --delete . ${{ env.APP_PATH }}/
+          # On s'assure que l'utilisateur est bien propriétaire
+          sudo chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} ${{ env.APP_PATH }}
+          echo "✅ Synchronisation terminée."
+
+      # 7. Déploiement des conteneurs (depuis le dossier de déploiement final)
       - name: 🚀 Deploy containers
+        working-directory: ${{ env.APP_PATH }} # On spécifie le bon dossier pour cette étape
         run: |
           echo "🔧 Configuration du kernel: vm.overcommit_memory..."
           sudo sysctl -w vm.overcommit_memory=1
@@ -122,6 +104,10 @@ jobs:
             echo "🌐 Création du réseau Docker 'web'..."
             sudo docker network create web
           fi
+          
+          # Les fichiers de certificat doivent être dans le dossier APP_PATH
+          # S'ils ne le sont pas, il faudra les copier ici.
+          # On suppose qu'ils y sont déjà suite à la configuration manuelle.
 
           echo "📥 Pull des dernières images..."
           sudo docker compose pull
@@ -131,8 +117,9 @@ jobs:
 
           echo "✅ Déploiement terminé."
 
-      # ⚙️ 9️⃣ Commandes Symfony post-déploiement
+      # 8. Commandes post-déploiement (depuis le dossier de déploiement final)
       - name: ⚙️ Run post-deployment commands
+        working-directory: ${{ env.APP_PATH }} # On spécifie le bon dossier pour cette étape
         run: |
           echo "⏳ Pause de 15 secondes pour laisser les conteneurs s'initialiser..."
           sleep 15
