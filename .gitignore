@@ -26,5 +26,5 @@
 /config/jwt/*.pem
 ###< lexik/jwt-authentication-bundle ###
 .env
-.env
-.env
+### Ignorer le dossier GitHub Actions et workflows ###
+.github/
