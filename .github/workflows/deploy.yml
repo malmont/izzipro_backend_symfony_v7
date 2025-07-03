@@ -1,37 +1,35 @@
-# Nom du workflow qui apparaît dans l'interface de GitHub Actions
+# deploy.yml
+
 name: Build and Deploy (Self-Hosted QA)
 
-# Déclencheur du workflow : s'exécute à chaque push sur la branche "qa"
 on:
   push:
     branches:
       - qa
 
-# La clé "jobs" contient tous les travaux à exécuter
 jobs:
   build-and-deploy-self-hosted:
     name: Build and Deploy (Self-Hosted)
     permissions:
       contents: read
       packages: write
-    runs-on: self-hosted
+    runs-on: self-hosted 
 
     env:
-      # On définit le chemin de déploiement final dans une variable
       APP_PATH: /home/${{ secrets.CLIENT1_SERVER_USER }}/app
 
     steps:
-      # Étape 1: Checkout du code dans un dossier de travail temporaire
+      # Étape 1: Checkout du code
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      # Étape 2: Configuration de la clé SSH (si nécessaire pour des sous-modules privés)
+      # Étape 2: Configuration SSH
       - name: 🔑 Configure SSH for Git Checkout
         uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
       
-      # Étape 3: Génération du fichier .env (dans le dossier de travail temporaire)
+      # Étape 3: Génération du fichier .env
       - name: 🔄 Generate .env file
         run: |
           echo "📄 Génération du fichier .env..."
@@ -55,7 +53,7 @@ jobs:
           EOL
           echo "✅ Fichier .env généré."
 
-      # Étape 4: Connexion à GHCR (pour l'utilisateur du runner : v2vadmin)
+      # Étape 4: Connexion à GHCR
       - name: 🔑 Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -76,7 +74,7 @@ jobs:
           
           echo "✅ Images Docker poussées vers GHCR."
 
-      # Étape 6: Synchronisation des fichiers vers le dossier de déploiement final
+      # Étape 6: Synchronisation des fichiers
       - name: 🚚 Synchronize files to deployment directory
         run: |
           echo "Synchronisation des fichiers vers ${{ env.APP_PATH }}"
@@ -87,7 +85,7 @@ jobs:
 
       # Étape 7: Déploiement des conteneurs
       - name: 🚀 Deploy containers
-        working-directory: ${{ env.APP_PATH }} # On exécute cette étape depuis le dossier final
+        working-directory: ${{ env.APP_PATH }}
         run: |
           echo "🔧 Configuration du kernel: vm.overcommit_memory..."
           sudo sysctl -w vm.overcommit_memory=1
@@ -104,14 +102,19 @@ jobs:
           echo "📥 Pull des dernières images..."
           sudo docker-compose pull
 
-          echo "🚀 Lancement des conteneurs..."
-          sudo docker-compose up -d --force-recreate
+          # --- CORRECTION ICI ---
+          echo "🛑 Arrêt et suppression des anciens conteneurs pour un redémarrage propre..."
+          sudo docker-compose down
+
+          echo "🚀 Lancement des nouveaux conteneurs..."
+          sudo docker-compose up -d
+          # --- FIN DE LA CORRECTION ---
 
           echo "✅ Déploiement terminé."
 
       # Étape 8: Commandes post-déploiement
       - name: ⚙️ Run post-deployment commands
-        working-directory: ${{ env.APP_PATH }} # On exécute aussi cette étape depuis le dossier final
+        working-directory: ${{ env.APP_PATH }}
         run: |
           echo "⏳ Pause de 15 secondes pour laisser les conteneurs s'initialiser..."
           sleep 15
