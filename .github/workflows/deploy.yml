@@ -1,44 +1,41 @@
-# deploy.yml
-
+# Nom du workflow qui apparaît dans l'interface de GitHub Actions
 name: Build and Deploy (Self-Hosted QA)
 
+# Déclencheur du workflow : s'exécute à chaque push sur la branche "qa"
 on:
   push:
     branches:
       - qa
 
+# La clé "jobs" contient tous les travaux à exécuter
 jobs:
   build-and-deploy-self-hosted:
     name: Build and Deploy (Self-Hosted)
     permissions:
       contents: read
       packages: write
-    runs-on: self-hosted 
+    runs-on: self-hosted
 
     env:
       # On définit le chemin de déploiement final dans une variable
       APP_PATH: /home/${{ secrets.CLIENT1_SERVER_USER }}/app
 
-    # PAS de "defaults.run.working-directory" ici. Les étapes s'exécuteront
-    # dans le dossier de checkout par défaut, où se trouve le code.
-
     steps:
-      # 1. Checkout du code dans un dossier de travail temporaire
+      # Étape 1: Checkout du code dans un dossier de travail temporaire
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Configuration de la clé SSH (si nécessaire pour des sous-modules privés)
+      # Étape 2: Configuration de la clé SSH (si nécessaire pour des sous-modules privés)
       - name: 🔑 Configure SSH for Git Checkout
         uses: webfactory/ssh-agent@v0.8.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
       
-      # 3. Génération du fichier .env (dans le dossier de travail temporaire)
+      # Étape 3: Génération du fichier .env (dans le dossier de travail temporaire)
       - name: 🔄 Generate .env file
         run: |
           echo "📄 Génération du fichier .env..."
           cat <<EOL > .env
-          # ... (contenu de votre .env) ...
           POSTGRES_USER=${{ secrets.DB_USER }}
           POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
           POSTGRES_DB=${{ secrets.DB_NAME }}
@@ -58,7 +55,7 @@ jobs:
           EOL
           echo "✅ Fichier .env généré."
 
-      # 4. Connexion à GHCR
+      # Étape 4: Connexion à GHCR (pour l'utilisateur du runner : v2vadmin)
       - name: 🔑 Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -66,8 +63,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 5. Construction des images Docker (depuis le dossier de travail temporaire)
-      # Cette étape va maintenant trouver le Dockerfile
+      # Étape 5: Construction et push des images Docker
       - name: 🏗️ Build and Push Docker Images
         run: |
           echo "📦 Construction et push de l'image Symfony..."
@@ -80,21 +76,18 @@ jobs:
           
           echo "✅ Images Docker poussées vers GHCR."
 
-      # 6. NOUVELLE ÉTAPE : Synchronisation vers le dossier de déploiement final
+      # Étape 6: Synchronisation des fichiers vers le dossier de déploiement final
       - name: 🚚 Synchronize files to deployment directory
         run: |
           echo "Synchronisation des fichiers vers ${{ env.APP_PATH }}"
-          # On s'assure que le dossier de destination existe
           sudo mkdir -p ${{ env.APP_PATH }}
-          # On copie tous les fichiers du checkout vers la destination finale
           sudo rsync -a --delete . ${{ env.APP_PATH }}/
-          # On s'assure que l'utilisateur est bien propriétaire
           sudo chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} ${{ env.APP_PATH }}
           echo "✅ Synchronisation terminée."
 
-      # 7. Déploiement des conteneurs (depuis le dossier de déploiement final)
+      # Étape 7: Déploiement des conteneurs
       - name: 🚀 Deploy containers
-        working-directory: ${{ env.APP_PATH }} # On spécifie le bon dossier pour cette étape
+        working-directory: ${{ env.APP_PATH }} # On exécute cette étape depuis le dossier final
         run: |
           echo "🔧 Configuration du kernel: vm.overcommit_memory..."
           sudo sysctl -w vm.overcommit_memory=1
@@ -105,23 +98,20 @@ jobs:
             sudo docker network create web
           fi
           
-          # Les fichiers de certificat doivent être dans le dossier APP_PATH
-          # S'ils ne le sont pas, il faudra les copier ici.
-          # On suppose qu'ils y sont déjà suite à la configuration manuelle.
+          echo "🔑 Connexion à GHCR pour l'utilisateur root..."
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
           echo "📥 Pull des dernières images..."
-          # --- CORRECTION ICI ---
           sudo docker-compose pull
 
           echo "🚀 Lancement des conteneurs..."
-          # --- CORRECTION ICI ---
           sudo docker-compose up -d --force-recreate
 
           echo "✅ Déploiement terminé."
 
-      # 8. Commandes post-déploiement (depuis le dossier de déploiement final)
+      # Étape 8: Commandes post-déploiement
       - name: ⚙️ Run post-deployment commands
-        working-directory: ${{ env.APP_PATH }} # On spécifie le bon dossier pour cette étape
+        working-directory: ${{ env.APP_PATH }} # On exécute aussi cette étape depuis le dossier final
         run: |
           echo "⏳ Pause de 15 secondes pour laisser les conteneurs s'initialiser..."
           sleep 15
