@@ -62,16 +62,17 @@ services:
     image: caddy:latest
     container_name: caddy_proxy
     ports:
-      - "80:80"
-      - "443:443"
+      # --- MODIFICATION ICI ---
+      # On utilise des ports libres pour éviter les conflits
+      - "8080:80"
+      - "8443:443"
+      # --- FIN DE LA MODIFICATION ---
     volumes:
       # Chemin vers votre Caddyfile
       - ./caddyfile/Caddyfile:/etc/caddy/Caddyfile:ro
-      # --- MODIFICATION ICI ---
       # Ajout des certificats SSL locaux générés avec mkcert
       - ./64.187.182.48.pem:/etc/caddy/certs/64.187.182.48.pem:ro
       - ./64.187.182.48-key.pem:/etc/caddy/certs/64.187.182.48-key.pem:ro
-      # --- FIN DE LA MODIFICATION ---
       - caddy_data:/data
       - caddy_config:/config
     networks:
