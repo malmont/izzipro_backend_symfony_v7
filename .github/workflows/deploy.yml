@@ -1,5 +1,5 @@
 # Nom du workflow qui apparaît dans l'interface de GitHub Actions
-name: Build and Deploy (Self-Hosted QA)
+name: Build and Deploy Backend (Self-Hosted QA)
 
 # Déclencheur du workflow : s'exécute à chaque push sur la branche "qa"
 on:
@@ -10,7 +10,7 @@ on:
 # La clé "jobs" contient tous les travaux à exécuter
 jobs:
   build-and-deploy-self-hosted:
-    name: Build and Deploy (Self-Hosted)
+    name: Build and Deploy Backend (Self-Hosted)
     permissions:
       contents: read
       packages: write
@@ -25,7 +25,7 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      # Étape 2: Configuration SSH
+      # Étape 2: Configuration SSH (uniquement pour cloner des dépendances privées si nécessaire)
       - name: 🔑 Configure SSH for Git Checkout
         uses: webfactory/ssh-agent@v0.8.0
         with:
@@ -36,14 +36,21 @@ jobs:
         run: |
           echo "📄 Génération du fichier .env..."
           cat <<EOL > .env
+          # Connexion par défaut (sera probablement surchargée par le Tenant Listener)
           POSTGRES_USER=${{ secrets.DB_USER }}
           POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
           POSTGRES_DB=${{ secrets.DB_NAME }}
           POSTGRES_HOST=db
           POSTGRES_PORT=5432
           DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@db:5432/${{ secrets.DB_NAME }}
+
+          # Connexion à la base de données Master pour la découverte des tenants
           MASTER_DATABASE_URL=postgresql://${{ secrets.MASTER_DB_USER }}:${{ secrets.MASTER_DB_PASSWORD }}@db:5432/master?serverVersion=14&charset=utf8
+          
+          # Variable pour Symfony Messenger
           MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0
+
+          # Variables de l'application
           APP_ENV=prod
           APP_SECRET=${{ secrets.APP_SECRET }}
           REDIS_URL=redis://redis
@@ -78,7 +85,7 @@ jobs:
           
           echo "✅ Images Docker poussées vers GHCR."
 
-      # Étape 6: Synchronisation des fichiers
+      # Étape 6: Synchronisation des fichiers vers le dossier de déploiement
       - name: 🚚 Synchronize files to deployment directory
         run: |
           echo "Synchronisation des fichiers vers ${{ env.APP_PATH }}"
@@ -105,7 +112,6 @@ jobs:
 
           echo "✅ Déploiement terminé."
 
-      # --- NOUVELLE ÉTAPE ---
       # Étape 8: Création de la base de données et de l'utilisateur Master
       - name: ⚙️ Create Master Database and User
         working-directory: ${{ env.APP_PATH }}
@@ -113,11 +119,8 @@ jobs:
           echo "⏳ Attente de 5 secondes pour que PostgreSQL démarre complètement..."
           sleep 5
           echo "🔧 Création de l'utilisateur et de la base de données master si nécessaire..."
-          # Crée l'utilisateur master, ignore l'erreur s'il existe déjà
           sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "CREATE USER ${{ secrets.MASTER_DB_USER }} WITH PASSWORD '${{ secrets.MASTER_DB_PASSWORD }}';" || echo "L'utilisateur master_user existe probablement déjà, on ignore."
-          # Crée la base de données master, ignore l'erreur si elle existe déjà
           sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "CREATE DATABASE master;" || echo "La base de données master existe probablement déjà, on ignore."
-          # Accorde tous les privilèges sur cette base à l'utilisateur master
           sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "GRANT ALL PRIVILEGES ON DATABASE master TO ${{ secrets.MASTER_DB_USER }};"
           echo "✅ Base de données master vérifiée."
 
