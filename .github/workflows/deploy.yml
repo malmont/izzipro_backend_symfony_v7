@@ -44,7 +44,6 @@ jobs:
           DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@db:5432/${{ secrets.DB_NAME }}
           MASTER_DATABASE_URL=postgresql://${{ secrets.MASTER_DB_USER }}:${{ secrets.MASTER_DB_PASSWORD }}@db:5432/master?serverVersion=14&charset=utf8
           MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0
-          
           APP_ENV=prod
           APP_SECRET=${{ secrets.APP_SECRET }}
           REDIS_URL=redis://redis
@@ -106,25 +105,32 @@ jobs:
 
           echo "✅ Déploiement terminé."
 
-      # Étape 8: Création de la base de données et de l'utilisateur Master
-      - name: ⚙️ Create Master Database and User
+      # Étape 8: Initialisation de la base de données Master
+      - name: ⚙️ Initialize Master Database
         working-directory: ${{ env.APP_PATH }}
         run: |
-          # --- CORRECTION ICI ---
-          # On remplace le "sleep" par une boucle qui vérifie si la DB est prête
           echo "⏳ Attente que PostgreSQL soit prêt à accepter des connexions..."
           until sudo docker exec symfony_db pg_isready -U ${{ secrets.DB_USER }} -d postgres; do
             echo "PostgreSQL n'est pas encore prêt, on attend 2 secondes..."
             sleep 2
           done
           echo "✅ PostgreSQL est prêt !"
-          # --- FIN DE LA CORRECTION ---
 
-          echo "🔧 Création de l'utilisateur et de la base de données master si nécessaire..."
-          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "CREATE USER ${{ secrets.MASTER_DB_USER }} WITH PASSWORD '${{ secrets.MASTER_DB_PASSWORD }}';" || echo "L'utilisateur master_user existe probablement déjà, on ignore."
-          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "CREATE DATABASE master;" || echo "La base de données master existe probablement déjà, on ignore."
+          echo "🔧 Création de l'utilisateur, de la DB, de la table 'tenants' et du tenant par défaut..."
+          # Crée l'utilisateur master, ignore l'erreur s'il existe déjà
+          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "CREATE USER ${{ secrets.MASTER_DB_USER }} WITH PASSWORD '${{ secrets.MASTER_DB_PASSWORD }}';" || true
+          # Crée la base de données master, ignore l'erreur si elle existe déjà
+          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "CREATE DATABASE master;" || true
+          # Accorde tous les privilèges sur cette base à l'utilisateur master
           sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "GRANT ALL PRIVILEGES ON DATABASE master TO ${{ secrets.MASTER_DB_USER }};"
-          echo "✅ Base de données master vérifiée."
+
+          # --- CORRECTION DE LA SYNTAXE ICI ---
+          # On exécute les commandes SQL une par une pour éviter les problèmes de syntaxe YAML
+          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -d master -c "CREATE TABLE IF NOT EXISTS tenants (id SERIAL PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE, name VARCHAR(255) NOT NULL, dbname VARCHAR(255) NOT NULL, dbuser VARCHAR(255), dbpass VARCHAR(255));"
+          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -d master -c "INSERT INTO tenants (code, name, dbname) VALUES ('ecommerceflutter', 'ecommerceflutter', 'ecommerceflutter') ON CONFLICT (code) DO NOTHING;"
+          # --- FIN DE LA CORRECTION ---
+          
+          echo "✅ Base de données master initialisée."
 
       # Étape 9: Commandes post-déploiement
       - name: ⚙️ Run post-deployment commands
@@ -137,6 +143,7 @@ jobs:
           sudo docker exec symfony_app php bin/console cache:clear --env=prod
           
           echo "🔄 Application des migrations de la base de données..."
+          # Cette commande migrera la base du tenant par défaut (ecommerceflutter)
           sudo docker exec symfony_app php bin/console doctrine:migrations:migrate --no-interaction --env=prod
 
           echo "🔧 Réajustement des permissions pour l'installation des assets..."
