@@ -128,6 +128,7 @@ jobs:
           # On exécute les commandes SQL une par une pour éviter les problèmes de syntaxe YAML
           sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -d master -c "CREATE TABLE IF NOT EXISTS tenants (id SERIAL PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE, name VARCHAR(255) NOT NULL, dbname VARCHAR(255) NOT NULL, dbuser VARCHAR(255), dbpass VARCHAR(255));"
           sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -d master -c "INSERT INTO tenants (code, name, dbname) VALUES ('ecommerceflutter', 'ecommerceflutter', 'ecommerceflutter') ON CONFLICT (code) DO NOTHING;"
+          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -d master -c "GRANT ALL PRIVILEGES ON TABLE tenants TO ${{ secrets.MASTER_DB_USER }};"
           # --- FIN DE LA CORRECTION ---
           
           echo "✅ Base de données master initialisée."
