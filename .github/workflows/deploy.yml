@@ -1,5 +1,5 @@
 # Nom du workflow qui apparaît dans l'interface de GitHub Actions
-name: Build and Deploy (Self-Hosted QA)
+name: Build and Deploy Backend (Self-Hosted QA)
 
 # Déclencheur du workflow : s'exécute à chaque push sur la branche "qa"
 on:
@@ -10,7 +10,7 @@ on:
 # La clé "jobs" contient tous les travaux à exécuter
 jobs:
   build-and-deploy-self-hosted:
-    name: Build and Deploy (Self-Hosted)
+    name: Build and Deploy Backend (Self-Hosted)
     permissions:
       contents: read
       packages: write
@@ -43,7 +43,6 @@ jobs:
           POSTGRES_PORT=5432
           DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@db:5432/${{ secrets.DB_NAME }}
           MASTER_DATABASE_URL=postgresql://${{ secrets.MASTER_DB_USER }}:${{ secrets.MASTER_DB_PASSWORD }}@db:5432/master?serverVersion=14&charset=utf8
-          
           MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0
           APP_ENV=prod
           APP_SECRET=${{ secrets.APP_SECRET }}
@@ -110,8 +109,16 @@ jobs:
       - name: ⚙️ Create Master Database and User
         working-directory: ${{ env.APP_PATH }}
         run: |
-          echo "⏳ Attente de 5 secondes pour que PostgreSQL démarre complètement..."
-          sleep 5
+          # --- CORRECTION ICI ---
+          # On remplace le "sleep" par une boucle qui vérifie si la DB est prête
+          echo "⏳ Attente que PostgreSQL soit prêt à accepter des connexions..."
+          until sudo docker exec symfony_db pg_isready -U ${{ secrets.DB_USER }} -d postgres; do
+            echo "PostgreSQL n'est pas encore prêt, on attend 2 secondes..."
+            sleep 2
+          done
+          echo "✅ PostgreSQL est prêt !"
+          # --- FIN DE LA CORRECTION ---
+
           echo "🔧 Création de l'utilisateur et de la base de données master si nécessaire..."
           sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "CREATE USER ${{ secrets.MASTER_DB_USER }} WITH PASSWORD '${{ secrets.MASTER_DB_PASSWORD }}';" || echo "L'utilisateur master_user existe probablement déjà, on ignore."
           sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "CREATE DATABASE master;" || echo "La base de données master existe probablement déjà, on ignore."
@@ -122,8 +129,8 @@ jobs:
       - name: ⚙️ Run post-deployment commands
         working-directory: ${{ env.APP_PATH }}
         run: |
-          echo "⏳ Pause de 10 secondes pour que l'application se stabilise..."
-          sleep 10
+          echo "⏳ Pause de 5 secondes pour que l'application se stabilise..."
+          sleep 5
           
           echo "🧹 Nettoyage et préparation du cache Symfony..."
           sudo docker exec symfony_app php bin/console cache:clear --env=prod
@@ -131,12 +138,9 @@ jobs:
           echo "🔄 Application des migrations de la base de données..."
           sudo docker exec symfony_app php bin/console doctrine:migrations:migrate --no-interaction --env=prod
 
-          # --- CORRECTION ICI ---
           echo "🔧 Réajustement des permissions pour l'installation des assets..."
-          # On donne la propriété du dossier public à www-data pour qu'il puisse y écrire
           sudo chown -R www-data:www-data public
-          # --- FIN DE LA CORRECTION ---
-
+          
           echo "📦 Installation des assets..."
           sudo docker exec symfony_app php bin/console assets:install public
 
