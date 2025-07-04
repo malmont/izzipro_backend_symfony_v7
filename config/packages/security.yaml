@@ -10,19 +10,27 @@ security:
     firewalls:
 
 
-        # 3) Toutes les autres APIs REST protégées par JWT
+
         api:
             pattern:   ^/api(?!/login)
             stateless: true
             provider:  tenant_user_provider
             jwt: ~
 
-        # 4) Pour vos assets / dev toolbar
+
         dev:
             pattern:   ^/(_(profiler|wdt)|css|images|js)/
             security:  false
 
-        # 5) LE FIREWALL “MAIN” POUR VOTRE PARTIE WEB
+        gemsuite_api:
+
+            pattern: ^/api/webhook/gemsuite
+            
+            stateless: true
+            
+            custom_authenticators:
+                - App\Security\GemsuiteJwtAuthenticator
+
         main:
             pattern:                ^/             # prend tout le reste
             stateless:              false          # si vous utilisez des sessions

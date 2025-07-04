@@ -1,0 +1,12 @@
+framework:
+    http_client:
+        scoped_clients:
+            gemsuite.client:
+                base_uri: 'https://localhost:8443'
+                
+                # Options mTLS
+                local_cert: '%kernel.project_dir%/config/secrets/test/iizipro_client.crt'
+                local_pk: '%kernel.project_dir%/config/secrets/test/iizipro_client.key'
+
+                # L'option correcte pour spécifier le fichier du certificat de l'autorité
+                cafile: '%kernel.project_dir%/config/secrets/test/ca.crt'
