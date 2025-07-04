@@ -1,5 +1,5 @@
 # Nom du workflow qui apparaît dans l'interface de GitHub Actions
-name: Build and Deploy Backend (Self-Hosted QA)
+name: Build and Deploy (Self-Hosted QA)
 
 # Déclencheur du workflow : s'exécute à chaque push sur la branche "qa"
 on:
@@ -10,7 +10,7 @@ on:
 # La clé "jobs" contient tous les travaux à exécuter
 jobs:
   build-and-deploy-self-hosted:
-    name: Build and Deploy Backend (Self-Hosted)
+    name: Build and Deploy (Self-Hosted)
     permissions:
       contents: read
       packages: write
@@ -25,7 +25,7 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      # Étape 2: Configuration SSH (uniquement pour cloner des dépendances privées si nécessaire)
+      # Étape 2: Configuration SSH
       - name: 🔑 Configure SSH for Git Checkout
         uses: webfactory/ssh-agent@v0.8.0
         with:
@@ -36,21 +36,14 @@ jobs:
         run: |
           echo "📄 Génération du fichier .env..."
           cat <<EOL > .env
-          # Connexion par défaut (sera probablement surchargée par le Tenant Listener)
           POSTGRES_USER=${{ secrets.DB_USER }}
           POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
           POSTGRES_DB=${{ secrets.DB_NAME }}
           POSTGRES_HOST=db
           POSTGRES_PORT=5432
           DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@db:5432/${{ secrets.DB_NAME }}
-
-          # Connexion à la base de données Master pour la découverte des tenants
           MASTER_DATABASE_URL=postgresql://${{ secrets.MASTER_DB_USER }}:${{ secrets.MASTER_DB_PASSWORD }}@db:5432/master?serverVersion=14&charset=utf8
-          
-          # Variable pour Symfony Messenger
           MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0
-
-          # Variables de l'application
           APP_ENV=prod
           APP_SECRET=${{ secrets.APP_SECRET }}
           REDIS_URL=redis://redis
@@ -85,7 +78,7 @@ jobs:
           
           echo "✅ Images Docker poussées vers GHCR."
 
-      # Étape 6: Synchronisation des fichiers vers le dossier de déploiement
+      # Étape 6: Synchronisation des fichiers
       - name: 🚚 Synchronize files to deployment directory
         run: |
           echo "Synchronisation des fichiers vers ${{ env.APP_PATH }}"
@@ -136,6 +129,12 @@ jobs:
           
           echo "🔄 Application des migrations de la base de données..."
           sudo docker exec symfony_app php bin/console doctrine:migrations:migrate --no-interaction --env=prod
+
+          # --- CORRECTION ICI ---
+          echo "🔧 Réajustement des permissions pour l'installation des assets..."
+          # On donne la propriété du dossier public à www-data pour qu'il puisse y écrire
+          sudo chown -R www-data:www-data public
+          # --- FIN DE LA CORRECTION ---
 
           echo "📦 Installation des assets..."
           sudo docker exec symfony_app php bin/console assets:install public
