@@ -101,6 +101,9 @@ class Product
     #[ORM\OneToOne(mappedBy: 'product', cascade: ['persist', 'remove'])]
     private ?ProductShipping $productShipping = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $gemsuiteProductId = null;
+
     public function __construct()
     {
         $this->category = new ArrayCollection();
@@ -528,6 +531,18 @@ class Product
         }
 
         $this->productShipping = $productShipping;
+
+        return $this;
+    }
+
+    public function getGemsuiteProductId(): ?int
+    {
+        return $this->gemsuiteProductId;
+    }
+
+    public function setGemsuiteProductId(?int $gemsuiteProductId): static
+    {
+        $this->gemsuiteProductId = $gemsuiteProductId;
 
         return $this;
     }

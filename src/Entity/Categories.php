@@ -29,6 +29,9 @@ class Categories
     #[ORM\ManyToMany(targetEntity: Product::class, mappedBy: 'category')]
     private Collection $products;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $gemsuiteCategoryId = null;
+
     public function __construct()
     {
         $this->products = new ArrayCollection();
@@ -105,5 +108,17 @@ class Categories
     public function __toString()
     {
         return $this->name;
+    }
+
+    public function getGemsuiteCategoryId(): ?int
+    {
+        return $this->gemsuiteCategoryId;
+    }
+
+    public function setGemsuiteCategoryId(?int $gemsuiteCategoryId): static
+    {
+        $this->gemsuiteCategoryId = $gemsuiteCategoryId;
+
+        return $this;
     }
 }

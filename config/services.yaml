@@ -138,6 +138,7 @@ services:
         bind:
             $projectDir: '%kernel.project_dir%'
 
+
     App\Security\GemsuiteJwtAuthenticator:
         arguments:
             # Bind the constructor argument '$projectDir' to the container parameter '%kernel.project_dir%'

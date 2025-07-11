@@ -3500,3 +3500,7 @@ INSERT INTO tenants(code,name,dbname) VALUES('demo','Demo Tenant','demo_db');
 -- Auto-generated tenant demo10
 CREATE DATABASE "demo_db10" ENCODING='UTF8' TEMPLATE=template0;
 INSERT INTO tenants(code,name,dbname) VALUES('demo10','Demo Tenant 2','demo_db10');
+
+-- Auto-generated tenant gemsuite
+CREATE DATABASE "gmasuite" ENCODING='UTF8' TEMPLATE=template0;
+INSERT INTO tenants(code,name,dbname) VALUES('gemsuite','gemcar','gmasuite');

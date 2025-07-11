@@ -45,8 +45,6 @@ class TenantEntityManagerProvider
             return $this->em;
         }
 
-        // On utilise la configuration globale de Doctrine (qui inclut vos vrais caches, Redis, etc.)
-        // On ne la modifie plus avec ArrayAdapter.
         $config = $this->ormConfig;
 
         // On crée le nouvel EM. On utilise `new EntityManager` car c'est plus direct

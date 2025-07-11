@@ -84,7 +84,7 @@ class TenantConnectionManager
     // CRUD tenant + migrations
     // -------------------------------------------------------------------
 
-    public function createTenant(string $code, string $name, string $dbname): void
+     public function createTenant(string $code, string $name, string $dbname, ?string $gemsuiteToken = null): void
     {
         // validate identifiers
         if (!preg_match('/^[a-z0-9_]+$/i', $code) || !preg_match('/^[a-z0-9_]+$/i', $dbname)) {
@@ -98,26 +98,40 @@ class TenantConnectionManager
             );
 
             // 2) enregistrer dans master.tenants
-            $stmt = $this->pdoMaster->prepare('INSERT INTO tenants(code,name,dbname) VALUES(:c,:n,:d)');
-            $stmt->execute(['c' => $code, 'n' => $name, 'd' => $dbname]);
+            $stmt = $this->pdoMaster->prepare(
+                'INSERT INTO tenants(code, name, dbname, gemsuite_token) VALUES(:c, :n, :d, :t)'
+            );
+            $stmt->execute([
+                'c' => $code,
+                'n' => $name,
+                'd' => $dbname,
+                't' => $gemsuiteToken
+            ]);
 
             // 3) migrer cette nouvelle base
             $this->runMigrations($dbname);
 
             // 4) append to docker/db/init.sql for future Docker initialization
             $initFile = $this->projectDir . '/docker/db/init.sql';
+            
+            // Prépare la valeur du token pour l'insertion SQL (gère le cas NULL)
+            $tokenValueForSql = ($gemsuiteToken === null) ? 'NULL' : "'" . addslashes($gemsuiteToken) . "'";
+
             $entry = sprintf(
                 "\n-- Auto-generated tenant %s\nCREATE DATABASE \"%s\" ENCODING='UTF8' TEMPLATE=template0;\n" .
-                "INSERT INTO tenants(code,name,dbname) VALUES('%s','%s','%s');\n",
+                "INSERT INTO tenants(code, name, dbname, gemsuite_token) VALUES('%s', '%s', '%s', %s);\n",
                 $code,
                 $dbname,
                 $code,
                 addslashes($name),
-                $dbname
+                $dbname,
+                $tokenValueForSql
             );
+            
             if (!is_dir(dirname($initFile))) {
                 @mkdir(dirname($initFile), 0755, true);
             }
+
             if (false === @file_put_contents($initFile, $entry, FILE_APPEND | LOCK_EX)) {
                 $this->logger->warning("Impossible d’écrire dans {$initFile}");
             } else {
@@ -286,7 +300,11 @@ private function runMigrations(string $dbname): void
         return $this->connection;
     }
 
-
+    public function getAllTenantDbNames(): array
+    {
+        $stmt = $this->pdoMaster->query('SELECT dbname FROM tenants ORDER BY id');
+        return $stmt->fetchAll(\PDO::FETCH_COLUMN);
+    }
 
 }
 
