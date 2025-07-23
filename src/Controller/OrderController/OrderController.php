@@ -20,6 +20,7 @@ use App\Entity\Order;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
+use App\Services\GemsuiteImporterService\GemsuiteSaleManager;
 
 class OrderController extends AbstractController
 {
@@ -29,6 +30,7 @@ class OrderController extends AbstractController
     private GetOrdersBySourceUseCase $getOrdersBySourceUseCase;
     private TenantEntityManagerProvider $emProvider;
     private TenantCacheService $cache;
+    private GemsuiteSaleManager $gemsuiteSaleManager;
 
     public function __construct(
         CreateOrderUseCase $createOrderUseCase,
@@ -36,7 +38,8 @@ class OrderController extends AbstractController
         GetOrdersBySourceUseCase $getOrdersBySourceUseCase,
         GetOrdersByUserUseCase $getOrdersByUserUseCase,
         TenantEntityManagerProvider $emProvider,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        GemsuiteSaleManager $gemsuiteSaleManager
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -44,6 +47,7 @@ class OrderController extends AbstractController
         $this->getOrdersByUserUseCase = $getOrdersByUserUseCase;
         $this->emProvider = $emProvider;
         $this->cache = $cache;
+        $this->gemsuiteSaleManager = $gemsuiteSaleManager;
     }
 
     /**
@@ -95,7 +99,19 @@ class OrderController extends AbstractController
             $paymentData['squareRiskLevel'] ?? null
         );
 
-        return $this->createOrderUseCase->execute($dto);
+         $result = $this->createOrderUseCase->execute($dto);
+
+    if ($result instanceof Order) {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $tenantEm->refresh($result);
+        $this->gemsuiteSaleManager->createSale($result);
+        return $this->json([
+            'success' => true,
+            'orderId' => $result->getId(),
+            'message' => 'Commande créée et synchronisée avec succès.'
+        ], JsonResponse::HTTP_CREATED);
+    }
+        return $result;
     }
 
     /**
@@ -108,8 +124,6 @@ class OrderController extends AbstractController
         if (!$user) {
             return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
-
-        // 🟢 Récupération des données de paiement Square
         $paymentData = $data['payment'] ?? [];
         $paymentMethods = array_map(function ($method) {
             return new PaymentMethodDTO($method['type'], $method['amount']);
@@ -132,7 +146,16 @@ class OrderController extends AbstractController
             $paymentData['squareLast4'] ?? null,
             $paymentData['squareRiskLevel'] ?? null
         );
-        return $this->createOrderUseCase->execute($dto);
+         $result = $this->createOrderUseCase->execute($dto);
+         if ($result instanceof Order) {
+            $this->gemsuiteSaleManager->createSale($result);
+            return $this->json([
+                'success' => true,
+                'orderId' => $result->getId(),
+                'message' => 'Commande créée et synchronisée avec succès.'
+            ], JsonResponse::HTTP_CREATED);
+        }
+        return $result;
     }
 
     /**
@@ -150,8 +173,6 @@ class OrderController extends AbstractController
         if (!$order) {
             return $this->json(['error' => 'Order not found'], JsonResponse::HTTP_NOT_FOUND);
         }
-
-        // Vérification que l'utilisateur peut bien annuler cette commande
         if ($order->getUser() !== $user) {
             return $this->json(['error' => 'Unauthorized: You can only cancel your own orders'], JsonResponse::HTTP_FORBIDDEN);
         }
@@ -163,7 +184,7 @@ class OrderController extends AbstractController
     #[Route("api/orders", name:"get_orders", methods:["GET"])]
     public function getOrders(Request $request): JsonResponse
     {
-        $this->denyAccessUnlessGranted('ROLE_ADMIN'); // Seuls les admins peuvent voir toutes les commandes
+        $this->denyAccessUnlessGranted('ROLE_ADMIN'); 
 
         $orderSourceId = $request->query->get('orderSource');
         if (!$orderSourceId) {
@@ -171,14 +192,12 @@ class OrderController extends AbstractController
         }
         $days = $request->query->get('days');
         $host = $request->getSchemeAndHttpHost();
-
-        // Construction d'une clé de cache basée sur orderSource et days
         $cacheKey = 'orders_source_' . $orderSourceId . ($days ? '_days_' . (int)$days : '');
 
         $orderDTOs = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($orderSourceId, $host, $days) {
-                $item->expiresAfter(300); // 5 minutes
+                $item->expiresAfter(300); 
                 $item->tag(['orders_source']);
                 return $this->getOrdersBySourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
             },
@@ -202,7 +221,7 @@ class OrderController extends AbstractController
         $orderDTOs = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($user, $host) {
-                $item->expiresAfter(300); // 5 minutes
+                $item->expiresAfter(300); 
                 $item->tag(['orders_user']);
                 return $this->getOrdersByUserUseCase->execute($user->getId(), $host);
             },

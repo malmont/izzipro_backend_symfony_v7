@@ -19,6 +19,8 @@ use Doctrine\Migrations\Metadata\ExecutedMigrations;
 use Doctrine\Migrations\Version\MigrationVersion;
 use Doctrine\Migrations\Metadata\AvailableMigration;
 use Doctrine\Migrations\MigratorConfiguration;
+use App\Services\TenantConnectionProvider;
+
 
 
 class TenantConnectionManager
@@ -31,19 +33,22 @@ class TenantConnectionManager
     private Connection       $connection;
     private LoggerInterface  $logger;
     private string           $projectDir;
+    private TenantConnectionProvider $connectionProvider; 
 
     public function __construct(
         string $masterDatabaseUrl,
         string $defaultTenantUrl,
         string $projectDir,
         Connection $connection,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        TenantConnectionProvider $connectionProvider
     ) {
         $this->logger           = $logger;
         $this->defaultTenantUrl = $defaultTenantUrl;
         $this->projectDir       = rtrim($projectDir, '/');
         $this->consolePath      = $this->projectDir . '/bin/console';
         $this->connection       = $connection;
+        $this->connectionProvider = $connectionProvider;
 
         // parse and validate master DSN
         $parts = parse_url($masterDatabaseUrl);
@@ -85,40 +90,43 @@ class TenantConnectionManager
     // -------------------------------------------------------------------
 
      public function createTenant(string $code, string $name, string $dbname, ?string $gemsuiteToken = null): void
-    {
-        // validate identifiers
-        if (!preg_match('/^[a-z0-9_]+$/i', $code) || !preg_match('/^[a-z0-9_]+$/i', $dbname)) {
-            throw new \InvalidArgumentException("Code ou dbname invalide : seuls [a-z0-9_] sont autorisés");
-        }
+        {
+            if (!preg_match('/^[a-z0-9_]+$/i', $code) || !preg_match('/^[a-z0-9_]+$/i', $dbname)) {
+                throw new \InvalidArgumentException("Code ou dbname invalide : seuls [a-z0-9_] sont autorisés");
+            }
 
-        try {
-            // 1) créer la base
-            $this->pdoMaster->exec(
-                sprintf('CREATE DATABASE "%s" ENCODING=\'UTF8\' TEMPLATE=template0', $dbname)
-            );
+            try {
+                $templateDbName = 'gmasuite'; 
+                $this->logger->info(sprintf('Tentative de terminaison des connexions pour la base template "%s"', $templateDbName));
+                try {
+                    $stmt = $this->pdoMaster->prepare(
+                        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :datname AND pid <> pg_backend_pid()"
+                    );
+                    $stmt->execute(['datname' => $templateDbName]);
+                    $this->logger->info('Les connexions existantes ont été terminées.');
+                } catch (\Throwable $termEx) {
+                    $this->logger->warning('Impossible de terminer les connexions existantes: ' . $termEx->getMessage());
+                }
+                $this->pdoMaster->exec(
+                    sprintf('CREATE DATABASE "%s" WITH TEMPLATE gmasuite', $dbname)
+                );
+                $stmt = $this->pdoMaster->prepare(
+                    'INSERT INTO tenants(code, name, dbname, gemsuite_token) VALUES(:c, :n, :d, :t)'
+                );
+                $stmt->execute([
+                    'c' => $code,
+                    'n' => $name,
+                    'd' => $dbname,
+                    't' => $gemsuiteToken
+                ]);
 
-            // 2) enregistrer dans master.tenants
-            $stmt = $this->pdoMaster->prepare(
-                'INSERT INTO tenants(code, name, dbname, gemsuite_token) VALUES(:c, :n, :d, :t)'
-            );
-            $stmt->execute([
-                'c' => $code,
-                'n' => $name,
-                'd' => $dbname,
-                't' => $gemsuiteToken
-            ]);
+                // $this->runMigrations($dbname);
+                $initFile = $this->projectDir . '/docker/db/init.sql';
+                
+                $tokenValueForSql = ($gemsuiteToken === null) ? 'NULL' : "'" . addslashes($gemsuiteToken) . "'";
 
-            // 3) migrer cette nouvelle base
-            $this->runMigrations($dbname);
-
-            // 4) append to docker/db/init.sql for future Docker initialization
-            $initFile = $this->projectDir . '/docker/db/init.sql';
-            
-            // Prépare la valeur du token pour l'insertion SQL (gère le cas NULL)
-            $tokenValueForSql = ($gemsuiteToken === null) ? 'NULL' : "'" . addslashes($gemsuiteToken) . "'";
-
-            $entry = sprintf(
-                "\n-- Auto-generated tenant %s\nCREATE DATABASE \"%s\" ENCODING='UTF8' TEMPLATE=template0;\n" .
+                $entry = sprintf(
+                "\n-- Auto-generated tenant %s\nCREATE DATABASE \"%s\" WITH TEMPLATE gmasuite;\n" .
                 "INSERT INTO tenants(code, name, dbname, gemsuite_token) VALUES('%s', '%s', '%s', %s);\n",
                 $code,
                 $dbname,
@@ -126,30 +134,29 @@ class TenantConnectionManager
                 addslashes($name),
                 $dbname,
                 $tokenValueForSql
-            );
-            
-            if (!is_dir(dirname($initFile))) {
-                @mkdir(dirname($initFile), 0755, true);
-            }
+                );
+                
+                if (!is_dir(dirname($initFile))) {
+                    @mkdir(dirname($initFile), 0755, true);
+                }
 
-            if (false === @file_put_contents($initFile, $entry, FILE_APPEND | LOCK_EX)) {
-                $this->logger->warning("Impossible d’écrire dans {$initFile}");
-            } else {
-                $this->logger->info("Init SQL mis à jour pour le tenant {$dbname}", ['file' => $initFile]);
-            }
+                if (false === @file_put_contents($initFile, $entry, FILE_APPEND | LOCK_EX)) {
+                    $this->logger->warning("Impossible d’écrire dans {$initFile}");
+                } else {
+                    $this->logger->info("Init SQL mis à jour pour le tenant {$dbname}", ['file' => $initFile]);
+                }
 
-        } catch (\Throwable $e) {
-            $this->logger->error("Échec création tenant '{$code}' / '{$dbname}': " . $e->getMessage());
-            // rollback manuel : supprimer la base si elle existe
-            try {
-                $this->pdoMaster->exec(sprintf('DROP DATABASE IF EXISTS "%s"', $dbname));
-                $this->logger->info("DROP DATABASE \"{$dbname}\" après échec");
-            } catch (\Throwable $dropEx) {
-                $this->logger->warning("Échec DROP DATABASE '{$dbname}' : " . $dropEx->getMessage());
+            } catch (\Throwable $e) {
+                $this->logger->error("Échec création tenant '{$code}' / '{$dbname}': " . $e->getMessage());
+                try {
+                    $this->pdoMaster->exec(sprintf('DROP DATABASE IF EXISTS "%s"', $dbname));
+                    $this->logger->info("DROP DATABASE \"{$dbname}\" après échec");
+                } catch (\Throwable $dropEx) {
+                    $this->logger->warning("Échec DROP DATABASE '{$dbname}' : " . $dropEx->getMessage());
+                }
+                throw $e;
             }
-            throw $e;
         }
-    }
 
     public function migrateTenant(string $dbname): void
     {
@@ -304,6 +311,21 @@ private function runMigrations(string $dbname): void
     {
         $stmt = $this->pdoMaster->query('SELECT dbname FROM tenants ORDER BY id');
         return $stmt->fetchAll(\PDO::FETCH_COLUMN);
+    }
+
+
+    public function getTenantToken(string $tenantCode): ?string
+    {
+        $stmt = $this->pdoMaster->prepare('SELECT gemsuite_token FROM tenants WHERE code = :code');
+        $stmt->execute(['code' => $tenantCode]);
+        $result = $stmt->fetchColumn();
+
+        return $result ?: null;
+    }
+
+     public function getCurrentTenantCode(): ?string
+    {
+        return $this->connectionProvider->getTenantCode();
     }
 
 }

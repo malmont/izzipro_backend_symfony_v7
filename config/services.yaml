@@ -144,3 +144,6 @@ services:
             # Bind the constructor argument '$projectDir' to the container parameter '%kernel.project_dir%'
             $projectDir: '%kernel.project_dir%'
             
+    App\Command\CleanMigrationHistoryCommand:
+        bind:
+            $projectDir: '%kernel.project_dir%'

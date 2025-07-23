@@ -17,6 +17,8 @@ class AdressOutputDTO
     public string $country;
     public ?string $province;
     public string $contactNumber;
+    public bool $isPrimary;
+
 
     public function __construct(Adress $adress)
     {
@@ -32,5 +34,6 @@ class AdressOutputDTO
         $this->province = $adress->getProvince();
         $this->country = $adress->getCountry();
         $this->contactNumber = $adress->getPhone();
+        $this->isPrimary = $adress->getUserAdress() ? $adress->getUserAdress()->getPrimaryAddress() === $adress : false;
     }
 }

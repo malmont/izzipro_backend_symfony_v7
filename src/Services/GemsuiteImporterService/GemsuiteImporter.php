@@ -5,6 +5,8 @@ namespace App\Services\GemsuiteImporterService;
 use App\Entity\Categories;
 use App\Entity\Product;
 use App\Entity\ProductShipping;
+use App\Entity\ProductVariant;
+use App\Entity\Style;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\String\Slugger\SluggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -40,9 +42,6 @@ class GemsuiteImporter
 
         } catch (\Throwable $e) {
             $this->logger->error('Erreur durant l\'importation GEM-SUITE: ' . $e->getMessage());
-            
-            // *** LIGNE DÉCOMMENTÉE CI-DESSOUS ***
-            // On propage l'exception pour que le contrôleur puisse l'attraper.
             throw $e;
         }
     }
@@ -88,18 +87,29 @@ class GemsuiteImporter
 
             $product->setName(trim($gemProductData['name_fr']));
             $product->setDescription($gemProductData['additional_fr'] ?? 'Pas de description.');
-            $product->setPrice((float) $gemProductData['price']);
+            $priceInDollars = (float)($gemProductData['price'] ?? 0);
+            $product->setPrice($priceInDollars * 100);
             $product->setQuantity((int) ($gemProductData['default_quantity'] ?? 0));
             $product->setSlug(strtolower($this->slugger->slug($product->getName())));
             $product->setIsWeb(isset($gemProductData['status']) && $gemProductData['status'] === 1);
+            $product->setIsnewarrival($gemProductData['is_new_arrival'] ?? true);
+            $product->setIsbestseller($gemProductData['is_bestseller'] ?? true);
+            $defaultStyle = $tenantEm->getRepository(Style::class)->find(2);
+            if ($defaultStyle) {
+                $product->setStyle($defaultStyle);
+            } else {
+                $this->logger->warning('Le style par défaut avec l\'ID 2 est introuvable dans la base de données du tenant.');
+            }
+
 
             if (isset($gemProductData['category_id']) && isset($categoryMap[$gemProductData['category_id']])) {
                 $product->addCategory($categoryMap[$gemProductData['category_id']]);
             }
             
-              if (!empty($gemProductData['medias'])) {
-                $baseUrl = 'https://app.gem-books.com';
-                $product->setImage($baseUrl . $gemProductData['medias'][0]['path']);
+             if (!empty($gemProductData['medias'])) {
+                $baseUrl = 'https://actif-file.s3-ca-central-1.amazonaws.com';
+                $imagePath = ltrim($gemProductData['medias'][0]['path'], '/');
+                $product->setImage($baseUrl . '/' . $imagePath);
             } else {
                 $product->setImage('');
             }
@@ -110,6 +120,14 @@ class GemsuiteImporter
             $shipping->setWidth((float)($gemProductData['dimensions_width'] ?? 0));
             $shipping->setHeight((float)($gemProductData['dimensions_height'] ?? 0));
             $product->setProductShipping($shipping);
+            if ($product->getVariants()->isEmpty() && empty($gemProductData['variantes'])) {
+            $defaultVariant = new ProductVariant();
+            $quantity = (float)($gemProductData['default_quantity'] ?? 0.0);
+            $defaultVariant->setStockQuantity((int)$quantity);
+            
+            $product->addVariant($defaultVariant);
+            $tenantEm->persist($defaultVariant);
+            }
 
             $tenantEm->persist($product);
         }

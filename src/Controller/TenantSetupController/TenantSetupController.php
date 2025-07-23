@@ -59,7 +59,7 @@ class TenantSetupController extends AbstractController
                     $newFilename = $safeFilename.'-'.uniqid().'.'.$logoFile->guessExtension();
                     try {
                         $logoFile->move($this->getParameter('kernel.project_dir').'/public/assets/uploads/email-logos', $newFilename);
-                        $entreprise->setLogo('assets/uploads/email-logos/' . $newFilename);
+                        $entreprise->setLogo($newFilename);
                     } catch (FileException $e) {
                         $this->addFlash('warning', 'Le logo n\'a pas pu être uploadé : ' . $e->getMessage());
                     }
@@ -85,8 +85,6 @@ class TenantSetupController extends AbstractController
                 $this->addFlash('info', 'Profil de l\'entreprise et administrateur créés.');
 
             } catch (\Throwable $e) {
-                // Si la création des données échoue, on supprime le tenant pour ne pas le laisser dans un état instable.
-                // Vous pouvez commenter cette partie si vous préférez un rollback manuel.
                 try {
                     $tenantManager->deleteTenant($dto->code, $dbname);
                     $this->addFlash('warning', 'Le tenant a été supprimé suite à une erreur de configuration.');

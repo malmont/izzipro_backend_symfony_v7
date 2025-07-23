@@ -59,6 +59,9 @@ class Adress
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $province = null;
 
+    #[ORM\OneToOne(mappedBy: 'primaryAddress', cascade: ['persist', 'remove'])]
+    private ?User $userPrimaryAdress = null;
+
     public function __construct()
     {
         $this->orders = new ArrayCollection();
@@ -251,6 +254,28 @@ class Adress
     public function setProvince(?string $province): static
     {
         $this->province = $province;
+
+        return $this;
+    }
+
+    public function getUserPrimaryAdress(): ?User
+    {
+        return $this->userPrimaryAdress;
+    }
+
+    public function setUserPrimaryAdress(?User $userPrimaryAdress): static
+    {
+        // unset the owning side of the relation if necessary
+        if ($userPrimaryAdress === null && $this->userPrimaryAdress !== null) {
+            $this->userPrimaryAdress->setPrimaryAddress(null);
+        }
+
+        // set the owning side of the relation if necessary
+        if ($userPrimaryAdress !== null && $userPrimaryAdress->getPrimaryAddress() !== $this) {
+            $userPrimaryAdress->setPrimaryAddress($this);
+        }
+
+        $this->userPrimaryAdress = $userPrimaryAdress;
 
         return $this;
     }

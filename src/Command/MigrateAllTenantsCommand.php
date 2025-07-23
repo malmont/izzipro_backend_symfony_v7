@@ -19,7 +19,6 @@ class MigrateAllTenantsCommand extends Command
 {
     private TenantConnectionManager $manager;
 
-    // Le constructeur a été simplifié et ne demande plus $projectDir
     public function __construct(TenantConnectionManager $manager)
     {
         parent::__construct();
@@ -76,25 +75,34 @@ class MigrateAllTenantsCommand extends Command
                     $dbname
                 );
 
-                $process = new Process([
-                    'php',
-                    'bin/console',
-                    'doctrine:migrations:migrate',
-                    '--no-interaction'
-                ]);
-
-                $process->setEnv(['DATABASE_URL' => $tenantDatabaseUrl]);
-                $process->setTimeout(3600);
-
-                $process->mustRun();
+                // --- LOGIQUE MODIFIÉE CI-DESSOUS ---
                 
-                $io->text($process->getOutput());
+                // ÉTAPE 1 : S'assurer que la table de métadonnées existe
+                $io->text('Synchronisation du stockage des métadonnées...');
+                $syncProcess = new Process([
+                    'php', 'bin/console', 'doctrine:migrations:sync-metadata-storage', '--no-interaction'
+                ]);
+                $syncProcess->setEnv(['DATABASE_URL' => $tenantDatabaseUrl]);
+                $syncProcess->mustRun();
+                $io->writeln($syncProcess->getOutput());
+
+                // ÉTAPE 2 : Lancer la migration
+                $io->text('Application des migrations en attente...');
+                $migrateProcess = new Process([
+                    'php', 'bin/console', 'doctrine:migrations:migrate', '--no-interaction'
+                ]);
+                $migrateProcess->setEnv(['DATABASE_URL' => $tenantDatabaseUrl]);
+                $migrateProcess->setTimeout(3600);
+                $migrateProcess->mustRun();
+                
+                $io->writeln($migrateProcess->getOutput());
                 $io->success("Migrations pour \"$dbname\" terminées.");
+                // --- FIN DE LA MODIFICATION ---
 
             } catch (\Throwable $e) {
                 $io->error(sprintf("Échec pour \"%s\": %s", $dbname, $e->getMessage()));
-                if (isset($process)) {
-                    $io->error($process->getErrorOutput());
+                if (isset($migrateProcess)) {
+                    $io->error($migrateProcess->getErrorOutput());
                 }
                 $errorCount++;
             }

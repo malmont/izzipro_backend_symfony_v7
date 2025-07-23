@@ -23,7 +23,6 @@ class AdressInputDTO
     #[Assert\NotBlank(message: "La ville est obligatoire.")]
     public string $city;
 
-    // ← NOUVEAU
     #[Assert\NotBlank(message: "La province / région est obligatoire.")]
     public string $province;
 
@@ -44,6 +43,9 @@ class AdressInputDTO
     )]
     public string $contactNumber;
 
+    // --- NOUVELLE PROPRIÉTÉ ---
+    public bool $isPrimary = false;
+
     public function __construct(array $data)
     {
         $this->firstname       = $data['firstname']       ?? '';
@@ -56,5 +58,6 @@ class AdressInputDTO
         $this->zipCode         = (string) ($data['zipCode']         ?? '');
         $this->country         = $data['country']         ?? '';
         $this->contactNumber   = (string) ($data['contactNumber']   ?? '');
+        $this->isPrimary       = (bool) ($data['isPrimary']       ?? false); 
     }
 }

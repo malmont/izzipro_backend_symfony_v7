@@ -4,11 +4,13 @@ namespace App\Controller\AdressController;
 
 use App\Dto\AdressInputDTO;
 use App\Entity\Adress;
+use App\Entity\User;
 use App\UseCase\AdressUseCase\GetUserAdressesUseCase;
 use App\UseCase\AdressUseCase\CreateAdressUseCase;
 use App\UseCase\AdressUseCase\EditAdressUseCase;
 use App\UseCase\AdressUseCase\DeleteAdressUseCase;
 use App\Services\AdressService\AddressVerificationService;
+use App\Services\GemsuiteImporterService\GemsuiteClientUpdater;
 use App\Services\TenantCacheService;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,31 +19,35 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\Cache\ItemInterface;
+use Doctrine\ORM\EntityManagerInterface;
 
 #[Route('/api/adresses')]
 class AdressApiController extends AbstractController
 {
-    private GetUserAdressesUseCase     $getUserAdressesUseCase;
-    private CreateAdressUseCase        $createAdressUseCase;
-    private EditAdressUseCase          $editAdressUseCase;
-    private DeleteAdressUseCase        $deleteAdressUseCase;
+    private GetUserAdressesUseCase $getUserAdressesUseCase;
+    private CreateAdressUseCase $createAdressUseCase;
+    private EditAdressUseCase $editAdressUseCase;
+    private DeleteAdressUseCase $deleteAdressUseCase;
     private AddressVerificationService $verifier;
-    private TenantCacheService         $cache;
+    private TenantCacheService $cache;
+    private GemsuiteClientUpdater $gemsuiteUpdater;
 
     public function __construct(
-        GetUserAdressesUseCase     $getUserAdressesUseCase,
-        CreateAdressUseCase        $createAdressUseCase,
-        EditAdressUseCase          $editAdressUseCase,
-        DeleteAdressUseCase        $deleteAdressUseCase,
-        AddressVerificationService  $verifier,
-        TenantCacheService         $cache
+        GetUserAdressesUseCase $getUserAdressesUseCase,
+        CreateAdressUseCase $createAdressUseCase,
+        EditAdressUseCase $editAdressUseCase,
+        DeleteAdressUseCase $deleteAdressUseCase,
+        AddressVerificationService $verifier,
+        TenantCacheService $cache,
+        GemsuiteClientUpdater $gemsuiteUpdater
     ) {
         $this->getUserAdressesUseCase = $getUserAdressesUseCase;
-        $this->createAdressUseCase    = $createAdressUseCase;
-        $this->editAdressUseCase      = $editAdressUseCase;
-        $this->deleteAdressUseCase    = $deleteAdressUseCase;
-        $this->verifier               = $verifier;
-        $this->cache                  = $cache;
+        $this->createAdressUseCase = $createAdressUseCase;
+        $this->editAdressUseCase = $editAdressUseCase;
+        $this->deleteAdressUseCase = $deleteAdressUseCase;
+        $this->verifier = $verifier;
+        $this->cache = $cache;
+        $this->gemsuiteUpdater = $gemsuiteUpdater;
     }
 
     /**
@@ -50,13 +56,14 @@ class AdressApiController extends AbstractController
     #[Route('/', name: 'get_user_adresses', methods: ['GET'])]
     public function getUserAdresses(): JsonResponse
     {
+        /** @var User $user */
         $user = $this->getUser();
         if (!$user) {
             return new JsonResponse(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
         }
 
         $cacheKey = "adresses_user_" . $user->getId();
-        $adresses = $this->cache->get(
+         $adresses = $this->cache->get(
             $cacheKey,
             function(ItemInterface $item) use ($user) {
                 $item->expiresAfter(3600);
@@ -74,10 +81,8 @@ class AdressApiController extends AbstractController
      * Créer une nouvelle adresse
      */
     #[Route('', name: 'create_adress', methods: ['POST'])]
-    public function createAdress(
-        Request            $request,
-        ValidatorInterface $validator
-    ): JsonResponse {
+    public function createAdress(Request $request, ValidatorInterface $validator, EntityManagerInterface $em): JsonResponse
+    {
         $user = $this->getUser();
         if (!$user) {
             return $this->json(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
@@ -121,8 +126,7 @@ class AdressApiController extends AbstractController
         $dto->zipCode        = $normalized['postal_code'];
         $dto->country        = $normalized['country'];
 
-        // Création de l’adresse
-        $this->createAdressUseCase->execute($dto, $user);
+        $adress = $this->createAdressUseCase->execute($dto, $user);
         return $this->json(['success' => 'Adresse créée avec succès'], Response::HTTP_CREATED);
     }
 
@@ -130,11 +134,8 @@ class AdressApiController extends AbstractController
      * Modifier une adresse
      */
     #[Route('/{id}', name: 'edit_adress', methods: ['PUT'])]
-    public function editAdress(
-        Request            $request,
-        ValidatorInterface $validator,
-        Adress             $adress
-    ): JsonResponse {
+    public function editAdress(Request $request, ValidatorInterface $validator, Adress $adress, EntityManagerInterface $em): JsonResponse
+    {
         $user = $this->getUser();
         if (!$user || $adress->getUserAdress() !== $user) {
             return $this->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
@@ -178,9 +179,28 @@ class AdressApiController extends AbstractController
         $dto->zipCode        = $normalized['postal_code'];
         $dto->country        = $normalized['country'];
 
-        // Mise à jour de l’adresse
         $this->editAdressUseCase->execute($dto, $adress);
         return $this->json(['success' => 'Adresse mise à jour avec succès'], Response::HTTP_OK);
+    }
+
+    /**
+     * Définir une adresse existante comme adresse principale
+     */
+    #[Route('/{id}/set-primary', name: 'set_primary_adress', methods: ['PUT'])]
+    public function setPrimaryAddress(Adress $adress, EntityManagerInterface $em): JsonResponse
+    {
+        $user = $this->getUser();
+        if (!$user || $adress->getUserAdress() !== $user) {
+            return $this->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $user->setPrimaryAddress($adress);
+        $em->persist($user);
+        $em->flush();
+
+        $this->gemsuiteUpdater->syncAddress($user, $adress);
+
+        return $this->json(['success' => 'Adresse principale mise à jour avec succès']);
     }
 
     /**
@@ -198,3 +218,4 @@ class AdressApiController extends AbstractController
         return $this->json(['success' => 'Adresse supprimée avec succès'], Response::HTTP_NO_CONTENT);
     }
 }
+  

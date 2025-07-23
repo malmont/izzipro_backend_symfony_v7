@@ -3,39 +3,50 @@
 namespace App\Controller\Account;
 
 use App\Entity\User;
+use App\Entity\Adress;
+use App\Entity\EmailConfiguration;
 use App\Form\RegistrationFormType;
 use App\Security\EmailVerifier;
+use App\Services\TenantConnectionManager;
+use App\Services\TenantEntityManagerProvider;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
+use App\Services\GemsuiteImporterService\GemsuiteClientManager;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Address;
+use Symfony\Component\Mime\Email;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Translation\TranslatorInterface;
-use SymfonyCasts\Bundle\VerifyEmail\Exception\VerifyEmailExceptionInterface;
-use Symfony\Component\Security\Core\User\UserInterface;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
-use Gesdinet\JWTRefreshTokenBundle\Entity\RefreshToken;
-use DateTime;
-use Symfony\Component\Mime\Email;
-use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use App\Entity\EmailConfiguration;
-use App\Services\TenantEntityManagerProvider;
-
+use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Psr\Log\LoggerInterface;
 
 class RegistrationController extends AbstractController
 {
+    private LoggerInterface $logger;
     private EmailVerifier $emailVerifier;
     private TenantEntityManagerProvider $tenantEmProvider;
+    private HttpClientInterface $client;
+    private TenantConnectionManager $tenantManager;
+    private GemsuiteClientManager $gemsuiteClientManager;
+
 
     public function __construct(
         EmailVerifier $emailVerifier,
-        TenantEntityManagerProvider $tenantEmProvider
+        TenantEntityManagerProvider $tenantEmProvider,
+        HttpClientInterface $client,
+        TenantConnectionManager $tenantManager,
+        LoggerInterface $logger,
+        GemsuiteClientManager $gemsuiteClientManager
     ) {
         $this->emailVerifier = $emailVerifier;
         $this->tenantEmProvider = $tenantEmProvider;
+        $this->client = $client;
+        $this->tenantManager = $tenantManager;
+        $this->gemsuiteClientManager = $gemsuiteClientManager;
+        $this->logger = $logger;
     }
 
     #[Route('/register', name: 'app_register')]
@@ -47,11 +58,9 @@ class RegistrationController extends AbstractController
         $form = $this->createForm(RegistrationFormType::class, $user);
         $form->handleRequest($request);
 
-        // Utilisation du provider multi-tenant
         $em = $this->tenantEmProvider->getEntityManager();
 
         if ($form->isSubmitted() && $form->isValid()) {
-            // encode the plain password
             $user->setPassword(
                 $userPasswordHasher->hashPassword(
                     $user,
@@ -83,7 +92,6 @@ class RegistrationController extends AbstractController
     public function registerApi(
         Request $request,
         UserPasswordHasherInterface $passwordHasher,
-        JWTTokenManagerInterface $jwtManager,
         MailerInterface $mailer,
         UrlGeneratorInterface $urlGenerator
     ): Response {
@@ -100,12 +108,10 @@ class RegistrationController extends AbstractController
         $lastName = $decoded['lastName'];
         $username = $email;
 
-         // Validation du format de l'email.
          if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return $this->json(['error' => 'Invalid email format'], Response::HTTP_BAD_REQUEST);
         }
 
-        // Vérification DNS optionnelle (enregistrements MX ou A).
         [$local, $domain] = explode('@', $email, 2);
         if (!checkdnsrr($domain, 'MX') && !checkdnsrr($domain, 'A')) {
             return $this->json(['error' => 'Email domain appears invalid'], Response::HTTP_BAD_REQUEST);
@@ -116,22 +122,26 @@ class RegistrationController extends AbstractController
             return $this->json(['error' => 'User already exists'], Response::HTTP_CONFLICT);
         }
 
+        $tenantCode = $this->tenantManager->getCurrentTenantCode();
+        $foundClient = $this->gemsuiteClientManager->findOrCreateClient($email, $firstName, $lastName, $tenantCode);
+
         $user = new User();
         $user->setEmail($email);
         $user->setFirstname($firstName);
         $user->setLastname($lastName);
         $user->setUsername($username);
+        $user->setPassword($passwordHasher->hashPassword($user, $password));
+        
+        if ($foundClient) {
+            $user->setGemsuiteClientId($foundClient['id']);
+        }
 
-        // Déterminer la plateforme et affecter le rôle correspondant.
         $platform = $decoded['platform'] ?? 'mobile';
         if ($platform === 'pos') {
             $user->setRoles(['ROLE_USER_POS']);
         } else {
             $user->setRoles(['ROLE_USER_INTERNET']);
         }
-
-        $hashedPassword = $passwordHasher->hashPassword($user, $password);
-        $user->setPassword($hashedPassword);
 
         $user->setIsVerified(false);
         $verificationToken = bin2hex(random_bytes(32));
@@ -217,5 +227,4 @@ class RegistrationController extends AbstractController
             'domain' => $domain
         ]);
     }
-
 }

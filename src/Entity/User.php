@@ -86,6 +86,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(mappedBy: 'userOtp', targetEntity: OtpCode::class)]
     private Collection $otpCodes;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $gemsuiteClientId = null;
+
+    #[ORM\OneToOne(inversedBy: 'userPrimaryAdress', cascade: ['persist', 'remove'])]
+    private ?Adress $primaryAddress = null;
+
     public function __construct()
     {
         $this->adresses = new ArrayCollection();
@@ -434,6 +440,30 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
                 $otpCode->setUserOtp(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getGemsuiteClientId(): ?int
+    {
+        return $this->gemsuiteClientId;
+    }
+
+    public function setGemsuiteClientId(?int $gemsuiteClientId): static
+    {
+        $this->gemsuiteClientId = $gemsuiteClientId;
+
+        return $this;
+    }
+
+    public function getPrimaryAddress(): ?Adress
+    {
+        return $this->primaryAddress;
+    }
+
+    public function setPrimaryAddress(?Adress $primaryAddress): static
+    {
+        $this->primaryAddress = $primaryAddress;
 
         return $this;
     }

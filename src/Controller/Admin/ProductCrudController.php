@@ -59,6 +59,7 @@ class ProductCrudController extends BaseTenantCrudController
             MoneyField::new('price')->setCurrency('USD')->onlyOnIndex(), 
             MoneyField::new('purchasePrice', "Prix d'achat de l'article")->setCurrency('USD'), 
             NumberField::new('coefficientMultiplier', 'Coefficient Multiplier'),
+            NumberField::new('gemsuiteProductId', 'gemsuiteProductId'),
             TextField::new('barcode', 'Barcode'),
             IntegerField::new('quantity')->onlyOnIndex(),
             TextField::new('tags'),

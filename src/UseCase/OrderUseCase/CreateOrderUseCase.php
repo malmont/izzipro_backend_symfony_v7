@@ -11,7 +11,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Security\Core\Security;
-
+use App\Entity\Order; 
 use App\UseCase\OrderUseCase\CreateOrderCommandUseCase;
 use App\UseCase\OrderUseCase\ProcessOrderItemsUseCase;
 use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
@@ -54,7 +54,7 @@ class CreateOrderUseCase
         $this->security = $security;
     }
 
-    public function execute(ICreateOrderDTO $orderDTO): JsonResponse
+    public function execute(ICreateOrderDTO $orderDTO)
     {
         $em = $this->emProvider->getEntityManager();
         $em->getConnection()->beginTransaction();
@@ -136,14 +136,8 @@ class CreateOrderUseCase
 
             $em->flush();
             $em->getConnection()->commit();
-
-            return new JsonResponse([
-                'message' => 'Order created successfully',
-                'orderId' => $order->getId(),
-            ], Response::HTTP_CREATED);
-
+            return $order;
         } catch (\Exception $e) {
-            // S'assurer que la connexion est toujours ouverte avant de faire un rollback
             if ($em->getConnection()->isTransactionActive()) {
                 $em->getConnection()->rollBack();
             }

@@ -5,15 +5,17 @@ use App\Dto\AdressInputDTO;
 use App\Dto\AdressOutputDTO;
 use App\Entity\Adress;
 use App\Services\TenantEntityManagerProvider;
-
+use App\Services\GemsuiteImporterService\GemsuiteClientUpdater; 
 class AdressService
 {
     private TenantEntityManagerProvider $tenantEmProvider;
+    private GemsuiteClientUpdater $gemsuiteUpdater;
 
-    public function __construct(TenantEntityManagerProvider $tenantEmProvider)
+    public function __construct(TenantEntityManagerProvider $tenantEmProvider, GemsuiteClientUpdater $gemsuiteUpdater)
     {
         
         $this->tenantEmProvider = $tenantEmProvider;
+        $this->gemsuiteUpdater = $gemsuiteUpdater;
     }
 
     private function getAdressRepository()
@@ -31,6 +33,7 @@ class AdressService
 
     public function createAdress(AdressInputDTO $inputDTO, $user): Adress
     {
+         $entityManager = $this->tenantEmProvider->getEntityManager();
         $adress = new Adress();
         $adress->setFirstname($inputDTO->firstname);
         $adress->setLastname($inputDTO->lastname);
@@ -44,10 +47,13 @@ class AdressService
         $adress->setProvince($inputDTO->province);
         $adress->setCountry($inputDTO->country);
         $adress->setUserAdress($user);
+        if ($inputDTO->isPrimary) {
+            $user->setPrimaryAddress($adress);
+        }
 
-        $repo = $this->getAdressRepository();
-        $repo->save($adress, true);
-
+        $entityManager->persist($adress);
+        $this->gemsuiteUpdater->syncAddress($user, $adress);
+        $entityManager->flush();
         return $adress;
     }
 
@@ -65,8 +71,11 @@ class AdressService
         $adress->setCodepostal($inputDTO->zipCode);
         $adress->setCountry($inputDTO->country);
 
-        $repo = $this->getAdressRepository();
-        $repo->save($adress, true);
+        if ($inputDTO->isPrimary && $user) {
+            $user->setPrimaryAddress($adress);
+            $this->gemsuiteUpdater->syncAddress($user, $adress);
+        }
+        $entityManager->flush();
 
         return $adress;
     }
