@@ -1,5 +1,5 @@
 <?php
-// src/EventSubscriber/CacheInvalidationSubscriber.php
+
 
 namespace App\EventSubscriber;
 
@@ -10,6 +10,7 @@ use App\Entity\Size;
 use App\Entity\Order;
 use App\Entity\AdminSettings;
 use App\Entity\Entreprise;
+use App\Entity\Banniere;
 use App\Entity\HomeSlider;
 use App\Entity\Product;
 use App\Entity\Payments;
@@ -33,6 +34,15 @@ use Doctrine\ORM\Events;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\TagAwareCacheInterface;
 use App\Services\TenantConnectionProvider;
+use App\Entity\Emploi;
+use App\Entity\Candidature;
+use App\Entity\Marque;
+use App\Entity\CategorieMarque;
+use App\Entity\Multilien; 
+use App\Entity\Recherche;
+use App\Entity\ServiceOffer;
+use App\Entity\Video;
+use App\Entity\Contact;
 
 class CacheInvalidationSubscriber implements EventSubscriber
 {
@@ -44,6 +54,56 @@ class CacheInvalidationSubscriber implements EventSubscriber
      * les clés à supprimer et/ou les tags à invalider.
      */
     private const CACHE_INVALIDATIONS = [
+        [
+            'classes' => [Contact::class],
+            'delete' => ['contacts_all'],
+            'invalidate_tags' => ['contacts'],
+        ],
+        [
+            'classes' => [Video::class],
+            'delete' => ['videos_all'],
+            'invalidate_tags' => ['videos'],
+        ],
+        [
+            'classes' => [ServiceOffer::class],
+            'delete' => ['service_offers_all'],
+            'invalidate_tags' => ['service_offers'],
+        ],
+        [
+            'classes' => [Recherche::class],
+            'delete' => ['recherches_all'],
+            'invalidate_tags' => ['recherches'],
+        ],
+        [
+            'classes' => [Multilien::class],
+            'delete' => ['multiliens_all'],
+            'invalidate_tags' => ['multiliens'],
+        ],
+        [
+            'classes' => [Marque::class, CategorieMarque::class], // Gère déjà les deux
+            'delete' => ['marques_all', 'categories_marque_all'],
+            'invalidate_tags' => ['marques', 'categories_marque'],
+        ],
+         [
+            'classes' => [Marque::class, CategorieMarque::class], 
+            'delete' => ['marques_all', 'categories_marque_all'], 
+            'invalidate_tags' => ['marques', 'categories_marque'],
+        ],
+        [
+            'classes' => [Candidature::class],
+            'delete' => ['candidatures_all'],
+            'invalidate_tags' => ['candidatures', 'emplois'], 
+        ],
+        [
+            'classes' => [Emploi::class],
+            'delete' => ['emplois_all'],
+            'invalidate_tags' => ['emplois'],
+        ],
+        [
+            'classes' => [Banniere::class],
+            'delete' => ['bannieres_all'], // On supprime la clé exacte
+            'invalidate_tags' => ['bannieres'], // On invalide aussi le tag par sécurité
+        ],
 
         // Pour TransactionCaisse : suppression d'une clé et invalidation d'un tag
         [
