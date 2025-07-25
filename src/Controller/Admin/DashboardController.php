@@ -69,6 +69,15 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
 use App\Entity\EmailConfiguration;
+use App\Entity\Banniere;
+use App\Entity\Emploi;
+use App\Entity\Candidature;
+use App\Entity\Marque;
+use App\Entity\CategorieMarque;
+use App\Entity\Multilien;
+use App\Entity\Recherche;
+use App\Entity\ServiceOffer;
+use App\Entity\Video;
 
 class DashboardController extends AbstractDashboardController
 {
@@ -97,6 +106,19 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Admin Settings', 'fas fa-cogs', AdminSettings::class);
         yield MenuItem::linkToCrud('Features', 'fa fa-star', Feature::class);
         yield MenuItem::linkToCrud('Explore Cards', 'fa fa-th-large', ExploreCard::class);
+
+        yield MenuItem::section('Landing Page');
+
+
+        yield MenuItem::linkToCrud('Bannières', 'fas fa-image', Banniere::class);
+        yield MenuItem::linkToCrud('Offres d\'emploi', 'fas fa-briefcase', Emploi::class);
+        yield MenuItem::linkToCrud('Candidatures', 'fas fa-file-alt', Candidature::class);
+        yield MenuItem::linkToCrud('Marques', 'fas fa-tags', Marque::class);
+        yield MenuItem::linkToCrud('Catégories de Marque', 'fas fa-sitemap', CategorieMarque::class);
+        yield MenuItem::linkToCrud('Multiliens', 'fas fa-link', Multilien::class);
+        yield MenuItem::linkToCrud('Section Recherche', 'fas fa-search', Recherche::class);
+        yield MenuItem::linkToCrud('Offres de Service', 'fas fa-concierge-bell', ServiceOffer::class);
+        yield MenuItem::linkToCrud('Vidéos', 'fas fa-video', Video::class);
 
         yield MenuItem::section('Entreprise');
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);

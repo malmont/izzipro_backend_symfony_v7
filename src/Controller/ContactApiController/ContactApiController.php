@@ -1,0 +1,69 @@
+<?php
+namespace App\Controller\ContactApiController;
+
+use App\Dto\ContactInputDto;
+use App\Dto\ContactOutputDto;
+use App\Services\TenantCacheService;
+use App\UseCase\ContactUseCase\GetAllContactsUseCase;
+use App\UseCase\ContactUseCase\CreateContactUseCase;
+use App\UseCase\ContactUseCase\UpdateContactUseCase;
+use App\UseCase\ContactUseCase\DeleteContactUseCase;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Contracts\Cache\ItemInterface;
+
+#[Route('/api/contacts')]
+class ContactApiController extends AbstractController
+{
+    public function __construct(
+        private GetAllContactsUseCase $getAllContactsUseCase,
+        private CreateContactUseCase $createContactUseCase,
+        private UpdateContactUseCase $updateContactUseCase,
+        private DeleteContactUseCase $deleteContactUseCase,
+        private TenantCacheService $cache
+    ) {}
+
+    #[Route('', name: 'api_contact_list', methods: ['GET'])]
+    public function list(): JsonResponse
+    {
+        $cacheKey = 'contacts_all';
+        $cacheTags = ['contacts'];
+
+        $contactsDto = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) {
+                $contacts = $this->getAllContactsUseCase->execute();
+                return array_map(fn($contact) => new ContactOutputDto($contact), $contacts);
+            },
+            3600,
+            $cacheTags
+        );
+
+        return $this->json($contactsDto);
+    }
+
+    #[Route('', name: 'api_contact_create', methods: ['POST'])]
+    public function create(#[MapRequestPayload] ContactInputDto $dto): JsonResponse
+    {
+        $contact = $this->createContactUseCase->execute($dto);
+        return $this->json(new ContactOutputDto($contact), Response::HTTP_CREATED);
+    }
+
+    #[Route('/{id}', name: 'api_contact_update', methods: ['PUT'])]
+    public function update(int $id, #[MapRequestPayload] ContactInputDto $dto): JsonResponse
+    {
+        $contact = $this->updateContactUseCase->execute($id, $dto);
+        return $this->json(new ContactOutputDto($contact));
+    }
+
+    #[Route('/{id}', name: 'api_contact_delete', methods: ['DELETE'])]
+    public function delete(int $id): JsonResponse
+    {
+        $this->deleteContactUseCase->execute($id);
+        return $this->json(null, Response::HTTP_NO_CONTENT);
+    }
+}

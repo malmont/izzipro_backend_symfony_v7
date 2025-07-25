@@ -1,0 +1,11 @@
+{# templates/admin/fields/link_to_cv.html.twig #}
+
+{% if field.value %}
+    {# Si une URL est bien présente, on affiche un lien cliquable #}
+    <a href="{{ field.value }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary">
+        <i class="fa fa-external-link-alt"></i> Voir le CV
+    </a>
+{% else %}
+    {# Sinon, on affiche un message par défaut #}
+    <span class="text-muted">Aucun CV fourni</span>
+{% endif %}
