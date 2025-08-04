@@ -1,0 +1,87 @@
+<?php
+
+namespace App\Controller\LandingPagesController;
+
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\Routing\Annotation\Route;
+
+
+
+class LandingPagesController extends AbstractController
+{
+    #[Route('/api/components-config', name: 'api_components_config', methods: ['GET'])]
+    public function getComponentsConfig(): JsonResponse
+    {
+        $componentsConfig = [
+            [
+                "type" => "Baniere",
+                "name" => "Bannière Héros",
+                "description" => "Affiche une grande bannière avec image et texte.",
+                "api_data_endpoint" => "/bannieres",
+                "data_id_field" => "id",
+                "data_label_field" => "titre", 
+                "is_data_selectable" => true
+            ],
+            [
+                "type" => "Marque",
+                "name" => "Affichage de Marques par Catégorie",
+                "description" => "Affiche les logos des marques appartenant à une catégorie.",
+                "api_data_endpoint" => "/categories-marque", 
+                "data_id_field" => "id",
+                "data_label_field" => "nom", 
+                "is_data_selectable" => true
+            ],
+            [
+                "type" => "Contact",
+                "name" => "Formulaire de Contact",
+                "description" => "Affiche un formulaire de contact.",
+                "is_data_selectable" => false 
+            ],
+            [
+                "type" => "Candidature",
+                "name" => "Formulaire de Candidature",
+                "description" => "Affiche une offre d'emploi ou un formulaire de candidature spontanée.",
+                "api_data_endpoint" => "/emplois",
+                "data_id_field" => "id",
+                "data_label_field" => "titre", 
+                "is_data_selectable" => true
+            ],
+            [
+                "type" => "MultiLien",
+                "name" => "Liens Multiples",
+                "description" => "Affiche un groupe de liens personnalisables.",
+                "api_data_endpoint" => "/multiliens", 
+                "data_id_field" => "id",
+                "data_label_field" => "titre", 
+                "is_data_selectable" => true
+            ],
+            [
+                "type" => "Service",
+                "name" => "Offres de Services",
+                "description" => "Présente les services offerts par l'entreprise.",
+                "api_data_endpoint" => "/service-offers", 
+                "data_id_field" => "id",
+                "data_label_field" => "titre", 
+                "is_data_selectable" => true
+            ],
+            [
+                "type" => "Video",
+                "name" => "Lecteur Vidéo",
+                "description" => "Intègre une vidéo spécifique.",
+                "api_data_endpoint" => "/videos",
+                "data_id_field" => "id",
+                "data_label_field" => "titre", 
+                "is_data_selectable" => true
+            ],
+            [
+                "type" => "Recherche",
+                "name" => "Barre de Recherche",
+                "description" => "Affiche une barre de recherche.",
+                "is_data_selectable" => false
+            ]
+        ];
+
+        return $this->json($componentsConfig);
+    }
+}

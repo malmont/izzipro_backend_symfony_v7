@@ -8,6 +8,7 @@ use App\UseCase\MultilienUseCase\GetAllMultiliensUseCase;
 use App\UseCase\MultilienUseCase\CreateMultilienUseCase;
 use App\UseCase\MultilienUseCase\UpdateMultilienUseCase;
 use App\UseCase\MultilienUseCase\DeleteMultilienUseCase;
+use App\UseCase\MultilienUseCase\GetMultilienByIdUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -24,7 +25,8 @@ class MultilienApiController extends AbstractController
         private CreateMultilienUseCase $createMultilienUseCase,
         private UpdateMultilienUseCase $updateMultilienUseCase,
         private DeleteMultilienUseCase $deleteMultilienUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private GetMultilienByIdUseCase $getMultilienByIdUseCase
     ) {}
 
     #[Route('', name: 'api_multilien_list', methods: ['GET'])]
@@ -45,6 +47,19 @@ class MultilienApiController extends AbstractController
         );
 
         return $this->json($multiliensDto);
+    }
+
+    #[Route('/{id}', name: 'api_multilien_get_one', methods: ['GET'])]
+    public function getOne(int $id, Request $request): JsonResponse
+    {
+        $multilien = $this->getMultilienByIdUseCase->execute($id);
+
+        if (!$multilien) {
+            return $this->json(['message' => 'Multilien non trouvé'], Response::HTTP_NOT_FOUND);
+        }
+        
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/multiliens';
+        return $this->json(new MultilienOutputDto($multilien, $baseImageUrl));
     }
 
     #[Route('', name: 'api_multilien_create', methods: ['POST'])]

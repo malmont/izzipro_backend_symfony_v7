@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\Cache\ItemInterface;
+use App\UseCase\ContactUseCase\GetContactByIdUseCase;
 
 #[Route('/api/contacts')]
 class ContactApiController extends AbstractController
@@ -24,7 +25,8 @@ class ContactApiController extends AbstractController
         private CreateContactUseCase $createContactUseCase,
         private UpdateContactUseCase $updateContactUseCase,
         private DeleteContactUseCase $deleteContactUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private GetContactByIdUseCase $getContactByIdUseCase
     ) {}
 
     #[Route('', name: 'api_contact_list', methods: ['GET'])]
@@ -45,6 +47,19 @@ class ContactApiController extends AbstractController
 
         return $this->json($contactsDto);
     }
+
+    #[Route('/{id}', name: 'api_contact_get_one', methods: ['GET'])]
+    public function getOne(int $id): JsonResponse
+    {
+        $contact = $this->getContactByIdUseCase->execute($id);
+
+        if (!$contact) {
+            return $this->json(['message' => 'Contact non trouvé'], Response::HTTP_NOT_FOUND);
+        }
+
+        return $this->json(new ContactOutputDto($contact));
+    }
+
 
     #[Route('', name: 'api_contact_create', methods: ['POST'])]
     public function create(#[MapRequestPayload] ContactInputDto $dto): JsonResponse

@@ -29,6 +29,7 @@ class CategorieMarqueCrudController extends BaseTenantCrudController
             AssociationField::new('marques', 'Marques associées')
             ->setFormTypeOptions([
                 'em' => $tenantEm,
+                'by_reference' => false, 
                 'query_builder' => function (MarqueRepository $repo) {
                     return $repo->createQueryBuilder('m')->orderBy('m.titre', 'ASC');
                 },
@@ -37,5 +38,3 @@ class CategorieMarqueCrudController extends BaseTenantCrudController
         ];
     }
 }
-    
-
