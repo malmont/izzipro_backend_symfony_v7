@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\Cache\ItemInterface;
+use App\UseCase\RechercheUseCase\GetRechercheByIdUseCase;
 
 #[Route('/api/recherches')]
 class RechercheApiController extends AbstractController
@@ -24,7 +25,8 @@ class RechercheApiController extends AbstractController
         private CreateRechercheUseCase $createRechercheUseCase,
         private UpdateRechercheUseCase $updateRechercheUseCase,
         private DeleteRechercheUseCase $deleteRechercheUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private GetRechercheByIdUseCase $getRechercheByIdUseCase
     ) {}
 
     #[Route('', name: 'api_recherche_list', methods: ['GET'])]
@@ -45,6 +47,19 @@ class RechercheApiController extends AbstractController
         );
 
         return $this->json($recherchesDto);
+    }
+
+    #[Route('/{id}', name: 'api_recherche_get_one', methods: ['GET'])]
+    public function getOne(int $id, Request $request): JsonResponse
+    {
+        $recherche = $this->getRechercheByIdUseCase->execute($id);
+
+        if (!$recherche) {
+            return $this->json(['message' => 'Recherche non trouvée'], Response::HTTP_NOT_FOUND);
+        }
+        
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/recherches';
+        return $this->json(new RechercheOutputDto($recherche, $baseImageUrl));
     }
 
     #[Route('', name: 'api_recherche_create', methods: ['POST'])]

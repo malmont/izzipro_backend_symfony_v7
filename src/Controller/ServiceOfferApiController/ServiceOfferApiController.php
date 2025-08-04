@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\Cache\ItemInterface;
+use App\UseCase\ServiceOfferUseCase\GetServiceOfferByIdUseCase;
 
 #[Route('/api/service-offers')]
 class ServiceOfferApiController extends AbstractController
@@ -24,7 +25,8 @@ class ServiceOfferApiController extends AbstractController
         private CreateServiceOfferUseCase $createServiceOfferUseCase,
         private UpdateServiceOfferUseCase $updateServiceOfferUseCase,
         private DeleteServiceOfferUseCase $deleteServiceOfferUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private GetServiceOfferByIdUseCase $getServiceOfferByIdUseCase
     ) {}
 
     #[Route('', name: 'api_service_offer_list', methods: ['GET'])]
@@ -32,7 +34,7 @@ class ServiceOfferApiController extends AbstractController
     {
         $cacheKey = 'service_offers_all';
         $cacheTags = ['service_offers'];
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/services';
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
 
         $serviceOffersDto = $this->cache->get(
             $cacheKey,
@@ -47,11 +49,24 @@ class ServiceOfferApiController extends AbstractController
         return $this->json($serviceOffersDto);
     }
 
+     #[Route('/{id}', name: 'api_service_offer_get_one', methods: ['GET'])]
+    public function getOne(int $id, Request $request): JsonResponse
+    {
+        $serviceOffer = $this->getServiceOfferByIdUseCase->execute($id);
+
+        if (!$serviceOffer) {
+            return $this->json(['message' => 'Offre de service non trouvée'], Response::HTTP_NOT_FOUND);
+        }
+        
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
+        return $this->json(new ServiceOfferOutputDto($serviceOffer, $baseImageUrl));
+    }
+
     #[Route('', name: 'api_service_offer_create', methods: ['POST'])]
     public function create(#[MapRequestPayload] ServiceOfferInputDto $dto, Request $request): JsonResponse
     {
         $serviceOffer = $this->createServiceOfferUseCase->execute($dto);
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/services';
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
         return $this->json(new ServiceOfferOutputDto($serviceOffer, $baseImageUrl), Response::HTTP_CREATED);
     }
 
@@ -59,7 +74,7 @@ class ServiceOfferApiController extends AbstractController
     public function update(int $id, #[MapRequestPayload] ServiceOfferInputDto $dto, Request $request): JsonResponse
     {
         $serviceOffer = $this->updateServiceOfferUseCase->execute($id, $dto);
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/services';
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
         return $this->json(new ServiceOfferOutputDto($serviceOffer));
     }
 

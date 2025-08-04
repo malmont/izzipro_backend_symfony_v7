@@ -9,6 +9,7 @@ use App\UseCase\BanniereUseCase\GetAllBannieresUseCase;
 use App\UseCase\BanniereUseCase\CreateBanniereUseCase;
 use App\UseCase\BanniereUseCase\UpdateBanniereUseCase;
 use App\UseCase\BanniereUseCase\DeleteBanniereUseCase;
+use App\UseCase\BanniereUseCase\GetBanniereByIdUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,7 +26,8 @@ class BanniereApiController extends AbstractController
         private CreateBanniereUseCase $createBanniereUseCase,
         private UpdateBanniereUseCase $updateBanniereUseCase,
         private DeleteBanniereUseCase $deleteBanniereUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private GetBanniereByIdUseCase $getBanniereByIdUseCase
     ) {
     }
 
@@ -34,23 +36,37 @@ class BanniereApiController extends AbstractController
     {
         $cacheKey = 'bannieres_all';
         $cacheTags = ['bannieres'];
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/bannieres';
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 
         $bannieresDto = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($baseImageUrl) {
                 $bannieres = $this->getAllBannieresUseCase->execute();
-                // On transforme les entités en DTOs de sortie pour une réponse propre
                 return array_map(
                     fn($banniere) => new BanniereOutputDto($banniere, $baseImageUrl),
                     $bannieres
                 );
             },
-            3600, // Durée de vie du cache en secondes (1 heure)
+            3600, 
             $cacheTags
         );
 
         return $this->json($bannieresDto);
+    }
+
+    #[Route('/{id}', name: 'api_banniere_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function getOne(int $id, Request $request): JsonResponse
+    {
+        $banniere = $this->getBanniereByIdUseCase->execute($id);
+
+        if (!$banniere) {
+            return $this->json(['message' => 'Bannière non trouvée'], Response::HTTP_NOT_FOUND);
+        }
+
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets//uploads/slider';
+        $outputDto = new BanniereOutputDto($banniere, $baseImageUrl);
+
+        return $this->json($outputDto);
     }
 
     #[Route('', name: 'api_banniere_create', methods: ['POST'])]
@@ -59,7 +75,7 @@ class BanniereApiController extends AbstractController
         $banniere = $this->createBanniereUseCase->execute($dto);
         
         // On retourne un DTO de sortie pour la cohérence
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/bannieres';
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets//uploads/slider';
         $outputDto = new BanniereOutputDto($banniere, $baseImageUrl);
 
         return $this->json($outputDto, Response::HTTP_CREATED);
@@ -71,7 +87,7 @@ class BanniereApiController extends AbstractController
         $banniere = $this->updateBanniereUseCase->execute($id, $dto);
 
         // On retourne un DTO de sortie pour la cohérence
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/bannieres';
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets//uploads/slider';
         $outputDto = new BanniereOutputDto($banniere, $baseImageUrl);
 
         return $this->json($outputDto, Response::HTTP_OK);

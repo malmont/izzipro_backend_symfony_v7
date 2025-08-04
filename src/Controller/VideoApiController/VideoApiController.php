@@ -8,6 +8,7 @@ use App\UseCase\VideoUseCase\GetAllVideosUseCase;
 use App\UseCase\VideoUseCase\CreateVideoUseCase;
 use App\UseCase\VideoUseCase\UpdateVideoUseCase;
 use App\UseCase\VideoUseCase\DeleteVideoUseCase;
+use App\UseCase\VideoUseCase\GetVideoByIdUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -24,7 +25,8 @@ class VideoApiController extends AbstractController
         private CreateVideoUseCase $createVideoUseCase,
         private UpdateVideoUseCase $updateVideoUseCase,
         private DeleteVideoUseCase $deleteVideoUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private GetVideoByIdUseCase $getVideoByIdUseCase
     ) {}
 
     #[Route('', name: 'api_video_list', methods: ['GET'])]
@@ -45,6 +47,18 @@ class VideoApiController extends AbstractController
         );
 
         return $this->json($videosDto);
+    }
+    #[Route('/{id}', name: 'api_video_get_one', methods: ['GET'])]
+    public function getOne(int $id, Request $request): JsonResponse
+    {
+        $video = $this->getVideoByIdUseCase->execute($id);
+
+        if (!$video) {
+            return $this->json(['message' => 'Vidéo non trouvée'], Response::HTTP_NOT_FOUND);
+        }
+        
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/videos';
+        return $this->json(new VideoOutputDto($video, $baseImageUrl));
     }
 
     #[Route('', name: 'api_video_create', methods: ['POST'])]

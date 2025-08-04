@@ -32,7 +32,7 @@ class MarqueApiController extends AbstractController
     {
         $cacheKey = 'marques_all';
         $cacheTags = ['marques'];
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/marques';
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
 
         $marquesDto = $this->cache->get(
             $cacheKey,
@@ -51,7 +51,7 @@ class MarqueApiController extends AbstractController
     public function create(#[MapRequestPayload] MarqueInputDto $dto, Request $request): JsonResponse
     {
         $marque = $this->createMarqueUseCase->execute($dto);
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/marques';
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
         return $this->json(new MarqueOutputDto($marque, $baseImageUrl), Response::HTTP_CREATED);
     }
 
@@ -59,7 +59,7 @@ class MarqueApiController extends AbstractController
     public function update(int $id, #[MapRequestPayload] MarqueInputDto $dto, Request $request): JsonResponse
     {
         $marque = $this->updateMarqueUseCase->execute($id, $dto);
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/marques';
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
         return $this->json(new MarqueOutputDto($marque));
     }
 

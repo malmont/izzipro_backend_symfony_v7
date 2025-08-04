@@ -10,5 +10,15 @@ use Doctrine\ORM\EntityRepository;
  */
 class CategorieMarqueRepository extends EntityRepository
 {
+
+    public function findAllWithMarques(): array
+    {
+        return $this->createQueryBuilder('c')
+            ->leftJoin('c.marques', 'm')
+            ->addSelect('m') // Important: sélectionne les données des marques jointes
+            ->orderBy('c.nom', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
    
 }

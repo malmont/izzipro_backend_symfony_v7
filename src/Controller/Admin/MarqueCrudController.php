@@ -11,9 +11,6 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 
-/**
- * Ce contrôleur hérite de notre base pour être automatiquement "multi-tenant".
- */
 class MarqueCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
@@ -23,7 +20,6 @@ class MarqueCrudController extends BaseTenantCrudController
 
     public function configureFields(string $pageName): iterable
     {
-        // $this->emProvider est accessible car il est 'protected' dans le parent
         $tenantEm = $this->emProvider->getEntityManager();
 
         return [
@@ -35,9 +31,9 @@ class MarqueCrudController extends BaseTenantCrudController
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
             AssociationField::new('categories', 'Catégories')
-                ->setFormTypeOption('by_reference', false)
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
+                    'by_reference' => false, 
                     'query_builder' => function (CategorieMarqueRepository $repo) {
                         return $repo->createQueryBuilder('cm')->orderBy('cm.nom', 'ASC');
                     },

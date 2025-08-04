@@ -22,6 +22,12 @@ class CandidatureService
         return $tenantEm->getRepository(Candidature::class)->findAll();
     }
 
+    public function findCandidature(int $id): ?Candidature
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        return $tenantEm->getRepository(Candidature::class)->find($id);
+    }
+
     public function createCandidature(CandidatureInputDto $dto): Candidature
     {
         $tenantEm = $this->emProvider->getEntityManager();

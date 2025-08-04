@@ -17,7 +17,8 @@ class CategorieMarqueService
     public function getAllCategoriesMarque(): array
     {
         $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(CategorieMarque::class)->findAll();
+        $repository = $tenantEm->getRepository(CategorieMarque::class);
+        return $repository->findAllWithMarques();
     }
 
     public function findCategorieMarque(int $id): ?CategorieMarque

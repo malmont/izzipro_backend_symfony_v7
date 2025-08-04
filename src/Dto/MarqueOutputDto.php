@@ -10,11 +10,11 @@ class MarqueOutputDto
     public ?string $logosMarquesUrl;
     public array $categories = [];
 
-    public function __construct(Marque $marque, string $baseImageUrl)
+    public function __construct(Marque $marque, ?string $baseImageUrl = null)
     {
         $this->id = $marque->getId();
         $this->titre = $marque->getTitre();
-        $this->logosMarquesUrl = $marque->getLogosMarques()
+        $this->logosMarquesUrl = $marque->getLogosMarques() && $baseImageUrl
             ? rtrim($baseImageUrl, '/') . '/' . $marque->getLogosMarques()
             : null;
 

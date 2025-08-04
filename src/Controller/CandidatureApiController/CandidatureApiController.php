@@ -7,6 +7,7 @@ use App\Services\TenantCacheService;
 use App\UseCase\CandidatureUseCase\GetAllCandidaturesUseCase;
 use App\UseCase\CandidatureUseCase\CreateCandidatureUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\UseCase\CandidatureUseCase\GetCandidatureByIdUseCase;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,7 +21,8 @@ class CandidatureApiController extends AbstractController
     public function __construct(
         private GetAllCandidaturesUseCase $getAllCandidaturesUseCase,
         private CreateCandidatureUseCase $createCandidatureUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private GetCandidatureByIdUseCase $getCandidatureByIdUseCase
     ) {}
 
     #[Route('', name: 'api_candidature_list', methods: ['GET'])]
@@ -40,6 +42,17 @@ class CandidatureApiController extends AbstractController
         );
 
         return $this->json($candidaturesDto);
+    }
+     #[Route('/{id}', name: 'api_candidature_get_one', methods: ['GET'])]
+    public function getOne(int $id): JsonResponse
+    {
+        $candidature = $this->getCandidatureByIdUseCase->execute($id);
+
+        if (!$candidature) {
+            return $this->json(['message' => 'Candidature non trouvée'], Response::HTTP_NOT_FOUND);
+        }
+        
+        return $this->json(new CandidatureOutputDto($candidature));
     }
 
     #[Route('', name: 'api_candidature_create', methods: ['POST'])]
