@@ -70,7 +70,7 @@ class ProductController extends AbstractController
     public function createProductByCommande(Commande $commande, Request $request): JsonResponse
     {
         try {
-            // Récupération du répertoire d'upload
+
             $uploadDir = $this->getParameter('kernel.project_dir') . '/public/assets/uploads/products/';
             $product = $this->createProductByCommandeUseCase->execute($commande, $request, $uploadDir);
 

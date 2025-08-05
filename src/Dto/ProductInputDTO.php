@@ -8,7 +8,7 @@ class ProductInputDTO
     public ?float $purchasePrice;
     public ?float $coefficientMultiplier;
     public ?int $styleId;
-    public array $categoryIds;  // Type array ici
+    public array $categoryIds;  
     public ?string $image;
 
     public function __construct(array $data)
@@ -18,13 +18,11 @@ class ProductInputDTO
         $this->purchasePrice = $data['purchasePrice'] ?? null;
         $this->coefficientMultiplier = $data['coefficientMultiplier'] ?? null;
         $this->styleId = $data['style_id'] ?? null;
-
-        // S'assurer que categoryIds est bien un tableau
         $categoryIds = $data['category_ids'] ?? [];
         if (is_string($categoryIds)) {
-            $categoryIds = explode(',', $categoryIds);  // Si c'est une chaîne, on la convertit en tableau
+            $categoryIds = explode(',', $categoryIds);  
         }
-        $this->categoryIds = (array) $categoryIds;  // On cast pour s'assurer que c'est bien un tableau
+        $this->categoryIds = (array) $categoryIds; 
 
         $this->image = $data['image'] ?? null;
     }

@@ -11,6 +11,8 @@ class ServiceOfferInputDto
 
     public ?string $logo = null;
 
+    public ?string $photoService = null;
+
     #[Assert\Length(max: 255)]
     public ?string $titreCommentaire = null;
 

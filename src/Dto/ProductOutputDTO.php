@@ -24,24 +24,17 @@ class ProductOutputDTO
         $this->purchasePrice = $product->getPurchasePrice();
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->slug = $product->getSlug();
-
-        // Image complète avec le chemin correct
-        $this->image = $product->getImage() ? $host . '/assets/uploads/products/' . $product->getImage() : null;
-
-        // Catégories
+        $this->image = $product->getImage() ?: null;
         $this->categories = array_map(fn($category) => [
             'id' => $category->getId(),
             'name' => $category->getName(),
             'description' => $category->getDescription(),
         ], $product->getCategory()->toArray());
 
-        // Style complet
         $this->style = $product->getStyle() ? [
             'id' => $product->getStyle()->getId(),
             'name' => $product->getStyle()->getName(),
         ] : null;
-
-        // Variantes avec les objets complets pour color et size
         $this->variants = array_map(fn($variant) => [
             'id' => $variant->getId(),
             'color' => $variant->getColor() ? [

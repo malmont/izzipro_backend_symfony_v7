@@ -26,6 +26,9 @@ class ServiceOffer
     #[ORM\Column(type: Types::TEXT, nullable: true)] 
     private ?string $descriptions = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $photoService = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -75,6 +78,18 @@ class ServiceOffer
     public function setDescriptions(?string $descriptions): static
     {
         $this->descriptions = $descriptions;
+
+        return $this;
+    }
+
+    public function getPhotoService(): ?string
+    {
+        return $this->photoService;
+    }
+
+    public function setPhotoService(?string $photoService): static
+    {
+        $this->photoService = $photoService;
 
         return $this;
     }

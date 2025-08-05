@@ -3,11 +3,10 @@ namespace App\Services\CategoryService;
 
 use App\Entity\Categories;
 use App\Entity\Product;
-use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
+use App\Services\TenantEntityManagerProvider; 
 
 class CategoryService
 {
-    // MODIFICATION 1 : Le service ne dépend plus que du provider
     private TenantEntityManagerProvider $emProvider;
 
     public function __construct(TenantEntityManagerProvider $emProvider)
@@ -17,7 +16,6 @@ class CategoryService
 
     public function getAllCategories(): array
     {
-        // MODIFICATION 2 : On récupère l'EM du tenant ici
         $em = $this->emProvider->getEntityManager();
         return $em->getRepository(Categories::class)->findAll();
     }
@@ -27,7 +25,6 @@ class CategoryService
         $em = $this->emProvider->getEntityManager();
         $queryBuilder = $em->getRepository(Product::class)->createQueryBuilder('p');
 
-        // Votre logique métier et de requête, sécurisée et inchangée, est parfaite.
         if ($categoryIds) {
             $queryBuilder->join('p.category', 'c')
                         ->andWhere('c.id IN (:categoryIds)')

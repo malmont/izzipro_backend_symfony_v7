@@ -3,6 +3,7 @@
 
 namespace App\Controller\Api;
 
+use App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler; 
 use App\Services\GemsuiteImporterService\GemsuiteSyncHandler;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,6 +14,7 @@ class GemsuiteWebhookController extends AbstractController
 {
     public function __construct(
         private GemsuiteSyncHandler $syncHandler,
+        private GemsuiteCompanySyncHandler $companySyncHandler,
         private LoggerInterface $logger
     ) {
     }
@@ -53,6 +55,10 @@ class GemsuiteWebhookController extends AbstractController
                 
                 case 'categories':
                     $this->syncHandler->handleCategoryUpdate($tenant_code, $id);
+                    break;
+
+                case 'company':
+                    $this->companySyncHandler->handleCompanyUpdate($tenant_code);
                     break;
                 
                 default:

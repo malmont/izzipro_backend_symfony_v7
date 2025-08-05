@@ -8,6 +8,7 @@ class ServiceOfferOutputDto
     public int $id;
     public string $titre;
     public ?string $logoUrl;
+    public ?string $photoServiceUrl = null;
     public ?string $titreCommentaire;
     public ?string $descriptions;
 
@@ -17,6 +18,9 @@ class ServiceOfferOutputDto
         $this->titre = $serviceOffer->getTitre();
         $this->logoUrl = $serviceOffer->getLogo()
             ? rtrim($baseImageUrl, '/') . '/' . $serviceOffer->getLogo()
+            : null;
+        $this->photoServiceUrl = $serviceOffer->getPhotoService()
+            ? rtrim($baseImageUrl, '/') . '/' . $serviceOffer->getPhotoService()
             : null;
         $this->titreCommentaire = $serviceOffer->getTitreCommentaire();
         $this->descriptions = $serviceOffer->getDescriptions();

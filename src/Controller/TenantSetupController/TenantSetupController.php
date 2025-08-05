@@ -2,7 +2,9 @@
 namespace App\Controller\TenantSetupController;
 
 use App\Dto\TenantSetupDTO;
+use App\Entity\AddressEntreprise; // <-- AJOUTER
 use App\Entity\Entreprise;
+use App\Entity\HomeSlider;
 use App\Entity\User;
 use App\Form\TenantSetupType;
 use App\Services\GemsuiteImporterService\GemsuiteImporter;
@@ -15,9 +17,12 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\String\Slugger\SluggerInterface;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class TenantSetupController extends AbstractController
 {
+    private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
+
     #[Route('/setup/new-store', name: 'app_tenant_setup')]
     public function setup(
         Request $request,
@@ -25,7 +30,8 @@ class TenantSetupController extends AbstractController
         TenantEntityManagerProvider $emProvider,
         UserPasswordHasherInterface $passwordHasher,
         SluggerInterface $slugger,
-        GemsuiteImporter $gemsuiteImporter
+        GemsuiteImporter $gemsuiteImporter,
+        HttpClientInterface $client
     ): Response {
         $dto = new TenantSetupDTO();
         $form = $this->createForm(TenantSetupType::class, $dto);
@@ -46,35 +52,75 @@ class TenantSetupController extends AbstractController
                 $emProvider->switchTenant($dbname, $dto->code);
                 $tenantEm = $emProvider->getEntityManager();
 
-                $entreprise = new Entreprise();
-                $entreprise->setName($dto->companyName);
-                $entreprise->setEmail($dto->companyEmail);
-                $entreprise->setTvaIntracommunautaire($dto->companyTva);
-                $entreprise->setEin($dto->companyEin);
-                
-                $logoFile = $form->get('companyLogo')->getData();
-                if ($logoFile) {
-                    $originalFilename = pathinfo($logoFile->getClientOriginalName(), PATHINFO_FILENAME);
-                    $safeFilename = $slugger->slug($originalFilename);
-                    $newFilename = $safeFilename.'-'.uniqid().'.'.$logoFile->guessExtension();
+                $companyData = null;
+                if ($dto->gemsuiteToken) {
                     try {
-                        $logoFile->move($this->getParameter('kernel.project_dir').'/public/assets/uploads/email-logos', $newFilename);
-                        $entreprise->setLogo($newFilename);
-                    } catch (FileException $e) {
-                        $this->addFlash('warning', 'Le logo n\'a pas pu être uploadé : ' . $e->getMessage());
+                        $response = $client->request('GET', self::GEMSUITE_API_URL . 'company', [
+                            'auth_bearer' => $dto->gemsuiteToken,
+                        ]);
+                        $companyData = $response->toArray()['data'][0] ?? null;
+                    } catch (\Throwable $e) {
+                        $this->addFlash('warning', 'Impossible de récupérer les informations de l\'entreprise depuis GEM-SUITE : ' . $e->getMessage());
                     }
                 }
+
+                $entreprise = new Entreprise();
+                $entreprise->setName($companyData['nom'] ?? $dto->companyName);
+                $entreprise->setEmail($companyData['email'] ?? $dto->companyEmail);
+                $entreprise->setTel($companyData['tel'] ?? null);
+                $entreprise->setTvaIntracommunautaire($dto->companyTva);
+                $entreprise->setEin($dto->companyEin);
+                $entreprise->setLogo($companyData['website_logo1'] ?? null);
+                $entreprise->setApropos($companyData['website_about_intro'] ?? null);
+                $entreprise->setConditionOfUse($companyData['website_terms'] ?? null);
+                $entreprise->setPrivacyPolicy($companyData['website_conf'] ?? null);
+
+                if (isset($companyData['website_link'])) {
+                    $pathParts = explode('/', rtrim($companyData['website_link'], '/'));
+                    $identifier = end($pathParts);
+                    $entreprise->setGemsuiteIdentifier($identifier);
+                }
+                
+                if ($companyData && !empty($companyData['adresse'])) {
+                    $addressEntreprise = new AddressEntreprise();
+                    $addressEntreprise->setStreet1($companyData['adresse']);
+                    $addressEntreprise->setStreet2('');
+                    $addressEntreprise->setCity($companyData['ville'] ?? '');
+                    $addressEntreprise->setState($companyData['prov'] ?? '');
+                    $addressEntreprise->setZip($companyData['cp'] ?? '');
+                    $addressEntreprise->setCountry($companyData['country'] == 1 ? 'CA' : 'Unknown');
+                    $addressEntreprise->setPhone($companyData['tel'] ?? '');
+                    $addressEntreprise->setEmail($companyData['email'] ?? '');
+                    $entreprise->setAddressEntreprise($addressEntreprise);
+                }
+
                 $tenantEm->persist($entreprise);
 
-                // Création de l'utilisateur admin
+                if ($companyData) {
+                    $homeSlider = new HomeSlider();
+                    $homeSlider->setTitle(strip_tags($companyData['website_intro_text1'] ?? 'Bienvenue'));
+                    $homeSlider->setDescription(strip_tags($companyData['website_intro_text2'] ?? 'Découvrez nos produits'));
+                    $homeSlider->setButtonMessage('Voir la boutique');
+                    $homeSlider->setButtonUrl('/shop');
+
+                    if (!empty($companyData['website_banner']) && $entreprise->getGemsuiteIdentifier()) {
+                        $bannerUrl = sprintf(
+                            'https://app.gem-books.com/?layout=image&d=%s&filename=%s',
+                            $entreprise->getGemsuiteIdentifier(),
+                            $companyData['website_banner']
+                        );
+                        $homeSlider->setImage($bannerUrl);
+                    } else {
+                        $homeSlider->setImage('');
+                    }
+                    $tenantEm->persist($homeSlider);
+                }
+
                 $user = new User();
                 $user->setFirstname($dto->adminName);
                 $user->setLastname('');
                 $user->setEmail($dto->adminEmail);
-                
-                // *** LIGNE AJOUTÉE POUR CORRIGER L'ERREUR ***
                 $user->setUsername($dto->adminEmail);
-
                 $user->setRoles(['ROLE_ADMIN']);
                 $user->setPassword($passwordHasher->hashPassword($user, $dto->plainPassword));
                 $user->setIsVerified(true); 
@@ -85,15 +131,7 @@ class TenantSetupController extends AbstractController
                 $this->addFlash('info', 'Profil de l\'entreprise et administrateur créés.');
 
             } catch (\Throwable $e) {
-                try {
-                    $tenantManager->deleteTenant($dto->code, $dbname);
-                    $this->addFlash('warning', 'Le tenant a été supprimé suite à une erreur de configuration.');
-                } catch (\Throwable $deleteEx) {
-                    $this->addFlash('error', 'Erreur critique : impossible de supprimer le tenant après l\'échec de la configuration.');
-                }
-
-                $this->addFlash('error', 'Erreur lors de la configuration des données initiales : ' . $e->getMessage());
-                return $this->redirectToRoute('app_tenant_setup');
+                $this->addFlash('warning', 'Erreur lors de la création du profil de l\'entreprise et administrateur.');
             }
             
             if ($dto->gemsuiteToken) {

@@ -32,12 +32,7 @@ class ProductOutputCategoryDto
     public array $variants;
     public array $category;
 
-    /**
-     * Transforme un objet Product en DTO.
-     *
-     * @param Product $product L'entité Product à transformer.
-     * @param string  $host    L'URL de base pour construire les liens d'images.
-     */
+
     public function __construct(Product $product, string $host)
     {
         $this->id = $product->getId();
@@ -49,9 +44,7 @@ class ProductOutputCategoryDto
         $this->isnewarrival = $product->isIsnewarrival();
         $this->isfeatured = $product->isIsfeatured();
         $this->isspecialoffer = $product->isIsspecialoffer();
-        $this->image = $product->getImage() 
-            ? $host . '/assets/uploads/products/' . $product->getImage() 
-            : null;
+        $this->image = $product->getImage() ?: null;
         $this->quantity = $product->getQuantity();
         $this->freezeQuantity = $product->getFreezeQuantity() ?? 0;
         $this->createdAt = $product->getCreatedAt()->format('Y-m-d H:i:s');
@@ -78,18 +71,15 @@ class ProductOutputCategoryDto
             $this->style = null;
         }
 
-        // Transformation des Variants
          $this->variants = array_map(function (ProductVariant $variant) {
             $color = $variant->getColor();
             $size = $variant->getSize();
             
-            // On transforme la collection de ProductOptionValue en un tableau simple
             $options = array_map(function (ProductOptionValue $optionValue) {
                 $parentOption = $optionValue->getProductOption();
                 return [
                     'value_id'    => $optionValue->getId(),
                     'value'       => $optionValue->getValue(),
-                    // On inclut le nom et l'id du type d'option pour le contexte
                     'option_name' => $parentOption ? $parentOption->getName() : null,
                     'option_id'   => $parentOption ? $parentOption->getId() : null,
                 ];
@@ -107,11 +97,10 @@ class ProductOutputCategoryDto
                     'name' => $size->getName(),
                 ] : null,
                 'stockQuantity' => $variant->getStockQuantity(),
-                'options' => $options, // <-- On ajoute le tableau d'options ici
+                'options' => $options, 
             ];
         }, $product->getVariants()->toArray());
 
-        // Transformation des Categories
         $this->category = array_map(function ($category) use ($host) {
             return [
                 'id'          => $category->getId(),

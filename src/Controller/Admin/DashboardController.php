@@ -99,7 +99,12 @@ class DashboardController extends AbstractDashboardController
     {
         yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
         
-        
+        yield MenuItem::section('Synchronisation');
+        yield MenuItem::linkToRoute(
+            'Synchronisation GemSuite', 
+            'fas fa-sync-alt', 
+            'admin_sync_gemsuite' 
+        );
         
         yield MenuItem::section('UI');
         yield MenuItem::linkToCrud('Home Slider', 'fas fa-images', HomeSlider::class);

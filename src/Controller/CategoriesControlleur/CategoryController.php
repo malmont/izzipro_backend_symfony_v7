@@ -36,7 +36,6 @@ class CategoryController extends AbstractController
     #[Route('/api/products/by-category', name: 'get_products_by_category', methods: ['GET'])]
     public function getProductsByCategory(Request $request): JsonResponse
     {
-        // Récupération des paramètres de requête
         $categoryIds = $request->query->get('categories');
         $keyword = $request->query->get('keyword');
         $page = $request->query->getInt('page', 1);
@@ -63,8 +62,6 @@ class CategoryController extends AbstractController
             'isWeb'      => $isWeb,
             'isPos'      => $isPos,
         ]));
-
-        // Pour éviter la sérialisation de proxies, on transforme les entités en DTO (ou tableau) dans la closure
         $host = $request->getSchemeAndHttpHost();
         $productsDTOArray = $this->cache->get(
             $cacheKey,
@@ -80,7 +77,6 @@ class CategoryController extends AbstractController
                     $isWeb,
                     $isPos
                 );
-                // Conversion en DTO ou tableau
                 return array_map(function ($product) use ($host) {
                     $dto = new ProductOutputCategoryDto($product, $host);
                     return $dto;
@@ -88,7 +84,6 @@ class CategoryController extends AbstractController
             },
         );
 
-        // Obtenir le nombre total de produits
         $totalProducts = $this->countProductsByCategoryUseCase->execute($categoryIds);
 
         return new JsonResponse([
