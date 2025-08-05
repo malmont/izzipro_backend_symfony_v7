@@ -38,9 +38,9 @@ class ProductDetailedOutputDTO
         $this->isnewarrival = $product->isIsnewarrival();
         $this->isfeatured = $product->isIsfeatured();
         $this->isspecialoffer = $product->isIsspecialoffer();
-        $this->image = $product->getImage() ? $host . '/assets/uploads/products/' . $product->getImage() : null;
+        $this->image = $product->getImage() ?: null;
         $this->quantity = $product->getQuantity();
-        $this->freezeQuantity = $product->getFreezeQuantity() ?? 0; // Option 2: valeur par défaut
+        $this->freezeQuantity = $product->getFreezeQuantity() ?? 0;
         $this->createdAt = $product->getCreatedAt()->format('Y-m-d H:i:s');
         $this->tags = $product->getTags();
         $this->slug = $product->getSlug();
@@ -48,13 +48,11 @@ class ProductDetailedOutputDTO
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->barcode = $product->getBarcode();
     
-        // Style
         $this->style = $product->getStyle() ? [
             'id' => $product->getStyle()->getId(),
             'name' => $product->getStyle()->getName(),
         ] : null;
     
-        // Variants
         $this->variants = array_map(function ($variant) {
             return [
                 'id' => $variant->getId(),
@@ -71,7 +69,6 @@ class ProductDetailedOutputDTO
             ];
         }, $product->getVariants()->toArray());
     
-        // Categories (changer en 'category' pour correspondre à l'ancienne version)
         $this->category = array_map(function ($category) {
             return [
                 'id' => $category->getId(),

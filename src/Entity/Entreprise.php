@@ -53,6 +53,9 @@ class Entreprise
     #[ORM\OneToOne(mappedBy: 'entreprise', targetEntity: AddressEntreprise::class, cascade: ['persist','remove'])]
     private ?AddressEntreprise $addressEntreprise = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $gemsuiteIdentifier = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -227,5 +230,17 @@ class Entreprise
     public function __toString(): string
     {
         return $this->name;
+    }
+
+    public function getGemsuiteIdentifier(): ?string
+    {
+        return $this->gemsuiteIdentifier;
+    }
+
+    public function setGemsuiteIdentifier(?string $gemsuiteIdentifier): static
+    {
+        $this->gemsuiteIdentifier = $gemsuiteIdentifier;
+
+        return $this;
     }
 }

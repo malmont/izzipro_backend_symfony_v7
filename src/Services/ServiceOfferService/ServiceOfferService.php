@@ -33,6 +33,7 @@ class ServiceOfferService
         $serviceOffer = new ServiceOffer();
         $serviceOffer->setTitre($dto->titre);
         $serviceOffer->setLogo($dto->logo);
+        $serviceOffer->setPhotoService($dto->photoService);
         $serviceOffer->setTitreCommentaire($dto->titreCommentaire);
         $serviceOffer->setDescriptions($dto->descriptions);
         
@@ -48,6 +49,7 @@ class ServiceOfferService
 
         $serviceOffer->setTitre($dto->titre ?? $serviceOffer->getTitre());
         $serviceOffer->setLogo($dto->logo ?? $serviceOffer->getLogo());
+        $serviceOffer->setPhotoService($dto->photoService ?? $serviceOffer->getPhotoService());
         $serviceOffer->setTitreCommentaire($dto->titreCommentaire ?? $serviceOffer->getTitreCommentaire());
         $serviceOffer->setDescriptions($dto->descriptions ?? $serviceOffer->getDescriptions());
         

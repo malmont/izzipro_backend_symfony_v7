@@ -29,6 +29,12 @@ class ServiceOfferCrudController extends BaseTenantCrudController
                 ->setUploadDir('public/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
+            ImageField::new('photoService', 'photoService')
+                ->setBasePath('assets/uploads/email-logos/')
+                ->setUploadDir('public/assets/uploads/email-logos/')
+                ->setUploadedFileNamePattern('[randomhash].[extension]')
+                ->setRequired(false),
+            
             TextField::new('titreCommentaire', 'Titre du commentaire')->hideOnIndex(),
             TextareaField::new('descriptions', 'Description')->hideOnIndex(),
         ];
