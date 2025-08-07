@@ -7,7 +7,6 @@ use App\Services\TenantEntityManagerProvider;
 
 class EntrepriseService
 {
-    // MODIFICATION 1 : Le service ne dépend plus que du provider
     private TenantEntityManagerProvider $emProvider;
 
     public function __construct(TenantEntityManagerProvider $emProvider)
@@ -17,7 +16,6 @@ class EntrepriseService
 
     public function createEntreprise(EntrepriseDto $dto): EntrepriseDto
     {
-        // MODIFICATION 2 : On récupère l'EM du tenant ici
         $em = $this->emProvider->getEntityManager();
 
         $entreprise = new Entreprise();
@@ -52,11 +50,10 @@ class EntrepriseService
             return null;
         }
 
-        // Le reste de la logique de création du DTO est inchangée
         $dto = new EntrepriseDto();
         $dto->id = $entreprise->getId();
         $dto->name = $entreprise->getName();
-        $dto->logo = $entreprise->getLogo() ? $host . '/assets/uploads/email-logos/' . $entreprise->getLogo() : null;
+        $dto->logo = $entreprise->getLogo();
         $dto->email = $entreprise->getEmail();
         $dto->apropos = $entreprise->getApropos();
         $dto->tel = $entreprise->getTel();

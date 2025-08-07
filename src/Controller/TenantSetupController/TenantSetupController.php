@@ -18,6 +18,7 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\String\Slugger\SluggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder; 
 
 class TenantSetupController extends AbstractController
 {
@@ -31,7 +32,8 @@ class TenantSetupController extends AbstractController
         UserPasswordHasherInterface $passwordHasher,
         SluggerInterface $slugger,
         GemsuiteImporter $gemsuiteImporter,
-        HttpClientInterface $client
+        HttpClientInterface $client,
+        GemsuiteImageUrlBuilder $imageUrlBuilder
     ): Response {
         $dto = new TenantSetupDTO();
         $form = $this->createForm(TenantSetupType::class, $dto);
@@ -70,17 +72,22 @@ class TenantSetupController extends AbstractController
                 $entreprise->setTel($companyData['tel'] ?? null);
                 $entreprise->setTvaIntracommunautaire($dto->companyTva);
                 $entreprise->setEin($dto->companyEin);
-                $entreprise->setLogo($companyData['website_logo1'] ?? null);
                 $entreprise->setApropos($companyData['website_about_intro'] ?? null);
                 $entreprise->setConditionOfUse($companyData['website_terms'] ?? null);
                 $entreprise->setPrivacyPolicy($companyData['website_conf'] ?? null);
 
-                if (isset($companyData['website_link'])) {
+                  if (isset($companyData['website_link'])) {
                     $pathParts = explode('/', rtrim($companyData['website_link'], '/'));
                     $identifier = end($pathParts);
                     $entreprise->setGemsuiteIdentifier($identifier);
                 }
                 
+                $logoPath = $companyData['website_logo1'] ?? null;
+                $entreprise->setLogo(
+                    $imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $logoPath)
+                );
+
+              
                 if ($companyData && !empty($companyData['adresse'])) {
                     $addressEntreprise = new AddressEntreprise();
                     $addressEntreprise->setStreet1($companyData['adresse']);
@@ -102,17 +109,12 @@ class TenantSetupController extends AbstractController
                     $homeSlider->setDescription(strip_tags($companyData['website_intro_text2'] ?? 'Découvrez nos produits'));
                     $homeSlider->setButtonMessage('Voir la boutique');
                     $homeSlider->setButtonUrl('/shop');
+                    $homeSlider->setIsDiplayed(true);
 
-                    if (!empty($companyData['website_banner']) && $entreprise->getGemsuiteIdentifier()) {
-                        $bannerUrl = sprintf(
-                            'https://app.gem-books.com/?layout=image&d=%s&filename=%s',
-                            $entreprise->getGemsuiteIdentifier(),
-                            $companyData['website_banner']
-                        );
-                        $homeSlider->setImage($bannerUrl);
-                    } else {
-                        $homeSlider->setImage('');
-                    }
+                    $bannerPath = $companyData['website_banner'] ?? null;
+                    $homeSlider->setImage(
+                        $imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $bannerPath)
+                    );
                     $tenantEm->persist($homeSlider);
                 }
 

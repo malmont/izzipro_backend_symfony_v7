@@ -58,6 +58,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             TextareaField::new('LegalNotice', 'Mentions légales'),
             TextareaField::new('privacyPolicy', 'Politique de confidentialité'),
             TextareaField::new('Apropos', 'A propos'),
+            TextareaField::new('gemsuiteIdentifier', 'gemsuiteIdentifier'),
             AssociationField::new('addressEntreprise', 'Adresse Entreprise')
                 ->formatValue(function ($value, $entity) {
                     $address = $entity->getAddressEntreprise();
