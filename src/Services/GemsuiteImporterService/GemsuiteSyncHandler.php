@@ -11,10 +11,12 @@ use App\Entity\Style;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use App\Entity\User;
+use App\Entity\Entreprise;
 use Symfony\Component\String\Slugger\SluggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
+use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
 
 class GemsuiteSyncHandler
 {
@@ -25,7 +27,8 @@ class GemsuiteSyncHandler
         private TenantEntityManagerProvider $emProvider,
         private TenantConnectionManager $tenantManager,
         private SluggerInterface $slugger,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private GemsuiteImageUrlBuilder $imageUrlBuilder
     ) {
     }
 
@@ -52,10 +55,16 @@ class GemsuiteSyncHandler
         }
         
         $tenantEm = $this->getTenantEntityManager($tenantCode);
+        $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
+        $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+
+        if (!$companyIdentifier) {
+            $this->logger->error(sprintf('Identifiant GEM-SUITE non trouvé pour le tenant "%s". Impossible de construire les URLs d\'images.', $tenantCode));
+        }
         
         $categoryMap = $this->importCategories($tenantEm, $token);
 
-        $this->updateOrCreateProduct($tenantEm, $gemProductData, $categoryMap);
+        $this->updateOrCreateProduct($tenantEm, $gemProductData, $categoryMap, $companyIdentifier);
 
         $tenantEm->flush();
         $this->logger->info(sprintf('Produit #%d synchronisé avec succès pour le tenant "%s".', $productId, $tenantCode));
@@ -78,7 +87,7 @@ class GemsuiteSyncHandler
     }
     
 
-    private function updateOrCreateProduct(EntityManagerInterface $em, array $gemProductData, array $categoryMap): void
+    private function updateOrCreateProduct(EntityManagerInterface $em, array $gemProductData, array $categoryMap,?string $companyIdentifier): void
     {
         $product = $em->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
         if (!$product) {
@@ -107,13 +116,10 @@ class GemsuiteSyncHandler
             $product->addCategory($categoryMap[$gemProductData['category_id']]);
         }
         
-        if (!empty($gemProductData['medias'])) {
-                $baseUrl = 'https://actif-file.s3-ca-central-1.amazonaws.com';
-                $imagePath = ltrim($gemProductData['medias'][0]['path'], '/');
-                $product->setImage($baseUrl . '/' . $imagePath);
-            } else {
-                $product->setImage('');
-            }
+        $imagePath = $gemProductData['medias'][0]['path'] ?? null;
+        $product->setImage(
+            $this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath)
+        );
 
         $shipping = $product->getProductShipping() ?? new ProductShipping();
         $shipping->setWeight((float)($gemProductData['weight'] ?? 0));

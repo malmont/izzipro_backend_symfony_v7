@@ -27,7 +27,7 @@ class HomeSliderDTO
         return new self(
             $homeSlider->getId(),
             $homeSlider->getTitle(),
-            $homeSlider->getImage() ? $host . '/assets/uploads/slider/' . $homeSlider->getImage() : null,
+            $homeSlider->getImage(),
             $homeSlider->getDescription(),
             $homeSlider->getButtonMessage(),
             $homeSlider->getButtonUrl(),

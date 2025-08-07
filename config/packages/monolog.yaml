@@ -12,7 +12,7 @@ monolog:
             type: stream
             path: "%kernel.logs_dir%/%kernel.environment%.log"
             level: debug
-            channels: ["!event", "!doctrine", "!security"]
+            channels: ["!event", "!doctrine", "!security","!deprecation"]
 
         # -------------------------------------------------------------------
         # Handler dédié aux requêtes Doctrine (SQL, cache, etc.)

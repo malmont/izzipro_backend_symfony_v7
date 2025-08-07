@@ -47,7 +47,6 @@ class GemsuiteSaleManager
         }
 
         try {
-            // --- ÉTAPE 1 : Créer la "coquille" de la Vente ---
             $saleData = $this->createSaleShell($gemsuiteClientId, $order->getOrderDate(), $token);
             $saleId = $saleData['id'] ?? null;
 

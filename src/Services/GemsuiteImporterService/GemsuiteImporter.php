@@ -14,6 +14,7 @@ use Symfony\Component\String\Slugger\SluggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use App\Services\TenantEntityManagerProvider;
 use App\Entity\Entreprise;
+use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
 
 class GemsuiteImporter
 {
@@ -23,7 +24,8 @@ class GemsuiteImporter
         private HttpClientInterface $client,
         private TenantEntityManagerProvider $emProvider,
         private SluggerInterface $slugger,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private GemsuiteImageUrlBuilder $imageUrlBuilder
     ) {
     }
 
@@ -46,7 +48,6 @@ class GemsuiteImporter
             }
 
             $categoryMap = $this->importCategories($tenantEm, $gemsuiteToken);
-            // On passe l'identifiant à la méthode d'importation des produits
             $this->importProducts($tenantEm, $gemsuiteToken, $categoryMap, $companyIdentifier);
             
             $this->logger->info(sprintf('Importation réussie pour le tenant "%s"', $tenantCode));
@@ -82,7 +83,7 @@ class GemsuiteImporter
         return $categoryMap;
     }
     
-    // La signature de la méthode a été mise à jour pour accepter l'identifiant
+
     private function importProducts(EntityManagerInterface $tenantEm, string $token, array $categoryMap, ?string $companyIdentifier): void
     {
         $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'products', [
@@ -117,21 +118,10 @@ class GemsuiteImporter
                 $product->addCategory($categoryMap[$gemProductData['category_id']]);
             }
             
-            // --- LOGIQUE MISE À JOUR POUR L'IMAGE ---
-            if (!empty($gemProductData['medias']) && isset($gemProductData['medias'][0]['path']) && $companyIdentifier) {
-                $imagePath = $gemProductData['medias'][0]['path'];
-                
-                $finalImageUrl = sprintf(
-                    'https://app.gem-books.com/?layout=image&d=%s&filename=%s',
-                    $companyIdentifier,
-                    $imagePath
-                );
-                
-                $product->setImage($finalImageUrl);
-            } else {
-                $product->setImage('');
-            }
-            // --- FIN DE LA MODIFICATION ---
+           $imagePath = $gemProductData['medias'][0]['path'] ?? null;
+            $product->setImage(
+                $this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath)
+            );
 
             $shipping = $product->getProductShipping() ?? new ProductShipping();
             $shipping->setWeight((float)($gemProductData['weight'] ?? 0));

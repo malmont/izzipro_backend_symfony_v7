@@ -11,6 +11,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
+use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
 
 class GemsuiteCompanySyncHandler
 {
@@ -20,7 +21,8 @@ class GemsuiteCompanySyncHandler
         private HttpClientInterface $client,
         private TenantEntityManagerProvider $emProvider,
         private TenantConnectionManager $tenantManager,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private GemsuiteImageUrlBuilder $imageUrlBuilder
     ) {
     }
 
@@ -67,16 +69,21 @@ class GemsuiteCompanySyncHandler
         $entreprise->setName($companyData['nom'] ?? $entreprise->getName());
         $entreprise->setEmail($companyData['email'] ?? $entreprise->getEmail());
         $entreprise->setTel($companyData['tel'] ?? $entreprise->getTel());
-        $entreprise->setLogo($companyData['website_logo1'] ?? null);
         $entreprise->setWebsite($companyData['website_link'] ?? $entreprise->getWebsite());
+        $entreprise->setApropos($companyData['website_about_intro'] ?? $entreprise->getApropos());
         $entreprise->setConditionOfUse($companyData['website_terms'] ?? $entreprise->getConditionOfUse());
         $entreprise->setPrivacyPolicy($companyData['website_conf'] ?? $entreprise->getPrivacyPolicy());
+
 
         if (isset($companyData['website_link'])) {
             $pathParts = explode('/', rtrim($companyData['website_link'], '/'));
             $identifier = end($pathParts);
             $entreprise->setGemsuiteIdentifier($identifier);
         }
+        $logoPath = $companyData['website_logo1'] ?? null;
+        $entreprise->setLogo(
+            $this->imageUrlBuilder->buildUrl($identifier, $logoPath)
+        );
 
         if (!empty($companyData['adresse'])) {
             $addressEntreprise = $entreprise->getAddressEntreprise() ?? new AddressEntreprise();
@@ -100,18 +107,19 @@ class GemsuiteCompanySyncHandler
 
         $homeSlider->setTitle(strip_tags($companyData['website_intro_text1'] ?? 'Bienvenue'));
         $homeSlider->setDescription(strip_tags($companyData['website_intro_text2'] ?? 'Découvrez nos produits'));
-        
-        if (!empty($companyData['website_banner']) && isset($companyData['website_link'])) {
+        $homeSlider->setButtonMessage($companyData['website_cta_header'] ?: 'Voir la boutique');
+        $homeSlider->setButtonUrl($companyData['website_cta_link'] ?? '/shop');
+        $homeSlider->setIsDiplayed(true);
+        $identifier = null;
+        if (isset($companyData['website_link'])) {
             $pathParts = explode('/', rtrim($companyData['website_link'], '/'));
             $identifier = end($pathParts);
-            
-            $bannerUrl = sprintf(
-                'https://app.gem-books.com/?layout=image&d=%s&filename=%s',
-                $identifier,
-                $companyData['website_banner']
-            );
-            $homeSlider->setImage($bannerUrl);
         }
+        
+        $bannerPath = $companyData['website_banner'] ?? null;
+        $homeSlider->setImage(
+            $this->imageUrlBuilder->buildUrl($identifier, $bannerPath)
+        );
         
         $em->persist($homeSlider);
     }
