@@ -75,10 +75,25 @@ class LandingPagesController extends AbstractController
                 "is_data_selectable" => true
             ],
             [
+            "type" => "Embed",
+            "name" => "Contenu Intégré (Embed)",
+            "description" => "Affiche une page externe dans un iframe.",
+            "api_data_endpoint" => "/api/embeds",
+            "data_id_field" => "id",
+            "data_label_field" => "titre",
+            "is_data_selectable" => true
+            ],
+            [
                 "type" => "Recherche",
                 "name" => "Barre de Recherche",
                 "description" => "Affiche une barre de recherche.",
                 "is_data_selectable" => false
+            ],
+            [
+                "type" => "APropos",
+                "name" => "Section À Propos",
+                "description" => "Affiche le texte 'À Propos' de l'entreprise.",
+                "is_data_selectable" => false 
             ]
         ];
 

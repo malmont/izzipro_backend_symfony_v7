@@ -31,10 +31,8 @@ class OrderItemDTO
         $variant = $orderItem->getProductVariant();
         $this->productVariantColor = $variant->getColor() ? $variant->getColor()->getName() : 'Inconnu';
         $this->productVariantSize = $variant->getSize() ? $variant->getSize()->getName() : 'Inconnu';
-        // Gestion de l'image avec le chemin complet
-        $this->productImage = $product->getImage() 
-            ? $host . '/assets/uploads/products/' . $product->getImage() 
-            : null;
+        $this->productImage = $product->getImage();
+            
     }
 
     public function toArray(): array

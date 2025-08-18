@@ -101,36 +101,30 @@ class CacheInvalidationSubscriber implements EventSubscriber
         ],
         [
             'classes' => [Banniere::class],
-            'delete' => ['bannieres_all'], // On supprime la clé exacte
-            'invalidate_tags' => ['bannieres'], // On invalide aussi le tag par sécurité
+            'delete' => ['bannieres_all'], 
+            'invalidate_tags' => ['bannieres'], 
         ],
 
-        // Pour TransactionCaisse : suppression d'une clé et invalidation d'un tag
         [
             'classes' => [TransactionCaisse::class],
             'delete' => ['open_caisse_transactions'],
             'invalidate_tags' => ['caisses_tag'],
         ],
-        // Pour AdminSettings
         [
             'classes' => [AdminSettings::class],
             'delete' => ['admin_settings'],
             'invalidate_tags' => [],
         ],
-        // Pour Carrier
         [
             'classes' => [Carrier::class],
             'delete' => ['carriers'],
             'invalidate_tags' => [],
         ],
-
-        // Pour HomeSlider
         [
             'classes' => [HomeSlider::class],
             'delete' => ['homeslider'],
             'invalidate_tags' => [],
         ],
-        // Pour SquareConfig
         [
             'classes' => [SquareConfig::class],
             'delete' => ['square_config'],

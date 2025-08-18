@@ -50,9 +50,7 @@ class OrderController extends AbstractController
         $this->gemsuiteSaleManager = $gemsuiteSaleManager;
     }
 
-    /**
-     * @Route("api/order/create", name="order_create", methods={"POST"})
-     */
+
     public function createOrder(Request $request): JsonResponse
     {
         $user = $this->getUser();
@@ -64,21 +62,15 @@ class OrderController extends AbstractController
         if (!isset($data['orderSource'], $data['paymentMethod'], $data['addressId'], $data['carrierId'], $data['items'])) {
             return $this->json(['error' => 'Missing required fields'], JsonResponse::HTTP_BAD_REQUEST);
         }
-
-        // Vérification que l'adresse appartient bien à l'utilisateur
         $em = $this->emProvider->getEntityManager();
         $address = $em->getRepository(Adress::class)->find($data['addressId']);
         if (!$address || $address->getUserAdress() !== $user) {
             return $this->json(['error' => 'Unauthorized: Invalid address'], JsonResponse::HTTP_FORBIDDEN);
         }
-
-        // Vérification que le transporteur existe
         $carrier = $em->getRepository(Carrier::class)->find($data['carrierId']);
         if (!$carrier) {
             return $this->json(['error' => 'Carrier not found'], JsonResponse::HTTP_NOT_FOUND);
         }
-
-        // 🟢 Récupération des données de paiement Square
         $paymentData = $data['payment'] ?? [];
 
         $dto = new CreateOrderDTO(
@@ -114,9 +106,7 @@ class OrderController extends AbstractController
         return $result;
     }
 
-    /**
-     * @Route("api/order/create-multi-payment", name="order_create_multi_payment", methods={"POST"})
-     */
+
     public function createOrderWithMultiplePayments(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
@@ -158,9 +148,7 @@ class OrderController extends AbstractController
         return $result;
     }
 
-    /**
-     * @Route("api/order/cancel/{id}", name="order_cancel", methods={"POST"})
-     */
+
     public function cancelOrder(int $id, Request $request): JsonResponse
     {
         $user = $this->getUser();

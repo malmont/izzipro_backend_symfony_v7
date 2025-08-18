@@ -89,6 +89,10 @@ class GemsuiteSyncHandler
 
     private function updateOrCreateProduct(EntityManagerInterface $em, array $gemProductData, array $categoryMap,?string $companyIdentifier): void
     {
+        if (!isset($gemProductData['id'], $gemProductData['name_fr'])) {
+            $this->logger->warning('Données de produit GEM-SUITE incomplètes. ID ou nom manquant.');
+            return;
+        }
         $product = $em->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
         if (!$product) {
             $product = new Product();

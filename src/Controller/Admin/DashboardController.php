@@ -58,6 +58,8 @@ use App\Entity\Parcel;
 use App\Entity\AddressEntreprise;
 use App\Entity\ProductOption;
 use App\Entity\ProductOptionValue;
+use App\Entity\LandingPageSetting;
+
 
 
 use App\Controller\Admin\OrderAllCrudController;
@@ -78,6 +80,7 @@ use App\Entity\Multilien;
 use App\Entity\Recherche;
 use App\Entity\ServiceOffer;
 use App\Entity\Video;
+use App\Entity\Embed; 
 
 class DashboardController extends AbstractDashboardController
 {
@@ -124,6 +127,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Section Recherche', 'fas fa-search', Recherche::class);
         yield MenuItem::linkToCrud('Offres de Service', 'fas fa-concierge-bell', ServiceOffer::class);
         yield MenuItem::linkToCrud('Vidéos', 'fas fa-video', Video::class);
+        yield MenuItem::linkToCrud('Contenus Intégrés', 'fas fa-code', Embed::class);
+         yield MenuItem::linkToCrud('Configuration', 'fas fa-cogs', LandingPageSetting::class);
+
 
         yield MenuItem::section('Entreprise');
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
