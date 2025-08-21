@@ -59,6 +59,7 @@ use App\Entity\AddressEntreprise;
 use App\Entity\ProductOption;
 use App\Entity\ProductOptionValue;
 use App\Entity\LandingPageSetting;
+use App\Entity\Presentation;
 
 
 
@@ -80,7 +81,8 @@ use App\Entity\Multilien;
 use App\Entity\Recherche;
 use App\Entity\ServiceOffer;
 use App\Entity\Video;
-use App\Entity\Embed; 
+use App\Entity\Embed;
+use App\Entity\BaniereStatique;
 
 class DashboardController extends AbstractDashboardController
 {
@@ -88,8 +90,6 @@ class DashboardController extends AbstractDashboardController
     public function index(): Response
     {
         return $this->render('admin/index.html.twig');
-        // $routeBuilder = $this->get(AdminUrlGenerator::class);
-        // return $this->redirect($routeBuilder->setController(OrderCrudController::class)->generateUrl());
     }
 
     public function configureDashboard(): Dashboard
@@ -128,7 +128,10 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Offres de Service', 'fas fa-concierge-bell', ServiceOffer::class);
         yield MenuItem::linkToCrud('Vidéos', 'fas fa-video', Video::class);
         yield MenuItem::linkToCrud('Contenus Intégrés', 'fas fa-code', Embed::class);
-         yield MenuItem::linkToCrud('Configuration', 'fas fa-cogs', LandingPageSetting::class);
+        yield MenuItem::linkToCrud('Configuration', 'fas fa-cogs', LandingPageSetting::class);
+        yield MenuItem::linkToCrud('Bannières Statiques', 'fas fa-image', BaniereStatique::class);
+        yield MenuItem::linkToCrud('Présentations', 'fas fa-columns', Presentation::class);
+
 
 
         yield MenuItem::section('Entreprise');

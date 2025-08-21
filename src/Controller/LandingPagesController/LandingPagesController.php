@@ -24,6 +24,15 @@ class LandingPagesController extends AbstractController
                 "is_data_selectable" => true
             ],
             [
+                "type" => "BaniereStatique",
+                "name" => "Bannière Statique",
+                "description" => "Affiche une seule bannière figée.",
+                "api_data_endpoint" => "/baniere-statiques",
+                "data_id_field" => "id",
+                "data_label_field" => "titre", 
+                "is_data_selectable" => true
+            ],
+            [
                 "type" => "Marque",
                 "name" => "Affichage de Marques par Catégorie",
                 "description" => "Affiche les logos des marques appartenant à une catégorie.",
@@ -94,6 +103,15 @@ class LandingPagesController extends AbstractController
                 "name" => "Section À Propos",
                 "description" => "Affiche le texte 'À Propos' de l'entreprise.",
                 "is_data_selectable" => false 
+            ],
+            [
+                "type" => "Presentation",
+                "name" => "Section de Présentation",
+                "description" => "Affiche une image à côté d'un texte et d'un bouton.",
+                "api_data_endpoint" => "/presentations",
+                "data_id_field" => "id",
+                "data_label_field" => "titre", 
+                "is_data_selectable" => true
             ]
         ];
 

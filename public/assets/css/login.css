@@ -1,0 +1,141 @@
+/* Style pour la page entière avec l'image de fond */
+body, html {
+    height: 100%;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f0f2f5; 
+}
+
+.login-page-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+    background-image: url('https://app.gem-car.com/image_file/logicielactif/images/info/201408111638565823_team-work-large.jpg');
+    background-size: cover;
+    background-position: center;
+}
+
+/* Conteneur principal du formulaire */
+.login-container {
+    background-color: #ffffff;
+    padding: 40px 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 570px;
+    text-align: center;
+}
+
+/* Logo */
+.login-logo img {
+    max-width: 300px;
+    margin-bottom: 25px;
+}
+
+/* Espacement des groupes de formulaire */
+.form-group {
+    margin-bottom: 6px;
+}
+
+/* Style des champs de saisie et du select */
+.form-control {
+    width: 100%;
+    height: 28px;
+    padding: 5px 12px; 
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    box-sizing: border-box; /* Important pour que le padding n'ajoute pas à la largeur */
+    -webkit-appearance: none; /* Enlève les styles par défaut sur iOS */
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.form-control:focus {
+  height: 28px; 
+  padding: 5px 12px; 
+  box-shadow: none; 
+  border-color: #ced4da; 
+  outline: none; 
+}
+
+/* Cas spécifique pour le select pour ajouter une flèche */
+select.form-control {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right .75rem center;
+    background-size: 16px 12px;
+    
+}
+
+
+.btn-connexion {
+    width: 100%;
+    height: 28px; 
+    padding: 0 15px; 
+    background-color: #007bff;
+    border: none;
+    color: white;
+    font-size: 1rem;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-connexion:hover {
+    background-color: #0056b3;
+}
+
+.login-links {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column; 
+    gap: 10px;
+}
+
+.btn-secondary-link {
+    width: 100%;
+    height: 28px;
+    padding: 0 15px; 
+    margin-bottom: 0px;
+    background-color: #ffffff;
+    border: 1px solid #dcdcdc;
+    color: #6c757d;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition: background-color 0.2s, border-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-secondary-link:hover {
+    background-color: #f8f9fa;
+    border-color: #c8c8c8;
+}
+
+.btn-secondary-link:last-child {
+    margin-bottom: 0;
+}
+
+/* Style pour le message d'erreur */
+.alert.alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-color: #f5c6cb;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    text-align: left;
+}
