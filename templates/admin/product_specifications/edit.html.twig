@@ -1,0 +1,32 @@
+{# templates/admin/product_specifications/edit.html.twig #}
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}
+    Gérer les caractéristiques pour "<strong>{{ product.name }}</strong>"
+{% endblock %}
+
+{% block main %}
+    {# ✅ Ajout d'une 'card' pour une intégration visuelle parfaite avec EasyAdmin #}
+    <div class="card">
+        <div class="card-body">
+            {{ form_start(form) }}
+                {# ✅ Rendu champ par champ pour un meilleur style par défaut (labels, aide, etc.) #}
+                {% for field in form %}
+                    {{ form_row(field) }}
+                {% endfor %}
+
+                {# ✅ Groupement des boutons d'action pour plus de clarté #}
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-save"></i> Sauvegarder
+                    </button>
+                    
+                    {# ✅ Ajout d'un lien de retour clair pour l'utilisateur, qui pointe vers la liste des produits #}
+                    <a href="{{ ea_url().setController('App\\Controller\\Admin\\ProductCrudController').setAction('index') }}" class="btn btn-secondary">
+                        Annuler
+                    </a>
+                </div>
+            {{ form_end(form) }}
+        </div>
+    </div>
+{% endblock %}

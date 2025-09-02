@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\PresentationRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\DBAL\Types\Types; 
 
@@ -28,6 +30,17 @@ class Presentation
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $lienBouton = null;
+
+    /**
+     * @var Collection<int, PresentationGroup>
+     */
+    #[ORM\ManyToMany(targetEntity: PresentationGroup::class, mappedBy: 'presentations')]
+    private Collection $presentationGroups;
+
+    public function __construct()
+    {
+        $this->presentationGroups = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -92,5 +105,37 @@ class Presentation
         $this->lienBouton = $lienBouton;
 
         return $this;
+    }
+
+    /**
+     * @return Collection<int, PresentationGroup>
+     */
+    public function getPresentationGroups(): Collection
+    {
+        return $this->presentationGroups;
+    }
+
+    public function addPresentationGroup(PresentationGroup $presentationGroup): static
+    {
+        if (!$this->presentationGroups->contains($presentationGroup)) {
+            $this->presentationGroups->add($presentationGroup);
+            $presentationGroup->addPresentation($this);
+        }
+
+        return $this;
+    }
+
+    public function removePresentationGroup(PresentationGroup $presentationGroup): static
+    {
+        if ($this->presentationGroups->removeElement($presentationGroup)) {
+            $presentationGroup->removePresentation($this);
+        }
+
+        return $this;
+    }
+
+    public function __toString(): string
+    {
+        return $this->titre ?? '';
     }
 }

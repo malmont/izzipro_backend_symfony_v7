@@ -15,6 +15,7 @@ class ProductOutputDTO
     public array $categories;
     public ?array $style;
     public array $variants;
+    public ?array $specifications;
 
     public function __construct(Product $product, string $host)
     {
@@ -24,7 +25,18 @@ class ProductOutputDTO
         $this->purchasePrice = $product->getPurchasePrice();
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->slug = $product->getSlug();
-        $this->image = $product->getImage() ?: null;
+        $this->specifications = $product->getSpecifications();
+        $imagePath = $product->getImage();
+        if ($imagePath) {
+            if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
+                $this->image = $imagePath;
+            } else {
+                $this->image = $host . '/assets/uploads/products/' . $imagePath;
+            }
+        } else {
+            $this->image = null;
+        }
+
         $this->categories = array_map(fn($category) => [
             'id' => $category->getId(),
             'name' => $category->getName(),

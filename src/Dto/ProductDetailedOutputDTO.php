@@ -26,6 +26,7 @@ class ProductDetailedOutputDTO
     public ?array $style;
     public array $variants;
     public array $category;
+    public ?array $specifications;
 
     public function __construct(Product $product, string $host)
     {
@@ -38,7 +39,16 @@ class ProductDetailedOutputDTO
         $this->isnewarrival = $product->isIsnewarrival();
         $this->isfeatured = $product->isIsfeatured();
         $this->isspecialoffer = $product->isIsspecialoffer();
-        $this->image = $product->getImage() ?: null;
+        $imagePath = $product->getImage();
+        if ($imagePath) {
+            if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
+                $this->image = $imagePath;
+            } else {
+                $this->image = $host . '/assets/uploads/products/' . $imagePath;
+            }
+        } else {
+            $this->image = null;
+        }
         $this->quantity = $product->getQuantity();
         $this->freezeQuantity = $product->getFreezeQuantity() ?? 0;
         $this->createdAt = $product->getCreatedAt()->format('Y-m-d H:i:s');
@@ -52,7 +62,7 @@ class ProductDetailedOutputDTO
             'id' => $product->getStyle()->getId(),
             'name' => $product->getStyle()->getName(),
         ] : null;
-    
+        $this->specifications = $product->getSpecifications();
         $this->variants = array_map(function ($variant) {
             return [
                 'id' => $variant->getId(),

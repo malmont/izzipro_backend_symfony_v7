@@ -15,6 +15,24 @@ class LandingPagesController extends AbstractController
     {
         $componentsConfig = [
             [
+                "type" => "PresentationGroup", // Nouvelle clé unique
+                "name" => "Groupe de Présentations",
+                "description" => "Affiche un groupe de plusieurs présentations.",
+                "api_data_endpoint" => "/api/presentation-groups",
+                "data_id_field" => "id",
+                "data_label_field" => "titre", 
+                "is_data_selectable" => true
+            ],
+            [
+                "type" => "Carousel",
+                "name" => "Carrousel de Produits",
+                "description" => "Affiche une liste de produits (ex: meilleures ventes).",
+                "api_data_endpoint" => null, 
+                "data_id_field" => "key",
+                "data_label_field" => "name",
+                "is_data_selectable" => true
+            ],
+            [
                 "type" => "Baniere",
                 "name" => "Bannière Héros",
                 "description" => "Affiche une grande bannière avec image et texte.",

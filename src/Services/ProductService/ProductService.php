@@ -78,62 +78,74 @@ class ProductService
         $em->flush();
     }
 
+    public function getProductById(int $id, string $host): ProductDetailedOutputDTO
+    {
+        $em = $this->emProvider->getEntityManager();
+        $productRepo = $em->getRepository(Product::class);
+
+        $product = $productRepo->findOneBy(['id' => $id]);
+
+        if (!$product) {
+            throw new NotFoundHttpException('Product not found for ID: ' . $id);
+        }
+
+        return new ProductDetailedOutputDTO($product, $host);
+    }
+
+
     public function getAllProducts(string $host): array
     {
         $em = $this->emProvider->getEntityManager();
-        $products = $em->getRepository(Product::class)->findAll();
+        $productRepo = $em->getRepository(Product::class);
         
-        $bestsellers = array_filter($products, fn($product) => $product->isIsbestseller());
-        $newArrivals = array_filter($products, fn($product) => $product->isIsnewarrival());
-        $specialOffers = array_filter($products, fn($product) => $product->isIsspecialoffer());
-
-        $bestsellersDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $bestsellers);
-        $newArrivalsDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $newArrivals);
-        $specialOffersDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $specialOffers);
+        $bestsellers = $productRepo->findBy(['isbestseller' => true, 'isWeb' => true]);
+        $newArrivals = $productRepo->findBy(['isnewarrival' => true, 'isWeb' => true]);
+        $specialOffers = $productRepo->findBy(['isspecialoffer' => true, 'isWeb' => true]);
 
         return [
-            'bestsellers' => $bestsellersDTO,
-            'newArrivals' => $newArrivalsDTO,
-            'specialOffers' => $specialOffersDTO,
+            'bestsellers' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host), $bestsellers),
+            'newArrivals' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host), $newArrivals),
+            'specialOffers' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host), $specialOffers),
         ];
     }
 
     public function getProductsByOffer(string $offer, string $host): array
     {
         $em = $this->emProvider->getEntityManager();
-        $products = $em->getRepository(Product::class)->findAll();
-        $filteredProducts = [];
-
+        
+        $criteria = ['isWeb' => true];
         switch ($offer) {
             case 'bestsellers':
-                $filteredProducts = array_filter($products, fn($product) =>
-                    $product->isIsbestseller() && ($product->isWeb())
-                );
+                $criteria['isbestseller'] = true;
                 break;
             case 'newarrivals':
-                $filteredProducts = array_filter($products, fn($product) =>
-                    $product->isIsnewarrival() && ($product->isWeb() )
-                );
+                $criteria['isnewarrival'] = true;
                 break;
             case 'specialoffers':
-                $filteredProducts = array_filter($products, fn($product) =>
-                    $product->isIsspecialoffer() && ($product->isWeb())
-                );
+                $criteria['isspecialoffer'] = true;
                 break;
             case 'isfeatured':
-                $filteredProducts = array_filter($products, fn($product) =>
-                    $product->isIsfeatured() && ($product->isWeb() )
-                );
+                $criteria['isfeatured'] = true;
                 break;
             case 'isAccessory':
-                $filteredProducts = array_filter($products, fn($product) =>
-                    $product->isAccessory() && ($product->isWeb() )
-                );
+                $criteria['isAccessory'] = true;
                 break;
             default:
                 return []; 
         }
 
-        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $filteredProducts);
+        $products = $em->getRepository(Product::class)->findBy($criteria);
+
+        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $products);
+    }
+
+    public function getLandingPageProducts(string $host): array
+    {
+        $em = $this->emProvider->getEntityManager();
+        
+        $products = $em->getRepository(Product::class)->findBy([
+            'isLandingPage' => true,
+        ]);
+    return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $products);
     }
 }

@@ -104,6 +104,15 @@ class Product
     #[ORM\Column(nullable: true)]
     private ?int $gemsuiteProductId = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?bool $isLandingPage = null;
+
+    #[ORM\ManyToOne(inversedBy: 'products')]
+    private ?ProductType $productType = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?array $specifications = null;
+
     public function __construct()
     {
         $this->category = new ArrayCollection();
@@ -169,7 +178,7 @@ class Product
     public function setPurchasePrice(?float $purchasePrice): static
     {
         $this->purchasePrice = $purchasePrice;
-        $this->updatePrice(); // Recalcule le prix à chaque fois que le prix d'achat est modifié
+        $this->updatePrice();
 
         return $this;
     }
@@ -520,12 +529,11 @@ class Product
 
     public function setProductShipping(?ProductShipping $productShipping): static
     {
-        // unset the owning side of the relation if necessary
+
         if ($productShipping === null && $this->productShipping !== null) {
             $this->productShipping->setProduct(null);
         }
 
-        // set the owning side of the relation if necessary
         if ($productShipping !== null && $productShipping->getProduct() !== $this) {
             $productShipping->setProduct($this);
         }
@@ -546,4 +554,41 @@ class Product
 
         return $this;
     }
+
+    public function isLandingPage(): ?bool
+    {
+        return $this->isLandingPage;
+    }
+
+    public function setIsLandingPage(?bool $isLandingPage): static
+    {
+        $this->isLandingPage = $isLandingPage;
+
+        return $this;
+    }
+
+    public function getProductType(): ?ProductType
+    {
+        return $this->productType;
+    }
+
+    public function setProductType(?ProductType $productType): self
+    {
+        $this->productType = $productType;
+
+        return $this;
+    }
+
+    public function getSpecifications(): ?array
+    {
+        return $this->specifications;
+    }
+
+    public function setSpecifications(?array $specifications): static
+    {
+        $this->specifications = $specifications;
+
+        return $this;
+    }
+
 }

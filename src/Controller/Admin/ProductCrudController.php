@@ -1,43 +1,41 @@
 <?php
+// src/Controller/Admin/ProductCrudController.php
 namespace App\Controller\Admin;
 
 use App\Entity\Product;
-use App\Entity\Categories;
-use App\Entity\Style;
-use App\Entity\Commande;
 use App\Repository\CategoriesRepository;
-use App\Repository\StyleRepository;
 use App\Repository\CommandeRepository;
+use App\Repository\ProductTypeRepository;
+use App\Repository\StyleRepository;
 use App\Services\TenantEntityManagerProvider;
-use App\Controller\Admin\BaseTenantCrudController; 
-use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
-use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
-use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
+use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\FormField; // <-- Importation ajoutée
+use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\SlugField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\SlugField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use Symfony\Component\HttpFoundation\RedirectResponse;
-
 
 class ProductCrudController extends BaseTenantCrudController
 {
     private AdminUrlGenerator $adminUrlGenerator;
 
-
     public function __construct(
-        TenantEntityManagerProvider $emProvider, 
+        TenantEntityManagerProvider $emProvider,
         AdminUrlGenerator $adminUrlGenerator
     ) {
-        parent::__construct($emProvider); 
+        parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
     }
 
@@ -48,77 +46,86 @@ class ProductCrudController extends BaseTenantCrudController
 
     public function configureFields(string $pageName): iterable
     {
-        $tenantEm = $this->emProvider->getEntityManager();
+        // ✅ Utilisation des onglets pour organiser le formulaire
+        yield FormField::addTab('Informations Générales');
+        yield FormField::addPanel('Détails du Produit');
 
-        return [
-            IdField::new('id')->hideOnForm(),
-            TextField::new('name'),
-            SlugField::new('slug')->setTargetFieldName('name')->hideOnIndex(),
-            TextEditorField::new('description')->setLabel('Description'),
-            TextEditorField::new('moreinformations')->hideOnIndex()->setLabel('moreinformations'),
-            MoneyField::new('price')->setCurrency('USD')->onlyOnIndex(), 
-            MoneyField::new('purchasePrice', "Prix d'achat de l'article")->setCurrency('USD'), 
-            NumberField::new('coefficientMultiplier', 'Coefficient Multiplier'),
-            NumberField::new('gemsuiteProductId', 'gemsuiteProductId'),
-            TextField::new('barcode', 'Barcode'),
-            IntegerField::new('quantity')->onlyOnIndex(),
-            TextField::new('tags'),
-            BooleanField::new('isbestseller', 'BestSeller'),
-            BooleanField::new('isnewarrival', 'New Arrival'),
-            BooleanField::new('isfeatured', 'Featured'),
-            BooleanField::new('isspecialoffer', 'Special Offer'),
-            BooleanField::new('isAccessory', 'Accessoires '),
-            BooleanField::new('isWeb', 'diffusion sur le web'),
-            BooleanField::new('isPos', 'diffusion sur le Point de vente'),
-            AssociationField::new('category')
-                ->setFormTypeOptions([
-                    'em' => $tenantEm,
-                    'query_builder' => fn(CategoriesRepository $repo) => $repo->createQueryBuilder('c')->orderBy('c.name', 'ASC'),
-                    'choice_label' => 'name',
-                ]),
-            AssociationField::new('style', 'Style')
-                ->setFormTypeOptions([
-                    'em' => $tenantEm,
-                    'query_builder' => fn(StyleRepository $repo) => $repo->createQueryBuilder('s')->orderBy('s.name', 'ASC'),
-                    'choice_label' => 'name',
-                ]),
-            AssociationField::new('commande', 'Commande')
-                ->setFormTypeOptions([
-                    'em' => $tenantEm,
-                    'query_builder' => fn(CommandeRepository $repo) => $repo->createQueryBuilder('cmd')->orderBy('cmd.date', 'DESC'), 
-                    'choice_label' => 'reference',
-                ]),
-            ImageField::new('image')
-                ->setBasePath('assets/uploads/products/')
-                ->setUploadDir('public/assets/uploads/products/')
-                ->setUploadedFileNamePattern('[randomhash].[extension]')
-                ->setRequired(false),
-            AssociationField::new('variants', 'Variantes de Produit')
-                ->setFormTypeOptions([
-                    'em' => $tenantEm,
-                    'by_reference' => false, 
-                ])
-                ->formatValue(function ($value, $entity) {
-                    $url = $this->adminUrlGenerator
-                        ->setController(ProductVariantListController::class)
-                        ->setAction('index')
-                        ->set('productId', $entity->getId())
-                        ->generateUrl();
-                    return sprintf('<a href="%s">Voir les variantes (%d)</a>', $url, count($value));
-                })
-                ->renderAsHtml(),
-        ];
+        yield IdField::new('id')->hideOnForm();
+        yield TextField::new('name', 'Nom du produit');
+        yield SlugField::new('slug')->setTargetFieldName('name')->hideOnIndex();
+        yield TextEditorField::new('description')->setColumns('col-md-12');
+        yield TextEditorField::new('moreinformations', 'Informations supplémentaires')->hideOnIndex()->setColumns('col-md-12');
+
+        yield FormField::addPanel('Informations Commerciales');
+        // ✅ Utilisation des colonnes pour un layout plus compact
+        yield MoneyField::new('purchasePrice', "Prix d'achat")->setCurrency('USD')->setColumns('col-md-4');
+        yield NumberField::new('coefficientMultiplier', 'Coefficient')->setColumns('col-md-4');
+        yield TextField::new('barcode', 'Code Barre')->setColumns('col-md-4');
+        yield IntegerField::new('quantity', 'Quantité')->onlyOnIndex();
+
+
+        yield FormField::addTab('Organisation & Média');
+        yield FormField::addPanel('Catégorisation');
+
+        $tenantEm = $this->emProvider->getEntityManager();
+        yield AssociationField::new('productType', 'Type de Produit')
+            ->setRequired(true)
+            ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn(ProductTypeRepository $repo) => $repo->createQueryBuilder('pt')->orderBy('pt.name', 'ASC')])
+            ->setColumns('col-md-6');
+        yield AssociationField::new('category', 'Catégorie')
+             ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn(CategoriesRepository $repo) => $repo->createQueryBuilder('c')->orderBy('c.name', 'ASC')])
+            ->setColumns('col-md-6');
+        yield AssociationField::new('style', 'Style')
+             ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn(StyleRepository $repo) => $repo->createQueryBuilder('s')->orderBy('s.name', 'ASC')])
+            ->setColumns('col-md-6');
+        yield TextField::new('tags')->setColumns('col-md-6');
+        
+        yield FormField::addPanel('Média');
+        yield ImageField::new('image')
+            ->setBasePath('assets/uploads/products/')
+            ->setUploadDir('public/assets/uploads/products/')
+            ->setUploadedFileNamePattern('[randomhash].[extension]')
+            ->setRequired(false)
+            ->setColumns('col-md-12');
+
+
+        yield FormField::addTab('Visibilité & Options');
+        yield FormField::addPanel('Options d\'Affichage (Flags)');
+        
+        yield BooleanField::new('isbestseller', 'BestSeller')->setColumns('col-md-3');
+        yield BooleanField::new('isnewarrival', 'Nouveauté')->setColumns('col-md-3');
+        yield BooleanField::new('isfeatured', 'En vedette')->setColumns('col-md-3');
+        yield BooleanField::new('isspecialoffer', 'Offre spéciale')->setColumns('col-md-3');
+        yield BooleanField::new('isAccessory', 'Accessoire')->setColumns('col-md-3');
+        yield BooleanField::new('isLandingPage', 'isLandingPage')->setColumns('col-md-3');
+        
+        yield FormField::addPanel('Statut de Publication');
+        yield BooleanField::new('isWeb', 'Actif sur le site Web')->setColumns('col-md-3');
+        yield BooleanField::new('isPos', 'Actif sur le Point de vente')->setColumns('col-md-3');
+        
+        yield FormField::addPanel('Données Externes');
+        yield NumberField::new('gemsuiteProductId', 'ID GEM-SUITE')->setColumns('col-md-6');
+        yield AssociationField::new('commande', 'Commande Associée')
+            ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn(CommandeRepository $repo) => $repo->createQueryBuilder('cmd')->orderBy('cmd.date', 'DESC')])
+            ->hideOnIndex()
+            ->setColumns('col-md-6');
     }
-    
+
     public function configureActions(Actions $actions): Actions
     {
-        $generateBarcode = Action::new('generateBarcode', 'Générer Code Barre')
+        $generateBarcode = Action::new('generateBarcode', 'Générer Code Barre', 'fa fa-barcode')
             ->linkToCrudAction('generateBarcode');
 
+        $manageSpecifications = Action::new('manageSpecifications', 'Caractéristiques', 'fa fa-cogs')
+            ->linkToRoute('admin_product_specifications', function (Product $product): array {
+                return ['id' => $product->getId()];
+            });
+
         return $actions
-            ->add(Crud::PAGE_EDIT, $generateBarcode)
-            ->add(Crud::PAGE_DETAIL, $generateBarcode)
-            ->add(Crud::PAGE_INDEX, $generateBarcode);
+            ->add(Crud::PAGE_INDEX, $manageSpecifications)
+            ->add(Crud::PAGE_EDIT, $manageSpecifications)
+            ->add(Crud::PAGE_INDEX, $generateBarcode)
+            ->add(Crud::PAGE_EDIT, $generateBarcode);
     }
 
     public function generateBarcode(AdminContext $context): RedirectResponse
@@ -131,10 +138,9 @@ class ProductCrudController extends BaseTenantCrudController
         }
         
         $tenantEm = $this->emProvider->getEntityManager();
-        $managedProduct = $tenantEm->merge($product);
         
-        $generatedBarcode = strtoupper(uniqid('BAR-', true));
-        $managedProduct->setBarcode($generatedBarcode);
+        $generatedBarcode = 'BAR-' . strtoupper(bin2hex(random_bytes(6)));
+        $product->setBarcode($generatedBarcode);
 
         $tenantEm->flush();
         $this->addFlash('success', 'Code barre généré avec succès : ' . $generatedBarcode);
@@ -142,10 +148,9 @@ class ProductCrudController extends BaseTenantCrudController
         $url = $this->adminUrlGenerator
                     ->setController(self::class)
                     ->setAction('edit')
-                    ->setEntityId($managedProduct->getId())
+                    ->setEntityId($product->getId())
                     ->generateUrl();
 
         return $this->redirect($url);
     }
-
 }

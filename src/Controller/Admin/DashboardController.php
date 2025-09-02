@@ -60,6 +60,8 @@ use App\Entity\ProductOption;
 use App\Entity\ProductOptionValue;
 use App\Entity\LandingPageSetting;
 use App\Entity\Presentation;
+use App\Entity\ProductType;
+use App\Entity\PresentationGroup;
 
 
 
@@ -95,7 +97,8 @@ class DashboardController extends AbstractDashboardController
     public function configureDashboard(): Dashboard
     {
         return Dashboard::new()
-            ->setTitle('Ecommerce'); 
+            ->setTitle('<img src="/assets/Logo-Principal_GEM-PORTAL.png" style="max-height: 45px; width: auto;">');
+
     }
 
     public function configureMenuItems(): iterable
@@ -131,6 +134,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Configuration', 'fas fa-cogs', LandingPageSetting::class);
         yield MenuItem::linkToCrud('Bannières Statiques', 'fas fa-image', BaniereStatique::class);
         yield MenuItem::linkToCrud('Présentations', 'fas fa-columns', Presentation::class);
+        yield MenuItem::linkToCrud('Groupes de Présentation', 'fas fa-columns', PresentationGroup::class);
 
 
 
@@ -210,9 +214,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Categories', 'fas fa-list', Categories::class);
         yield MenuItem::linkToRoute('Gestion des Codes-Barres', 'fa fa-barcode', 'admin_barcode_management');
         yield MenuItem::linkToCrud('Types d\'options', 'fas fa-tag', ProductOption::class);
-        yield MenuItem::linkToCrud('Valeurs d\'options', 'fas fa-palette', ProductOptionValue::class)->setController(ProductOptionValueCrudController::class);;
+        yield MenuItem::linkToCrud('Valeurs d\'options', 'fas fa-palette', ProductOptionValue::class)->setController(ProductOptionValueCrudController::class);
+        yield MenuItem::linkToCrud('Types de Produit', 'fas fa-box', ProductType::class);
 
-
-
+              
     }
 }
