@@ -33,6 +33,4 @@ class BaniereStatiqueService
         $tenantEm->flush();
         return $entity;
     }
-    
-    // Ajoutez update() et delete() ici si nécessaire
 }

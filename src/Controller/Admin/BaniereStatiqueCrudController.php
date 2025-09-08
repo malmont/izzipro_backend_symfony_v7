@@ -3,12 +3,16 @@
 namespace App\Controller\Admin;
 
 use App\Entity\BaniereStatique;
+use App\Form\BaniereStatiqueTranslationType;
 use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ColorField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
+
 
 class BaniereStatiqueCrudController extends BaseTenantCrudController
 {
@@ -29,7 +33,11 @@ class BaniereStatiqueCrudController extends BaseTenantCrudController
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
             TextField::new('texteBouton', 'Texte du bouton'),
-            ColorField::new('colorBackground', 'Couleur de fond'),    
+            ColorField::new('colorBackground', 'Couleur de fond'),
+            CollectionField::new('translations', 'Traductions')
+                ->setEntryType(BaniereStatiqueTranslationType::class)
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(),    
         ];
     }
 }

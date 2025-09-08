@@ -1,14 +1,23 @@
 <?php
 namespace App\UseCase\BaniereStatiqueUseCase;
 
+use App\Dto\BaniereStatiqueOutputDto;
 use App\Services\BaniereStatiqueService\BaniereStatiqueService;
 
 class GetAllBaniereStatiquesUseCase
 {
     public function __construct(private BaniereStatiqueService $service) {}
 
-    public function execute(): array
+    /**
+     * @return BaniereStatiqueOutputDto[]
+     */
+    public function execute(string $locale, string $baseImageUrl): array
     {
-        return $this->service->findAll();
+        $entities = $this->service->findAll();
+        
+        return array_map(
+            fn($entity) => new BaniereStatiqueOutputDto($entity, $baseImageUrl, $locale),
+            $entities
+        );
     }
 }

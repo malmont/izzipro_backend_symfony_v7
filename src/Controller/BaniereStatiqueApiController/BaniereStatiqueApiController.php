@@ -1,7 +1,6 @@
 <?php
 namespace App\Controller\BaniereStatiqueApiController;
 
-use App\Dto\BaniereStatiqueOutputDto;
 use App\UseCase\BaniereStatiqueUseCase\GetAllBaniereStatiquesUseCase;
 use App\UseCase\BaniereStatiqueUseCase\GetBaniereStatiqueByIdUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -21,20 +20,23 @@ class BaniereStatiqueApiController extends AbstractController
     #[Route('', name: 'api_baniere_statique_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
-        $entities = $this->getAllUseCase->execute();
-        $dtos = array_map(fn($entity) => new BaniereStatiqueOutputDto($entity, $baseImageUrl), $entities);
+        $locale = $request->getLocale();
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider'; 
+        $dtos = $this->getAllUseCase->execute($locale, $baseImageUrl);
+
         return $this->json($dtos);
     }
 
     #[Route('/{id}', name: 'api_baniere_statique_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
-        $entity = $this->getByIdUseCase->execute($id);
-        if (!$entity) {
+        $locale = $request->getLocale(); 
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
+        $dto = $this->getByIdUseCase->execute($id, $locale, $baseImageUrl);
+        if (!$dto) {
             return $this->json(['message' => 'Bannière statique non trouvée'], Response::HTTP_NOT_FOUND);
         }
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
-        return $this->json(new BaniereStatiqueOutputDto($entity, $baseImageUrl));
+        
+        return $this->json($dto);
     }
 }

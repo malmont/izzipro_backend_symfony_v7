@@ -62,6 +62,7 @@ use App\Entity\LandingPageSetting;
 use App\Entity\Presentation;
 use App\Entity\ProductType;
 use App\Entity\PresentationGroup;
+use App\Entity\BaniereStatiqueTranslation;
 
 
 
