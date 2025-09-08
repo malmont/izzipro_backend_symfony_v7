@@ -11,8 +11,15 @@ class HomeSliderDTO
     public string $buttonUrl;
     public bool $isDiplayed;
 
-    public function __construct(int $id, string $title, ?string $image, string $description, string $buttonMessage,string $buttonUrl,bool $isDiplayed)
-    {
+    public function __construct(
+        int $id,
+        string $title,
+        ?string $image,
+        string $description,
+        string $buttonMessage,
+        string $buttonUrl,
+        bool $isDiplayed
+    ) {
         $this->id = $id;
         $this->title = $title;
         $this->image = $image;
@@ -24,10 +31,21 @@ class HomeSliderDTO
 
     public static function fromEntity($homeSlider, string $host): self
     {
+        $imagePath = $homeSlider->getImage();
+        if ($imagePath) {
+            if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
+                $image = $imagePath;
+            } else {
+                $image = $host . '/assets/uploads/slider/' . $imagePath;
+            }
+        } else {
+            $image = null;
+        }
+
         return new self(
             $homeSlider->getId(),
             $homeSlider->getTitle(),
-            $homeSlider->getImage(),
+            $image,
             $homeSlider->getDescription(),
             $homeSlider->getButtonMessage(),
             $homeSlider->getButtonUrl(),
@@ -35,5 +53,3 @@ class HomeSliderDTO
         );
     }
 }
-
-

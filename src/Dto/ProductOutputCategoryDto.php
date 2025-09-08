@@ -44,7 +44,16 @@ class ProductOutputCategoryDto
         $this->isnewarrival = $product->isIsnewarrival();
         $this->isfeatured = $product->isIsfeatured();
         $this->isspecialoffer = $product->isIsspecialoffer();
-        $this->image = $product->getImage() ?: null;
+        $imagePath = $product->getImage();
+        if ($imagePath) {
+            if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
+                $this->image = $imagePath;
+            } else {
+                $this->image = $host . '/assets/uploads/products/' . $imagePath;
+            }
+        } else {
+            $this->image = null;
+        }
         $this->quantity = $product->getQuantity();
         $this->freezeQuantity = $product->getFreezeQuantity() ?? 0;
         $this->createdAt = $product->getCreatedAt()->format('Y-m-d H:i:s');
@@ -53,7 +62,6 @@ class ProductOutputCategoryDto
         $this->purchasePrice = $product->getPurchasePrice();
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->barcode = $product->getBarcode();
-
         $style = $product->getStyle();
         if ($style) {
             if (method_exists($style, '__isInitialized') && !$style->__isInitialized()) {

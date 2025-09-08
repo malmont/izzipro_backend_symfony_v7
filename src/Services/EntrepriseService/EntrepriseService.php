@@ -42,8 +42,6 @@ class EntrepriseService
     public function getEntrepriseById(int $id, string $host): ?EntrepriseDto
     {
         $em = $this->emProvider->getEntityManager();
-
-        // On utilise l'EM du tenant pour obtenir le repository et les données
         $entreprise = $em->getRepository(Entreprise::class)->find($id);
         
         if (!$entreprise) {
@@ -53,7 +51,18 @@ class EntrepriseService
         $dto = new EntrepriseDto();
         $dto->id = $entreprise->getId();
         $dto->name = $entreprise->getName();
-        $dto->logo = $entreprise->getLogo();
+
+        // === Résolution du logo, même modèle que ProductOutputDTO ===
+        $imagePath = $entreprise->getLogo();
+        if ($imagePath) {
+            if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
+                $dto->logo = $imagePath;
+            } else {
+                $dto->logo = $host . '/assets/uploads/email-logos/' . $imagePath;
+            }
+        } else {
+            $dto->logo = null;
+        }
         $dto->email = $entreprise->getEmail();
         $dto->apropos = $entreprise->getApropos();
         $dto->tel = $entreprise->getTel();
