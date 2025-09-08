@@ -6,12 +6,13 @@ use App\Entity\Banniere;
 class BanniereOutputDto
 {
     public int $id;
-    public string $titre;
+    public ?string $titre; 
     public ?string $texte;
     public ?string $imageDeFondUrl;
 
-    public function __construct(Banniere $banniere, string $baseImageUrl)
+    public function __construct(Banniere $banniere, string $baseImageUrl, string $locale)
     {
+        $translation = $banniere->getTranslation($locale);
         $this->id = $banniere->getId();
         $this->titre = $banniere->getTitre();
         $this->texte = $banniere->getTexte();

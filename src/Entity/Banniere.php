@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\BanniereRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -22,6 +24,17 @@ class Banniere
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $imageDeFond = null;
+
+    /**
+     * @var Collection<int, BanniereTranslation>
+     */
+    #[ORM\OneToMany(mappedBy: 'banniere', targetEntity: BanniereTranslation::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    private Collection $translations;
+
+    public function __construct()
+    {
+        $this->translations = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -60,6 +73,50 @@ class Banniere
     public function setImageDeFond(?string $imageDeFond): static
     {
         $this->imageDeFond = $imageDeFond;
+
+        return $this;
+    }
+
+    public function getTranslation(string $locale): ?BanniereTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        return $this->translations->first() ?: null;
+    }
+
+    /**
+     * @return Collection<int, BanniereTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(BanniereTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setBanniere($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(BanniereTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            if ($translation->getBanniere() === $this) {
+                $translation->setBanniere(null);
+            }
+        }
 
         return $this;
     }

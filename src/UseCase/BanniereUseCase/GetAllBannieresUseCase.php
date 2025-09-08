@@ -1,6 +1,7 @@
 <?php
 namespace App\UseCase\BanniereUseCase;
 
+use App\Dto\BanniereOutputDto;
 use App\Services\BanniereService\BanniereService;
 
 class GetAllBannieresUseCase
@@ -12,8 +13,15 @@ class GetAllBannieresUseCase
         $this->banniereService = $banniereService;
     }
 
-    public function execute(): array
+    /**
+     * @return BanniereOutputDto[]
+     */
+    public function execute(string $locale, string $baseImageUrl): array
     {
-        return $this->banniereService->getAllBannieres();
+        $entities = $this->banniereService->getAllBannieres();
+        return array_map(
+            fn($banniere) => new BanniereOutputDto($banniere, $baseImageUrl, $locale),
+            $entities
+        );
     }
 }
