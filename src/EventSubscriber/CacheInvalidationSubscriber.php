@@ -152,6 +152,21 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'delete' => ['colors_all'],
             'invalidate_tags' => [],
         ],
+        [
+            'classes' => [ExploreCard::class],
+            'delete' => [],
+            'invalidate_tags' => ['explore_cards_all'],
+        ],
+        [
+            'classes' => [Entreprise::class], 
+            'delete' => [],
+            'invalidate_tags' => ['entreprise'],
+        ],
+        [
+            'classes' => [EmailConfiguration::class],
+            'delete' => [],
+            'invalidate_tags' => ['email_configurations_all'],
+        ],
         // Pour Commande et Fournisseur : tag commandes_by_collection
         [
             'classes' => [Commande::class, Fournisseur::class],
@@ -304,6 +319,12 @@ class CacheInvalidationSubscriber implements EventSubscriber
             if ($entity->getId()) {
                 $this->cache->invalidateTags(['categorie_marque_' . $entity->getId()]);
             }
+        }
+        if ($entity instanceof ExploreCard && $entity->getId()) {
+            $this->cache->invalidateTags(['explore_card_' . $entity->getId()]);
+        }
+        if ($entity instanceof Entreprise && $entity->getId()) {
+            $this->cache->invalidateTags(['entreprise_' . $entity->getId()]);
         }
 
         if ($entity instanceof Adress) {

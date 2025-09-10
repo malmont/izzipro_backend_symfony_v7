@@ -5,7 +5,7 @@ namespace App\Controller\FeatureController;
 use App\UseCase\FeatureUseCase\GetFeaturesUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpFoundation\Request;           // ← on importe Request
+use Symfony\Component\HttpFoundation\Request;     
 use Symfony\Component\Routing\Annotation\Route;
 
 #[Route('/api/features', name: 'api_features', methods: ['GET'])]

@@ -6,30 +6,30 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Services\TenantCacheService;
+use Symfony\Contracts\Cache\ItemInterface;
 
 #[Route('/api/explore-cards', name: 'api_explore_cards', methods: ['GET'])]
 class ExploreCardController extends AbstractController
 {
     public function __invoke(
         GetExploreCardUseCase $useCase,
-        Request $request
+        Request $request,
+        TenantCacheService $cache
     ): JsonResponse {
+        $locale = $request->getLocale();
+        $cacheKey = 'explore_cards_all_' . $locale;
         $host = $request->getSchemeAndHttpHost();
 
-        /** @var \App\Dto\ExploreCardDto[] $dtos */
-        $dtos = $useCase->execute($host);
+        $dtos = $cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($useCase, $host, $locale) {
+                $item->expiresAfter(3600);
+                $item->tag(['explore_cards_all']);
 
-        $data = array_map(fn($dto) => [
-            'id'             => $dto->id,
-            'isDifferent'    => $dto->isDifferent,
-            'standardTitle'  => $dto->standardTitle,
-            'differentTitle' => $dto->differentTitle,
-            'description'    => $dto->description,
-            'link'           => $dto->link,
-            'imageUrl'       => $dto->imageUrl,
-            'videoUrl'       => $dto->videoUrl,
-        ], $dtos);
-
-        return $this->json($data);
+                return $useCase->execute($host, $locale);
+            }
+        );
+        return $this->json($dtos);
     }
 }

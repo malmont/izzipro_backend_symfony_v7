@@ -9,11 +9,10 @@ class GetExploreCardUseCase
     public function __construct(private ExploreCardService $service) {}
 
     /**
-     * @param string $host
      * @return ExploreCardDto[]
      */
-    public function execute(string $host): array
+    public function execute(string $host, string $locale): array
     {
-        return $this->service->getAllCards($host);
+        return $this->service->getAllCards($host, $locale);
     }
 }
