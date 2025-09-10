@@ -25,17 +25,18 @@ class CarrierControleur extends AbstractController
     public function getCarrier(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $cacheKey = 'carriers';
+        $locale = $request->getLocale();
+        $cacheKey = 'carriers_' . $locale;
 
         $carriers = $this->cache->get(
             $cacheKey,
-            function(ItemInterface $item) use ($host) {
+            function(ItemInterface $item) use ($host, $locale) {
                 $item->expiresAfter(3600);
-                error_log("Cache miss for carriers");
-                return $this->getAllCarriersUseCase->execute($host);
+                error_log("Cache miss for carriers in locale: " . $locale);
+                return $this->getAllCarriersUseCase->execute($host, $locale);
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['carriers']
+            3600,
+            ['carriers']
         );
 
         return $this->json($carriers, JsonResponse::HTTP_OK);

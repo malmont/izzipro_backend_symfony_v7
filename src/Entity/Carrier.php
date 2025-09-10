@@ -44,12 +44,19 @@ class Carrier
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $carrierAccountId = null;
 
+    /**
+     * @var Collection<int, CarrierTranslation>
+     */
+    #[ORM\OneToMany(mappedBy: 'carrier', targetEntity: CarrierTranslation::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    private Collection $translations;
+
 
     public function __construct()
     {
        
         $this->createdAt = new DateTime();
         $this->orders = new ArrayCollection();
+        $this->translations = new ArrayCollection();
     }
 
 
@@ -152,19 +159,16 @@ class Carrier
             $this->orders->add($order);
             $order->setCarrier($this);
         }
-
         return $this;
     }
 
     public function removeOrder(Order $order): static
     {
         if ($this->orders->removeElement($order)) {
-            // set the owning side to null (unless already changed)
             if ($order->getCarrier() === $this) {
                 $order->setCarrier(null);
             }
         }
-
         return $this;
     }
 
@@ -176,7 +180,53 @@ class Carrier
     public function setCarrierAccountId(?string $carrierAccountId): static
     {
         $this->carrierAccountId = $carrierAccountId;
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, CarrierTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(CarrierTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setCarrier($this);
+        }
 
         return $this;
+    }
+
+    public function removeTranslation(CarrierTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            // set the owning side to null (unless already changed)
+            if ($translation->getCarrier() === $this) {
+                $translation->setCarrier(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getTranslation(string $locale): ?CarrierTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        return $this->translations->first() ?: null;
     }
 }
