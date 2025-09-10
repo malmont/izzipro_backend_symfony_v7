@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\ColorRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: ColorRepository::class)]
@@ -18,6 +20,20 @@ class Color
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $codeHexa = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $code = null;
+
+    /**
+     * @var Collection<int, ColorTranslation>
+     */
+    #[ORM\OneToMany(mappedBy: 'color', targetEntity: ColorTranslation::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    private Collection $translations;
+
+    public function __construct()
+    {
+        $this->translations = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -51,5 +67,64 @@ class Color
     public function __toString(): string
     {
         return $this->name ?: 'N/A';
+    }
+
+    public function getCode(): ?string
+    {
+        return $this->code;
+    }
+
+    public function setCode(?string $code): static
+    {
+        $this->code = $code;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, ColorTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(ColorTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setColor($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(ColorTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            // set the owning side to null (unless already changed)
+            if ($translation->getColor() === $this) {
+                $translation->setColor(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getTranslation(string $locale): ?ColorTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        return $this->translations->first() ?: null;
     }
 }
