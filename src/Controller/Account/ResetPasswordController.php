@@ -29,6 +29,9 @@ class ResetPasswordController extends AbstractController
         MailerInterface $mailer,
         UrlGeneratorInterface $urlGenerator
     ): Response {
+        $locale = $request->getLocale();
+
+
         $data = json_decode($request->getContent(), true);
         if (!isset($data['email'])) {
             return $this->json(['error' => 'Email is required.'], Response::HTTP_BAD_REQUEST);
@@ -54,18 +57,28 @@ class ResetPasswordController extends AbstractController
             UrlGeneratorInterface::ABSOLUTE_URL
         );
 
+
         $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
+        
         $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@votredomaine.com';
-        $fromName  = $emailConfig?->getFromName()  ?? 'Votre Société';
+        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
+        $signature = $translation?->getSignature() ?? '';
+        $logoUrl   = $emailConfig?->getLogo();
+
 
         $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+
 
         $emailContent = $this->renderView('reset_password/reset.html.twig', [
             'resetUrl'    => $resetUrl,
             'user'        => $user,
-            'emailConfig' => $emailConfig,
+            'fromName'    => $fromName, // On passe les variables traduites
+            'signature'   => $signature,
+            'logoUrl'     => $logoUrl,
             'domain'      => $domain,
         ]);
+
 
         $emailMessage = (new Email())
             ->from(sprintf('%s <%s>', $fromName, $fromEmail))
@@ -85,6 +98,7 @@ class ResetPasswordController extends AbstractController
         Request $request,
         UserPasswordHasherInterface $passwordHasher
     ): Response {
+        $locale = $request->getLocale();
         $data = json_decode($request->getContent(), true) ?: $request->request->all();
 
         if (!isset($data['token'], $data['newPassword'])) {
@@ -112,12 +126,21 @@ class ResetPasswordController extends AbstractController
         $em->flush();
 
         $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
+        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
+        $signature = $translation?->getSignature() ?? '';
+        $logoUrl   = $emailConfig?->getLogo();
+
         $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+
 
         return $this->render('reset_password/success.html.twig', [
             'message' => 'Password reset successfully.',
             'domain' => $domain,
-            'emailConfig' => $emailConfig,
+            'fromName' => $fromName,
+            'signature' => $signature,
+            'logoUrl' => $logoUrl,
+            'fromEmail' => $fromEmail,
             'user' => $user
         ]);
     }
@@ -125,14 +148,26 @@ class ResetPasswordController extends AbstractController
     #[Route('/password-reset/form', name: 'app_password_reset_confirm_form', methods: ['GET'])]
     public function resetPasswordForm(Request $request): Response
     {
+
+        $locale = $request->getLocale();
+
         $token = $request->query->get('token');
         $em = $this->tenantEmProvider->getEntityManager();
         $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
+        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
+        $signature = $translation?->getSignature() ?? '';
+        $logoUrl   = $emailConfig?->getLogo();
+
+
         $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
 
         return $this->render('reset_password/form.html.twig', [
             'token' => $token,
-            'emailConfig' => $emailConfig,
+            'fromName' => $fromName,
+            'signature' => $signature,
+            'logoUrl' => $logoUrl,
+            'fromEmail' => $fromEmail,
             'domain' => $domain,
         ]);
     }

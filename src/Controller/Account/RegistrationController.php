@@ -96,6 +96,7 @@ class RegistrationController extends AbstractController
         UrlGeneratorInterface $urlGenerator
     ): Response {
         $em = $this->tenantEmProvider->getEntityManager();
+        $locale = $request->getLocale();
         $decoded = json_decode($request->getContent(), true);
 
         if (!isset($decoded['email'], $decoded['password'], $decoded['firstName'], $decoded['lastName'])) {
@@ -156,21 +157,28 @@ class RegistrationController extends AbstractController
             UrlGeneratorInterface::ABSOLUTE_URL
         );
         $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
 
-        if (!$emailConfig) {
+        if ($emailConfig && $emailConfigTranslation) {
+            $fromEmail = $emailConfig->getFromEmail();
+            $fromName  = $emailConfigTranslation->getFromName();
+            $signature = $emailConfigTranslation->getSignature();
+            $logoUrl   = $emailConfig->getLogo();
+        } else {
             $fromEmail = 'no-reply@votredomaine.com';
             $fromName  = 'Votre Société';
-        } else {
-            $fromEmail = $emailConfig->getFromEmail();
-            $fromName  = $emailConfig->getFromName();
+            $signature = '';
+            $logoUrl   = null;
         }
 
         $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
 
         $emailContent = $this->renderView('verification/validation_email.html.twig', [
-            'user'        => $user,
-            'emailConfig' => $emailConfig,
-            'domain'      => $domain,
+            'user'            => $user,
+            'fromName'        => $fromName,
+            'signature'       => $signature,
+            'logoUrl'         => $logoUrl,
+            'domain'          => $domain,
             'verificationUrl' => $verificationUrl,
         ]);
 
