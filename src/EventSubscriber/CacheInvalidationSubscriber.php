@@ -138,7 +138,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
         [
         'classes' => [Categories::class],
         'delete' => ['categories_all'], 
-        'invalidate_tags' => ['products_by_category'], 
+        'invalidate_tags' => ['categories_all', 'products_by_category'],
         ],
         // Collections
         [

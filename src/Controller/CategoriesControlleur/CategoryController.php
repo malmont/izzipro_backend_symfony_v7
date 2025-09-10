@@ -13,6 +13,7 @@ use Symfony\Component\Routing\Annotation\Route;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
+use App\Dto\CategoryOutputDTO;
 
 class CategoryController extends AbstractController
 {
@@ -99,28 +100,20 @@ class CategoryController extends AbstractController
     #[Route('/api/category', name: 'get_categories', methods: ['GET'])]
     public function getCategories(Request $request): JsonResponse
     {
-        $cacheKey = 'categories_all';
+        $locale = $request->getLocale();
+        $cacheKey = 'categories_all_' . $locale;
         $host = $request->getSchemeAndHttpHost();
 
         $categoriesArray = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($host) {
-                $item->expiresAfter(3600);
-                $item->tag(['categories_all']);
+            function (ItemInterface $item) use ($host, $locale) {
+                // ...
                 $em = $this->emProvider->getEntityManager();
                 $categories = $em->getRepository(Categories::class)->findAll();
-                $result = [];
-                foreach ($categories as $category) {
-                    $result[] = [
-                        'id'          => $category->getId(),
-                        'name'        => $category->getName(),
-                        'description' => $category->getDescription(),
-                        'image'       => $category->getImage()
-                            ? $host . '/assets/uploads/categories/' . $category->getImage()
-                            : null,
-                    ];
-                }
-                return $result;
+                return array_map(
+                    fn($category) => (new CategoryOutputDTO($category, $host, $locale))->toArray(),
+                    $categories
+                );
             },
         );
 
