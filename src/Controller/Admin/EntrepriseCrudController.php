@@ -2,12 +2,14 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Entreprise;
+use App\Form\EntrepriseTranslationType; 
 use App\Controller\Admin\BaseTenantCrudController; 
 use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\EmailField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
@@ -16,18 +18,13 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\UrlField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 
-
-
 class EntrepriseCrudController extends BaseTenantCrudController
 {
     private AdminUrlGenerator $adminUrlGenerator;
 
-    /**
-     * 3. Le constructeur reçoit maintenant SES dépendances ET celles du parent
-     */
     public function __construct(
         AdminUrlGenerator $adminUrlGenerator,
-        TenantEntityManagerProvider $emProvider // Requis par le parent
+        TenantEntityManagerProvider $emProvider
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
@@ -42,6 +39,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
     {
         return [
             IdField::new('id')->onlyOnIndex(),
+            
+            // --- Champs non traduits ---
             TextField::new('name', 'Nom de l\'entreprise'),
             ImageField::new('logo', 'Logo')
                 ->setBasePath('assets/uploads/email-logos/')
@@ -75,6 +74,12 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 })
                 ->renderAsHtml()
                 ->onlyOnIndex(),
+
+
+            CollectionField::new('translations', 'Contenus Traduits')
+                ->setEntryType(EntrepriseTranslationType::class)
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(), 
         ];
     }
 }

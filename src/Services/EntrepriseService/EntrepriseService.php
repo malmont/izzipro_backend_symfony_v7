@@ -2,6 +2,7 @@
 namespace App\Services\EntrepriseService;
 
 use App\Entity\Entreprise;
+use App\Entity\EntrepriseTranslation; // On importe l'entité de traduction
 use App\Dto\EntrepriseDto;
 use App\Services\TenantEntityManagerProvider; 
 
@@ -26,12 +27,15 @@ class EntrepriseService
         $entreprise->setWebsite($dto->website);
         $entreprise->setEin($dto->ein);
         $entreprise->setTvaIntracommunautaire($dto->tvaIntracommunautaire);
-        $entreprise->setConditionOfUse($dto->conditionOfUse);
-        $entreprise->setLegalNotice($dto->LegalNotice);
-        $entreprise->setPrivacyPolicy($dto->privacyPolicy);
         $entreprise->setAdress($dto->adress);
+        $translation = new EntrepriseTranslation();
+        $translation->setLanguage('fr');
+        $translation->setConditionOfUse($dto->conditionOfUse);
+        $translation->setLegalNotice($dto->LegalNotice);
+        $translation->setPrivacyPolicy($dto->privacyPolicy);
+        $translation->setApropos($dto->apropos);
+        $entreprise->addTranslation($translation);
 
-        // On utilise l'EM du tenant
         $em->persist($entreprise);
         $em->flush();
 
@@ -39,7 +43,7 @@ class EntrepriseService
         return $dto;
     }
 
-    public function getEntrepriseById(int $id, string $host): ?EntrepriseDto
+    public function getEntrepriseById(int $id, string $host, string $locale): ?EntrepriseDto
     {
         $em = $this->emProvider->getEntityManager();
         $entreprise = $em->getRepository(Entreprise::class)->find($id);
@@ -47,32 +51,25 @@ class EntrepriseService
         if (!$entreprise) {
             return null;
         }
+        $translation = $entreprise->getTranslation($locale);
 
         $dto = new EntrepriseDto();
         $dto->id = $entreprise->getId();
         $dto->name = $entreprise->getName();
-
-        // === Résolution du logo, même modèle que ProductOutputDTO ===
-        $imagePath = $entreprise->getLogo();
-        if ($imagePath) {
-            if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
-                $dto->logo = $imagePath;
-            } else {
-                $dto->logo = $host . '/assets/uploads/email-logos/' . $imagePath;
-            }
-        } else {
-            $dto->logo = null;
-        }
         $dto->email = $entreprise->getEmail();
-        $dto->apropos = $entreprise->getApropos();
         $dto->tel = $entreprise->getTel();
         $dto->website = $entreprise->getWebsite();
         $dto->ein = $entreprise->getEin();
         $dto->tvaIntracommunautaire = $entreprise->getTvaIntracommunautaire();
-        $dto->conditionOfUse = $entreprise->getConditionOfUse();
-        $dto->LegalNotice = $entreprise->getLegalNotice();
-        $dto->privacyPolicy = $entreprise->getPrivacyPolicy();
         $dto->adress = $entreprise->getAdress();
+        $imagePath = $entreprise->getLogo();
+        $dto->logo = $imagePath ? $host . '/assets/uploads/email-logos/' . $imagePath : null;
+        if ($translation) {
+            $dto->conditionOfUse = $translation->getConditionOfUse();
+            $dto->LegalNotice = $translation->getLegalNotice();
+            $dto->privacyPolicy = $translation->getPrivacyPolicy();
+            $dto->apropos = $translation->getApropos();
+        }
 
         return $dto;
     }
