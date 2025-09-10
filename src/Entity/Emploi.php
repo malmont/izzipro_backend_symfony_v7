@@ -27,9 +27,22 @@ class Emploi
     #[ORM\OneToMany(mappedBy: 'emploi', targetEntity: Candidature::class)]
     private Collection $candidatures;
 
+    /**
+     * @var Collection<int, EmploiTranslation>
+     */
+    #[ORM\OneToMany(
+    mappedBy: 'emploi', 
+    targetEntity: EmploiTranslation::class, 
+    cascade: ['persist', 'remove'], 
+    orphanRemoval: true,
+    fetch: 'EXTRA_LAZY'
+    )]
+    private Collection $translations;
+
     public function __construct()
     {
         $this->candidatures = new ArrayCollection();
+        $this->translations = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -89,5 +102,52 @@ class Emploi
         }
 
         return $this;
+    }
+
+    /**
+     * @return Collection<int, EmploiTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(EmploiTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setEmploi($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(EmploiTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            // set the owning side to null (unless already changed)
+            if ($translation->getEmploi() === $this) {
+                $translation->setEmploi(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getTranslation(string $locale): ?EmploiTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        return $this->translations->first() ?: null;
     }
 }

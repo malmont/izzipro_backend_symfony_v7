@@ -96,8 +96,8 @@ class CacheInvalidationSubscriber implements EventSubscriber
         ],
         [
             'classes' => [Emploi::class],
-            'delete' => ['emplois_all'],
-            'invalidate_tags' => ['emplois'],
+            'delete' => [''],
+            'invalidate_tags' => ['emplois_all'],
         ],
         [
             'classes' => [Banniere::class, BanniereStatique::class],
