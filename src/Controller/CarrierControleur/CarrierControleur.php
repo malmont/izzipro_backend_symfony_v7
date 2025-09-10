@@ -32,11 +32,10 @@ class CarrierControleur extends AbstractController
             $cacheKey,
             function(ItemInterface $item) use ($host, $locale) {
                 $item->expiresAfter(3600);
+                $item->tag(['carriers_all']);
                 error_log("Cache miss for carriers in locale: " . $locale);
                 return $this->getAllCarriersUseCase->execute($host, $locale);
-            },
-            3600,
-            ['carriers']
+            }
         );
 
         return $this->json($carriers, JsonResponse::HTTP_OK);

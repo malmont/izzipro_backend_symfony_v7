@@ -75,19 +75,19 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'invalidate_tags' => ['recherches'],
         ],
         [
+            'classes' => [Marque::class],
+            'delete' => [],
+            'invalidate_tags' => ['marques_all', 'categories_marque_all'],
+        ],
+        [
             'classes' => [Multilien::class],
             'delete' => ['multiliens_all'],
             'invalidate_tags' => ['multiliens'],
         ],
         [
-            'classes' => [Marque::class, CategorieMarque::class], // Gère déjà les deux
-            'delete' => ['marques_all', 'categories_marque_all'],
-            'invalidate_tags' => ['marques', 'categories_marque'],
-        ],
-         [
-            'classes' => [Marque::class, CategorieMarque::class], 
-            'delete' => ['marques_all', 'categories_marque_all'], 
-            'invalidate_tags' => ['marques', 'categories_marque'],
+            'classes' => [CategorieMarque::class],
+            'delete' => [],
+            'invalidate_tags' => ['categories_marque_all'],
         ],
         [
             'classes' => [Candidature::class],
@@ -100,11 +100,10 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'invalidate_tags' => ['emplois'],
         ],
         [
-            'classes' => [Banniere::class],
-            'delete' => ['bannieres_all'], 
-            'invalidate_tags' => ['bannieres'], 
+            'classes' => [Banniere::class, BanniereStatique::class],
+            'delete' => [],
+            'invalidate_tags' => ['bannieres_all', 'bannieres_statiques_all'],
         ],
-
         [
             'classes' => [TransactionCaisse::class],
             'delete' => ['open_caisse_transactions'],
@@ -117,8 +116,8 @@ class CacheInvalidationSubscriber implements EventSubscriber
         ],
         [
             'classes' => [Carrier::class],
-            'delete' => ['carriers'],
-            'invalidate_tags' => [],
+            'delete' => [],
+            'invalidate_tags' => ['carriers_all'],
         ],
         [
             'classes' => [HomeSlider::class],
@@ -285,6 +284,27 @@ class CacheInvalidationSubscriber implements EventSubscriber
         $tenantCode = $this->tcp->getTenantCode() ?: 'master';
         $prefix = $tenantCode . ':';
         $tagPrefix = $tenantCode;
+
+         if ($entity instanceof BanniereStatique) {
+            if ($entity->getId()) {
+                $this->cache->invalidateTags(['baniere_statique_' . $entity->getId()]);
+            }
+        }
+        if ($entity instanceof Banniere) {
+            if ($entity->getId()) {
+                $this->cache->invalidateTags(['banniere_' . $entity->getId()]);
+            }
+        }
+        if ($entity instanceof Carrier) {
+            if ($entity->getId()) {
+                $this->cache->invalidateTags(['carrier_' . $entity->getId()]);
+            }
+        }
+        if ($entity instanceof CategorieMarque) {
+            if ($entity->getId()) {
+                $this->cache->invalidateTags(['categorie_marque_' . $entity->getId()]);
+            }
+        }
 
         if ($entity instanceof Adress) {
             $user = $entity->getUserAdress();

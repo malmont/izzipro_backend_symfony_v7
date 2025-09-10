@@ -15,7 +15,7 @@ class CategorieMarqueRepository extends EntityRepository
     {
         return $this->createQueryBuilder('c')
             ->leftJoin('c.marques', 'm')
-            ->addSelect('m') // Important: sélectionne les données des marques jointes
+            ->addSelect('m') 
             ->orderBy('c.nom', 'ASC')
             ->getQuery()
             ->getResult();

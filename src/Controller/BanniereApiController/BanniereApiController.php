@@ -36,16 +36,15 @@ class BanniereApiController extends AbstractController
     {
         $locale = $request->getLocale();
         $cacheKey = 'bannieres_all_' . $locale; 
-        $cacheTags = ['bannieres'];
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 
         $dtos = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['bannieres_all']);
                 return $this->getAllBannieresUseCase->execute($locale, $baseImageUrl);
-            },
-            3600, 
-            $cacheTags
+            }
         );
 
         return $this->json($dtos);
@@ -56,16 +55,15 @@ class BanniereApiController extends AbstractController
     {
         $locale = $request->getLocale();
         $cacheKey = 'banniere_' . $id . '_' . $locale;
-        $cacheTags = ['banniere_' . $id];
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 
         $dto = $this->cache->get(
             $cacheKey,
             function(ItemInterface $item) use ($id, $locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['bannieres_all', 'banniere_' . $id]);
                 return $this->getBanniereByIdUseCase->execute($id, $locale, $baseImageUrl);
-            },
-            3600,
-            $cacheTags
+            }
         );
 
         if (!$dto) {

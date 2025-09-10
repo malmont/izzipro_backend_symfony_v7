@@ -1,11 +1,23 @@
 <?php
 namespace App\UseCase\CategorieMarqueUseCase;
 
+use App\Dto\CategorieMarqueOutputDto;
 use App\Services\CategorieMarqueService\CategorieMarqueService;
 
 class GetAllCategoriesMarqueUseCase
 {
     private CategorieMarqueService $categorieMarqueService;
     public function __construct(CategorieMarqueService $service) { $this->categorieMarqueService = $service; }
-    public function execute(): array { return $this->categorieMarqueService->getAllCategoriesMarque(); }
+
+    /**
+     * @return CategorieMarqueOutputDto[]
+     */
+    public function execute(string $locale, string $baseImageUrl): array 
+    { 
+        $categories = $this->categorieMarqueService->getAllCategoriesMarque(); 
+                return array_map(
+            fn($cat) => new CategorieMarqueOutputDto($cat, $baseImageUrl, $locale), 
+            $categories
+        );
+    }
 }

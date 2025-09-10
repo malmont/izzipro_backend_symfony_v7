@@ -30,20 +30,20 @@ class CategorieMarqueApiController extends AbstractController
         private TenantCacheService $cache
     ) {}
 
-    #[Route('', name: 'api_categorie_marque_list', methods: ['GET'])]
-    public function list(): JsonResponse
+   #[Route('', name: 'api_categorie_marque_list', methods: ['GET'])]
+    public function list(Request $request): JsonResponse
     {
-        $cacheKey = 'categories_marque_all';
-        $cacheTags = ['categories_marque'];
+        $locale = $request->getLocale();
+        $cacheKey = 'categories_marque_all_' . $locale;
+        $baseImageUrl = $request->getSchemeAndHttpHost(); 
 
         $categoriesDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) {
-                $categories = $this->getAllCategoriesMarqueUseCase->execute();
-                return array_map(fn($cat) => new CategorieMarqueOutputDto($cat), $categories);
-            },
-            3600,
-            $cacheTags
+            function (ItemInterface $item) use ($locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['categories_marque_all']);
+                return $this->getAllCategoriesMarqueUseCase->execute($locale, $baseImageUrl);
+            }
         );
 
         return $this->json($categoriesDto);
@@ -52,20 +52,23 @@ class CategorieMarqueApiController extends AbstractController
     #[Route('/{id}/marques', name: 'api_categorie_marque_get_marques', methods: ['GET'])]
     public function getMarquesForCategory(int $id, Request $request): JsonResponse
     {
-        $marques = $this->getMarquesByCategorieUseCase->execute($id);
-
-        if ($marques === null) {
-            return $this->json(['message' => 'Catégorie non trouvée ou aucune marque associée'], Response::HTTP_NOT_FOUND);
-        }
+        $locale = $request->getLocale();
+        $cacheKey = 'categorie_marque_' . $id . '_marques_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos'; 
-        $marquesDto = array_map(
-            fn($marque) => new MarqueOutputDto($marque, $baseImageUrl),
-            $marques
+        $marquesDto = $this->cache->get(
+            $cacheKey,
+            function(ItemInterface $item) use ($id, $locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['marques_all', 'categorie_marque_' . $id]);
+                return $this->getMarquesByCategorieUseCase->execute($id, $locale, $baseImageUrl);
+            }
         );
 
+        if ($marquesDto === null) {
+            return $this->json(['message' => 'Catégorie non trouvée ou aucune marque associée'], Response::HTTP_NOT_FOUND);
+        }
         return $this->json($marquesDto);
     }
-
     #[Route('', name: 'api_categorie_marque_create', methods: ['POST'])]
     public function create(#[MapRequestPayload] CategorieMarqueInputDto $dto): JsonResponse
     {
