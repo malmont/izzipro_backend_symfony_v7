@@ -6,6 +6,7 @@ use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
+use App\Form\OrderTypeTranslationType; 
 
 class OrderTypeCrudController extends BaseTenantCrudController
 {
@@ -21,6 +22,10 @@ class OrderTypeCrudController extends BaseTenantCrudController
             TextField::new('name', 'Name'),
             TextField::new('description', 'Description')->hideOnIndex(),
             CollectionField::new('orders', 'Orders')->onlyOnDetail(),
+            CollectionField::new('translations', 'Traductions')
+                ->setEntryType(OrderTypeTranslationType::class)
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(),
         ];
     }
 }

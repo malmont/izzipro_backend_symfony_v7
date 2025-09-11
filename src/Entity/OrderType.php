@@ -27,9 +27,22 @@ class OrderType
     #[ORM\OneToMany(mappedBy: 'orderType', targetEntity: Order::class)]
     private Collection $orders;
 
+    /**
+     * @var Collection<int, OrderTypeTranslation>
+     */
+    #[ORM\OneToMany(
+    mappedBy: 'orderType', 
+    targetEntity: OrderTypeTranslation::class, 
+    cascade: ['persist', 'remove'], 
+    orphanRemoval: true,
+    fetch: 'EXTRA_LAZY'
+    )]
+    private Collection $translations;
+
     public function __construct()
     {
         $this->orders = new ArrayCollection();
+        $this->translations = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -94,4 +107,52 @@ class OrderType
     {
         return $this->name;
     }
+
+    /**
+     * @return Collection<int, OrderTypeTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(OrderTypeTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setOrderType($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(OrderTypeTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            // set the owning side to null (unless already changed)
+            if ($translation->getOrderType() === $this) {
+                $translation->setOrderType(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getTranslation(string $locale): ?OrderTypeTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        return $this->translations->first() ?: null;
+    }
+
 }
