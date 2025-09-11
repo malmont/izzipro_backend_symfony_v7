@@ -29,37 +29,48 @@ class RechercheApiController extends AbstractController
         private GetRechercheByIdUseCase $getRechercheByIdUseCase
     ) {}
 
-    #[Route('', name: 'api_recherche_list', methods: ['GET'])]
+   #[Route('', name: 'api_recherche_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $cacheKey = 'recherches_all';
-        $cacheTags = ['recherches'];
+        $locale = $request->getLocale();
+        $cacheKey = 'recherches_all_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/recherches';
 
-        $recherchesDto = $this->cache->get(
+        $dtos = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($baseImageUrl) {
-                $recherches = $this->getAllRecherchesUseCase->execute();
-                return array_map(fn($recherche) => new RechercheOutputDto($recherche, $baseImageUrl), $recherches);
-            },
-            3600,
-            $cacheTags
+            function (ItemInterface $item) use ($locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['recherches_all']);
+
+                return $this->getAllRecherchesUseCase->execute($baseImageUrl, $locale);
+            }
         );
 
-        return $this->json($recherchesDto);
+        return $this->json($dtos);
     }
 
-    #[Route('/{id}', name: 'api_recherche_get_one', methods: ['GET'])]
+    #[Route('/{id}', name: 'api_recherche_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
-        $recherche = $this->getRechercheByIdUseCase->execute($id);
+        $locale = $request->getLocale();
+        $cacheKey = 'recherche_' . $id . '_' . $locale;
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/recherches';
 
-        if (!$recherche) {
+        $dto = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($id, $locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['recherches_all', 'recherche_' . $id]);
+
+                return $this->getRechercheByIdUseCase->execute($id, $baseImageUrl, $locale);
+            }
+        );
+
+        if (!$dto) {
             return $this->json(['message' => 'Recherche non trouvée'], Response::HTTP_NOT_FOUND);
         }
         
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/recherches';
-        return $this->json(new RechercheOutputDto($recherche, $baseImageUrl));
+        return $this->json($dto);
     }
 
     #[Route('', name: 'api_recherche_create', methods: ['POST'])]

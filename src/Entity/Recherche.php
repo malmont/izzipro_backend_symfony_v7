@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\RechercheRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: RechercheRepository::class)]
@@ -24,6 +26,23 @@ class Recherche
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $imageDeFond = null;
+
+    /**
+     * @var Collection<int, RechercheTranslation>
+     */
+    #[ORM\OneToMany(
+    mappedBy: 'recherche', 
+    targetEntity: RechercheTranslation::class, 
+    cascade: ['persist', 'remove'], 
+    orphanRemoval: true,
+    fetch: 'EXTRA_LAZY'
+    )]
+    private Collection $translations;
+
+    public function __construct()
+    {
+        $this->translations = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -76,5 +95,51 @@ class Recherche
         $this->imageDeFond = $imageDeFond;
 
         return $this;
+    }
+
+    /**
+     * @return Collection<int, RechercheTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(RechercheTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setRecherche($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(RechercheTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            // set the owning side to null (unless already changed)
+            if ($translation->getRecherche() === $this) {
+                $translation->setRecherche(null);
+            }
+        }
+
+        return $this;
+    }
+    public function getTranslation(string $locale): ?RechercheTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        return $this->translations->first() ?: null;
     }
 }
