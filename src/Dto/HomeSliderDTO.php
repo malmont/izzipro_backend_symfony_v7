@@ -1,24 +1,26 @@
 <?php
 namespace App\Dto;
 
+use App\Entity\HomeSlider;
+
 class HomeSliderDTO
 {
     public int $id;
-    public string $title;
+    public ?string $title;
     public ?string $image;
-    public string $description;
-    public string $buttonMessage;
-    public string $buttonUrl;
-    public bool $isDiplayed;
+    public ?string $description;
+    public ?string $buttonMessage;
+    public ?string $buttonUrl;
+    public ?bool $isDiplayed;
 
     public function __construct(
         int $id,
-        string $title,
+        ?string $title,
         ?string $image,
-        string $description,
-        string $buttonMessage,
-        string $buttonUrl,
-        bool $isDiplayed
+        ?string $description,
+        ?string $buttonMessage,
+        ?string $buttonUrl,
+        ?bool $isDiplayed
     ) {
         $this->id = $id;
         $this->title = $title;
@@ -29,26 +31,35 @@ class HomeSliderDTO
         $this->isDiplayed = $isDiplayed;
     }
 
-    public static function fromEntity($homeSlider, string $host): self
+    public static function fromEntity(HomeSlider $homeSlider, string $host, string $locale): self
     {
+        // --- Logique "en attente" ---
+        // $translation = $homeSlider->getTranslation($locale);
+        // TODO: Après la migration, on branchera la logique de traduction ici.
+
+        // --- Logique actuelle ---
+        $title = $homeSlider->getTitle();
+        $description = $homeSlider->getDescription();
+        $buttonMessage = $homeSlider->getButtonMessage();
+        // Pour les champs optionnels (image, buttonUrl)
+        // $buttonUrl = $translation ? $translation->getButtonUrl() : $homeSlider->getButtonUrl();
         $imagePath = $homeSlider->getImage();
+        $buttonUrl = $homeSlider->getButtonUrl();
+
+
         if ($imagePath) {
-            if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
-                $image = $imagePath;
-            } else {
-                $image = $host . '/assets/uploads/slider/' . $imagePath;
-            }
+            $image = str_starts_with($imagePath, 'http') ? $imagePath : rtrim($host, '/') . '/assets/uploads/slider/' . $imagePath;
         } else {
             $image = null;
         }
 
         return new self(
             $homeSlider->getId(),
-            $homeSlider->getTitle(),
+            $title,
             $image,
-            $homeSlider->getDescription(),
-            $homeSlider->getButtonMessage(),
-            $homeSlider->getButtonUrl(),
+            $description,
+            $buttonMessage,
+            $buttonUrl,
             $homeSlider->isIsDiplayed(),
         );
     }

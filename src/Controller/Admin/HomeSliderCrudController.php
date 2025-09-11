@@ -9,7 +9,10 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
-use App\Controller\Admin\BaseTenantCrudController;
+use App\Controller\Admin\BaseTenantCrudController;  
+use App\Form\HomeSliderTranslationType; 
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
+
 
 class HomeSliderCrudController extends BaseTenantCrudController
 {
@@ -27,6 +30,10 @@ class HomeSliderCrudController extends BaseTenantCrudController
             TextField::new('description'),
             TextField::new('buttonMessage'),
             TextField::new('buttonUrl'),
+            CollectionField::new('translations', 'Traductions')
+                ->setEntryType(HomeSliderTranslationType::class)
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(),
             ImageField::new('image')->setBasePath('assets/uploads/slider/')
                                     ->setUploadDir('public/assets/uploads/slider/')
                                     ->setUploadedFileNamePattern('[randomhash].[extension]')

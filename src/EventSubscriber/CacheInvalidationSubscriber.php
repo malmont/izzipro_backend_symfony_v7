@@ -14,6 +14,10 @@ use App\Entity\Banniere;
 use App\Entity\HomeSlider;
 use App\Entity\Product;
 use App\Entity\Payments;
+use App\Entity\BanniereStatique;
+use App\Entity\ExploreCard;
+use App\Entity\EmailConfiguration;
+use App\Entity\Feature;
 use App\Entity\ProductVariant;
 use App\Entity\SquareConfig;
 use App\Entity\Color;
@@ -121,8 +125,13 @@ class CacheInvalidationSubscriber implements EventSubscriber
         ],
         [
             'classes' => [HomeSlider::class],
-            'delete' => ['homeslider'],
-            'invalidate_tags' => [],
+            'delete' => [],
+            'invalidate_tags' => ['homeslider_all'],
+        ],
+        [
+            'classes' => [Feature::class],
+            'delete' => [],
+            'invalidate_tags' => ['features_all'],
         ],
         [
             'classes' => [SquareConfig::class],

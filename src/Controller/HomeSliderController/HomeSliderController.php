@@ -12,31 +12,27 @@ use Symfony\Contracts\Cache\ItemInterface;
 
 class HomeSliderController extends AbstractController
 {
-    private GetAllHomeSliderUseCase $getAllHomeSliderUseCase;
-    private TenantCacheService $cache;
-
     public function __construct(
-        GetAllHomeSliderUseCase $getAllHomeSliderUseCase,
-        TenantCacheService $cache
-    ) {
-        $this->getAllHomeSliderUseCase = $getAllHomeSliderUseCase;
-        $this->cache = $cache;
-    }
+        private GetAllHomeSliderUseCase $getAllHomeSliderUseCase,
+        private TenantCacheService $cache
+    ) {}
 
     #[Route('/api/homeslider', name: 'get_home_slider', methods: ['GET'])]
     public function getHomeSlider(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
+        $locale = $request->getLocale();
+        $cacheKey = 'homeslider_all_' . $locale;
 
-        $homeSlider = $this->cache->get(
-            'homeslider',
-            function(ItemInterface $item) use ($host) {
+        $homeSliderDto = $this->cache->get(
+            $cacheKey,
+            function(ItemInterface $item) use ($host, $locale) {
                 $item->expiresAfter(3600);
-                return $this->getAllHomeSliderUseCase->execute($host);
-            },
-            /* ttl */ 3600
+                $item->tag(['homeslider_all']);
+                return $this->getAllHomeSliderUseCase->execute($host, $locale);
+            }
         );
 
-        return $this->json($homeSlider, JsonResponse::HTTP_OK);
+        return $this->json($homeSliderDto, JsonResponse::HTTP_OK);
     }
 }
