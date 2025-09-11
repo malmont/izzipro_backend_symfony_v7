@@ -2,14 +2,15 @@
 namespace App\Controller\Admin;
 
 use App\Entity\StatusCommande;
-use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
+use App\Form\StatusCommandeTranslationType;
 
-// 2. On étend notre contrôleur de base
+
 class StatusCommandeCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
@@ -32,6 +33,10 @@ class StatusCommandeCrudController extends BaseTenantCrudController
             TextField::new('name', 'Name'),
             TextareaField::new('description', 'Description')->hideOnIndex(),
             CollectionField::new('orders', 'Orders')->onlyOnDetail(),
+            CollectionField::new('translations', 'Traductions')
+                ->setEntryType(StatusCommandeTranslationType::class)
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(),
         ];
     }
 }

@@ -16,22 +16,24 @@ class GetOrdersByUserUseCase
         $this->orderService = $orderService;
     }
 
-    public function execute(int $userId, string $host): array
+    public function execute(int $userId, string $host, string $locale): array
     {
         $orders = $this->orderService->getOrdersByUser($userId);
         $orderDTOs = [];
 
         foreach ($orders as $order) {
             $orderItemDTOs = [];
-
             foreach ($order->getOrderItems() as $orderItem) {
                 $orderItemDTOs[] = new OrderItemDTO($orderItem, $host);
             }
 
-            // Créer un AdressOutputDTO pour l'adresse de livraison
             $shippingAdressDTO = $order->getShippingAdress() 
                 ? new AdressOutputDTO($order->getShippingAdress()) 
                 : null;
+
+            $status = $order->getStatus();
+            $statusTranslation = $status ? $status->getTranslation($locale) : null;
+            $statusName = $statusTranslation ? $statusTranslation->getName() : ($status ? $status->getName() : null);
 
             $orderDTOs[] = new OrderDTO(
                 $order->getId(),
@@ -41,7 +43,7 @@ class GetOrdersByUserUseCase
                 $order->getUserId() ? $order->getUserId()->getId() : null,
                 $shippingAdressDTO,
                 $order->getOrderSource() ? $order->getOrderSource()->getName() : null,
-                $order->getStatus() ? $order->getStatus()->getName() : null,
+                $statusName, 
                 $orderItemDTOs
             );
         }

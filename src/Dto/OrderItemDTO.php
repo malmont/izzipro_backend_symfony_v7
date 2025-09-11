@@ -31,7 +31,14 @@ class OrderItemDTO
         $variant = $orderItem->getProductVariant();
         $this->productVariantColor = $variant->getColor() ? $variant->getColor()->getName() : 'Inconnu';
         $this->productVariantSize = $variant->getSize() ? $variant->getSize()->getName() : 'Inconnu';
-        $this->productImage = $product->getImage();
+        $imagePath = $product->getImage();
+        if ($imagePath) {
+            $this->productImage = str_starts_with($imagePath, 'http')
+                ? $imagePath
+                : rtrim($host, '/') . '/assets/uploads/products/' . $imagePath;
+        } else {
+            $this->productImage = null;
+        }
             
     }
 

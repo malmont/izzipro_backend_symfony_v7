@@ -27,9 +27,22 @@ class StatusCommande
     #[ORM\OneToMany(mappedBy: 'status', targetEntity: Order::class)]
     private Collection $orders;
 
+    /**
+     * @var Collection<int, StatusCommandeTranslation>
+     */
+    #[ORM\OneToMany(
+    mappedBy: 'statusCommande', 
+    targetEntity: StatusCommandeTranslation::class, 
+    cascade: ['persist', 'remove'], 
+    orphanRemoval: true,
+    fetch: 'EXTRA_LAZY'
+    )]
+    private Collection $translations;
+
     public function __construct()
     {
         $this->orders = new ArrayCollection();
+        $this->translations = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -94,5 +107,52 @@ class StatusCommande
     public function __toString(): string
     {
         return $this->name ?? 'N/A';
+    }
+
+    /**
+     * @return Collection<int, StatusCommandeTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(StatusCommandeTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setStatusCommande($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(StatusCommandeTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            // set the owning side to null (unless already changed)
+            if ($translation->getStatusCommande() === $this) {
+                $translation->setStatusCommande(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getTranslation(string $locale): ?StatusCommandeTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        return $this->translations->first() ?: null;
     }
 }
