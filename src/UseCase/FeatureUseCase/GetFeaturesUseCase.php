@@ -1,7 +1,7 @@
 <?php
 namespace App\UseCase\FeatureUseCase;
 
-use App\DTO\FeatureDTO;
+use App\Dto\FeatureDTO;
 use App\Services\FeatureService\FeatureService;
 
 class GetFeaturesUseCase
@@ -9,11 +9,16 @@ class GetFeaturesUseCase
     public function __construct(private FeatureService $service) {}
 
     /**
-     * @param string $host  Le scheme+host, ex. "https://mon-domaine.com"
+     * @param string $host    Le scheme+host, ex. "https://mon-domaine.com"
+     * @param string $locale  La langue demandée, ex. "fr"
      * @return FeatureDTO[]
      */
-    public function execute(string $host): array
+    public function execute(string $host, string $locale): array
     {
-        return $this->service->getAllFeatures($host);
+        $features = $this->service->getAllFeatures();
+        return array_map(
+            fn($feature) => FeatureDTO::fromEntity($feature, $host, $locale),
+            $features
+        );
     }
 }

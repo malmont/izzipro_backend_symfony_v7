@@ -3,8 +3,9 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Feature;
+use App\Form\FeatureTranslationType;
 use App\Controller\Admin\BaseTenantCrudController;
-use EasyCorp\Bundle\EasyAdminBundle\Field\{IdField, TextField, ImageField};
+use EasyCorp\Bundle\EasyAdminBundle\Field\{IdField, TextField, ImageField, CollectionField};
 
 class FeatureCrudController extends BaseTenantCrudController
 {
@@ -16,10 +17,11 @@ class FeatureCrudController extends BaseTenantCrudController
     public function configureFields(string $pageName): iterable
     {
         yield IdField::new('id')->onlyOnIndex();
-
         yield TextField::new('title', 'Titre');
-
-        // Si vous stockez juste le chemin d’une image (iconPath)
+        yield CollectionField::new('translations', 'Traductions')
+            ->setEntryType(FeatureTranslationType::class)
+            ->setFormTypeOption('by_reference', false)
+            ->onlyOnForms();
         yield ImageField::new('iconPath', 'Icône')
             ->setBasePath('assets/uploads/icons')
             ->setUploadDir('public/assets/uploads/icons')
