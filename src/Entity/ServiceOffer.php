@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\ServiceOfferRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\DBAL\Types\Types;
 
@@ -28,6 +30,23 @@ class ServiceOffer
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $photoService = null;
+
+    /**
+     * @var Collection<int, ServiceOfferTranslation>
+     */
+    #[ORM\OneToMany(
+    mappedBy: 'serviceOffer', 
+    targetEntity: ServiceOfferTranslation::class, 
+    cascade: ['persist', 'remove'], 
+    orphanRemoval: true,
+    fetch: 'EXTRA_LAZY'
+    )]
+    private Collection $translations;
+
+    public function __construct()
+    {
+        $this->translations = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -92,5 +111,53 @@ class ServiceOffer
         $this->photoService = $photoService;
 
         return $this;
+    }
+
+    /**
+     * @return Collection<int, ServiceOfferTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(ServiceOfferTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setServiceOffer($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(ServiceOfferTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            // set the owning side to null (unless already changed)
+            if ($translation->getServiceOffer() === $this) {
+                $translation->setServiceOffer(null);
+            }
+        }
+
+        return $this;
+    }
+
+
+    public function getTranslation(string $locale): ?ServiceOfferTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        return $this->translations->first() ?: null;
     }
 }
