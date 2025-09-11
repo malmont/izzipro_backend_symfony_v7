@@ -19,10 +19,15 @@ class GetPaymentsByOrderSourceUseCase
         $paymentDTOs = [];
 
         foreach ($payments as $payment) {
+
             $paymentMethod = $payment->getPaymentMethod();
-            $translation = $paymentMethod ? $paymentMethod->getTranslation($locale) : null;
-            $paymentMethodName = $translation ? $translation->getName() : ($paymentMethod ? $paymentMethod->getName() : 'N/A');
-            $statusName = $payment->getStatutPayment() ? $payment->getStatutPayment()->getName() : 'N/A';
+            $methodTranslation = $paymentMethod ? $paymentMethod->getTranslation($locale) : null;
+            $paymentMethodName = $methodTranslation ? $methodTranslation->getName() : ($paymentMethod ? $paymentMethod->getName() : 'N/A');
+
+            $statusPayment = $payment->getStatutPayment();
+            $statusTranslation = $statusPayment ? $statusPayment->getTranslation($locale) : null;
+            $statusName = $statusTranslation ? $statusTranslation->getName() : ($statusPayment ? $statusPayment->getName() : 'N/A');
+
 
             $paymentDTOs[] = new PaymentDTO(
                 $payment->getId(),
@@ -30,7 +35,7 @@ class GetPaymentsByOrderSourceUseCase
                 $payment->getPaymentDate()->format('Y-m-d H:i:s'),
                 $payment->getOrderPayment()->getReference(),
                 $paymentMethodName,
-                $statusName
+                $statusName 
             );
         }
 
