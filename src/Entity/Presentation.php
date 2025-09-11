@@ -37,9 +37,22 @@ class Presentation
     #[ORM\ManyToMany(targetEntity: PresentationGroup::class, mappedBy: 'presentations')]
     private Collection $presentationGroups;
 
+    /**
+     * @var Collection<int, PresentationTranslation>
+     */
+    #[ORM\OneToMany(
+    mappedBy: 'presentation', 
+    targetEntity: PresentationTranslation::class, 
+    cascade: ['persist', 'remove'], 
+    orphanRemoval: true,
+    fetch: 'EXTRA_LAZY'
+    )]
+    private Collection $translations;
+
     public function __construct()
     {
         $this->presentationGroups = new ArrayCollection();
+        $this->translations = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -137,5 +150,52 @@ class Presentation
     public function __toString(): string
     {
         return $this->titre ?? '';
+    }
+
+    /**
+     * @return Collection<int, PresentationTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(PresentationTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setPresentation($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(PresentationTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            // set the owning side to null (unless already changed)
+            if ($translation->getPresentation() === $this) {
+                $translation->setPresentation(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getTranslation(string $locale): ?PresentationTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        return $this->translations->first() ?: null;
     }
 }

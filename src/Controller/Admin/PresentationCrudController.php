@@ -9,6 +9,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\UrlField;
+use App\Form\PresentationTranslationType;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 
 class PresentationCrudController extends BaseTenantCrudController
 {
@@ -28,6 +30,10 @@ class PresentationCrudController extends BaseTenantCrudController
                 ->setUploadDir('public/assets/uploads/slider/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
+            CollectionField::new('translations', 'Traductions')
+                ->setEntryType(PresentationTranslationType::class)
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(),    
             TextField::new('texteBouton', 'Texte du bouton'),
             UrlField::new('lienBouton', 'Lien du bouton'),
         ];
