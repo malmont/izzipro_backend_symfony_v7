@@ -63,7 +63,14 @@ class EntrepriseService
         $dto->tvaIntracommunautaire = $entreprise->getTvaIntracommunautaire();
         $dto->adress = $entreprise->getAdress();
         $imagePath = $entreprise->getLogo();
-        $dto->logo = $imagePath ? $host . '/assets/uploads/email-logos/' . $imagePath : null;
+        if (empty($imagePath)) {
+            $dto->logo = null;
+        } elseif (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
+            $dto->logo = $imagePath; 
+        } else {
+            $cleanedHost = rtrim($host, '/');
+            $dto->logo = $cleanedHost . '/assets/uploads/email-logos/' . $imagePath;
+        }
         if ($translation) {
             $dto->conditionOfUse = $translation->getConditionOfUse();
             $dto->LegalNotice = $translation->getLegalNotice();

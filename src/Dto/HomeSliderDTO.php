@@ -41,16 +41,16 @@ class HomeSliderDTO
         $title = $homeSlider->getTitle();
         $description = $homeSlider->getDescription();
         $buttonMessage = $homeSlider->getButtonMessage();
-        // Pour les champs optionnels (image, buttonUrl)
-        // $buttonUrl = $translation ? $translation->getButtonUrl() : $homeSlider->getButtonUrl();
         $imagePath = $homeSlider->getImage();
         $buttonUrl = $homeSlider->getButtonUrl();
 
-
-        if ($imagePath) {
-            $image = str_starts_with($imagePath, 'http') ? $imagePath : rtrim($host, '/') . '/assets/uploads/slider/' . $imagePath;
+        if (empty($imagePath)) {
+            $image = null; 
+        } elseif (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
+            $image = $imagePath;
         } else {
-            $image = null;
+            $cleanedHost = rtrim($host, '/');
+            $image = $cleanedHost . '/assets/uploads/slider/' . $imagePath;
         }
 
         return new self(

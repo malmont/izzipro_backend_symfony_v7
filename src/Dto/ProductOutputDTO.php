@@ -27,16 +27,14 @@ class ProductOutputDTO
         $this->slug = $product->getSlug();
         $this->specifications = $product->getSpecifications();
         $imagePath = $product->getImage();
-        if ($imagePath) {
-            if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
-                $this->image = $imagePath;
-            } else {
-                $this->image = $host . '/assets/uploads/products/' . $imagePath;
-            }
-        } else {
+        if (empty($imagePath)) {
             $this->image = null;
+        } elseif (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
+            $this->image = $imagePath;
+        } else {
+            $cleanedHost = rtrim($host, '/');
+            $this->image = $cleanedHost . '/assets/uploads/products/' . $imagePath;
         }
-
         $this->categories = array_map(fn($category) => [
             'id' => $category->getId(),
             'name' => $category->getName(),

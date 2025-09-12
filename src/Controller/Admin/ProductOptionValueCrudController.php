@@ -8,7 +8,8 @@ use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
-use App\Controller\Admin\BaseTenantCrudController; 
+use App\Controller\Admin\BaseTenantCrudController;
+use App\Form\ProductOptionValueTranslationType; 
 
 class ProductOptionValueCrudController extends BaseTenantCrudController
 {
@@ -28,6 +29,10 @@ class ProductOptionValueCrudController extends BaseTenantCrudController
         return [
             IdField::new('id')->hideOnForm(),
             TextField::new('value', 'Valeur de l\'option'),
+            CollectionField::new('translations', 'Valeur par langue')
+                ->setEntryType(ProductOptionValueTranslationType::class) // <-- Il faudra créer ce FormType
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(),
             AssociationField::new('productOption', 'Type d\'option parent')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,

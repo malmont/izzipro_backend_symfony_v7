@@ -15,7 +15,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\FormField; // <-- Importation ajoutée
+use EasyCorp\Bundle\EasyAdminBundle\Field\FormField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
@@ -109,6 +109,19 @@ class ProductCrudController extends BaseTenantCrudController
             ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn(CommandeRepository $repo) => $repo->createQueryBuilder('cmd')->orderBy('cmd.date', 'DESC')])
             ->hideOnIndex()
             ->setColumns('col-md-6');
+
+       yield AssociationField::new('variants', 'Variantes de Produit')
+            ->formatValue(function ($value, $entity) {
+                $url = $this->adminUrlGenerator
+                    ->setController(\App\Controller\Admin\ProductVariantListController::class)
+                    ->setAction('index') 
+                    ->set('productId', $entity->getId())
+                    ->generateUrl();
+                $count = is_countable($value) ? count($value) : 0;
+
+                return sprintf('<a href="%s">Voir les variantes (%d)</a>', $url, $count);
+            })
+            ->renderAsHtml()->onlyOnIndex(); 
     }
 
     public function configureActions(Actions $actions): Actions

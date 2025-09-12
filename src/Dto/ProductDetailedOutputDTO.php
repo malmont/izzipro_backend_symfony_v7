@@ -40,14 +40,14 @@ class ProductDetailedOutputDTO
         $this->isfeatured = $product->isIsfeatured();
         $this->isspecialoffer = $product->isIsspecialoffer();
         $imagePath = $product->getImage();
-        if ($imagePath) {
-            if (filter_var($imagePath, FILTER_VALIDATE_URL)) {
-                $this->image = $imagePath;
-            } else {
-                $this->image = $host . '/assets/uploads/products/' . $imagePath;
-            }
-        } else {
+        
+        if (empty($imagePath)) {
             $this->image = null;
+        } elseif (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
+            $this->image = $imagePath;
+        } else {
+            $cleanedHost = rtrim($host, '/');
+            $this->image = $cleanedHost . '/assets/uploads/products/' . $imagePath;
         }
         $this->quantity = $product->getQuantity();
         $this->freezeQuantity = $product->getFreezeQuantity() ?? 0;
