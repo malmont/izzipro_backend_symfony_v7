@@ -32,34 +32,47 @@ class VideoApiController extends AbstractController
     #[Route('', name: 'api_video_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $cacheKey = 'videos_all';
-        $cacheTags = ['videos'];
+        $locale = $request->getLocale();
+        $cacheKey = 'videos_all_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/videos';
 
-        $videosDto = $this->cache->get(
+        $dtos = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($baseImageUrl) {
-                $videos = $this->getAllVideosUseCase->execute();
-                return array_map(fn($video) => new VideoOutputDto($video, $baseImageUrl), $videos);
-            },
-            3600,
-            $cacheTags
+            function (ItemInterface $item) use ($locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['videos_all']);
+
+                return $this->getAllVideosUseCase->execute($baseImageUrl, $locale);
+            }
         );
 
-        return $this->json($videosDto);
+        return $this->json($dtos);
     }
+
     #[Route('/{id}', name: 'api_video_get_one', methods: ['GET'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
-        $video = $this->getVideoByIdUseCase->execute($id);
+        $locale = $request->getLocale();
+        $cacheKey = 'video_' . $id . '_' . $locale;
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/videos';
 
-        if (!$video) {
+        $dto = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($id, $locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['videos_all', 'video_' . $id]);
+
+                return $this->getVideoByIdUseCase->execute($id, $baseImageUrl, $locale);
+            }
+        );
+
+        if (!$dto) {
             return $this->json(['message' => 'Vidéo non trouvée'], Response::HTTP_NOT_FOUND);
         }
         
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/videos';
-        return $this->json(new VideoOutputDto($video, $baseImageUrl));
+        return $this->json($dto);
     }
+
 
     #[Route('', name: 'api_video_create', methods: ['POST'])]
     public function create(#[MapRequestPayload] VideoInputDto $dto, Request $request): JsonResponse

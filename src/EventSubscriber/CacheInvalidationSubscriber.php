@@ -47,6 +47,13 @@ use App\Entity\Recherche;
 use App\Entity\ServiceOffer;
 use App\Entity\Video;
 use App\Entity\Contact;
+use App\Entity\StatusPayment;
+use App\Entity\StatusCommande;
+use App\Entity\Presentation;
+use App\Entity\PresentationGroup;
+use App\Entity\PaymentMethod;
+use App\Entity\OrderType;
+
 
 class CacheInvalidationSubscriber implements EventSubscriber
 {
@@ -68,15 +75,45 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'delete' => ['videos_all'],
             'invalidate_tags' => ['videos'],
         ],
-        [
+         [
             'classes' => [ServiceOffer::class],
-            'delete' => ['service_offers_all'],
-            'invalidate_tags' => ['service_offers'],
+            'delete' => [],
+            'invalidate_tags' => ['service_offers_all'],
+        ],
+         [
+            'classes' => [Recherche::class],
+            'delete' => [],
+            'invalidate_tags' => ['recherches_all'],
         ],
         [
-            'classes' => [Recherche::class],
-            'delete' => ['recherches_all'],
-            'invalidate_tags' => ['recherches'],
+            'classes' => [StatusPayment::class],
+            'delete' => [],
+            'invalidate_tags' => ['status_payments_all'],
+        ],
+        [
+            'classes' => [StatusCommande::class],
+            'delete' => [],
+            'invalidate_tags' => ['status_commandes_all'],
+        ],
+        [
+            'classes' => [Presentation::class],
+            'delete' => [],
+            'invalidate_tags' => ['presentations_all'],
+        ],
+        [
+            'classes' => [PresentationGroup::class],
+            'delete' => [],
+            'invalidate_tags' => ['presentation_groups_all'],
+        ],
+        [
+            'classes' => [PaymentMethod::class],
+            'delete' => [],
+            'invalidate_tags' => ['payment_methods_all'],
+        ],
+        [
+            'classes' => [OrderType::class],
+            'delete' => [],
+            'invalidate_tags' => ['order_types_all'],
         ],
         [
             'classes' => [Marque::class],
