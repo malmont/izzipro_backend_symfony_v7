@@ -1,7 +1,7 @@
 <?php
-
 namespace App\UseCase\SizesUseCase;
 
+use App\Dto\SizeDTO;
 use App\Services\SizesService\SizeService;
 
 class GetSizesUseCase
@@ -13,19 +13,15 @@ class GetSizesUseCase
         $this->sizeService = $sizeService;
     }
 
-    public function execute(): array
+    /**
+     * @return SizeDTO[]
+     */
+    public function execute(string $locale): array
     {
         $sizes = $this->sizeService->getAllSizes();
-
-        // Convertir les objets Size en tableau
-        $sizesArray = [];
-        foreach ($sizes as $size) {
-            $sizesArray[] = [
-                'id' => $size->getId(),
-                'name' => $size->getName(),
-            ];
-        }
-
-        return $sizesArray;
+        return array_map(
+            fn($size) => SizeDTO::fromEntity($size, $locale),
+            $sizes
+        );
     }
 }

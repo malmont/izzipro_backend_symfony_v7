@@ -1,10 +1,10 @@
 <?php
-
 namespace App\Controller\SizesController;
 
 use App\UseCase\SizesUseCase\GetSizesUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request; // On importe Request
 use Symfony\Component\Routing\Annotation\Route;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -21,18 +21,20 @@ class SizeController extends AbstractController
     }
 
     #[Route('/api/sizes', name: 'get_sizes', methods: ['GET'])]
-    public function getSizes(): JsonResponse
+    public function getSizes(Request $request): JsonResponse
     {
-        $cacheKey = 'sizes_all';
+        $locale = $request->getLocale();
+        $cacheKey = 'sizes_all_' . $locale;
 
-        $sizesArray = $this->cache->get(
+        $sizesDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) {
-                $item->expiresAfter(3600); // 1 heure
-                return $this->getSizesUseCase->execute();
-            },
+            function (ItemInterface $item) use ($locale) {
+                $item->expiresAfter(3600);
+                $item->tag(['sizes_all']);
+                return $this->getSizesUseCase->execute($locale);
+            }
         );
 
-        return new JsonResponse($sizesArray, JsonResponse::HTTP_OK);
+        return $this->json($sizesDto);
     }
 }

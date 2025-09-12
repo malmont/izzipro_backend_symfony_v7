@@ -1,19 +1,28 @@
 <?php
 namespace App\Dto;
 
+use App\Entity\Size;
+
 class SizeDTO
 {
-    public string $name;
+    public int $id;
+    public ?string $code;
+    public ?string $name;
 
-    public function __construct(string $name)
-    {
-        $this->name = $name;
-    }
+    private function __construct() {}
 
-    public static function fromEntity($size): self
+    public static function fromEntity(Size $size, string $locale): self
     {
-        return new self(
-            $size->getName()
-        );
+        $dto = new self();
+        
+        // --- Logique "en attente" ---
+        // $translation = $size->getTranslation($locale);
+        // TODO: Après la migration, on branchera cette logique.
+
+        $dto->id   = $size->getId();
+        $dto->code = $size->getCode();
+        $dto->name = $size->getName();
+        
+        return $dto;
     }
 }

@@ -3,41 +3,12 @@
 namespace App\Repository;
 
 use App\Entity\PresentationGroupTranslation;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityRepository;
 
 /**
  * @extends ServiceEntityRepository<PresentationGroupTranslation>
  */
-class PresentationGroupTranslationRepository extends ServiceEntityRepository
+class PresentationGroupTranslationRepository extends EntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, PresentationGroupTranslation::class);
-    }
-
-    //    /**
-    //     * @return PresentationGroupTranslation[] Returns an array of PresentationGroupTranslation objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('p')
-    //            ->andWhere('p.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('p.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
-
-    //    public function findOneBySomeField($value): ?PresentationGroupTranslation
-    //    {
-    //        return $this->createQueryBuilder('p')
-    //            ->andWhere('p.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+  
 }
