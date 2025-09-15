@@ -14,8 +14,8 @@ class GetProductByIdUseCase
         $this->productService = $productService;
     }
 
-    public function execute(int $productId, string $host): ProductDetailedOutputDTO
+    public function execute(int $id, string $host, string $locale = 'fr'): ProductDetailedOutputDTO
     {
-        return $this->productService->getProductById($productId, $host);
+        return $this->productService->getProductById($id, $host, $locale); // <-- Passer $locale
     }
 }

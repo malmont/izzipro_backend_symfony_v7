@@ -1,8 +1,8 @@
 <?php
-
 namespace App\UseCase\ProductUseCase;
 
 use App\Services\ProductService\ProductService;
+use App\Dto\ProductDetailedOutputDTO;
 
 class GetAllProductsUseCase
 {
@@ -13,8 +13,8 @@ class GetAllProductsUseCase
         $this->productService = $productService;
     }
 
-    public function execute(string $host): array
+    public function execute(string $host, string $locale = 'fr'): array
     {
-        return $this->productService->getAllProducts($host);
+        return $this->productService->getAllProducts($host, $locale);
     }
 }

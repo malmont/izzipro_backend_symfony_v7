@@ -13,8 +13,8 @@ class GetLandingPageProductsUseCase
         $this->productService = $productService;
     }
 
-    public function execute(string $host): array
+    public function execute(string $host, string $locale = 'fr'): array
     {
-        return $this->productService->getLandingPageProducts($host);
+        return $this->productService->getLandingPageProducts($host, $locale);
     }
 }

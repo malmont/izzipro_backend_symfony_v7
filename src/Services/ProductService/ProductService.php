@@ -78,7 +78,7 @@ class ProductService
         $em->flush();
     }
 
-    public function getProductById(int $id, string $host): ProductDetailedOutputDTO
+    public function getProductById(int $id, string $host, string $locale = 'fr'): ProductDetailedOutputDTO
     {
         $em = $this->emProvider->getEntityManager();
         $productRepo = $em->getRepository(Product::class);
@@ -88,12 +88,11 @@ class ProductService
         if (!$product) {
             throw new NotFoundHttpException('Product not found for ID: ' . $id);
         }
-
-        return new ProductDetailedOutputDTO($product, $host);
+        return new ProductDetailedOutputDTO($product, $host, $locale);
     }
 
 
-    public function getAllProducts(string $host): array
+    public function getAllProducts(string $host, string $locale = 'fr'): array
     {
         $em = $this->emProvider->getEntityManager();
         $productRepo = $em->getRepository(Product::class);
@@ -103,13 +102,13 @@ class ProductService
         $specialOffers = $productRepo->findBy(['isspecialoffer' => true, 'isWeb' => true]);
 
         return [
-            'bestsellers' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host), $bestsellers),
-            'newArrivals' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host), $newArrivals),
-            'specialOffers' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host), $specialOffers),
+            'bestsellers' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale), $bestsellers),
+            'newArrivals' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale), $newArrivals),
+            'specialOffers' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale), $specialOffers),
         ];
     }
 
-    public function getProductsByOffer(string $offer, string $host): array
+    public function getProductsByOffer(string $offer, string $host, string $locale = 'fr'): array
     {
         $em = $this->emProvider->getEntityManager();
         
@@ -136,16 +135,16 @@ class ProductService
 
         $products = $em->getRepository(Product::class)->findBy($criteria);
 
-        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $products);
+        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale), $products);
     }
 
-    public function getLandingPageProducts(string $host): array
+    public function getLandingPageProducts(string $host, string $locale = 'fr'): array
     {
         $em = $this->emProvider->getEntityManager();
         
         $products = $em->getRepository(Product::class)->findBy([
             'isLandingPage' => true,
         ]);
-    return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $products);
+    return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale), $products);
     }
 }

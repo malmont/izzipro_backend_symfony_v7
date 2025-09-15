@@ -106,17 +106,18 @@ class ProductController extends AbstractController
     public function getAllProducts(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $cacheKey = 'all_products';
+        $locale = $request->getLocale();
+        $cacheKey = 'all_products_' . $locale;
 
         $products = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($host) {
+            function (ItemInterface $item) use ($host, $locale) {
                 $item->expiresAfter(300);
-                $item->tag(['products_all']);
-                return $this->getAllProductsUseCase->execute($host);
+                $item->tag(['products_all', 'locale_' . $locale]);
+                return $this->getAllProductsUseCase->execute($host, $locale);
             },
             /* ttl */ 300,
-            /* extraTags */ ['products_all']
+            /* extraTags */ ['products_all', 'locale_' . $locale]
         );
 
         return $this->json($products, JsonResponse::HTTP_OK);
@@ -126,27 +127,29 @@ class ProductController extends AbstractController
     public function getProductsByOffer(string $offer, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $cacheKey = 'products_by_offer_' . $offer;
+        $locale = $request->getLocale();
+        $cacheKey = 'products_by_offer_' . $offer . '_' . $locale;
 
         $products = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($offer, $host) {
+            function (ItemInterface $item) use ($offer, $host, $locale) {
                 $item->expiresAfter(300);
-                $item->tag(['products_by_offer']);
-                return $this->getProductsByOfferUseCase->execute($offer, $host);
+                $item->tag(['products_by_offer', 'locale_' . $locale]);
+                return $this->getProductsByOfferUseCase->execute($offer, $host, $locale);
             },
             /* ttl */ 300,
-            /* extraTags */ ['products_by_offer']
+            /* extraTags */ ['products_by_offer', 'locale_' . $locale]
         );
 
         return $this->json($products, JsonResponse::HTTP_OK);
     }
 
-    #[Route('/api/landingpage', name: 'get_landing_page_products', methods: ['GET'])]
+   #[Route('/api/landingpage', name: 'get_landing_page_products', methods: ['GET'])]
     public function getLandingPageProducts(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $products = $this->getLandingPageProductsUseCase->execute($host);
+        $locale = $request->getLocale();
+        $products = $this->getLandingPageProductsUseCase->execute($host, $locale); 
 
         return $this->json($products, JsonResponse::HTTP_OK);
     }
@@ -156,7 +159,8 @@ class ProductController extends AbstractController
     {
         try {
             $host = $request->getSchemeAndHttpHost();
-            $product = $this->getProductByIdUseCase->execute($id, $host);
+            $locale = $request->getLocale(); 
+            $product = $this->getProductByIdUseCase->execute($id, $host, $locale); 
             return $this->json($product, JsonResponse::HTTP_OK);
         } catch (\Exception $e) {
             return $this->json(['error' => $e->getMessage()], JsonResponse::HTTP_NOT_FOUND);

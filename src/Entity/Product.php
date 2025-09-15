@@ -22,10 +22,10 @@ class Product
     #[ORM\Column(length: 255)]
     private ?string $name = null;
 
-    #[ORM\Column(type: Types::TEXT)]
+    #[ORM\Column(type: Types::TEXT, nullable: true)] 
     private ?string $description = null;
 
-    #[ORM\Column(type: Types::TEXT)]
+    #[ORM\Column(type: Types::TEXT, nullable: true)] 
     private ?string $moreinformations =  '';
 
     #[ORM\Column]
@@ -43,7 +43,7 @@ class Product
     #[ORM\Column(nullable: true)]
     private ?bool $isspecialoffer = false;
 
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(length: 255, nullable: true)] 
     private ?string $image = null;
 
     #[ORM\ManyToMany(targetEntity: Categories::class, inversedBy: 'products')]
@@ -113,6 +113,18 @@ class Product
     #[ORM\Column(nullable: true)]
     private ?array $specifications = null;
 
+    /**
+     * @var Collection<int, ProductTranslation>
+     */
+    #[ORM\OneToMany(
+        mappedBy: 'product',
+        targetEntity: ProductTranslation::class,
+        cascade: ['persist', 'remove'],
+        orphanRemoval: true,
+        fetch: 'EXTRA_LAZY'
+    )]
+    private Collection $translations;
+
     public function __construct()
     {
         $this->category = new ArrayCollection();
@@ -120,7 +132,8 @@ class Product
         $this->reviewsProducts = new ArrayCollection();
         $this->createdAt = new DateTimeImmutable();
         $this->variants = new ArrayCollection();
-        $this->updateQuantity(); 
+        $this->updateQuantity();
+        $this->translations = new ArrayCollection(); 
     }
 
     public function getId(): ?int
@@ -145,7 +158,7 @@ class Product
         return $this->description;
     }
 
-    public function setDescription(string $description): self
+    public function setDescription(?string $description): self
     {
         $this->description = $description;
 
@@ -251,7 +264,7 @@ class Product
         return $this->image;
     }
 
-    public function setImage(string $image): self
+    public function setImage(?string $image): self
     {
         $this->image = $image;
 
@@ -589,6 +602,61 @@ class Product
         $this->specifications = $specifications;
 
         return $this;
+    }
+
+    /**
+     * @return Collection<int, ProductTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(ProductTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setProduct($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(ProductTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            // set the owning side to null (unless already changed)
+            if ($translation->getProduct() === $this) {
+                $translation->setProduct(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getTranslation(string $locale = 'fr', bool $createIfNotFound = false): ?ProductTranslation
+    {
+        /** @var ProductTranslation $translation */
+        foreach ($this->translations as $translation) {
+            if ($translation->getLocale() === $locale) {
+                return $translation;
+            }
+        }
+        foreach ($this->translations as $translation) {
+            if ($translation->getLocale() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        if ($createIfNotFound) {
+            $newTranslation = new ProductTranslation();
+            $newTranslation->setLocale($locale);
+            $newTranslation->setProduct($this);
+            $this->addTranslation($newTranslation);
+            return $newTranslation;
+        }
+
+        return $this->translations->first() ?: null;
     }
 
 }

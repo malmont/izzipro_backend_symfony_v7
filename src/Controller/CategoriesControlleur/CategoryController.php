@@ -53,7 +53,8 @@ class CategoryController extends AbstractController
             $categoryIds = json_decode($categoryIds, true);
         }
 
-        // Construit une clé de cache dynamique en hachant les paramètres
+        $locale = $request->getLocale();
+
         $cacheKey = 'products_by_category_' . md5(json_encode([
             'categories' => $categoryIds,
             'keyword'    => $keyword,
@@ -62,13 +63,14 @@ class CategoryController extends AbstractController
             'barcode'    => $barcode,
             'isWeb'      => $isWeb,
             'isPos'      => $isPos,
+            'locale'     => $locale,
         ]));
         $host = $request->getSchemeAndHttpHost();
         $productsDTOArray = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos, $host) {
-                $item->expiresAfter(300); // 5 minutes
-                $item->tag(['products_by_category']);
+            function (ItemInterface $item) use ($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos, $host, $locale) {
+                $item->expiresAfter(300); 
+                $item->tag(['products_by_category', 'locale_' . $locale]); 
                 $products = $this->getProductsByCategoryUseCase->execute(
                     $categoryIds,
                     $keyword,
@@ -76,16 +78,17 @@ class CategoryController extends AbstractController
                     $pageSize,
                     $barcode,
                     $isWeb,
-                    $isPos
+                    $isPos,
+                    $locale
                 );
-                return array_map(function ($product) use ($host) {
-                    $dto = new ProductOutputCategoryDto($product, $host);
+                return array_map(function ($product) use ($host, $locale) {
+                    $dto = new ProductOutputCategoryDto($product, $host, $locale);
                     return $dto;
                 }, $products);
             },
         );
 
-        $totalProducts = $this->countProductsByCategoryUseCase->execute($categoryIds);
+        $totalProducts = $this->countProductsByCategoryUseCase->execute($categoryIds, $locale);
 
         return new JsonResponse([
             'meta' => [
@@ -107,7 +110,9 @@ class CategoryController extends AbstractController
         $categoriesArray = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($host, $locale) {
-                // ...
+                $item->expiresAfter(3600);
+                $item->tag(['categories_all', 'locale_' . $locale]);
+
                 $em = $this->emProvider->getEntityManager();
                 $categories = $em->getRepository(Categories::class)->findAll();
                 return array_map(

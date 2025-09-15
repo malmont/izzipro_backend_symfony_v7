@@ -3,7 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\ProductShipping;
-use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
+use Doctrine\ORM\EntityRepository;
 
 /**
  * N'est plus un service Symfony.
@@ -11,8 +11,5 @@ use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de bas
  */
 class ProductShippingRepository extends EntityRepository
 {
-    /**
-     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
-     */
-    // public function __construct(ManagerRegistry $registry) { ... }
+
 }

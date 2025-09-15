@@ -26,6 +26,9 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use Symfony\Component\HttpFoundation\RedirectResponse;
+use App\Entity\ProductTranslation;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
+use App\Form\ProductTranslationType;
 
 class ProductCrudController extends BaseTenantCrudController
 {
@@ -46,18 +49,22 @@ class ProductCrudController extends BaseTenantCrudController
 
     public function configureFields(string $pageName): iterable
     {
-        // ✅ Utilisation des onglets pour organiser le formulaire
         yield FormField::addTab('Informations Générales');
         yield FormField::addPanel('Détails du Produit');
 
         yield IdField::new('id')->hideOnForm();
         yield TextField::new('name', 'Nom du produit');
         yield SlugField::new('slug')->setTargetFieldName('name')->hideOnIndex();
-        yield TextEditorField::new('description')->setColumns('col-md-12');
-        yield TextEditorField::new('moreinformations', 'Informations supplémentaires')->hideOnIndex()->setColumns('col-md-12');
-
+        yield TextEditorField::new('description')->setColumns('col-md-12')->setRequired(false); 
+        yield TextEditorField::new('moreinformations', 'Informations supplémentaires')->hideOnIndex()->setColumns('col-md-12')->setRequired(false);
+        yield CollectionField::new('translations', 'Traductions')
+        ->setEntryType(ProductTranslationType::class)
+        ->setFormTypeOptions([
+            'by_reference' => false, 
+        ])
+        ->renderExpanded()
+        ->setColumns('col-12');
         yield FormField::addPanel('Informations Commerciales');
-        // ✅ Utilisation des colonnes pour un layout plus compact
         yield MoneyField::new('purchasePrice', "Prix d'achat")->setCurrency('USD')->setColumns('col-md-4');
         yield NumberField::new('coefficientMultiplier', 'Coefficient')->setColumns('col-md-4');
         yield TextField::new('barcode', 'Code Barre')->setColumns('col-md-4');
@@ -122,6 +129,8 @@ class ProductCrudController extends BaseTenantCrudController
                 return sprintf('<a href="%s">Voir les variantes (%d)</a>', $url, $count);
             })
             ->renderAsHtml()->onlyOnIndex(); 
+
+           
     }
 
     public function configureActions(Actions $actions): Actions
