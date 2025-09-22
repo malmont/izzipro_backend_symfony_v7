@@ -14,8 +14,7 @@ class GetAllVideosUseCase
      */
     public function execute(string $baseImageUrl, string $locale): array 
     { 
-        $videos = $this->videoService->getAllVideos();
-        
+        $videos = $this->videoService->getAllVideosByLocale($locale);
         return array_map(
             fn($video) => new VideoOutputDto($video, $baseImageUrl, $locale),
             $videos

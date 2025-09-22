@@ -4,7 +4,6 @@ namespace App\UseCase\ColorUseCase;
 use App\Services\ColorService\ColorService;
 use App\Dto\ColorOutputDTO;
 
-
 class GetAllColorsUseCase
 {
     private ColorService $colorService;
@@ -14,10 +13,9 @@ class GetAllColorsUseCase
         $this->colorService = $colorService;
     }
 
-
     public function execute(string $locale): array
     {
-        $colors = $this->colorService->getAllColors();
+        $colors = $this->colorService->getAllColorsByLocale($locale);
         
         return array_map(
             fn($color) => new ColorOutputDTO($color, $locale),

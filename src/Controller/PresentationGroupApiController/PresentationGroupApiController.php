@@ -23,7 +23,7 @@ class PresentationGroupApiController extends AbstractController
     #[Route('', name: 'api_presentation_group_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr'); 
         $cacheKey = 'presentation_groups_all_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 
@@ -42,8 +42,8 @@ class PresentationGroupApiController extends AbstractController
 
     #[Route('/{id}', name: 'api_presentation_group_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id, Request $request): JsonResponse
-    {
-        $locale = $request->getLocale();
+        {
+        $locale = $request->query->get('locale', 'fr'); 
         $cacheKey = 'presentation_group_' . $id . '_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 

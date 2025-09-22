@@ -13,7 +13,7 @@ class GetAllPresentationGroupsUseCase
      */
     public function execute(string $baseImageUrl, string $locale): array
     {
-        $entities = $this->service->findAll();
+        $entities = $this->service->findAllByLocale($locale);
         
         return array_map(
             fn($entity) => new PresentationGroupOutputDto($entity, $baseImageUrl, $locale),

@@ -53,7 +53,7 @@ class CategoryController extends AbstractController
             $categoryIds = json_decode($categoryIds, true);
         }
 
-        $locale = $request->getLocale();
+        $locale = $request->get('locale', 'fr');
 
         $cacheKey = 'products_by_category_' . md5(json_encode([
             'categories' => $categoryIds,
@@ -72,6 +72,7 @@ class CategoryController extends AbstractController
                 $item->expiresAfter(300); 
                 $item->tag(['products_by_category', 'locale_' . $locale]); 
                 $products = $this->getProductsByCategoryUseCase->execute(
+                    $locale,
                     $categoryIds,
                     $keyword,
                     $page,
@@ -79,7 +80,7 @@ class CategoryController extends AbstractController
                     $barcode,
                     $isWeb,
                     $isPos,
-                    $locale
+                    
                 );
                 return array_map(function ($product) use ($host, $locale) {
                     $dto = new ProductOutputCategoryDto($product, $host, $locale);
@@ -88,8 +89,7 @@ class CategoryController extends AbstractController
             },
         );
 
-        $totalProducts = $this->countProductsByCategoryUseCase->execute($categoryIds, $locale);
-
+        $totalProducts = $this->countProductsByCategoryUseCase->execute($locale, $categoryIds);
         return new JsonResponse([
             'meta' => [
                 'total' => $totalProducts,
@@ -103,7 +103,7 @@ class CategoryController extends AbstractController
     #[Route('/api/category', name: 'get_categories', methods: ['GET'])]
     public function getCategories(Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = $request->get('locale', 'fr');
         $cacheKey = 'categories_all_' . $locale;
         $host = $request->getSchemeAndHttpHost();
 

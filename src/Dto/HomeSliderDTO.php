@@ -31,35 +31,27 @@ class HomeSliderDTO
         $this->isDiplayed = $isDiplayed;
     }
 
-    public static function fromEntity(HomeSlider $homeSlider, string $host, string $locale): self
+   public static function fromEntity(HomeSlider $homeSlider, string $host, string $locale): self
     {
-        // --- Logique "en attente" ---
-        // $translation = $homeSlider->getTranslation($locale);
-        // TODO: Après la migration, on branchera la logique de traduction ici.
+        $translation = $homeSlider->getTranslation($locale);
 
-        // --- Logique actuelle ---
-        $title = $homeSlider->getTitle();
-        $description = $homeSlider->getDescription();
-        $buttonMessage = $homeSlider->getButtonMessage();
         $imagePath = $homeSlider->getImage();
-        $buttonUrl = $homeSlider->getButtonUrl();
-
-        if (empty($imagePath)) {
-            $image = null; 
-        } elseif (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
+        if (str_starts_with((string)$imagePath, 'http')) {
             $image = $imagePath;
-        } else {
+        } else if ($imagePath) {
             $cleanedHost = rtrim($host, '/');
             $image = $cleanedHost . '/assets/uploads/slider/' . $imagePath;
+        } else {
+            $image = null;
         }
 
         return new self(
             $homeSlider->getId(),
-            $title,
+            $translation?->getTitle() ?? $homeSlider->getTitle(),
             $image,
-            $description,
-            $buttonMessage,
-            $buttonUrl,
+            $translation?->getDescription() ?? $homeSlider->getDescription(),
+            $translation?->getButtonMessage() ?? $homeSlider->getButtonMessage(),
+            $homeSlider->getButtonUrl(),
             $homeSlider->isIsDiplayed(),
         );
     }

@@ -10,12 +10,10 @@ class GetBaniereStatiqueByIdUseCase
 
     public function execute(int $id, string $locale, string $baseImageUrl): ?BaniereStatiqueOutputDto
     {
-        $entity = $this->service->findById($id);
-
+        $entity = $this->service->findByIdAndLocale($id, $locale);
         if (!$entity) {
             return null;
         }
-
         return new BaniereStatiqueOutputDto($entity, $baseImageUrl, $locale);
     }
 }

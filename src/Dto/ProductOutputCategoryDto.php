@@ -100,7 +100,7 @@ class ProductOutputCategoryDto
                 'id' => $variant->getId(),
                 'color' => $color ? [
                     'id'       => $color->getId(),
-                    'name'     => $color->getTranslation($locale)?->getName(),
+                    'name' => $color->getTranslation($locale)?->getName() ?? $color->getName(),
                     'codeHexa' => $color->getCodeHexa(),
                 ] : null,
                 'size' => $size ? [

@@ -2,7 +2,6 @@
 namespace App\UseCase\PresentationUseCase;
 
 use App\Dto\PresentationOutputDto;
-use App\Entity\Presentation;
 use App\Services\PresentationService\PresentationService;
 
 class GetPresentationByIdUseCase
@@ -11,7 +10,7 @@ class GetPresentationByIdUseCase
 
     public function execute(int $id, string $baseImageUrl, string $locale): ?PresentationOutputDto
     {
-        $entity = $this->service->findById($id);
+        $entity = $this->service->findByIdAndLocale($id, $locale);
 
         if (!$entity) {
             return null;

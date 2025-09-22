@@ -7,12 +7,26 @@ use App\Services\TenantEntityManagerProvider;
 
 class BaniereStatiqueService
 {
-    public function __construct(private TenantEntityManagerProvider $emProvider) {}
+    public function __construct(private TenantEntityManagerProvider $emProvider) {
+
+        $tenantEm = $this->emProvider->getEntityManager();
+        $this->repository = $tenantEm->getRepository(BaniereStatique::class);
+    }
 
     public function findAll(): array
     {
-        $tenantEm = $this->emProvider->getEntityManager();
+        return $this->repository->findAll();
         return $tenantEm->getRepository(BaniereStatique::class)->findAll();
+    }
+
+    public function findAllByLocale(string $locale): array
+    {
+        return $this->repository->findAllByLocale($locale);
+    }
+
+    public function findByIdAndLocale(int $id, string $locale): ?BaniereStatique
+    {
+        return $this->repository->findByIdAndLocale($id, $locale);
     }
 
     public function findById(int $id): ?BaniereStatique

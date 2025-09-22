@@ -12,11 +12,10 @@ class EmploiOutputDto
 
     public function __construct(Emploi $emploi, string $locale)
     {
-        // $translation = $emploi->getTranslation($locale);
-        // TODO: Après la migration, on "branchera" la logique de traduction ici.
+        $translation = $emploi->getTranslation($locale);
         $this->id = $emploi->getId();
-        $this->titre = $emploi->getTitre();
-        $this->description = $emploi->getDescription();
+        $this->titre = $translation?->getTitre() ?? $emploi->getTitre();
+        $this->description = $translation?->getDescription() ?? $emploi->getDescription();
         $this->nombreCandidatures = $emploi->getCandidatures()->count();
     }
 }

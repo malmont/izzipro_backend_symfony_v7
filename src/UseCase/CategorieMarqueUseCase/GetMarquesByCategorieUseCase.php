@@ -16,7 +16,7 @@ class GetMarquesByCategorieUseCase
      */
     public function execute(int $id, string $locale, string $baseImageUrl): ?array 
     {
-        $categorie = $this->categorieMarqueService->findCategorieMarque($id);
+        $categorie = $this->categorieMarqueService->findCategorieMarque($id, $locale);
 
         if (!$categorie) {
             return null;

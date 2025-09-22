@@ -33,7 +33,7 @@ class CategorieMarqueApiController extends AbstractController
    #[Route('', name: 'api_categorie_marque_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = $request->get('locale', 'fr');
         $cacheKey = 'categories_marque_all_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost(); 
 
@@ -52,7 +52,7 @@ class CategorieMarqueApiController extends AbstractController
     #[Route('/{id}/marques', name: 'api_categorie_marque_get_marques', methods: ['GET'])]
     public function getMarquesForCategory(int $id, Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = $request->get('locale', 'fr');
         $cacheKey = 'categorie_marque_' . $id . '_marques_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos'; 
         $marquesDto = $this->cache->get(

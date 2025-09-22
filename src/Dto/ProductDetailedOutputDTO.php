@@ -76,12 +76,12 @@ class ProductDetailedOutputDTO
                 'id' => $variant->getId(),
                 'color' => $color ? [
                     'id'       => $color->getId(),
-                    'name'     => $color->getTranslation($locale)?->getName(),
+                    'name'     => $color->getTranslation($locale)?->getName() ?? $color->getName(),
                     'codeHexa' => $color->getCodeHexa(),
                 ] : null,
                 'size' => $size ? [
                     'id'   => $size->getId(),
-                    'name' => $size->getTranslation($locale)?->getName(),
+                    'name' => $size->getTranslation($locale)?->getName() ?? $size->getName(),
                 ] : null,
                 'stockQuantity' => $variant->getStockQuantity(),
             ];
@@ -92,8 +92,8 @@ class ProductDetailedOutputDTO
             $this->category = array_map(function (Categories $category) use ($locale) {
                 return [
                     'id'          => $category->getId(),
-                    'name'        => $category->getTranslation($locale)?->getName(),
-                    'description' => $category->getTranslation($locale)?->getDescription(),
+                    'name'        => $translation?->getName() ?? $category->getName(),
+                    'description' => $translation?->getDescription() ?? $category->getDescription(),
                     'image'       => $category->getImage(),
                 ];
             }, $categoriesCollection->toArray());

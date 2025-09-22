@@ -12,8 +12,8 @@ class GetCategoriesUseCase
         $this->categoryService = $categoryService;
     }
 
-    public function execute(): array
+    public function execute(string $locale): array
     {
-        return $this->categoryService->getAllCategories();
+        return $this->categoryService->getAllCategories($locale);
     }
 }

@@ -16,7 +16,7 @@ class GetAllCarriersUseCase
 
     public function execute(string $host, string $locale): array
     {
-        $carriers = $this->carrierService->getAllCarriers();
+        $carriers = $this->carrierService->getAllCarriers($locale);
         return array_map(
             fn($carrier) => CarrierDTO::fromEntity($carrier, $host, $locale), 
             $carriers

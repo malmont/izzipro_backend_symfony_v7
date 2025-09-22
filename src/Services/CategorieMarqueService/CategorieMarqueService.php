@@ -14,17 +14,17 @@ class CategorieMarqueService
         $this->emProvider = $emProvider;
     }
 
-    public function getAllCategoriesMarque(): array
+    public function getAllCategoriesMarque(string $locale): array
     {
         $tenantEm = $this->emProvider->getEntityManager();
         $repository = $tenantEm->getRepository(CategorieMarque::class);
-        return $repository->findAllWithMarques();
+        return $repository->findAllByLocale($locale);
     }
 
-    public function findCategorieMarque(int $id): ?CategorieMarque
+    public function findCategorieMarque(int $id, string $locale): ?CategorieMarque
     {
         $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(CategorieMarque::class)->find($id);
+        return $tenantEm->getRepository(CategorieMarque::class)->findByIdAndLocale($id,$locale);
     }
 
     public function createCategorieMarque(CategorieMarqueInputDto $dto): CategorieMarque

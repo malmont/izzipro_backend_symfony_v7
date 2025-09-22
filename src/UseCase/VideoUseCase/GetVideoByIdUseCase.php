@@ -13,12 +13,10 @@ class GetVideoByIdUseCase
 
     public function execute(int $id, string $baseImageUrl, string $locale): ?VideoOutputDto
     {
-        $video = $this->videoService->findVideo($id);
-
+        $video = $this->videoService->findVideoByIdAndLocale($id, $locale);
         if (!$video) {
             return null;
         }
-
         return new VideoOutputDto($video, $baseImageUrl, $locale);
     }
 }

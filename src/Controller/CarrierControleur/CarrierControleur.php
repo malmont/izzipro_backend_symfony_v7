@@ -25,7 +25,7 @@ class CarrierControleur extends AbstractController
     public function getCarrier(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $locale = $request->getLocale();
+        $locale = $request->get('locale', 'fr');
         $cacheKey = 'carriers_' . $locale;
 
         $carriers = $this->cache->get(

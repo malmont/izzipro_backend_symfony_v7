@@ -11,12 +11,10 @@ class GetPresentationGroupByIdUseCase
 
     public function execute(int $id, string $baseImageUrl, string $locale): ?PresentationGroupOutputDto
     {
-        $entity = $this->service->findById($id);
-
+        $entity = $this->service->findByIdAndLocale($id, $locale);
         if (!$entity) {
             return null;
         }
-
         return new PresentationGroupOutputDto($entity, $baseImageUrl, $locale);
     }
 }

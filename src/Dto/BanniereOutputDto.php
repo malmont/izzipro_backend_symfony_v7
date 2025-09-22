@@ -14,8 +14,8 @@ class BanniereOutputDto
     {
         $translation = $banniere->getTranslation($locale);
         $this->id = $banniere->getId();
-        $this->titre = $banniere->getTitre();
-        $this->texte = $banniere->getTexte();
+        $this->titre = $translation?->getTitre() ?? $banniere->getTitre();
+        $this->texte = $translation?->getTexte() ?? $banniere->getTexte();
         $this->imageDeFondUrl = $banniere->getImageDeFond()
             ? rtrim($baseImageUrl, '/') . '/' . $banniere->getImageDeFond()
             : null;

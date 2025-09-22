@@ -2,18 +2,21 @@
 namespace App\Services\FeatureService;
 
 use App\Entity\Feature;
+use App\Repository\FeatureRepository;
 use App\Services\TenantEntityManagerProvider;
 
 class FeatureService
 {
-    public function __construct(private TenantEntityManagerProvider $emProvider) {}
+    private FeatureRepository $repository;
 
-    /**
-     * @return Feature[]
-     */
-    public function getAllFeatures(): array
+    public function __construct(private TenantEntityManagerProvider $emProvider) 
     {
         $em = $this->emProvider->getEntityManager();
-        return $em->getRepository(Feature::class)->findAll();
+        $this->repository = $em->getRepository(Feature::class);
+    }
+
+    public function getAllFeaturesByLocale(string $locale): array
+    {
+        return $this->repository->findAllByLocale($locale);
     }
 }

@@ -11,6 +11,8 @@ class EmploiService
 
     public function __construct(TenantEntityManagerProvider $emProvider)
     {
+        $em = $emProvider->getEntityManager();
+        $this->repository = $em->getRepository(Emploi::class);
         $this->emProvider = $emProvider;
     }
 
@@ -18,6 +20,10 @@ class EmploiService
     {
         $tenantEm = $this->emProvider->getEntityManager();
         return $tenantEm->getRepository(Emploi::class)->findAll();
+    }
+    public function getAllEmploisByLocale(string $locale): array
+    {
+        return $this->repository->findAllByLocale($locale);
     }
 
     public function findEmploi(int $id): ?Emploi

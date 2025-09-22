@@ -22,6 +22,7 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Psr\Log\LoggerInterface;
+use App\Services\EmailConfigurationService\EmailConfigurationService;
 
 class RegistrationController extends AbstractController
 {
@@ -31,6 +32,7 @@ class RegistrationController extends AbstractController
     private HttpClientInterface $client;
     private TenantConnectionManager $tenantManager;
     private GemsuiteClientManager $gemsuiteClientManager;
+    private EmailConfigurationService $emailConfigurationService;
 
 
     public function __construct(
@@ -39,7 +41,8 @@ class RegistrationController extends AbstractController
         HttpClientInterface $client,
         TenantConnectionManager $tenantManager,
         LoggerInterface $logger,
-        GemsuiteClientManager $gemsuiteClientManager
+        GemsuiteClientManager $gemsuiteClientManager,
+        EmailConfigurationService $emailConfigurationService
     ) {
         $this->emailVerifier = $emailVerifier;
         $this->tenantEmProvider = $tenantEmProvider;
@@ -47,6 +50,7 @@ class RegistrationController extends AbstractController
         $this->tenantManager = $tenantManager;
         $this->gemsuiteClientManager = $gemsuiteClientManager;
         $this->logger = $logger;
+        $this->emailConfigurationService = $emailConfigurationService;
     }
 
     #[Route('/register', name: 'app_register')]
@@ -96,7 +100,7 @@ class RegistrationController extends AbstractController
         UrlGeneratorInterface $urlGenerator
     ): Response {
         $em = $this->tenantEmProvider->getEntityManager();
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr');
         $decoded = json_decode($request->getContent(), true);
 
         if (!isset($decoded['email'], $decoded['password'], $decoded['firstName'], $decoded['lastName'])) {
@@ -156,7 +160,7 @@ class RegistrationController extends AbstractController
             ['token' => $verificationToken],
             UrlGeneratorInterface::ABSOLUTE_URL
         );
-        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $emailConfig = $this->emailConfigurationService->findOneByLocale($locale);
         $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
 
         if ($emailConfig && $emailConfigTranslation) {

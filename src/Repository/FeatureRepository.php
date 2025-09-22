@@ -11,5 +11,14 @@ use Doctrine\ORM\EntityRepository;
  */
 class FeatureRepository extends EntityRepository
 {
+    public function findAllByLocale(string $locale): array
+    {
+        return $this->createQueryBuilder('f') // 'f' est l'alias pour Feature
+            ->leftJoin('f.translations', 't', 'WITH', 't.language = :locale')
+            ->addSelect('t')
+            ->setParameter('locale', $locale)
+            ->getQuery()
+            ->getResult();
+    }
 
 }

@@ -17,7 +17,8 @@ class FeatureController extends AbstractController
         Request $request,
         TenantCacheService $cache
     ): JsonResponse {
-        $locale = $request->getLocale();
+        // On force la lecture depuis les paramètres de la requête
+        $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'features_all_' . $locale;
         $host = $request->getSchemeAndHttpHost();
 
@@ -25,7 +26,7 @@ class FeatureController extends AbstractController
             $cacheKey,
             function (ItemInterface $item) use ($useCase, $host, $locale) {
                 $item->expiresAfter(3600);
-                $item->tag(['features_all']);
+                $item->tag(['features_all', 'locale_' . $locale]);
 
                 return $useCase->execute($host, $locale);
             }

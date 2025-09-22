@@ -14,12 +14,12 @@ class BaniereStatiqueOutputDto
 
     public function __construct(BaniereStatique $entity, string $baseImageUrl, string $locale)
     {
-        $translation = $entity->getTranslation($locale);// TODO: Après la migration, on "branchera" la logique de traduction ici.
+        $translation = $entity->getTranslation($locale);
         $this->id = $entity->getId();
-        $this->titre = $entity->getTitre();
-        $this->texte = $entity->getTexte();
-        $this->imageDeFondUrl = $entity->getImageDeFond() ? $baseImageUrl . '/' . $entity->getImageDeFond() : null;
-        $this->texteBouton = $entity->getTexteBouton();
+        $this->titre = $translation?->getTitre() ?? $entity->getTitre();
+        $this->texte = $translation?->getTexte() ?? $entity->getTexte();
+        $this->texteBouton = $translation?->getTexteBouton() ?? $entity->getTexteBouton();
+         $this->imageDeFondUrl = $entity->getImageDeFond() ? $baseImageUrl . '/' . $entity->getImageDeFond() : null;
         $this->colorBackground = $entity->getColorBackground(); 
     }
 }

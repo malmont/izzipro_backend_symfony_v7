@@ -25,13 +25,15 @@ class CarrierDTO
     public static function fromEntity(Carrier $carrier, string $host, string $locale): self
     {
          $translation = $carrier->getTranslation($locale);
-        // TODO: Après la migration, on "branchera" la logique de traduction ici
+         
         return new self(
             $carrier->getId(),
-            $carrier->getName(),
+            $translation?->getName() ?? $carrier->getName(),
+            
             $carrier->getPhoto() ? rtrim($host, '/') . '/assets/uploads/Carrier/' . $carrier->getPhoto() : null,
             $carrier->getCarrierAccountId() ?? null,
-            $carrier->getDescription(),
+            $translation?->getDescription() ?? $carrier->getDescription(),
+
             $carrier->getPrice()
         );
     }

@@ -12,9 +12,9 @@ class GetProductsByCategoryUseCase
         $this->categoryService = $categoryService;
     }
 
-    public function execute(?array $categoryIds, ?string $keyword, int $page, int $pageSize, ?string $barcode, ?bool $isWeb, ?bool $isPos): array
+    public function execute(string $locale, ?array $categoryIds, ?string $keyword, int $page, int $pageSize, ?string $barcode, ?bool $isWeb, ?bool $isPos): array
     {
-        return $this->categoryService->getProductsByCategory($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos);
+        return $this->categoryService->getProductsByCategory($locale, $categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos);
     }
 
 }

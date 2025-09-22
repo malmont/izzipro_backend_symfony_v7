@@ -13,8 +13,7 @@ class GetAllBaniereStatiquesUseCase
      */
     public function execute(string $locale, string $baseImageUrl): array
     {
-        $entities = $this->service->findAll();
-        
+        $entities = $this->service->findAllByLocale($locale);
         return array_map(
             fn($entity) => new BaniereStatiqueOutputDto($entity, $baseImageUrl, $locale),
             $entities

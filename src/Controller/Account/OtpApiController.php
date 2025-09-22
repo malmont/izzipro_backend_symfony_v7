@@ -39,11 +39,7 @@ class OtpApiController extends AbstractController
         $email = $data['username'] ?? '';
         $otpProvided = $data['otp'] ?? '';
         $platform = $data['platform'] ?? 'mobile';
-
-        // Récupérer l'EntityManager pour le tenant courant
         $em = $this->emProvider->getEntityManager();
-
-        // Récupération de l'utilisateur par email
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if (!$user instanceof UserInterface) {
             return $this->json([
@@ -56,21 +52,17 @@ class OtpApiController extends AbstractController
             'code'    => $otpProvided
         ]);
 
-        // Vérifier que le code OTP existe et n'est pas expiré
         if (!$otpCode || $otpCode->getExpiration() < new DateTime()) {
             return $this->json([
                 'error' => 'Code OTP invalide ou expiré'
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        // Supprimer l'OTP validé pour éviter toute réutilisation
         $em->remove($otpCode);
         $em->flush();
 
-        // Génération des tokens via le service factorisé
         $tokens = $this->tokenService->generateTokens($user);
 
-        // Création de la réponse HTTP avec les tokens (les cookies sont ajoutés si la plateforme est 'web')
         return $this->tokenService->createResponseWithTokens($tokens, $platform);
     }
 }

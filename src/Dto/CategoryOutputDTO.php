@@ -12,14 +12,15 @@ class CategoryOutputDTO
 
     public function __construct(Categories $category, string $host, string $locale)
     {
-
-        // $translation = $category->getTranslation($locale);
-        // TODO: Après la migration, on "branchera" la logique de traduction ici.
+        $translation = $category->getTranslation($locale);
 
         $this->id = $category->getId();
-        $this->name = $category->getName(); 
-        $this->description = $category->getDescription(); 
-        $this->image = $category->getImage() ? rtrim($host, '/') . '/assets/uploads/categories/' . $category->getImage() : null;
+        $this->name = $translation?->getName() ?? $category->getName(); 
+        $this->description = $translation?->getDescription() ?? $category->getDescription(); 
+        
+        $this->image = $category->getImage() 
+            ? rtrim($host, '/') . '/assets/uploads/categories/' . $category->getImage() 
+            : null;
     }
 
     public function toArray(): array

@@ -32,7 +32,7 @@ class VideoApiController extends AbstractController
     #[Route('', name: 'api_video_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'videos_all_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/videos';
 
@@ -52,7 +52,7 @@ class VideoApiController extends AbstractController
     #[Route('/{id}', name: 'api_video_get_one', methods: ['GET'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'video_' . $id . '_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/videos';
 

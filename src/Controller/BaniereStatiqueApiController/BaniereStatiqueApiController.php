@@ -1,7 +1,6 @@
 <?php
 namespace App\Controller\BaniereStatiqueApiController;
 
-// ... vos use statements
 use App\Services\TenantCacheService;
 use App\UseCase\BaniereStatiqueUseCase\GetAllBaniereStatiquesUseCase;
 use App\UseCase\BaniereStatiqueUseCase\GetBaniereStatiqueByIdUseCase;
@@ -24,7 +23,7 @@ class BaniereStatiqueApiController extends AbstractController
     #[Route('', name: 'api_baniere_statique_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'bannieres_statiques_all_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 
@@ -44,7 +43,7 @@ class BaniereStatiqueApiController extends AbstractController
     #[Route('/{id}', name: 'api_baniere_statique_get_one', methods: ['GET'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'baniere_statique_' . $id . '_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 

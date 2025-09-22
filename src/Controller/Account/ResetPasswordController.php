@@ -13,14 +13,17 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
+use App\Services\EmailConfigurationService\EmailConfigurationService; 
 
 class ResetPasswordController extends AbstractController
 {
     private TenantEntityManagerProvider $tenantEmProvider;
+    private EmailConfigurationService $emailConfigService;
 
-    public function __construct(TenantEntityManagerProvider $tenantEmProvider)
+    public function __construct(TenantEntityManagerProvider $tenantEmProvider, EmailConfigurationService $emailConfigService)
     {
         $this->tenantEmProvider = $tenantEmProvider;
+        $this->emailConfigService = $emailConfigService;
     }
 
     #[Route('/api/password-reset/request', name: 'app_password_reset_request', methods: ['POST'])]
@@ -29,8 +32,7 @@ class ResetPasswordController extends AbstractController
         MailerInterface $mailer,
         UrlGeneratorInterface $urlGenerator
     ): Response {
-        $locale = $request->getLocale();
-
+        $locale = $request->query->get('locale', $request->getLocale());
 
         $data = json_decode($request->getContent(), true);
         if (!isset($data['email'])) {
@@ -58,7 +60,7 @@ class ResetPasswordController extends AbstractController
         );
 
 
-        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
         $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
         
         $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@votredomaine.com';
@@ -125,7 +127,7 @@ class ResetPasswordController extends AbstractController
         $em->persist($user);
         $em->flush();
 
-        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
         $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
         $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
         $signature = $translation?->getSignature() ?? '';
@@ -153,7 +155,7 @@ class ResetPasswordController extends AbstractController
 
         $token = $request->query->get('token');
         $em = $this->tenantEmProvider->getEntityManager();
-        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
         $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
         $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
         $signature = $translation?->getSignature() ?? '';

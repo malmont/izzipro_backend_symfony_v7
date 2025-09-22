@@ -34,7 +34,7 @@ class BanniereApiController extends AbstractController
     #[Route('', name: 'api_banniere_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'bannieres_all_' . $locale; 
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 
@@ -53,7 +53,7 @@ class BanniereApiController extends AbstractController
     #[Route('/{id}', name: 'api_banniere_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'banniere_' . $id . '_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 

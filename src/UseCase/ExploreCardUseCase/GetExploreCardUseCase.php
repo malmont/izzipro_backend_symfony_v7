@@ -13,6 +13,6 @@ class GetExploreCardUseCase
      */
     public function execute(string $host, string $locale): array
     {
-        return $this->service->getAllCards($host, $locale);
+        return $this->service->getAllCardsByLocale($host, $locale);
     }
 }

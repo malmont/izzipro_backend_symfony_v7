@@ -106,7 +106,7 @@ class ProductController extends AbstractController
     public function getAllProducts(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr'); 
         $cacheKey = 'all_products_' . $locale;
 
         $products = $this->cache->get(
@@ -127,7 +127,7 @@ class ProductController extends AbstractController
     public function getProductsByOffer(string $offer, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr'); 
         $cacheKey = 'products_by_offer_' . $offer . '_' . $locale;
 
         $products = $this->cache->get(
@@ -148,7 +148,7 @@ class ProductController extends AbstractController
     public function getLandingPageProducts(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr');
         $products = $this->getLandingPageProductsUseCase->execute($host, $locale); 
 
         return $this->json($products, JsonResponse::HTTP_OK);
@@ -159,7 +159,7 @@ class ProductController extends AbstractController
     {
         try {
             $host = $request->getSchemeAndHttpHost();
-            $locale = $request->getLocale(); 
+            $locale = $request->query->get('locale', 'fr');
             $product = $this->getProductByIdUseCase->execute($id, $host, $locale); 
             return $this->json($product, JsonResponse::HTTP_OK);
         } catch (\Exception $e) {

@@ -2,20 +2,31 @@
 namespace App\Services\EntrepriseService;
 
 use App\Entity\Entreprise;
-use App\Entity\EntrepriseTranslation; // On importe l'entité de traduction
 use App\Dto\EntrepriseDto;
+use App\Repository\EntrepriseRepository;
 use App\Services\TenantEntityManagerProvider; 
 
 class EntrepriseService
 {
-    private TenantEntityManagerProvider $emProvider;
+    private EntrepriseRepository $repository;
 
     public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->emProvider = $emProvider;
+        $em = $emProvider->getEntityManager();
+        $this->repository = $em->getRepository(Entreprise::class);
     }
-
-    public function createEntreprise(EntrepriseDto $dto): EntrepriseDto
+    
+    public function getEntrepriseByIdAndLocale(int $id, string $host, string $locale): ?EntrepriseDto
+    {
+        $entreprise = $this->repository->findByIdAndLocale($id, $locale);
+        
+        if (!$entreprise) {
+            return null;
+        }
+        return EntrepriseDto::fromEntity($entreprise, $host, $locale);
+    }
+    
+   public function createEntreprise(EntrepriseDto $dto): EntrepriseDto
     {
         $em = $this->emProvider->getEntityManager();
 
@@ -40,44 +51,6 @@ class EntrepriseService
         $em->flush();
 
         $dto->id = $entreprise->getId();
-        return $dto;
-    }
-
-    public function getEntrepriseById(int $id, string $host, string $locale): ?EntrepriseDto
-    {
-        $em = $this->emProvider->getEntityManager();
-        $entreprise = $em->getRepository(Entreprise::class)->find($id);
-        
-        if (!$entreprise) {
-            return null;
-        }
-        $translation = $entreprise->getTranslation($locale);
-
-        $dto = new EntrepriseDto();
-        $dto->id = $entreprise->getId();
-        $dto->name = $entreprise->getName();
-        $dto->email = $entreprise->getEmail();
-        $dto->tel = $entreprise->getTel();
-        $dto->website = $entreprise->getWebsite();
-        $dto->ein = $entreprise->getEin();
-        $dto->tvaIntracommunautaire = $entreprise->getTvaIntracommunautaire();
-        $dto->adress = $entreprise->getAdress();
-        $imagePath = $entreprise->getLogo();
-        if (empty($imagePath)) {
-            $dto->logo = null;
-        } elseif (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
-            $dto->logo = $imagePath; 
-        } else {
-            $cleanedHost = rtrim($host, '/');
-            $dto->logo = $cleanedHost . '/assets/uploads/email-logos/' . $imagePath;
-        }
-        if ($translation) {
-            $dto->conditionOfUse = $translation->getConditionOfUse();
-            $dto->LegalNotice = $translation->getLegalNotice();
-            $dto->privacyPolicy = $translation->getPrivacyPolicy();
-            $dto->apropos = $translation->getApropos();
-        }
-
         return $dto;
     }
 }

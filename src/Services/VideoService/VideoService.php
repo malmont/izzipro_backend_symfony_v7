@@ -3,61 +3,58 @@ namespace App\Services\VideoService;
 
 use App\Dto\VideoInputDto;
 use App\Entity\Video;
+use App\Repository\VideoRepository;
 use App\Services\TenantEntityManagerProvider;
+use Doctrine\ORM\EntityManagerInterface;
 
 class VideoService
 {
-    private TenantEntityManagerProvider $emProvider;
+    private EntityManagerInterface $em;
+    private VideoRepository $repository;
 
     public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->emProvider = $emProvider;
+        $this->em = $emProvider->getEntityManager();
+        $this->repository = $this->em->getRepository(Video::class);
     }
 
-    public function getAllVideos(): array
+    public function getAllVideosByLocale(string $locale): array
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Video::class)->findAll();
+        return $this->repository->findAllByLocale($locale);
     }
 
-    public function findVideo(int $id): ?Video
+    public function findVideoByIdAndLocale(int $id, string $locale): ?Video
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Video::class)->find($id);
+        return $this->repository->findByIdAndLocale($id, $locale);
     }
-
+    
     public function createVideo(VideoInputDto $dto): Video
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        
         $video = new Video();
         $video->setTitre($dto->titre);
         $video->setLienVideo($dto->lienVideo);
         $video->setImageDeFond($dto->imageDeFond);
-        
-        $tenantEm->persist($video);
-        $tenantEm->flush();
+
+        $this->em->persist($video);
+        $this->em->flush();
 
         return $video;
     }
 
     public function updateVideo(Video $video, VideoInputDto $dto): Video
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-
         $video->setTitre($dto->titre ?? $video->getTitre());
         $video->setLienVideo($dto->lienVideo ?? $video->getLienVideo());
         $video->setImageDeFond($dto->imageDeFond ?? $video->getImageDeFond());
-        
-        $tenantEm->flush();
+
+        $this->em->flush();
 
         return $video;
     }
 
     public function deleteVideo(Video $video): void
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->remove($video);
-        $tenantEm->flush();
+        $this->em->remove($video);
+        $this->em->flush();
     }
 }

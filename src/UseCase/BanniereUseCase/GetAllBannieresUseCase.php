@@ -18,7 +18,7 @@ class GetAllBannieresUseCase
      */
     public function execute(string $locale, string $baseImageUrl): array
     {
-        $entities = $this->banniereService->getAllBannieres();
+        $entities = $this->banniereService->findAllByLocale($locale);
         return array_map(
             fn($banniere) => new BanniereOutputDto($banniere, $baseImageUrl, $locale),
             $entities

@@ -26,4 +26,13 @@ class CategoriesRepository extends EntityRepository
             $this->getEntityManager()->flush();
         }
     }
+    public function findAllByLocale(string $locale): array
+    {
+        return $this->createQueryBuilder('c')
+            ->leftJoin('c.translations', 't', 'WITH', 't.language = :locale')
+            ->addSelect('t')
+            ->setParameter('locale', $locale)
+            ->getQuery()
+            ->getResult();
+    }
 }

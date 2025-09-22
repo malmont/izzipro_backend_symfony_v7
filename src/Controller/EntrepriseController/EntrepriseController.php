@@ -41,7 +41,7 @@ class EntrepriseController extends AbstractController
     public function getEntreprise(int $id, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $locale = $request->getLocale();
+        $locale = $request->get('locale', 'fr');
         $cacheKey = "entreprise_{$id}_{$locale}";
 
         $entrepriseDto = $this->cache->get(

@@ -2,22 +2,26 @@
 namespace App\Services\PresentationService;
 
 use App\Entity\Presentation;
+use App\Repository\PresentationRepository;
 use App\Services\TenantEntityManagerProvider;
 
 class PresentationService
 {
-    public function __construct(private TenantEntityManagerProvider $emProvider) {}
+    private PresentationRepository $repository;
 
-    public function findAll(): array
+    public function __construct(private TenantEntityManagerProvider $emProvider) 
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Presentation::class)->findAll();
+        $em = $this->emProvider->getEntityManager();
+        $this->repository = $em->getRepository(Presentation::class);
     }
 
-    public function findById(int $id): ?Presentation
+    public function findAllByLocale(string $locale): array
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Presentation::class)->find($id);
+        return $this->repository->findAllByLocale($locale);
     }
-    
+
+    public function findByIdAndLocale(int $id, string $locale): ?Presentation
+    {
+        return $this->repository->findByIdAndLocale($id, $locale);
+    }
 }

@@ -7,23 +7,23 @@ use App\Services\TenantEntityManagerProvider;
 
 class BanniereService
 {
-    private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TenantEntityManagerProvider $emProvider)
-    {
-        $this->emProvider = $emProvider;
-    }
 
-    public function getAllBannieres(): array
+    public function __construct(private TenantEntityManagerProvider $emProvider)
     {
         $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Banniere::class)->findAll();
+        $this->repository = $tenantEm->getRepository(Banniere::class);
     }
 
-    public function findBanniere(int $id): ?Banniere
+    public function findAllByLocale(string $locale): array
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Banniere::class)->find($id);
+        return $this->repository->findAllByLocale($locale);
+    }
+
+
+    public function findByIdAndLocale(int $id, string $locale): ?Banniere
+    {
+        return $this->repository->findByIdAndLocale($id, $locale);
     }
 
     public function createBanniere(BanniereInputDto $dto): Banniere

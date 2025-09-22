@@ -21,7 +21,7 @@ class HomeSliderController extends AbstractController
     public function getHomeSlider(Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'homeslider_all_' . $locale;
 
         $homeSliderDto = $this->cache->get(

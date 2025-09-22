@@ -17,7 +17,7 @@ class ExploreCardController extends AbstractController
         Request $request,
         TenantCacheService $cache
     ): JsonResponse {
-        $locale = $request->getLocale();
+        $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'explore_cards_all_' . $locale;
         $host = $request->getSchemeAndHttpHost();
 

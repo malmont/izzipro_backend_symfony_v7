@@ -14,7 +14,7 @@ class GetBanniereByIdUseCase
 
     public function execute(int $id, string $locale, string $baseImageUrl): ?BanniereOutputDto
     {
-        $entity = $this->banniereService->findBanniere($id);
+        $entity = $this->banniereService->findByIdAndLocale($id, $locale);
 
         if (!$entity) {
             return null;

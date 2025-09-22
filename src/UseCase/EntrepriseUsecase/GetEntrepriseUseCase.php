@@ -7,11 +7,12 @@ use App\Services\EntrepriseService\EntrepriseService;
 class GetEntrepriseUseCase
 {
     private EntrepriseService $entrepriseService;
-    public function __construct( EntrepriseService $entrepriseService) {
+    public function __construct(EntrepriseService $entrepriseService) {
         $this->entrepriseService = $entrepriseService;
     }
+
     public function execute(int $id, string $host, string $locale): ?EntrepriseDto
     {
-        return $this->entrepriseService->getEntrepriseById($id, $host, $locale);
+        return $this->entrepriseService->getEntrepriseByIdAndLocale($id, $host, $locale);
     }
 }

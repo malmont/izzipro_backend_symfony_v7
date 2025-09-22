@@ -13,21 +13,25 @@ use Symfony\Component\Mime\Email;
 use Twig\Environment;
 use Symfony\Component\HttpFoundation\Request;
 use App\Services\TenantEntityManagerProvider; 
-
+use App\Services\EmailConfigurationService\EmailConfigurationService;
 class OtpService
 {
     private TenantEntityManagerProvider $tenantEmProvider;
     private MailerInterface $mailer;
     private Environment $twig;
+    private EmailConfigurationService $emailConfigService;
+
 
     public function __construct(
         TenantEntityManagerProvider $tenantEmProvider,
         MailerInterface $mailer,
-        Environment $twig
+        Environment $twig,
+        EmailConfigurationService $emailConfigService   
     ) {
         $this->tenantEmProvider = $tenantEmProvider;
         $this->mailer        = $mailer;
         $this->twig          = $twig;
+        $this->emailConfigService = $emailConfigService;
     }
 
     /**
@@ -76,7 +80,7 @@ class OtpService
         $em->flush();
 
         // On récupère la configuration et sa traduction
-        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
         $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
         
         $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@votredomaine.com';

@@ -11,5 +11,16 @@ use Doctrine\ORM\EntityRepository;
  */
 class EntrepriseRepository extends EntityRepository
 {
+    public function findByIdAndLocale(int $id, string $locale): ?Entreprise
+    {
+        return $this->createQueryBuilder('e')
+            ->where('e.id = :id')
+            ->setParameter('id', $id)
+            ->leftJoin('e.translations', 't', 'WITH', 't.language = :locale')
+            ->addSelect('t')
+            ->setParameter('locale', $locale)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
 
 }

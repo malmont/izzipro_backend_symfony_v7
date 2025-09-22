@@ -12,9 +12,9 @@ class GetAllEmploisUseCase
     /**
      * @return EmploiOutputDto[]
      */
-    public function execute(string $locale): array 
+     public function execute(string $locale): array 
     { 
-        $emplois = $this->emploiService->getAllEmplois(); 
+        $emplois = $this->emploiService->getAllEmploisByLocale($locale); 
         return array_map(
             fn($emploi) => new EmploiOutputDto($emploi, $locale),
             $emplois
