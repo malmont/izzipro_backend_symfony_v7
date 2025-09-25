@@ -20,15 +20,24 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Définir le dossier de travail
 WORKDIR /var/www
 
-# Copier et installer les dépendances Composer
-COPY composer.json composer.lock ./
-RUN composer install --prefer-dist --no-dev --optimize-autoloader
+# --- LA CORRECTION EST ICI ---
 
-# Copier tout le code de l'application
+# 1. Copier les fichiers composer
+COPY composer.json composer.lock ./
+
+# 2. Installer les dépendances SANS exécuter les scripts pour profiter du cache Docker
+RUN composer install --prefer-dist --no-dev --no-autoloader --no-scripts
+
+# 3. Copier tout le code de l'application
 COPY . .
 
-# Exécuter les scripts post-installation de Symfony, comme la création du cache
+# 4. Maintenant que tous les fichiers sont là, on génère l'autoloader optimisé...
+RUN composer dump-autoload --optimize-autoloader --no-dev
+
+# 5. ...et on exécute les scripts de Symfony (qui ont besoin de bin/console)
 RUN composer run-script post-install-cmd
+
+# --- FIN DE LA CORRECTION ---
 
 
 # =================================================================
@@ -72,10 +81,12 @@ WORKDIR /var/www
 COPY --from=builder /var/www .
 
 # Configurer les permissions
-RUN mkdir -p /var/www/config/jwt \
-    && chown -R www-data:www-data /var/www/config/jwt /var/www/var \
-    && chmod -R 755 /var/www/config/jwt /var/www/var
+RUN mkdir -p /var/www/var /var/www/config/jwt \
+    && chown -R www-data:www-data /var/www/var /var/www/config/jwt \
+    && chmod -R 755 /var/www/var /var/www/config/jwt
 
+# Exécuter avec un utilisateur non-root
 USER www-data
 
+# Lancer PHP-FPM
 CMD ["php-fpm"]
