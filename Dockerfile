@@ -20,8 +20,6 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Définir le dossier de travail
 WORKDIR /var/www
 
-# --- LA CORRECTION EST ICI ---
-
 # 1. Copier les fichiers composer
 COPY composer.json composer.lock ./
 
@@ -31,13 +29,16 @@ RUN composer install --prefer-dist --no-dev --no-autoloader --no-scripts
 # 3. Copier tout le code de l'application
 COPY . .
 
+# --- Option B : compiler l'environnement prod ---
+# (NOUVEAU) Génère .env.local.php pour l'env prod
+RUN composer dump-env prod
+# ------------------------------------------------
+
 # 4. Maintenant que tous les fichiers sont là, on génère l'autoloader optimisé...
 RUN composer dump-autoload --optimize --no-dev
-#RUN composer dump-autoload --optimize-autoloader --no-dev --- IGNORE ---
-RUN APP_NO_DOTENV=1 composer run-script post-install-cmd
 
-
-# --- FIN DE LA CORRECTION ---
+# (MODIFIÉ) Exécuter les scripts Composer avec Dotenv désactivé et env explicite
+RUN APP_NO_DOTENV=1 APP_ENV=prod APP_DEBUG=0 composer run-script post-install-cmd
 
 
 # =================================================================
