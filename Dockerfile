@@ -29,15 +29,13 @@ RUN composer install --prefer-dist --no-dev --no-autoloader --no-scripts
 # 3. Copier tout le code de l'application
 COPY . .
 
-# --- Option B : compiler l'environnement prod ---
-# (NOUVEAU) Génère .env.local.php pour l'env prod
-RUN composer dump-env prod
-# ------------------------------------------------
-
-# 4. Maintenant que tous les fichiers sont là, on génère l'autoloader optimisé...
+# 4. Générer l'autoloader (nécessaire pour dump-env)
 RUN composer dump-autoload --optimize --no-dev
 
-# (MODIFIÉ) Exécuter les scripts Composer avec Dotenv désactivé et env explicite
+# 5. Compiler l'environnement prod (génère .env.local.php)
+RUN composer dump-env prod
+
+# 6. Exécuter les scripts Composer avec Dotenv désactivé et env explicite
 RUN APP_NO_DOTENV=1 APP_ENV=prod APP_DEBUG=0 composer run-script post-install-cmd
 
 
