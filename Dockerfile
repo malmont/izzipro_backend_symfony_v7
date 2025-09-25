@@ -33,9 +33,9 @@ COPY . .
 
 # 4. Maintenant que tous les fichiers sont là, on génère l'autoloader optimisé...
 RUN composer dump-autoload --optimize --no-dev
+#RUN composer dump-autoload --optimize-autoloader --no-dev --- IGNORE ---
+RUN APP_NO_DOTENV=1 composer run-script post-install-cmd
 
-# 5. ...et on exécute les scripts de Symfony (qui ont besoin de bin/console)
-RUN composer run-script post-install-cmd
 
 # --- FIN DE LA CORRECTION ---
 
