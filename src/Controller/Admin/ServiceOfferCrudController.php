@@ -8,6 +8,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
+use App\Form\ServiceOfferTranslationType;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 
 /**
  * Ce contrôleur hérite de notre base pour être automatiquement "multi-tenant".
@@ -34,6 +36,10 @@ class ServiceOfferCrudController extends BaseTenantCrudController
                 ->setUploadDir('public/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
+            CollectionField::new('translations', 'Traductions')
+                ->setEntryType(ServiceOfferTranslationType::class)
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(),    
             
             TextField::new('titreCommentaire', 'Titre du commentaire')->hideOnIndex(),
             TextareaField::new('descriptions', 'Description')->hideOnIndex(),

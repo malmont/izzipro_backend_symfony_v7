@@ -4,17 +4,26 @@
 
 {% block body %}
   <div style="text-align: center; margin-bottom: 20px;">
-    <img src="{{ domain ~ entreprise.logo }}" alt="{{ entreprise.name }} Logo" style="max-width: 200px;">
-    <h1>{{ entreprise.name }}</h1>
+    {% if logoUrl %}
+      <img src="{{ domain ~ logoUrl }}" alt="{{ fromName }} Logo" style="max-width: 200px;">
+    {% endif %}
+    {% if fromName %}
+      <h1>{{ fromName }}</h1>
+    {% endif %}
   </div>
   <p>
     Bonjour,<br>
     Votre code de vérification est : <strong>{{ code }}</strong>.<br>
-    Ce code expirera dans {{ lifetime }} secondes.
+    Ce code expirera dans {{ (lifetime / 60)|round }} minutes.
   </p>
-  <p>
-    Pour toute question, contactez-nous :<br>
-    Email : {{ entreprise.email }}<br>
-    Téléphone : {{ entreprise.tel }}
-  </p>
+  
+  {% if signature %}
+    <p>{{ signature|raw }}</p>
+  {% else %}
+    <p>
+      Pour toute question, contactez-nous :<br>
+      Email : {{ entreprise.email }}<br>
+      Téléphone : {{ entreprise.tel }}
+    </p>
+  {% endif %}
 {% endblock %}

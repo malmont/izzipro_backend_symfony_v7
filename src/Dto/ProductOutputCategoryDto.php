@@ -7,12 +7,15 @@ use App\Entity\ProductVariant;
 use App\Entity\ProductOptionValue;
 use App\Entity\Category;
 use App\Entity\Style;
+use App\Entity\Color;
+use App\Entity\Size;
+use App\Entity\ProductOption;
 
 class ProductOutputCategoryDto
 {
     public int $id;
-    public string $name;
-    public string $description;
+    public ?string $name;
+    public ?string $description; 
     public ?string $moreinformations;
     public float $price;
     public bool $isbestseller;
@@ -23,37 +26,45 @@ class ProductOutputCategoryDto
     public int $quantity;
     public ?int $freezeQuantity;
     public string $createdAt;
-    public ?string $tags;
-    public string $slug;
+    public ?string $tags; 
+    public ?string $slug;
     public ?float $purchasePrice;
     public ?float $coefficientMultiplier;
     public ?string $barcode;
     public ?array $style;
     public array $variants;
-    public array $category;
+    public ?array $category;
 
 
-    public function __construct(Product $product, string $host)
+    public function __construct(Product $product, string $host, string $locale = 'fr')
     {
+        $productTranslation = $product->getTranslation($locale);
         $this->id = $product->getId();
-        $this->name = $product->getName();
-        $this->description = $product->getDescription();
-        $this->moreinformations = $product->getMoreinformations();
+        $this->name = $productTranslation?->getName() ?? $product->getName(); 
+        $this->description = $productTranslation?->getDescription() ?? $product->getDescription();
+        $this->moreinformations = $productTranslation?->getMoreinformations() ?? $product->getMoreinformations();
         $this->price = $product->getPrice();
         $this->isbestseller = $product->isIsbestseller();
         $this->isnewarrival = $product->isIsnewarrival();
         $this->isfeatured = $product->isIsfeatured();
         $this->isspecialoffer = $product->isIsspecialoffer();
-        $this->image = $product->getImage() ?: null;
+        $imagePath = $product->getImage();
+        if (empty($imagePath)) {
+            $this->image = null;
+        } elseif (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
+            $this->image = $imagePath;
+        } else {
+            $cleanedHost = rtrim($host, '/');
+            $this->image = $cleanedHost . '/assets/uploads/products/' . $imagePath;
+        }
         $this->quantity = $product->getQuantity();
         $this->freezeQuantity = $product->getFreezeQuantity() ?? 0;
         $this->createdAt = $product->getCreatedAt()->format('Y-m-d H:i:s');
-        $this->tags = $product->getTags();
-        $this->slug = $product->getSlug();
+        $this->tags = $productTranslation?->getTags() ?? $product->getTags(); 
+        $this->slug = $productTranslation?->getSlug() ?? $product->getSlug();
         $this->purchasePrice = $product->getPurchasePrice();
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->barcode = $product->getBarcode();
-
         $style = $product->getStyle();
         if ($style) {
             if (method_exists($style, '__isInitialized') && !$style->__isInitialized()) {
@@ -71,7 +82,7 @@ class ProductOutputCategoryDto
             $this->style = null;
         }
 
-         $this->variants = array_map(function (ProductVariant $variant) {
+         $this->variants = array_map(function (ProductVariant $variant) use ($locale){
             $color = $variant->getColor();
             $size = $variant->getSize();
             
@@ -79,7 +90,7 @@ class ProductOutputCategoryDto
                 $parentOption = $optionValue->getProductOption();
                 return [
                     'value_id'    => $optionValue->getId(),
-                    'value'       => $optionValue->getValue(),
+                    'value'       => $optionValue->getTranslation($locale)?->getValue(),
                     'option_name' => $parentOption ? $parentOption->getName() : null,
                     'option_id'   => $parentOption ? $parentOption->getId() : null,
                 ];
@@ -89,23 +100,23 @@ class ProductOutputCategoryDto
                 'id' => $variant->getId(),
                 'color' => $color ? [
                     'id'       => $color->getId(),
-                    'name'     => $color->getName(),
+                    'name' => $color->getTranslation($locale)?->getName() ?? $color->getName(),
                     'codeHexa' => $color->getCodeHexa(),
                 ] : null,
                 'size' => $size ? [
                     'id'   => $size->getId(),
-                    'name' => $size->getName(),
+                    'name' => $size->getTranslation($locale)?->getName(),
                 ] : null,
                 'stockQuantity' => $variant->getStockQuantity(),
                 'options' => $options, 
             ];
         }, $product->getVariants()->toArray());
 
-        $this->category = array_map(function ($category) use ($host) {
+        $this->category = array_map(function ($category) use ($host, $locale) {
             return [
                 'id'          => $category->getId(),
-                'name'        => $category->getName(),
-                'description' => $category->getDescription(),
+                'name'        => $category->getTranslation($locale)?->getName(),
+                    'description' => $category->getTranslation($locale)?->getDescription(),
                 'image'       => $category->getImage() 
                     ? $host . '/assets/uploads/categories/' . $category->getImage() 
                     : null,

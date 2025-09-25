@@ -13,19 +13,29 @@ class GetPaymentsByOrderSourceUseCase
         $this->paymentService = $paymentService;
     }
 
-    public function execute(int $orderSourceId, string $host, ?int $days = null): array
+    public function execute(int $orderSourceId, string $host, string $locale, ?int $days = null): array
     {
         $payments = $this->paymentService->getPaymentsByOrderSource($orderSourceId, $days);
         $paymentDTOs = [];
 
         foreach ($payments as $payment) {
+
+            $paymentMethod = $payment->getPaymentMethod();
+            $methodTranslation = $paymentMethod ? $paymentMethod->getTranslation($locale) : null;
+            $paymentMethodName = $methodTranslation ? $methodTranslation->getName() : ($paymentMethod ? $paymentMethod->getName() : 'N/A');
+
+            $statusPayment = $payment->getStatutPayment();
+            $statusTranslation = $statusPayment ? $statusPayment->getTranslation($locale) : null;
+            $statusName = $statusTranslation ? $statusTranslation->getName() : ($statusPayment ? $statusPayment->getName() : 'N/A');
+
+
             $paymentDTOs[] = new PaymentDTO(
                 $payment->getId(),
                 $payment->getAmount(),
                 $payment->getPaymentDate()->format('Y-m-d H:i:s'),
                 $payment->getOrderPayment()->getReference(),
-                $payment->getPaymentMethod()->getName(),
-                $payment->getStatutPayment()->getName()
+                $paymentMethodName,
+                $statusName 
             );
         }
 

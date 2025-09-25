@@ -1,25 +1,27 @@
-{# templates/emails/password_reset_success.html.twig #}
+{# templates/reset_password/success.html.twig #}
 {% extends 'base.email.html.twig' %}
 
 {% block title %}Mot de passe réinitialisé avec succès{% endblock %}
 
 {% block body %}
   <div style="text-align: center; margin-bottom: 20px;">
-    {% if emailConfig and emailConfig.logo %}
-      <img src="{{ domain ~ emailConfig.logo }}" alt="{{ emailConfig.fromName }}" style="max-width: 200px;">
+    {% if logoUrl %}
+      <img src="{{ domain ~ logoUrl }}" alt="{{ fromName }}" style="max-width: 200px;">
     {% endif %}
-    {% if emailConfig and emailConfig.fromName %}
-      <h2>{{ emailConfig.fromName }}</h2>
+    {% if fromName %}
+      <h2>{{ fromName }}</h2>
     {% endif %}
   </div>
+
   <div class="alert alert-success" role="alert" style="text-align: center;">
       <h4 class="alert-heading">Félicitations, {{ user.firstname }}!</h4>
       <p>{{ message }}</p>
       <hr>
       <p class="mb-0">Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.</p>
   </div>
+
   <div style="text-align: center; margin-top: 20px;">
       <p>Pour toute question, contactez-nous :</p>
-      <p>Email : {{ emailConfig.fromEmail }} </p>
+      <p>Email : {{ fromEmail }} </p>
   </div>
 {% endblock %}

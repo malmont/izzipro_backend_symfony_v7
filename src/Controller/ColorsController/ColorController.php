@@ -2,10 +2,11 @@
 
 namespace App\Controller\ColorsController;
 
-use App\Dto\ColorOutputDTO;
+
 use App\UseCase\ColorUseCase\GetAllColorsUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -22,22 +23,21 @@ class ColorController extends AbstractController
     }
 
     #[Route('/api/colors', name: 'get_colors', methods: ['GET'])]
-    public function getColors(): JsonResponse
+    public function getColors(Request $request): JsonResponse
     {
-        $cacheKey = 'colors_all';
-        $colorsArray = $this->cache->get(
-            $cacheKey,
-            function (ItemInterface $item) {
-                $item->expiresAfter(3600); 
-                $colors = $this->getAllColorsUseCase->execute();
-                return array_map(function ($color) {
-                    $dto = new ColorOutputDTO($color);
-                    return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
-                }, $colors);
-            },
+        $locale = $request->getLocale();
+        $cacheKey = 'colors_all_' . $locale;
 
+        $colorsDto = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($locale) {
+                $item->expiresAfter(3600); 
+                $item->tag(['colors_all']);
+                
+                return $this->getAllColorsUseCase->execute($locale);
+            }
         );
         
-        return new JsonResponse($colorsArray, JsonResponse::HTTP_OK);
+        return $this->json($colorsDto);
     }
 }

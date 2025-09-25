@@ -31,39 +31,56 @@ class ManualSyncController extends AbstractController
 
         $tenantCode = $this->tenantManager->getCurrentTenantCode();
         if (!$tenantCode) {
-            $this->addFlash('error', 'Impossible de déterminer le tenant actuel.');
+            $this->addFlash('danger', 'Impossible de déterminer le tenant actuel.');
             return $this->redirectToRoute('admin'); 
         }
 
         $token = $this->tenantManager->getTenantToken($tenantCode);
         if (!$token) {
-            $this->addFlash('error', sprintf('Aucun token GEM-SUITE n\'est configuré pour le tenant "%s".', $tenantCode));
+            $this->addFlash('danger', sprintf('Aucun token GEM-SUITE n\'est configuré pour le tenant "%s".', $tenantCode));
             return $this->redirectToRoute('admin');
         }
 
         $this->addFlash('info', 'Lancement de la synchronisation complète pour le tenant ' . $tenantCode);
 
         try {
+            // Synchronisation de l'entreprise
             $this->companySyncHandler->handleCompanyUpdate($tenantCode);
             $this->addFlash('success', 'Informations de l\'entreprise synchronisées.');
+
+            // Récupération et synchronisation des catégories
             $categoriesResponse = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', ['auth_bearer' => $token]);
-            $categories = $categoriesResponse->toArray()['data'] ?? [];
-            foreach ($categories as $category) {
-                $this->syncHandler->handleCategoryUpdate($tenantCode, $category['id']);
+            $categoriesContent = $categoriesResponse->getContent(false);
+
+            if (!empty($categoriesContent)) {
+                $categories = $categoriesResponse->toArray()['data'] ?? [];
+                foreach ($categories as $category) {
+                    $this->syncHandler->handleCategoryUpdate($tenantCode, $category['id']);
+                }
+                $this->addFlash('success', sprintf('%d catégories synchronisées.', count($categories)));
+            } else {
+                $this->addFlash('warning', 'Aucune catégorie à synchroniser. La réponse de l\'API était vide.');
             }
-            $this->addFlash('success', sprintf('%d catégories synchronisées.', count($categories)));
+
+            // Récupération et synchronisation des produits
             $productsResponse = $this->client->request('GET', self::GEMSUITE_API_URL . 'products', ['auth_bearer' => $token]);
-            $products = $productsResponse->toArray()['data'] ?? [];
-            foreach ($products as $product) {
-                $this->syncHandler->handleProductUpdate($tenantCode, $product['id']);
+            $productsContent = $productsResponse->getContent(false);
+
+            if (!empty($productsContent)) {
+                $products = $productsResponse->toArray()['data'] ?? [];
+                foreach ($products as $product) {
+                    $this->syncHandler->handleProductUpdate($tenantCode, $product['id']);
+                }
+                $this->addFlash('success', sprintf('%d produits synchronisés.', count($products)));
+            } else {
+                $this->addFlash('warning', 'Aucun produit à synchroniser. La réponse de l\'API était vide.');
             }
-            $this->addFlash('success', sprintf('%d produits synchronisés.', count($products)));
 
         } catch (\Throwable $e) {
             $this->logger->error('Erreur lors de la synchronisation manuelle : ' . $e->getMessage());
-            $this->addFlash('error', 'Une erreur est survenue pendant la synchronisation. Consultez les logs pour plus de détails.');
+            $this->addFlash('danger', 'Une erreur est survenue pendant la synchronisation. Consultez les logs pour plus de détails.');
         }
 
-        return $this->redirectToRoute('admin'); 
+        return $this->redirectToRoute('admin');
     }
 }

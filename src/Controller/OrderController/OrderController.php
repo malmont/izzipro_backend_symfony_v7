@@ -64,21 +64,15 @@ class OrderController extends AbstractController
         if (!isset($data['orderSource'], $data['paymentMethod'], $data['addressId'], $data['carrierId'], $data['items'])) {
             return $this->json(['error' => 'Missing required fields'], JsonResponse::HTTP_BAD_REQUEST);
         }
-
-        // Vérification que l'adresse appartient bien à l'utilisateur
         $em = $this->emProvider->getEntityManager();
         $address = $em->getRepository(Adress::class)->find($data['addressId']);
         if (!$address || $address->getUserAdress() !== $user) {
             return $this->json(['error' => 'Unauthorized: Invalid address'], JsonResponse::HTTP_FORBIDDEN);
         }
-
-        // Vérification que le transporteur existe
         $carrier = $em->getRepository(Carrier::class)->find($data['carrierId']);
         if (!$carrier) {
             return $this->json(['error' => 'Carrier not found'], JsonResponse::HTTP_NOT_FOUND);
         }
-
-        // 🟢 Récupération des données de paiement Square
         $paymentData = $data['payment'] ?? [];
 
         $dto = new CreateOrderDTO(
@@ -207,7 +201,7 @@ class OrderController extends AbstractController
         return $this->json($orderData);
     }
 
-    #[Route("api/ordersuser", name:"get_user_orders", methods:["GET"])]
+     #[Route("api/ordersuser", name:"get_user_orders", methods:["GET"])]
     public function getUserOrders(Request $request, Security $security): JsonResponse
     {
         $user = $security->getUser();
@@ -216,17 +210,18 @@ class OrderController extends AbstractController
         }
 
         $host = $request->getSchemeAndHttpHost();
-        $cacheKey = 'orders_user_' . $user->getId();
+        $locale = $request->getLocale(); 
+        
+
+        $cacheKey = 'orders_user_' . $user->getId() . '_' . $locale;
 
         $orderDTOs = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($user, $host) {
+            function (ItemInterface $item) use ($user, $host, $locale) {
                 $item->expiresAfter(300); 
-                $item->tag(['orders_user']);
-                return $this->getOrdersByUserUseCase->execute($user->getId(), $host);
-            },
-            /* ttl */ 300,
-            /* extraTags */ ['orders_user']
+                $item->tag(['orders_user', 'orders_user_' . $user->getId()]);
+                return $this->getOrdersByUserUseCase->execute($user->getId(), $host, $locale);
+            }
         );
 
         if (empty($orderDTOs)) {

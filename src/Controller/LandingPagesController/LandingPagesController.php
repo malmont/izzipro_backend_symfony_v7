@@ -15,10 +15,37 @@ class LandingPagesController extends AbstractController
     {
         $componentsConfig = [
             [
+                "type" => "PresentationGroup", // Nouvelle clé unique
+                "name" => "Groupe de Présentations",
+                "description" => "Affiche un groupe de plusieurs présentations.",
+                "api_data_endpoint" => "/api/presentation-groups",
+                "data_id_field" => "id",
+                "data_label_field" => "titre", 
+                "is_data_selectable" => true
+            ],
+            [
+                "type" => "Carousel",
+                "name" => "Carrousel de Produits",
+                "description" => "Affiche une liste de produits (ex: meilleures ventes).",
+                "api_data_endpoint" => null, 
+                "data_id_field" => "key",
+                "data_label_field" => "name",
+                "is_data_selectable" => true
+            ],
+            [
                 "type" => "Baniere",
                 "name" => "Bannière Héros",
                 "description" => "Affiche une grande bannière avec image et texte.",
                 "api_data_endpoint" => "/bannieres",
+                "data_id_field" => "id",
+                "data_label_field" => "titre", 
+                "is_data_selectable" => true
+            ],
+            [
+                "type" => "BaniereStatique",
+                "name" => "Bannière Statique",
+                "description" => "Affiche une seule bannière figée.",
+                "api_data_endpoint" => "/baniere-statiques",
                 "data_id_field" => "id",
                 "data_label_field" => "titre", 
                 "is_data_selectable" => true
@@ -75,10 +102,34 @@ class LandingPagesController extends AbstractController
                 "is_data_selectable" => true
             ],
             [
+            "type" => "Embed",
+            "name" => "Contenu Intégré (Embed)",
+            "description" => "Affiche une page externe dans un iframe.",
+            "api_data_endpoint" => "/api/embeds",
+            "data_id_field" => "id",
+            "data_label_field" => "titre",
+            "is_data_selectable" => true
+            ],
+            [
                 "type" => "Recherche",
                 "name" => "Barre de Recherche",
                 "description" => "Affiche une barre de recherche.",
                 "is_data_selectable" => false
+            ],
+            [
+                "type" => "APropos",
+                "name" => "Section À Propos",
+                "description" => "Affiche le texte 'À Propos' de l'entreprise.",
+                "is_data_selectable" => false 
+            ],
+            [
+                "type" => "Presentation",
+                "name" => "Section de Présentation",
+                "description" => "Affiche une image à côté d'un texte et d'un bouton.",
+                "api_data_endpoint" => "/presentations",
+                "data_id_field" => "id",
+                "data_label_field" => "titre", 
+                "is_data_selectable" => true
             ]
         ];
 

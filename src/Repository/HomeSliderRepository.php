@@ -34,10 +34,7 @@ class HomeSliderRepository extends EntityRepository
             ->getResult();
     }
     
-    // Note : Les méthodes `save` et `remove` que vous aviez ne sont généralement
-    // pas nécessaires dans un repository car c'est le rôle de l'EntityManager,
-    // mais si vous voulez les garder pour des raisons de raccourci, elles
-    // fonctionneront aussi car $this->getEntityManager() retournera le bon.
+
     public function save(HomeSlider $entity, bool $flush = false): void
     {
         $this->getEntityManager()->persist($entity);
@@ -55,4 +52,16 @@ class HomeSliderRepository extends EntityRepository
             $this->getEntityManager()->flush();
         }
     }
+    public function findAllByLocale(string $locale): array
+    {
+        return $this->createQueryBuilder('h')
+            ->leftJoin('h.translations', 't', 'WITH', 't.language = :locale')
+            ->addSelect('t')
+            ->setParameter('locale', $locale)
+            ->andWhere('h.isDiplayed = :active')
+            ->setParameter('active', true)
+            ->getQuery()
+            ->getResult();
+    }
+
 }

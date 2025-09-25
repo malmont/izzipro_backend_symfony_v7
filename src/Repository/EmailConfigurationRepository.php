@@ -3,20 +3,19 @@
 namespace App\Repository;
 
 use App\Entity\EmailConfiguration;
-use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
+use Doctrine\ORM\EntityRepository; 
 
-/**
- * N'est plus un service Symfony.
- * @extends EntityRepository<EmailConfiguration>
- */
+
 class EmailConfigurationRepository extends EntityRepository
 {
-    /**
-     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
-     */
-    // public function __construct(ManagerRegistry $registry) { ... }
+    public function findOneByLocale(string $locale): ?EmailConfiguration
+        {
+            return $this->createQueryBuilder('ec')
+                ->leftJoin('ec.translations', 't', 'WITH', 't.language = :locale')
+                ->addSelect('t')
+                ->setParameter('locale', $locale)
+                ->getQuery()
+                ->getOneOrNullResult();
+        }
 
-
-    // Les méthodes commentées restent ici, inchangées.
-    // Si vous en aviez besoin, elles fonctionneraient maintenant correctement.
 }

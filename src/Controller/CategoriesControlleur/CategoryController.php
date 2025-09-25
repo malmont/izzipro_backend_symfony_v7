@@ -13,6 +13,7 @@ use Symfony\Component\Routing\Annotation\Route;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
+use App\Dto\CategoryOutputDTO;
 
 class CategoryController extends AbstractController
 {
@@ -52,7 +53,8 @@ class CategoryController extends AbstractController
             $categoryIds = json_decode($categoryIds, true);
         }
 
-        // Construit une clé de cache dynamique en hachant les paramètres
+        $locale = $request->get('locale', 'fr');
+
         $cacheKey = 'products_by_category_' . md5(json_encode([
             'categories' => $categoryIds,
             'keyword'    => $keyword,
@@ -61,31 +63,33 @@ class CategoryController extends AbstractController
             'barcode'    => $barcode,
             'isWeb'      => $isWeb,
             'isPos'      => $isPos,
+            'locale'     => $locale,
         ]));
         $host = $request->getSchemeAndHttpHost();
         $productsDTOArray = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos, $host) {
-                $item->expiresAfter(300); // 5 minutes
-                $item->tag(['products_by_category']);
+            function (ItemInterface $item) use ($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos, $host, $locale) {
+                $item->expiresAfter(300); 
+                $item->tag(['products_by_category', 'locale_' . $locale]); 
                 $products = $this->getProductsByCategoryUseCase->execute(
+                    $locale,
                     $categoryIds,
                     $keyword,
                     $page,
                     $pageSize,
                     $barcode,
                     $isWeb,
-                    $isPos
+                    $isPos,
+                    
                 );
-                return array_map(function ($product) use ($host) {
-                    $dto = new ProductOutputCategoryDto($product, $host);
+                return array_map(function ($product) use ($host, $locale) {
+                    $dto = new ProductOutputCategoryDto($product, $host, $locale);
                     return $dto;
                 }, $products);
             },
         );
 
-        $totalProducts = $this->countProductsByCategoryUseCase->execute($categoryIds);
-
+        $totalProducts = $this->countProductsByCategoryUseCase->execute($locale, $categoryIds);
         return new JsonResponse([
             'meta' => [
                 'total' => $totalProducts,
@@ -99,28 +103,22 @@ class CategoryController extends AbstractController
     #[Route('/api/category', name: 'get_categories', methods: ['GET'])]
     public function getCategories(Request $request): JsonResponse
     {
-        $cacheKey = 'categories_all';
+        $locale = $request->get('locale', 'fr');
+        $cacheKey = 'categories_all_' . $locale;
         $host = $request->getSchemeAndHttpHost();
 
         $categoriesArray = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($host) {
+            function (ItemInterface $item) use ($host, $locale) {
                 $item->expiresAfter(3600);
-                $item->tag(['categories_all']);
+                $item->tag(['categories_all', 'locale_' . $locale]);
+
                 $em = $this->emProvider->getEntityManager();
                 $categories = $em->getRepository(Categories::class)->findAll();
-                $result = [];
-                foreach ($categories as $category) {
-                    $result[] = [
-                        'id'          => $category->getId(),
-                        'name'        => $category->getName(),
-                        'description' => $category->getDescription(),
-                        'image'       => $category->getImage()
-                            ? $host . '/assets/uploads/categories/' . $category->getImage()
-                            : null,
-                    ];
-                }
-                return $result;
+                return array_map(
+                    fn($category) => (new CategoryOutputDTO($category, $host, $locale))->toArray(),
+                    $categories
+                );
             },
         );
 

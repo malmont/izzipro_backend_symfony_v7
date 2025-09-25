@@ -2,10 +2,12 @@
 // src/Dto/ExploreCardDto.php
 namespace App\Dto;
 
+use App\Entity\ExploreCard;
+
 class ExploreCardDto
 {
-    public int    $id;
-    public bool   $isDifferent;
+    public int     $id;
+    public bool    $isDifferent;
     public ?string $standardTitle;
     public ?string $differentTitle;
     public ?string $description;
@@ -13,23 +15,25 @@ class ExploreCardDto
     public ?string $imageUrl;
     public ?string $videoUrl;
 
-    public function __construct(
-        int    $id,
-        bool   $isDifferent,
-        ?string $standardTitle,
-        ?string $differentTitle,
-        ?string $description,
-        ?string $link,
-        ?string $imageUrl,
-        ?string $videoUrl
-    ) {
-        $this->id             = $id;
-        $this->isDifferent    = $isDifferent;
-        $this->standardTitle  = $standardTitle;
-        $this->differentTitle = $differentTitle;
-        $this->description    = $description;
-        $this->link           = $link;
-        $this->imageUrl       = $imageUrl;
-        $this->videoUrl       = $videoUrl;
+    private function __construct() {}
+
+    public static function fromEntity(ExploreCard $entity, string $host, string $locale): self
+    {
+        $dto = new self();
+        $translation = $entity->getTranslation($locale);
+
+        $dto->id          = $entity->getId();
+        $dto->isDifferent = $entity->getIsDifferent();
+        $dto->link        = $entity->getLink();
+        
+        $basePath = rtrim($host, '/') . '/assets/uploads/explore/';
+        $dto->imageUrl    = $entity->getImagePath() ? $basePath . $entity->getImagePath() : null;
+        $dto->videoUrl    = $entity->getVideoPath();
+
+        $dto->standardTitle  = $translation?->getStandardTitle() ?? $entity->getStandardTitle();
+        $dto->differentTitle = $translation?->getDifferentTitle() ?? $entity->getDifferentTitle();
+        $dto->description    = $translation?->getDescription() ?? $entity->getDescription();
+        
+        return $dto;
     }
 }

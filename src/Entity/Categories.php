@@ -32,9 +32,18 @@ class Categories
     #[ORM\Column(nullable: true)]
     private ?int $gemsuiteCategoryId = null;
 
+    #[ORM\OneToMany(
+    mappedBy: 'category', 
+    targetEntity: CategoriesTranslation::class, 
+    cascade: ['persist', 'remove'], 
+    orphanRemoval: true,
+    fetch: 'EXTRA_LAZY')]
+    private Collection $translations;
+
     public function __construct()
     {
         $this->products = new ArrayCollection();
+        $this->translations = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -120,5 +129,50 @@ class Categories
         $this->gemsuiteCategoryId = $gemsuiteCategoryId;
 
         return $this;
+    }
+    /**
+     * @return Collection<int, CategoriesTranslation>
+     */
+    public function getTranslations(): Collection 
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(CategoriesTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setCategory($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(CategoriesTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            if ($translation->getCategory() === $this) {
+                $translation->setCategory(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getTranslation(string $locale): ?CategoriesTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        return $this->translations->first() ?: null;
     }
 }

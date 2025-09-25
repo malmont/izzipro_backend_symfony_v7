@@ -41,17 +41,18 @@ class EntrepriseController extends AbstractController
     public function getEntreprise(int $id, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();
-        $cacheKey = "entreprise_$id";
+        $locale = $request->get('locale', 'fr');
+        $cacheKey = "entreprise_{$id}_{$locale}";
 
         $entrepriseDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($id, $host) {
+            function (ItemInterface $item) use ($id, $host, $locale) {
                 $item->expiresAfter(3600);
-                error_log("Cache miss for entreprise_$id");
-                return $this->getEntrepriseUseCase->execute($id, $host);
-            },
-            /* ttl */ 3600,
-            /* extraTags */ ['entreprise']
+                $item->tag(['entreprise', 'entreprise_' . $id]);
+                
+                error_log("Cache miss for entreprise_{$id} in locale: {$locale}");
+                return $this->getEntrepriseUseCase->execute($id, $host, $locale);
+            }
         );
 
         if (!$entrepriseDto) {

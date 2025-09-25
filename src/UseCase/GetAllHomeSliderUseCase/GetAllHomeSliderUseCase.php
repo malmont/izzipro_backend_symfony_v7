@@ -1,5 +1,4 @@
 <?php
-
 namespace App\UseCase\GetAllHomeSliderUseCase;
 
 use App\Services\HomeSliderService\HomeSliderService;
@@ -13,9 +12,13 @@ class GetAllHomeSliderUseCase
         $this->homeSliderService = $homeSliderService;
     }
 
-    public function execute(string $host): array
+    public function execute(string $host, string $locale): array
     {
-        $homeSliders = $this->homeSliderService->getAllhomeSliders();
-        return array_map(fn($homeSlider) => HomeSliderDTO::fromEntity($homeSlider, $host), $homeSliders);
+        $homeSliders = $this->homeSliderService->getAllHomeSlidersByLocale($locale);
+        
+        return array_map(
+            fn($homeSlider) => HomeSliderDTO::fromEntity($homeSlider, $host, $locale), 
+            $homeSliders
+        );
     }
 }

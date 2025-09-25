@@ -14,9 +14,9 @@ class CarrierService
         $this->emProvider = $emProvider;
     }
 
-    public function getAllCarriers(): array
+    public function getAllCarriers(string $locale): array
     {
         $em = $this->emProvider->getEntityManager();
-        return $em->getRepository(Carrier::class)->findAll();
+        return $em->getRepository(Carrier::class)->findAllByLocale($locale);
     }
 }

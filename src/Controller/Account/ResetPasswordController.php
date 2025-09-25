@@ -13,14 +13,17 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
+use App\Services\EmailConfigurationService\EmailConfigurationService; 
 
 class ResetPasswordController extends AbstractController
 {
     private TenantEntityManagerProvider $tenantEmProvider;
+    private EmailConfigurationService $emailConfigService;
 
-    public function __construct(TenantEntityManagerProvider $tenantEmProvider)
+    public function __construct(TenantEntityManagerProvider $tenantEmProvider, EmailConfigurationService $emailConfigService)
     {
         $this->tenantEmProvider = $tenantEmProvider;
+        $this->emailConfigService = $emailConfigService;
     }
 
     #[Route('/api/password-reset/request', name: 'app_password_reset_request', methods: ['POST'])]
@@ -29,6 +32,8 @@ class ResetPasswordController extends AbstractController
         MailerInterface $mailer,
         UrlGeneratorInterface $urlGenerator
     ): Response {
+        $locale = $request->query->get('locale', $request->getLocale());
+
         $data = json_decode($request->getContent(), true);
         if (!isset($data['email'])) {
             return $this->json(['error' => 'Email is required.'], Response::HTTP_BAD_REQUEST);
@@ -54,18 +59,28 @@ class ResetPasswordController extends AbstractController
             UrlGeneratorInterface::ABSOLUTE_URL
         );
 
-        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+
+        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
+        $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
+        
         $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@votredomaine.com';
-        $fromName  = $emailConfig?->getFromName()  ?? 'Votre Société';
+        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
+        $signature = $translation?->getSignature() ?? '';
+        $logoUrl   = $emailConfig?->getLogo();
+
 
         $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+
 
         $emailContent = $this->renderView('reset_password/reset.html.twig', [
             'resetUrl'    => $resetUrl,
             'user'        => $user,
-            'emailConfig' => $emailConfig,
+            'fromName'    => $fromName, // On passe les variables traduites
+            'signature'   => $signature,
+            'logoUrl'     => $logoUrl,
             'domain'      => $domain,
         ]);
+
 
         $emailMessage = (new Email())
             ->from(sprintf('%s <%s>', $fromName, $fromEmail))
@@ -85,6 +100,7 @@ class ResetPasswordController extends AbstractController
         Request $request,
         UserPasswordHasherInterface $passwordHasher
     ): Response {
+        $locale = $request->getLocale();
         $data = json_decode($request->getContent(), true) ?: $request->request->all();
 
         if (!isset($data['token'], $data['newPassword'])) {
@@ -111,13 +127,22 @@ class ResetPasswordController extends AbstractController
         $em->persist($user);
         $em->flush();
 
-        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
+        $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
+        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
+        $signature = $translation?->getSignature() ?? '';
+        $logoUrl   = $emailConfig?->getLogo();
+
         $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+
 
         return $this->render('reset_password/success.html.twig', [
             'message' => 'Password reset successfully.',
             'domain' => $domain,
-            'emailConfig' => $emailConfig,
+            'fromName' => $fromName,
+            'signature' => $signature,
+            'logoUrl' => $logoUrl,
+            'fromEmail' => $fromEmail,
             'user' => $user
         ]);
     }
@@ -125,14 +150,26 @@ class ResetPasswordController extends AbstractController
     #[Route('/password-reset/form', name: 'app_password_reset_confirm_form', methods: ['GET'])]
     public function resetPasswordForm(Request $request): Response
     {
+
+        $locale = $request->getLocale();
+
         $token = $request->query->get('token');
         $em = $this->tenantEmProvider->getEntityManager();
-        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
+        $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
+        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
+        $signature = $translation?->getSignature() ?? '';
+        $logoUrl   = $emailConfig?->getLogo();
+
+
         $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
 
         return $this->render('reset_password/form.html.twig', [
             'token' => $token,
-            'emailConfig' => $emailConfig,
+            'fromName' => $fromName,
+            'signature' => $signature,
+            'logoUrl' => $logoUrl,
+            'fromEmail' => $fromEmail,
             'domain' => $domain,
         ]);
     }

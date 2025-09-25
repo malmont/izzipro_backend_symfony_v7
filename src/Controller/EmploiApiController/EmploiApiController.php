@@ -27,20 +27,19 @@ class EmploiApiController extends AbstractController
         private TenantCacheService $cache
     ) {}
 
-    #[Route('', name: 'api_emploi_list', methods: ['GET'])]
-    public function list(): JsonResponse
+     #[Route('', name: 'api_emploi_list', methods: ['GET'])]
+    public function list(Request $request): JsonResponse
     {
-        $cacheKey = 'emplois_all';
-        $cacheTags = ['emplois'];
+        $locale = $request->getLocale();
+        $cacheKey = 'emplois_all_' . $locale;
 
         $emploisDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) {
-                $emplois = $this->getAllEmploisUseCase->execute();
-                return array_map(fn($emploi) => new EmploiOutputDto($emploi), $emplois);
-            },
-            3600,
-            $cacheTags
+            function (ItemInterface $item) use ($locale) {
+                $item->expiresAfter(3600);
+                $item->tag(['emplois_all']);
+                return $this->getAllEmploisUseCase->execute($locale);
+            }
         );
 
         return $this->json($emploisDto);

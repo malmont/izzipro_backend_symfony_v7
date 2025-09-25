@@ -13,21 +13,25 @@ use Symfony\Component\Mime\Email;
 use Twig\Environment;
 use Symfony\Component\HttpFoundation\Request;
 use App\Services\TenantEntityManagerProvider; 
-
+use App\Services\EmailConfigurationService\EmailConfigurationService;
 class OtpService
 {
     private TenantEntityManagerProvider $tenantEmProvider;
     private MailerInterface $mailer;
     private Environment $twig;
+    private EmailConfigurationService $emailConfigService;
+
 
     public function __construct(
         TenantEntityManagerProvider $tenantEmProvider,
         MailerInterface $mailer,
-        Environment $twig
+        Environment $twig,
+        EmailConfigurationService $emailConfigService   
     ) {
         $this->tenantEmProvider = $tenantEmProvider;
         $this->mailer        = $mailer;
         $this->twig          = $twig;
+        $this->emailConfigService = $emailConfigService;
     }
 
     /**
@@ -35,21 +39,20 @@ class OtpService
      * et envoie l'email avec le code OTP.
      *
      * @param User   $user    L'utilisateur pour lequel générer l’OTP.
-     *                        Doit soit déjà exister en base (avec un ID),
-     *                        soit être une nouvelle entité à persister.
-     * @param Request $request Pour obtenir le schéma et l'hôte (pour le domaine).
+     * Doit soit déjà exister en base (avec un ID),
+     * soit être une nouvelle entité à persister.
+     * @param Request $request Pour obtenir la locale et le domaine.
      * @return void
      *
      * @throws \RuntimeException Si on ne retrouve pas l’utilisateur existant dans ce tenant.
      */
     public function generateAndSendOtp(User $user, Request $request): void
     {
-        // Récupérer l’EntityManager du tenant
         $em = $this->tenantEmProvider->getEntityManager();
+        $locale = $request->getLocale(); // On récupère la locale
 
         // Cas 1 : utilisateur existant (a déjà un ID)
         if ($user->getId() !== null) {
-            // Recharger l’utilisateur dans le contexte du EM courant
             $userManaged = $em->getRepository(User::class)->find($user->getId());
             if (!$userManaged) {
                 throw new \RuntimeException(sprintf(
@@ -59,11 +62,8 @@ class OtpService
             }
         } else {
             // Cas 2 : nouvel utilisateur à persister
-            // Il faudra le persister avant de générer l’OTP
             $userManaged = $user;
             $em->persist($userManaged);
-            // On peut flush ici ou attendre après la création de l’OTP selon besoins.
-            // Si on flush maintenant, on s'assure que l’utilisateur a un ID valide :
             $em->flush();
         }
 
@@ -79,24 +79,17 @@ class OtpService
         $em->persist($otpCode);
         $em->flush();
 
-        // Récupérer la configuration d’email depuis la BDD
-        $emailConfig = $em->getRepository(EmailConfiguration::class)
-            ->findOneBy([]);
-        if (!$emailConfig) {
-            $fromEmail = 'no-reply@votredomaine.com';
-            $fromName  = 'Votre Société';
-        } else {
-            $fromEmail = $emailConfig->getFromEmail();
-            $fromName  = $emailConfig->getFromName();
-        }
-
-        // Récupérer les informations de l’entreprise (supposons une seule entreprise)
+        // On récupère la configuration et sa traduction
+        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
+        $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
+        
+        $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@votredomaine.com';
+        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
+        $signature = $translation?->getSignature() ?? '';
+        $logoUrl   = $emailConfig?->getLogo();
+        
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
-
-        // Construire le domaine pour le logo
         $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
-
-        // Préparer et envoyer l’email OTP avec le template Twig
         $emailMessage = (new Email())
             ->from(sprintf('%s <%s>', $fromName, $fromEmail))
             ->to($userManaged->getEmail())
@@ -104,9 +97,12 @@ class OtpService
             ->html(
                 $this->twig->render('security/2fa_email.html.twig', [
                     'code'       => $otp,
-                    'lifetime'   => 300, // 5 minutes en secondes
+                    'lifetime'   => 300,
                     'entreprise' => $entreprise,
                     'domain'     => $domain,
+                    'fromName'   => $fromName,
+                    'signature'  => $signature,
+                    'logoUrl'    => $logoUrl,
                 ])
             );
         $this->mailer->send($emailMessage);

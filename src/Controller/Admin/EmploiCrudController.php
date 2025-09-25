@@ -3,15 +3,14 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Emploi;
+use App\Form\EmploiTranslationType; 
 use App\Controller\Admin\BaseTenantCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
-use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 
-/**
- * Ce contrôleur hérite de notre base pour être automatiquement "multi-tenant".
- */
 class EmploiCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
@@ -23,9 +22,13 @@ class EmploiCrudController extends BaseTenantCrudController
     {
         return [
             IdField::new('id')->onlyOnIndex(),
-            TextField::new('titre', 'Titre de l\'offre'),
-            TextareaField::new('description', 'Description')->hideOnIndex(),
             AssociationField::new('candidatures', 'Candidatures')->onlyOnIndex(),
+            CollectionField::new('translations', 'Traductions')
+                ->setEntryType(EmploiTranslationType::class)
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(),
+            TextField::new('titre', 'Titre (Défaut)'),
+            TextareaField::new('description', 'Description')->hideOnIndex(),
         ];
     }
 }

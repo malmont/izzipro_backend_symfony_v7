@@ -34,47 +34,49 @@ class BanniereApiController extends AbstractController
     #[Route('', name: 'api_banniere_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $cacheKey = 'bannieres_all';
-        $cacheTags = ['bannieres'];
+        $locale = $request->query->get('locale', 'fr');
+        $cacheKey = 'bannieres_all_' . $locale; 
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 
-        $bannieresDto = $this->cache->get(
+        $dtos = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($baseImageUrl) {
-                $bannieres = $this->getAllBannieresUseCase->execute();
-                return array_map(
-                    fn($banniere) => new BanniereOutputDto($banniere, $baseImageUrl),
-                    $bannieres
-                );
-            },
-            3600, 
-            $cacheTags
+            function (ItemInterface $item) use ($locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['bannieres_all']);
+                return $this->getAllBannieresUseCase->execute($locale, $baseImageUrl);
+            }
         );
 
-        return $this->json($bannieresDto);
+        return $this->json($dtos);
     }
 
     #[Route('/{id}', name: 'api_banniere_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
-        $banniere = $this->getBanniereByIdUseCase->execute($id);
+        $locale = $request->query->get('locale', 'fr');
+        $cacheKey = 'banniere_' . $id . '_' . $locale;
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 
-        if (!$banniere) {
+        $dto = $this->cache->get(
+            $cacheKey,
+            function(ItemInterface $item) use ($id, $locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['bannieres_all', 'banniere_' . $id]);
+                return $this->getBanniereByIdUseCase->execute($id, $locale, $baseImageUrl);
+            }
+        );
+
+        if (!$dto) {
             return $this->json(['message' => 'Bannière non trouvée'], Response::HTTP_NOT_FOUND);
         }
 
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets//uploads/slider';
-        $outputDto = new BanniereOutputDto($banniere, $baseImageUrl);
-
-        return $this->json($outputDto);
+        return $this->json($dto);
     }
 
     #[Route('', name: 'api_banniere_create', methods: ['POST'])]
     public function create(#[MapRequestPayload] BanniereInputDto $dto, Request $request): JsonResponse
     {
         $banniere = $this->createBanniereUseCase->execute($dto);
-        
-        // On retourne un DTO de sortie pour la cohérence
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets//uploads/slider';
         $outputDto = new BanniereOutputDto($banniere, $baseImageUrl);
 
@@ -85,8 +87,6 @@ class BanniereApiController extends AbstractController
     public function update(int $id, #[MapRequestPayload] BanniereInputDto $dto, Request $request): JsonResponse
     {
         $banniere = $this->updateBanniereUseCase->execute($id, $dto);
-
-        // On retourne un DTO de sortie pour la cohérence
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets//uploads/slider';
         $outputDto = new BanniereOutputDto($banniere, $baseImageUrl);
 

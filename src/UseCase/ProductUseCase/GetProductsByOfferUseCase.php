@@ -13,8 +13,8 @@ class GetProductsByOfferUseCase
         $this->productService = $productService;
     }
 
-    public function execute(string $offer, string $host): array
+    public function execute(string $offer, string $host, string $locale = 'fr'): array
     {
-        return $this->productService->getProductsByOffer($offer, $host);
+        return $this->productService->getProductsByOffer($offer, $host, $locale);
     }
 }

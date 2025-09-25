@@ -3,11 +3,13 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Banniere;
+use App\Form\BanniereTranslationType;
 use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 
 /**
  * Ce contrôleur hérite de notre base pour être automatiquement "multi-tenant".
@@ -25,6 +27,10 @@ class BanniereCrudController extends BaseTenantCrudController
             IdField::new('id')->hideOnForm(),
             TextField::new('titre', 'Titre'),
             TextEditorField::new('texte', 'Texte')->hideOnIndex(),
+            CollectionField::new('translations', 'Traductions')
+                ->setEntryType(BanniereTranslationType::class)
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(),
             ImageField::new('imageDeFond', 'Image de fond')
                ->setBasePath('assets/uploads/slider/')
                         ->setUploadDir('public/assets/uploads/slider/')

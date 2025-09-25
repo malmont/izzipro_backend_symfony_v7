@@ -90,7 +90,6 @@ class Caisse
     public function removeTransactionCaiss(TransactionCaisse $transactionCaiss): static
     {
         if ($this->transactionCaisses->removeElement($transactionCaiss)) {
-            // set the owning side to null (unless already changed)
             if ($transactionCaiss->getCaisse() === $this) {
                 $transactionCaiss->setCaisse(null);
             }

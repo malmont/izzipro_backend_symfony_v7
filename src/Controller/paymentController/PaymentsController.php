@@ -52,6 +52,7 @@ class PaymentsController extends AbstractController
 
         $days = $request->query->get('days');
         $host = $request->getSchemeAndHttpHost();
+        $locale = $request->getLocale();
 
         $em = $this->emProvider->getEntityManager();
         $userOrders = $em->getRepository(Order::class)->findBy(['user' => $user]);
@@ -59,14 +60,14 @@ class PaymentsController extends AbstractController
             return $this->json(['error' => 'Unauthorized access to payments'], JsonResponse::HTTP_FORBIDDEN);
         }
 
-        $cacheKey = 'payments_orderSource_' . $orderSourceId . ($days ? '_days_' . (int)$days : '');
+        $cacheKey = 'payments_orderSource_' . $orderSourceId . '_locale_' . $locale . ($days ? '_days_' . (int)$days : '');
 
         $paymentDTOs = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($orderSourceId, $host, $days) {
+            function (ItemInterface $item) use ($orderSourceId, $host, $locale, $days) {
                 $item->expiresAfter(300);
-                $item->tag(['payments']);
-                return $this->getPaymentsByOrderSourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
+                $item->tag(['payments', 'payments_orderSource_' . $orderSourceId]);
+                return $this->getPaymentsByOrderSourceUseCase->execute((int)$orderSourceId, $host, $locale, $days ? (int)$days : null);
             },
         );
 

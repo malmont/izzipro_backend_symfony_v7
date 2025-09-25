@@ -1,8 +1,7 @@
 <?php
-
 namespace App\UseCase\CategorieMarqueUseCase;
 
-use App\Entity\CategorieMarque;
+use App\Dto\MarqueOutputDto;
 use App\Services\CategorieMarqueService\CategorieMarqueService;
 
 class GetMarquesByCategorieUseCase
@@ -12,13 +11,21 @@ class GetMarquesByCategorieUseCase
     ) {
     }
 
-    public function execute(int $id): ?array 
+    /**
+     * @return MarqueOutputDto[]|null
+     */
+    public function execute(int $id, string $locale, string $baseImageUrl): ?array 
     {
-        $categorie = $this->categorieMarqueService->findCategorieMarque($id);
+        $categorie = $this->categorieMarqueService->findCategorieMarque($id, $locale);
 
         if (!$categorie) {
             return null;
         }
-        return $categorie->getMarques()->toArray();
+
+        $marques = $categorie->getMarques()->toArray();
+        return array_map(
+            fn($marque) => new MarqueOutputDto($marque, $baseImageUrl),
+            $marques
+        );
     }
 }

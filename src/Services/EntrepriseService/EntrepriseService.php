@@ -3,18 +3,30 @@ namespace App\Services\EntrepriseService;
 
 use App\Entity\Entreprise;
 use App\Dto\EntrepriseDto;
+use App\Repository\EntrepriseRepository;
 use App\Services\TenantEntityManagerProvider; 
 
 class EntrepriseService
 {
-    private TenantEntityManagerProvider $emProvider;
+    private EntrepriseRepository $repository;
 
     public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->emProvider = $emProvider;
+        $em = $emProvider->getEntityManager();
+        $this->repository = $em->getRepository(Entreprise::class);
     }
-
-    public function createEntreprise(EntrepriseDto $dto): EntrepriseDto
+    
+    public function getEntrepriseByIdAndLocale(int $id, string $host, string $locale): ?EntrepriseDto
+    {
+        $entreprise = $this->repository->findByIdAndLocale($id, $locale);
+        
+        if (!$entreprise) {
+            return null;
+        }
+        return EntrepriseDto::fromEntity($entreprise, $host, $locale);
+    }
+    
+   public function createEntreprise(EntrepriseDto $dto): EntrepriseDto
     {
         $em = $this->emProvider->getEntityManager();
 
@@ -26,45 +38,19 @@ class EntrepriseService
         $entreprise->setWebsite($dto->website);
         $entreprise->setEin($dto->ein);
         $entreprise->setTvaIntracommunautaire($dto->tvaIntracommunautaire);
-        $entreprise->setConditionOfUse($dto->conditionOfUse);
-        $entreprise->setLegalNotice($dto->LegalNotice);
-        $entreprise->setPrivacyPolicy($dto->privacyPolicy);
         $entreprise->setAdress($dto->adress);
+        $translation = new EntrepriseTranslation();
+        $translation->setLanguage('fr');
+        $translation->setConditionOfUse($dto->conditionOfUse);
+        $translation->setLegalNotice($dto->LegalNotice);
+        $translation->setPrivacyPolicy($dto->privacyPolicy);
+        $translation->setApropos($dto->apropos);
+        $entreprise->addTranslation($translation);
 
-        // On utilise l'EM du tenant
         $em->persist($entreprise);
         $em->flush();
 
         $dto->id = $entreprise->getId();
-        return $dto;
-    }
-
-    public function getEntrepriseById(int $id, string $host): ?EntrepriseDto
-    {
-        $em = $this->emProvider->getEntityManager();
-
-        // On utilise l'EM du tenant pour obtenir le repository et les données
-        $entreprise = $em->getRepository(Entreprise::class)->find($id);
-        
-        if (!$entreprise) {
-            return null;
-        }
-
-        $dto = new EntrepriseDto();
-        $dto->id = $entreprise->getId();
-        $dto->name = $entreprise->getName();
-        $dto->logo = $entreprise->getLogo();
-        $dto->email = $entreprise->getEmail();
-        $dto->apropos = $entreprise->getApropos();
-        $dto->tel = $entreprise->getTel();
-        $dto->website = $entreprise->getWebsite();
-        $dto->ein = $entreprise->getEin();
-        $dto->tvaIntracommunautaire = $entreprise->getTvaIntracommunautaire();
-        $dto->conditionOfUse = $entreprise->getConditionOfUse();
-        $dto->LegalNotice = $entreprise->getLegalNotice();
-        $dto->privacyPolicy = $entreprise->getPrivacyPolicy();
-        $dto->adress = $entreprise->getAdress();
-
         return $dto;
     }
 }

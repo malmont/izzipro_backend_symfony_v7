@@ -3504,3 +3504,11 @@ INSERT INTO tenants(code,name,dbname) VALUES('demo10','Demo Tenant 2','demo_db10
 -- Auto-generated tenant gemsuite
 CREATE DATABASE "gmasuite" ENCODING='UTF8' TEMPLATE=template0;
 INSERT INTO tenants(code,name,dbname) VALUES('gemsuite','gemcar','gmasuite');
+
+-- Auto-generated tenant larameemarine
+CREATE DATABASE "db_larameemarine" WITH TEMPLATE gmasuite;
+INSERT INTO tenants(code, name, dbname, gemsuite_token) VALUES('larameemarine', 'larameemarine', 'db_larameemarine', NULL);
+
+-- Auto-generated tenant larameemarine
+CREATE DATABASE "db_larameemarine" WITH TEMPLATE gmasuite;
+INSERT INTO tenants(code, name, dbname, gemsuite_token) VALUES('larameemarine', 'larameemarine', 'db_larameemarine', NULL);

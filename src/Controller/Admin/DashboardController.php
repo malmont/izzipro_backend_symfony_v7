@@ -58,6 +58,12 @@ use App\Entity\Parcel;
 use App\Entity\AddressEntreprise;
 use App\Entity\ProductOption;
 use App\Entity\ProductOptionValue;
+use App\Entity\LandingPageSetting;
+use App\Entity\Presentation;
+use App\Entity\ProductType;
+use App\Entity\PresentationGroup;
+use App\Entity\BaniereStatiqueTranslation;
+
 
 
 use App\Controller\Admin\OrderAllCrudController;
@@ -78,6 +84,8 @@ use App\Entity\Multilien;
 use App\Entity\Recherche;
 use App\Entity\ServiceOffer;
 use App\Entity\Video;
+use App\Entity\Embed;
+use App\Entity\BaniereStatique;
 
 class DashboardController extends AbstractDashboardController
 {
@@ -85,14 +93,13 @@ class DashboardController extends AbstractDashboardController
     public function index(): Response
     {
         return $this->render('admin/index.html.twig');
-        // $routeBuilder = $this->get(AdminUrlGenerator::class);
-        // return $this->redirect($routeBuilder->setController(OrderCrudController::class)->generateUrl());
     }
 
     public function configureDashboard(): Dashboard
     {
         return Dashboard::new()
-            ->setTitle('Ecommerce'); 
+            ->setTitle('<img src="/assets/Logo-Principal_GEM-PORTAL.png" style="max-height: 45px; width: auto;">');
+
     }
 
     public function configureMenuItems(): iterable
@@ -124,6 +131,13 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Section Recherche', 'fas fa-search', Recherche::class);
         yield MenuItem::linkToCrud('Offres de Service', 'fas fa-concierge-bell', ServiceOffer::class);
         yield MenuItem::linkToCrud('Vidéos', 'fas fa-video', Video::class);
+        yield MenuItem::linkToCrud('Contenus Intégrés', 'fas fa-code', Embed::class);
+        yield MenuItem::linkToCrud('Configuration', 'fas fa-cogs', LandingPageSetting::class);
+        yield MenuItem::linkToCrud('Bannières Statiques', 'fas fa-image', BaniereStatique::class);
+        yield MenuItem::linkToCrud('Présentations', 'fas fa-columns', Presentation::class);
+        yield MenuItem::linkToCrud('Groupes de Présentation', 'fas fa-columns', PresentationGroup::class);
+
+
 
         yield MenuItem::section('Entreprise');
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
@@ -201,9 +215,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Categories', 'fas fa-list', Categories::class);
         yield MenuItem::linkToRoute('Gestion des Codes-Barres', 'fa fa-barcode', 'admin_barcode_management');
         yield MenuItem::linkToCrud('Types d\'options', 'fas fa-tag', ProductOption::class);
-        yield MenuItem::linkToCrud('Valeurs d\'options', 'fas fa-palette', ProductOptionValue::class)->setController(ProductOptionValueCrudController::class);;
+        yield MenuItem::linkToCrud('Valeurs d\'options', 'fas fa-palette', ProductOptionValue::class)->setController(ProductOptionValueCrudController::class);
+        yield MenuItem::linkToCrud('Types de Produit', 'fas fa-box', ProductType::class);
 
-
-
+              
     }
 }

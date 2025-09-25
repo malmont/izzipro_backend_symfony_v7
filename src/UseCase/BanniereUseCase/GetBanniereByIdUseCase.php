@@ -1,7 +1,7 @@
 <?php
-
 namespace App\UseCase\BanniereUseCase;
 
+use App\Dto\BanniereOutputDto;
 use App\Entity\Banniere;
 use App\Services\BanniereService\BanniereService;
 
@@ -12,8 +12,13 @@ class GetBanniereByIdUseCase
     ) {
     }
 
-    public function execute(int $id): ?Banniere
+    public function execute(int $id, string $locale, string $baseImageUrl): ?BanniereOutputDto
     {
-        return $this->banniereService->findBanniere($id);
+        $entity = $this->banniereService->findByIdAndLocale($id, $locale);
+
+        if (!$entity) {
+            return null;
+        }
+        return new BanniereOutputDto($entity, $baseImageUrl, $locale);
     }
 }

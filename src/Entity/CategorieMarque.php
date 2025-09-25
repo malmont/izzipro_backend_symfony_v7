@@ -24,9 +24,16 @@ class CategorieMarque
     #[ORM\ManyToMany(targetEntity: Marque::class, mappedBy: 'categories')]
     private Collection $marques;
 
+    /**
+     * @var Collection<int, CategorieMarqueTranslation>
+     */
+    #[ORM\OneToMany(mappedBy: 'categorieMarque', targetEntity: CategorieMarqueTranslation::class,cascade: ['persist', 'remove'],orphanRemoval: true)]
+    private Collection $translations;
+
     public function __construct()
     {
         $this->marques = new ArrayCollection();
+        $this->translations = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -71,5 +78,52 @@ class CategorieMarque
         }
 
         return $this;
+    }
+
+    /**
+     * @return Collection<int, CategorieMarqueTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(CategorieMarqueTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setCategorieMarque($this);
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(CategorieMarqueTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            // set the owning side to null (unless already changed)
+            if ($translation->getCategorieMarque() === $this) {
+                $translation->setCategorieMarque(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getTranslation(string $locale): ?CategorieMarqueTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        return $this->translations->first() ?: null;
     }
 }

@@ -3,7 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\ExploreCard;
-use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
+use Doctrine\ORM\EntityRepository; 
 
 /**
  * N'est plus un service Symfony.
@@ -11,8 +11,13 @@ use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de bas
  */
 class ExploreCardRepository extends EntityRepository
 {
-    /**
-     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
-     */
-    // public function __construct(ManagerRegistry $registry) { ... }
+    public function findAllByLocale(string $locale): array
+    {
+        return $this->createQueryBuilder('ec') // 'ec' pour ExploreCard
+            ->leftJoin('ec.translations', 't', 'WITH', 't.language = :locale')
+            ->addSelect('t')
+            ->setParameter('locale', $locale)
+            ->getQuery()
+            ->getResult();
+    }
 }

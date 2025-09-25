@@ -3,7 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\Entreprise;
-use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
+use Doctrine\ORM\EntityRepository;
 
 /**
  * N'est plus un service Symfony.
@@ -11,8 +11,16 @@ use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de bas
  */
 class EntrepriseRepository extends EntityRepository
 {
-    /**
-     * SUPPRIMÉ : Le constructeur n'est plus nécessaire.
-     */
-    // public function __construct(ManagerRegistry $registry) { ... }
+    public function findByIdAndLocale(int $id, string $locale): ?Entreprise
+    {
+        return $this->createQueryBuilder('e')
+            ->where('e.id = :id')
+            ->setParameter('id', $id)
+            ->leftJoin('e.translations', 't', 'WITH', 't.language = :locale')
+            ->addSelect('t')
+            ->setParameter('locale', $locale)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
 }

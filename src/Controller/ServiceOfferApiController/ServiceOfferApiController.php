@@ -29,39 +29,49 @@ class ServiceOfferApiController extends AbstractController
         private GetServiceOfferByIdUseCase $getServiceOfferByIdUseCase
     ) {}
 
-    #[Route('', name: 'api_service_offer_list', methods: ['GET'])]
+   #[Route('', name: 'api_service_offer_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $cacheKey = 'service_offers_all';
-        $cacheTags = ['service_offers'];
+        $locale = $request->getLocale();
+        $cacheKey = 'service_offers_all_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
 
-        $serviceOffersDto = $this->cache->get(
+        $dtos = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($baseImageUrl) {
-                $serviceOffers = $this->getAllServiceOffersUseCase->execute();
-                return array_map(fn($offer) => new ServiceOfferOutputDto($offer, $baseImageUrl), $serviceOffers);
-            },
-            3600,
-            $cacheTags
+            function (ItemInterface $item) use ($locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['service_offers_all']);
+
+                return $this->getAllServiceOffersUseCase->execute($baseImageUrl, $locale);
+            }
         );
 
-        return $this->json($serviceOffersDto);
+        return $this->json($dtos);
     }
 
-     #[Route('/{id}', name: 'api_service_offer_get_one', methods: ['GET'])]
+    #[Route('/{id}', name: 'api_service_offer_get_one', methods: ['GET'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
-        $serviceOffer = $this->getServiceOfferByIdUseCase->execute($id);
+        $locale = $request->getLocale();
+        $cacheKey = 'service_offer_' . $id . '_' . $locale;
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
 
-        if (!$serviceOffer) {
+        $dto = $this->cache->get(
+            $cacheKey,
+            function (ItemInterface $item) use ($id, $locale, $baseImageUrl) {
+                $item->expiresAfter(3600);
+                $item->tag(['service_offers_all', 'service_offer_' . $id]);
+
+                return $this->getServiceOfferByIdUseCase->execute($id, $baseImageUrl, $locale);
+            }
+        );
+
+        if (!$dto) {
             return $this->json(['message' => 'Offre de service non trouvée'], Response::HTTP_NOT_FOUND);
         }
         
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
-        return $this->json(new ServiceOfferOutputDto($serviceOffer, $baseImageUrl));
+        return $this->json($dto);
     }
-
     #[Route('', name: 'api_service_offer_create', methods: ['POST'])]
     public function create(#[MapRequestPayload] ServiceOfferInputDto $dto, Request $request): JsonResponse
     {

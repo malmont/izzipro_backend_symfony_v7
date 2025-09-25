@@ -5,16 +5,18 @@
 
 {% block body %}
 <div class="container mt-5">
-    {% if emailConfig and emailConfig.logo %}
+    {% if logoUrl %}
         <div class="text-center mb-4">
-            <img src="{{ domain ~ emailConfig.logo }}" alt="{{ emailConfig.fromName }} Logo" style="max-width: 200px;">
+            <img src="{{ domain ~ logoUrl }}" alt="{{ fromName }} Logo" style="max-width: 200px;">
         </div>
     {% endif %}
-    {% if emailConfig and emailConfig.fromName %}
+
+    {% if fromName %}
         <div class="text-center mb-4">
-            <h2>{{ emailConfig.fromName }}</h2>
+            <h2>{{ fromName }}</h2>
         </div>
     {% endif %}
+
     <div class="alert alert-info" role="alert">
         <h4 class="alert-heading">Bonjour, {{ user.firstname }}!</h4>
         <p>Merci de vous être inscrit. Pour activer votre compte, veuillez cliquer sur le lien ci-dessous :</p>

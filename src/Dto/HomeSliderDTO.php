@@ -1,18 +1,27 @@
 <?php
 namespace App\Dto;
 
+use App\Entity\HomeSlider;
+
 class HomeSliderDTO
 {
     public int $id;
-    public string $title;
+    public ?string $title;
     public ?string $image;
-    public string $description;
-    public string $buttonMessage;
-    public string $buttonUrl;
-    public bool $isDiplayed;
+    public ?string $description;
+    public ?string $buttonMessage;
+    public ?string $buttonUrl;
+    public ?bool $isDiplayed;
 
-    public function __construct(int $id, string $title, ?string $image, string $description, string $buttonMessage,string $buttonUrl,bool $isDiplayed)
-    {
+    public function __construct(
+        int $id,
+        ?string $title,
+        ?string $image,
+        ?string $description,
+        ?string $buttonMessage,
+        ?string $buttonUrl,
+        ?bool $isDiplayed
+    ) {
         $this->id = $id;
         $this->title = $title;
         $this->image = $image;
@@ -22,18 +31,28 @@ class HomeSliderDTO
         $this->isDiplayed = $isDiplayed;
     }
 
-    public static function fromEntity($homeSlider, string $host): self
+   public static function fromEntity(HomeSlider $homeSlider, string $host, string $locale): self
     {
+        $translation = $homeSlider->getTranslation($locale);
+
+        $imagePath = $homeSlider->getImage();
+        if (str_starts_with((string)$imagePath, 'http')) {
+            $image = $imagePath;
+        } else if ($imagePath) {
+            $cleanedHost = rtrim($host, '/');
+            $image = $cleanedHost . '/assets/uploads/slider/' . $imagePath;
+        } else {
+            $image = null;
+        }
+
         return new self(
             $homeSlider->getId(),
-            $homeSlider->getTitle(),
-            $homeSlider->getImage(),
-            $homeSlider->getDescription(),
-            $homeSlider->getButtonMessage(),
+            $translation?->getTitle() ?? $homeSlider->getTitle(),
+            $image,
+            $translation?->getDescription() ?? $homeSlider->getDescription(),
+            $translation?->getButtonMessage() ?? $homeSlider->getButtonMessage(),
             $homeSlider->getButtonUrl(),
             $homeSlider->isIsDiplayed(),
         );
     }
 }
-
-

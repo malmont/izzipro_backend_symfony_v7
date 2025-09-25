@@ -2,12 +2,13 @@
 namespace App\Controller\Admin;
 
 use App\Entity\StatusPayment;
-use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
-use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
+use App\Form\StatusPaymentTranslationType;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 
-// 2. On étend notre contrôleur de base
 class StatusPaymentCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
@@ -21,6 +22,10 @@ class StatusPaymentCrudController extends BaseTenantCrudController
             IdField::new('id')->hideOnForm(),
             TextField::new('name', 'Nom du Statut de Paiement'),
             TextEditorField::new('description', 'Description')->hideOnIndex(),
+            CollectionField::new('translations', 'Traductions')
+                ->setEntryType(StatusPaymentTranslationType::class)
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(),
         ];
     }
 }

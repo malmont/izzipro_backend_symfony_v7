@@ -1,4 +1,5 @@
 <?php
+
 namespace App\UseCase\CarrierUseCase;
 
 use App\Services\CarrierService\CarrierService;
@@ -13,9 +14,12 @@ class GetAllCarriersUseCase
         $this->carrierService = $carrierService;
     }
 
-    public function execute(string $host): array
+    public function execute(string $host, string $locale): array
     {
-        $carriers = $this->carrierService->getAllCarriers();
-        return array_map(fn($carrier) => CarrierDTO::fromEntity($carrier, $host), $carriers);
+        $carriers = $this->carrierService->getAllCarriers($locale);
+        return array_map(
+            fn($carrier) => CarrierDTO::fromEntity($carrier, $host, $locale), 
+            $carriers
+        );
     }
 }

@@ -1,162 +1,62 @@
-# Nom du workflow qui apparaît dans l'interface de GitHub Actions
-name: Build and Deploy Backend (Self-Hosted QA)
+name: Build and Deploy Backend to Kubernetes
 
-# Déclencheur du workflow : s'exécute à chaque push sur la branche "qa"
 on:
   push:
     branches:
-      - qa
+      - main # ⚠️ Mettez ici le nom de votre branche de production
 
-# La clé "jobs" contient tous les travaux à exécuter
+permissions:
+  contents: read
+  packages: write
+
 jobs:
-  build-and-deploy-self-hosted:
-    name: Build and Deploy Backend (Self-Hosted)
-    permissions:
-      contents: read
-      packages: write
-    runs-on: self-hosted
-
-    env:
-      # On définit le chemin de déploiement final dans une variable
-      APP_PATH: /home/${{ secrets.CLIENT1_SERVER_USER }}/app
+  build-and-deploy:
+    name: Build, Push and Deploy
+    runs-on: ubuntu-latest
 
     steps:
-      # Étape 1: Checkout du code
-      - name: 📥 Checkout repository
+      - name: 📥 Checkout App Repository
         uses: actions/checkout@v4
 
-      # Étape 2: Configuration SSH
-      - name: 🔑 Configure SSH for Git Checkout
-        uses: webfactory/ssh-agent@v0.8.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-      
-      # Étape 3: Génération du fichier .env
-      - name: 🔄 Generate .env file
-        run: |
-          echo "📄 Génération du fichier .env..."
-          cat <<EOL > .env
-          POSTGRES_USER=${{ secrets.DB_USER }}
-          POSTGRES_PASSWORD=${{ secrets.DB_PASSWORD }}
-          POSTGRES_DB=${{ secrets.DB_NAME }}
-          POSTGRES_HOST=db
-          POSTGRES_PORT=5432
-          DATABASE_URL=pgsql://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@db:5432/${{ secrets.DB_NAME }}
-          MASTER_DATABASE_URL=postgresql://${{ secrets.MASTER_DB_USER }}:${{ secrets.MASTER_DB_PASSWORD }}@db:5432/master?serverVersion=14&charset=utf8
-          MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0
-          APP_ENV=prod
-          APP_SECRET=${{ secrets.APP_SECRET }}
-          REDIS_URL=redis://redis
-          MAILER_DSN=${{ secrets.MAILER_DSN }}
-          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
-          JWT_PUBLIC_KEY=${{ secrets.JWT_PUBLIC_KEY }}
-          JWT_PASSPHRASE=${{ secrets.JWT_PASSPHRASE }}
-          SQUARE_SECRET_KEY=${{ secrets.SQUARE_SECRET_KEY }}
-          CLIENT1_SERVER_USER=${{ secrets.CLIENT1_SERVER_USER }}
-          CLIENT1_GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
-          EOL
-          echo "✅ Fichier .env généré."
-
-      # Étape 4: Connexion à GHCR
-      - name: 🔑 Login to GHCR
+      - name: 🔑 Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Étape 5: Construction et push des images Docker
-      - name: 🏗️ Build and Push Docker Images
+      - name: 🏷️ Determine Image Tag
+        id: meta
+        run: echo "IMAGE_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: 🏗️ Build and Push Docker Image
         run: |
-          echo "📦 Construction et push de l'image Symfony..."
-          docker build --build-arg APP_ENV=prod -t ghcr.io/${{ github.repository_owner }}/symfony-backend:latest -f Dockerfile .
-          docker push ghcr.io/${{ github.repository_owner }}/symfony-backend:latest
-          
-          echo "📦 Construction et push de l'image Nginx..."
-          docker build -t ghcr.io/${{ github.repository_owner }}/symfony-nginx:latest -f Dockerfile.nginx .
-          docker push ghcr.io/${{ github.repository_owner }}/symfony-nginx:latest
-          
-          echo "✅ Images Docker poussées vers GHCR."
-
-      # Étape 6: Synchronisation des fichiers
-      - name: 🚚 Synchronize files to deployment directory
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ env.IMAGE_TAG }}"
+          echo "📦 Building and pushing image: $IMAGE_NAME"
+          docker build -t $IMAGE_NAME -f Dockerfile .
+          docker push $IMAGE_NAME
+      
+      - name: 🔄 Update K8s Config Repository
         run: |
-          echo "Synchronisation des fichiers vers ${{ env.APP_PATH }}"
-          sudo mkdir -p ${{ env.APP_PATH }}
-          sudo rsync -a --delete . ${{ env.APP_PATH }}/
-          sudo chown -R ${{ secrets.CLIENT1_SERVER_USER }}:${{ secrets.CLIENT1_SERVER_USER }} ${{ env.APP_PATH }}
-          echo "✅ Synchronisation terminée."
-
-      # Étape 7: Déploiement des conteneurs
-      - name: 🚀 Deploy containers
-        working-directory: ${{ env.APP_PATH }}
-        run: |
-          echo "🔑 Connexion à GHCR pour l'utilisateur root..."
-          echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-          echo "📥 Téléchargement des nouvelles images depuis GHCR..."
-          sudo docker-compose pull
-
-          echo "🛑 Arrêt et suppression des anciens conteneurs..."
-          sudo docker-compose down --remove-orphans
+          echo "🌀 Cloning K8s config repository..."
+          # ⚠️ IMPORTANT : Créez ce secret dans les paramètres de votre dépôt de code.
+          # Il doit contenir un "Personal Access Token" qui a le droit d'écrire sur votre dépôt de config.
+          git clone https://x-access-token:${{ secrets.PAT_FOR_CONFIG_REPO }}@github.com/v2v-technologies/ecommerce-k8s.git k8s-config
           
-          echo "🚀 Lancement des nouveaux conteneurs..."
-          sudo docker-compose up -d
+          cd k8s-config
 
-          echo "✅ Déploiement terminé."
-
-      # Étape 8: Initialisation de la base de données Master
-      - name: ⚙️ Initialize Master Database
-        working-directory: ${{ env.APP_PATH }}
-        run: |
-          echo "⏳ Attente que PostgreSQL soit prêt à accepter des connexions..."
-          until sudo docker exec symfony_db pg_isready -U ${{ secrets.DB_USER }} -d postgres; do
-            echo "PostgreSQL n'est pas encore prêt, on attend 2 secondes..."
-            sleep 2
-          done
-          echo "✅ PostgreSQL est prêt !"
-
-          echo "🔧 Création de l'utilisateur, de la DB, de la table 'tenants' et du tenant par défaut..."
-          # Crée l'utilisateur master, ignore l'erreur s'il existe déjà
-          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "CREATE USER ${{ secrets.MASTER_DB_USER }} WITH PASSWORD '${{ secrets.MASTER_DB_PASSWORD }}';" || true
-          # Crée la base de données master, ignore l'erreur si elle existe déjà
-          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "CREATE DATABASE master;" || true
-          # Accorde tous les privilèges sur cette base à l'utilisateur master
-          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -c "GRANT ALL PRIVILEGES ON DATABASE master TO ${{ secrets.MASTER_DB_USER }};"
-
-          # --- CORRECTION DE LA SYNTAXE ICI ---
-          # On exécute les commandes SQL une par une pour éviter les problèmes de syntaxe YAML
-          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -d master -c "CREATE TABLE IF NOT EXISTS tenants (id SERIAL PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE, name VARCHAR(255) NOT NULL, dbname VARCHAR(255) NOT NULL, dbuser VARCHAR(255), dbpass VARCHAR(255));"
-          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -d master -c "INSERT INTO tenants (code, name, dbname) VALUES ('ecommerceflutter', 'ecommerceflutter', 'ecommerceflutter') ON CONFLICT (code) DO NOTHING;"
-          sudo docker exec symfony_db psql -U ${{ secrets.DB_USER }} -d master -c "GRANT ALL PRIVILEGES ON TABLE tenants TO ${{ secrets.MASTER_DB_USER }};"
-          # --- FIN DE LA CORRECTION ---
+          echo "✏️ Updating image tag in deployment.yaml..."
+          # Installation de yq, un outil pour éditer du YAML en ligne de commande
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
           
-          echo "✅ Base de données master initialisée."
+          # La commande magique qui met à jour le tag de l'image
+          yq e '.spec.template.spec.containers[0].image = "ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ env.IMAGE_TAG }}"' -i ./apps/backend-symfony/deployment.yaml
 
-      # Étape 9: Commandes post-déploiement
-      - name: ⚙️ Run post-deployment commands
-        working-directory: ${{ env.APP_PATH }}
-        run: |
-          echo "⏳ Pause de 5 secondes pour que l'application se stabilise..."
-          sleep 5
+          echo "🚀 Pushing configuration changes..."
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "Deploy backend image ${{ env.IMAGE_TAG }}"
+          git push
           
-          echo "🧹 Nettoyage et préparation du cache Symfony..."
-          sudo docker exec symfony_app php bin/console cache:clear --env=prod
-          
-          echo "🔄 Application des migrations de la base de données..."
-          # Cette commande migrera la base du tenant par défaut (ecommerceflutter)
-          sudo docker exec symfony_app php bin/console doctrine:migrations:migrate --no-interaction --env=prod
-
-          echo "🔧 Réajustement des permissions pour l'installation des assets..."
-          sudo chown -R www-data:www-data public
-          
-          echo "📦 Installation des assets..."
-          sudo docker exec symfony_app php bin/console assets:install public
-
-          echo "🔧 Réajustement des permissions sur les dossiers d'upload..."
-          sudo mkdir -p public/assets/uploads
-          sudo mkdir -p public/assets/images
-          sudo chown -R www-data:www-data public/assets/uploads public/assets/images
-          sudo chmod -R 775 public/assets/uploads public/assets/images
-
-          echo "✅ Commandes post-déploiement terminées."
+          echo "✅ Config repository updated. Argo CD will now deploy the new version."

@@ -14,6 +14,10 @@ use App\Entity\Banniere;
 use App\Entity\HomeSlider;
 use App\Entity\Product;
 use App\Entity\Payments;
+use App\Entity\BanniereStatique;
+use App\Entity\ExploreCard;
+use App\Entity\EmailConfiguration;
+use App\Entity\Feature;
 use App\Entity\ProductVariant;
 use App\Entity\SquareConfig;
 use App\Entity\Color;
@@ -43,6 +47,13 @@ use App\Entity\Recherche;
 use App\Entity\ServiceOffer;
 use App\Entity\Video;
 use App\Entity\Contact;
+use App\Entity\StatusPayment;
+use App\Entity\StatusCommande;
+use App\Entity\Presentation;
+use App\Entity\PresentationGroup;
+use App\Entity\PaymentMethod;
+use App\Entity\OrderType;
+
 
 class CacheInvalidationSubscriber implements EventSubscriber
 {
@@ -64,15 +75,50 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'delete' => ['videos_all'],
             'invalidate_tags' => ['videos'],
         ],
-        [
+         [
             'classes' => [ServiceOffer::class],
-            'delete' => ['service_offers_all'],
-            'invalidate_tags' => ['service_offers'],
+            'delete' => [],
+            'invalidate_tags' => ['service_offers_all'],
+        ],
+         [
+            'classes' => [Recherche::class],
+            'delete' => [],
+            'invalidate_tags' => ['recherches_all'],
         ],
         [
-            'classes' => [Recherche::class],
-            'delete' => ['recherches_all'],
-            'invalidate_tags' => ['recherches'],
+            'classes' => [StatusPayment::class],
+            'delete' => [],
+            'invalidate_tags' => ['status_payments_all'],
+        ],
+        [
+            'classes' => [StatusCommande::class],
+            'delete' => [],
+            'invalidate_tags' => ['status_commandes_all'],
+        ],
+        [
+            'classes' => [Presentation::class],
+            'delete' => [],
+            'invalidate_tags' => ['presentations_all'],
+        ],
+        [
+            'classes' => [PresentationGroup::class],
+            'delete' => [],
+            'invalidate_tags' => ['presentation_groups_all'],
+        ],
+        [
+            'classes' => [PaymentMethod::class],
+            'delete' => [],
+            'invalidate_tags' => ['payment_methods_all'],
+        ],
+        [
+            'classes' => [OrderType::class],
+            'delete' => [],
+            'invalidate_tags' => ['order_types_all'],
+        ],
+        [
+            'classes' => [Marque::class],
+            'delete' => [],
+            'invalidate_tags' => ['marques_all', 'categories_marque_all'],
         ],
         [
             'classes' => [Multilien::class],
@@ -80,14 +126,9 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'invalidate_tags' => ['multiliens'],
         ],
         [
-            'classes' => [Marque::class, CategorieMarque::class], // Gère déjà les deux
-            'delete' => ['marques_all', 'categories_marque_all'],
-            'invalidate_tags' => ['marques', 'categories_marque'],
-        ],
-         [
-            'classes' => [Marque::class, CategorieMarque::class], 
-            'delete' => ['marques_all', 'categories_marque_all'], 
-            'invalidate_tags' => ['marques', 'categories_marque'],
+            'classes' => [CategorieMarque::class],
+            'delete' => [],
+            'invalidate_tags' => ['categories_marque_all'],
         ],
         [
             'classes' => [Candidature::class],
@@ -96,41 +137,39 @@ class CacheInvalidationSubscriber implements EventSubscriber
         ],
         [
             'classes' => [Emploi::class],
-            'delete' => ['emplois_all'],
-            'invalidate_tags' => ['emplois'],
+            'delete' => [''],
+            'invalidate_tags' => ['emplois_all'],
         ],
         [
-            'classes' => [Banniere::class],
-            'delete' => ['bannieres_all'], // On supprime la clé exacte
-            'invalidate_tags' => ['bannieres'], // On invalide aussi le tag par sécurité
+            'classes' => [Banniere::class, BanniereStatique::class],
+            'delete' => [],
+            'invalidate_tags' => ['bannieres_all', 'bannieres_statiques_all'],
         ],
-
-        // Pour TransactionCaisse : suppression d'une clé et invalidation d'un tag
         [
             'classes' => [TransactionCaisse::class],
             'delete' => ['open_caisse_transactions'],
             'invalidate_tags' => ['caisses_tag'],
         ],
-        // Pour AdminSettings
         [
             'classes' => [AdminSettings::class],
             'delete' => ['admin_settings'],
             'invalidate_tags' => [],
         ],
-        // Pour Carrier
         [
             'classes' => [Carrier::class],
-            'delete' => ['carriers'],
-            'invalidate_tags' => [],
+            'delete' => [],
+            'invalidate_tags' => ['carriers_all'],
         ],
-
-        // Pour HomeSlider
         [
             'classes' => [HomeSlider::class],
-            'delete' => ['homeslider'],
-            'invalidate_tags' => [],
+            'delete' => [],
+            'invalidate_tags' => ['homeslider_all'],
         ],
-        // Pour SquareConfig
+        [
+            'classes' => [Feature::class],
+            'delete' => [],
+            'invalidate_tags' => ['features_all'],
+        ],
         [
             'classes' => [SquareConfig::class],
             'delete' => ['square_config'],
@@ -145,7 +184,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
         [
         'classes' => [Categories::class],
         'delete' => ['categories_all'], 
-        'invalidate_tags' => ['products_by_category'], 
+        'invalidate_tags' => ['categories_all', 'products_by_category'],
         ],
         // Collections
         [
@@ -158,6 +197,21 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'classes' => [Color::class],
             'delete' => ['colors_all'],
             'invalidate_tags' => [],
+        ],
+        [
+            'classes' => [ExploreCard::class],
+            'delete' => [],
+            'invalidate_tags' => ['explore_cards_all'],
+        ],
+        [
+            'classes' => [Entreprise::class], 
+            'delete' => [],
+            'invalidate_tags' => ['entreprise'],
+        ],
+        [
+            'classes' => [EmailConfiguration::class],
+            'delete' => [],
+            'invalidate_tags' => ['email_configurations_all'],
         ],
         // Pour Commande et Fournisseur : tag commandes_by_collection
         [
@@ -291,6 +345,33 @@ class CacheInvalidationSubscriber implements EventSubscriber
         $tenantCode = $this->tcp->getTenantCode() ?: 'master';
         $prefix = $tenantCode . ':';
         $tagPrefix = $tenantCode;
+
+         if ($entity instanceof BanniereStatique) {
+            if ($entity->getId()) {
+                $this->cache->invalidateTags(['baniere_statique_' . $entity->getId()]);
+            }
+        }
+        if ($entity instanceof Banniere) {
+            if ($entity->getId()) {
+                $this->cache->invalidateTags(['banniere_' . $entity->getId()]);
+            }
+        }
+        if ($entity instanceof Carrier) {
+            if ($entity->getId()) {
+                $this->cache->invalidateTags(['carrier_' . $entity->getId()]);
+            }
+        }
+        if ($entity instanceof CategorieMarque) {
+            if ($entity->getId()) {
+                $this->cache->invalidateTags(['categorie_marque_' . $entity->getId()]);
+            }
+        }
+        if ($entity instanceof ExploreCard && $entity->getId()) {
+            $this->cache->invalidateTags(['explore_card_' . $entity->getId()]);
+        }
+        if ($entity instanceof Entreprise && $entity->getId()) {
+            $this->cache->invalidateTags(['entreprise_' . $entity->getId()]);
+        }
 
         if ($entity instanceof Adress) {
             $user = $entity->getUserAdress();

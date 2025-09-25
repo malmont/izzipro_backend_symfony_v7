@@ -2,18 +2,20 @@
 namespace App\Controller\Admin;
 
 use App\Entity\ExploreCard;
-use App\Controller\Admin\BaseTenantCrudController; // <-- 1. On importe notre base
+use App\Form\ExploreCardTranslationType;
+use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\{
     IdField,
     BooleanField,
     TextField,
-    TextareaField,
-    ImageField
+    CollectionField,
+    ImageField,
+    TextareaField
 };
 use Symfony\Component\Form\Extension\Core\Type\FileType;
 
-// 2. On étend notre contrôleur de base
+
 class ExploreCardCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
@@ -65,6 +67,11 @@ class ExploreCardCrudController extends BaseTenantCrudController
 
         yield TextField::new('videoPath', 'Lien vidéo')
             ->setRequired(false)
-            ->onlyOnForms();    
+            ->onlyOnForms();  
+            
+        yield CollectionField::new('translations', 'Contenus Traduits')
+            ->setEntryType(ExploreCardTranslationType::class)
+            ->setFormTypeOption('by_reference', false)
+            ->onlyOnForms();
     }
 }

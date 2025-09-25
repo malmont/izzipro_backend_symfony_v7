@@ -1,22 +1,22 @@
 <?php
-
 namespace App\Services\ColorService;
 
 use App\Entity\Color;
+use App\Repository\ColorRepository;
 use App\Services\TenantEntityManagerProvider;
 
 class ColorService
 {
-    private TenantEntityManagerProvider $emProvider;
+    private ColorRepository $repository;
 
     public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->emProvider = $emProvider;
+        $em = $emProvider->getEntityManager();
+        $this->repository = $em->getRepository(Color::class);
     }
 
-    public function getAllColors(): array
+    public function getAllColorsByLocale(string $locale): array
     {
-        $em = $this->emProvider->getEntityManager();
-        return $em->getRepository(Color::class)->findAll();
+        return $this->repository->findAllByLocale($locale);
     }
 }

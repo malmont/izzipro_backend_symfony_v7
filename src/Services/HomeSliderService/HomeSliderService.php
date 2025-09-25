@@ -2,20 +2,21 @@
 namespace App\Services\HomeSliderService;
 
 use App\Entity\HomeSlider;
-use App\Services\TenantEntityManagerProvider; // Ajouté
+use App\Repository\HomeSliderRepository;
+use App\Services\TenantEntityManagerProvider;
 
 class HomeSliderService 
 {
-    private TenantEntityManagerProvider $tenantEmProvider;
+    private HomeSliderRepository $repository;
 
-    public function __construct(TenantEntityManagerProvider $tenantEmProvider)
+    public function __construct(TenantEntityManagerProvider $emProvider)
     {
-        $this->tenantEmProvider = $tenantEmProvider;
+        $em = $emProvider->getEntityManager();
+        $this->repository = $em->getRepository(HomeSlider::class);
     }
 
-    public function getAllhomeSliders(): array
+    public function getAllHomeSlidersByLocale(string $locale): array
     {
-        $em = $this->tenantEmProvider->getEntityManager();
-        return $em->getRepository(HomeSlider::class)->findAll(); 
+        return $this->repository->findAllByLocale($locale);
     } 
 }

@@ -9,6 +9,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use Symfony\Component\Form\Extension\Core\Type\FileType;
 use EasyCorp\Bundle\EasyAdminBundle\Field\UrlField;
+use App\Form\VideoTranslationType;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 
 /**
  * Ce contrôleur hérite de notre base pour être automatiquement "multi-tenant".
@@ -31,6 +33,10 @@ class VideoCrudController extends BaseTenantCrudController
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
             UrlField::new('lienVideo', 'Lien de la vidéo (YouTube, Vimeo, etc.)'),
+            CollectionField::new('translations', 'Contenus par langue')
+                ->setEntryType(VideoTranslationType::class)
+                ->setFormTypeOption('by_reference', false)
+                ->onlyOnForms(),
         ];
     }
 

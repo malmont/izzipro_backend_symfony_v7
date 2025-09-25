@@ -13,9 +13,11 @@ use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Cocur\Slugify\Slugify;
+use App\Repository\ProductRepository;
 
 class ProductService
 {
+    private ProductRepository $repository;
     private TenantEntityManagerProvider $emProvider;
     private EntityRetrieverService $entityRetrieverService;
 
@@ -23,8 +25,10 @@ class ProductService
         TenantEntityManagerProvider $emProvider,
         EntityRetrieverService $entityRetrieverService
     ) {
-        $this->emProvider = $emProvider;
+        $em = $emProvider->getEntityManager();
+        $this->repository = $em->getRepository(Product::class);
         $this->entityRetrieverService = $entityRetrieverService;
+        $this->emProvider = $emProvider;
     }
 
     public function getProductsByCommande(Commande $commande, string $host): array
@@ -78,62 +82,50 @@ class ProductService
         $em->flush();
     }
 
-    public function getAllProducts(string $host): array
+    public function getProductById(int $id, string $host, string $locale = 'fr'): ProductDetailedOutputDTO
     {
-        $em = $this->emProvider->getEntityManager();
-        $products = $em->getRepository(Product::class)->findAll();
-        
-        $bestsellers = array_filter($products, fn($product) => $product->isIsbestseller());
-        $newArrivals = array_filter($products, fn($product) => $product->isIsnewarrival());
-        $specialOffers = array_filter($products, fn($product) => $product->isIsspecialoffer());
+        $product = $this->repository->findByIdAndLocale($id, $locale);
 
-        $bestsellersDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $bestsellers);
-        $newArrivalsDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $newArrivals);
-        $specialOffersDTO = array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $specialOffers);
+        if (!$product) {
+            throw new NotFoundHttpException('Product not found for ID: ' . $id);
+        }
+        return new ProductDetailedOutputDTO($product, $host, $locale);
+    }
+
+    public function getAllProducts(string $host, string $locale = 'fr'): array
+    {
+        $bestsellers   = $this->repository->findTranslatedByCriteria($locale, ['isbestseller' => true, 'isWeb' => true]);
+        $newArrivals   = $this->repository->findTranslatedByCriteria($locale, ['isnewarrival' => true, 'isWeb' => true]);
+        $specialOffers = $this->repository->findTranslatedByCriteria($locale, ['isspecialoffer' => true, 'isWeb' => true]);
 
         return [
-            'bestsellers' => $bestsellersDTO,
-            'newArrivals' => $newArrivalsDTO,
-            'specialOffers' => $specialOffersDTO,
+            'bestsellers'   => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale), $bestsellers),
+            'newArrivals'   => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale), $newArrivals),
+            'specialOffers' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale), $specialOffers),
         ];
     }
 
-    public function getProductsByOffer(string $offer, string $host): array
+    public function getProductsByOffer(string $offer, string $host, string $locale = 'fr'): array
     {
-        $em = $this->emProvider->getEntityManager();
-        $products = $em->getRepository(Product::class)->findAll();
-        $filteredProducts = [];
-
-        switch ($offer) {
-            case 'bestsellers':
-                $filteredProducts = array_filter($products, fn($product) =>
-                    $product->isIsbestseller() && ($product->isWeb())
-                );
-                break;
-            case 'newarrivals':
-                $filteredProducts = array_filter($products, fn($product) =>
-                    $product->isIsnewarrival() && ($product->isWeb() )
-                );
-                break;
-            case 'specialoffers':
-                $filteredProducts = array_filter($products, fn($product) =>
-                    $product->isIsspecialoffer() && ($product->isWeb())
-                );
-                break;
-            case 'isfeatured':
-                $filteredProducts = array_filter($products, fn($product) =>
-                    $product->isIsfeatured() && ($product->isWeb() )
-                );
-                break;
-            case 'isAccessory':
-                $filteredProducts = array_filter($products, fn($product) =>
-                    $product->isAccessory() && ($product->isWeb() )
-                );
-                break;
-            default:
-                return []; 
+        $criteria = ['isWeb' => true];
+        $dbFieldMap = [
+            'bestsellers'   => 'isbestseller',
+            'newarrivals'   => 'isnewarrival',
+            'specialoffers' => 'isspecialoffer',
+            'isfeatured'    => 'isfeatured',
+            'isAccessory'   => 'isAccessory'
+        ];
+        if (!isset($dbFieldMap[$offer])) {
+            return []; 
         }
+        $criteria[$dbFieldMap[$offer]] = true;
+        $products = $this->repository->findTranslatedByCriteria($locale, $criteria);
+        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale), $products);
+    }
 
-        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $filteredProducts);
+    public function getLandingPageProducts(string $host, string $locale = 'fr'): array
+    {
+        $products = $this->repository->findTranslatedByCriteria($locale, ['isLandingPage' => true]);
+        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale), $products);
     }
 }
