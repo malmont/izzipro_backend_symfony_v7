@@ -32,7 +32,7 @@ RUN composer install --prefer-dist --no-dev --no-autoloader --no-scripts
 COPY . .
 
 # 4. Maintenant que tous les fichiers sont là, on génère l'autoloader optimisé...
-RUN composer dump-autoload --optimize-autoloader --no-dev
+RUN composer dump-autoload --optimize --no-dev
 
 # 5. ...et on exécute les scripts de Symfony (qui ont besoin de bin/console)
 RUN composer run-script post-install-cmd
