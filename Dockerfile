@@ -32,8 +32,19 @@ COPY . .
 # 4. Générer l'autoloader (nécessaire pour dump-env)
 RUN composer dump-autoload --optimize --no-dev
 
-# 5. Compiler l'environnement prod (génère .env.local.php)
-RUN composer dump-env prod
+# 5. (NOUVEAU) Créer un .env **temporaire** pour permettre `dump-env`, puis le supprimer
+#    - Si .env existe déjà: on ne touche pas
+#    - Sinon on copie .env.dist s'il existe
+#    - Sinon on crée un .env minimal (prod)
+RUN set -eux; \
+    if [ ! -f .env ]; then \
+        if [ -f .env.dist ]; then cp .env.dist .env; else printf "APP_ENV=prod\nAPP_DEBUG=0\n" > .env; fi; \
+        export CREATED_TMP_ENV=1; \
+    else \
+        export CREATED_TMP_ENV=0; \
+    fi; \
+    composer dump-env prod; \
+    if [ "${CREATED_TMP_ENV:-0}" = "1" ]; then rm -f .env; fi
 
 # 6. Exécuter les scripts Composer avec Dotenv désactivé et env explicite
 RUN APP_NO_DOTENV=1 APP_ENV=prod APP_DEBUG=0 composer run-script post-install-cmd
