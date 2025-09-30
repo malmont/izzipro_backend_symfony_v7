@@ -35,24 +35,39 @@ class TenantDoctrineSwitcherListener
 
     public function onKernelRequest(RequestEvent $event): void
     {
-        // On ne traite que la requête principale
         if (!$event->isMainRequest()) {
             return;
         }
 
         $request = $event->getRequest();
         $host = $request->getHost();
+        $tenantCode = null;
 
-        // 1. Récupère le code du tenant
-        $tenantCode = $request->headers->get('X-Tenant-Code')
-            ?: (\str_contains($host, '.') ? \explode('.', $host, 2)[0] : null);
+        // 1. On essaie de récupérer via l'en-tête, pour les APIs par exemple
+        $tenantCode = $request->headers->get('X-Tenant-Code');
 
+        // 2. Sinon, on essaie de récupérer via le sous-domaine
+        if (!$tenantCode) {
+            $hostParts = explode('.', $host);
+            // Un sous-domaine valide aura au moins 3 parties (ex: tenant.domaine.com)
+            if (count($hostParts) > 2) {
+                $tenantCode = $hostParts[0];
+            }
+        }
+
+        // 3. Si on n'a toujours rien trouvé (on est sur le domaine racine), on applique le tenant par défaut
+        if (!$tenantCode && $host === 'gem-portal-backend.com') {
+            $this->logger->info("Domaine racine détecté. Application du tenant par défaut 'tenantdefaut'.");
+            $tenantCode = 'tenantdefaut';
+        }
+        
+        // 4. Si après tout ça on n'a pas de code, on ne fait rien
         if (!$tenantCode) {
             $this->logger->info("Pas de tenant détecté : base par défaut utilisée.");
             return;
         }
 
-        // 2. Lookup du mapping tenant->dbname
+        // La suite du code pour changer de base de données ne change pas...
         $stmt = $this->pdoMaster->prepare('SELECT dbname FROM tenants WHERE code = :c');
         $stmt->execute(['c' => $tenantCode]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
@@ -63,11 +78,8 @@ class TenantDoctrineSwitcherListener
         }
 
         $targetDb = $row['dbname'];
-        
-        // 3. Récupère la base de données ACTUELLE de la connexion Doctrine
         $currentDb = $this->tenantConnectionProvider->getConnection()->getParams()['dbname'] ?? null;
 
-        // 4. Si besoin (et seulement si besoin), on bascule la connexion
         if ($targetDb !== $currentDb) {
             $this->logger->info("Changement de contexte de BDD requis. Actuelle: '$currentDb', Cible: '$targetDb'.");
             $this->tenantConnectionProvider->switchTenant($targetDb, $tenantCode);
