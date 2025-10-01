@@ -48,3 +48,14 @@ monolog:
             type: console
             process_psr_3_messages: false
             channels: ["!event", "!doctrine", "!security"]
+
+when@prod:
+    monolog:
+        handlers:
+            # Ce handler va écraser tous les autres handlers définis plus haut,
+            # mais uniquement lorsque l'environnement est 'prod'.
+            main:
+                type: stream
+                path: "php://stderr" # On envoie tout vers la sortie d'erreur du conteneur
+                level: debug      # On log tout pour le débogage
+                formatter: monolog.formatter.json
