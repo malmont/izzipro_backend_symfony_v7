@@ -36,27 +36,46 @@ jobs:
           docker build -t $IMAGE_NAME -f Dockerfile .
           docker push $IMAGE_NAME
       
+      # ⬇️⬇️ C'EST CE BLOC QUI EST ENTIÈREMENT CORRIGÉ ⬇️⬇️
       - name: 🔄 Update K8s Config Repository
         run: |
           echo "🌀 Cloning K8s config repository..."
-          # ⚠️ IMPORTANT : Créez ce secret dans les paramètres de votre dépôt de code.
-          # Il doit contenir un "Personal Access Token" qui a le droit d'écrire sur votre dépôt de config.
           git clone https://x-access-token:${{ secrets.PAT_FOR_CONFIG_REPO }}@github.com/v2v-technologies/ecommerce-k8s.git k8s-config
           
           cd k8s-config
 
-          echo "✏️ Updating image tag in deployment.yaml..."
-          # Installation de yq, un outil pour éditer du YAML en ligne de commande
+          echo "✏️ Installing yq..."
           sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
           
-          # La commande magique qui met à jour le tag de l'image
-          yq e '.spec.template.spec.containers[0].image = "ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ env.IMAGE_TAG }}"' -i ./apps/backend-symfony/deployment.yaml
-          yq e '.spec.template.spec.containers[0].image = "ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ env.IMAGE_TAG }}"' -i ./apps/backend-symfony/job-postsync-backend.yaml
+          # Vérification de sécurité pour s'assurer que le tag n'est pas vide
+          if [ -z "${{ env.IMAGE_TAG }}" ]; then
+            echo "::error::IMAGE_TAG environment variable is empty. Aborting."
+            exit 1
+          fi
+
+          # On utilise le nom dynamique du dépôt, comme vous le faites déjà
+          IMAGE_URL="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ env.IMAGE_TAG }}"
+          echo "Generated image URL: $IMAGE_URL"
+
+          echo "✏️ Updating image tag in deployment.yaml (main container)..."
+          yq e -i ".spec.template.spec.containers[0].image = \"$IMAGE_URL\"" ./apps/backend-symfony/deployment.yaml
+
+          echo "✏️ Updating image tag in deployment.yaml (initContainer)..."
+          # La commande que vous avez correctement identifiée comme manquante
+          yq e -i ".spec.template.spec.initContainers[0].image = \"$IMAGE_URL\"" ./apps/backend-symfony/deployment.yaml
+
+          echo "✏️ Updating image tag in job-postsync-backend.yaml..."
+          yq e -i ".spec.template.spec.containers[0].image = \"$IMAGE_URL\"" ./apps/backend-symfony/job-postsync-backend.yaml
+
           echo "🚀 Pushing configuration changes..."
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add .
-          git commit -m "Deploy backend image ${{ env.IMAGE_TAG }}"
-          git push
           
-          echo "✅ Config repository updated. Argo CD will now deploy the new version."
+          if git diff-index --quiet HEAD; then
+            echo "No changes to commit. Skipping push."
+          else
+            git commit -m "Deploy backend image ${{ env.IMAGE_TAG }}"
+            git push
+            echo "✅ Config repository updated."
+          fi
