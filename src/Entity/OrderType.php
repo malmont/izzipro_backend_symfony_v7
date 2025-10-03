@@ -6,9 +6,11 @@ use App\Repository\OrderTypeRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
+
 
 #[ORM\Entity(repositoryClass: OrderTypeRepository::class)]
-class OrderType
+class OrderType implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -116,14 +118,12 @@ class OrderType
         return $this->translations;
     }
 
-    public function addTranslation(OrderTypeTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setOrderType($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(OrderTypeTranslation $translation): static
@@ -153,6 +153,25 @@ class OrderType
         }
         
         return $this->translations->first() ?: null;
+    }
+    public function getTranslatableFields(): array
+    {
+        return ['name', 'description'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return OrderTypeTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 
 }

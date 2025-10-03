@@ -147,3 +147,7 @@ services:
     App\Command\CleanMigrationHistoryCommand:
         bind:
             $projectDir: '%kernel.project_dir%'
+
+    App\Services\DeepLTranslateService\DeepLTranslateService:
+        arguments:
+            $deepLApiKey: '%env(DEEPL_API_KEY)%'

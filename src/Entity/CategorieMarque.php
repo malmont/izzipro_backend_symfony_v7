@@ -6,9 +6,11 @@ use App\Repository\CategorieMarqueRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
+
 
 #[ORM\Entity(repositoryClass: CategorieMarqueRepository::class)]
-class CategorieMarque
+class CategorieMarque implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -88,14 +90,12 @@ class CategorieMarque
         return $this->translations;
     }
 
-    public function addTranslation(CategorieMarqueTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setCategorieMarque($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(CategorieMarqueTranslation $translation): static
@@ -125,5 +125,24 @@ class CategorieMarque
         }
         
         return $this->translations->first() ?: null;
+    }
+     public function getTranslatableFields(): array
+    {
+        return ['nom'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return CategorieMarqueTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

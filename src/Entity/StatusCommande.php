@@ -6,9 +6,10 @@ use App\Repository\StatusCommandeRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: StatusCommandeRepository::class)]
-class StatusCommande
+class StatusCommande implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -117,14 +118,12 @@ class StatusCommande
         return $this->translations;
     }
 
-    public function addTranslation(StatusCommandeTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setStatusCommande($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(StatusCommandeTranslation $translation): static
@@ -154,5 +153,24 @@ class StatusCommande
         }
         
         return $this->translations->first() ?: null;
+    }
+    public function getTranslatableFields(): array
+    {
+        return ['name', 'description'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return StatusCommandeTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

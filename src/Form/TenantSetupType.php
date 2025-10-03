@@ -12,21 +12,21 @@ use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Form\Extension\Core\Type\HiddenType;
+
 
 class TenantSetupType extends AbstractType
 {
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
-            ->add('code', TextType::class, ['label' => 'Identifiant unique du Tenant (ex: acme_corp)'])
-            ->add('subdomain', TextType::class, ['label' => 'Sous-domaine souhaité (ex: acme)'])
-            
-            ->add('companyName', TextType::class, ['label' => 'Nom officiel de l\'entreprise'])
-            ->add('companyLogo', FileType::class, ['label' => 'Logo de l\'entreprise', 'required' => false, 'mapped' => false])
-            ->add('companyEmail', EmailType::class, ['label' => 'Email public de contact'])
-            ->add('companyTva', TextType::class, ['label' => 'N° TVA Intracommunautaire', 'required' => false])
-            ->add('companyEin', TextType::class, ['label' => 'N° d\'identification (EIN/SIREN)', 'required' => false])
-            
+            ->add('code', HiddenType::class)
+            ->add('subdomain', HiddenType::class) 
+            ->add('subdomain_display', TextType::class, [
+                'label' => 'Sous-domaine détecté',
+                'mapped' => false, 
+                'disabled' => true,
+            ])
             ->add('adminName', TextType::class, ['label' => 'Nom complet de l\'administrateur'])
             ->add('adminEmail', EmailType::class, ['label' => 'Email de l\'administrateur'])
             ->add('plainPassword', PasswordType::class, ['label' => 'Mot de passe'])

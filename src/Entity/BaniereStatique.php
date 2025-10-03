@@ -7,9 +7,10 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\DBAL\Types\Types; 
+use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: BaniereStatiqueRepository::class)]
-class BaniereStatique
+class BaniereStatique implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -115,14 +116,14 @@ class BaniereStatique
         return $this->translations;
     }
 
-    public function addTranslation(BaniereStatiqueTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setBaniereStatique($this);
         }
 
-        return $this;
+
     }
 
     public function removeTranslation(BaniereStatiqueTranslation $translation): static
@@ -150,5 +151,26 @@ class BaniereStatique
             }
         }
         return $this->translations->first() ?: null;
+    }
+
+     public function getTranslatableFields(): array
+    {
+        return ['titre', 'texte', 'texteBouton'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return BaniereStatiqueTranslation::class;
+    }
+    
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

@@ -7,9 +7,11 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Doctrine\DBAL\Types\Types; 
+use App\Entity\TranslatableInterface;
+
 
 #[ORM\Entity(repositoryClass: PresentationRepository::class)]
-class Presentation
+class Presentation implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -160,14 +162,12 @@ class Presentation
         return $this->translations;
     }
 
-    public function addTranslation(PresentationTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setPresentation($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(PresentationTranslation $translation): static
@@ -197,5 +197,24 @@ class Presentation
         }
         
         return $this->translations->first() ?: null;
+    }
+     public function getTranslatableFields(): array
+    {
+        return ['titre', 'texte', 'texteBouton', 'lienBouton'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return PresentationTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

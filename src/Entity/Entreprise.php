@@ -8,8 +8,9 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
+
 #[ORM\Entity(repositoryClass: EntrepriseRepository::class)]
-class Entreprise
+class Entreprise implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -271,14 +272,12 @@ class Entreprise
         return $this->translations;
     }
 
-    public function addTranslation(EntrepriseTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setEntreprise($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(EntrepriseTranslation $translation): static
@@ -308,5 +307,24 @@ class Entreprise
         }
         
         return $this->translations->first() ?: null;
+    }
+    public function getTranslatableFields(): array
+    {
+        return ['conditionOfUse', 'LegalNotice', 'privacyPolicy', 'Apropos'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return EntrepriseTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

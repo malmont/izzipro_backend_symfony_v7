@@ -1,0 +1,135 @@
+/* public/assets/css/setup.css */
+
+/* --- Wrapper principal (inspiré de .login-page-wrapper) --- */
+.setup-page-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* Aligné en haut pour les formulaires longs */
+    min-height: 100vh;
+    width: 100%;
+    /* Utilisation de votre image de fond exacte */
+    background-image: url('https://app.gem-car.com/image_file/logicielactif/images/info/201408111638565823_team-work-large.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed; /* L'image reste fixe lors du scroll */
+    padding: 4rem 1rem;
+    box-sizing: border-box;
+}
+
+/* --- Conteneur du formulaire (inspiré de .login-container) --- */
+.setup-container {
+    background-color: #ffffff;
+    padding: 40px 50px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 800px; /* Plus large pour ce formulaire */
+}
+
+/* --- Logo --- */
+.setup-logo {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.setup-logo img {
+    max-width: 250px;
+    height: auto;
+}
+
+/* --- Titres --- */
+.setup-container h1 {
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 2.5rem;
+}
+
+.form-section h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #343a40;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 0.75rem;
+    margin-top: 2rem;
+    margin-bottom: 1.5rem;
+}
+.form-section:first-of-type h2 {
+    margin-top: 0;
+}
+
+/* --- Styles pour les champs de formulaire (inspiré de .form-control) --- */
+.form-row {
+    margin-bottom: 1rem;
+}
+
+.form-row label {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    display: block;
+}
+
+/* Style unifié pour les inputs */
+.form-row input[type="text"],
+.form-row input[type="email"],
+.form-row input[type="password"] {
+    width: 100%;
+    padding: 8px 12px; /* Un peu plus de hauteur que 28px pour la lisibilité */
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-row input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+/* Style pour les champs de type 'file' */
+.form-row input[type="file"] {
+    font-size: 0.9rem;
+}
+
+/* --- Bouton de soumission (inspiré de .btn-connexion) --- */
+.btn-submit {
+    width: 100%;
+    padding: 12px 15px; /* Plus grand pour un appel à l'action principal */
+    background-color: #007bff;
+    border: none;
+    color: white;
+    font-size: 1.1rem;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background-color 0.2s;
+    margin-top: 2rem;
+}
+
+.btn-submit:hover {
+    background-color: #0056b3;
+}
+
+/* --- Messages Flash (inspiré de .alert.alert-danger) --- */
+.alert {
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border-radius: 4px;
+    text-align: center;
+    border: 1px solid transparent;
+}
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border-color: #c3e6cb;
+}
+.alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-color: #f5c6cb;
+}

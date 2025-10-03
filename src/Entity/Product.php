@@ -9,10 +9,11 @@ use Doctrine\ORM\Mapping as ORM;
 use App\Repository\ProductRepository;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\Common\Collections\ArrayCollection;
+use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: ProductRepository::class)]
 #[ApiResource]
-class Product
+class Product implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -612,14 +613,12 @@ class Product
         return $this->translations;
     }
 
-    public function addTranslation(ProductTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setProduct($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(ProductTranslation $translation): static
@@ -657,6 +656,26 @@ class Product
         }
 
         return $this->translations->first() ?: null;
+    }
+    public function getTranslatableFields(): array
+    {
+        return ['name', 'description', 'moreinformations', 'slug', 'tags', 'specifications'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return ProductTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            // Attention: on utilise getLocale() ici, car votre entité ProductTranslation utilise 'locale'
+            if ($translation->getLocale() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 
 }

@@ -8,9 +8,10 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use App\Repository\CarrierRepository;
+use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: CarrierRepository::class)]
-class Carrier
+class Carrier implements TranslatableInterface 
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -191,14 +192,12 @@ class Carrier
         return $this->translations;
     }
 
-    public function addTranslation(CarrierTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setCarrier($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(CarrierTranslation $translation): static
@@ -228,5 +227,25 @@ class Carrier
         }
         
         return $this->translations->first() ?: null;
+    }
+     public function getTranslatableFields(): array
+    {
+        // Les champs à traduire pour Carrier sont 'name' et 'description'
+        return ['name', 'description'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return CarrierTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

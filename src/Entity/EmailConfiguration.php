@@ -7,9 +7,10 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: EmailConfigurationRepository::class)]
-class EmailConfiguration
+class EmailConfiguration implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -105,15 +106,13 @@ class EmailConfiguration
         return $this->translations;
     }
 
-    public function addTranslation(EmailConfigurationTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setEmailConfiguration($this);
         }
-
-        return $this;
-    }
+}
 
     public function removeTranslation(EmailConfigurationTranslation $translation): static
     {
@@ -142,4 +141,24 @@ class EmailConfiguration
         
         return $this->translations->first() ?: null;
     }
+    public function getTranslatableFields(): array
+    {
+        return ['fromName', 'signature'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return EmailConfigurationTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
+    }
+
 }

@@ -1,79 +1,42 @@
 {# templates/tenant_setup/form.html.twig #}
 {% extends 'base.html.twig' %}
 
-{% block title %}Créer un nouveau site{% endblock %}
+{% block title %}Finaliser la création de votre site{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('assets/css/setup.css') }}">
+{% endblock %}
 
 {% block body %}
-    <style>
-        .form-container {
-            max-width: 800px;
-            margin: 2rem auto;
-            padding: 2rem;
-            background-color: #f9f9f9;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        .form-section {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .form-section legend {
-            font-size: 1.25rem;
-            font-weight: 600;
-            padding: 0 0.5rem;
-            margin-left: 1rem;
-        }
-        .form-row {
-            margin-bottom: 1.5rem;
-        }
-    </style>
+<div class="setup-page-wrapper">
+    <div class="setup-container">
 
-    <div class="form-container">
-        <h1>Configuration du nouveau site E-commerce</h1>
+        <div class="setup-logo">
+            <img src="{{ asset('assets/Logo-Principal_GEM-PORTAL.png') }}" alt="GEM-PORTAL Logo">
+        </div>
 
-        {# Affiche les messages flash (erreurs ou succès) #}
+        <h1>Finaliser la Création de Votre Site</h1>
+
         {% for label, messages in app.flashes %}
             {% for message in messages %}
-                <div class="alert alert-{{ label }}" style="padding: 1rem; margin-bottom: 1rem; border-radius: 4px; background-color: #e2e3e5; color: #383d41;">
+                <div class="alert alert-{{ label }}">
                     {{ message }}
                 </div>
             {% endfor %}
         {% endfor %}
 
         {{ form_start(form) }}
-            <fieldset class="form-section">
-                <legend>Informations sur le Tenant</legend>
+        
+            <div class="form-section">
+                <h2>Votre Site</h2>
                 <div class="form-row">
-                    {{ form_row(form.code) }}
+                    {{ form_row(form.subdomain_display) }}
                 </div>
-                <div class="form-row">
-                    {{ form_row(form.subdomain) }}
-                </div>
-            </fieldset>
+            </div>
 
-            <fieldset class="form-section">
-                <legend>Profil de l'entreprise</legend>
-                <div class="form-row">
-                    {{ form_row(form.companyName) }}
-                </div>
-                <div class="form-row">
-                    {{ form_row(form.companyLogo) }}
-                </div>
-                <div class="form-row">
-                    {{ form_row(form.companyEmail) }}
-                </div>
-                <div class="form-row">
-                    {{ form_row(form.companyTva) }}
-                </div>
-                <div class="form-row">
-                    {{ form_row(form.companyEin) }}
-                </div>
-            </fieldset>
-
-            <fieldset class="form-section">
-                <legend>Administrateur</legend>
+            <div class="form-section">
+                <h2>Créer votre compte Administrateur</h2>
                 <div class="form-row">
                     {{ form_row(form.adminName) }}
                 </div>
@@ -83,20 +46,23 @@
                 <div class="form-row">
                     {{ form_row(form.plainPassword) }}
                 </div>
-            </fieldset>
+            </div>
             
-            <fieldset class="form-section">
-                <legend>Intégration GEM-SUITE (Test)</legend>
+            <div class="form-section">
+                <h2>Intégration GEM-SUITE</h2>
                 <div class="form-row">
                     {{ form_row(form.gemsuiteToken) }}
                 </div>
-            </fieldset>
-
-            {# Le bouton de soumission est en dehors des fieldsets #}
-            <div class="form-row">
-                 {{ form_widget(form.save, {'attr': {'class': 'btn btn-primary btn-lg'}}) }}
             </div>
+
+            <div class="form-row">
+                 {{ form_widget(form.save, {'attr': {'class': 'btn-submit'}}) }}
+            </div>
+
+            {# form_rest(form) est une bonne pratique pour afficher les champs cachés (code, subdomain) et le jeton CSRF #}
+            {{ form_rest(form) }}
 
         {{ form_end(form) }}
     </div>
+</div>
 {% endblock %}

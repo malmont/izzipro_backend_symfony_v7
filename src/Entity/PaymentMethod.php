@@ -6,9 +6,11 @@ use App\Repository\PaymentMethodRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
+
 
 #[ORM\Entity(repositoryClass: PaymentMethodRepository::class)]
-class PaymentMethod
+class PaymentMethod implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -117,14 +119,12 @@ class PaymentMethod
         return $this->translations;
     }
 
-    public function addTranslation(PaymentMethodTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setPaymentMethod($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(PaymentMethodTranslation $translation): static
@@ -154,5 +154,24 @@ class PaymentMethod
         }
         
         return $this->translations->first() ?: null;
+    }
+     public function getTranslatableFields(): array
+    {
+        return ['name', 'description'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return PaymentMethodTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

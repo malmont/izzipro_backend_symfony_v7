@@ -6,9 +6,12 @@ use App\Repository\ColorRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
+
 
 #[ORM\Entity(repositoryClass: ColorRepository::class)]
-class Color
+class Color implements TranslatableInterface
+
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -89,14 +92,12 @@ class Color
         return $this->translations;
     }
 
-    public function addTranslation(ColorTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setColor($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(ColorTranslation $translation): static
@@ -126,5 +127,24 @@ class Color
         }
         
         return $this->translations->first() ?: null;
+    }
+    public function getTranslatableFields(): array
+    {
+        return ['name'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return ColorTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

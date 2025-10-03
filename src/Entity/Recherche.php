@@ -6,9 +6,11 @@ use App\Repository\RechercheRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
+
 
 #[ORM\Entity(repositoryClass: RechercheRepository::class)]
-class Recherche
+class Recherche implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -105,14 +107,12 @@ class Recherche
         return $this->translations;
     }
 
-    public function addTranslation(RechercheTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setRecherche($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(RechercheTranslation $translation): static
@@ -141,5 +141,24 @@ class Recherche
         }
         
         return $this->translations->first() ?: null;
+    }
+    public function getTranslatableFields(): array
+    {
+        return ['titre', 'texte1', 'texte2'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return RechercheTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

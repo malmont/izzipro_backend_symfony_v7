@@ -52,7 +52,7 @@ security:
 
         - { path: ^/admin, roles: ROLE_ADMIN }
         - { path: ^/(account|adress|checkout), roles: [ROLE_USER_INTERNET, ROLE_USER_POS,ROLE_ADMIN] }
-        - { path: ^/api/(login|register|login-web|token/refresh|password-reset/request|password-reset/confirm|password-reset/form|products/by-category|category|homeslider|products|entreprise|otp-verify|features|explore-cards|webhooks/gemsuite|bannieres|emplois|candidatures|marques|categories-marque|multiliens|recherches|service-offers|videos|contacts|components-config|landingpage-settings|embeds|baniere-statiques|presentations|landingpage|presentation-groups), roles: PUBLIC_ACCESS }
+        - { path: ^/api/(login|register|login-web|token/refresh|password-reset/request|password-reset/confirm|password-reset/form|products/by-category|category|homeslider|products|entreprise|otp-verify|features|explore-cards|webhooks/gemsuite|bannieres|emplois|candidatures|marques|categories-marque|multiliens|recherches|service-offers|videos|contacts|components-config|landingpage-settings|embeds|baniere-statiques|presentations|landingpage|presentation-groups|tenant/check), roles: PUBLIC_ACCESS }
         - { path: ^/api/(collections|createcollections|commandes|fournisseurs|transporteurs|dashboard|caisse|statistiques|stock-evolution|stock-value|frais|payments/statistics|taxes/monthly|carrier/statistics), roles: ROLE_ADMIN }
         - { path: ^/api, roles: [ROLE_USER_INTERNET, ROLE_USER_POS,ROLE_ADMIN] }
 

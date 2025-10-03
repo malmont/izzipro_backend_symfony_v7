@@ -6,9 +6,11 @@ use App\Repository\SizeRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
+
 
 #[ORM\Entity(repositoryClass: SizeRepository::class)]
-class Size
+class Size implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -116,14 +118,12 @@ class Size
         return $this->translations;
     }
 
-    public function addTranslation(SizeTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setSize($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(SizeTranslation $translation): static
@@ -153,6 +153,25 @@ class Size
         }
         
         return $this->translations->first() ?: null;
+    }
+     public function getTranslatableFields(): array
+    {
+        return ['name'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return SizeTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 
 }

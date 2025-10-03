@@ -6,9 +6,10 @@ use App\Repository\PresentationGroupRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: PresentationGroupRepository::class)]
-class PresentationGroup
+class PresentationGroup implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -91,14 +92,12 @@ class PresentationGroup
         return $this->translations;
     }
 
-    public function addTranslation(PresentationGroupTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setPresentationGroup($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(PresentationGroupTranslation $translation): static
@@ -128,5 +127,24 @@ class PresentationGroup
         }
 
         return $this->translations->first() ?: null;
+    }
+    public function getTranslatableFields(): array
+    {
+        return ['titre'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return PresentationGroupTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

@@ -6,9 +6,10 @@ use App\Repository\ProductOptionValueRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: ProductOptionValueRepository::class)]
-class ProductOptionValue
+class ProductOptionValue implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -135,14 +136,12 @@ class ProductOptionValue
         return $this->translations;
     }
 
-    public function addTranslation(ProductOptionValueTranslation $translation): static
+   public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setProductOptionValue($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(ProductOptionValueTranslation $translation): static
@@ -172,5 +171,24 @@ class ProductOptionValue
         }
         
         return $this->translations->first() ?: null;
+    }
+     public function getTranslatableFields(): array
+    {
+        return ['value'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return ProductOptionValueTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

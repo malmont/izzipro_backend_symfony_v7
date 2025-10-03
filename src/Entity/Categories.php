@@ -7,10 +7,11 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: CategoriesRepository::class)]
 #[ApiResource]
-class Categories
+class Categories implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -138,14 +139,12 @@ class Categories
         return $this->translations;
     }
 
-    public function addTranslation(CategoriesTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setCategory($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(CategoriesTranslation $translation): static
@@ -174,5 +173,24 @@ class Categories
         }
         
         return $this->translations->first() ?: null;
+    }
+     public function getTranslatableFields(): array
+    {
+        return ['name', 'description'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return CategoriesTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

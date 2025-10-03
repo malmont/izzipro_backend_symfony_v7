@@ -6,9 +6,10 @@ use App\Repository\VideoRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: VideoRepository::class)]
-class Video
+class Video implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -90,14 +91,12 @@ class Video
         return $this->translations;
     }
 
-    public function addTranslation(VideoTranslation $translation): static
+    public function addTranslation(object $translation): void
     {
         if (!$this->translations->contains($translation)) {
             $this->translations->add($translation);
             $translation->setVideo($this);
         }
-
-        return $this;
     }
 
     public function removeTranslation(VideoTranslation $translation): static
@@ -127,5 +126,25 @@ class Video
         }
         
         return $this->translations->first() ?: null;
+    }
+
+     public function getTranslatableFields(): array
+    {
+        return ['titre'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return VideoTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

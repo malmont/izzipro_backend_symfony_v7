@@ -1,5 +1,5 @@
 <?php
-// src/EventListener/TenantDoctrineSwitcherListener.php
+
 
 namespace App\EventListener;
 
@@ -13,13 +13,12 @@ class TenantDoctrineSwitcherListener
     private LoggerInterface $logger;
     private TenantConnectionProvider $tenantConnectionProvider;
 
-    // Le constructeur ne change pas
     public function __construct(
         TenantConnectionProvider $tenantConnectionProvider,
         LoggerInterface $logger,
         string $masterDatabaseUrl
     ) {
-        // ... (votre code de constructeur existant)
+        // ... votre constructeur reste inchangé ...
         $parts = parse_url($masterDatabaseUrl);
         $scheme = $parts['scheme'] === 'postgresql' ? 'pgsql' : $parts['scheme'];
         $host   = $parts['host'];
@@ -40,34 +39,46 @@ class TenantDoctrineSwitcherListener
         }
 
         $request = $event->getRequest();
-        $host = $request->getHost();
-        $tenantCode = null;
 
-        // 1. On essaie de récupérer via l'en-tête, pour les APIs par exemple
+        // --- DÉBUT DE LA MODIFICATION (Version Robuste) ---
+        // Liste des CHEMINS D'URL qui ne doivent PAS déclencher le changement de tenant.
+        // On se base sur le chemin, pas le nom de la route.
+        $excludedPaths = [
+            '/api/tenant/check',
+        ];
+
+        // On récupère le chemin de la requête actuelle (ex: /api/tenant/check)
+        $currentPath = $request->getPathInfo();
+
+        // Si le chemin actuel est dans notre liste d'exceptions, on arrête tout de suite.
+        if (in_array($currentPath, $excludedPaths)) {
+            $this->logger->info("Chemin '{$currentPath}' exclu. Le listener de tenant ne s'applique pas.");
+            return;
+        }
+        // --- FIN DE LA MODIFICATION ---
+
+        // Le reste de votre code est identique...
+        $host = $request->getHost();
         $tenantCode = $request->headers->get('X-Tenant-Code');
 
-        // 2. Sinon, on essaie de récupérer via le sous-domaine
         if (!$tenantCode) {
             $hostParts = explode('.', $host);
-            // Un sous-domaine valide aura au moins 3 parties (ex: tenant.domaine.com)
             if (count($hostParts) > 2) {
                 $tenantCode = $hostParts[0];
             }
         }
-
-        // 3. Si on n'a toujours rien trouvé (on est sur le domaine racine), on applique le tenant par défaut
+        
+        // ...etc.
         if (!$tenantCode && $host === 'gem-portal-backend.com') {
             $this->logger->info("Domaine racine détecté. Application du tenant par défaut 'tenantdefaut'.");
             $tenantCode = 'tenantdefaut';
         }
         
-        // 4. Si après tout ça on n'a pas de code, on ne fait rien
         if (!$tenantCode) {
             $this->logger->info("Pas de tenant détecté : base par défaut utilisée.");
             return;
         }
 
-        // La suite du code pour changer de base de données ne change pas...
         $stmt = $this->pdoMaster->prepare('SELECT dbname FROM tenants WHERE code = :c');
         $stmt->execute(['c' => $tenantCode]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
@@ -86,3 +97,4 @@ class TenantDoctrineSwitcherListener
         }
     }
 }
+
