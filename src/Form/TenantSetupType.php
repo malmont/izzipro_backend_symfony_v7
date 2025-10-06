@@ -27,9 +27,9 @@ class TenantSetupType extends AbstractType
                 'mapped' => false, 
                 'disabled' => true,
             ])
-            ->add('adminName', TextType::class, ['label' => 'Nom complet de l\'administrateur'])
-            ->add('adminEmail', EmailType::class, ['label' => 'Email de l\'administrateur'])
-            ->add('plainPassword', PasswordType::class, ['label' => 'Mot de passe'])
+            // ->add('adminName', TextType::class, ['label' => 'Nom complet de l\'administrateur'])
+            // ->add('adminEmail', EmailType::class, ['label' => 'Email de l\'administrateur'])
+            // ->add('plainPassword', PasswordType::class, ['label' => 'Mot de passe'])
             
             ->add('gemsuiteToken', TextType::class, ['label' => 'Token GEM-SUITE (pour test)', 'required' => false])
             

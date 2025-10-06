@@ -6,6 +6,7 @@ namespace App\Services\GemsuiteImporterService;
 use App\Entity\Categories;
 use App\Entity\Product;
 use App\Entity\ProductShipping;
+use App\Entity\GemsuiteClient;
 use App\Entity\ProductVariant;
 use App\Entity\Style;
 use Doctrine\ORM\EntityManagerInterface;
@@ -28,60 +29,74 @@ class GemsuiteImporter
         private GemsuiteImageUrlBuilder $imageUrlBuilder
     ) {
     }
-
-    // La signature de la méthode a été mise à jour pour accepter l'identifiant
     public function importDataForTenant(string $tenantCode, string $gemsuiteToken): void
     {
-        $this->logger->info(sprintf('Début de l\'importation pour le tenant "%s"', $tenantCode));
+        $this->logger->info(sprintf('Début de l\'importation complète pour le tenant "%s"', $tenantCode));
 
         try {
             $dbname = 'db_' . $tenantCode;
             $this->emProvider->switchTenant($dbname, $tenantCode);
             $tenantEm = $this->emProvider->getEntityManager();
 
-            // On récupère l'identifiant de l'entreprise depuis la BDD locale
+            $this->logger->info(sprintf('Début de l\'importation des clients pour le tenant "%s"', $tenantCode));
+            $this->importClients($tenantEm, $gemsuiteToken);
+            $this->logger->info(sprintf('Importation des clients terminée.', $tenantCode));
+
+            $this->logger->info(sprintf('Début de l\'importation des catégories pour le tenant "%s"', $tenantCode));
+            $categoryMap = $this->importCategories($tenantEm, $gemsuiteToken);
+            $this->logger->info(sprintf('Importation des catégories terminée.', $tenantCode));
+            
+            $this->logger->info(sprintf('Début de l\'importation des produits pour le tenant "%s"', $tenantCode));
             $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
             $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
-
-            if (!$companyIdentifier) {
-                $this->logger->error(sprintf('Identifiant GEM-SUITE non trouvé pour le tenant "%s". Impossible de construire les URLs d\'images.', $tenantCode));
-            }
-
-            $categoryMap = $this->importCategories($tenantEm, $gemsuiteToken);
             $this->importProducts($tenantEm, $gemsuiteToken, $categoryMap, $companyIdentifier);
+            $this->logger->info(sprintf('Importation des produits terminée.', $tenantCode));
             
-            $this->logger->info(sprintf('Importation réussie pour le tenant "%s"', $tenantCode));
+            $this->logger->info(sprintf('Importation complète réussie pour le tenant "%s"', $tenantCode));
 
         } catch (\Throwable $e) {
-            $this->logger->error('Erreur durant l\'importation GEM-SUITE: ' . $e->getMessage());
+            $this->logger->error('Erreur durant l\'importation GEM-SUITE: ' . $e->getMessage(), ['exception' => $e]);
             throw $e;
         }
     }
 
-    private function importCategories(EntityManagerInterface $tenantEm, string $token): array
-    {
-        // ... (code inchangé)
-        $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', [
-            'auth_bearer' => $token,
-        ]);
-        
-        $data = $response->toArray();
-        $categoryMap = [];
+     private function importCategories(EntityManagerInterface $tenantEm, string $token): array
+        {
+            $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', [
+                'auth_bearer' => $token,
+            ]);
+            
+            $data = $response->toArray();
+            $categoryMap = [];
 
-        foreach ($data['data'] as $gemCategoryData) {
-            $category = $tenantEm->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
-            if (!$category) {
-                $category = new Categories();
-                $category->setGemsuiteCategoryId($gemCategoryData['id']);
+            foreach ($data['data'] as $gemCategoryData) {
+                $status = (int)($gemCategoryData['status'] ?? 1);
+                $syncWeb = (bool)($gemCategoryData['sync_web'] ?? true);
+
+                if ($status !== 1 || $syncWeb !== true) {
+                    $categoryName = $gemCategoryData['name_fr'] ?? 'ID ' . ($gemCategoryData['id'] ?? 'inconnue');
+                    $this->logger->info(sprintf(
+                        'Catégorie "%s" ignorée car elle n\'est pas active pour la synchronisation web (status: %d, sync_web: %s).',
+                        $categoryName,
+                        $status,
+                        $syncWeb ? 'true' : 'false'
+                    ));
+                    continue;
+                }
+                $category = $tenantEm->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
+                if (!$category) {
+                    $category = new Categories();
+                    $category->setGemsuiteCategoryId($gemCategoryData['id']);
+                }
+                
+                $category->setName(trim($gemCategoryData['name_fr']));
+                $tenantEm->persist($category);
+                $categoryMap[$gemCategoryData['id']] = $category;
             }
             
-            $category->setName(trim($gemCategoryData['name_fr']));
-            $tenantEm->persist($category);
-            $categoryMap[$gemCategoryData['id']] = $category;
+            $tenantEm->flush();
+            return $categoryMap;
         }
-        $tenantEm->flush();
-        return $categoryMap;
-    }
     
 
     private function importProducts(EntityManagerInterface $tenantEm, string $token, array $categoryMap, ?string $companyIdentifier): void
@@ -93,6 +108,18 @@ class GemsuiteImporter
         $data = $response->toArray();
         
         foreach ($data['data'] as $gemProductData) {
+            $status = (int)($gemProductData['status'] ?? 0);
+            $syncWeb = (bool)($gemProductData['sync_web'] ?? false);
+            if ($status !== 1 || $syncWeb !== true) {
+                $productName = $gemProductData['name_fr'] ?? 'ID ' . ($gemProductData['id'] ?? 'inconnu');
+                $this->logger->info(sprintf(
+                    'Produit "%s" ignoré car il n\'est pas actif pour la synchronisation web (status: %d, sync_web: %s).',
+                    $productName,
+                    $status,
+                    $syncWeb ? 'true' : 'false'
+                ));
+                continue;
+            }
             $product = $tenantEm->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
             if (!$product) {
                 $product = new Product();
@@ -104,7 +131,7 @@ class GemsuiteImporter
             $priceInDollars = (float)($gemProductData['price'] ?? 0);
             $product->setPrice($priceInDollars * 100);
             $product->setSlug(strtolower($this->slugger->slug($product->getName())));
-            $product->setIsWeb(isset($gemProductData['status']) && $gemProductData['status'] === 1);
+            $product->setIsWeb(true);
             $product->setIsnewarrival($gemProductData['is_new_arrival'] ?? true);
             $product->setIsbestseller($gemProductData['is_bestseller'] ?? true);
             $defaultStyle = $tenantEm->getRepository(Style::class)->find(2);
@@ -143,4 +170,46 @@ class GemsuiteImporter
         }
         $tenantEm->flush();
     }
+
+     public function checkPrerequisites(string $token): void
+        {
+            $this->logger->info('Début de la pré-vérification des données GEM-SUITE.');
+            $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', [
+                'auth_bearer' => $token,
+            ]);
+            
+            $data = $response->toArray();
+            
+            if (empty($data['data'])) {
+                $this->logger->error('Pré-vérification échouée : Aucune catégorie retournée par l\'API GEM-SUITE.');
+                throw new \Exception('Aucune catégorie trouvée sur GEM-SUITE. L\'importation ne peut pas être lancée.');
+            }
+            $this->logger->info('Pré-vérification des données GEM-SUITE réussie.');
+        }
+        private function importClients(EntityManagerInterface $tenantEm, string $token): void
+    {
+        $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'clients', [
+            'auth_bearer' => $token,
+        ]);
+        
+        $data = $response->toArray();
+        $clientRepo = $tenantEm->getRepository(GemsuiteClient::class);
+
+        foreach ($data['data'] as $gemClientData) {
+            $localClient = $clientRepo->findOneBy(['gemsuiteId' => $gemClientData['id']]);
+            if (!$localClient) {
+                $localClient = new GemsuiteClient();
+                $localClient->setGemsuiteId($gemClientData['id']);
+            }
+            
+            $localClient->setName($gemClientData['name'] ?? 'N/A');
+            $email = strtolower($gemClientData['email'] ?? '');
+            $localClient->setEmail(empty($email) ? null : $email);
+            
+            $tenantEm->persist($localClient);
+        }
+        
+        $tenantEm->flush();
+    }
+
 }

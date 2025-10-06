@@ -1,5 +1,5 @@
 <?php
-
+// src/Services/GemsuiteImporterService/GemsuiteSyncHandler.php
 
 namespace App\Services\GemsuiteImporterService;
 
@@ -8,6 +8,7 @@ use App\Entity\Product;
 use App\Entity\ProductShipping;
 use App\Entity\ProductVariant;
 use App\Entity\Style;
+use App\Entity\GemsuiteClient;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use App\Entity\User;
@@ -34,6 +35,7 @@ class GemsuiteSyncHandler
 
     /**
      * Gère la mise à jour d'un produit.
+     * MODIFIÉ : Désactive le produit local s'il n'est plus synchronisable.
      */
     public function handleProductUpdate(string $tenantCode, int $productId): void
     {
@@ -44,30 +46,49 @@ class GemsuiteSyncHandler
             return;
         }
 
-        $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'products/' . $productId, [
-            'auth_bearer' => $token,
-        ]);
+        try {
+            $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'products/' . $productId, [
+                'auth_bearer' => $token,
+            ]);
 
-        $gemProductData = $response->toArray()['data'] ?? null;
-        if (!$gemProductData) {
-            $this->logger->warning(sprintf('Produit #%d non trouvé sur GEM-SUITE pour le tenant "%s".', $productId, $tenantCode));
-            return;
+            $gemProductData = $response->toArray()['data'] ?? null;
+            if (!$gemProductData) {
+                $this->logger->warning(sprintf('Produit #%d non trouvé sur GEM-SUITE pour le tenant "%s".', $productId, $tenantCode));
+                return;
+            }
+            
+            $tenantEm = $this->getTenantEntityManager($tenantCode);
+
+            // --- NOUVELLE LOGIQUE DE SYNCHRONISATION ---
+            $status = (int)($gemProductData['status'] ?? 0);
+            $syncWeb = (bool)($gemProductData['sync_web'] ?? false);
+
+            if ($status === 1 && $syncWeb === true) {
+                // Le produit est actif, on le crée ou on le met à jour
+                $this->logger->info(sprintf('Produit #%d actif sur GEM-SUITE. Mise à jour en cours...', $productId));
+                $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
+                $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+                $categoryMap = $this->importCategories($tenantEm, $token);
+                $this->updateOrCreateProduct($tenantEm, $gemProductData, $categoryMap, $companyIdentifier);
+
+            } else {
+                // Le produit est inactif, on le désactive sur le site e-commerce
+                $this->logger->info(sprintf('Produit #%d inactif sur GEM-SUITE. Tentative de désactivation...', $productId));
+                $product = $tenantEm->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
+                if ($product) {
+                    $product->setIsWeb(false);
+                    $this->logger->info(sprintf('Le produit local "%s" a été désactivé.', $product->getName()));
+                } else {
+                    $this->logger->info(sprintf('Le produit inactif #%d n\'existait pas localement. Aucune action nécessaire.', $productId));
+                }
+            }
+            // --- FIN DE LA NOUVELLE LOGIQUE ---
+
+            $tenantEm->flush();
+            $this->logger->info(sprintf('Produit #%d synchronisé avec succès pour le tenant "%s".', $productId, $tenantCode));
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Erreur lors de la synchronisation du produit #%d : %s', $productId, $e->getMessage()));
         }
-        
-        $tenantEm = $this->getTenantEntityManager($tenantCode);
-        $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
-        $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
-
-        if (!$companyIdentifier) {
-            $this->logger->error(sprintf('Identifiant GEM-SUITE non trouvé pour le tenant "%s". Impossible de construire les URLs d\'images.', $tenantCode));
-        }
-        
-        $categoryMap = $this->importCategories($tenantEm, $token);
-
-        $this->updateOrCreateProduct($tenantEm, $gemProductData, $categoryMap, $companyIdentifier);
-
-        $tenantEm->flush();
-        $this->logger->info(sprintf('Produit #%d synchronisé avec succès pour le tenant "%s".', $productId, $tenantCode));
     }
 
     /**
@@ -75,19 +96,23 @@ class GemsuiteSyncHandler
      */
     public function handleCategoryUpdate(string $tenantCode, int $categoryId): void
     {
-        $this->logger->info(sprintf('Synchronisation de la catégorie #%d pour le tenant "%s"', $categoryId, $tenantCode));
+        $this->logger->info(sprintf('Synchronisation des catégories (déclenchée par #%d) pour le tenant "%s"', $categoryId, $tenantCode));
         $token = $this->tenantManager->getTenantToken($tenantCode);
         if (!$token) {
             $this->logger->error(sprintf('Aucun token trouvé pour le tenant "%s".', $tenantCode));
             return;
         }
         
-        $tenantEm = $this->getTenantEntityManager($tenantCode);
-        $this->importCategories($tenantEm, $token); 
+        try {
+            $tenantEm = $this->getTenantEntityManager($tenantCode);
+            $this->importCategories($tenantEm, $token);
+            $this->logger->info(sprintf('Catégories synchronisées avec succès pour le tenant "%s".', $tenantCode));
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Erreur lors de la synchronisation des catégories pour le tenant "%s": %s', $tenantCode, $e->getMessage()));
+        }
     }
     
-
-    private function updateOrCreateProduct(EntityManagerInterface $em, array $gemProductData, array $categoryMap,?string $companyIdentifier): void
+    private function updateOrCreateProduct(EntityManagerInterface $em, array $gemProductData, array $categoryMap, ?string $companyIdentifier): void
     {
         if (!isset($gemProductData['id'], $gemProductData['name_fr'])) {
             $this->logger->warning('Données de produit GEM-SUITE incomplètes. ID ou nom manquant.');
@@ -105,7 +130,10 @@ class GemsuiteSyncHandler
         $product->setPrice($priceInDollars * 100);
         $product->setQuantity((int) ($gemProductData['default_quantity'] ?? 0));
         $product->setSlug(strtolower($this->slugger->slug($product->getName())));
-        $product->setIsWeb(isset($gemProductData['status']) && $gemProductData['status'] === 1);
+        
+        // MODIFIÉ : On met 'isWeb' à true car on sait que le produit est actif à ce stade
+        $product->setIsWeb(true);
+        
         $product->setIsnewarrival($gemProductData['is_new_arrival'] ?? true);
         $product->setIsbestseller($gemProductData['is_bestseller'] ?? true);
         $defaultStyle = $em->getRepository(Style::class)->find(2);
@@ -147,6 +175,9 @@ class GemsuiteSyncHandler
         $em->persist($product);
     }
 
+    /**
+     * MODIFIÉ : Ajout du filtrage par status et sync_web.
+     */
     private function importCategories(EntityManagerInterface $em, string $token): array
     {
         $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', [
@@ -157,6 +188,17 @@ class GemsuiteSyncHandler
         $categoryMap = [];
 
         foreach ($data['data'] as $gemCategoryData) {
+            // --- LOGIQUE DE FILTRAGE AJOUTÉE ---
+            // On utilise la règle "optimiste" : par défaut, on synchronise.
+            $status = (int)($gemCategoryData['status'] ?? 1);
+            $syncWeb = (bool)($gemCategoryData['sync_web'] ?? true);
+
+            if ($status !== 1 || $syncWeb !== true) {
+                // Logique pour ignorer les catégories inactives
+                continue;
+            }
+            // --- FIN DU FILTRAGE ---
+
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
             if (!$category) {
                 $category = new Categories();
@@ -178,6 +220,49 @@ class GemsuiteSyncHandler
         return $this->emProvider->getEntityManager();
     }
 
+    public function handleClientUpdate(string $tenantCode, int $clientId): void
+    {
+        $this->logger->info(sprintf('Synchronisation du client #%d pour le tenant "%s"', $clientId, $tenantCode));
+        $token = $this->tenantManager->getTenantToken($tenantCode);
+        if (!$token) {
+            $this->logger->error(sprintf('Aucun token trouvé pour le tenant "%s".', $tenantCode));
+            return;
+        }
+
+        try {
+            $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'clients/' . $clientId, [
+                'auth_bearer' => $token,
+            ]);
+
+            $gemClientData = $response->toArray()['data'] ?? null;
+            if (!$gemClientData) {
+                $this->logger->warning(sprintf('Client #%d non trouvé sur GEM-SUITE.', $clientId));
+                return;
+            }
+
+            $tenantEm = $this->getTenantEntityManager($tenantCode);
+
+            // 2. Trouver le client local correspondant ou en créer un nouveau
+            $localClient = $tenantEm->getRepository(GemsuiteClient::class)->findOneBy(['gemsuiteId' => $clientId]);
+            if (!$localClient) {
+                $localClient = new GemsuiteClient();
+                $localClient->setGemsuiteId($clientId);
+                $this->logger->info(sprintf('Nouveau client local créé pour l\'ID GEM-SUITE #%d.', $clientId));
+            }
+
+            // 3. Mettre à jour les informations
+            $localClient->setName($gemClientData['name'] ?? 'N/A');
+            $email = strtolower($gemClientData['email'] ?? '');
+            $localClient->setEmail(empty($email) ? null : $email);
+
+            $tenantEm->persist($localClient);
+            $tenantEm->flush();
+            $this->logger->info(sprintf('Client local pour l\'ID GEM-SUITE #%d synchronisé avec succès.', $clientId));
+
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Erreur lors de la synchronisation du client #%d : %s', $clientId, $e->getMessage()));
+        }
+    }
     //  public function handleClientUpdate(string $tenantCode, int $clientId): void
     // {
     //     $this->logger->info(sprintf('Synchronisation du client #%d pour le tenant "%s"', $clientId, $tenantCode));

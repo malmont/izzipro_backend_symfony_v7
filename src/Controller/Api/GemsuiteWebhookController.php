@@ -60,7 +60,9 @@ class GemsuiteWebhookController extends AbstractController
                 case 'company':
                     $this->companySyncHandler->handleCompanyUpdate($tenant_code);
                     break;
-                
+                case 'clients':
+                    $this->syncHandler->handleClientUpdate($tenant_code, $id);
+                    break;    
                 default:
                     $this->logger->warning(sprintf('Endpoint de webhook non géré : "%s"', $endpoint));
                     break;

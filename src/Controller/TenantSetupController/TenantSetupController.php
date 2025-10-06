@@ -30,7 +30,7 @@ class TenantSetupController extends AbstractController
         TenantConnectionManager $tenantManager,
         TenantEntityManagerProvider $emProvider,
         UserPasswordHasherInterface $passwordHasher,
-        SluggerInterface $slugger, // <-- Slugger n'était pas utilisé, mais je le laisse au cas où.
+        SluggerInterface $slugger,
         GemsuiteImporter $gemsuiteImporter,
         HttpClientInterface $client,
         GemsuiteImageUrlBuilder $imageUrlBuilder
@@ -93,6 +93,12 @@ class TenantSetupController extends AbstractController
                 return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
             // --- FIN DE LA VALIDATION. SI ON EST ICI, LE JETON EST VALIDE. ---
+            try {
+                $gemsuiteImporter->checkPrerequisites($dto->gemsuiteToken);
+            } catch (\Throwable $e) {
+                $this->addFlash('danger', 'Impossible de démarrer la création : ' . $e->getMessage());
+                return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
+            }
 
             $dbname = 'db_' . $dto->code;
             try {
@@ -157,16 +163,16 @@ class TenantSetupController extends AbstractController
                     $tenantEm->persist($homeSlider);
                 }
 
-                $user = new User();
-                $user->setFirstname($dto->adminName);
-                $user->setLastname('');
-                $user->setEmail($dto->adminEmail);
-                $user->setUsername($dto->adminEmail);
-                $user->setRoles(['ROLE_ADMIN']);
-                $user->setPassword($passwordHasher->hashPassword($user, $dto->plainPassword));
-                $user->setIsVerified(true); 
+                // $user = new User();
+                // $user->setFirstname($dto->adminName);
+                // $user->setLastname('');
+                // $user->setEmail($dto->adminEmail);
+                // $user->setUsername($dto->adminEmail);
+                // $user->setRoles(['ROLE_ADMIN']);
+                // $user->setPassword($passwordHasher->hashPassword($user, $dto->plainPassword));
+                // $user->setIsVerified(true); 
 
-                $tenantEm->persist($user);
+                // $tenantEm->persist($user);
                 
                 $tenantEm->flush();
                 $this->addFlash('info', 'Profil de l\'entreprise et administrateur créés.');

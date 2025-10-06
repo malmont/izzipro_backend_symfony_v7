@@ -28,16 +28,16 @@ class TenantSetupDTO
     #[Assert\Image(maxSize: '1024k')]
     public ?UploadedFile $companyLogo = null;
     
-    #[Assert\NotBlank]
-    public ?string $adminName = null;
+    // #[Assert\NotBlank]
+    // public ?string $adminName = null;
     
-    #[Assert\NotBlank]
-    #[Assert\Email]
-    public ?string $adminEmail = null;
+    // #[Assert\NotBlank]
+    // #[Assert\Email]
+    // public ?string $adminEmail = null;
 
-    #[Assert\NotBlank]
-    #[Assert\Length(min: 8)]
-    public ?string $plainPassword = null;
+    // #[Assert\NotBlank]
+    // #[Assert\Length(min: 8)]
+    // public ?string $plainPassword = null;
     
     // Optionnel pour la phase de test
     public ?string $gemsuiteToken = null;

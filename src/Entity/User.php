@@ -92,6 +92,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToOne(inversedBy: 'userPrimaryAdress', cascade: ['persist', 'remove'])]
     private ?Adress $primaryAddress = null;
 
+    #[ORM\ManyToOne(inversedBy: 'users')]
+    #[ORM\JoinColumn(nullable: true)]
+    private ?GemsuiteClient $gemsuiteClient = null;
+
     public function __construct()
     {
         $this->adresses = new ArrayCollection();
@@ -464,6 +468,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setPrimaryAddress(?Adress $primaryAddress): static
     {
         $this->primaryAddress = $primaryAddress;
+
+        return $this;
+    }
+
+    public function getGemsuiteClient(): ?GemsuiteClient
+    {
+        return $this->gemsuiteClient;
+    }
+
+    public function setGemsuiteClient(?GemsuiteClient $gemsuiteClient): static
+    {
+        $this->gemsuiteClient = $gemsuiteClient;
 
         return $this;
     }

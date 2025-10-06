@@ -1,5 +1,5 @@
 <?php
-// src/Services/GemsuiteClientUpdater.php
+// src/Services/GemsuiteImporterService/GemsuiteClientUpdater.php
 
 namespace App\Services\GemsuiteImporterService;
 
@@ -22,16 +22,25 @@ class GemsuiteClientUpdater
 
     /**
      * Synchronise une adresse Iizipro vers le client GEM-SUITE correspondant.
+     * MODIFIÉ : Utilise la nouvelle relation User->getGemsuiteClient()
      */
     public function syncAddress(User $user, Adress $address): void
     {
-        $gemsuiteClientId = $user->getGemsuiteClientId();
-        if (!$gemsuiteClientId) {
+        // --- MODIFICATION ---
+        // 1. On récupère l'objet GemsuiteClient lié à l'utilisateur
+        $gemsuiteClient = $user->getGemsuiteClient();
+
+        if (!$gemsuiteClient) {
             $this->logger->info(sprintf('L\'utilisateur %s n\'a pas de client GEM-SUITE associé. Aucune synchronisation d\'adresse effectuée.', $user->getEmail()));
             return;
         }
 
-        $tenantCode = $this->tenantManager->getCurrentTenantCode(); 
+        // 2. On récupère l'ID depuis cet objet pour l'appel API
+        $gemsuiteClientId = $gemsuiteClient->getGemsuiteId();
+        // --- FIN DE LA MODIFICATION ---
+
+        // Le reste de la méthode ne change pas
+        $tenantCode = $this->tenantManager->getCurrentTenantCode();
         $token = $this->tenantManager->getTenantToken($tenantCode);
         if (!$token) {
             $this->logger->warning(sprintf('Aucun token pour le tenant "%s", impossible de synchroniser l\'adresse.', $tenantCode));
@@ -55,6 +64,8 @@ class GemsuiteClientUpdater
                 'auth_bearer' => $token,
                 'json' => $payload,
             ]);
+
+            $this->logger->info(sprintf('Adresse pour le client GEM-SUITE #%d synchronisée avec succès.', $gemsuiteClientId));
 
         } catch (\Throwable $e) {
             $this->logger->error('Erreur lors de la synchronisation de l\'adresse vers GEM-SUITE : ' . $e->getMessage());

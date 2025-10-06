@@ -3,7 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\FraisDePort;
-use Doctrine\ORM\EntityRepository; // MODIFIÉ : On utilise le repository de base
+use Doctrine\ORM\EntityRepository;
 use DateTime;
 
 /**
