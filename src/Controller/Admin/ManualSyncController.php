@@ -1,25 +1,22 @@
 <?php
+// src/Controller/Admin/ManualSyncController.php
 
 namespace App\Controller\Admin;
 
 use App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler;
-use App\Services\GemsuiteImporterService\GemsuiteSyncHandler;
+use App\Services\GemsuiteImporterService\GemsuiteImporter;
 use App\Services\TenantConnectionManager;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class ManualSyncController extends AbstractController
 {
-    private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
-
     public function __construct(
-        private GemsuiteSyncHandler $syncHandler,
-        private GemsuiteCompanySyncHandler $companySyncHandler,
+        private GemsuiteImporter $importer, 
+        private GemsuiteCompanySyncHandler $companySyncHandler, 
         private TenantConnectionManager $tenantManager,
-        private HttpClientInterface $client,
         private LoggerInterface $logger
     ) {
     }
@@ -41,46 +38,21 @@ class ManualSyncController extends AbstractController
             return $this->redirectToRoute('admin');
         }
 
-        $this->addFlash('info', 'Lancement de la synchronisation complète pour le tenant ' . $tenantCode);
+        $this->addFlash('info', 'Lancement de la synchronisation complète pour le tenant ' . $tenantCode . '. Cette opération peut prendre plusieurs minutes.');
 
         try {
-            // Synchronisation de l'entreprise
             $this->companySyncHandler->handleCompanyUpdate($tenantCode);
-            $this->addFlash('success', 'Informations de l\'entreprise synchronisées.');
+            $this->addFlash('success', 'Informations de l\'entreprise et du slider synchronisées.');
+            $this->importer->importDataForTenant($tenantCode, $token);
+            $this->addFlash('success', 'Clients, catégories et produits synchronisés.');
 
-            // Récupération et synchronisation des catégories
-            $categoriesResponse = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', ['auth_bearer' => $token]);
-            $categoriesContent = $categoriesResponse->getContent(false);
-
-            if (!empty($categoriesContent)) {
-                $categories = $categoriesResponse->toArray()['data'] ?? [];
-                foreach ($categories as $category) {
-                    $this->syncHandler->handleCategoryUpdate($tenantCode, $category['id']);
-                }
-                $this->addFlash('success', sprintf('%d catégories synchronisées.', count($categories)));
-            } else {
-                $this->addFlash('warning', 'Aucune catégorie à synchroniser. La réponse de l\'API était vide.');
-            }
-
-            // Récupération et synchronisation des produits
-            $productsResponse = $this->client->request('GET', self::GEMSUITE_API_URL . 'products', ['auth_bearer' => $token]);
-            $productsContent = $productsResponse->getContent(false);
-
-            if (!empty($productsContent)) {
-                $products = $productsResponse->toArray()['data'] ?? [];
-                foreach ($products as $product) {
-                    $this->syncHandler->handleProductUpdate($tenantCode, $product['id']);
-                }
-                $this->addFlash('success', sprintf('%d produits synchronisés.', count($products)));
-            } else {
-                $this->addFlash('warning', 'Aucun produit à synchroniser. La réponse de l\'API était vide.');
-            }
+            $this->addFlash('info', 'Synchronisation complète terminée avec succès !');
 
         } catch (\Throwable $e) {
-            $this->logger->error('Erreur lors de la synchronisation manuelle : ' . $e->getMessage());
-            $this->addFlash('danger', 'Une erreur est survenue pendant la synchronisation. Consultez les logs pour plus de détails.');
+            $this->logger->error('Erreur lors de la synchronisation manuelle : ' . $e->getMessage(), ['exception' => $e]);
+            $this->addFlash('danger', 'Une erreur est survenue pendant la synchronisation : ' . $e->getMessage());
         }
 
-        return $this->redirectToRoute('admin');
+        return $this->redirectToRoute('admin'); 
     }
 }

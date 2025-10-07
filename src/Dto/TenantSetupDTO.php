@@ -15,18 +15,18 @@ class TenantSetupDTO
     #[Assert\Regex('/^[a-z0-9-]+$/i', message: "Le sous-domaine ne doit contenir que des lettres, chiffres ou tirets.")]
     public ?string $subdomain = null;
 
-    #[Assert\NotBlank]
-    public ?string $companyName = null;
+    // #[Assert\NotBlank]
+    // public ?string $companyName = null;
 
-    #[Assert\Email]
-    public ?string $companyEmail = null;
+    // #[Assert\Email]
+    // public ?string $companyEmail = null;
     
-    public ?string $companyTva = null;
-    public ?string $companyEin = null;
+    // public ?string $companyTva = null;
+    // public ?string $companyEin = null;
 
-    // Pour l'upload de fichier
-    #[Assert\Image(maxSize: '1024k')]
-    public ?UploadedFile $companyLogo = null;
+    // // Pour l'upload de fichier
+    // #[Assert\Image(maxSize: '1024k')]
+    // public ?UploadedFile $companyLogo = null;
     
     // #[Assert\NotBlank]
     // public ?string $adminName = null;

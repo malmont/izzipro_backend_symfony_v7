@@ -151,3 +151,7 @@ services:
     App\Services\DeepLTranslateService\DeepLTranslateService:
         arguments:
             $deepLApiKey: '%env(DEEPL_API_KEY)%'
+
+    App\Controller\TenantSetupController\TenantSetupController:
+        bind:
+            $frontendBaseDomain: '%env(FRONTEND_BASE_DOMAIN)%'

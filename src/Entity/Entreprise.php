@@ -32,10 +32,10 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $website = null;
 
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(length: 255, nullable: true)]
     private ?string $ein = null;
 
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(length: 255, nullable: true)] 
     private ?string $tvaIntracommunautaire = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
@@ -146,7 +146,7 @@ class Entreprise implements TranslatableInterface
         return $this->ein;
     }
 
-    public function setEin(string $ein): static
+    public function setEin(?string $ein): static
     {
         $this->ein = $ein;
 
@@ -158,7 +158,7 @@ class Entreprise implements TranslatableInterface
         return $this->tvaIntracommunautaire;
     }
 
-    public function setTvaIntracommunautaire(string $tvaIntracommunautaire): static
+    public function setTvaIntracommunautaire(?string $tvaIntracommunautaire): static
     {
         $this->tvaIntracommunautaire = $tvaIntracommunautaire;
 

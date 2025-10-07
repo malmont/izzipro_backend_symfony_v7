@@ -382,7 +382,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
             if ($this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags([$tagPrefix . 'adresses_user']);
             }
-            return;
+            
         }
         if ($entity instanceof Entreprise) {
             $specificKeyToDelete = $prefix . 'entreprise_' . $entity->getId();
@@ -390,7 +390,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
             if ($this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags([$tagPrefix . 'entreprise']);
             }
-            return;
+            
         }
         if ($entity instanceof FraisDePort) {
             $commande = $entity->getCommande();
@@ -402,7 +402,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
             if ($this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags([$tagPrefix . 'frais_de_port']);
             }
-            return;
+            
         }
         if ($entity instanceof NoteDeFrais) {
             $collection = $entity->getCollection();
@@ -413,7 +413,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
             if ($this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags([$tagPrefix . 'notes_de_frais']);
             }
-            return;
+            
         }
         if ($entity instanceof Order) {
             $user = $entity->getUserId();
@@ -427,7 +427,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
                     $tagPrefix . 'orders_source'
                 ]);
             }
-            return;
+            
         }
 
         if ($entity instanceof ProductVariant || $entity instanceof Product) {
@@ -449,20 +449,21 @@ class CacheInvalidationSubscriber implements EventSubscriber
             if ($this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags([$tagPrefix . 'product_variants']);
             }
-            return;
         }
 
         foreach (self::CACHE_INVALIDATIONS as $operation) {
             foreach ($operation['classes'] as $class) {
                 if ($entity instanceof $class) {
                     foreach ($operation['delete'] as $key) {
-                        $this->cache->delete($prefix . $key);
+                       if ($key) {
+                            $this->cache->delete($prefix . $key);
+                        }
                     }
                     if (!empty($operation['invalidate_tags']) && $this->cache instanceof TagAwareCacheInterface) {
                         $tags = array_map(fn($tag) => $tagPrefix . $tag, $operation['invalidate_tags']);
                         $this->cache->invalidateTags($tags);
                     }
-                    break;
+                  
                 }
             }
         }

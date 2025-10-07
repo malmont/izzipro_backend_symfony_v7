@@ -75,10 +75,15 @@ class GemsuiteCompanySyncHandler
         $entreprise->setPrivacyPolicy($companyData['website_conf'] ?? $entreprise->getPrivacyPolicy());
 
 
+        $identifier = $entreprise->getGemsuiteIdentifier(); 
+
         if (isset($companyData['website_link'])) {
             $pathParts = explode('/', rtrim($companyData['website_link'], '/'));
-            $identifier = end($pathParts);
-            $entreprise->setGemsuiteIdentifier($identifier);
+            $newIdentifier = end($pathParts);
+            if ($newIdentifier) {
+                $entreprise->setGemsuiteIdentifier($newIdentifier);
+                $identifier = $newIdentifier; 
+            }
         }
         $logoPath = $companyData['website_logo1'] ?? null;
         $entreprise->setLogo(
@@ -111,11 +116,8 @@ class GemsuiteCompanySyncHandler
         $homeSlider->setButtonUrl($companyData['website_cta_link'] ?? '/shop');
         $homeSlider->setIsDiplayed(true);
         $identifier = null;
-        if (isset($companyData['website_link'])) {
-            $pathParts = explode('/', rtrim($companyData['website_link'], '/'));
-            $identifier = end($pathParts);
-        }
-        
+        $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
+        $identifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
         $bannerPath = $companyData['website_banner'] ?? null;
         $homeSlider->setImage(
             $this->imageUrlBuilder->buildUrl($identifier, $bannerPath)

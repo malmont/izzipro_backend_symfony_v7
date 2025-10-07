@@ -14,23 +14,25 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\File\Exception\FileException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\String\Slugger\SluggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder; 
+use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 
 class TenantSetupController extends AbstractController
 {
     private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
+
+     public function __construct(
+        private string $frontendBaseDomain
+    ) {
+    }
 
     #[Route('/setup/new-store', name: 'app_tenant_setup')]
     public function setup(
         Request $request,
         TenantConnectionManager $tenantManager,
         TenantEntityManagerProvider $emProvider,
-        UserPasswordHasherInterface $passwordHasher,
-        SluggerInterface $slugger,
         GemsuiteImporter $gemsuiteImporter,
         HttpClientInterface $client,
         GemsuiteImageUrlBuilder $imageUrlBuilder
@@ -39,7 +41,6 @@ class TenantSetupController extends AbstractController
 
         $host = $request->getHost();
         $parts = explode('.', $host);
-
         if (count($parts) < 3) {
             $this->addFlash('danger', 'L\'accès à cette page doit se faire via le sous-domaine de votre nouveau site (ex: monclient.votredomaine.com).');
             return $this->redirectToRoute('app_home'); 
@@ -57,7 +58,7 @@ class TenantSetupController extends AbstractController
             $this->addFlash('danger', 'Erreur lors de la vérification du sous-domaine : ' . $e->getMessage());
             return $this->redirectToRoute('app_home');
         }
-
+        
         $dto = new TenantSetupDTO();
         $dto->subdomain = $subdomain;
         $dto->code = $subdomain;
@@ -65,16 +66,13 @@ class TenantSetupController extends AbstractController
         $form = $this->createForm(TenantSetupType::class, $dto);
         $form->get('subdomain_display')->setData($subdomain);
         $form->handleRequest($request);
-
         if ($form->isSubmitted() && $form->isValid()) {
-            
             // --- VALIDATION DU JETON GEM-SUITE (SÉCURITÉ) ---
             $companyData = null;
             if (!$dto->gemsuiteToken) {
                 $this->addFlash('danger', 'Le jeton d\'authentification GEM-SUITE est obligatoire pour créer un nouveau site.');
                 return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
-
             try {
                 $response = $client->request('GET', self::GEMSUITE_API_URL . 'company', [
                     'auth_bearer' => $dto->gemsuiteToken,
@@ -163,17 +161,6 @@ class TenantSetupController extends AbstractController
                     $tenantEm->persist($homeSlider);
                 }
 
-                // $user = new User();
-                // $user->setFirstname($dto->adminName);
-                // $user->setLastname('');
-                // $user->setEmail($dto->adminEmail);
-                // $user->setUsername($dto->adminEmail);
-                // $user->setRoles(['ROLE_ADMIN']);
-                // $user->setPassword($passwordHasher->hashPassword($user, $dto->plainPassword));
-                // $user->setIsVerified(true); 
-
-                // $tenantEm->persist($user);
-                
                 $tenantEm->flush();
                 $this->addFlash('info', 'Profil de l\'entreprise et administrateur créés.');
 
@@ -191,7 +178,8 @@ class TenantSetupController extends AbstractController
             }
 
             $this->addFlash('success', 'Le site pour ' . $companyData['nom'] . ' est prêt !');
-            return $this->redirectToRoute('app_home');
+            $newSiteUrl = sprintf('https://%s.%s', $dto->code, $this->frontendBaseDomain);
+            return new RedirectResponse($newSiteUrl);
         }
 
         return $this->render('tenant_setup/form.html.twig', [
