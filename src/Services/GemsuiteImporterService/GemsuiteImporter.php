@@ -9,6 +9,7 @@ use App\Entity\ProductShipping;
 use App\Entity\GemsuiteClient;
 use App\Entity\ProductVariant;
 use App\Entity\Style;
+use App\Services\TranslationGeneratorService\TranslationGeneratorService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\String\Slugger\SluggerInterface;
@@ -21,12 +22,14 @@ class GemsuiteImporter
 {
     private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
+    // --- CONSTRUCTEUR MODIFIÉ ---
     public function __construct(
         private HttpClientInterface $client,
         private TenantEntityManagerProvider $emProvider,
         private SluggerInterface $slugger,
         private LoggerInterface $logger,
-        private GemsuiteImageUrlBuilder $imageUrlBuilder
+        private GemsuiteImageUrlBuilder $imageUrlBuilder,
+        private TranslationGeneratorService $translationGenerator
     ) {
     }
     public function importDataForTenant(string $tenantCode, string $gemsuiteToken): void
@@ -91,6 +94,10 @@ class GemsuiteImporter
                 
                 $category->setName(trim($gemCategoryData['name_fr']));
                 $tenantEm->persist($category);
+
+                // --- AJOUT DE LA TRADUCTION ---
+                $this->translationGenerator->generateTranslations($category);
+                
                 $categoryMap[$gemCategoryData['id']] = $category;
             }
             
@@ -141,8 +148,17 @@ class GemsuiteImporter
                 $this->logger->warning('Le style par défaut avec l\'ID 2 est introuvable dans la base de données du tenant.');
             }
 
-            if (isset($gemProductData['category_id']) && isset($categoryMap[$gemProductData['category_id']])) {
-                $product->addCategory($categoryMap[$gemProductData['category_id']]);
+            if (isset($gemProductData['category_id'])) {
+                if (isset($categoryMap[$gemProductData['category_id']])) {
+                    $product->addCategory($categoryMap[$gemProductData['category_id']]);
+                } else {
+                    $this->logger->warning(sprintf(
+                        'Le produit "%s" (ID Gem-Suite: %d) est lié à une catégorie (ID: %d) qui est inactive ou non synchronisée. L\'association est ignorée.',
+                        ($gemProductData['name_fr'] ?? 'N/A'),
+                        $gemProductData['id'],
+                        $gemProductData['category_id']
+                    ));
+                }
             }
             
            $imagePath = $gemProductData['medias'][0]['path'] ?? null;
@@ -167,26 +183,30 @@ class GemsuiteImporter
             }
 
             $tenantEm->persist($product);
+            
+            // --- AJOUT DE LA TRADUCTION ---
+            $this->translationGenerator->generateTranslations($product);
         }
         $tenantEm->flush();
     }
 
-     public function checkPrerequisites(string $token): void
-        {
-            $this->logger->info('Début de la pré-vérification des données GEM-SUITE.');
-            $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', [
-                'auth_bearer' => $token,
-            ]);
-            
-            $data = $response->toArray();
-            
-            if (empty($data['data'])) {
-                $this->logger->error('Pré-vérification échouée : Aucune catégorie retournée par l\'API GEM-SUITE.');
-                throw new \Exception('Aucune catégorie trouvée sur GEM-SUITE. L\'importation ne peut pas être lancée.');
-            }
-            $this->logger->info('Pré-vérification des données GEM-SUITE réussie.');
+    public function checkPrerequisites(string $token): void
+    {
+        $this->logger->info('Début de la pré-vérification des données GEM-SUITE.');
+        $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', [
+            'auth_bearer' => $token,
+        ]);
+        
+        $data = $response->toArray();
+        
+        if (empty($data['data'])) {
+            $this->logger->error('Pré-vérification échouée : Aucune catégorie retournée par l\'API GEM-SUITE.');
+            throw new \Exception('Aucune catégorie trouvée sur GEM-SUITE. L\'importation ne peut pas être lancée.');
         }
-        private function importClients(EntityManagerInterface $tenantEm, string $token): void
+        $this->logger->info('Pré-vérification des données GEM-SUITE réussie.');
+    }
+
+    private function importClients(EntityManagerInterface $tenantEm, string $token): void
     {
         $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'clients', [
             'auth_bearer' => $token,
@@ -211,5 +231,4 @@ class GemsuiteImporter
         
         $tenantEm->flush();
     }
-
 }

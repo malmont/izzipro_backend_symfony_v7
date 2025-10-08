@@ -6,6 +6,7 @@ namespace App\Services\GemsuiteImporterService;
 use App\Entity\Entreprise;
 use App\Entity\HomeSlider;
 use App\Entity\AddressEntreprise;
+use App\Services\TranslationGeneratorService\TranslationGeneratorService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -17,12 +18,14 @@ class GemsuiteCompanySyncHandler
 {
     private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
+    // --- CONSTRUCTEUR MIS À JOUR ---
     public function __construct(
         private HttpClientInterface $client,
         private TenantEntityManagerProvider $emProvider,
         private TenantConnectionManager $tenantManager,
         private LoggerInterface $logger,
-        private GemsuiteImageUrlBuilder $imageUrlBuilder
+        private GemsuiteImageUrlBuilder $imageUrlBuilder,
+        private TranslationGeneratorService $translationGenerator // <-- AJOUT
     ) {
     }
 
@@ -74,9 +77,7 @@ class GemsuiteCompanySyncHandler
         $entreprise->setConditionOfUse($companyData['website_terms'] ?? $entreprise->getConditionOfUse());
         $entreprise->setPrivacyPolicy($companyData['website_conf'] ?? $entreprise->getPrivacyPolicy());
 
-
         $identifier = $entreprise->getGemsuiteIdentifier(); 
-
         if (isset($companyData['website_link'])) {
             $pathParts = explode('/', rtrim($companyData['website_link'], '/'));
             $newIdentifier = end($pathParts);
@@ -104,6 +105,9 @@ class GemsuiteCompanySyncHandler
         }
         
         $em->persist($entreprise);
+
+        // --- AJOUT DE LA TRADUCTION ---
+        $this->translationGenerator->generateTranslations($entreprise);
     }
 
     private function updateHomeSliderData(EntityManagerInterface $em, array $companyData): void
@@ -112,18 +116,22 @@ class GemsuiteCompanySyncHandler
 
         $homeSlider->setTitle(strip_tags($companyData['website_intro_text1'] ?? 'Bienvenue'));
         $homeSlider->setDescription(strip_tags($companyData['website_intro_text2'] ?? 'Découvrez nos produits'));
-        $homeSlider->setButtonMessage($companyData['website_cta_header'] ?: 'Voir la boutique');
+        $homeSlider->setButtonMessage($companyData['website_cta_header'] ?? 'Voir la boutique');
         $homeSlider->setButtonUrl($companyData['website_cta_link'] ?? '/shop');
         $homeSlider->setIsDiplayed(true);
-        $identifier = null;
+        
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
         $identifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+        
         $bannerPath = $companyData['website_banner'] ?? null;
         $homeSlider->setImage(
             $this->imageUrlBuilder->buildUrl($identifier, $bannerPath)
         );
         
         $em->persist($homeSlider);
+
+        // --- AJOUT DE LA TRADUCTION ---
+        $this->translationGenerator->generateTranslations($homeSlider);
     }
 
     private function getTenantEntityManager(string $tenantCode): EntityManagerInterface

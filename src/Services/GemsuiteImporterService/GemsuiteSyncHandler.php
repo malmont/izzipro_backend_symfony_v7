@@ -9,6 +9,7 @@ use App\Entity\ProductShipping;
 use App\Entity\ProductVariant;
 use App\Entity\Style;
 use App\Entity\GemsuiteClient;
+use App\Services\TranslationGeneratorService\TranslationGeneratorService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use App\Entity\User;
@@ -23,19 +24,20 @@ class GemsuiteSyncHandler
 {
     private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
+    // --- CONSTRUCTEUR MODIFIÉ ---
     public function __construct(
         private HttpClientInterface $client,
         private TenantEntityManagerProvider $emProvider,
         private TenantConnectionManager $tenantManager,
         private SluggerInterface $slugger,
         private LoggerInterface $logger,
-        private GemsuiteImageUrlBuilder $imageUrlBuilder
+        private GemsuiteImageUrlBuilder $imageUrlBuilder,
+        private TranslationGeneratorService $translationGenerator
     ) {
     }
 
     /**
      * Gère la mise à jour d'un produit.
-     * MODIFIÉ : Désactive le produit local s'il n'est plus synchronisable.
      */
     public function handleProductUpdate(string $tenantCode, int $productId): void
     {
@@ -59,12 +61,10 @@ class GemsuiteSyncHandler
             
             $tenantEm = $this->getTenantEntityManager($tenantCode);
 
-            // --- NOUVELLE LOGIQUE DE SYNCHRONISATION ---
             $status = (int)($gemProductData['status'] ?? 0);
             $syncWeb = (bool)($gemProductData['sync_web'] ?? false);
 
             if ($status === 1 && $syncWeb === true) {
-                // Le produit est actif, on le crée ou on le met à jour
                 $this->logger->info(sprintf('Produit #%d actif sur GEM-SUITE. Mise à jour en cours...', $productId));
                 $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
                 $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
@@ -72,7 +72,6 @@ class GemsuiteSyncHandler
                 $this->updateOrCreateProduct($tenantEm, $gemProductData, $categoryMap, $companyIdentifier);
 
             } else {
-                // Le produit est inactif, on le désactive sur le site e-commerce
                 $this->logger->info(sprintf('Produit #%d inactif sur GEM-SUITE. Tentative de désactivation...', $productId));
                 $product = $tenantEm->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
                 if ($product) {
@@ -82,7 +81,6 @@ class GemsuiteSyncHandler
                     $this->logger->info(sprintf('Le produit inactif #%d n\'existait pas localement. Aucune action nécessaire.', $productId));
                 }
             }
-            // --- FIN DE LA NOUVELLE LOGIQUE ---
 
             $tenantEm->flush();
             $this->logger->info(sprintf('Produit #%d synchronisé avec succès pour le tenant "%s".', $productId, $tenantCode));
@@ -130,10 +128,7 @@ class GemsuiteSyncHandler
         $product->setPrice($priceInDollars * 100);
         $product->setQuantity((int) ($gemProductData['default_quantity'] ?? 0));
         $product->setSlug(strtolower($this->slugger->slug($product->getName())));
-        
-        // MODIFIÉ : On met 'isWeb' à true car on sait que le produit est actif à ce stade
         $product->setIsWeb(true);
-        
         $product->setIsnewarrival($gemProductData['is_new_arrival'] ?? true);
         $product->setIsbestseller($gemProductData['is_bestseller'] ?? true);
         $defaultStyle = $em->getRepository(Style::class)->find(2);
@@ -142,7 +137,6 @@ class GemsuiteSyncHandler
         } else {
             $this->logger->warning('Le style par défaut avec l\'ID 2 est introuvable dans la base de données du tenant.');
         }
-
 
         if (isset($gemProductData['category_id']) && isset($categoryMap[$gemProductData['category_id']])) {
             $product->addCategory($categoryMap[$gemProductData['category_id']]);
@@ -173,11 +167,11 @@ class GemsuiteSyncHandler
         }
 
         $em->persist($product);
+
+        // --- AJOUT DE LA TRADUCTION ---
+        $this->translationGenerator->generateTranslations($product);
     }
 
-    /**
-     * MODIFIÉ : Ajout du filtrage par status et sync_web.
-     */
     private function importCategories(EntityManagerInterface $em, string $token): array
     {
         $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', [
@@ -188,16 +182,12 @@ class GemsuiteSyncHandler
         $categoryMap = [];
 
         foreach ($data['data'] as $gemCategoryData) {
-            // --- LOGIQUE DE FILTRAGE AJOUTÉE ---
-            // On utilise la règle "optimiste" : par défaut, on synchronise.
             $status = (int)($gemCategoryData['status'] ?? 1);
             $syncWeb = (bool)($gemCategoryData['sync_web'] ?? true);
 
             if ($status !== 1 || $syncWeb !== true) {
-                // Logique pour ignorer les catégories inactives
                 continue;
             }
-            // --- FIN DU FILTRAGE ---
 
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
             if (!$category) {
@@ -207,6 +197,10 @@ class GemsuiteSyncHandler
             
             $category->setName(trim($gemCategoryData['name_fr']));
             $em->persist($category);
+
+            // --- AJOUT DE LA TRADUCTION ---
+            $this->translationGenerator->generateTranslations($category);
+
             $categoryMap[$gemCategoryData['id']] = $category;
         }
         $em->flush();
@@ -262,63 +256,6 @@ class GemsuiteSyncHandler
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('Erreur lors de la synchronisation du client #%d : %s', $clientId, $e->getMessage()));
         }
-    }
-    //  public function handleClientUpdate(string $tenantCode, int $clientId): void
-    // {
-    //     $this->logger->info(sprintf('Synchronisation du client #%d pour le tenant "%s"', $clientId, $tenantCode));
-    //     $token = $this->tenantManager->getTenantToken($tenantCode);
-    //     if (!$token) {
-    //         $this->logger->error(sprintf('Aucun token trouvé pour le tenant "%s".', $tenantCode));
-    //         return;
-    //     }
-
-    //     try {
-    //         // 1. Récupérer les données à jour du client depuis GEM-SUITE
-    //         $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'clients/' . $clientId, [
-    //             'auth_bearer' => $token,
-    //         ]);
-
-    //         $gemClientData = $response->toArray()['data'] ?? null;
-    //         if (!$gemClientData) {
-    //             $this->logger->warning(sprintf('Client #%d non trouvé sur GEM-SUITE.', $clientId));
-    //             return;
-    //         }
-
-    //         $tenantEm = $this->getTenantEntityManager($tenantCode);
-
-    //         // 2. Trouver l'utilisateur Iizipro correspondant
-    //         $user = $tenantEm->getRepository(User::class)->findOneBy(['gemsuiteClientId' => $clientId]);
-
-    //         if (!$user) {
-    //             $this->logger->info(sprintf('Aucun utilisateur Iizipro n\'est lié au client GEM-SUITE #%d.', $clientId));
-    //             return;
-    //         }
-
-    //         // 3. Mettre à jour (ou créer) son adresse principale
-    //         if (!empty($gemClientData['address'])) {
-    //             $address = $user->getAdresses()->first() ?: new Adress();
-
-    //             $address->setFirstname($user->getFirstname());
-    //             $address->setLastname($user->getLastname());
-    //             $address->setAddress($gemClientData['address']);
-    //             $address->setCity($gemClientData['city'] ?? '');
-    //             $address->setCodepostal($gemClientData['zipcode'] ?? '');
-    //             $address->setCountry($gemClientData['pays'] ?? 'Canada');
-    //             $address->setProvince($gemClientData['state'] ?? '');
-    //             $address->setPhone($gemClientData['phone'] ?? 'N/A');
-
-    //             // On s'assure que l'adresse est bien liée à l'utilisateur
-    //             if (!$user->getAdresses()->contains($address)) {
-    //                 $user->addAdress($address);
-    //                 $tenantEm->persist($address);
-    //             }
-
-    //             $tenantEm->flush();
-    //             $this->logger->info(sprintf('Adresse de l\'utilisateur "%s" synchronisée avec succès.', $user->getEmail()));
-    //         }
-
-    //     } catch (\Throwable $e) {
-    //         $this->logger->error(sprintf('Erreur lors de la synchronisation du client #%d : %s', $clientId, $e->getMessage()));
-    //     }
-    // }
+   
+}
 }

@@ -1,30 +1,33 @@
 <?php
+// src/Controller/TenantSetupController/TenantSetupController.php
+
 namespace App\Controller\TenantSetupController;
 
 use App\Dto\TenantSetupDTO;
 use App\Entity\AddressEntreprise;
 use App\Entity\Entreprise;
 use App\Entity\HomeSlider;
-use App\Entity\User;
 use App\Form\TenantSetupType;
 use App\Services\GemsuiteImporterService\GemsuiteImporter;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
+use App\Services\TranslationGeneratorService\TranslationGeneratorService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\File\Exception\FileException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
-use Symfony\Component\HttpFoundation\RedirectResponse;
+use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder; 
 
 class TenantSetupController extends AbstractController
 {
     private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
-     public function __construct(
-        private string $frontendBaseDomain
+    // --- AJOUT 2 : Injection du service de traduction ---
+    public function __construct(
+        private string $frontendBaseDomain,
+        private TranslationGeneratorService $translationGenerator
     ) {
     }
 
@@ -38,7 +41,6 @@ class TenantSetupController extends AbstractController
         GemsuiteImageUrlBuilder $imageUrlBuilder
     ): Response {
         
-
         $host = $request->getHost();
         $parts = explode('.', $host);
         if (count($parts) < 3) {
@@ -66,8 +68,8 @@ class TenantSetupController extends AbstractController
         $form = $this->createForm(TenantSetupType::class, $dto);
         $form->get('subdomain_display')->setData($subdomain);
         $form->handleRequest($request);
+
         if ($form->isSubmitted() && $form->isValid()) {
-            // --- VALIDATION DU JETON GEM-SUITE (SÉCURITÉ) ---
             $companyData = null;
             if (!$dto->gemsuiteToken) {
                 $this->addFlash('danger', 'Le jeton d\'authentification GEM-SUITE est obligatoire pour créer un nouveau site.');
@@ -77,12 +79,10 @@ class TenantSetupController extends AbstractController
                 $response = $client->request('GET', self::GEMSUITE_API_URL . 'company', [
                     'auth_bearer' => $dto->gemsuiteToken,
                 ]);
-
                 if ($response->getStatusCode() !== 200) {
                      throw new \Exception('Le jeton GEM-SUITE est invalide ou l\'API a retourné une erreur.');
                 }
                 $companyData = $response->toArray()['data'][0] ?? null;
-
                 if (!$companyData) {
                     throw new \Exception('Aucune donnée d\'entreprise trouvée pour ce jeton GEM-SUITE.');
                 }
@@ -90,7 +90,7 @@ class TenantSetupController extends AbstractController
                 $this->addFlash('danger', 'Erreur de validation GEM-SUITE : ' . $e->getMessage());
                 return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
-            // --- FIN DE LA VALIDATION. SI ON EST ICI, LE JETON EST VALIDE. ---
+
             try {
                 $gemsuiteImporter->checkPrerequisites($dto->gemsuiteToken);
             } catch (\Throwable $e) {
@@ -121,7 +121,7 @@ class TenantSetupController extends AbstractController
                 $entreprise->setConditionOfUse($companyData['website_terms'] ?? null);
                 $entreprise->setPrivacyPolicy($companyData['website_conf'] ?? null);
 
-                  if (isset($companyData['website_link'])) {
+                if (isset($companyData['website_link'])) {
                     $pathParts = explode('/', rtrim($companyData['website_link'], '/'));
                     $identifier = end($pathParts);
                     $entreprise->setGemsuiteIdentifier($identifier);
@@ -145,6 +145,9 @@ class TenantSetupController extends AbstractController
                     $entreprise->setAddressEntreprise($addressEntreprise);
                 }
                 $tenantEm->persist($entreprise);
+                
+                // --- AJOUT 3 : On déclenche la traduction pour l'entreprise ---
+                $this->translationGenerator->generateTranslations($entreprise);
 
                 if ($companyData) {
                     $homeSlider = new HomeSlider();
@@ -159,21 +162,24 @@ class TenantSetupController extends AbstractController
                         $imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $bannerPath)
                     );
                     $tenantEm->persist($homeSlider);
+
+                    // --- AJOUT 4 : On déclenche la traduction pour le slider ---
+                    $this->translationGenerator->generateTranslations($homeSlider);
                 }
 
                 $tenantEm->flush();
-                $this->addFlash('info', 'Profil de l\'entreprise et administrateur créés.');
+                $this->addFlash('info', 'Profil de l\'entreprise créé et traduit.');
 
             } catch (\Throwable $e) {
-                $this->addFlash('warning', 'Erreur lors de la création du profil de l\'entreprise et administrateur: ' . $e->getMessage());
+                $this->addFlash('warning', 'Erreur lors de la création du profil de l\'entreprise : ' . $e->getMessage());
             }
             
             if ($dto->gemsuiteToken) {
                 try {
                     $gemsuiteImporter->importDataForTenant($dto->code, $dto->gemsuiteToken);
-                    $this->addFlash('info', 'Les produits de GEM-SUITE ont été importés.');
+                    $this->addFlash('info', 'Les données de GEM-SUITE ont été importées et traduites.');
                 } catch (\Throwable $e) {
-                    $this->addFlash('warning', 'Le site a été créé, mais l\'importation des produits a échoué: ' . $e->getMessage());
+                    $this->addFlash('warning', 'Le site a été créé, mais l\'importation des données a échoué: ' . $e->getMessage());
                 }
             }
 
