@@ -35,13 +35,15 @@ class TenantConnectionManager
     private string           $projectDir;
     private TenantConnectionProvider $connectionProvider; 
 
+
     public function __construct(
         string $masterDatabaseUrl,
         string $defaultTenantUrl,
         string $projectDir,
         Connection $connection,
         LoggerInterface $logger,
-        TenantConnectionProvider $connectionProvider
+        TenantConnectionProvider $connectionProvider,
+
     ) {
         $this->logger           = $logger;
         $this->defaultTenantUrl = $defaultTenantUrl;
@@ -49,6 +51,7 @@ class TenantConnectionManager
         $this->consolePath      = $this->projectDir . '/bin/console';
         $this->connection       = $connection;
         $this->connectionProvider = $connectionProvider;
+
 
         // parse and validate master DSN
         $parts = parse_url($masterDatabaseUrl);
@@ -119,32 +122,6 @@ class TenantConnectionManager
                     'd' => $dbname,
                     't' => $gemsuiteToken
                 ]);
-
-                // $this->runMigrations($dbname);
-                $initFile = $this->projectDir . '/docker/db/init.sql';
-                
-                $tokenValueForSql = ($gemsuiteToken === null) ? 'NULL' : "'" . addslashes($gemsuiteToken) . "'";
-
-                $entry = sprintf(
-                "\n-- Auto-generated tenant %s\nCREATE DATABASE \"%s\" WITH TEMPLATE gmasuite;\n" .
-                "INSERT INTO tenants(code, name, dbname, gemsuite_token) VALUES('%s', '%s', '%s', %s);\n",
-                $code,
-                $dbname,
-                $code,
-                addslashes($name),
-                $dbname,
-                $tokenValueForSql
-                );
-                
-                if (!is_dir(dirname($initFile))) {
-                    @mkdir(dirname($initFile), 0755, true);
-                }
-
-                if (false === @file_put_contents($initFile, $entry, FILE_APPEND | LOCK_EX)) {
-                    $this->logger->warning("Impossible d’écrire dans {$initFile}");
-                } else {
-                    $this->logger->info("Init SQL mis à jour pour le tenant {$dbname}", ['file' => $initFile]);
-                }
 
             } catch (\Throwable $e) {
                 $this->logger->error("Échec création tenant '{$code}' / '{$dbname}': " . $e->getMessage());
@@ -326,6 +303,13 @@ private function runMigrations(string $dbname): void
      public function getCurrentTenantCode(): ?string
     {
         return $this->connectionProvider->getTenantCode();
+    }
+
+    public function switchToTenantByName(string $dbname): void
+    {
+        $params = $this->tenantParams;
+        $params['dbname'] = $dbname;
+        $this->reconnect($params);
     }
 
 }

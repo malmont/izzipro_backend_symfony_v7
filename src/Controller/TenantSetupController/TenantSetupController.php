@@ -19,6 +19,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder; 
+use App\Services\DefaultAssetSynchronizer;
 
 class TenantSetupController extends AbstractController
 {
@@ -27,7 +28,8 @@ class TenantSetupController extends AbstractController
     // --- AJOUT 2 : Injection du service de traduction ---
     public function __construct(
         private string $frontendBaseDomain,
-        private TranslationGeneratorService $translationGenerator
+        private TranslationGeneratorService $translationGenerator,
+        private DefaultAssetSynchronizer $assetSynchronizer
     ) {
     }
 
@@ -110,6 +112,8 @@ class TenantSetupController extends AbstractController
             try {
                 $emProvider->switchTenant($dbname, $dto->code);
                 $tenantEm = $emProvider->getEntityManager();
+                $this->assetSynchronizer->synchronize($tenantEm);
+                $this->addFlash('info', 'Assets par défaut synchronisés.');
 
                 $entreprise = new Entreprise();
                 $entreprise->setName($companyData['nom']);
