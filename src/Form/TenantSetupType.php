@@ -31,7 +31,7 @@ class TenantSetupType extends AbstractType
             // ->add('adminEmail', EmailType::class, ['label' => 'Email de l\'administrateur'])
             // ->add('plainPassword', PasswordType::class, ['label' => 'Mot de passe'])
             
-            ->add('gemsuiteToken', TextType::class, ['label' => 'Token GEM-SUITE (pour test)', 'required' => false])
+            ->add('gemsuiteToken', TextType::class, ['label' => 'Token GEM-SUITE', 'required' => false])
             
             ->add('save', SubmitType::class, ['label' => 'Créer et Activer le Site']);
     }

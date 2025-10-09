@@ -1,4 +1,20 @@
-# 📦 Utilise PHP 8.3 avec FPM
+# =========================================================================
+# ÉTAGE 1: BUILDER - Installation des dépendances Composer
+# =========================================================================
+FROM composer:2 as builder
+
+WORKDIR /app
+
+# Copier uniquement les fichiers de dépendances
+COPY composer.json composer.lock ./
+
+# Installer les dépendances en mode production optimisé
+RUN composer install --prefer-dist --no-dev --no-scripts --optimize-autoloader
+
+
+# =========================================================================
+# ÉTAGE 2: FINAL - Construction de l'image de production
+# =========================================================================
 FROM php:8.3-fpm
 
 # 🔧 Installer les dépendances système nécessaires
@@ -19,7 +35,7 @@ RUN apt-get update && apt-get install -y \
  && docker-php-ext-enable redis \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# ✅ Configurer PHP
+# ✅ Configurer PHP pour la production
 RUN echo "memory_limit=-1" > /usr/local/etc/php/conf.d/memory-limit.ini \
  && printf "opcache.enable=1\nopcache.memory_consumption=128\nopcache.interned_strings_buffer=8\nopcache.max_accelerated_files=10000\nopcache.validate_timestamps=0\n" > /usr/local/etc/php/conf.d/opcache-recommended.ini \
  && echo "variables_order=EGPCS" > /usr/local/etc/php/conf.d/zzz-env.ini
@@ -28,34 +44,23 @@ RUN echo "memory_limit=-1" > /usr/local/etc/php/conf.d/memory-limit.ini \
 RUN sed -i "s|listen = 127.0.0.1:9000|listen = 127.0.0.1:9000|g" /usr/local/etc/php-fpm.d/www.conf \
  && sed -i 's|^;*clear_env = .*|clear_env = no|' /usr/local/etc/php-fpm.d/www.conf
 
-# 📦 Installer Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
 # 📂 Définir le dossier de travail
 WORKDIR /var/www
 
-# 📄 Copier uniquement composer.json et composer.lock (cache Docker)
-COPY composer.json composer.lock ./
+# 📄 Copier les dépendances depuis l'étage "builder"
+COPY --from=builder /app/vendor/ ./vendor/
 
-# ✅ INSTALL 1 — sans scripts (pas encore de bin/console)
-RUN composer install --prefer-dist --no-dev --optimize-autoloader --no-progress --no-scripts
-
-# 📂 Copier le reste du projet
+# 📂 Copier TOUT le code de l'application (incluant /public/assets/master_files)
 COPY . .
 
-# 🔧 Configurer les permissions spécifiques pour jwt
+# 🔧 Configurer les permissions
 RUN mkdir -p /var/www/config/jwt \
-    && chown -R www-data:www-data /var/www/config/jwt \
-    && chmod -R 755 /var/www/config/jwt
+    && mkdir -p /var/www/var \
+    && chown -R www-data:www-data /var/www
 
-# 📁 Créer le dossier var avec les bonnes permissions
-RUN mkdir -p /var/www/var \
-    && chown -R www-data:www-data /var/www \
-    && chmod -R 755 /var/www
-
-# ✅ Désactiver définitivement Dotenv (sans secrets cuits) et optimiser l'autoload
+# ✅ Préparer l'environnement de production
 RUN composer dump-env prod --empty \
- && composer dump-autoload -o
+ && composer dump-autoload --optimize --classmap-authoritative
 
 # ✅ Exécuter avec un utilisateur non-root
 USER www-data
