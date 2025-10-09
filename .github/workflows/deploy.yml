@@ -3,7 +3,7 @@ name: Build and Deploy Backend to Kubernetes
 on:
   push:
     branches:
-      - main # ⚠️ Mettez ici le nom de votre branche de production
+      - main
 
 permissions:
   contents: read
