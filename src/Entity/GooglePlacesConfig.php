@@ -50,14 +50,17 @@ class GooglePlacesConfig
         return $decrypted;
     }
 
-    public function setGoogleApiKeyProd(string $plain): self
+    public function setGoogleApiKeyProd(?string $plain): self
     {
-        $encrypted = sodium_crypto_secretbox(
-            $plain,
-            $this->getNonce(),
-            $this->getSecretKey()
-        );
-        $this->googleApiKeyProdEncrypted = sodium_bin2hex($encrypted);
+        if (!empty($plain)) {
+            $encrypted = sodium_crypto_secretbox(
+                $plain,
+                $this->getNonce(),
+                $this->getSecretKey()
+            );
+            $this->googleApiKeyProdEncrypted = sodium_bin2hex($encrypted);
+        }
+        
         return $this;
     }
 

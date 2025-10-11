@@ -70,7 +70,6 @@ class TenantSetupController extends AbstractController
         $form = $this->createForm(TenantSetupType::class, $dto);
         $form->get('subdomain_display')->setData($subdomain);
         $form->handleRequest($request);
-
         if ($form->isSubmitted() && $form->isValid()) {
             $companyData = null;
             if (!$dto->gemsuiteToken) {

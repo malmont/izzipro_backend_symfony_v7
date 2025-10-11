@@ -19,10 +19,10 @@ class GooglePlacesConfigCrudController extends BaseTenantCrudController
         return [
             IdField::new('id')->hideOnForm(),
             TextField::new('googleApiKeyTest', 'Clé Google Places (test)'),
-            TextField::new('googleApiKeyProdEncrypted', 'Clé Google Places (prod)')
-                ->setFormTypeOption('mapped', false)
+            TextField::new('googleApiKeyProd', 'Clé Google Places (prod)')
+                ->setFormTypeOption('required', false)
                 ->onlyOnForms()
-                ->setHelp('Entrez la clé prod en clair, elle sera chiffrée automatiquement'),
+                ->setHelp('Entrez une nouvelle clé pour la mettre à jour. Laissez vide pour ne pas la changer.'),
         ];
     }
 }

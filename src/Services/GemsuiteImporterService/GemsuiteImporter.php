@@ -44,14 +44,17 @@ class GemsuiteImporter
             $this->logger->info(sprintf('Début de l\'importation des clients pour le tenant "%s"', $tenantCode));
             $this->importClients($tenantEm, $gemsuiteToken);
             $this->logger->info(sprintf('Importation des clients terminée.', $tenantCode));
-
+            $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
+            $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+            if (!$companyIdentifier) {
+                $this->logger->warning(sprintf('Identifiant GEM-SUITE non trouvé pour le tenant "%s". Les URLs d\'images pourraient être incomplètes.', $tenantCode));
+            }
             $this->logger->info(sprintf('Début de l\'importation des catégories pour le tenant "%s"', $tenantCode));
-            $categoryMap = $this->importCategories($tenantEm, $gemsuiteToken);
+            $categoryMap = $this->importCategories($tenantEm, $gemsuiteToken,$companyIdentifier);
             $this->logger->info(sprintf('Importation des catégories terminée.', $tenantCode));
             
             $this->logger->info(sprintf('Début de l\'importation des produits pour le tenant "%s"', $tenantCode));
-            $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
-            $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+
             $this->importProducts($tenantEm, $gemsuiteToken, $categoryMap, $companyIdentifier);
             $this->logger->info(sprintf('Importation des produits terminée.', $tenantCode));
             
@@ -63,7 +66,7 @@ class GemsuiteImporter
         }
     }
 
-     private function importCategories(EntityManagerInterface $tenantEm, string $token): array
+     private function importCategories(EntityManagerInterface $tenantEm, string $token, ?string $companyIdentifier): array
         {
             $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', [
                 'auth_bearer' => $token,
@@ -91,6 +94,10 @@ class GemsuiteImporter
                     $category = new Categories();
                     $category->setGemsuiteCategoryId($gemCategoryData['id']);
                 }
+                $imagePath = $gemCategoryData['img_paths'] ?? null;
+                $category->setImage(
+                    $this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath)
+                );
                 
                 $category->setName(trim($gemCategoryData['name_fr']));
                 $tenantEm->persist($category);
@@ -127,12 +134,19 @@ class GemsuiteImporter
                 ));
                 continue;
             }
+            if (empty(trim($gemProductData['name_fr'] ?? ''))) {
+                $this->logger->warning(sprintf(
+                    'Produit avec ID Gem-Suite #%d ignoré car il n\'a pas de nom (name_fr).',
+                    $gemProductData['id'] ?? 'inconnu'
+                ));
+                continue;
+            }
             $product = $tenantEm->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
             if (!$product) {
                 $product = new Product();
                 $product->setGemsuiteProductId($gemProductData['id']);
             }
-
+            $product->getCategory()->clear();
             $product->setName(trim($gemProductData['name_fr']));
             $product->setDescription($gemProductData['additional_fr'] ?? 'Pas de description.');
             $priceInDollars = (float)($gemProductData['price'] ?? 0);

@@ -68,7 +68,7 @@ class GemsuiteSyncHandler
                 $this->logger->info(sprintf('Produit #%d actif sur GEM-SUITE. Mise à jour en cours...', $productId));
                 $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
                 $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
-                $categoryMap = $this->importCategories($tenantEm, $token);
+                $categoryMap = $this->importCategories($tenantEm, $token, $companyIdentifier);
                 $this->updateOrCreateProduct($tenantEm, $gemProductData, $categoryMap, $companyIdentifier);
 
             } else {
@@ -103,7 +103,9 @@ class GemsuiteSyncHandler
         
         try {
             $tenantEm = $this->getTenantEntityManager($tenantCode);
-            $this->importCategories($tenantEm, $token);
+            $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
+            $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+            $this->importCategories($tenantEm, $token, $companyIdentifier);
             $this->logger->info(sprintf('Catégories synchronisées avec succès pour le tenant "%s".', $tenantCode));
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('Erreur lors de la synchronisation des catégories pour le tenant "%s": %s', $tenantCode, $e->getMessage()));
@@ -172,7 +174,7 @@ class GemsuiteSyncHandler
         $this->translationGenerator->generateTranslations($product);
     }
 
-    private function importCategories(EntityManagerInterface $em, string $token): array
+    private function importCategories(EntityManagerInterface $em, string $token, ?string $companyIdentifier): array
     {
         $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', [
             'auth_bearer' => $token,
@@ -196,6 +198,10 @@ class GemsuiteSyncHandler
             }
             
             $category->setName(trim($gemCategoryData['name_fr']));
+            $imagePath = $gemCategoryData['img_paths'] ?? null;
+                $category->setImage(
+                    $this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath)
+                );
             $em->persist($category);
 
             // --- AJOUT DE LA TRADUCTION ---

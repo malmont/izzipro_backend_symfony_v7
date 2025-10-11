@@ -17,10 +17,20 @@ class CategoryOutputDTO
         $this->id = $category->getId();
         $this->name = $translation?->getName() ?? $category->getName(); 
         $this->description = $translation?->getDescription() ?? $category->getDescription(); 
+
+        $imagePath = $category->getImage();
+        if (empty($imagePath)) {
+            $this->image = null;
+        } elseif (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
+            $this->image = $imagePath;
+        } else {
+            $cleanedHost = rtrim($host, '/');
+            $this->image = $cleanedHost . '/assets/uploads/categories/' . $imagePath;
+        }
         
-        $this->image = $category->getImage() 
-            ? rtrim($host, '/') . '/assets/uploads/categories/' . $category->getImage() 
-            : null;
+        // $this->image = $category->getImage() 
+        //     ? rtrim($host, '/') . '/assets/uploads/categories/' . $category->getImage() 
+        //     : null;
     }
 
     public function toArray(): array
