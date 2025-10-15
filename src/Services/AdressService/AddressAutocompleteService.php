@@ -3,6 +3,7 @@
 
 namespace App\Services\AdressService;
 
+use Psr\Log\LoggerInterface; // <-- AJOUT
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use App\Services\AdressService\GooglePlacesKeyProvider;
 use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
@@ -11,7 +12,8 @@ class AddressAutocompleteService
 {
     public function __construct(
         private HttpClientInterface     $client,
-        private GooglePlacesKeyProvider $keyProvider
+        private GooglePlacesKeyProvider $keyProvider,
+        private LoggerInterface         $logger // <-- AJOUT
     ) {}
 
     /**
@@ -19,11 +21,15 @@ class AddressAutocompleteService
      *
      * @param string $input
      * @return array<int, array{description:string,place_id:string}>
-     * @throws TransportExceptionInterface
+     * @throws TransportExceptionInterface|\RuntimeException
      */
     public function suggest(string $input): array
     {
         $key = $this->keyProvider->getKey();
+        if (empty($key)) {
+            throw new \RuntimeException('La clé API Google Places n\'est pas configurée pour ce tenant.');
+        }
+
         $response = $this->client->request('GET', 'https://maps.googleapis.com/maps/api/place/autocomplete/json', [
             'query' => [
                 'input' => $input,
@@ -32,7 +38,17 @@ class AddressAutocompleteService
             ],
         ]);
 
-        $data = $response->toArray(false);
+        if ($response->getStatusCode() !== 200) {
+            $data = $response->toArray(false);
+            $errorMessage = $data['error_message'] ?? 'Erreur inconnue de l\'API Google Places.';
+            $this->logger->error('Erreur de l\'API Google Places (Autocomplete)', [
+                'status_code' => $response->getStatusCode(),
+                'response' => $data,
+            ]);
+            throw new \RuntimeException('API Google Places: ' . $errorMessage);
+        }
+
+        $data = $response->toArray();
 
         if (empty($data['predictions']) || !is_array($data['predictions'])) {
             return [];
@@ -54,18 +70,22 @@ class AddressAutocompleteService
      *
      * @param string $placeId
      * @return array{
-     *   street1:string,
-     *   street2:?string,
-     *   city:string,
-     *   province:string,
-     *   postal_code:string,
-     *   country:string
+     * street1:string,
+     * street2:?string,
+     * city:string,
+     * province:string,
+     * postal_code:string,
+     * country:string
      * }
-     * @throws TransportExceptionInterface
+     * @throws TransportExceptionInterface|\RuntimeException
      */
     public function getDetails(string $placeId): array
     {
         $key = $this->keyProvider->getKey();
+        if (empty($key)) {
+            throw new \RuntimeException('La clé API Google Places n\'est pas configurée pour ce tenant.');
+        }
+
         $response = $this->client->request('GET', 'https://maps.googleapis.com/maps/api/place/details/json', [
             'query' => [
                 'place_id' => $placeId,
@@ -74,7 +94,17 @@ class AddressAutocompleteService
             ],
         ]);
 
-        $data = $response->toArray(false);
+        if ($response->getStatusCode() !== 200) {
+            $data = $response->toArray(false);
+            $errorMessage = $data['error_message'] ?? 'Erreur inconnue de l\'API Google Places.';
+            $this->logger->error('Erreur de l\'API Google Places (Details)', [
+                'status_code' => $response->getStatusCode(),
+                'response' => $data,
+            ]);
+            throw new \RuntimeException('API Google Places: ' . $errorMessage);
+        }
+
+        $data = $response->toArray();
         $components = $data['result']['address_components'] ?? [];
 
         // map des composants

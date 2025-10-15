@@ -127,6 +127,11 @@ class AdressApiController extends AbstractController
         $dto->country        = $normalized['country'];
 
         $adress = $this->createAdressUseCase->execute($dto, $user);
+        if ($dto->isPrimary) {
+            $user->setPrimaryAddress($adress);
+            $this->gemsuiteUpdater->syncAddress($user, $adress);
+        }
+        $em->flush();
         return $this->json(['success' => 'Adresse créée avec succès'], Response::HTTP_CREATED);
     }
 
@@ -180,6 +185,15 @@ class AdressApiController extends AbstractController
         $dto->country        = $normalized['country'];
 
         $this->editAdressUseCase->execute($dto, $adress);
+        if ($dto->isPrimary) {
+            $user->setPrimaryAddress($adress);
+            $this->gemsuiteUpdater->syncAddress($user, $adress);
+        } 
+        elseif ($user->getPrimaryAddress() === $adress) {
+            $user->setPrimaryAddress(null);
+        }
+
+        $em->flush();
         return $this->json(['success' => 'Adresse mise à jour avec succès'], Response::HTTP_OK);
     }
 

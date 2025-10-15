@@ -15,7 +15,7 @@ class Adress
     #[ORM\GeneratedValue]
     #[ORM\Column]
     private ?int $id = null;
-
+    
     #[ORM\Column(length: 255)]
     private ?string $firstname = null;
 
@@ -215,6 +215,24 @@ class Adress
 
         return $result;
     }
+    public function getFormattedForChoice(): string
+    {
+        $parts = [];
+        $parts[] = $this->fullname;
+        if ($this->company) {
+            $parts[] = $this->company;
+        }
+        $parts[] = $this->address;
+        if ($this->complement) {
+            $parts[] = $this->complement;
+        }
+        $parts[] = $this->codepostal . ' ' . $this->city;
+        $parts[] = $this->country;
+
+        // On retire les éléments vides (ex: si complement est null)
+        // et on les joint avec une virgule et un espace.
+        return implode(', ', array_filter($parts));
+    }
 
     /**
      * @return Collection<int, Order>
@@ -263,20 +281,9 @@ class Adress
         return $this->userPrimaryAdress;
     }
 
-    public function setUserPrimaryAdress(?User $userPrimaryAdress): static
+     public function setUserPrimaryAdress(?User $userPrimaryAdress): static
     {
-        // unset the owning side of the relation if necessary
-        if ($userPrimaryAdress === null && $this->userPrimaryAdress !== null) {
-            $this->userPrimaryAdress->setPrimaryAddress(null);
-        }
-
-        // set the owning side of the relation if necessary
-        if ($userPrimaryAdress !== null && $userPrimaryAdress->getPrimaryAddress() !== $this) {
-            $userPrimaryAdress->setPrimaryAddress($this);
-        }
-
         $this->userPrimaryAdress = $userPrimaryAdress;
-
         return $this;
     }
 }

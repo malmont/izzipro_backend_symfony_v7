@@ -89,7 +89,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(nullable: true)]
     private ?int $gemsuiteClientId = null;
 
-    #[ORM\OneToOne(inversedBy: 'userPrimaryAdress', cascade: ['persist', 'remove'])]
+    #[ORM\OneToOne(targetEntity: Adress::class, inversedBy: 'userPrimaryAdress', cascade: ['persist', 'remove'])]
+    #[ORM\JoinColumn(name: "primary_address_id", referencedColumnName: "id", onDelete: 'SET NULL')]
     private ?Adress $primaryAddress = null;
 
     #[ORM\ManyToOne(inversedBy: 'users')]
@@ -467,11 +468,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function setPrimaryAddress(?Adress $primaryAddress): static
     {
+
+        if ($this->primaryAddress !== null && $this->primaryAddress !== $primaryAddress) {
+            $this->primaryAddress->setUserPrimaryAdress(null);
+        }
+
         $this->primaryAddress = $primaryAddress;
+        if ($primaryAddress !== null) {
+            $primaryAddress->setUserPrimaryAdress($this);
+        }
 
         return $this;
     }
-
     public function getGemsuiteClient(): ?GemsuiteClient
     {
         return $this->gemsuiteClient;
@@ -483,5 +491,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
         return $this;
     }
+
 
 }

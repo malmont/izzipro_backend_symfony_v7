@@ -128,7 +128,8 @@ class RegistrationController extends AbstractController
         }
 
         $tenantCode = $this->tenantManager->getCurrentTenantCode();
-        $foundClient = $this->gemsuiteClientManager->findOrCreateClient($email, $firstName, $lastName, $tenantCode);
+        $gemsuiteClient = $this->gemsuiteClientManager->findOrCreateClient($email, $firstName, $lastName, $tenantCode);
+
 
         $user = new User();
         $user->setEmail($email);
@@ -137,8 +138,8 @@ class RegistrationController extends AbstractController
         $user->setUsername($username);
         $user->setPassword($passwordHasher->hashPassword($user, $password));
         
-        if ($foundClient) {
-            $user->setGemsuiteClientId($foundClient['id']);
+        if ($gemsuiteClient) {
+            $user->setGemsuiteClient($gemsuiteClient); 
         }
 
         $platform = $decoded['platform'] ?? 'mobile';
@@ -155,48 +156,52 @@ class RegistrationController extends AbstractController
         $em->persist($user);
         $em->flush();
 
-        $verificationUrl = $urlGenerator->generate(
-            'app_verify_email',
-            ['token' => $verificationToken],
-            UrlGeneratorInterface::ABSOLUTE_URL
-        );
+        $locale = $request->query->get('locale', 'fr');
         $emailConfig = $this->emailConfigurationService->findOneByLocale($locale);
         $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
-
         if ($emailConfig && $emailConfigTranslation) {
+            
+            $verificationUrl = $urlGenerator->generate(
+                'app_verify_email',
+                ['token' => $verificationToken],
+                UrlGeneratorInterface::ABSOLUTE_URL
+            );
+
             $fromEmail = $emailConfig->getFromEmail();
             $fromName  = $emailConfigTranslation->getFromName();
             $signature = $emailConfigTranslation->getSignature();
             $logoUrl   = $emailConfig->getLogo();
+            
+            $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+
+            $emailContent = $this->renderView('verification/validation_email.html.twig', [
+                'user'            => $user,
+                'fromName'        => $fromName,
+                'signature'       => $signature,
+                'logoUrl'         => $logoUrl,
+                'domain'          => $domain,
+                'verificationUrl' => $verificationUrl,
+            ]);
+
+            $emailMessage = (new Email())
+                ->from(sprintf('%s <%s>', $fromName, $fromEmail))
+                ->to($user->getEmail())
+                ->subject('Veuillez valider votre adresse email')
+                ->html($emailContent);
+
+            $mailer->send($emailMessage);
+            return $this->json([
+                'message' => 'Registered Successfully. Please check your email to verify your account.'
+            ], Response::HTTP_CREATED);
+
         } else {
-            $fromEmail = 'no-reply@votredomaine.com';
-            $fromName  = 'Votre Société';
-            $signature = '';
-            $logoUrl   = null;
+            $user->setIsVerified(false);
+            $user->setVerificationToken(null);
+            $em->flush();
+            return $this->json([
+                'message' => 'Registered Successfully.'
+            ], Response::HTTP_CREATED);
         }
-
-        $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
-
-        $emailContent = $this->renderView('verification/validation_email.html.twig', [
-            'user'            => $user,
-            'fromName'        => $fromName,
-            'signature'       => $signature,
-            'logoUrl'         => $logoUrl,
-            'domain'          => $domain,
-            'verificationUrl' => $verificationUrl,
-        ]);
-
-        $emailMessage = (new Email())
-            ->from(sprintf('%s <%s>', $fromName, $fromEmail))
-            ->to($user->getEmail())
-            ->subject('Veuillez valider votre adresse email')
-            ->html($emailContent);
-
-        $mailer->send($emailMessage);
-
-        return $this->json([
-            'message' => 'Registered Successfully. Please check your email to verify your account.'
-        ], Response::HTTP_CREATED);
 
     }
 

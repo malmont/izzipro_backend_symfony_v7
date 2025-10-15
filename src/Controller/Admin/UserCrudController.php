@@ -56,7 +56,7 @@ class UserCrudController extends BaseTenantCrudController
                             ->setParameter('user', $currentUser)
                             ->orderBy('a.fullname', 'ASC');
                     },
-                    'choice_label' => '__toString', 
+                    'choice_label' => 'formattedForChoice'
                 ])
                 ->setRequired(false), 
             AssociationField::new('adresses', 'Toutes les adresses')
