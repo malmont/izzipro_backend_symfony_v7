@@ -155,3 +155,7 @@ services:
     App\Controller\TenantSetupController\TenantSetupController:
         bind:
             $frontendBaseDomain: '%env(FRONTEND_BASE_DOMAIN)%'
+
+    App\Services\GoogleTranslateService\GoogleTranslateService:
+        arguments:
+            $googleApiKey: '%env(GOOGLE_API_KEY)%'        

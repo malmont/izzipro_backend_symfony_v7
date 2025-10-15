@@ -4,13 +4,15 @@
 namespace App\Services\TranslationGeneratorService;
 
 use App\Entity\TranslatableInterface;
-use App\Services\DeepLTranslateService\DeepLTranslateService;
+// use App\Services\DeepLTranslateService\DeepLTranslateService;
 use Psr\Log\LoggerInterface;
+use App\Services\GoogleTranslateService\GoogleTranslateService; 
 
 class TranslationGeneratorService
 {
     public function __construct(
-        private DeepLTranslateService $translator,
+        // private DeepLTranslateService $translator,
+        private GoogleTranslateService $translator,
         private LoggerInterface $logger
     ) {
     }
