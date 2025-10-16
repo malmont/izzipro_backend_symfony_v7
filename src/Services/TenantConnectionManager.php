@@ -256,9 +256,8 @@ private function runMigrations(string $dbname): void
         }
     } elseif (is_array($result)) {
         foreach ($result as $mv) {
-            // Certains retours Doctrine sont des objets, d'autres des tableaux de string
             if (is_array($mv)) {
-                $migratedVersions[] = json_encode($mv); // Pour debug éventuel
+                $migratedVersions[] = json_encode($mv);
             } else {
                 $migratedVersions[] = (string)$mv;
             }

@@ -8,6 +8,7 @@ use App\Entity\AddressEntreprise;
 use App\Entity\Entreprise;
 use App\Entity\HomeSlider;
 use App\Form\TenantSetupType;
+use App\Entity\EmailConfiguration; 
 use App\Services\GemsuiteImporterService\GemsuiteImporter;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
@@ -148,10 +149,22 @@ class TenantSetupController extends AbstractController
                     $entreprise->setAddressEntreprise($addressEntreprise);
                 }
                 $tenantEm->persist($entreprise);
-                
-                // --- AJOUT 3 : On déclenche la traduction pour l'entreprise ---
+
                 $this->translationGenerator->generateTranslations($entreprise);
 
+
+                if($companyData){
+                    $emailConfiguration =new EmailConfiguration();
+                    $emailConfiguration->setFromName($companyData['nom'] ?? 'Votre Entreprise');
+                    $logoPath = $companyData['website_logo1'] ?? null;
+                    $emailConfiguration->setLogo(
+                    $imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $logoPath)
+                );
+                $tenantEm->persist($emailConfiguration);
+                $this->addFlash('info', 'Configuration email créée.');
+
+                }
+   
                 if ($companyData) {
                     $homeSlider = new HomeSlider();
                     $homeSlider->setTitle(strip_tags($companyData['website_intro_text1'] ?? 'Bienvenue'));

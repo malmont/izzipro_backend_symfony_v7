@@ -1,0 +1,63 @@
+{# templates/stripe/status.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Statut de votre Compte Stripe{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('assets/css/setup.css') }}"> 
+{% endblock %}
+
+{% block body %}
+<div class="setup-page-wrapper">
+    <div class="setup-container">
+
+        <div class="setup-logo">
+            <img src="{{ asset('assets/Logo-Principal_GEM-PORTAL.png') }}" alt="GEM-PORTAL Logo">
+        </div>
+
+        <h1>Votre Compte Stripe</h1>
+
+        {% if stripe_config.isActive %}
+            <div class="alert alert-success">
+                Votre compte Stripe est déjà actif et prêt à recevoir des paiements.
+            </div>
+            <p>
+                <strong>Identifiant de votre compte :</strong> {{ stripe_config.accountId }}
+            </p>
+        
+        {% else %}
+            <div class="alert alert-warning">
+                Votre compte Stripe est enregistré mais la configuration n'est pas finalisée.
+            </div>
+            <p>
+                Pour activer les paiements, vous devez terminer la configuration. Vous pouvez recommencer le processus en cliquant sur "Changer de Compte".
+            </p>
+        {% endif %}
+
+        <p class="mt-4">
+            Vous pouvez fermer cette page en toute sécurité et retourner à votre interface GemSuite.
+        </p>
+
+        <div style="margin-top: 1.5rem;">
+            
+            <div class="form-row">
+                <form action="{{ path('app_stripe_disconnect') }}" method="post">
+                    <button type="submit" class="btn-submit btn-secondary" style="width: 100%;"
+                            onclick="return confirm('Êtes-vous sûr de vouloir déconnecter ce compte Stripe ? Vous devrez recommencer le processus de connexion.')">
+                        Changer de Compte
+                    </button>
+                </form>
+            </div>
+
+            <div class="form-row" style="margin-top: 1rem;">
+                <button onclick="window.close();" class="btn-submit" style="width: 100%;">
+                    Fermer
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+{% endblock %}

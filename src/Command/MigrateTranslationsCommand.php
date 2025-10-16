@@ -4,7 +4,8 @@
 namespace App\Command;
 
 use App\Entity\TranslatableInterface;
-use App\Services\DeepLTranslateService\DeepLTranslateService;
+
+use App\Services\GoogleTranslateService\GoogleTranslateService;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantConnectionProvider;
 use App\Services\TenantEntityManagerProvider;
@@ -19,13 +20,13 @@ class MigrateTranslationsCommand extends Command
 {
     protected static $defaultName = 'app:migrate-translations';
 
-    private DeepLTranslateService $translator;
+    private GoogleTranslateService $translator;
     private TenantEntityManagerProvider $tenantEmProvider;
     private TenantConnectionManager $connectionManager;
     private TenantConnectionProvider $connectionProvider;
 
     public function __construct(
-        DeepLTranslateService $translator,
+        GoogleTranslateService $translator,
         TenantEntityManagerProvider $tenantEmProvider,
         TenantConnectionManager $connectionManager,
         TenantConnectionProvider $connectionProvider
@@ -40,13 +41,14 @@ class MigrateTranslationsCommand extends Command
     protected function configure(): void
     {
         $this
-            ->setDescription('Migre les données de l\'entité principale vers les tables de traduction (FR et EN).')
+            ->setDescription('Migre les données de l\'entité principale vers les tables de traduction (FR et EN) en utilisant Google Translate.')
             ->addArgument('entityClass', InputArgument::REQUIRED, 'La classe de l\'entité à migrer (ex: App\Entity\Product)')
             ->addOption('tenant', null, InputOption::VALUE_REQUIRED, 'Le nom de la base de données (dbname) du tenant à traduire. Si omis, tous les tenants seront traités.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+
         $io = new SymfonyStyle($input, $output);
         $entityClass = $input->getArgument('entityClass');
         $tenantDbName = $input->getOption('tenant');
@@ -94,6 +96,8 @@ class MigrateTranslationsCommand extends Command
 
     private function translateEntity(SymfonyStyle $io, TranslatableInterface $entity): void
     {
+
+        
         $io->writeln("  -> Entité ID: {$entity->getId()}");
         $fields = $entity->getTranslatableFields();
         $translationClass = $entity->getTranslationEntityClass();
@@ -124,11 +128,11 @@ class MigrateTranslationsCommand extends Command
                 if (method_exists($entity, $getter) && method_exists($englishTranslation, $setter)) {
                     $sourceValue = $entity->$getter();
                     if ($sourceValue === null) {
-                    $englishTranslation->$setter(null);
-                } elseif (is_string($sourceValue)) {
-                    $translatedText = $this->translator->translate($sourceValue, 'en', 'fr');
-                    $englishTranslation->$setter($translatedText);
-                }
+                        $englishTranslation->$setter(null);
+                    } elseif (is_string($sourceValue)) {
+                        $translatedText = $this->translator->translate($sourceValue, 'en', 'fr');
+                        $englishTranslation->$setter($translatedText);
+                    }
                 }
             }
             $entity->addTranslation($englishTranslation);
@@ -141,6 +145,7 @@ class MigrateTranslationsCommand extends Command
 
     private function setLocaleOrLanguage(object $translationEntity, string $locale): void
     {
+
         if (method_exists($translationEntity, 'setLocale')) {
             $translationEntity->setLocale($locale);
         } elseif (method_exists($translationEntity, 'setLanguage')) {

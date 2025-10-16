@@ -127,6 +127,7 @@ class ResetPasswordController extends AbstractController
         $em->persist($user);
         $em->flush();
 
+        $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@votredomaine.com';
         $emailConfig = $this->emailConfigService->findOneByLocale($locale);
         $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
         $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
@@ -160,6 +161,7 @@ class ResetPasswordController extends AbstractController
         $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
         $signature = $translation?->getSignature() ?? '';
         $logoUrl   = $emailConfig?->getLogo();
+        $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@votredomaine.com';
 
 
         $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';

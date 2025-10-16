@@ -35,19 +35,6 @@
                 </div>
             </div>
 
-            {# <div class="form-section">
-                <h2>Créer votre compte Administrateur</h2>
-                <div class="form-row">
-                    {{ form_row(form.adminName) }}
-                </div>
-                <div class="form-row">
-                    {{ form_row(form.adminEmail) }}
-                </div>
-                <div class="form-row">
-                    {{ form_row(form.plainPassword) }}
-                </div>
-            </div>
-             #}
             <div class="form-section">
                 <h2>Intégration GEM-SUITE</h2>
                 <div class="form-row">
@@ -59,7 +46,6 @@
                  {{ form_widget(form.save, {'attr': {'class': 'btn-submit'}}) }}
             </div>
 
-            {# form_rest(form) est une bonne pratique pour afficher les champs cachés (code, subdomain) et le jeton CSRF #}
             {{ form_rest(form) }}
 
         {{ form_end(form) }}

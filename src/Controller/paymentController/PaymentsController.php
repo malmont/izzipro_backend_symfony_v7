@@ -13,6 +13,7 @@ use App\Entity\Order;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\Security\Core\Security;
 use App\Services\TenantCacheService;
+use App\Services\StripeService\StripeService;
 use Symfony\Contracts\Cache\ItemInterface;
 
 class PaymentsController extends AbstractController
@@ -22,19 +23,22 @@ class PaymentsController extends AbstractController
     private TenantEntityManagerProvider $emProvider;
     private Security $security;
     private TenantCacheService $cache;
+    private StripeService $stripeService;
 
     public function __construct(
         GetPaymentsByOrderSourceUseCase $getPaymentsByOrderSourceUseCase,
         CreatePaymentUseCase $createPaymentUseCase,
         TenantEntityManagerProvider $emProvider,
         Security $security,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        StripeService $stripeService 
     ) {
         $this->getPaymentsByOrderSourceUseCase = $getPaymentsByOrderSourceUseCase;
         $this->createPaymentUseCase = $createPaymentUseCase;
         $this->emProvider = $emProvider;
         $this->security = $security;
         $this->cache = $cache;
+        $this->stripeService = $stripeService;
     }
 
     #[Route('api/payments', name: 'get_payments', methods: ['GET'])]
@@ -75,9 +79,48 @@ class PaymentsController extends AbstractController
         return $this->json($paymentData);
     }
 
-    /**
-     * @Route("/api/payment", name="process_payment", methods={"POST"})
-     */
+ 
+    #[Route('/api/stripe/create-intent', name: 'api_stripe_create_intent', methods: ['POST'])]
+    public function createStripePaymentIntent(Request $request): JsonResponse
+    {
+        $user = $this->getUser();
+        if (!$user) {
+            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        $amount = $data['amount'] ?? null; 
+        if (!$amount || $amount <= 0) {
+            return $this->json(['error' => 'Montant invalide ou non fourni'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+
+        $clientSecret = $this->stripeService->createPaymentIntent((int)$amount, 'cad');
+
+        if (!$clientSecret) {
+            return $this->json(['error' => 'Impossible de créer l\'intention de paiement. Vérifiez la configuration Stripe du tenant.'], 500);
+        }
+
+        return $this->json(['clientSecret' => $clientSecret]);
+    }
+
+    #[Route('/api/stripe-config', name: 'get_stripe_config', methods: ['GET'])]
+    public function getStripeConfig(): JsonResponse
+    {
+
+        $publicKey = $_ENV['STRIPE_PUBLIC_KEY'] ?? null;
+
+        if (!$publicKey) {
+             return $this->json(['error' => 'Clé publique Stripe non configurée sur le serveur.'], 500);
+        }
+        
+        return $this->json(['publicKey' => $publicKey]);
+    }
+
+
+    // --- MÉTHODES SQUARE MISES EN COMMENTAIRE ---
+    
+    /*
+    #[Route("/api/payment", name="process_payment", methods={"POST"})]
     public function processPayment(Request $request): JsonResponse
     {
         $user = $this->getUser();
@@ -116,10 +159,9 @@ class PaymentsController extends AbstractController
 
         return $this->json(['success' => false, 'errors' => $result['errors']], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
     }
-
-    /**
-     * Récupérer applicationId et locationId pour le front
-     */
+    */
+    
+    /*
     #[Route('/api/square-config', name: 'get_square_config', methods: ['GET'])]
     public function getSquareConfig(Request $request): JsonResponse
     {
@@ -148,8 +190,8 @@ class PaymentsController extends AbstractController
                     'locationId'    => $squareConfig->getLocationId(),
                 ];
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['square_config']
+            3600,
+            ['square_config']
         );
 
         if (!$squareConfigData) {
@@ -158,4 +200,5 @@ class PaymentsController extends AbstractController
 
         return $this->json(['success' => true, 'data' => $squareConfigData]);
     }
+    */
 }

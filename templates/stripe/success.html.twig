@@ -1,0 +1,45 @@
+{# templates/stripe/success.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Statut de la Connexion Stripe{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <link rel="stylesheet" href="{{ asset('assets/css/setup.css') }}"> 
+{% endblock %}
+
+{% block body %}
+<div class="setup-page-wrapper">
+    <div class="setup-container">
+
+        <div class="setup-logo">
+            <img src="{{ asset('assets/Logo-Principal_GEM-PORTAL.png') }}" alt="GEM-PORTAL Logo">
+        </div>
+
+        {% if connection_success %}
+            <h1>Connexion Réussie !</h1>
+        {% else %}
+            <h1>Échec de la Connexion</h1>
+        {% endif %}
+
+        {% for label, messages in app.flashes %}
+            {% for message in messages %}
+                <div class="alert alert-{{ label }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endfor %}
+
+        <p class="mt-3">
+            Le processus est terminé. Vous pouvez maintenant fermer cette page en toute sécurité et retourner à votre interface GemSuite.
+        </p>
+
+        <div class="form-row mt-4">
+             <button onclick="window.close();" class="btn-submit">
+                Fermer la page
+             </button>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

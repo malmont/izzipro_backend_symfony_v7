@@ -40,9 +40,6 @@ class TenantDoctrineSwitcherListener
 
         $request = $event->getRequest();
 
-        // --- DÉBUT DE LA MODIFICATION (Version Robuste) ---
-        // Liste des CHEMINS D'URL qui ne doivent PAS déclencher le changement de tenant.
-        // On se base sur le chemin, pas le nom de la route.
         $excludedPaths = [
             '/api/tenant/check',
         ];
@@ -55,9 +52,7 @@ class TenantDoctrineSwitcherListener
             $this->logger->info("Chemin '{$currentPath}' exclu. Le listener de tenant ne s'applique pas.");
             return;
         }
-        // --- FIN DE LA MODIFICATION ---
 
-        // Le reste de votre code est identique...
         $host = $request->getHost();
         $tenantCode = $request->headers->get('X-Tenant-Code');
 

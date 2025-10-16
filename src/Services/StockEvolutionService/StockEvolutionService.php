@@ -1,14 +1,13 @@
 <?php
 namespace App\Services\StockEvolutionService;
 
-use App\Entity\InventoryMovements; // <-- On importe l'entité
-use App\Repository\InventoryMovementsRepository; // <-- On importe le repository pour le type-hint
-use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
+use App\Entity\InventoryMovements;
+use App\Repository\InventoryMovementsRepository;
+use App\Services\TenantEntityManagerProvider;
 use DateTime;
 
 class StockEvolutionService
 {
-    // MODIFICATION 1 : Le service ne dépend plus que du provider
     private TenantEntityManagerProvider $emProvider;
 
     public function __construct(TenantEntityManagerProvider $emProvider)
@@ -16,9 +15,7 @@ class StockEvolutionService
         $this->emProvider = $emProvider;
     }
 
-    /**
-     * MODIFICATION 2 : On crée une méthode privée pour récupérer le repository du tenant.
-     */
+
     private function getInventoryMovementsRepository(): InventoryMovementsRepository
     {
         return $this->emProvider->getEntityManager()->getRepository(InventoryMovements::class);

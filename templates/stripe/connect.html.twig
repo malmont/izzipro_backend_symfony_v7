@@ -1,0 +1,54 @@
+{# templates/stripe/connect.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block title %}Connecter votre compte Stripe{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+
+    <link rel="stylesheet" href="{{ asset('assets/css/setup.css') }}"> 
+{% endblock %}
+
+{% block body %}
+<div class="setup-page-wrapper">
+    <div class="setup-container">
+
+        <div class="setup-logo">
+            <img src="{{ asset('assets/Logo-Principal_GEM-PORTAL.png') }}" alt="GEM-PORTAL Logo">
+        </div>
+
+        <h1>Connecter Votre Compte de Paiement</h1>
+        <p>
+            Pour commencer à accepter des paiements sur votre site, vous devez d'abord connecter un compte Stripe.
+        </p>
+
+        {% for label, messages in app.flashes %}
+            {% for message in messages %}
+                <div class="alert alert-{{ label }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endfor %}
+
+        {{ form_start(form) }}
+        
+            <div class="form-section">
+                <h2>Identification Sécurisée</h2>
+                <p class="text-muted">
+                    Veuillez utiliser votre token GEM-SUITE pour nous assurer que nous lions le compte Stripe au bon site e-commerce.
+                </p>
+                <div class="form-row">
+                    {# On affiche le champ 'token' de notre StripeConnectionTokenType #}
+                    {{ form_row(form.token) }}
+                </div>
+            </div>
+
+            <div class="form-row">
+                 {# On affiche le bouton 'connect' avec la même classe CSS #}
+                 {{ form_widget(form.connect, {'attr': {'class': 'btn-submit'}}) }}
+            </div>
+
+        {{ form_end(form) }}
+    </div>
+</div>
+{% endblock %}
