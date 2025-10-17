@@ -75,13 +75,13 @@ class PaymentsCrudController extends BaseTenantCrudController
                     'query_builder' => fn(PaymentTypeRepository $repo) => $repo->createQueryBuilder('pt')->orderBy('pt.name', 'ASC'),
                     'choice_label' => 'name'
                 ]),
-            TextField::new('squarePaymentId', 'Square Payment ID')->hideOnForm(),
-            TextField::new('squareOrderId', 'Square Order ID')->hideOnForm(),
-            UrlField::new('squareReceiptUrl', 'Receipt URL')->hideOnIndex(),
-            TextField::new('squareStatus', 'Payment Status')->hideOnForm(),
-            TextField::new('squareCardBrand', 'Card Brand')->hideOnForm(),
-            TextField::new('squareLast4', 'Card Last 4')->hideOnForm(),
-            TextField::new('squareRiskLevel', 'Risk Level')->hideOnForm(),
+            TextField::new('stripePaymentId', 'stripe Payment ID')->hideOnForm(),
+            TextField::new('stripeReceiptUrl', 'stripe Receipt URL')->hideOnForm(),
+            UrlField::new('stripeStatus', 'stripe Status')->hideOnIndex(),
+            TextField::new('stripeCardBrand', 'stripe Card Brand')->hideOnForm(),
+            TextField::new('stripeLast4', 'stripe Last 4')->hideOnForm(),
+            TextField::new('stripeRiskLevel', 'stripe Risk Level')->hideOnForm(),
+
         ];
 
         // Cette logique conditionnelle doit rester ici car elle est spécifique

@@ -90,7 +90,13 @@ class OrderController extends AbstractController
             $paymentData['squareStatus'] ?? null,
             $paymentData['squareCardBrand'] ?? null,
             $paymentData['squareLast4'] ?? null,
-            $paymentData['squareRiskLevel'] ?? null
+            $paymentData['squareRiskLevel'] ?? null,
+            $paymentData['stripePaymentId'] ?? null,
+            $paymentData['receiptUrl'] ?? null,
+            $paymentData['status'] ?? null,
+            $paymentData['cardBrand'] ?? null,
+            $paymentData['last4'] ?? null,
+            $paymentData['riskLevel'] ?? null
         );
 
          $result = $this->createOrderUseCase->execute($dto);
@@ -138,7 +144,13 @@ class OrderController extends AbstractController
             $paymentData['squareStatus'] ?? null,
             $paymentData['squareCardBrand'] ?? null,
             $paymentData['squareLast4'] ?? null,
-            $paymentData['squareRiskLevel'] ?? null
+            $paymentData['squareRiskLevel'] ?? null,
+            $paymentData['stripePaymentId'] ?? null,
+            $paymentData['receiptUrl'] ?? null,
+            $paymentData['status'] ?? null,
+            $paymentData['cardBrand'] ?? null,
+            $paymentData['last4'] ?? null,
+            $paymentData['riskLevel'] ?? null
         );
          $result = $this->createOrderUseCase->execute($dto);
          if ($result instanceof Order) {

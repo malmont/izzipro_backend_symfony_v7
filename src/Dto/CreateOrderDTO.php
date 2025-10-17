@@ -22,6 +22,14 @@ class CreateOrderDTO implements ICreateOrderDTO
     private ?string $squareLast4;
     private ?string $squareRiskLevel;
 
+    // --- ✅ NOUVELLES PROPRIÉTÉS POUR STRIPE ---
+    private ?string $stripePaymentId;
+    private ?string $stripeReceiptUrl;
+    private ?string $stripeStatus;
+    private ?string $stripeCardBrand;
+    private ?string $stripeLast4;
+    private ?string $stripeRiskLevel;
+
     public function __construct(
         int $userId,
         int $orderSource,
@@ -37,7 +45,13 @@ class CreateOrderDTO implements ICreateOrderDTO
         ?string $squareStatus = null,
         ?string $squareCardBrand = null,
         ?string $squareLast4 = null,
-        ?string $squareRiskLevel = null
+        ?string $squareRiskLevel = null,
+        ?string $stripePaymentId = null,
+        ?string $stripeReceiptUrl = null,
+        ?string $stripeStatus = null,
+        ?string $stripeCardBrand = null,
+        ?string $stripeLast4 = null,
+        ?string $stripeRiskLevel = null
     ) {
         $this->userId = $userId;
         $this->orderSource = $orderSource;
@@ -56,6 +70,12 @@ class CreateOrderDTO implements ICreateOrderDTO
         $this->squareCardBrand = $squareCardBrand;
         $this->squareLast4 = $squareLast4;
         $this->squareRiskLevel = $squareRiskLevel;
+        $this->stripePaymentId = $stripePaymentId;
+        $this->stripeReceiptUrl = $stripeReceiptUrl;
+        $this->stripeStatus = $stripeStatus;
+        $this->stripeCardBrand = $stripeCardBrand;
+        $this->stripeLast4 = $stripeLast4;
+        $this->stripeRiskLevel = $stripeRiskLevel;
     }
 
     // ✅ Getters existants
@@ -76,4 +96,11 @@ class CreateOrderDTO implements ICreateOrderDTO
     public function getSquareCardBrand(): ?string { return $this->squareCardBrand; }
     public function getSquareLast4(): ?string { return $this->squareLast4; }
     public function getSquareRiskLevel(): ?string { return $this->squareRiskLevel; }
+
+    public function getStripePaymentId(): ?string { return $this->stripePaymentId; }
+    public function getStripeReceiptUrl(): ?string { return $this->stripeReceiptUrl; }
+    public function getStripeStatus(): ?string { return $this->stripeStatus; }
+    public function getStripeCardBrand(): ?string { return $this->stripeCardBrand; }
+    public function getStripeLast4(): ?string { return $this->stripeLast4; }
+    public function getStripeRiskLevel(): ?string { return $this->stripeRiskLevel; }
 }

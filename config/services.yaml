@@ -162,4 +162,8 @@ services:
 
     App\Services\StripeService\StripeService:
         arguments:
-            $stripeSecretKey: '%env(STRIPE_SECRET_KEY)%'        
+            $stripeSecretKey: '%env(STRIPE_SECRET_KEY)%' 
+
+    App\Services\StripePaymentService\StripePaymentService:
+        arguments:
+            $stripeSecretKey: '%env(STRIPE_SECRET_KEY)%'       

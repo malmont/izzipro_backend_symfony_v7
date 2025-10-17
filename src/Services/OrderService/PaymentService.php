@@ -49,6 +49,24 @@ class PaymentService
         if ($orderDTO->getSquareRiskLevel()) {
             $payment->setSquareRiskLevel($orderDTO->getSquareRiskLevel());
         }
+        if ($orderDTO->getStripePaymentId()) {
+            $payment->setStripePaymentId($orderDTO->getStripePaymentId());
+        }
+        if ($orderDTO->getStripeReceiptUrl()) {
+            $payment->setStripeReceiptUrl($orderDTO->getStripeReceiptUrl());
+        }
+        if ($orderDTO->getStripeStatus()) {
+            $payment->setStripeStatus($orderDTO->getStripeStatus());
+        }
+        if ($orderDTO->getStripeCardBrand()) {
+            $payment->setStripeCardBrand($orderDTO->getStripeCardBrand());
+        }
+        if ($orderDTO->getStripeLast4()) {
+            $payment->setStripeLast4($orderDTO->getStripeLast4());
+        }
+        if ($orderDTO->getStripeRiskLevel()) {
+            $payment->setStripeRiskLevel($orderDTO->getStripeRiskLevel());
+        }
     }
         return $payment;
     }

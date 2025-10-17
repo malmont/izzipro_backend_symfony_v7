@@ -32,6 +32,7 @@ class StripeService
         if (!$stripeConfig) {
             $account = Account::create([
                 'type' => 'express',
+                'requested_capabilities' => ['card_payments', 'transfers'],
             ]);
 
             $stripeConfig = new StripeConfig();
@@ -87,7 +88,7 @@ class StripeService
             $paymentIntent = PaymentIntent::create([
                 'amount' => $amount,
                 'currency' => $currency,
-                'automatic_payment_methods' => ['enabled' => true],
+                'payment_method_types' => ['card'],
             ], [
                 'stripe_account' => $stripeConfig->getAccountId(),
             ]);

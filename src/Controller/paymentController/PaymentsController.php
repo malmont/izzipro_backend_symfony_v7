@@ -15,6 +15,7 @@ use Symfony\Component\Security\Core\Security;
 use App\Services\TenantCacheService;
 use App\Services\StripeService\StripeService;
 use Symfony\Contracts\Cache\ItemInterface;
+use App\Entity\StripeConfig;
 
 class PaymentsController extends AbstractController
 {
@@ -79,6 +80,35 @@ class PaymentsController extends AbstractController
         return $this->json($paymentData);
     }
 
+        #[Route('/api/payment', name: 'process_payment', methods: ['POST'])]
+        public function processPayment(Request $request): JsonResponse
+        {
+            $user = $this->getUser();
+            if (!$user) {
+                return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+            }
+
+            $data = json_decode($request->getContent(), true);
+            $paymentIntentId = $data['paymentIntentId'] ?? null;
+
+            if (!$paymentIntentId) {
+                return $this->json(['success' => false, 'error' => 'Invalid data: paymentIntentId is missing.'], JsonResponse::HTTP_BAD_REQUEST);
+            }
+            $result = $this->createPaymentUseCase->execute($paymentIntentId);
+            
+            if ($result['success']) {
+                $response = [
+                    'success' => true,
+                    'payment' => $result['payment']
+                ];
+                return $this->json($response);
+            }
+
+            return $this->json(['success' => false, 'errors' => $result['errors']], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    
+    
+
  
     #[Route('/api/stripe/create-intent', name: 'api_stripe_create_intent', methods: ['POST'])]
     public function createStripePaymentIntent(Request $request): JsonResponse
@@ -104,63 +134,29 @@ class PaymentsController extends AbstractController
     }
 
     #[Route('/api/stripe-config', name: 'get_stripe_config', methods: ['GET'])]
-    public function getStripeConfig(): JsonResponse
+    public function getStripeConfig(TenantEntityManagerProvider $emProvider): JsonResponse
     {
-
         $publicKey = $_ENV['STRIPE_PUBLIC_KEY'] ?? null;
-
         if (!$publicKey) {
              return $this->json(['error' => 'Clé publique Stripe non configurée sur le serveur.'], 500);
         }
         
-        return $this->json(['publicKey' => $publicKey]);
+        // On va chercher l'ID du compte connecté pour le tenant actuel
+        $em = $emProvider->getEntityManager();
+        $stripeConfig = $em->getRepository(StripeConfig::class)->findOneBy(['isActive' => true]);
+        
+        if (!$stripeConfig) {
+            return $this->json(['error' => 'Aucun compte Stripe actif n\'est connecté pour ce site.'], 404);
+        }
+        
+        return $this->json([
+            'publicKey' => $publicKey,
+            'stripeAccountId' => $stripeConfig->getAccountId() // <-- On ajoute cette information
+        ]);
     }
 
 
     // --- MÉTHODES SQUARE MISES EN COMMENTAIRE ---
-    
-    /*
-    #[Route("/api/payment", name="process_payment", methods={"POST"})]
-    public function processPayment(Request $request): JsonResponse
-    {
-        $user = $this->getUser();
-        if (!$user) {
-            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
-        }
-
-        $data = json_decode($request->getContent(), true);
-        $nonce = $data['nonce'] ?? null;
-        $amount = $data['amount'] ?? null;
-        if (!$nonce || !$amount) {
-            return $this->json(['success' => false, 'error' => 'Invalid data.'], JsonResponse::HTTP_BAD_REQUEST);
-        }
-
-        if ($amount <= 0) {
-            return $this->json(['error' => 'Invalid payment amount'], JsonResponse::HTTP_BAD_REQUEST);
-        }
-
-        $result = $this->createPaymentUseCase->execute($nonce, $amount * 100);
-        if ($result['success']) {
-            $payment = $result['payment'];
-            $response = [
-                'success' => true,
-                'payment' => [
-                    'squarePaymentId'   => $payment->getId(),
-                    'squareOrderId'     => $payment->getOrderId(),
-                    'squareReceiptUrl'  => $payment->getReceiptUrl(),
-                    'squareStatus'      => $payment->getStatus(),
-                    'squareCardBrand'   => $payment->getCardDetails()->getCard()->getCardBrand(),
-                    'squareLast4'       => $payment->getCardDetails()->getCard()->getLast4(),
-                    'squareRiskLevel'   => $payment->getRiskEvaluation()->getRiskLevel()
-                ]
-            ];
-            return $this->json($response);
-        }
-
-        return $this->json(['success' => false, 'errors' => $result['errors']], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
-    }
-    */
-    
     /*
     #[Route('/api/square-config', name: 'get_square_config', methods: ['GET'])]
     public function getSquareConfig(Request $request): JsonResponse

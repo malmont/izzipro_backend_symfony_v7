@@ -33,13 +33,11 @@ class PaymentHandlerUseCase
         \DateTime $paymentDate = null,
         ICreateOrderDTO $orderDTO = null
     ): void {
-        // MODIFICATION 2 : On récupère l'EM du tenant une seule fois
         $em = $this->emProvider->getEntityManager();
 
-        // MODIFICATION 3 : On remplace EntityRetrieverService par des appels directs et sûrs
         $paymentMethod = $paymentMethodId
             ? $em->getRepository(PaymentMethod::class)->find($paymentMethodId)
-            : $order->getPayments()->first()->getPaymentMethod(); // Suppose que la commande a déjà des paiements si l'ID n'est pas fourni
+            : $order->getPayments()->first()->getPaymentMethod();
 
         if (!$paymentMethod) {
             throw new NotFoundHttpException('Payment method not found');

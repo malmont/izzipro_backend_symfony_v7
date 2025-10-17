@@ -68,6 +68,24 @@ class Payments
     #[ORM\Column(length: 50, nullable: true)]
     private ?string $squareRiskLevel = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $stripePaymentId = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $stripeReceiptUrl = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $stripeStatus = null;
+    
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $stripeCardBrand = null;
+
+    #[ORM\Column(length: 4, nullable: true)]
+    private ?string $stripeLast4 = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $stripeRiskLevel = null;
+
     public function __construct()
     {
         $this->transactionCaisses = new ArrayCollection();
@@ -261,5 +279,18 @@ class Payments
         $this->squareRiskLevel = $squareRiskLevel;
         return $this;
     }
+
+    public function getStripePaymentId(): ?string { return $this->stripePaymentId; }
+    public function setStripePaymentId(?string $stripePaymentId): self { $this->stripePaymentId = $stripePaymentId; return $this; }
+    public function getStripeReceiptUrl(): ?string { return $this->stripeReceiptUrl; }
+    public function setStripeReceiptUrl(?string $stripeReceiptUrl): self { $this->stripeReceiptUrl = $stripeReceiptUrl; return $this; }
+    public function getStripeStatus(): ?string { return $this->stripeStatus; }
+    public function setStripeStatus(?string $stripeStatus): self { $this->stripeStatus = $stripeStatus; return $this; }
+    public function getStripeCardBrand(): ?string { return $this->stripeCardBrand; }
+    public function setStripeCardBrand(?string $stripeCardBrand): self { $this->stripeCardBrand = $stripeCardBrand; return $this; }
+    public function getStripeLast4(): ?string { return $this->stripeLast4; }
+    public function setStripeLast4(?string $stripeLast4): self { $this->stripeLast4 = $stripeLast4; return $this; }
+    public function getStripeRiskLevel(): ?string { return $this->stripeRiskLevel; }
+    public function setStripeRiskLevel(?string $stripeRiskLevel): self { $this->stripeRiskLevel = $stripeRiskLevel; return $this; }
  
 }

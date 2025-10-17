@@ -35,8 +35,8 @@ class SquarePaymentService
 
         // ✅ Créer correctement le montant (amount_money)
         $money = new Money();
-        $money->setAmount($amount);      // Montant en centimes (1000 = 10.00 CAD)
-        $money->setCurrency('CAD');      // Devise : CAD (ou USD, EUR...)
+        $money->setAmount($amount);
+        $money->setCurrency('CAD'); 
 
         // ✅ Générer une clé idempotente pour éviter les paiements en double
         $idempotencyKey = uniqid('payment_', true);
