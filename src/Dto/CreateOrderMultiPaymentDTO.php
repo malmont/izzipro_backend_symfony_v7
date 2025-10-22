@@ -63,6 +63,7 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
         $this->carrierId = $carrierId;
         $this->typeOrder = $typeOrder;
         $this->items = $items;
+        $this->priceShipping = $priceShipping;
 
         // 🟢 Initialisation des données de paiement Square
         $this->squarePaymentId = $squarePaymentId;
