@@ -3,11 +3,10 @@ namespace App\UseCase\ShippingUseCase;
 
 use App\Dto\CartItemDto;
 use App\Dto\ParcelSummaryDto;
-use App\Entity\ProductShipping; // <-- On importe les entités
-use App\Entity\PackagingType;
+use App\Entity\ProductShipping;
 use App\Services\ShippingService\ShippingService;
 use App\Services\ShippingService\ShipmentAddressBuilder;
-use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
+use App\Services\TenantEntityManagerProvider;
 use LogicException;
 
 
@@ -36,12 +35,10 @@ class GetShippingRatesForCart
         // MODIFICATION 2 : On récupère l'EM et les repositories ici
         $em = $this->emProvider->getEntityManager();
         $shippingRepo = $em->getRepository(ProductShipping::class);
-        $templateRepo = $em->getRepository(PackagingType::class);
 
         // 1. Récupérer et valider ProductShipping pour chaque item
         $items = [];
         foreach ($cartItems as $ci) {
-            // On utilise le repository obtenu depuis l'EM du tenant
             $ps = $shippingRepo->findOneBy(['product' => $ci->productId]);
             if (! $ps) {
                 throw new LogicException(
@@ -58,13 +55,8 @@ class GetShippingRatesForCart
         $to   = $this->builder->buildTo($toAddress);
         $from = $this->builder->buildFrom();
 
-        // 3. Charger tous les templates d’emballage
-        $templates = $templateRepo->findAll();
-        $parcels   = $this->shippingService->getParcelsFromItems($items, $templates);
-
-        // 4. Récupérer les tarifs EasyPost
         return $this->shippingService->getRates(
-            $parcels,
+            $items,
             $to,
             $from,
             $carrierAccountIds

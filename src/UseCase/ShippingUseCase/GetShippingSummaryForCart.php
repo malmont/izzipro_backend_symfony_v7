@@ -5,7 +5,6 @@ namespace App\UseCase\ShippingUseCase;
 use App\Dto\CartItemDto;
 use App\Dto\RateSummaryDto;
 use App\Entity\ProductShipping;
-use App\Entity\PackagingType;
 use App\Services\ShippingService\ShippingService;
 use App\Services\ShippingService\ShipmentAddressBuilder;
 use App\Services\TenantEntityManagerProvider;
@@ -21,8 +20,8 @@ class GetShippingSummaryForCart
 
     /**
      * @param CartItemDto[] $cartItems
-     * @param array         $toAddress        // keys : street1, street2, city, province, postal_code, country
-     * @param array         $fromAddress      // same keys as $toAddress
+     * @param array         $toAddress    
+     * @param array         $fromAddress  
      * @param string[]      $carrierAccountIds
      * @return RateSummaryDto[]
      */
@@ -34,7 +33,6 @@ class GetShippingSummaryForCart
     ): array {
         $em = $this->emProvider->getEntityManager();
         $shippingRepo = $em->getRepository(ProductShipping::class);
-        $templateRepo = $em->getRepository(PackagingType::class);
 
         // 1) Charger et dupliquer les configs ProductShipping
         $items = [];
@@ -52,12 +50,7 @@ class GetShippingSummaryForCart
         $to   = $this->builder->buildTo($toAddress);
         $from = $this->builder->buildFrom();
 
-        // 3) Calculer les colis
-        $templates = $templateRepo->findAll();
-        $parcels   = $this->shippingService->getParcelsFromItems($items, $templates);
-
-        // 4) Récupérer tous les tarifs
-        $rateOptions = $this->shippingService->getRates($parcels, $to, $from, $carrierAccountIds);
+        $rateOptions = $this->shippingService->getRates($items, $to, $from, $carrierAccountIds);
 
         // 5) Agréger par carrier+service
         $buckets = [];
@@ -75,7 +68,6 @@ class GetShippingSummaryForCart
             }
             // ⚠️ on utilise $r->price (pas ->rate)
             $buckets[$key]['totalPrice']    += $r->price;
-            // ⚠️ on utilise $r->deliveryDays (pas ->estimatedDays)
             $buckets[$key]['estimatedDays']  = max(
                 $buckets[$key]['estimatedDays'],
                 $r->estimatedDays
@@ -91,11 +83,12 @@ class GetShippingSummaryForCart
                 $b['service'],
                 round($b['totalPrice'], 2),
                 $b['currency'],
-                $b['parcelCount'],    // d’abord parcelCount
-                $b['estimatedDays']   // puis estimatedDays
+                $b['parcelCount'],
+                $b['estimatedDays']
             );
         }
 
         return $summaries;
     }
 }
+

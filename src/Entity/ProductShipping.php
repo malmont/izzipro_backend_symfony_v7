@@ -4,9 +4,11 @@ namespace App\Entity;
 
 use App\Repository\ProductShippingRepository;
 use Doctrine\ORM\Mapping as ORM;
+use DVDoug\BoxPacker\Item;
+use DVDoug\BoxPacker\Rotation;
 
 #[ORM\Entity(repositoryClass: ProductShippingRepository::class)]
-class ProductShipping
+class ProductShipping implements Item
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -52,10 +54,7 @@ class ProductShipping
         return $this;
     }
 
-    public function getWeight(): ?float
-    {
-        return $this->weight;
-    }
+
 
     public function setWeight(float $weight): static
     {
@@ -64,10 +63,7 @@ class ProductShipping
         return $this;
     }
 
-    public function getLength(): ?float
-    {
-        return $this->length;
-    }
+
 
     public function setLength(float $length): static
     {
@@ -76,10 +72,7 @@ class ProductShipping
         return $this;
     }
 
-    public function getWidth(): ?float
-    {
-        return $this->width;
-    }
+
 
     public function setWidth(?float $width): static
     {
@@ -122,5 +115,39 @@ class ProductShipping
         $this->shippingClassEntity = $shippingClassEntity;
 
         return $this;
+    }
+    public function getDescription(): string
+    {
+        return 'ProductShippingID:' . $this->getId(); 
+    }
+
+ 
+    public function getWidth(): int
+    {
+        return (int) round($this->width * 10);
+    }
+
+
+    public function getLength(): int
+    {
+        return (int) round($this->length * 10);
+    }
+
+
+    public function getDepth(): int
+    {
+        return (int) round($this->height * 10);
+    }
+
+
+    public function getWeight(): int
+    {
+        return (int) round($this->weight * 1000);
+    }
+    
+
+    public function getAllowedRotation(): Rotation
+    {
+        return Rotation::BestFit;
     }
 }

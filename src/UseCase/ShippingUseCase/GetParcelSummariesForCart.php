@@ -3,9 +3,10 @@ namespace App\UseCase\ShippingUseCase;
 
 use App\Dto\CartItemDto;
 use App\Dto\ParcelSummaryDto;
-use App\Entity\ProductShipping; // <-- On importe l'entité
+use App\Entity\ProductShipping;
 use App\Services\ShippingService\ShippingService;
-use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
+use App\Services\TenantEntityManagerProvider;
+use LogicException;
 
 class GetParcelSummariesForCart
 {
@@ -20,10 +21,8 @@ class GetParcelSummariesForCart
      * @return ParcelSummaryDto[]
      */
     public function execute(
-        array $cartItems,
-        array $to,
-        array $from,
-        array $carrierAccountIds
+        array $cartItems
+ 
     ): array {
         // MODIFICATION 2 : On récupère l'EM et le repository ici
         $em = $this->emProvider->getEntityManager();
@@ -31,19 +30,20 @@ class GetParcelSummariesForCart
 
         $items = [];
         foreach ($cartItems as $ci) {
-            // On utilise le repository obtenu depuis l'EM du tenant
             $ps = $shippingRepo->findOneBy(['product' => $ci->productId]);
+            if (! $ps) {
+                throw new LogicException(
+                    "Aucune configuration d'expédition trouvée pour le produit ID {$ci->productId}. "
+                  . "Merci de créer une ProductShipping pour ce produit."
+                );
+            }
+
             for ($i = 0; $i < $ci->quantity; $i++) {
                 $items[] = $ps;
             }
         }
-
-        // Le reste de votre logique est inchangée
-        $raw = $this->shippingService->getParcelSummaries(
-            $items,
-            $to,
-            $from,
-            $carrierAccountIds
+         $raw = $this->shippingService->getParcelSummaries(
+            $items
         );
 
         return array_map(
@@ -58,3 +58,4 @@ class GetParcelSummariesForCart
         );
     }
 }
+

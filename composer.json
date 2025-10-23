@@ -12,6 +12,7 @@
         "doctrine/doctrine-migrations-bundle": "^3.2",
         "doctrine/orm": "^2.14",
         "dompdf/dompdf": "^3.1",
+        "dvdoug/boxpacker": "^4",
         "easycorp/easyadmin-bundle": "^4.7",
         "easypost/easypost-php": "^8.0",
         "gesdinet/jwt-refresh-token-bundle": "^1.3",
