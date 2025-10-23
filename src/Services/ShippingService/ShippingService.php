@@ -14,8 +14,8 @@ use DVDoug\BoxPacker\PackedBoxList;
 class ShippingService
 {
     // Constantes pour les conversions d'unités
-    private const G_TO_OZ = 0.035274;  // Grammes en Onces
-    private const MM_TO_IN = 0.0393701; // Millimètres en Pouces
+    private const G_TO_OZ = 0.035274;
+    private const MM_TO_IN = 0.0393701;
 
     public function __construct(
         private TenantEntityManagerProvider $emProvider,
@@ -56,6 +56,7 @@ class ShippingService
 
         /** @var PackedBox $packedBox */
         foreach ($packedParcels as $packedBox) {
+            // Cette ligne est déjà correcte
             $box = $packedBox->box;
 
             // 1) Payload principal
@@ -99,7 +100,7 @@ class ShippingService
     {
         $agg = [];
         foreach ($rates as $r) {
-            $key = $r->carrier . '|' . $r->service;
+            $key = $r->carrier . '|' * $r->service;
             if (!isset($agg[$key])) {
                 $agg[$key] = [
                     'carrier'       => $r->carrier,
@@ -133,19 +134,17 @@ class ShippingService
      */
     public function getParcelSummaries(array $items): array
     {
-        // CORRECTION : La logique de récupération des colis est maintenant ici
         $packedParcels = $this->getPackedParcels($items);
         $summaries = [];
         $i = 1;
 
         /** @var PackedBox $packedBox */
         foreach ($packedParcels as $packedBox) {
-            $box = $packedBox->getBox(); // Notre entité PackagingType
+            $box = $packedBox->box;
+            
             $summaries[] = [
                 'index'  => $i++,
-                // Convertir de g -> kg pour l'affichage
                 'weight' => round($packedBox->getWeight() / 1000, 2),
-                // Convertir de mm -> cm pour l'affichage
                 'length' => round($box->getOuterLength() / 10, 1),
                 'width'  => round($box->getOuterWidth() / 10, 1),
                 'height' => round($box->getOuterDepth() / 10, 1),
@@ -172,16 +171,16 @@ class ShippingService
 
         /** @var PackedBox $packedBox */
         foreach ($packedParcels as $packedBox) {
-            $box = $packedBox->getBox();
+            $box = $packedBox->box; 
 
             $payload = [
                 'to_address'       => $to,
                 'from_address'     => $from,
                 'parcel'           => [
-                    'weight' => $packedBox->getWeight() * self::G_TO_OZ, // g -> oz
-                    'length' => $box->getOuterLength() * self::MM_TO_IN, // mm -> in
-                    'width'  => $box->getOuterWidth() * self::MM_TO_IN,  // mm -> in
-                    'height' => $box->getOuterDepth() * self::MM_TO_IN,  // mm -> in
+                    'weight' => $packedBox->getWeight() * self::G_TO_OZ,
+                    'length' => $box->getOuterLength() * self::MM_TO_IN,
+                    'width'  => $box->getOuterWidth() * self::MM_TO_IN,
+                    'height' => $box->getOuterDepth() * self::MM_TO_IN,
                 ],
                 'carrier_accounts' => [$carrierAccountId],
             ];
