@@ -37,7 +37,6 @@ class ShippingService
         $templateRepo = $em->getRepository(PackagingType::class);
         $templates = $templateRepo->findAll();
 
-        // Cette méthode renvoie bien un PackedBoxList
         return $this->packager->computeParcels($items, $templates);
     }
 
@@ -56,7 +55,6 @@ class ShippingService
 
         /** @var PackedBox $packedBox */
         foreach ($packedParcels as $packedBox) {
-            // Cette ligne est déjà correcte
             $box = $packedBox->box;
 
             // 1) Payload principal
@@ -100,7 +98,7 @@ class ShippingService
     {
         $agg = [];
         foreach ($rates as $r) {
-            $key = $r->carrier . '|' * $r->service;
+            $key = $r->carrier . '|' . $r->service;
             if (!isset($agg[$key])) {
                 $agg[$key] = [
                     'carrier'       => $r->carrier,

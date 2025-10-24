@@ -88,7 +88,7 @@ class OrderCrudController extends BaseTenantCrudController
                 ]),
             DateTimeField::new('orderDate', 'Date de commande')->setFormat('dd/MM/yyyy HH:mm'),
             DateTimeField::new('statusUpdatedAt', 'Date de updateStatut')->setFormat('dd/MM/yyyy HH:mm'),
-            MoneyField::new('totalAmount', 'Montant total')->setCurrency('USD'),
+            MoneyField::new('totalAmount', 'Montant total')->setCurrency('CAD'),
             AssociationField::new('payments', 'Paiements')->onlyOnDetail(),
         ];
     }

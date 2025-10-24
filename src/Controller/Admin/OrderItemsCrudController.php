@@ -46,8 +46,9 @@ class OrderItemsCrudController extends BaseTenantCrudController
                 ]),
 
             IntegerField::new('quantity', 'Quantity'),
-            MoneyField::new('unitPrice', 'Unit Price')->setCurrency('USD')->setStoredAsCents(false),
-            MoneyField::new('totalPrice', 'Total Price')->setCurrency('USD')->setStoredAsCents(false),
+            MoneyField::new('unitPrice', 'Unit Price')->setCurrency('CAD'),
+            MoneyField::new('totalPrice', 'Total Price')->setCurrency('CAD'),
+
         ];
     }
 

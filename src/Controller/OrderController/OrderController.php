@@ -21,6 +21,7 @@ use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 use App\Services\GemsuiteImporterService\GemsuiteSaleManager;
+use Psr\Log\LoggerInterface;
 
 class OrderController extends AbstractController
 {
@@ -31,6 +32,7 @@ class OrderController extends AbstractController
     private TenantEntityManagerProvider $emProvider;
     private TenantCacheService $cache;
     private GemsuiteSaleManager $gemsuiteSaleManager;
+    private LoggerInterface $logger;
 
     public function __construct(
         CreateOrderUseCase $createOrderUseCase,
@@ -39,7 +41,8 @@ class OrderController extends AbstractController
         GetOrdersByUserUseCase $getOrdersByUserUseCase,
         TenantEntityManagerProvider $emProvider,
         TenantCacheService $cache,
-        GemsuiteSaleManager $gemsuiteSaleManager
+        GemsuiteSaleManager $gemsuiteSaleManager,
+        LoggerInterface $logger
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -48,6 +51,7 @@ class OrderController extends AbstractController
         $this->emProvider = $emProvider;
         $this->cache = $cache;
         $this->gemsuiteSaleManager = $gemsuiteSaleManager;
+        $this->logger = $logger;
     }
 
     /**
@@ -213,30 +217,37 @@ class OrderController extends AbstractController
         return $this->json($orderData);
     }
 
-     #[Route("api/ordersuser", name:"get_user_orders", methods:["GET"])]
+    #[Route("api/ordersuser", name:"get_user_orders", methods:["GET"])]
     public function getUserOrders(Request $request, Security $security): JsonResponse
     {
+        /** @var User $user */ // Type hint pour clarté
         $user = $security->getUser();
         if (!$user) {
             return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
         $host = $request->getSchemeAndHttpHost();
-        $locale = $request->getLocale(); 
-        
-
-        $cacheKey = 'orders_user_' . $user->getId() . '_' . $locale;
+        $locale = $request->getLocale();
+        $cacheKeySuffix = 'orders_user_' . $user->getId() . '_' . $locale;
+        $tags = ['orders_user', 'orders_user_' . $user->getId()];
 
         $orderDTOs = $this->cache->get(
-            $cacheKey,
-            function (ItemInterface $item) use ($user, $host, $locale) {
-                $item->expiresAfter(300); 
-                $item->tag(['orders_user', 'orders_user_' . $user->getId()]);
+            $cacheKeySuffix,
+            function (ItemInterface $item) use ($user, $host, $locale, $cacheKeySuffix) { 
+                $this->logger->info('Cache MISS for getUserOrders. Computing...', [
+                     'key_suffix_requested' => $cacheKeySuffix 
+                ]);
                 return $this->getOrdersByUserUseCase->execute($user->getId(), $host, $locale);
-            }
+            },
+            300,
+            $tags
         );
 
         if (empty($orderDTOs)) {
+            $this->logger->info('No orders found for getUserOrders (after cache check/compute)', [
+                'user_id' => $user->getId(),
+                'locale' => $locale
+            ]);
             return $this->json(['message' => 'No orders found for the current user'], JsonResponse::HTTP_NOT_FOUND);
         }
 

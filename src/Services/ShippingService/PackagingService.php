@@ -23,7 +23,7 @@ class PackagingService
      */
     public function computeParcels(array $items, array $templates): PackedBoxList
     {
-        // 1) Grouper par ID de ShippingClass
+        // 1) Grouper par ID de ShippingClass (les "Buckets")
         $buckets = [];
         foreach ($items as $item) {
             $sc  = $item->getShippingClassEntity();
@@ -31,41 +31,53 @@ class PackagingService
             $buckets[$key][] = $item;
         }
 
-        $packer = new Packer();
 
-        // 2) Ajouter tous les gabarits (boîtes)
-        foreach ($templates as $box) {
-            $packer->addBox($box);
-        }
+        // On va stocker tous les colis finaux de tous les buckets ici
+        $allPackedBoxes = new PackedBoxList();
 
-        // 3) Pour chaque bucket, ajouter les items
-        foreach ($buckets as $groupItems) {
+        // 2) Pour chaque bucket, FAIRE UN CALCUL D'EMBALLAGE SÉPARÉ
+        foreach ($buckets as $shippingClassKey => $groupItems) {
+            
+            $packer = new Packer(); 
+
+            // 3) Ajouter tous les gabarits (boîtes) à CE packer
+            foreach ($templates as $box) {
+                $packer->addBox($box);
+            }
+
+            // 4) Ajouter les items de CE BUCKET SEULEMENT
             foreach ($groupItems as $item) {
                 $packer->addItem($item, 1); // 1 = quantité
             }
-        }
 
-        // 4) Lancer le calcul
-        $packedBoxes = $packer->pack();
+            // 5) Lancer le calcul pour CE BUCKET
+            $packedBoxesForThisBucket = $packer->pack();
 
+            // 6) Vérifier les articles trop grands pour CE BUCKET
+            $unpackedItems = $packer->getUnpackedItems();
 
-        $tooLargeItems = $packer->getUnpackedItems();
+            // On vérifie s'il y a des articles non emballés
+            if (count($unpackedItems) > 0) {
+                
+                $firstItem = null;
+                foreach ($unpackedItems as $item) {
+                    $firstItem = $item;
+                    break;
+                }
 
-        if (count($tooLargeItems) > 0) {
-            
-            $firstItem = null;
-            foreach ($tooLargeItems as $item) {
-                $firstItem = $item;
-                break;
+                throw new ItemTooLargeForPackagingException(
+                    "L'article '{$firstItem->getDescription()}' (classe: {$shippingClassKey}) est trop grand pour tous les gabarits d'emballage disponibles."
+                );
             }
 
-            throw new ItemTooLargeForPackagingException(
-                "L'article '{$firstItem->getDescription()}' (dimensions: {$firstItem->getWidth()}x{$firstItem->getLength()}x{$firstItem->getDepth()} mm) est trop grand pour tous les gabarits d'emballage disponibles."
-            );
+            // 7) Ajouter les colis de ce bucket à la liste totale
+            foreach ($packedBoxesForThisBucket as $packedBox) {
+                $allPackedBoxes->insert($packedBox);
+            }
         }
 
-        // 6) Retourner la collection de colis (qui est un objet PackedBoxList)
-        return $packedBoxes;
+        // 8) Retourner la liste complète de TOUS les colis
+        return $allPackedBoxes;
     }
 }
 

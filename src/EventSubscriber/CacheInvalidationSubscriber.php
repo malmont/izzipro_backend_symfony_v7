@@ -53,12 +53,15 @@ use App\Entity\Presentation;
 use App\Entity\PresentationGroup;
 use App\Entity\PaymentMethod;
 use App\Entity\OrderType;
+use Psr\Log\LoggerInterface;
+use App\Entity\User;
 
 
 class CacheInvalidationSubscriber implements EventSubscriber
 {
     private CacheInterface $cache;
     private TenantConnectionProvider $tcp;
+    
 
     /**
      * Tableau de correspondance définissant pour chaque groupe d'entités
@@ -416,20 +419,16 @@ class CacheInvalidationSubscriber implements EventSubscriber
             
         }
         if ($entity instanceof Order) {
+            /** @var User|null $user */
             $user = $entity->getUserId();
-            if ($user) {
-                $specificKeyToDelete = $prefix . 'orders_user_' . $user->getId();
-                $this->cache->delete($specificKeyToDelete);
-            }
-            if ($this->cache instanceof TagAwareCacheInterface) {
-                $this->cache->invalidateTags([
-                    $tagPrefix . 'orders_user',
-                    $tagPrefix . 'orders_source'
-                ]);
-            }
-            
+            $tenantCode = $this->tcp->getTenantCode() ?: 'master';
+            if ($user !== null && get_class($user) === User::class && $this->cache instanceof TagAwareCacheInterface) {
+                $userTagSimple = 'orders_user_' . $user->getId();
+                $userTagPrefixed = $tenantCode . $userTagSimple;
+                $tagsToInvalidate = [$userTagPrefixed, $tenantCode];
+                $this->cache->invalidateTags($tagsToInvalidate);
+            } 
         }
-
         if ($entity instanceof ProductVariant || $entity instanceof Product) {
             
             $productId = null;
