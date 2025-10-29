@@ -33,6 +33,7 @@ class EntrepriseService
         $entreprise = new Entreprise();
         $entreprise->setName($dto->name);
         $entreprise->setLogo($dto->logo);
+        $entreprise->setFaviconFilename($dto->faviconUrl);
         $entreprise->setEmail($dto->email);
         $entreprise->setTel($dto->tel);
         $entreprise->setWebsite($dto->website);

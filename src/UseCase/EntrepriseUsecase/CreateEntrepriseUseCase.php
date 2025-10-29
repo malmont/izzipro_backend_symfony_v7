@@ -20,6 +20,7 @@ class CreateEntrepriseUseCase
         $dto = new EntrepriseDto();
         $dto->name = $data['name'] ?? null;
         $dto->logo = $data['logo'] ?? null;
+        $dto->faviconUrl = $data['faviconUrl'] ?? null;
         $dto->email = $data['email'] ?? null;
         $dto->tel = $data['tel'] ?? null;
         $dto->website = $data['website'] ?? null;
@@ -33,3 +34,4 @@ class CreateEntrepriseUseCase
         return $this->entrepriseService->createEntreprise($dto);
     }
 }
+

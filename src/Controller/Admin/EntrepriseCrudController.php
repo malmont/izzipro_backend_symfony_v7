@@ -47,6 +47,11 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->setUploadDir('public/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
+            ImageField::new('faviconFilename', 'Favicon')
+                ->setBasePath('assets/uploads/email-logos/')
+                ->setUploadDir('public/assets/uploads/email-logos/')
+                ->setUploadedFileNamePattern('[randomhash].[extension]')
+                ->setRequired(false),        
             TextField::new('adress', 'Adresse'),
             EmailField::new('email', 'E-mail'),
             TextField::new('tel', 'Téléphone'),

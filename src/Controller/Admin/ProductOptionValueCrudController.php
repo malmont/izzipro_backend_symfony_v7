@@ -6,10 +6,12 @@ use App\Entity\ProductOptionValue;
 use App\Repository\ProductOptionRepository;
 use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use App\Controller\Admin\BaseTenantCrudController;
 use App\Form\ProductOptionValueTranslationType; 
+
 
 class ProductOptionValueCrudController extends BaseTenantCrudController
 {

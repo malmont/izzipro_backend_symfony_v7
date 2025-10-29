@@ -71,6 +71,9 @@ class Entreprise implements TranslatableInterface
     )]
     private Collection $translations;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $faviconFilename = null;
+
     public function __construct()
     {
         $this->translations = new ArrayCollection();
@@ -326,5 +329,17 @@ class Entreprise implements TranslatableInterface
             }
         }
         return null;
+    }
+
+    public function getFaviconFilename(): ?string
+    {
+        return $this->faviconFilename;
+    }
+
+    public function setFaviconFilename(?string $faviconFilename): static
+    {
+        $this->faviconFilename = $faviconFilename;
+
+        return $this;
     }
 }

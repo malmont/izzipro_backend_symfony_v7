@@ -7,6 +7,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use App\Controller\Admin\BaseTenantCrudController; 
 use App\Form\ProductOptionTranslationType;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 
 // On étend la base pour le multi-tenant
 class ProductOptionCrudController extends BaseTenantCrudController

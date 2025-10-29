@@ -167,3 +167,7 @@ services:
     App\Services\StripePaymentService\StripePaymentService:
         arguments:
             $stripeSecretKey: '%env(STRIPE_SECRET_KEY)%'       
+
+    App\Services\ShippingService\EasyPostService:
+        arguments:
+            $appEnv: '%kernel.environment%'

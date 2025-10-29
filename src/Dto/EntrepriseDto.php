@@ -8,6 +8,7 @@ class EntrepriseDto
     public ?int $id = null;
     public ?string $name = null;
     public ?string $logo = null;
+    public ?string $faviconUrl = null;
     public ?string $email = null;
     public ?string $apropos = null;
     public ?string $tel = null;
@@ -37,6 +38,12 @@ class EntrepriseDto
             $dto->logo = $imagePath;
         } else if ($imagePath) {
             $dto->logo = rtrim($host, '/') . '/assets/uploads/email-logos/' . $imagePath;
+        }
+        $faviconPath = $entreprise->getFaviconFilename();
+        if (str_starts_with((string)$faviconPath, 'http')) {
+            $dto->faviconUrl = $faviconPath;
+        } else if ($faviconPath) {
+            $dto->faviconUrl = rtrim($host, '/') . '/assets/uploads/email-logos/' . $faviconPath;
         }
 
         $dto->conditionOfUse = $translation?->getConditionOfUse() ?? $entreprise->getConditionOfUse();
