@@ -1,4 +1,6 @@
 <?php
+// src/Dto/ProductDetailedOutputDTO.php
+
 namespace App\Dto;
 
 use App\Entity\Product;
@@ -7,6 +9,8 @@ use App\Entity\Style;
 use App\Entity\Color;
 use App\Entity\Size;
 use App\Entity\ProductVariant;
+use App\Entity\ProductOptionValue; // <-- AJOUT 1
+use App\Entity\ProductOption;    // <-- AJOUT 2
 
 class ProductDetailedOutputDTO
 {
@@ -37,7 +41,7 @@ class ProductDetailedOutputDTO
     {
         $productTranslation = $product->getTranslation($locale);
         $this->id = $product->getId();
-         $this->name = $productTranslation?->getName() ?? $product->getName();
+        $this->name = $productTranslation?->getName() ?? $product->getName();
         $this->description = $productTranslation?->getDescription() ?? $product->getDescription();
         $this->moreinformations = $productTranslation?->getMoreinformations() ?? $product->getMoreinformations();
         $this->price = $product->getPrice();
@@ -66,12 +70,28 @@ class ProductDetailedOutputDTO
     
         $this->style = $product->getStyle() ? [
             'id' => $product->getStyle()->getId(),
-            'name' => $product->getStyle()->getName(),
+            'name' => $product->getStyle()->getName(), // Note : Le style n'est pas traduit ici
         ] : null;
         $this->specifications = $product->getSpecifications();
+
+        // --- BLOC DE VARIANTES MIS À JOUR ---
         $this->variants = array_map(function (ProductVariant $variant) use ($locale) {
             $color = $variant->getColor();
             $size = $variant->getSize();
+
+            // --- AJOUT 3 : On boucle sur les 'optionValues' ---
+            $options = array_map(function (ProductOptionValue $optionValue) use ($locale) {
+                $parentOption = $optionValue->getProductOption();
+                return [
+                    'value_id'    => $optionValue->getId(),
+                    'value'       => $optionValue->getTranslation($locale)?->getValue() ?? $optionValue->getValue(),
+                    'option_name' => $parentOption ? ($parentOption->getTranslation($locale)?->getName() ?? $parentOption->getName()) : null,
+                    'option_id'   => $parentOption ? $parentOption->getId() : null,
+                    'option_code' => $parentOption ? $parentOption->getCode() : null,
+                ];
+            }, $variant->getOptionValues()->toArray());
+            // --- FIN AJOUT ---
+
             return [
                 'id' => $variant->getId(),
                 'color' => $color ? [
@@ -84,22 +104,33 @@ class ProductDetailedOutputDTO
                     'name' => $size->getTranslation($locale)?->getName() ?? $size->getName(),
                 ] : null,
                 'stockQuantity' => $variant->getStockQuantity(),
+                'options' => $options, // <-- AJOUT 4 : On ajoute le tableau
             ];
         }, $product->getVariants()->toArray());
+        // --- FIN BLOC ---
     
         $categoriesCollection = $product->getCategory();
         if ($categoriesCollection && !$categoriesCollection->isEmpty()) {
-            $this->category = array_map(function (Categories $category) use ($locale) {
+            
+            // --- BLOC CATÉGORIE CORRIGÉ ---
+            $this->category = array_map(function (Categories $category) use ($locale, $host) { // <-- CORRECTION : Type 'Categories'
+                
+                // --- CORRECTION : On utilise la traduction de la catégorie, pas du produit ---
+                $translation = $category->getTranslation($locale); 
+                
                 return [
                     'id'          => $category->getId(),
                     'name'        => $translation?->getName() ?? $category->getName(),
                     'description' => $translation?->getDescription() ?? $category->getDescription(),
-                    'image'       => $category->getImage(),
+                    'image'       => $category->getImage()
+                        ? rtrim($host, '/') . '/assets/uploads/categories/' . $category->getImage()
+                        : null,
                 ];
             }, $categoriesCollection->toArray());
+            // --- FIN CORRECTION ---
+
         } else {
-            $this->category = [];
+            $this->category = []; // Initialisé à un tableau vide, cohérent avec $variants
         }   
     }   
  }
-    

@@ -1,4 +1,6 @@
 <?php
+// src/Dto/ProductOutputDTO.php
+
 namespace App\Dto;
 
 use App\Entity\Product;
@@ -7,6 +9,8 @@ use App\Entity\Style;
 use App\Entity\Color;
 use App\Entity\Size;
 use App\Entity\ProductVariant;
+use App\Entity\ProductOptionValue; // <-- AJOUT 1 : On importe l'entité
+use App\Entity\ProductOption; // <-- AJOUT 2 : On importe le parent
 
 class ProductOutputDTO
 {
@@ -41,10 +45,12 @@ class ProductOutputDTO
             $cleanedHost = rtrim($host, '/');
             $this->image = $cleanedHost . '/assets/uploads/products/' . $imagePath;
         }
+        
+        // ... (votre logique pour 'categories' et 'style' reste inchangée) ...
         $categoriesCollection = $product->getCategory();
         if ($categoriesCollection && !$categoriesCollection->isEmpty()) {
             $this->categories = array_map(function (Category $category) use ($locale) {
-                return [
+                 return [
                     'id'          => $category->getId(),
                     'name'        => $category->getTranslation($locale)?->getName(),
                     'description' => $category->getTranslation($locale)?->getDescription(),
@@ -54,14 +60,30 @@ class ProductOutputDTO
             $this->categories = null;
         }
 
-
         $this->style = $product->getStyle() ? [
             'id' => $product->getStyle()->getId(),
             'name' => $product->getStyle()->getName(),
         ] : null;
+
+
+        // --- DÉBUT DU BLOC MODIFIÉ ---
         $this->variants = array_map(function (ProductVariant $variant) use ($locale) {
             $color = $variant->getColor();
             $size = $variant->getSize();
+
+            // --- AJOUT 3 : On boucle sur les 'optionValues' de la variante ---
+            $options = array_map(function (ProductOptionValue $optionValue) use ($locale) {
+                $parentOption = $optionValue->getProductOption();
+                
+                return [
+                    'value_id'    => $optionValue->getId(),
+                    'value'       => $optionValue->getTranslation($locale)?->getValue() ?? $optionValue->getValue(),
+                    'option_name' => $parentOption ? ($parentOption->getTranslation($locale)?->getName() ?? $parentOption->getName()) : null,
+                    'option_id'   => $parentOption ? $parentOption->getId() : null,
+                    'option_code' => $parentOption ? $parentOption->getCode() : null, // Très utile pour le front !
+                ];
+            }, $variant->getOptionValues()->toArray());
+            // --- FIN DE L'AJOUT ---
 
             return [
                 'id' => $variant->getId(),
@@ -75,7 +97,9 @@ class ProductOutputDTO
                     'name' => $size->getTranslation($locale)?->getName(),
                 ] : null,
                 'stockQuantity' => $variant->getStockQuantity(),
+                'options' => $options, // <-- AJOUT 4 : On ajoute le tableau d'options à la variante
             ];
         }, $product->getVariants()->toArray());
+        // --- FIN DU BLOC MODIFIÉ ---
     }
 }

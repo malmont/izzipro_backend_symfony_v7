@@ -154,15 +154,14 @@ class TenantSetupController extends AbstractController
 
 
                 if($companyData){
-                    $emailConfiguration =new EmailConfiguration();
+                    $emailConfiguration = $tenantEm->getRepository(EmailConfiguration::class)->findOneBy([]) ?? new EmailConfiguration();
                     $emailConfiguration->setFromName($companyData['nom'] ?? 'Votre Entreprise');
                     $logoPath = $companyData['website_logo1'] ?? null;
                     $emailConfiguration->setLogo(
-                    $imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $logoPath)
-                );
-                $tenantEm->persist($emailConfiguration);
-                $this->addFlash('info', 'Configuration email créée.');
-
+                        $imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $logoPath)
+                    );
+                    $tenantEm->persist($emailConfiguration); 
+                    $this->addFlash('info', 'Configuration email mise à jour.');
                 }
    
                 if ($companyData) {

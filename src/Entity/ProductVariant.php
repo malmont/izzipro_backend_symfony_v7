@@ -30,7 +30,7 @@ class ProductVariant
     private ?Product $product = null;
 
     #[ORM\Column]
-    private ?int $stockQuantity = null;
+    private int $stockQuantity = 0;
 
     /**
      * @var Collection<int, OrderItems>
@@ -50,11 +50,15 @@ class ProductVariant
     #[ORM\ManyToMany(targetEntity: ProductOptionValue::class, inversedBy: 'productVariants')]
     private Collection $optionValues;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $gemsuiteVariantId = null;
+
     public function __construct()
     {
         $this->orderItems = new ArrayCollection();
         $this->inventoryMovements = new ArrayCollection();
         $this->optionValues = new ArrayCollection();
+        $this->stockQuantity = 0;
     }
 
     public function getId(): ?int
@@ -102,7 +106,7 @@ class ProductVariant
         return $this;
     }
 
-    public function getStockQuantity(): ?int
+    public function getStockQuantity(): int
     {
         return $this->stockQuantity;
     }
@@ -223,6 +227,18 @@ class ProductVariant
     public function removeOptionValue(ProductOptionValue $optionValue): static
     {
         $this->optionValues->removeElement($optionValue);
+
+        return $this;
+    }
+
+    public function getGemsuiteVariantId(): ?int
+    {
+        return $this->gemsuiteVariantId;
+    }
+
+    public function setGemsuiteVariantId(?int $gemsuiteVariantId): static
+    {
+        $this->gemsuiteVariantId = $gemsuiteVariantId;
 
         return $this;
     }

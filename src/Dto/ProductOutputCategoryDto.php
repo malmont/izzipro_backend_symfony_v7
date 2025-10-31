@@ -86,13 +86,14 @@ class ProductOutputCategoryDto
             $color = $variant->getColor();
             $size = $variant->getSize();
             
-            $options = array_map(function (ProductOptionValue $optionValue) {
+            $options = array_map(function (ProductOptionValue $optionValue) use ($locale){
                 $parentOption = $optionValue->getProductOption();
                 return [
                     'value_id'    => $optionValue->getId(),
                     'value'       => $optionValue->getTranslation($locale)?->getValue(),
                     'option_name' => $parentOption ? $parentOption->getName() : null,
                     'option_id'   => $parentOption ? $parentOption->getId() : null,
+                    'option_code' => $parentOption ? $parentOption->getCode() : null,
                 ];
             }, $variant->getOptionValues()->toArray());
 
