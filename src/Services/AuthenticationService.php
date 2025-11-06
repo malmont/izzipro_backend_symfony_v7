@@ -48,16 +48,17 @@ class AuthenticationService
         }
 
         if (!$user instanceof UserInterface || !$this->passwordHasher->isPasswordValid($user, $password)) {
-            return new JsonResponse(['error' => 'Identifiants invalides'], Response::HTTP_UNAUTHORIZED);
-        }
-        
-
-        if (!$user->isVerified()) {
             return new JsonResponse(
-                ['error' => 'Your account is not verified. Please check your email.'],
+                ['code' => 'LOGIN_INVALID', 'message' => 'Identifiants invalides'], 
                 Response::HTTP_UNAUTHORIZED
             );
-            
+        }
+        
+        if (!$user->isVerified()) {
+            return new JsonResponse(
+                ['code' => 'ACCOUNT_NOT_VERIFIED', 'message' => 'Votre compte n\'est pas vérifié. Veuillez consulter vos e-mails.'],
+                Response::HTTP_UNAUTHORIZED
+            );
         }
         
         if (in_array($platform, ['web', 'mobile'])) {
