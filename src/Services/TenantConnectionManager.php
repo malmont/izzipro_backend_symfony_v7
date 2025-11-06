@@ -92,7 +92,7 @@ class TenantConnectionManager
     // CRUD tenant + migrations
     // -------------------------------------------------------------------
 
-     public function createTenant(string $code, string $name, string $dbname, ?string $gemsuiteToken = null): void
+    public function createTenant(string $code, string $name, string $dbname, ?string $gemsuiteToken = null, bool $isInternal = false): void
         {
             if (!preg_match('/^[a-z0-9_]+$/i', $code) || !preg_match('/^[a-z0-9_]+$/i', $dbname)) {
                 throw new \InvalidArgumentException("Code ou dbname invalide : seuls [a-z0-9_] sont autorisés");
@@ -114,13 +114,14 @@ class TenantConnectionManager
                     sprintf('CREATE DATABASE "%s" WITH TEMPLATE gmasuite', $dbname)
                 );
                 $stmt = $this->pdoMaster->prepare(
-                    'INSERT INTO tenants(code, name, dbname, gemsuite_token) VALUES(:c, :n, :d, :t)'
+                'INSERT INTO tenants(code, name, dbname, gemsuite_token, is_internal_store) VALUES(:c, :n, :d, :t, :is_internal)'
                 );
                 $stmt->execute([
                     'c' => $code,
                     'n' => $name,
                     'd' => $dbname,
-                    't' => $gemsuiteToken
+                    't' => $gemsuiteToken,
+                    'is_internal' => $isInternal,
                 ]);
 
             } catch (\Throwable $e) {
@@ -309,6 +310,21 @@ private function runMigrations(string $dbname): void
         $params = $this->tenantParams;
         $params['dbname'] = $dbname;
         $this->reconnect($params);
+    }
+    public function isTenantInternal(string $tenantCode): bool
+    {
+        try {
+            $stmt = $this->pdoMaster->prepare(
+                'SELECT is_internal_store FROM tenants WHERE code = :code'
+            );
+            $stmt->execute(['code' => $tenantCode]);
+            $result = $stmt->fetchColumn();
+            return $result === true; 
+
+        } catch (\Throwable $e) {
+            $this->logger->error("Erreur lors de la vérification du statut interne du tenant '{$tenantCode}': " . $e->getMessage());
+            return false; 
+        }
     }
 
 }

@@ -144,7 +144,6 @@ class ShippingController extends AbstractController
     #[Route('/api/shipping/summary', methods: ['POST'])]
     public function summary(Request $request): JsonResponse
     {
-        // 2. AJOUTER LE BLOC TRY...CATCH
         try {
             $data = json_decode($request->getContent(), true);
 

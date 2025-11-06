@@ -42,10 +42,13 @@ class ProductShippingCrudController extends BaseTenantCrudController
                     'choice_label' => 'name',
                 ]),
 
-            NumberField::new('weight', 'Poids (kg)')->setNumDecimals(2)->setRequired(true),
-            NumberField::new('length', 'Longueur (cm)')->setNumDecimals(1)->hideOnIndex(),
-            NumberField::new('width', 'Largeur (cm)')->setNumDecimals(1)->hideOnIndex(),
-            NumberField::new('height', 'Hauteur (cm)')->setNumDecimals(1)->hideOnIndex(),
+            // --- CORRECTION ICI ---
+            // On pointe vers les nouvelles propriétés en KG et CM
+            NumberField::new('weightKg', 'Poids (kg)')->setNumDecimals(2)->setRequired(true),
+            NumberField::new('lengthCm', 'Longueur (cm)')->setNumDecimals(1)->hideOnIndex(),
+            NumberField::new('widthCm', 'Largeur (cm)')->setNumDecimals(1)->hideOnIndex(),
+            NumberField::new('heightCm', 'Hauteur (cm)')->setNumDecimals(1)->hideOnIndex(),
+            // --- FIN CORRECTION ---
 
             AssociationField::new('shippingClassEntity', 'Classe d’expédition')
                 ->setRequired(false)
@@ -61,3 +64,4 @@ class ProductShippingCrudController extends BaseTenantCrudController
     }
     
 }
+

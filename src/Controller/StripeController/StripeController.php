@@ -23,11 +23,11 @@ class StripeController extends AbstractController
     ): Response
     {
         $subdomainCode = $tenantConnectionManager->getCurrentTenantCode();
-        
         if ($subdomainCode === null) {
             $this->addFlash('danger', 'L\'accès à cette page doit se faire via un sous-domaine valide.');
             return $this->redirectToRoute('app_tenant_setup'); 
         }
+        
 
         $stripeConfig = $stripeService->getStripeConfigForCurrentTenant();
 

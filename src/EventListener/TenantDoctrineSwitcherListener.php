@@ -85,9 +85,13 @@ class TenantDoctrineSwitcherListener
 
         $targetDb = $row['dbname'];
         $currentDb = $this->tenantConnectionProvider->getConnection()->getParams()['dbname'] ?? null;
-
-        if ($targetDb !== $currentDb) {
-            $this->logger->info("Changement de contexte de BDD requis. Actuelle: '$currentDb', Cible: '$targetDb'.");
+        $currentTenantCode = $this->tenantConnectionProvider->getTenantCode();
+        if ($targetDb !== $currentDb || $tenantCode !== $currentTenantCode) {
+            if ($targetDb !== $currentDb) {
+                $this->logger->info("Changement de contexte de BDD requis. Actuelle: '$currentDb', Cible: '$targetDb'.");
+            } else {
+                $this->logger->info("Mise à jour du code tenant (BDD déjà correcte). Cible: '$tenantCode'.");
+            }
             $this->tenantConnectionProvider->switchTenant($targetDb, $tenantCode);
         }
     }

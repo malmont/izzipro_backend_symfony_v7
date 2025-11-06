@@ -22,6 +22,7 @@ use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 use App\Services\GemsuiteImporterService\GemsuiteSaleManager;
 use Psr\Log\LoggerInterface;
+use App\Services\OrderService\OrderMailerService; 
 
 class OrderController extends AbstractController
 {
@@ -33,6 +34,7 @@ class OrderController extends AbstractController
     private TenantCacheService $cache;
     private GemsuiteSaleManager $gemsuiteSaleManager;
     private LoggerInterface $logger;
+    private OrderMailerService $orderMailerService;
 
     public function __construct(
         CreateOrderUseCase $createOrderUseCase,
@@ -42,7 +44,8 @@ class OrderController extends AbstractController
         TenantEntityManagerProvider $emProvider,
         TenantCacheService $cache,
         GemsuiteSaleManager $gemsuiteSaleManager,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        OrderMailerService $orderMailerService
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -52,6 +55,7 @@ class OrderController extends AbstractController
         $this->cache = $cache;
         $this->gemsuiteSaleManager = $gemsuiteSaleManager;
         $this->logger = $logger;
+        $this->orderMailerService = $orderMailerService;
     }
 
     /**
@@ -109,12 +113,24 @@ class OrderController extends AbstractController
         $tenantEm = $this->emProvider->getEntityManager();
         $tenantEm->refresh($result);
         $this->gemsuiteSaleManager->createSale($result);
-        return $this->json([
-            'success' => true,
-            'orderId' => $result->getId(),
-            'message' => 'Commande créée et synchronisée avec succès.'
-        ], JsonResponse::HTTP_CREATED);
-    }
+        try {
+                $locale = $request->query->get('locale', 'fr'); 
+                $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+                $this->orderMailerService->sendOrderConfirmation($result, $locale, $domain);
+                $this->orderMailerService->sendShippingNotification($result, $locale, $domain);
+
+            } catch (\Exception $e) {
+                $this->logger->error("Le service d'email a échoué mais la commande est créée : " . $e->getMessage(), [
+                    'orderId' => $result->getId(),
+                    'exception' => $e
+                ]);
+            }
+            return $this->json([
+                'success' => true,
+                'orderId' => $result->getId(),
+                'message' => 'Commande créée et synchronisée avec succès.'
+            ], JsonResponse::HTTP_CREATED);
+        }
         return $result;
     }
 
@@ -159,6 +175,19 @@ class OrderController extends AbstractController
          $result = $this->createOrderUseCase->execute($dto);
          if ($result instanceof Order) {
             $this->gemsuiteSaleManager->createSale($result);
+            
+            try {
+                $locale = $request->query->get('locale', 'fr'); 
+                $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+                $this->orderMailerService->sendOrderConfirmation($result, $locale, $domain);
+                $this->orderMailerService->sendShippingNotification($result, $locale, $domain);
+            } catch (\Exception $e) {
+                $this->logger->error("Le service d'email (multi-paiement) a échoué : " . $e->getMessage(), [
+                    'orderId' => $result->getId(),
+                    'exception' => $e
+                ]);
+            }
+
             return $this->json([
                 'success' => true,
                 'orderId' => $result->getId(),

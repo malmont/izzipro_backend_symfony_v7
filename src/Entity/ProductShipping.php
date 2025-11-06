@@ -18,17 +18,20 @@ class ProductShipping implements Item
     #[ORM\OneToOne(inversedBy: 'productShipping', cascade: ['persist', 'remove'])]
     private ?Product $product = null;
 
-    #[ORM\Column]
-    private ?float $weight = null;
+    #[ORM\Column(name: "weight")]
+    private ?float $weightKg = null;
 
-    #[ORM\Column]
-    private ?float $length = null;
+    #[ORM\Column(name: "length")]
+    private ?float $lengthCm = null;
 
-    #[ORM\Column(nullable: true)]
-    private ?float $width = null;
+    #[ORM\Column(name: "width", nullable: true)]
+    private ?float $widthCm = null;
 
-    #[ORM\Column(nullable: true)]
-    private ?float $height = null;
+    #[ORM\Column(name: "height", nullable: true)]
+    private ?float $heightCm = null; 
+
+    // --- FIN DES PROPRIÉTÉS RENOMMÉES ---
+
 
     #[ORM\Column(length: 50, nullable: true)]
     private ?string $shippingClass = null;
@@ -50,48 +53,57 @@ class ProductShipping implements Item
     public function setProduct(?Product $product): static
     {
         $this->product = $product;
-
         return $this;
     }
 
+    // --- NOUVEAUX GETTERS/SETTERS POUR EASYADMIN (en KG et CM) ---
 
-
-    public function setWeight(float $weight): static
+    public function getWeightKg(): ?float
     {
-        $this->weight = $weight;
+        return $this->weightKg;
+    }
 
+    public function setWeightKg(float $weightKg): static
+    {
+        $this->weightKg = $weightKg;
         return $this;
     }
 
-
-
-    public function setLength(float $length): static
+    public function getLengthCm(): ?float
     {
-        $this->length = $length;
+        return $this->lengthCm;
+    }
 
+    public function setLengthCm(float $lengthCm): static
+    {
+        $this->lengthCm = $lengthCm;
         return $this;
     }
 
-
-
-    public function setWidth(?float $width): static
+    public function getWidthCm(): ?float
     {
-        $this->width = $width;
+        return $this->widthCm;
+    }
 
+    public function setWidthCm(?float $widthCm): static
+    {
+        $this->widthCm = $widthCm;
         return $this;
     }
 
-    public function getHeight(): ?float
+    public function getHeightCm(): ?float
     {
-        return $this->height;
+        return $this->heightCm;
     }
 
-    public function setHeight(?float $height): static
+    public function setHeightCm(?float $heightCm): static
     {
-        $this->height = $height;
-
+        $this->heightCm = $heightCm;
         return $this;
     }
+
+    // --- FIN DES NOUVEAUX GETTERS/SETTERS ---
+
 
     public function getShippingClass(): ?string
     {
@@ -101,7 +113,6 @@ class ProductShipping implements Item
     public function setShippingClass(?string $shippingClass): static
     {
         $this->shippingClass = $shippingClass;
-
         return $this;
     }
 
@@ -113,41 +124,38 @@ class ProductShipping implements Item
     public function setShippingClassEntity(?ShippingClass $shippingClassEntity): static
     {
         $this->shippingClassEntity = $shippingClassEntity;
-
         return $this;
     }
+
+
     public function getDescription(): string
     {
         return 'ProductShippingID:' . $this->getId(); 
     }
 
- 
     public function getWidth(): int
     {
-        return (int) round($this->width * 10);
+        return (int) round(($this->widthCm ?? 0) * 10);
     }
-
 
     public function getLength(): int
     {
-        return (int) round($this->length * 10);
+        return (int) round(($this->lengthCm ?? 0) * 10);
     }
-
 
     public function getDepth(): int
     {
-        return (int) round($this->height * 10);
+        return (int) round(($this->heightCm ?? 0) * 10);
     }
 
-
-    public function getWeight(): int
+    public function getWeight(): int 
     {
-        return (int) round($this->weight * 1000);
+        return (int) round(($this->weightKg ?? 0) * 1000);
     }
     
-
     public function getAllowedRotation(): Rotation
     {
         return Rotation::BestFit;
     }
 }
+

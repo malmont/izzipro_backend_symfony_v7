@@ -75,7 +75,6 @@ class EasyPostService
 
         try {
             $shipment = $client->shipment->create($data);
-
             $rateToBuy = null;
             foreach ($shipment->rates as $r) {
                 if ($r->carrier_account_id === $carrierAccountId && $r->service === $service && isset($r->id)) {

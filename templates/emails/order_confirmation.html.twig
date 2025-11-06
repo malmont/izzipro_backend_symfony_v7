@@ -1,0 +1,97 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Confirmation de votre commande n°{{ order.reference }}{% endblock %}
+
+{% block body %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: Arial, sans-serif; line-height: 1.6;">
+    <tr>
+        <td align="center" style="padding: 20px;">
+            <table width="600" border="0" cellspacing="0" cellpadding="20" style="border: 1px solid #ddd; border-radius: 8px;">
+                
+                <!-- 1. En-tête (Logo / Nom) -->
+                {% if logoUrl is defined and logoUrl %}
+                    <tr>
+                        <td align="center" style="padding-bottom: 20px; border-bottom: 1px solid #eee;">
+                            <img src="{{ domain ~ logoUrl }}" alt="{{ fromName }}" style="max-width: 200px;">
+                        </td>
+                    </tr>
+                {% elseif fromName is defined %}
+                    <tr>
+                        <td align="center" style="padding-bottom: 20px; border-bottom: 1px solid #eee;">
+                            <h1 style="margin:0;">{{ fromName }}</h1>
+                        </td>
+                    </tr>
+                {% endif %}
+
+                <!-- 2. Contenu de l'email -->
+                <tr>
+                    <td style="padding: 30px;">
+                        <h2 style="color: #333;">Merci pour votre commande, {{ order.userId.firstname }} !</h2>
+                        <p style="font-size: 16px;">Votre commande n°<strong>{{ order.reference }}</strong> a bien été enregistrée.</p>
+                        <p>Nous préparons votre commande et vous recevrez bientôt un email concernant son expédition.</p>
+                        
+                        <h3 style="margin-top: 30px; border-bottom: 2px solid #eee; padding-bottom: 5px;">Détails de la commande</h3>
+                        
+                        {% for item in order.orderItems %}
+                            <table width="100%" border="0" cellspacing="0" cellpadding="5" style="margin-bottom: 10px;">
+                                <tr>
+                                    <!-- Nom du produit corrigé -->
+                                    <td style="font-size: 15px;">{{ item.quantity }} x {{ item.productVariant.productName }}</td>
+                                    
+                                    <!-- CORRECTION MONÉTAIRE (locale retirée) -->
+                                    <td align="right" style="font-size: 15px;">
+                                        {{ (item.totalPrice / 100) | format_currency('CAD') }}
+                                    </td>
+                                </tr>
+                            </table>
+                        {% endfor %}
+                        
+                        <hr style="border: 0; border-top: 1px dashed #ccc; margin: 20px 0;">
+                        
+                        <table width="100%" border="0" cellspacing="0" cellpadding="5">
+                            {% if order.subTotal is not null %}
+                            <tr>
+                                <td>Sous-total :</td>
+                                <!-- CORRECTION MONÉTAIRE (locale retirée) -->
+                                <td align="right">
+                                    {{ (order.subTotal / 100) | format_currency('CAD') }}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% if order.totalTax is not null %}
+                            <tr>
+                                <td>Taxes :</td>
+                                <!-- CORRECTION MONÉTAIRE (locale retirée) -->
+                                <td align="right">
+                                    {{ (order.totalTax / 100) | format_currency('CAD') }}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            <tr>
+                                <td style="font-size: 18px; font-weight: bold;">Total :</td>
+                                <!-- CORRECTION MONÉTAIRE (locale retirée) -->
+                                <td align="right" style="font-size: 18px; font-weight: bold;">
+                                    {{ (order.totalAmount / 100) | format_currency('CAD') }}
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p style="margin-top: 30px;">Merci de votre confiance,</p>
+                        <p>L'équipe {{ fromName }}</p>
+                    </td>
+                </tr>
+
+                <!-- 3. Signature (Pied de page) -->
+                {% if signature is defined and signature %}
+                    <tr>
+                        <td align="center" style="padding: 20px; border-top: 1px solid #eee; font-size: 12px; color: #888;">
+                            <p style="margin:0;">{{ signature|raw }}</p>
+                        </td>
+                    </tr>
+                {% endif %}
+                
+            </table>
+        </td>
+    </tr>
+</table>
+{% endblock %}
