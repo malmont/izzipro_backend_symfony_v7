@@ -22,15 +22,18 @@ class HomeSliderController extends AbstractController
     {
         $host = $request->getSchemeAndHttpHost();
         $locale = $request->query->get('locale', 'fr');
+        
         $cacheKey = 'homeslider_all_' . $locale;
+        $tags = ['homeslider_all'];
+
 
         $homeSliderDto = $this->cache->get(
             $cacheKey,
-            function(ItemInterface $item) use ($host, $locale) {
-                $item->expiresAfter(3600);
-                $item->tag(['homeslider_all']);
+            function(ItemInterface $item) use ($host, $locale) { 
                 return $this->getAllHomeSliderUseCase->execute($host, $locale);
-            }
+            },
+            3600,
+            $tags 
         );
 
         return $this->json($homeSliderDto, JsonResponse::HTTP_OK);

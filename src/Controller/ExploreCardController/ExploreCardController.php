@@ -19,17 +19,18 @@ class ExploreCardController extends AbstractController
     ): JsonResponse {
         $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'explore_cards_all_' . $locale;
+        $tags = ['explore_cards_all'];
         $host = $request->getSchemeAndHttpHost();
 
         $dtos = $cache->get(
-            $cacheKey,
+            $cacheKey, 
             function (ItemInterface $item) use ($useCase, $host, $locale) {
-                $item->expiresAfter(3600);
-                $item->tag(['explore_cards_all']);
-
-                return $useCase->execute($host, $locale);
-            }
+            return $useCase->execute($host, $locale);
+            },
+            3600,
+            $tags 
         );
+        
         return $this->json($dtos);
     }
 }

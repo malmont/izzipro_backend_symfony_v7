@@ -31,9 +31,7 @@ class EntrepriseController extends AbstractController
     public function create(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
-
         $entrepriseDto = $this->createEntrepriseUseCase->execute($data);
-
         return $this->json($entrepriseDto);
     }
 
@@ -43,18 +41,16 @@ class EntrepriseController extends AbstractController
         $host = $request->getSchemeAndHttpHost();
         $locale = $request->get('locale', 'fr');
         $cacheKey = "entreprise_{$id}_{$locale}";
-
+        $tags = ['entreprise', 'entreprise_' . $id];
         $entrepriseDto = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($id, $host, $locale) {
-                $item->expiresAfter(3600);
-                $item->tag(['entreprise', 'entreprise_' . $id]);
-                
                 error_log("Cache miss for entreprise_{$id} in locale: {$locale}");
                 return $this->getEntrepriseUseCase->execute($id, $host, $locale);
-            }
+            },
+            3600,
+            $tags
         );
-
         if (!$entrepriseDto) {
             return $this->json(['error' => 'Entreprise not found'], JsonResponse::HTTP_NOT_FOUND);
         }
