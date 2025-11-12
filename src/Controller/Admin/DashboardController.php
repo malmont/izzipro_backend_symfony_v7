@@ -86,6 +86,7 @@ use App\Entity\ServiceOffer;
 use App\Entity\Video;
 use App\Entity\Embed;
 use App\Entity\BaniereStatique;
+use App\Entity\NewsletterSubscriber;
 
 class DashboardController extends AbstractDashboardController
 {
@@ -170,6 +171,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Contact', 'fas fa-envelope', Contact::class);
         yield MenuItem::linkToCrud('Users', 'fas fa-user', User::class);
         yield MenuItem::linkToCrud('Email Configuration', 'fa fa-envelope', EmailConfiguration::class);
+        yield MenuItem::linkToCrud('Newsletter', 'fa fa-envelope', NewsletterSubscriber::class);
 
         yield MenuItem::section('Mouvements stock');
         yield MenuItem::linkToCrud('Types de Mouvement', 'fas fa-exchange-alt', MovementType::class);
