@@ -52,8 +52,6 @@ class TenantConnectionManager
         $this->connection       = $connection;
         $this->connectionProvider = $connectionProvider;
 
-
-        // parse and validate master DSN
         $parts = parse_url($masterDatabaseUrl);
         if ($parts === false) {
             throw new \InvalidArgumentException("MASTER_DATABASE_URL invalide");
@@ -116,13 +114,12 @@ class TenantConnectionManager
                 $stmt = $this->pdoMaster->prepare(
                 'INSERT INTO tenants(code, name, dbname, gemsuite_token, is_internal_store) VALUES(:c, :n, :d, :t, :is_internal)'
                 );
-                $stmt->execute([
-                    'c' => $code,
-                    'n' => $name,
-                    'd' => $dbname,
-                    't' => $gemsuiteToken,
-                    'is_internal' => $isInternal,
-                ]);
+                $stmt->bindValue(':c', $code);
+                $stmt->bindValue(':n', $name);
+                $stmt->bindValue(':d', $dbname);
+                $stmt->bindValue(':t', $gemsuiteToken);
+                $stmt->bindValue(':is_internal', $isInternal, PDO::PARAM_BOOL); 
+                $stmt->execute();
 
             } catch (\Throwable $e) {
                 $this->logger->error("Échec création tenant '{$code}' / '{$dbname}': " . $e->getMessage());
@@ -324,6 +321,21 @@ private function runMigrations(string $dbname): void
         } catch (\Throwable $e) {
             $this->logger->error("Erreur lors de la vérification du statut interne du tenant '{$tenantCode}': " . $e->getMessage());
             return false; 
+        }
+    }
+
+    public function findTenantById(int $tenantId): ?array
+    {
+        try {
+            $stmt = $this->pdoMaster->prepare('SELECT code, dbname FROM tenants WHERE id = :id');
+            $stmt->execute(['id' => $tenantId]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC); // ['code' => 'client1', 'dbname' => 'db_client1']
+
+            return $result ?: null;
+
+        } catch (\Throwable $e) {
+            $this->logger->error("Échec de findTenantById pour l'ID {$tenantId}: " . $e->getMessage());
+            return null;
         }
     }
 

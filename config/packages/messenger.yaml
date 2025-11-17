@@ -1,24 +1,27 @@
+# config/packages/messenger.yaml
+
 framework:
     messenger:
-        failure_transport: failed
-
+        # A. On définit notre "camion de livraison" (Transport)
         transports:
-            # https://symfony.com/doc/current/messenger.html#transport-configuration
+            # On lui donne un nom, "async" est la convention
             async:
+                # On lui dit d'utiliser notre NOUVELLE variable d'environnement
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                
                 options:
-                    use_notify: true
-                    check_delayed_interval: 60000
+                    # C'est le nom de la file d'attente dans Redis
+                    stream: 'gemsuite_setup'
+                
+                # Stratégie en cas d'échec (ex: API GEM-SUITE indisponible)
                 retry_strategy:
-                    max_retries: 3
-                    multiplier: 2
-            failed: 'doctrine://default?queue_name=failed'
-            # sync: 'sync://'
+                    max_retries: 3       # Il réessaiera 3 fois
+                    delay: 1000          # Il attend 1 seconde avant le 1er essai
+                    multiplier: 2        # Il attend 2s (1s*2) avant le 2e, 4s (2s*2) avant le 3e
+                    max_delay: 0         # Pas de limite
 
+        # B. On définit le "centre de tri" (Routage)
         routing:
-            # Symfony\Component\Mailer\Messenger\SendEmailMessage: async
-            Symfony\Component\Notifier\Message\ChatMessage: async
-            Symfony\Component\Notifier\Message\SmsMessage: async
-
-            # Route your messages to the transports
-            # 'App\Message\YourMessage': async
+            # On dit : "Tous les messages qui portent l'étiquette 
+            # 'TenantJobInterface' doivent aller dans le camion 'async'"
+            'App\Message\TenantJobInterface': async

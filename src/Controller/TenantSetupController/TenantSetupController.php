@@ -4,33 +4,26 @@
 namespace App\Controller\TenantSetupController;
 
 use App\Dto\TenantSetupDTO;
-use App\Entity\AddressEntreprise;
-use App\Entity\Entreprise;
-use App\Entity\HomeSlider;
 use App\Form\TenantSetupType;
-use App\Entity\EmailConfiguration; 
 use App\Services\GemsuiteImporterService\GemsuiteImporter;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
-use App\Services\TranslationGeneratorService\TranslationGeneratorService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder; 
-use App\Services\DefaultAssetSynchronizer;
+use App\Entity\SyncJob;
+use App\Message\StartGemsuiteImportJob;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 class TenantSetupController extends AbstractController
 {
     private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
-    // --- AJOUT 2 : Injection du service de traduction ---
     public function __construct(
-        private string $frontendBaseDomain,
-        private TranslationGeneratorService $translationGenerator,
-        private DefaultAssetSynchronizer $assetSynchronizer
+        private string $frontendBaseDomain
     ) {
     }
 
@@ -41,7 +34,7 @@ class TenantSetupController extends AbstractController
         TenantEntityManagerProvider $emProvider,
         GemsuiteImporter $gemsuiteImporter,
         HttpClientInterface $client,
-        GemsuiteImageUrlBuilder $imageUrlBuilder
+        MessageBusInterface $messageBus
     ): Response {
         
         $host = $request->getHost();
@@ -101,100 +94,45 @@ class TenantSetupController extends AbstractController
             }
 
             $dbname = 'db_' . $dto->code;
+            $tenantId = null;
             try {
                 $tenantManager->createTenant($dto->code, $companyData['nom'], $dbname, $dto->gemsuiteToken);
                 $this->addFlash('info', 'Infrastructure du tenant créée avec succès.');
+
+                $pdoMaster = $tenantManager->getPdoMaster();
+                $stmt = $pdoMaster->prepare('SELECT id FROM tenants WHERE code = :code');
+                $stmt->execute(['code' => $dto->code]);
+                $tenantId = $stmt->fetchColumn();
+                if (!$tenantId) { throw new \Exception("Impossible de retrouver l'ID du tenant après création."); }
+
             } catch (\Throwable $e) {
                 $this->addFlash('error', 'Erreur critique lors de la création du tenant : ' . $e->getMessage());
                 return $this->redirectToRoute('app_tenant_setup');
             }
 
-            try {
-                $emProvider->switchTenant($dbname, $dto->code);
-                $tenantEm = $emProvider->getEntityManager();
-                $this->assetSynchronizer->synchronize($tenantEm);
-                $this->addFlash('info', 'Assets par défaut synchronisés.');
-
-                $entreprise = new Entreprise();
-                $entreprise->setName($companyData['nom']);
-                $entreprise->setEmail($companyData['email'] ?? null);
-                $entreprise->setTel($companyData['tel'] ?? null);
-                $entreprise->setTvaIntracommunautaire($companyData['tps'] ?? null); 
-                $entreprise->setEin($companyData['federal'] ?? null);
-                $entreprise->setApropos($companyData['website_about_intro'] ?? null);
-                $entreprise->setConditionOfUse($companyData['website_terms'] ?? null);
-                $entreprise->setPrivacyPolicy($companyData['website_conf'] ?? null);
-
-                if (isset($companyData['website_link'])) {
-                    $pathParts = explode('/', rtrim($companyData['website_link'], '/'));
-                    $identifier = end($pathParts);
-                    $entreprise->setGemsuiteIdentifier($identifier);
-                }
-                
-                $logoPath = $companyData['website_logo1'] ?? null;
-                $entreprise->setLogo(
-                    $imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $logoPath)
-                );
-              
-                if ($companyData && !empty($companyData['adresse'])) {
-                    $addressEntreprise = new AddressEntreprise();
-                    $addressEntreprise->setStreet1($companyData['adresse']);
-                    $addressEntreprise->setStreet2('');
-                    $addressEntreprise->setCity($companyData['ville'] ?? '');
-                    $addressEntreprise->setState($companyData['prov'] ?? '');
-                    $addressEntreprise->setZip($companyData['cp'] ?? '');
-                    $addressEntreprise->setCountry($companyData['country'] == 1 ? 'CA' : 'Unknown');
-                    $addressEntreprise->setPhone($companyData['tel'] ?? '');
-                    $addressEntreprise->setEmail($companyData['email'] ?? '');
-                    $entreprise->setAddressEntreprise($addressEntreprise);
-                }
-                $tenantEm->persist($entreprise);
-
-                $this->translationGenerator->generateTranslations($entreprise);
-
-
-                if($companyData){
-                    $emailConfiguration = $tenantEm->getRepository(EmailConfiguration::class)->findOneBy([]) ?? new EmailConfiguration();
-                    $emailConfiguration->setFromName($companyData['nom'] ?? 'Votre Entreprise');
-                    $logoPath = $companyData['website_logo1'] ?? null;
-                    $emailConfiguration->setLogo(
-                        $imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $logoPath)
-                    );
-                    $tenantEm->persist($emailConfiguration); 
-                    $this->addFlash('info', 'Configuration email mise à jour.');
-                }
-   
-                if ($companyData) {
-                    $homeSlider = new HomeSlider();
-                    $homeSlider->setTitle(strip_tags($companyData['website_intro_text1'] ?? 'Bienvenue'));
-                    $homeSlider->setDescription(strip_tags($companyData['website_intro_text2'] ?? 'Découvrez nos produits'));
-                    $homeSlider->setButtonMessage('Voir la boutique');
-                    $homeSlider->setButtonUrl('/shop');
-                    $homeSlider->setIsDiplayed(true);
-
-                    $bannerPath = $companyData['website_banner'] ?? null;
-                    $homeSlider->setImage(
-                        $imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $bannerPath)
-                    );
-                    $tenantEm->persist($homeSlider);
-
-                    // --- AJOUT 4 : On déclenche la traduction pour le slider ---
-                    $this->translationGenerator->generateTranslations($homeSlider);
-                }
-
-                $tenantEm->flush();
-                $this->addFlash('info', 'Profil de l\'entreprise créé et traduit.');
-
-            } catch (\Throwable $e) {
-                $this->addFlash('warning', 'Erreur lors de la création du profil de l\'entreprise : ' . $e->getMessage());
-            }
-            
             if ($dto->gemsuiteToken) {
                 try {
-                    $gemsuiteImporter->importDataForTenant($dto->code, $dto->gemsuiteToken);
-                    $this->addFlash('info', 'Les données de GEM-SUITE ont été importées et traduites.');
+                    $emProvider->switchTenant($dbname, $dto->code);
+                    $tenantEm = $emProvider->getEntityManager();
+
+                    $syncJob = new SyncJob();
+                    $syncJob->setStatus('pending');
+                    $syncJob->setCurrentStep('Initialisation du job...');
+                    $tenantEm->persist($syncJob);
+                    $tenantEm->flush(); 
+
+                    $message = new StartGemsuiteImportJob(
+                        $tenantId, 
+                        $dto->gemsuiteToken,
+                        $syncJob->getId() 
+                    );
+                    
+                    $messageBus->dispatch($message);
+                    
+                    $this->addFlash('info', 'Le site est prêt. La création démarre en arrière-plan.');
+
                 } catch (\Throwable $e) {
-                    $this->addFlash('warning', 'Le site a été créé, mais l\'importation des données a échoué: ' . $e->getMessage());
+                    $this->addFlash('warning', 'Le site a été créé, mais l\'importation n\'a pas pu démarrer: ' . $e->getMessage());
                 }
             }
 

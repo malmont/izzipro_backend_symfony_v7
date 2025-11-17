@@ -4,27 +4,20 @@
 namespace App\Services\TranslationGeneratorService;
 
 use App\Entity\TranslatableInterface;
-// use App\Services\DeepLTranslateService\DeepLTranslateService;
 use Psr\Log\LoggerInterface;
 use App\Services\GoogleTranslateService\GoogleTranslateService; 
 
 class TranslationGeneratorService
 {
     public function __construct(
-        // private DeepLTranslateService $translator,
         private GoogleTranslateService $translator,
         private LoggerInterface $logger
     ) {
     }
 
-    /**
-     * Génère les traductions FR (copie) et EN (API) pour n'importe quelle entité
-     * qui implémente TranslatableInterface.
-     */
     public function generateTranslations(TranslatableInterface $entity): void
     {
         try {
-            // --- Partie Française (Copie) ---
             if ($entity->findTranslationByLocale('fr') === null) {
                 $translationClass = $entity->getTranslationEntityClass();
                 $frenchTranslation = new $translationClass();
@@ -71,13 +64,10 @@ class TranslationGeneratorService
                 $entity->getId(),
                 $e->getMessage()
             ));
-            // On ne bloque pas tout le processus d'importation si une seule traduction échoue.
         }
     }
 
-    /**
-     * Gère la compatibilité setLocale/setLanguage.
-     */
+
     private function setLocaleOrLanguage(object $translationEntity, string $locale): void
     {
         if (method_exists($translationEntity, 'setLocale')) {
