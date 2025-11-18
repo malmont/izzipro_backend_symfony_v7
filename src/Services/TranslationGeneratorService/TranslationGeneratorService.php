@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Services\TranslationGeneratorService;
 
 use App\Entity\TranslatableInterface;
@@ -18,45 +17,78 @@ class TranslationGeneratorService
     public function generateTranslations(TranslatableInterface $entity): void
     {
         try {
-            if ($entity->findTranslationByLocale('fr') === null) {
+            // ----------------------------------------------------
+            // 1. GESTION DE LA TRADUCTION FRANÇAISE (SOURCE)
+            // ----------------------------------------------------
+            
+            // Tente de trouver la traduction existante, ou en crée une nouvelle
+            $frenchTranslation = $entity->findTranslationByLocale('fr');
+            $newFrenchTranslation = false;
+
+            if ($frenchTranslation === null) {
                 $translationClass = $entity->getTranslationEntityClass();
                 $frenchTranslation = new $translationClass();
                 $this->setLocaleOrLanguage($frenchTranslation, 'fr');
-                
-                foreach ($entity->getTranslatableFields() as $field) {
-                    $getter = 'get' . ucfirst($field);
-                    $setter = 'set' . ucfirst($field);
-                    if (method_exists($entity, $getter) && method_exists($frenchTranslation, $setter)) {
-                        $sourceValue = $entity->$getter();
-                        if (is_string($sourceValue) || is_null($sourceValue)) {
-                            $frenchTranslation->$setter($sourceValue);
-                        }
+                $newFrenchTranslation = true;
+            }
+            
+            // Mise à jour des champs FR (même si elle existait)
+            foreach ($entity->getTranslatableFields() as $field) {
+                $getter = 'get' . ucfirst($field);
+                $setter = 'set' . ucfirst($field);
+                if (method_exists($entity, $getter) && method_exists($frenchTranslation, $setter)) {
+                    $sourceValue = $entity->$getter();
+                    if (is_string($sourceValue) || is_null($sourceValue)) {
+                        $frenchTranslation->$setter($sourceValue);
                     }
                 }
+            }
+
+            if ($newFrenchTranslation) {
                 $entity->addTranslation($frenchTranslation);
             }
 
-            // --- Partie Anglaise (Traduction API) ---
-            if ($entity->findTranslationByLocale('en') === null) {
+
+            // ----------------------------------------------------
+            // 2. GESTION DE LA TRADUCTION ANGLAISE (CIBLE API)
+            // ----------------------------------------------------
+            
+            // Tente de trouver la traduction existante, ou en crée une nouvelle
+            $englishTranslation = $entity->findTranslationByLocale('en');
+            $newEnglishTranslation = false;
+
+            if ($englishTranslation === null) {
                 $translationClass = $entity->getTranslationEntityClass();
                 $englishTranslation = new $translationClass();
                 $this->setLocaleOrLanguage($englishTranslation, 'en');
+                $newEnglishTranslation = true;
+            }
 
-                foreach ($entity->getTranslatableFields() as $field) {
-                    $getter = 'get' . ucfirst($field);
-                    $setter = 'set' . ucfirst($field);
-                    if (method_exists($entity, $getter) && method_exists($englishTranslation, $setter)) {
-                        $sourceValue = $entity->$getter();
-                        if ($sourceValue === null) {
-                            $englishTranslation->$setter(null);
-                        } elseif (is_string($sourceValue) && trim($sourceValue) !== '') {
-                            $translatedText = $this->translator->translate($sourceValue, 'en', 'fr');
-                            $englishTranslation->$setter($translatedText);
-                        }
+            // Mise à jour des champs EN (même si elle existait)
+            foreach ($entity->getTranslatableFields() as $field) {
+                $getter = 'get' . ucfirst($field);
+                $setter = 'set' . ucfirst($field);
+                
+                if (method_exists($entity, $getter) && method_exists($englishTranslation, $setter)) {
+                    // Utilise la valeur FR de l'entité comme source pour la traduction API
+                    $sourceValue = $entity->$getter(); 
+                    
+                    if ($sourceValue === null) {
+                        $englishTranslation->$setter(null);
+                    } elseif (is_string($sourceValue) && trim($sourceValue) !== '') {
+                        // 🚀 L'appel API de traduction est désormais exécuté à chaque mise à jour
+                        $translatedText = $this->translator->translate($sourceValue, 'en', 'fr');
+                        $englishTranslation->$setter($translatedText);
+                    } else {
+                        $englishTranslation->$setter(''); // Gère les chaînes vides
                     }
                 }
+            }
+            
+            if ($newEnglishTranslation) {
                 $entity->addTranslation($englishTranslation);
             }
+
         } catch (\Throwable $e) {
             $this->logger->error(sprintf(
                 'Erreur lors de la génération de traduction pour l\'entité %s (ID: %d): %s',
@@ -66,7 +98,6 @@ class TranslationGeneratorService
             ));
         }
     }
-
 
     private function setLocaleOrLanguage(object $translationEntity, string $locale): void
     {
