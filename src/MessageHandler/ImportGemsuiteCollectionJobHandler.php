@@ -14,6 +14,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use App\Message\FinalizeSyncJob;
 
 #[AsMessageHandler]
 class ImportGemsuiteCollectionJobHandler
@@ -47,7 +48,6 @@ class ImportGemsuiteCollectionJobHandler
         ));
 
         $tenant = $this->tenantManager->findTenantById($message->getTenantId());
-        // ... (gestion erreur tenant)
         if (!$tenant) {
             $this->logger->error("[Job Paginé Fail] Tenant ID {$message->getTenantId()} non trouvé.");
             return;
@@ -109,20 +109,15 @@ class ImportGemsuiteCollectionJobHandler
             $microJobType = ($type === 'clients_contacts') ? 'client' : $type;
 
             if ($microJobType === 'products') {
-                // --- CORRIGÉ ICI ---
                 $this->dispatchProductJobs($items, $message);
             } else {
-                // --- CORRIGÉ ICI ---
                 $this->dispatchSimpleJobs($items, $microJobType, $message);
             }
 
             if ($isLastPage) {
-                // --- CORRIGÉ ICI ---
                 $this->logger->info(sprintf('Fin de la collection "%s".', $type));
-                // --- CORRIGÉ ICI ---
                 $this->dispatchNextJob($type, $message); 
             } else {
-                // --- CORRIGÉ ICI ---
                 $this->logger->info(sprintf('Page %d de "%s" traitée. Demande de la page %d.', $page, $type, $page + 1));
                 $this->messageBus->dispatch(new ImportGemsuiteCollectionJob(
                     $message->getTenantId(),
@@ -134,7 +129,6 @@ class ImportGemsuiteCollectionJobHandler
             }
 
         } catch (\Throwable $e) {
-            // --- CORRIGÉ ICI ---
             $this->logger->error("[Job Paginé Fail] Erreur sur '{$type}' Page {$page}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             if (isset($syncJob)) {
                 $syncJob->setStatus('failed');
@@ -179,7 +173,6 @@ class ImportGemsuiteCollectionJobHandler
             }
         }
         
-        // PASSE 2 : VARIANTES
         $this->logger->info('Dispatch des produits : Passe 2 (Variantes)');
         foreach ($items as $itemData) {
              $this->messageBus->dispatch(new ProcessGemsuiteEntityJob(
@@ -191,7 +184,7 @@ class ImportGemsuiteCollectionJobHandler
         }
     }
 
-    /**
+   /**
      * Gère la "chaîne de montage"
      */
     private function dispatchNextJob(string $currentType, ImportGemsuiteCollectionJob $originalMessage): void
@@ -208,11 +201,14 @@ class ImportGemsuiteCollectionJobHandler
                 $originalMessage->getGemsuiteToken(),
                 $originalMessage->getSyncJobId(),
                 $nextJobType,
-                1 // On démarre le nouveau job à la page 1
+                1 
             ));
         } else {
-
-            $this->logger->info(sprintf('Fin de la chaîne d\'importation ("%s" était le dernier).', $currentType));
+            $this->logger->info(sprintf('Fin de la chaîne d\'importation ("%s" était le dernier). Lancement du FINAL.', $currentType));
+            $this->messageBus->dispatch(new FinalizeSyncJob(
+                $originalMessage->getTenantId(),
+                $originalMessage->getSyncJobId()
+            ));
         }
     }
 }

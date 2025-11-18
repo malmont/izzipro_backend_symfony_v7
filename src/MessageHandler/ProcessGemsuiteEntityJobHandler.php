@@ -153,7 +153,7 @@ class ProcessGemsuiteEntityJobHandler
         $imagePath = $data['img_paths'] ?? null;
         if (!empty($imagePath)) {
             $category->setImage(
-                $this.imageUrlBuilder->buildUrl($companyIdentifier, $imagePath)
+                $this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath)
             );
         }
         

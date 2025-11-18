@@ -137,8 +137,13 @@ class TenantSetupController extends AbstractController
             }
 
             $this->addFlash('success', 'Le site pour ' . $companyData['nom'] . ' est prêt !');
-            $newSiteUrl = sprintf('https://%s.%s', $dto->code, $this->frontendBaseDomain);
-            return new RedirectResponse($newSiteUrl);
+
+            $finalUrl = sprintf('https://%s.%s', $dto->code, $this->frontendBaseDomain);
+                        return $this->redirectToRoute('app_setup_status', [
+                'tenantCode' => $dto->code,
+                'syncJobId' => $syncJob->getId(),
+                'finalUrl' => base64_encode($finalUrl) 
+            ]);
         }
 
         return $this->render('tenant_setup/form.html.twig', [
