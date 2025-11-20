@@ -7,7 +7,6 @@ use App\Services\TenantEntityManagerProvider;
 
 class CalculateTaxesUseCase
 {
-    // MODIFICATION 1 : Le service ne dépend plus que du provider et du service de calcul
     private TenantEntityManagerProvider $emProvider;
     private TaxCalculationService $taxCalculationService;
 

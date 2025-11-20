@@ -1,9 +1,9 @@
 <?php
 
-
 namespace App\Services\GemsuiteImporterService;
 
 use App\Entity\Order;
+use App\Entity\Payments;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use App\Services\TenantConnectionManager;
@@ -12,6 +12,8 @@ class GemsuiteSaleManager
 {
     private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
+    private const METHOD_ID_STRIPE = 207;
+
     public function __construct(
         private HttpClientInterface $client,
         private TenantConnectionManager $tenantManager,
@@ -19,135 +21,137 @@ class GemsuiteSaleManager
     ) {
     }
 
-    /**
-     * Orchestre la création d'une vente complète dans GEM-SUITE.
-     *
-     * @param Order $order La commande créée dans Iizipro.
-     * @return array|null Les données de la vente créée, ou null en cas d'erreur.
-     */
+
     public function createSale(Order $order): ?array
     {
         $user = $order->getUserId();
-        if (!$user) {
-            $this->logger->error(sprintf('La commande #%d n\'a pas d\'utilisateur associé.', $order->getId()));
-            return null;
-        }
-        
-        $gemsuiteClientId = $user->getGemsuiteClientId();
-        if (!$gemsuiteClientId) {
-            $this->logger->warning(sprintf('L\'utilisateur %s n\'a pas de client GEM-SUITE associé.', $user->getEmail()));
+        if (!$user || !$user->getGemsuiteClientId()) {
+            $this->logger->warning(sprintf('Client GEM-SUITE manquant pour la commande #%d.', $order->getId()));
             return null;
         }
 
         $tenantCode = $this->tenantManager->getCurrentTenantCode();
         $token = $this->tenantManager->getTenantToken($tenantCode);
         if (!$token) {
-            $this->logger->error(sprintf('Aucun token pour le tenant "%s", impossible de créer la vente.', $tenantCode));
+            $this->logger->error(sprintf('Token manquant pour le tenant "%s".', $tenantCode));
             return null;
         }
 
         try {
-            $saleData = $this->createSaleShell($gemsuiteClientId, $order->getOrderDate(), $token);
+            $saleData = $this->createSaleShell($user->getGemsuiteClientId(), $order, $token);
             $saleId = $saleData['id'] ?? null;
 
             if (!$saleId) {
-                $this->logger->error('La création de la vente sur GEM-SUITE a réussi mais aucun ID n\'a été retourné.');
-                return null;
+                throw new \Exception('ID de vente non retourné par GEM-SUITE lors de la création.');
             }
-            $this->logger->info(sprintf('Vente #%d créée avec succès sur GEM-SUITE.', $saleId));
             $this->addProductsToSale($order, $saleId, $token);
+            $this->finalizeSaleAsInvoice($saleId, $token);
             $this->createPaymentForSale($order, $saleId, $token);
 
+            $this->logger->info(sprintf('Succès: Commande #%d synchronisée et facturée (GemSuite ID: %d).', $order->getId(), $saleId));
+            
             return $saleData;
 
         } catch (\Throwable $e) {
-            $this->logger->error('Une erreur est survenue lors du processus de création de la vente sur GEM-SUITE : ' . $e->getMessage());
+            $this->logger->error('Erreur critique synchro GEM-SUITE : ' . $e->getMessage());
             return null;
         }
     }
 
-    /**
-     * Étape 1 : Crée la vente de base.
-     */
-    private function createSaleShell(int $clientId, \DateTimeInterface $date, string $token): ?array
+
+    private function createSaleShell(int $clientId, Order $order, string $token): ?array
     {
-        $salePayload = [
+        $shippingTotal = $order->getShippingCost() ?? 0;
+        $shippingCostForGem = $shippingTotal > 0 ? $shippingTotal / 100 : 0;
+        $payload = [
             'client_id' => (string) $clientId,
-            'date' => $date->format('Y-m-d'),
+            'date' => $order->getOrderDate()->format('Y-m-d'),
+            'external_number' => $order->getReference() ?? (string)$order->getId(),
+            'shipping_cost' => $shippingCostForGem,
         ];
 
         $response = $this->client->request('POST', self::GEMSUITE_API_URL . 'sales', [
             'auth_bearer' => $token,
-            'json' => $salePayload,
+            'json' => $payload,
         ]);
 
         if (!in_array($response->getStatusCode(), [200, 201])) {
-            $this->logger->error('API Error while creating sale shell', [
-                'status_code' => $response->getStatusCode(),
-                'response' => $response->getContent(false),
-            ]);
-            throw new \Exception('Impossible de créer la vente de base sur GEM-SUITE.');
+            throw new \Exception('Erreur API createSale: ' . $response->getContent(false));
         }
 
         return $response->toArray()['data'] ?? null;
     }
 
-    /**
-     * Étape 2 : Ajoute les lignes de produits à une vente existante.
-     */
     private function addProductsToSale(Order $order, int $saleId, string $token): void
     {
         foreach ($order->getOrderItems() as $item) {
             $product = $item->getProductVariant() ? $item->getProductVariant()->getProduct() : null;
-            if ($product && $product->getGemsuiteProductId()) {
-                $productPayload = [
-                    'sale_id' => $saleId,
-                    'product_id' => $product->getGemsuiteProductId(),
-                    'product_quantity' => $item->getQuantity(),
-                    'product_price' => $item->getUnitPrice() / 100,
-                ];
+            $gemProductId = $product?->getGemsuiteProductId();
+
+            if ($gemProductId) {
+                $price = $item->getUnitPrice() / 100;
 
                 $this->client->request('POST', self::GEMSUITE_API_URL . 'sales_products', [
                     'auth_bearer' => $token,
-                    'json' => $productPayload,
+                    'json' => [
+                        'sale_id' => $saleId,
+                        'product_id' => $gemProductId,
+                        'product_quantity' => $item->getQuantity(),
+                        'product_price' => $price,
+                    ],
                 ]);
-                $this->logger->info(sprintf('Produit #%d ajouté à la vente #%d.', $product->getGemsuiteProductId(), $saleId));
             }
         }
     }
 
-    /**
-     * Étape 3 : Crée un paiement et l'associe à une vente.
-     */
+
+    private function finalizeSaleAsInvoice(int $saleId, string $token): void
+    {
+        $response = $this->client->request('PUT', self::GEMSUITE_API_URL . 'sales/' . $saleId, [
+            'auth_bearer' => $token,
+            'json' => ['action' => 'invoice'],
+        ]);
+
+        if (!in_array($response->getStatusCode(), [200, 201])) {
+            $this->logger->warning(sprintf('Impossible de convertir la vente #%d en facture (Code: %d).', $saleId, $response->getStatusCode()));
+        }
+    }
+
     private function createPaymentForSale(Order $order, int $saleId, string $token): void
     {
-        $payment = $order->getPayments()->first();
+        /** @var Payments|null $payment */
+        $payment = $order->getPayments()->first(); 
+
         if (!$payment) {
-            $this->logger->info(sprintf('Aucun paiement à synchroniser pour la vente #%d.', $saleId));
+            $this->logger->info("Aucun paiement trouvé pour la commande #{$order->getId()}.");
             return;
         }
+        $stripeRef = $payment->getStripePaymentId();
+        $amount = $payment->getAmount() / 100;
 
-        $paymentPayload = [
+        $payload = [
             'invoice_id' => $saleId,
-            'amount' => $payment->getAmount() / 100,
+            'amount' => $amount,
             'date_payment' => $payment->getPaymentDate()->format('Y-m-d'),
-            // NOTE: L'ID de la méthode de paiement doit être mappé.
-            // Pour l'instant, on utilise une valeur par défaut (ex: 1 pour "Carte de crédit").
-            'method_id' => 1, 
+            'method_id' => self::METHOD_ID_STRIPE, 
         ];
+
+        if ($stripeRef) {
+            $payload['reference'] = $stripeRef; 
+            $payload['note'] = "Stripe ID: " . $stripeRef; // On le met aussi en note par sécurité
+        }
 
         $response = $this->client->request('POST', self::GEMSUITE_API_URL . 'sales_payment', [
             'auth_bearer' => $token,
-            'json' => $paymentPayload,
+            'json' => $payload,
         ]);
 
-        if (in_array($response->getStatusCode(), [200, 201])) {
-            $this->logger->info(sprintf('Paiement pour la vente #%d synchronisé avec succès.', $saleId));
-        } else {
-            $this->logger->warning(sprintf('La vente #%d a été créée, mais la synchronisation du paiement a échoué.', $saleId), [
-                'status_code' => $response->getStatusCode(),
-                'response' => $response->getContent(false),
+        if (!in_array($response->getStatusCode(), [200, 201])) {
+            $this->logger->error("Erreur ajout paiement Stripe sur GemSuite pour vente #$saleId", [
+                'response' => $response->getContent(false)
             ]);
+        } else {
+            $this->logger->info("Paiement Stripe ($stripeRef) ajouté à la vente #$saleId");
         }
     }
 }

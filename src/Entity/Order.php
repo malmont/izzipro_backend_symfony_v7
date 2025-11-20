@@ -81,7 +81,9 @@ class Order
     #[ORM\OneToOne(mappedBy: 'odershipping', cascade: ['persist', 'remove'])]
     private ?ShippingOrder $shippingOrder = null;
 
-   
+    #[ORM\Column(nullable: true)]
+    private ?float $shippingCost = null;
+
     public function __construct()
     {
         $this->orderItems = new ArrayCollection();
@@ -199,7 +201,6 @@ class Order
     public function removeOrderItem(OrderItems $orderItem): static
     {
         if ($this->orderItems->removeElement($orderItem)) {
-            // set the owning side to null (unless already changed)
             if ($orderItem->getOrderAssociated() === $this) {
                 $orderItem->setOrderAssociated(null);
             }
@@ -229,7 +230,6 @@ class Order
     public function removePayment(Payments $payment): static
     {
         if ($this->payments->removeElement($payment)) {
-            // set the owning side to null (unless already changed)
             if ($payment->getOrderPayment() === $this) {
                 $payment->setOrderPayment(null);
             }
@@ -342,7 +342,6 @@ class Order
     public function removeOrderTax(OrderTax $orderTax): static
     {
         if ($this->orderTaxes->removeElement($orderTax)) {
-            // set the owning side to null (unless already changed)
             if ($orderTax->getOrderTax() === $this) {
                 $orderTax->setOrderTax(null);
             }
@@ -370,17 +369,26 @@ class Order
 
     public function setShippingOrder(?ShippingOrder $shippingOrder): static
     {
-        // unset the owning side of the relation if necessary
         if ($shippingOrder === null && $this->shippingOrder !== null) {
             $this->shippingOrder->setOdershipping(null);
         }
-
-        // set the owning side of the relation if necessary
         if ($shippingOrder !== null && $shippingOrder->getOdershipping() !== $this) {
             $shippingOrder->setOdershipping($this);
         }
 
         $this->shippingOrder = $shippingOrder;
+
+        return $this;
+    }
+
+    public function getShippingCost(): ?float
+    {
+        return $this->shippingCost;
+    }
+
+    public function setShippingCost(?float $shippingCost): self
+    {
+        $this->shippingCost = $shippingCost;
 
         return $this;
     }

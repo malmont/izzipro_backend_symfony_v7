@@ -33,6 +33,7 @@ class ProcessOrderItemsUseCase
         $em = $this->emProvider->getEntityManager();
         $isCancel = $typeOrderId !== 1;
         $subtotal = 0;
+        $order->setShippingCost($priceShipping);
         $carrierPrice = $priceShipping; 
         $subtotal += $carrierPrice;
         foreach ($items as $itemData) {
