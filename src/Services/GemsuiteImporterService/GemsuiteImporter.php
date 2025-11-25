@@ -8,18 +8,19 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class GemsuiteImporter
 {
-    private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
+    // private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
     public function __construct(
         private HttpClientInterface $client,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private string $gemsuiteApiUrl
     ) {
     }
 
     public function checkPrerequisites(string $token): void
     {
         $this->logger->info('Début de la pré-vérification des données GEM-SUITE.');
-        $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', [
+        $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'categories', [
             'auth_bearer' => $token,
         ]);
         

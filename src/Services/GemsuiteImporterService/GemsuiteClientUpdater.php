@@ -11,12 +11,13 @@ use App\Services\TenantConnectionManager;
 
 class GemsuiteClientUpdater
 {
-    private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
+    // private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
     public function __construct(
         private HttpClientInterface $client,
         private TenantConnectionManager $tenantManager,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private string $gemsuiteApiUrl
     ) {
     }
 
@@ -50,7 +51,7 @@ class GemsuiteClientUpdater
                 'pays' => $address->getCountry(),
             ];
 
-            $this->client->request('PUT', self::GEMSUITE_API_URL . 'clients/' . $gemsuiteClientId, [
+            $this->client->request('PUT', $this->gemsuiteApiUrl . 'clients/' . $gemsuiteClientId, [
                 'auth_bearer' => $token,
                 'json' => $payload,
             ]);

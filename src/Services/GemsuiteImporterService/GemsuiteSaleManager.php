@@ -10,14 +10,15 @@ use App\Services\TenantConnectionManager;
 
 class GemsuiteSaleManager
 {
-    private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
+    // private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
     private const METHOD_ID_STRIPE = 207;
 
     public function __construct(
         private HttpClientInterface $client,
         private TenantConnectionManager $tenantManager,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private string $gemsuiteApiUrl
     ) {
     }
 
@@ -70,7 +71,7 @@ class GemsuiteSaleManager
             'shipping_cost' => $shippingCostForGem,
         ];
 
-        $response = $this->client->request('POST', self::GEMSUITE_API_URL . 'sales', [
+        $response = $this->client->request('POST', $this->gemsuiteApiUrl . 'sales', [
             'auth_bearer' => $token,
             'json' => $payload,
         ]);
@@ -91,7 +92,7 @@ class GemsuiteSaleManager
             if ($gemProductId) {
                 $price = $item->getUnitPrice() / 100;
 
-                $this->client->request('POST', self::GEMSUITE_API_URL . 'sales_products', [
+                $this->client->request('POST', $this->gemsuiteApiUrl . 'sales_products', [
                     'auth_bearer' => $token,
                     'json' => [
                         'sale_id' => $saleId,

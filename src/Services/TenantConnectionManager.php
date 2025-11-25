@@ -339,6 +339,24 @@ private function runMigrations(string $dbname): void
         }
     }
 
+    /**
+     * Trouve un tenant par son code unique (ex: 'testmessenger').
+     */
+    public function findTenantByCode(string $code): ?array
+    {
+        try {
+            $stmt = $this->pdoMaster->prepare('SELECT id, code, dbname FROM tenants WHERE code = :code');
+            $stmt->execute(['code' => $code]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC); 
+
+            return $result ?: null;
+
+        } catch (\Throwable $e) {
+            $this->logger->error("Échec de findTenantByCode pour '{$code}': " . $e->getMessage());
+            return null;
+        }
+    }
+
 }
 
 

@@ -51,7 +51,14 @@ class PackagingService
             }
 
             // 5) Lancer le calcul pour CE BUCKET
-            $packedBoxesForThisBucket = $packer->pack();
+            try {
+                $packedBoxesForThisBucket = $packer->pack();
+            } catch (\DVDoug\BoxPacker\Exception\NoBoxesAvailableException $e) {
+                // On capture l'erreur de la librairie et on lance la tienne
+                throw new ItemTooLargeForPackagingException(
+                    "L'article est trop grand pour tous les gabarits d'emballage disponibles. (" . $e->getMessage() . ")"
+                );
+            }
 
             // 6) Vérifier les articles trop grands pour CE BUCKET
             $unpackedItems = $packer->getUnpackedItems();

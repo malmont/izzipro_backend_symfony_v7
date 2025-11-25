@@ -25,7 +25,7 @@ use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
 
 class GemsuiteSyncHandler
 {
-    private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
+    // private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
     public function __construct(
         private HttpClientInterface $client,
@@ -34,7 +34,8 @@ class GemsuiteSyncHandler
         private SluggerInterface $slugger,
         private LoggerInterface $logger,
         private GemsuiteImageUrlBuilder $imageUrlBuilder,
-        private TranslationGeneratorService $translationGenerator
+        private TranslationGeneratorService $translationGenerator,
+        private string $gemsuiteApiUrl
     ) {
     }
 
@@ -48,7 +49,7 @@ class GemsuiteSyncHandler
         }
 
         try {
-            $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'products/' . $productId, [
+            $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'products/' . $productId, [
                 'auth_bearer' => $token,
             ]);
 
@@ -247,7 +248,7 @@ class GemsuiteSyncHandler
      */
     private function importCategories(EntityManagerInterface $em, string $token, ?string $companyIdentifier): array
     {
-        $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'categories', [
+        $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'categories', [
             'auth_bearer' => $token,
         ]);
         

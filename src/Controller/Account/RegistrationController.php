@@ -103,6 +103,7 @@ class RegistrationController extends AbstractController
         $locale = $request->query->get('locale', 'fr');
         $decoded = json_decode($request->getContent(), true);
 
+        // 1. Validation des données d'entrée
         if (!isset($decoded['email'], $decoded['password'], $decoded['firstName'], $decoded['lastName'])) {
             return $this->json(['error' => 'Invalid data'], Response::HTTP_BAD_REQUEST);
         }
@@ -113,7 +114,7 @@ class RegistrationController extends AbstractController
         $lastName = $decoded['lastName'];
         $username = $email;
 
-         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return $this->json(['error' => 'Invalid email format'], Response::HTTP_BAD_REQUEST);
         }
 
@@ -127,9 +128,9 @@ class RegistrationController extends AbstractController
             return $this->json(['error' => 'User already exists'], Response::HTTP_CONFLICT);
         }
 
+        // 2. Création du Client Gemsuite & User
         $tenantCode = $this->tenantManager->getCurrentTenantCode();
         $gemsuiteClient = $this->gemsuiteClientManager->findOrCreateClient($email, $firstName, $lastName, $tenantCode);
-
 
         $user = new User();
         $user->setEmail($email);
@@ -156,53 +157,84 @@ class RegistrationController extends AbstractController
         $em->persist($user);
         $em->flush();
 
-        $locale = $request->query->get('locale', 'fr');
+        $this->logger->info("[Register API] User créé avec ID: " . $user->getId());
+
+        // 3. Gestion de l'Email (AVEC DEBUG LOGS) 🕵️‍♂️
+        
+        $this->logger->info("[Register API] Recherche Config Email pour locale: $locale");
+
         $emailConfig = $this->emailConfigurationService->findOneByLocale($locale);
         $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
+
+        // Diagnostic précis si la config manque
+        if (!$emailConfig) {
+            $this->logger->error("[Register API] ERREUR: Aucune entité 'EmailConfiguration' trouvée en BDD !");
+        } elseif (!$emailConfigTranslation) {
+            $this->logger->error("[Register API] ERREUR: Config trouvée mais pas de traduction pour la locale '$locale'.");
+        }
+
+        // Si la config existe, on tente l'envoi
         if ($emailConfig && $emailConfigTranslation) {
             
-            $verificationUrl = $urlGenerator->generate(
-                'app_verify_email',
-                ['token' => $verificationToken],
-                UrlGeneratorInterface::ABSOLUTE_URL
-            );
+            try {
+                $this->logger->info("[Register API] Config OK. Préparation de l'email via : " . $emailConfig->getFromEmail());
 
-            $fromEmail = $emailConfig->getFromEmail();
-            $fromName  = $emailConfigTranslation->getFromName();
-            $signature = $emailConfigTranslation->getSignature();
-            $logoUrl   = $emailConfig->getLogo();
-            
-            $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+                $verificationUrl = $urlGenerator->generate(
+                    'app_verify_email',
+                    ['token' => $verificationToken],
+                    UrlGeneratorInterface::ABSOLUTE_URL
+                );
 
-            $emailContent = $this->renderView('verification/validation_email.html.twig', [
-                'user'            => $user,
-                'fromName'        => $fromName,
-                'signature'       => $signature,
-                'logoUrl'         => $logoUrl,
-                'domain'          => $domain,
-                'verificationUrl' => $verificationUrl,
-            ]);
+                $fromEmail = $emailConfig->getFromEmail();
+                $fromName  = $emailConfigTranslation->getFromName();
+                $signature = $emailConfigTranslation->getSignature();
+                $logoUrl   = $emailConfig->getLogo();
+                
+                $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
 
-            $emailMessage = (new Email())
-                ->from(sprintf('%s <%s>', $fromName, $fromEmail))
-                ->to($user->getEmail())
-                ->subject('Veuillez valider votre adresse email')
-                ->html($emailContent);
+                $emailContent = $this->renderView('verification/validation_email.html.twig', [
+                    'user'            => $user,
+                    'fromName'        => $fromName,
+                    'signature'       => $signature,
+                    'logoUrl'         => $logoUrl,
+                    'domain'          => $domain,
+                    'verificationUrl' => $verificationUrl,
+                ]);
 
-            $mailer->send($emailMessage);
-            return $this->json([
-                'message' => 'Registered Successfully. Please check your email to verify your account.'
-            ], Response::HTTP_CREATED);
+                $emailMessage = (new Email())
+                    ->from(sprintf('%s <%s>', $fromName, $fromEmail))
+                    ->to($user->getEmail())
+                    ->subject('Veuillez valider votre adresse email')
+                    ->html($emailContent);
+
+                $mailer->send($emailMessage);
+                
+                $this->logger->info("[Register API] SUCCÈS: Email remis au transporteur (ou file d'attente).");
+
+                return $this->json([
+                    'message' => 'Registered Successfully. Please check your email to verify your account.'
+                ], Response::HTTP_CREATED);
+
+            } catch (\Throwable $e) {
+                // En cas d'erreur SMTP, on loggue mais on ne fait pas planter l'inscription
+                $this->logger->critical("[Register API] EXCEPTION MAILER : " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+                
+                // On peut décider de retourner le succès quand même, ou une erreur. 
+                // Ici je garde la logique "Succès" pour ne pas bloquer le user, mais l'admin verra les logs.
+            }
 
         } else {
+            // Config manquante : On loggue le SKIP
+            $this->logger->warning("[Register API] SKIP EMAIL: Passage dans le else (pas de config email valide). L'utilisateur est inscrit mais non notifié.");
+            
             $user->setIsVerified(false);
             $user->setVerificationToken(null);
             $em->flush();
-            return $this->json([
-                'message' => 'Registered Successfully.'
-            ], Response::HTTP_CREATED);
         }
 
+        return $this->json([
+            'message' => 'Registered Successfully.'
+        ], Response::HTTP_CREATED);
     }
 
     #[Route('/verify/email', name: 'app_verify_email', methods: ['GET'])]

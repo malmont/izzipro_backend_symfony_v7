@@ -16,7 +16,7 @@ use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
 
 class GemsuiteCompanySyncHandler
 {
-    private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
+    // private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
     // --- CONSTRUCTEUR MIS À JOUR ---
     public function __construct(
@@ -25,7 +25,8 @@ class GemsuiteCompanySyncHandler
         private TenantConnectionManager $tenantManager,
         private LoggerInterface $logger,
         private GemsuiteImageUrlBuilder $imageUrlBuilder,
-        private TranslationGeneratorService $translationGenerator // <-- AJOUT
+        private TranslationGeneratorService $translationGenerator,
+        private string $gemsuiteApiUrl
     ) {
     }
 
@@ -42,7 +43,7 @@ class GemsuiteCompanySyncHandler
         }
 
         try {
-            $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'company', [
+            $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'company', [
                 'auth_bearer' => $token,
             ]);
 

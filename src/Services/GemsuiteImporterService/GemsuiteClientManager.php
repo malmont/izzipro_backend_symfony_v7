@@ -12,14 +12,15 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class GemsuiteClientManager
 {
-    private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
+    // private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
 
     public function __construct(
         private HttpClientInterface $client,
         private TenantConnectionManager $tenantManager,
         private TenantEntityManagerProvider $emProvider,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private string $gemsuiteApiUrl
     ) {
     }
 
@@ -76,7 +77,7 @@ class GemsuiteClientManager
      */
     private function createClientOnGemsuite(string $email, string $firstName, string $lastName, string $token): ?array
     {
-        $response = $this->client->request('POST', self::GEMSUITE_API_URL . 'clients', [
+        $response = $this->client->request('POST', $this->gemsuiteApiUrl . 'clients', [
             'auth_bearer' => $token,
             'json' => [
                 'name' => $firstName . ' ' . $lastName,

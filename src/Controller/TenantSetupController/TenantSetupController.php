@@ -20,10 +20,11 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 class TenantSetupController extends AbstractController
 {
-    private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
+    // private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
     public function __construct(
-        private string $frontendBaseDomain
+        private string $frontendBaseDomain,
+        private string $gemsuiteApiUrl
     ) {
     }
 
@@ -71,7 +72,7 @@ class TenantSetupController extends AbstractController
                 return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
             try {
-                $response = $client->request('GET', self::GEMSUITE_API_URL . 'company', [
+                $response = $client->request('GET', $this->gemsuiteApiUrl . 'company', [
                     'auth_bearer' => $dto->gemsuiteToken,
                 ]);
                 if ($response->getStatusCode() !== 200) {

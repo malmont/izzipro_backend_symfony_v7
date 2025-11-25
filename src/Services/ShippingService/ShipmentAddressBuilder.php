@@ -8,10 +8,8 @@ use LogicException;
 
 class ShipmentAddressBuilder
 {
-    // MODIFICATION 1 : La propriété change pour stocker le provider
     private TenantEntityManagerProvider $emProvider;
 
-    // MODIFICATION 2 : Le constructeur injecte notre provider
     public function __construct(TenantEntityManagerProvider $emProvider)
     {
         $this->emProvider = $emProvider;

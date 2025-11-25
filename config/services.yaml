@@ -10,6 +10,8 @@ services:
     _defaults:
         autowire: true      # Automatically injects dependencies in your services.
         autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+        bind:
+            $gemsuiteApiUrl: '%env(resolve:GEMSUITE_API_URL)%'
 
     Doctrine\ORM\Configuration: '@doctrine.orm.default_configuration'
     Doctrine\Common\EventManager: '@doctrine.dbal.default_connection.event_manager'    

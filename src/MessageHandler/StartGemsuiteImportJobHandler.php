@@ -24,7 +24,7 @@ use Doctrine\ORM\EntityManagerInterface;
 #[AsMessageHandler]
 class StartGemsuiteImportJobHandler
 {
-    private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
+    // private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
 
     public function __construct(
         private LoggerInterface $logger,
@@ -34,7 +34,8 @@ class StartGemsuiteImportJobHandler
         private TranslationGeneratorService $translationGenerator,
         private GemsuiteImageUrlBuilder $imageUrlBuilder,
         private HttpClientInterface $client,
-        private MessageBusInterface $messageBus
+        private MessageBusInterface $messageBus,
+        private string $gemsuiteApiUrl
     ) {
     }
 
@@ -70,7 +71,7 @@ class StartGemsuiteImportJobHandler
             $syncJob->setCurrentStep('Étape 1/3 : Création de la coquille du site...');
             $tenantEm->flush();
 
-            $response = $this->client->request('GET', self::GEMSUITE_API_URL . 'company', [
+            $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'company', [
                 'auth_bearer' => $message->getGemsuiteToken(),
             ]);
             $companyData = $response->toArray()['data'][0] ?? null;

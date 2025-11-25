@@ -19,7 +19,7 @@ use App\Message\FinalizeSyncJob;
 #[AsMessageHandler]
 class ImportGemsuiteCollectionJobHandler
 {
-    private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
+    // private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
     private const PAGE_LIMIT = 50;
 
     private const IMPORT_CHAIN = [
@@ -33,7 +33,8 @@ class ImportGemsuiteCollectionJobHandler
         private TenantConnectionManager $tenantManager,
         private TenantEntityManagerProvider $emProvider,
         private MessageBusInterface $messageBus,
-        private HttpClientInterface $client
+        private HttpClientInterface $client,
+        private string $gemsuiteApiUrl
     ) {
     }
 
@@ -68,7 +69,7 @@ class ImportGemsuiteCollectionJobHandler
             
             if ($type === 'categories') {
                 $this->logger->warning(sprintf('Collection "%s" non paginée. Tentative de "Big Dump".', $type));
-                $response = $this->client->request('GET', self::GEMSUITE_API_URL . $type, [
+                $response = $this->client->request('GET', $this->gemsuiteApiUrl . $type, [
                     'auth_bearer' => $message->getGemsuiteToken(),
                 ]);
                 $data = $response->toArray();
@@ -79,7 +80,7 @@ class ImportGemsuiteCollectionJobHandler
                 $syncJob->setTotalItems($syncJob->getTotalItems() + $itemCount);
 
             } else {
-                $response = $this->client->request('GET', self::GEMSUITE_API_URL . $type, [
+                $response = $this->client->request('GET', $this->gemsuiteApiUrl . $type, [
                     'auth_bearer' => $message->getGemsuiteToken(),
                     'query' => [
                         'page' => $page,

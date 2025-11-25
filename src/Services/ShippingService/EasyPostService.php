@@ -21,7 +21,7 @@ class EasyPostService
         $this->appEnv = $appEnv;
     }
 
-    private function getTenantClient(): EasyPostClient
+    protected function getTenantClient(): EasyPostClient
     {
         $em = $this->emProvider->getEntityManager();
         $repo = $em->getRepository(EasyPostConfiguration::class);
@@ -62,7 +62,14 @@ class EasyPostService
     {
         $client = $this->getTenantClient();
         try {
-            return $client->shipment->create($data)->rates;
+            $shipment = $client->shipment->create($data);
+            // dd("DEBUG getRates (Purolator) :", $shipment);
+            if (!empty($shipment->messages)) {
+                $this->logger->warning('Messages transporteur (getRates)', [
+                    'messages' => json_decode(json_encode($shipment->messages), true)
+                ]);
+            }
+            return $shipment->rates;
         } catch (\EasyPost\Exception\Api\BaseException $e) {
             error_log("EasyPost API Error (getRates): " . $e->getMessage());
             throw new RuntimeException("Erreur lors de la récupération des tarifs EasyPost: " . $e->getMessage(), 0, $e);

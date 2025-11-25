@@ -70,11 +70,13 @@ class AdressService
         $adress->setProvince($inputDTO->province);
         $adress->setCodepostal($inputDTO->zipCode);
         $adress->setCountry($inputDTO->country);
-
+        $user = $adress->getUserAdress();
         if ($inputDTO->isPrimary && $user) {
             $user->setPrimaryAddress($adress);
             $this->gemsuiteUpdater->syncAddress($user, $adress);
         }
+        $entityManager = $this->tenantEmProvider->getEntityManager(); // Ajouté car il manquait aussi
+        $entityManager->flush();
         $entityManager->flush();
 
         return $adress;
