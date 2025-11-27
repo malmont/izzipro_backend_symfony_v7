@@ -10,34 +10,94 @@ use Symfony\Component\Routing\Annotation\Route;
 
 class TenantController extends AbstractController
 {
+    private string $frontendBaseDomain;
+
+    // On injecte le domaine de base pour pouvoir valider les sous-domaines correctement
+    public function __construct(string $frontendBaseDomain)
+    {
+        $this->frontendBaseDomain = $frontendBaseDomain;
+    }
 
     #[Route('/api/tenant/check', name: 'api_tenant_check', methods: ['GET'])]
     public function check(Request $request, TenantConnectionManager $tenantManager): JsonResponse
     {
-        // 1. On récupère le sous-domaine (qui correspond à votre 'code' de tenant)
-        $host = $request->getHost();
-        $subdomain = explode('.', $host)[0];
+        // 1. Récupération du Host (Priorité au Header envoyé par le Front React)
+        $host = $request->headers->get('X-Tenant-Host');
+
+        if (!$host) {
+            $host = $request->getHost();
+        }
         
-        // Si le sous-domaine est vide ou est 'www', on considère qu'il n'existe pas
-        if (empty($subdomain) || in_array($subdomain, ['www', 'app', 'api'])) {
-             return new JsonResponse(['exists' => false]);
+        // 2. Connexion PDO Master
+        try {
+            $pdoMaster = $tenantManager->getPdoMaster();
+        } catch (\Throwable $e) {
+            return new JsonResponse(['error' => 'Erreur connexion BDD Master.'], 500);
         }
 
+        $tenantExists = false;
+
+        // 3. PRIORITÉ 1 : Vérification DOMAINE PERSONNALISÉ
         try {
-            // 2. On récupère la connexion PDO directe à la base MASTER depuis votre service
-            $pdoMaster = $tenantManager->getPdoMaster();
+            $altHost = $host;
+            if (str_starts_with($host, 'www.')) {
+                $altHost = substr($host, 4); 
+            } else {
+                $altHost = 'www.' . $host;
+            }
 
-            // 3. On prépare et exécute une requête sécurisée pour vérifier l'existence
-            $stmt = $pdoMaster->prepare('SELECT COUNT(*) FROM tenants WHERE code = :code');
-            $stmt->execute(['code' => $subdomain]);
+            // On vérifie si ce domaine existe dans la colonne custom_domain
+            $stmt = $pdoMaster->prepare(
+                'SELECT 1 FROM tenants WHERE custom_domain = :host OR custom_domain = :altHost'
+            );
+            $stmt->execute(['host' => $host, 'altHost' => $altHost]);
             
-            $count = (int) $stmt->fetchColumn();
-
-            // 4. On retourne la réponse
-            return new JsonResponse(['exists' => ($count > 0)]);
+            if ($stmt->fetch()) {
+                $tenantExists = true;
+            }
 
         } catch (\Throwable $e) {
-            return new JsonResponse(['error' => 'Impossible de vérifier le tenant.'], 500);
+             // On ne bloque pas, on passe à la suite (log en prod conseillé)
         }
+
+
+        // 4. PRIORITÉ 2 : Vérification SOUS-DOMAINE
+        if (!$tenantExists) {
+            $tenantCode = null;
+            
+            // On nettoie les domaines pour éviter les erreurs de port (ex: localhost:3000)
+            $cleanHost = explode(':', $host)[0];
+            $cleanBase = explode(':', $this->frontendBaseDomain)[0];
+
+            // Si le host finit par le domaine principal (ex: boutique.gem-portal.com)
+            if (str_ends_with($cleanHost, $cleanBase) && $cleanHost !== $cleanBase) {
+                
+                // Extraction "brute" du premier segment
+                $hostParts = explode('.', $cleanHost);
+                
+                // Gestion basique : si www.boutique.domaine.com -> boutique
+                if ($hostParts[0] === 'www' && isset($hostParts[1])) {
+                    $tenantCode = $hostParts[1];
+                } else {
+                    $tenantCode = $hostParts[0];
+                }
+            }
+            
+            // Si on a isolé un code potentiel, on vérifie s'il existe en BDD
+            if ($tenantCode) {
+                 try {
+                    $stmt = $pdoMaster->prepare('SELECT 1 FROM tenants WHERE code = :code');
+                    $stmt->execute(['code' => $tenantCode]);
+                    
+                    if ($stmt->fetch()) {
+                        $tenantExists = true;
+                    }
+                } catch (\Throwable $e) {
+                    return new JsonResponse(['error' => 'Erreur vérification sous-domaine.'], 500);
+                }
+            }
+        }
+
+        return new JsonResponse(['exists' => $tenantExists]);
     }
 }

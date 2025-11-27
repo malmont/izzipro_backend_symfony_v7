@@ -126,6 +126,20 @@ class Product implements TranslatableInterface
     )]
     private Collection $translations;
 
+    #[ORM\Column(nullable: true)]
+    #[Groups(['product:read'])]
+    private ?float $specialPrice = null;
+    
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $specialPriceFrom = null;
+    
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $specialPriceTo = null;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    #[Groups(['product:read'])]
+    private ?bool $isPreOrder = false;
+
     public function __construct()
     {
         $this->category = new ArrayCollection();
@@ -670,12 +684,81 @@ class Product implements TranslatableInterface
     public function findTranslationByLocale(string $locale): ?object
     {
         foreach ($this->translations as $translation) {
-            // Attention: on utilise getLocale() ici, car votre entité ProductTranslation utilise 'locale'
             if ($translation->getLocale() === $locale) {
                 return $translation;
             }
         }
         return null;
+    }
+    public function getSpecialPrice(): ?float
+    {
+        return $this->specialPrice;
+    }
+
+    public function setSpecialPrice(?float $specialPrice): self
+    {
+        $this->specialPrice = $specialPrice;
+        return $this;
+    }
+
+    public function getSpecialPriceFrom(): ?\DateTimeImmutable
+    {
+        return $this->specialPriceFrom;
+    }
+
+    public function setSpecialPriceFrom(?\DateTimeImmutable $specialPriceFrom): self
+    {
+        $this->specialPriceFrom = $specialPriceFrom;
+        return $this;
+    }
+
+    public function getSpecialPriceTo(): ?\DateTimeImmutable
+    {
+        return $this->specialPriceTo;
+    }
+
+    public function setSpecialPriceTo(?\DateTimeImmutable $specialPriceTo): self
+    {
+        $this->specialPriceTo = $specialPriceTo;
+        return $this;
+    }
+
+    public function isIsPreOrder(): ?bool
+    {
+        return $this->isPreOrder;
+    }
+
+    public function setIsPreOrder(bool $isPreOrder): self
+    {
+        $this->isPreOrder = $isPreOrder;
+        return $this;
+    }
+
+
+    #[Groups(['product:read'])]
+    public function getEffectivePrice(): float
+    {
+        $now = new \DateTimeImmutable();
+
+        if ($this->specialPrice !== null && $this->specialPrice > 0) {
+            $validFrom = $this->specialPriceFrom === null || $now >= $this->specialPriceFrom;
+            $validTo   = $this->specialPriceTo === null   || $now <= $this->specialPriceTo;
+
+            if ($validFrom && $validTo) {
+                return $this->specialPrice;
+            }
+        }
+
+        return $this->price ?? 0.0;
+    }
+
+    #[Groups(['product:read'])]
+    public function isSalable(): bool
+    {
+        if ($this->isPreOrder) {
+            return true;
+        }
+        return $this->quantity > 0;
     }
 
 }

@@ -128,6 +128,9 @@ services:
     App\EventListener\TenantDoctrineSwitcherListener:
         arguments:
             $masterDatabaseUrl: '%env(resolve:MASTER_DATABASE_URL)%'
+            # Correction ici : on utilise BASE au lieu de MAIN pour correspondre à ton .env
+            $frontendMainDomain: '%env(resolve:FRONTEND_BASE_DOMAIN)%' 
+            $backendMainDomain: '%env(resolve:BACKEND_BASE_DOMAIN)%'
         tags:
             - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest, priority: 100 }
 
@@ -173,3 +176,7 @@ services:
     App\Services\ShippingService\EasyPostService:
         arguments:
             $appEnv: '%kernel.environment%'
+
+    App\Controller\TenantSetupController\TenantController:
+        arguments:
+            $frontendBaseDomain: '%env(resolve:FRONTEND_BASE_DOMAIN)%'  

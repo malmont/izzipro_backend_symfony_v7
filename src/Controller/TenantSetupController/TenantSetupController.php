@@ -20,8 +20,6 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 class TenantSetupController extends AbstractController
 {
-    // private const GEMSUITE_API_URL = 'https://app.gem-books.com/api/';
-
     public function __construct(
         private string $frontendBaseDomain,
         private string $gemsuiteApiUrl
@@ -39,18 +37,47 @@ class TenantSetupController extends AbstractController
     ): Response {
         
         $host = $request->getHost();
-        $parts = explode('.', $host);
-        if (count($parts) < 3) {
-            $this->addFlash('danger', 'L\'accès à cette page doit se faire via le sous-domaine de votre nouveau site (ex: monclient.votredomaine.com).');
+        $subdomain = null;
+
+        // --- 1. Extraction du sous-domaine ---
+        // On vérifie si on est bien sur un sous-domaine du domaine principal
+        // ex: host = "client.gem-portal-dev.com", base = "gem-portal-dev.com"
+        if (str_ends_with($host, $this->frontendBaseDomain) && $host !== $this->frontendBaseDomain) {
+            // On retire le domaine de base pour isoler le sous-domaine
+            // On retire aussi le dernier point (d'où le +1)
+            $prefix = substr($host, 0, -(strlen($this->frontendBaseDomain) + 1));
+            
+            // Si on a "www.client", on prend "client", sinon on prend tout le préfixe
+            $parts = explode('.', $prefix);
+            $subdomain = end($parts); 
+        }
+
+        // Si extraction échouée ou sous-domaine invalide/réservé
+        if (!$subdomain || in_array($subdomain, ['www', 'api', 'admin', 'mail'])) {
+            $this->addFlash('danger', 'L\'accès à cette page doit se faire via un sous-domaine valide de votre nouveau site.');
             return $this->redirectToRoute('app_home'); 
         }
-        $subdomain = $parts[0];
-          try {
+
+        // --- 2. Vérification Disponibilité (Code + DB + Custom Domain) ---
+        try {
             $pdoMaster = $tenantManager->getPdoMaster();
-            $stmt = $pdoMaster->prepare('SELECT 1 FROM tenants WHERE code = :code OR dbname = :dbname');
-            $stmt->execute(['code' => $subdomain, 'dbname' => 'db_' . $subdomain]);
+            
+            // Mise à jour de la requête pour inclure custom_domain
+            $stmt = $pdoMaster->prepare('
+                SELECT 1 FROM tenants 
+                WHERE code = :code 
+                OR dbname = :dbname
+                OR custom_domain = :host
+            ');
+            
+            $stmt->execute([
+                'code' => $subdomain, 
+                'dbname' => 'db_' . $subdomain,
+                'host' => $host // On vérifie si le host actuel n'est pas déjà enregistré comme custom_domain
+            ]);
+
             if ($stmt->fetch()) {
-                $this->addFlash('danger', 'Ce sous-domaine est déjà utilisé ou réservé. Veuillez en choisir un autre.');
+                $this->addFlash('danger', 'Ce sous-domaine ou nom de site est déjà utilisé. Veuillez en choisir un autre.');
                 return $this->redirectToRoute('app_home'); 
             }
         } catch (\Throwable $e) {
@@ -63,12 +90,16 @@ class TenantSetupController extends AbstractController
         $dto->code = $subdomain;
 
         $form = $this->createForm(TenantSetupType::class, $dto);
-        $form->get('subdomain_display')->setData($subdomain);
+        if ($form->has('subdomain_display')) {
+            $form->get('subdomain_display')->setData($subdomain);
+        }
+        
         $form->handleRequest($request);
+
         if ($form->isSubmitted() && $form->isValid()) {
             $companyData = null;
             if (!$dto->gemsuiteToken) {
-                $this->addFlash('danger', 'Le jeton d\'authentification GEM-SUITE est obligatoire pour créer un nouveau site.');
+                $this->addFlash('danger', 'Le jeton d\'authentification GEM-SUITE est obligatoire.');
                 return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
             try {
@@ -97,7 +128,15 @@ class TenantSetupController extends AbstractController
             $dbname = 'db_' . $dto->code;
             $tenantId = null;
             try {
-                $tenantManager->createTenant($dto->code, $companyData['nom'], $dbname, $dto->gemsuiteToken);
+                // MODIF: Ajout du null en dernier argument pour le custom_domain
+                $tenantManager->createTenant(
+                    $dto->code, 
+                    $companyData['nom'], 
+                    $dbname, 
+                    $dto->gemsuiteToken, 
+                    null // Custom domain est null à la création auto
+                );
+                
                 $this->addFlash('info', 'Infrastructure du tenant créée avec succès.');
 
                 $pdoMaster = $tenantManager->getPdoMaster();
@@ -111,6 +150,7 @@ class TenantSetupController extends AbstractController
                 return $this->redirectToRoute('app_tenant_setup');
             }
 
+            // --- LOGIQUE SYNC JOB INCHANGÉE ---
             if ($dto->gemsuiteToken) {
                 try {
                     $emProvider->switchTenant($dbname, $dto->code);
@@ -139,8 +179,11 @@ class TenantSetupController extends AbstractController
 
             $this->addFlash('success', 'Le site pour ' . $companyData['nom'] . ' est prêt !');
 
-            $finalUrl = sprintf('https://%s.%s', $dto->code, $this->frontendBaseDomain);
-                        return $this->redirectToRoute('app_setup_status', [
+            // MODIF: Gestion du protocole dynamique
+            $protocol = $request->isSecure() ? 'https' : 'http';
+            $finalUrl = sprintf('%s://%s.%s', $protocol, $dto->code, $this->frontendBaseDomain);
+            
+            return $this->redirectToRoute('app_setup_status', [
                 'tenantCode' => $dto->code,
                 'syncJobId' => $syncJob->getId(),
                 'finalUrl' => base64_encode($finalUrl) 
