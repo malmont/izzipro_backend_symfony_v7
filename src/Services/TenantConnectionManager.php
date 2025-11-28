@@ -90,49 +90,62 @@ class TenantConnectionManager
     // CRUD tenant + migrations
     // -------------------------------------------------------------------
 
-    public function createTenant(string $code, string $name, string $dbname, ?string $gemsuiteToken = null, bool $isInternal = false): void
-        {
-            if (!preg_match('/^[a-z0-9_]+$/i', $code) || !preg_match('/^[a-z0-9_]+$/i', $dbname)) {
-                throw new \InvalidArgumentException("Code ou dbname invalide : seuls [a-z0-9_] sont autorisés");
-            }
-
-            try {
-                $templateDbName = 'gmasuite'; 
-                $this->logger->info(sprintf('Tentative de terminaison des connexions pour la base template "%s"', $templateDbName));
-                try {
-                    $stmt = $this->pdoMaster->prepare(
-                        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :datname AND pid <> pg_backend_pid()"
-                    );
-                    $stmt->execute(['datname' => $templateDbName]);
-                    $this->logger->info('Les connexions existantes ont été terminées.');
-                } catch (\Throwable $termEx) {
-                    $this->logger->warning('Impossible de terminer les connexions existantes: ' . $termEx->getMessage());
-                }
-                $this->pdoMaster->exec(
-                    sprintf('CREATE DATABASE "%s" WITH TEMPLATE gmasuite', $dbname)
-                );
-                $stmt = $this->pdoMaster->prepare(
-                'INSERT INTO tenants(code, name, dbname, gemsuite_token, is_internal_store) VALUES(:c, :n, :d, :t, :is_internal)'
-                );
-                $stmt->bindValue(':c', $code);
-                $stmt->bindValue(':n', $name);
-                $stmt->bindValue(':d', $dbname);
-                $stmt->bindValue(':t', $gemsuiteToken);
-                $stmt->bindValue(':is_internal', $isInternal, PDO::PARAM_BOOL); 
-                $stmt->execute();
-
-            } catch (\Throwable $e) {
-                $this->logger->error("Échec création tenant '{$code}' / '{$dbname}': " . $e->getMessage());
-                try {
-                    $this->pdoMaster->exec(sprintf('DROP DATABASE IF EXISTS "%s"', $dbname));
-                    $this->logger->info("DROP DATABASE \"{$dbname}\" après échec");
-                } catch (\Throwable $dropEx) {
-                    $this->logger->warning("Échec DROP DATABASE '{$dbname}' : " . $dropEx->getMessage());
-                }
-                throw $e;
-            }
+    public function createTenant(
+        string $code, 
+        string $name, 
+        string $dbname, 
+        ?string $gemsuiteToken = null, 
+        bool $isInternal = false, 
+        ?string $customDomain = null // 1. Nouvel argument ajouté ici
+    ): void {
+        if (!preg_match('/^[a-z0-9_]+$/i', $code) || !preg_match('/^[a-z0-9_]+$/i', $dbname)) {
+            throw new \InvalidArgumentException("Code ou dbname invalide : seuls [a-z0-9_] sont autorisés");
         }
 
+        try {
+            $templateDbName = 'gmasuite'; 
+            $this->logger->info(sprintf('Tentative de terminaison des connexions pour la base template "%s"', $templateDbName));
+            try {
+                $stmt = $this->pdoMaster->prepare(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :datname AND pid <> pg_backend_pid()"
+                );
+                $stmt->execute(['datname' => $templateDbName]);
+                $this->logger->info('Les connexions existantes ont été terminées.');
+            } catch (\Throwable $termEx) {
+                $this->logger->warning('Impossible de terminer les connexions existantes: ' . $termEx->getMessage());
+            }
+
+            // Création physique de la base de données
+            $this->pdoMaster->exec(
+                sprintf('CREATE DATABASE "%s" WITH TEMPLATE gmasuite', $dbname)
+            );
+
+            // 2. Mise à jour de la requête SQL pour inclure custom_domain
+            $stmt = $this->pdoMaster->prepare(
+                'INSERT INTO tenants(code, name, dbname, gemsuite_token, is_internal_store, custom_domain) 
+                 VALUES(:c, :n, :d, :t, :is_internal, :custom_domain)'
+            );
+
+            $stmt->bindValue(':c', $code);
+            $stmt->bindValue(':n', $name);
+            $stmt->bindValue(':d', $dbname);
+            $stmt->bindValue(':t', $gemsuiteToken);
+            $stmt->bindValue(':is_internal', $isInternal, \PDO::PARAM_BOOL); 
+            $stmt->bindValue(':custom_domain', $customDomain); // 3. Binding de la nouvelle valeur
+
+            $stmt->execute();
+
+        } catch (\Throwable $e) {
+            $this->logger->error("Échec création tenant '{$code}' / '{$dbname}': " . $e->getMessage());
+            try {
+                $this->pdoMaster->exec(sprintf('DROP DATABASE IF EXISTS "%s"', $dbname));
+                $this->logger->info("DROP DATABASE \"{$dbname}\" après échec");
+            } catch (\Throwable $dropEx) {
+                $this->logger->warning("Échec DROP DATABASE '{$dbname}' : " . $dropEx->getMessage());
+            }
+            throw $e;
+        }
+    }
     public function migrateTenant(string $dbname): void
     {
         $stmt = $this->pdoMaster->prepare('SELECT 1 FROM tenants WHERE dbname = :db');

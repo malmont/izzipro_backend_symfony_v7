@@ -1,5 +1,4 @@
 <?php
-// src/Controller/TenantSetupController/TenantSetupController.php
 
 namespace App\Controller\TenantSetupController;
 
@@ -23,8 +22,7 @@ class TenantSetupController extends AbstractController
     public function __construct(
         private string $frontendBaseDomain,
         private string $gemsuiteApiUrl
-    ) {
-    }
+    ) {}
 
     #[Route('/setup/new-store', name: 'app_tenant_setup')]
     public function setup(
@@ -39,52 +37,43 @@ class TenantSetupController extends AbstractController
         $host = $request->getHost();
         $subdomain = null;
 
-        // --- 1. Extraction du sous-domaine ---
-        // On vérifie si on est bien sur un sous-domaine du domaine principal
-        // ex: host = "client.gem-portal-dev.com", base = "gem-portal-dev.com"
-        if (str_ends_with($host, $this->frontendBaseDomain) && $host !== $this->frontendBaseDomain) {
-            // On retire le domaine de base pour isoler le sous-domaine
-            // On retire aussi le dernier point (d'où le +1)
-            $prefix = substr($host, 0, -(strlen($this->frontendBaseDomain) + 1));
+        $cleanHost = explode(':', $host)[0];
+
+        // Cas Localhost
+        if ($cleanHost === 'localhost' || $cleanHost === '127.0.0.1') {
+            $subdomain = 'localtest'; 
+        } 
+        else {
+
+            $parts = explode('.', $cleanHost);
             
-            // Si on a "www.client", on prend "client", sinon on prend tout le préfixe
-            $parts = explode('.', $prefix);
-            $subdomain = end($parts); 
+            if (count($parts) >= 3) {
+                if ($parts[0] !== 'www') {
+                    $subdomain = $parts[0];
+                } elseif (isset($parts[1])) {
+                    $subdomain = $parts[1];
+                }
+            }
         }
 
-        // Si extraction échouée ou sous-domaine invalide/réservé
-        if (!$subdomain || in_array($subdomain, ['www', 'api', 'admin', 'mail'])) {
-            $this->addFlash('danger', 'L\'accès à cette page doit se faire via un sous-domaine valide de votre nouveau site.');
+        // Si extraction échouée ou sous-domaine réservé
+        if (!$subdomain || in_array($subdomain, ['www', 'api', 'admin', 'mail', 'backend'])) {
+            $this->addFlash('danger', 'Accès invalide. Veuillez utiliser une URL de type : nomboutique.votre-domaine.com/setup/new-store');
             return $this->redirectToRoute('app_home'); 
         }
 
-        // --- 2. Vérification Disponibilité (Code + DB + Custom Domain) ---
+        // --- 2. VÉRIFICATION DISPONIBILITÉ (Code + DB + Custom Domain) ---
         try {
-            $pdoMaster = $tenantManager->getPdoMaster();
-            
-            // Mise à jour de la requête pour inclure custom_domain
-            $stmt = $pdoMaster->prepare('
-                SELECT 1 FROM tenants 
-                WHERE code = :code 
-                OR dbname = :dbname
-                OR custom_domain = :host
-            ');
-            
-            $stmt->execute([
-                'code' => $subdomain, 
-                'dbname' => 'db_' . $subdomain,
-                'host' => $host // On vérifie si le host actuel n'est pas déjà enregistré comme custom_domain
-            ]);
-
-            if ($stmt->fetch()) {
-                $this->addFlash('danger', 'Ce sous-domaine ou nom de site est déjà utilisé. Veuillez en choisir un autre.');
+            if (!$this->isIdentifierAvailable($subdomain, $tenantManager)) {
+                $this->addFlash('danger', "Le site '$subdomain' existe déjà ou est réservé. Veuillez en choisir un autre.");
                 return $this->redirectToRoute('app_home'); 
             }
         } catch (\Throwable $e) {
-            $this->addFlash('danger', 'Erreur lors de la vérification du sous-domaine : ' . $e->getMessage());
+            $this->addFlash('danger', 'Erreur système lors de la vérification : ' . $e->getMessage());
             return $this->redirectToRoute('app_home');
         }
         
+        // --- 3. GESTION DU FORMULAIRE ---
         $dto = new TenantSetupDTO();
         $dto->subdomain = $subdomain;
         $dto->code = $subdomain;
@@ -97,90 +86,95 @@ class TenantSetupController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            
+            // A. Validation API GemSuite
             $companyData = null;
             if (!$dto->gemsuiteToken) {
-                $this->addFlash('danger', 'Le jeton d\'authentification GEM-SUITE est obligatoire.');
+                $this->addFlash('danger', 'Le jeton GEM-SUITE est obligatoire.');
                 return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
             try {
                 $response = $client->request('GET', $this->gemsuiteApiUrl . 'company', [
                     'auth_bearer' => $dto->gemsuiteToken,
                 ]);
-                if ($response->getStatusCode() !== 200) {
-                     throw new \Exception('Le jeton GEM-SUITE est invalide ou l\'API a retourné une erreur.');
-                }
+                if ($response->getStatusCode() !== 200) { throw new \Exception('Jeton invalide ou erreur API.'); }
+                
                 $companyData = $response->toArray()['data'][0] ?? null;
-                if (!$companyData) {
-                    throw new \Exception('Aucune donnée d\'entreprise trouvée pour ce jeton GEM-SUITE.');
-                }
+                if (!$companyData) { throw new \Exception('Aucune entreprise trouvée.'); }
             } catch (\Throwable $e) {
-                $this->addFlash('danger', 'Erreur de validation GEM-SUITE : ' . $e->getMessage());
+                $this->addFlash('danger', 'Erreur API GemSuite : ' . $e->getMessage());
                 return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
 
+            // B. Vérification Pré-requis
             try {
                 $gemsuiteImporter->checkPrerequisites($dto->gemsuiteToken);
             } catch (\Throwable $e) {
-                $this->addFlash('danger', 'Impossible de démarrer la création : ' . $e->getMessage());
+                $this->addFlash('danger', $e->getMessage());
                 return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
 
+            // C. Double Check (Race condition)
+            if (!$this->isIdentifierAvailable($dto->code, $tenantManager)) {
+                $this->addFlash('danger', 'Ce nom a été pris pendant que vous remplissiez le formulaire.');
+                return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
+            }
+
+            // D. Création du Tenant
             $dbname = 'db_' . $dto->code;
             $tenantId = null;
             try {
-                // MODIF: Ajout du null en dernier argument pour le custom_domain
+
                 $tenantManager->createTenant(
-                    $dto->code, 
-                    $companyData['nom'], 
-                    $dbname, 
-                    $dto->gemsuiteToken, 
-                    null // Custom domain est null à la création auto
+                    $dto->code,
+                    $companyData['nom'],
+                    $dbname,
+                    $dto->gemsuiteToken,
+                    false,
+                    null 
                 );
                 
-                $this->addFlash('info', 'Infrastructure du tenant créée avec succès.');
+                $this->addFlash('info', 'Infrastructure créée.');
 
+                // Récupération ID Tenant pour le Job
                 $pdoMaster = $tenantManager->getPdoMaster();
                 $stmt = $pdoMaster->prepare('SELECT id FROM tenants WHERE code = :code');
                 $stmt->execute(['code' => $dto->code]);
                 $tenantId = $stmt->fetchColumn();
-                if (!$tenantId) { throw new \Exception("Impossible de retrouver l'ID du tenant après création."); }
+                if (!$tenantId) throw new \Exception("ID tenant introuvable après création.");
 
             } catch (\Throwable $e) {
-                $this->addFlash('error', 'Erreur critique lors de la création du tenant : ' . $e->getMessage());
+                $this->addFlash('error', 'Erreur création tenant : ' . $e->getMessage());
                 return $this->redirectToRoute('app_tenant_setup');
             }
 
-            // --- LOGIQUE SYNC JOB INCHANGÉE ---
-            if ($dto->gemsuiteToken) {
-                try {
-                    $emProvider->switchTenant($dbname, $dto->code);
-                    $tenantEm = $emProvider->getEntityManager();
+            // E. Lancement du Job Messenger
+            try {
+                $emProvider->switchTenant($dbname, $dto->code);
+                $tenantEm = $emProvider->getEntityManager();
 
-                    $syncJob = new SyncJob();
-                    $syncJob->setStatus('pending');
-                    $syncJob->setCurrentStep('Initialisation du job...');
-                    $tenantEm->persist($syncJob);
-                    $tenantEm->flush(); 
+                $syncJob = new SyncJob();
+                $syncJob->setStatus('pending');
+                $syncJob->setCurrentStep('Initialisation...');
+                $tenantEm->persist($syncJob);
+                $tenantEm->flush(); 
 
-                    $message = new StartGemsuiteImportJob(
-                        $tenantId, 
-                        $dto->gemsuiteToken,
-                        $syncJob->getId() 
-                    );
-                    
-                    $messageBus->dispatch($message);
-                    
-                    $this->addFlash('info', 'Le site est prêt. La création démarre en arrière-plan.');
+                $message = new StartGemsuiteImportJob($tenantId, $dto->gemsuiteToken, $syncJob->getId());
+                $messageBus->dispatch($message);
+                
+                $this->addFlash('info', 'Importation démarrée en arrière-plan.');
 
-                } catch (\Throwable $e) {
-                    $this->addFlash('warning', 'Le site a été créé, mais l\'importation n\'a pas pu démarrer: ' . $e->getMessage());
-                }
+            } catch (\Throwable $e) {
+                $this->addFlash('warning', 'Site créé mais échec du démarrage de l\'import : ' . $e->getMessage());
             }
 
-            $this->addFlash('success', 'Le site pour ' . $companyData['nom'] . ' est prêt !');
+            $this->addFlash('success', 'Site prêt !');
 
-            // MODIF: Gestion du protocole dynamique
+            // F. Redirection vers la page de statut
+            // On utilise $frontendBaseDomain pour l'URL finale, mais la redirection actuelle se fait sur le domaine courant
             $protocol = $request->isSecure() ? 'https' : 'http';
+            
+            // L'URL finale vers laquelle l'utilisateur ira une fois fini (sur le vrai domaine)
             $finalUrl = sprintf('%s://%s.%s', $protocol, $dto->code, $this->frontendBaseDomain);
             
             return $this->redirectToRoute('app_setup_status', [
@@ -193,5 +187,21 @@ class TenantSetupController extends AbstractController
         return $this->render('tenant_setup/form.html.twig', [
             'form' => $form->createView(),
         ]);
+    }
+
+    /**
+     * Vérifie si l'identifiant est disponible (Code, DB, Custom Domain)
+     */
+    private function isIdentifierAvailable(string $identifier, TenantConnectionManager $tenantManager): bool
+    {
+        $pdoMaster = $tenantManager->getPdoMaster();
+        $dbname = 'db_' . $identifier;
+        
+        $sql = 'SELECT 1 FROM tenants WHERE code = :identifier OR dbname = :dbname OR custom_domain = :identifier';
+        
+        $stmt = $pdoMaster->prepare($sql);
+        $stmt->execute(['identifier' => $identifier, 'dbname' => $dbname]);
+        
+        return $stmt->fetch() === false; 
     }
 }

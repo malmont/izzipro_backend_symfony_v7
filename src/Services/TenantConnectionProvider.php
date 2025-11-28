@@ -20,8 +20,6 @@ class TenantConnectionProvider
         $this->baseParams = $defaultConnection->getParams();
         $this->config = $defaultConnection->getConfiguration();
         $this->eventManager = $defaultConnection->getEventManager();
-
-
     }
 
     public function switchTenant(string $tenantDbName, ?string $tenantCode = null): void

@@ -10,24 +10,25 @@ use Symfony\Component\Routing\Annotation\Route;
 
 class TenantController extends AbstractController
 {
-    private string $frontendBaseDomain;
-
-    // On injecte le domaine de base pour pouvoir valider les sous-domaines correctement
-    public function __construct(string $frontendBaseDomain)
-    {
-        $this->frontendBaseDomain = $frontendBaseDomain;
-    }
+    // On garde l'injection pour la forme, mais on utilise une logique plus dynamique
+    public function __construct(
+        private string $frontendBaseDomain 
+    ) {}
 
     #[Route('/api/tenant/check', name: 'api_tenant_check', methods: ['GET'])]
     public function check(Request $request, TenantConnectionManager $tenantManager): JsonResponse
     {
         // 1. Récupération du Host (Priorité au Header envoyé par le Front React)
+        // C'est ça qui permet au Front et au Back d'être sur des domaines différents
         $host = $request->headers->get('X-Tenant-Host');
 
         if (!$host) {
             $host = $request->getHost();
         }
         
+        // Nettoyage du port éventuel (ex: localhost:3000 -> localhost)
+        $cleanHost = explode(':', $host)[0];
+
         // 2. Connexion PDO Master
         try {
             $pdoMaster = $tenantManager->getPdoMaster();
@@ -37,57 +38,56 @@ class TenantController extends AbstractController
 
         $tenantExists = false;
 
-        // 3. PRIORITÉ 1 : Vérification DOMAINE PERSONNALISÉ
+        // --- PRIORITÉ 1 : DOMAINE PERSONNALISÉ (ex: www.dailydrip.ca) ---
         try {
-            $altHost = $host;
-            if (str_starts_with($host, 'www.')) {
-                $altHost = substr($host, 4); 
-            } else {
-                $altHost = 'www.' . $host;
-            }
+            $altHost = str_starts_with($cleanHost, 'www.') ? substr($cleanHost, 4) : 'www.' . $cleanHost;
 
-            // On vérifie si ce domaine existe dans la colonne custom_domain
             $stmt = $pdoMaster->prepare(
                 'SELECT 1 FROM tenants WHERE custom_domain = :host OR custom_domain = :altHost'
             );
-            $stmt->execute(['host' => $host, 'altHost' => $altHost]);
+            $stmt->execute(['host' => $cleanHost, 'altHost' => $altHost]);
             
             if ($stmt->fetch()) {
                 $tenantExists = true;
             }
-
         } catch (\Throwable $e) {
-             // On ne bloque pas, on passe à la suite (log en prod conseillé)
+             // On continue, ce n'est peut-être pas un domaine custom
         }
 
-
-        // 4. PRIORITÉ 2 : Vérification SOUS-DOMAINE
+        // --- PRIORITÉ 2 : SOUS-DOMAINE (ex: testmessenger.gem-portal.ca) ---
         if (!$tenantExists) {
             $tenantCode = null;
             
-            // On nettoie les domaines pour éviter les erreurs de port (ex: localhost:3000)
-            $cleanHost = explode(':', $host)[0];
-            $cleanBase = explode(':', $this->frontendBaseDomain)[0];
-
-            // Si le host finit par le domaine principal (ex: boutique.gem-portal.com)
-            if (str_ends_with($cleanHost, $cleanBase) && $cleanHost !== $cleanBase) {
+            // Logique universelle : ne dépend plus strictement de la variable d'env
+            if ($cleanHost === 'localhost' || $cleanHost === '127.0.0.1') {
+                $tenantCode = 'localtest'; 
+            } else {
+                // On découpe le domaine par les points
+                $parts = explode('.', $cleanHost);
                 
-                // Extraction "brute" du premier segment
-                $hostParts = explode('.', $cleanHost);
-                
-                // Gestion basique : si www.boutique.domaine.com -> boutique
-                if ($hostParts[0] === 'www' && isset($hostParts[1])) {
-                    $tenantCode = $hostParts[1];
-                } else {
-                    $tenantCode = $hostParts[0];
+                // Si on a au moins 3 parties (ex: boutique.domaine.com)
+                // C'est un sous-domaine SaaS classique
+                if (count($parts) >= 3) {
+                    // Si le premier n'est pas 'www', c'est notre code
+                    if ($parts[0] !== 'www') {
+                        $tenantCode = $parts[0];
+                    } 
+                    // Si c'est 'www.boutique.domaine.com', le code est en 2ème position
+                    elseif (isset($parts[1])) {
+                        $tenantCode = $parts[1];
+                    }
                 }
             }
             
-            // Si on a isolé un code potentiel, on vérifie s'il existe en BDD
-            if ($tenantCode) {
+            // Si on a trouvé un code potentiel, on vérifie s'il existe vraiment en BDD
+            if ($tenantCode && !in_array($tenantCode, ['api', 'admin', 'backend', 'www'])) {
                  try {
-                    $stmt = $pdoMaster->prepare('SELECT 1 FROM tenants WHERE code = :code');
-                    $stmt->execute(['code' => $tenantCode]);
+                    // On vérifie si le CODE ou le DBNAME existe
+                    $stmt = $pdoMaster->prepare('SELECT 1 FROM tenants WHERE code = :code OR dbname = :dbname');
+                    $stmt->execute([
+                        'code' => $tenantCode,
+                        'dbname' => 'db_' . $tenantCode
+                    ]);
                     
                     if ($stmt->fetch()) {
                         $tenantExists = true;

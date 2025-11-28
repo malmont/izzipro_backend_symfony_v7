@@ -19,15 +19,15 @@ class TenantDoctrineSwitcherListener
     private \PDO $pdoMaster;
     private LoggerInterface $logger;
     private TenantConnectionProvider $tenantConnectionProvider;
-    private string $frontendMainDomain; // Domaine principal du FRONTEND (ex: arkanoa-media.com)
-    private string $backendMainDomain;  // Domaine principal du BACKEND (ex: backend-strapi.online)
+    private string $frontendMainDomain; 
+    private string $backendMainDomain; 
 
     public function __construct(
         TenantConnectionProvider $tenantConnectionProvider,
         LoggerInterface $logger,
         string $masterDatabaseUrl,
-        string $frontendMainDomain, // Injecté depuis services.yaml
-        string $backendMainDomain   // Injecté depuis services.yaml
+        string $frontendMainDomain, 
+        string $backendMainDomain  
     ) {
         $parts = parse_url($masterDatabaseUrl);
         $scheme = $parts['scheme'] === 'postgresql' ? 'pgsql' : $parts['scheme'];
@@ -131,8 +131,6 @@ class TenantDoctrineSwitcherListener
             $this->logger->info("Domaine racine Backend (P3) détecté. Application du tenant par défaut 'tenantdefaut'.");
             $tenantCode = 'tenantdefaut'; // Assurez-vous que 'tenantdefaut' existe
         }
-        // NOTE: On ne met pas de tenant par défaut pour le domaine racine FRONTEND,
-        // car le frontend a sa propre logique (ex: page d'accueil)
 
         if (!$tenantCode) {
             $this->logger->info("Pas de tenant détecté pour le host '$host' (lu depuis {$source}).");
@@ -164,7 +162,6 @@ class TenantDoctrineSwitcherListener
             $this->logger->info("Changement de contexte de BDD requis. Actuelle: '$currentDb', Cible: '$targetDb'.");
             $this->tenantConnectionProvider->switchTenant($targetDb, $tenantCode);
         } else {
-            // S'assure que le tenantCode est propagé au provider même si la BDD est déjà la bonne
             $this->tenantConnectionProvider->switchTenant($targetDb, $tenantCode);
             $this->logger->info("Contexte de BDD déjà correct. Cible: '$targetDb'. (Tenant: $tenantCode)");
         }
