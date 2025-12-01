@@ -108,7 +108,7 @@ class GemsuiteSaleManager
 
     private function finalizeSaleAsInvoice(int $saleId, string $token): void
     {
-        $response = $this->client->request('PUT', self::GEMSUITE_API_URL . 'sales/' . $saleId, [
+        $response = $this->client->request('PUT', $this->gemsuiteApiUrl . 'sales/' . $saleId, [
             'auth_bearer' => $token,
             'json' => ['action' => 'invoice'],
         ]);
@@ -139,10 +139,10 @@ class GemsuiteSaleManager
 
         if ($stripeRef) {
             $payload['reference'] = $stripeRef; 
-            $payload['note'] = "Stripe ID: " . $stripeRef; // On le met aussi en note par sécurité
+            $payload['note'] = "Stripe ID: " . $stripeRef;
         }
 
-        $response = $this->client->request('POST', self::GEMSUITE_API_URL . 'sales_payment', [
+        $response = $this->client->request('POST', $this->gemsuiteApiUrl . 'sales_payment', [
             'auth_bearer' => $token,
             'json' => $payload,
         ]);

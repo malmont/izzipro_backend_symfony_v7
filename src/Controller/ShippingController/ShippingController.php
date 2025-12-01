@@ -31,7 +31,6 @@ class ShippingController extends AbstractController
     #[Route('/api/shipping/rates', methods: ['POST'])]
     public function rates(Request $request): JsonResponse
     {
-        // 2. AJOUTER LE BLOC TRY...CATCH
         try {
             $data = json_decode($request->getContent(), true);
             $cart = array_map(
@@ -47,13 +46,11 @@ class ShippingController extends AbstractController
             return $this->json($rates);
 
         } catch (ItemTooLargeForPackagingException $e) {
-            // Erreur 400 (Bad Request) : Le produit est trop grand.
             return $this->json(
                 ['error' => $e->getMessage()],
                 JsonResponse::HTTP_BAD_REQUEST 
             );
         } catch (\Exception $e) {
-            // Erreur 500 (Interne) : API EasyPost HS, autre...
             $this->logger->error('Erreur API Shipping/Rates: ' . $e->getMessage(), ['exception' => $e]);
             return $this->json(
                 ['error' => 'Une erreur serveur est survenue lors du calcul des tarifs.'],
@@ -77,19 +74,15 @@ class ShippingController extends AbstractController
             );
             $summary = $this->getParcelSummariesForCart->execute(
                 $cart
-                // Note: les adresses et transporteurs ne sont pas
-                // nécessaires pour getParcelSummaries selon notre ShippingService
             );
             return $this->json($summary);
 
         } catch (ItemTooLargeForPackagingException $e) {
-            // Erreur 400 (Bad Request)
             return $this->json(
                 ['error' => $e->getMessage()],
                 JsonResponse::HTTP_BAD_REQUEST
             );
         } catch (\Exception $e) {
-            // Erreur 500 (Interne)
             $this->logger->error('Erreur API Shipping/Parcels: ' . $e->getMessage(), ['exception' => $e]);
             return $this->json(
                 ['error' => 'Une erreur serveur est survenue lors du calcul des colis.'],
@@ -104,7 +97,6 @@ class ShippingController extends AbstractController
     #[Route('/api/shipping/buy', methods: ['POST'])]
     public function buy(Request $request): JsonResponse
     {
-        // 2. AJOUTER LE BLOC TRY...CATCH
         try {
             $data = json_decode($request->getContent(), true);
             $orderId = (int) ($data['orderId'] ?? 0);
@@ -123,16 +115,18 @@ class ShippingController extends AbstractController
             return $this->json($labels);
 
         } catch (ItemTooLargeForPackagingException $e) {
-            // Erreur 400 (Bad Request)
             return $this->json(
                 ['error' => $e->getMessage()],
                 JsonResponse::HTTP_BAD_REQUEST
             );
         } catch (\Exception $e) {
-            // Erreur 500 (Interne)
             $this->logger->error('Erreur API Shipping/Buy: ' . $e->getMessage(), ['exception' => $e]);
+            
             return $this->json(
-                ['error' => 'Une erreur serveur est survenue lors de l\'achat des étiquettes.'],
+                [
+                    'error' => 'DEBUG ERROR: ' . $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ],
                 JsonResponse::HTTP_INTERNAL_SERVER_ERROR
             );
         }
@@ -162,13 +156,11 @@ class ShippingController extends AbstractController
             return $this->json($result);
 
         } catch (ItemTooLargeForPackagingException $e) {
-            // Erreur 400 (Bad Request)
             return $this->json(
                 ['error' => $e->getMessage()],
                 JsonResponse::HTTP_BAD_REQUEST
             );
         } catch (\Exception $e) {
-            // Erreur 500 (Interne)
             $this->logger->error('Erreur API Shipping/Summary: ' . $e->getMessage(), ['exception' => $e]);
             return $this->json(
                 ['error' => 'Une erreur serveur est survenue lors du calcul du résumé.'],

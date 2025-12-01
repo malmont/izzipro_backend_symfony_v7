@@ -82,26 +82,39 @@ class EasyPostService
 
         try {
             $shipment = $client->shipment->create($data);
+            
             $rateToBuy = null;
+            
+            $targetAccountId = trim($carrierAccountId);
+            $targetService = trim($service);
+
             foreach ($shipment->rates as $r) {
-                if ($r->carrier_account_id === $carrierAccountId && $r->service === $service && isset($r->id)) {
+                if ($r->carrier_account_id === $targetAccountId && $r->service === $targetService && isset($r->id)) {
                     $rateToBuy = $r;
                     break;
                 }
             }
+            
             if (!$rateToBuy) {
+
+                $availableServices = array_map(fn($r) => $r->service . ' (' . $r->carrier_account_id . ')', $shipment->rates);
+                error_log("Tarif introuvable. Cherché: [$targetService][$targetAccountId]. Trouvés: " . implode(', ', $availableServices));
+
                 $rateToBuy = $shipment->lowestRate();
                 if (!isset($rateToBuy->id)) {
                      throw new RuntimeException("Impossible de trouver un tarif achetable pour cette expédition.");
                 }
             }
 
-            $bought = $client->shipment->buy($shipment->id, ['rate' => ['id' => $rateToBuy->id]]); // Passe l'ID du rate
+            $bought = $client->shipment->buy($shipment->id, ['rate' => ['id' => $rateToBuy->id]]);
 
             return [
                 'label_url'     => $bought->postage_label->label_url,
                 'tracking_code' => $bought->tracking_code,
+                'price'         => $rateToBuy->rate,
+                'currency'      => $rateToBuy->currency
             ];
+
         } catch (\EasyPost\Exception\Api\BaseException $e) {
              error_log("EasyPost API Error (buyShipment): " . $e->getMessage());
              throw new RuntimeException("Erreur lors de l'achat de l'étiquette EasyPost: " . $e->getMessage(), 0, $e);
