@@ -1,27 +1,39 @@
 {# templates/reset_password/success.html.twig #}
-{% extends 'base.email.html.twig' %}
+{% extends 'base.html.twig' %}
 
-{% block title %}Mot de passe réinitialisé avec succès{% endblock %}
+{% block title %}Mot de passe réinitialisé{% endblock %}
 
 {% block body %}
+<div class="container mt-5" style="max-width: 600px;">
+  
   <div style="text-align: center; margin-bottom: 20px;">
-    {% if logoUrl %}
-      <img src="{{ domain ~ logoUrl }}" alt="{{ fromName }}" style="max-width: 200px;">
+    {# CORRECTION : On concatène domain + logoUrl ici aussi #}
+    {% if logoUrl is defined and logoUrl %}
+      <img src="{{ domain }}{{ logoUrl }}" alt="{{ fromName }}" style="max-width: 200px;">
     {% endif %}
+    
     {% if fromName %}
       <h2>{{ fromName }}</h2>
     {% endif %}
   </div>
 
-  <div class="alert alert-success" role="alert" style="text-align: center;">
-      <h4 class="alert-heading">Félicitations, {{ user.firstname }}!</h4>
-      <p>{{ message }}</p>
+  <div class="alert alert-success shadow-sm" role="alert" style="text-align: center;">
+      <h4 class="alert-heading">Félicitations, {{ user.firstname }} !</h4>
+      
+      <p>{{ message|default('Opération réussie.') }}</p>
       <hr>
-      <p class="mb-0">Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.</p>
+      <p class="mb-0">Votre mot de passe a été réinitialisé avec succès.</p>
+      
+      {# <div class="mt-4"> #}
+          {# Petite astuce : Si tu veux renvoyer vers le login du shop, il faudrait idéalement utiliser l'URL du front #}
+          {# <a href="/login" class="btn btn-primary">Se connecter maintenant</a>
+      </div> #}
   </div>
 
-  <div style="text-align: center; margin-top: 20px;">
-      <p>Pour toute question, contactez-nous :</p>
-      <p>Email : {{ fromEmail }} </p>
-  </div>
+  {% if fromEmail is defined and fromEmail %}
+      <div style="text-align: center; margin-top: 20px; color: #666;">
+          <p><small>Pour toute question : {{ fromEmail }}</small></p>
+      </div>
+  {% endif %}
+</div>
 {% endblock %}

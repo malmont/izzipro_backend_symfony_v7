@@ -29,6 +29,8 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use App\Entity\ProductTranslation;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use App\Form\ProductTranslationType;
+use App\Enum\ProductMode;
+use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 
 class ProductCrudController extends BaseTenantCrudController
 {
@@ -69,7 +71,16 @@ class ProductCrudController extends BaseTenantCrudController
         yield NumberField::new('coefficientMultiplier', 'Coefficient')->setColumns('col-md-4');
         yield TextField::new('barcode', 'Code Barre')->setColumns('col-md-4');
         yield IntegerField::new('quantity', 'Quantité')->onlyOnIndex();
-
+        yield ChoiceField::new('mode', 'Type de Vente')
+            ->setChoices([
+                'Vente Classique (Retail)' => ProductMode::RETAIL,
+                'Location / Réservation' => ProductMode::BOOKING,
+            ])
+            ->renderAsBadges([
+                ProductMode::RETAIL->value => 'success',
+                ProductMode::BOOKING->value => 'warning',
+            ])
+            ->setColumns('col-md-6');
 
         yield FormField::addTab('Organisation & Média');
         yield FormField::addPanel('Catégorisation');

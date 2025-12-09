@@ -173,9 +173,12 @@ class TenantConnectionManager
 
     public function switchToTenant(TenantConfig $tenant): void
     {
-        $params = $this->tenantParams;
-        $params['dbname'] = $tenant->getDbname();
-        $this->reconnect($params);
+        $this->logger->info("[Manager] Bascule demandée vers : " . $tenant->getDbname());
+        
+        $this->connectionProvider->switchTenant(
+            $tenant->getDbname(), 
+            $tenant->getCode()
+        );
     }
 
     public function switchToMaster(): void
@@ -368,6 +371,83 @@ private function runMigrations(string $dbname): void
             $this->logger->error("Échec de findTenantByCode pour '{$code}': " . $e->getMessage());
             return null;
         }
+    }
+    /**
+     * Logique copiée du Listener : Support Custom Domain + Subdomain + WWW
+     */
+    public function findTenantConfigByHost(string $host): ?TenantConfig
+    {
+        $pdo = $this->pdoMaster; 
+        $tenantCode = null;
+        $dbname = null;
+        $name = 'Unknown';
+
+        // 1. Nettoyage et gestion du WWW
+        // Si l'URL arrive avec www., on teste avec et sans.
+        $altHost = $host;
+        if (str_starts_with($host, 'www.')) {
+            $altHost = substr($host, 4); 
+        } else {
+            $altHost = 'www.' . $host;
+        }
+
+        // 2. PRIORITÉ 1 : DOMAINE PERSONNALISÉ (Logique du Listener)
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT code, name, dbname FROM tenants WHERE custom_domain = :host OR custom_domain = :altHost LIMIT 1'
+            );
+            $stmt->execute(['host' => $host, 'altHost' => $altHost]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($row) {
+                $tenantCode = $row['code'];
+                $dbname = $row['dbname'];
+                $name = $row['name'] ?? $tenantCode;
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning("Erreur SQL recherche custom domain: " . $e->getMessage());
+        }
+
+        if (!$tenantCode) {
+            $cleanHost = explode(':', $host)[0]; 
+            $parts = explode('.', $cleanHost);
+
+            $potentialCode = null;
+            if ($parts[0] === 'www' && isset($parts[1])) {
+                $potentialCode = $parts[1];
+            } else {
+                $potentialCode = $parts[0];
+            }
+
+            // Exclusion des mots clés système
+            if ($potentialCode && !in_array($potentialCode, ['api', 'admin', 'backend', 'www', 'localhost'])) {
+                try {
+                    // On vérifie si ce code existe vraiment
+                    $stmt = $pdo->prepare('SELECT code, name, dbname FROM tenants WHERE code = :code LIMIT 1');
+                    $stmt->execute(['code' => $potentialCode]);
+                    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                    if ($row) {
+                        $tenantCode = $row['code'];
+                        $dbname = $row['dbname'];
+                        $name = $row['name'] ?? $tenantCode;
+                    }
+                } catch (\Throwable $e) {
+                    // Silence
+                }
+            }
+        }
+
+        if ($tenantCode && $dbname) {
+            $config = new TenantConfig();
+            $config->setCode($tenantCode);
+            $config->setName($name);
+            $config->setDbname($dbname);
+            
+            return $config;
+        }
+
+        return null;
     }
 
 }

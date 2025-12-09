@@ -18,7 +18,7 @@ use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
 use App\UseCase\OrderUseCase\CalculateTaxesUseCase;
 use App\UseCase\OrderUseCase\PaymentHandlerUseCase;
 use App\UseCase\OrderUseCase\CalculateTotalAmountUseCase;
-
+use App\UseCase\Booking\HandleBookingUseCase;
 
 class CreateOrderUseCase
 {
@@ -31,6 +31,7 @@ class CreateOrderUseCase
     private HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase;
     private TenantEntityManagerProvider $emProvider;
     private Security $security;
+    private HandleBookingUseCase $handleBookingUseCase;
 
     public function __construct(
         CreateOrderCommandUseCase $createOrderCommandUseCase,
@@ -41,7 +42,8 @@ class CreateOrderUseCase
         CalculateTotalAmountUseCase $calculateTotalAmountUseCase,
         HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase,
         TenantEntityManagerProvider $emProvider,
-        Security $security
+        Security $security,
+        HandleBookingUseCase $handleBookingUseCase
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -52,6 +54,7 @@ class CreateOrderUseCase
         $this->handleCaisseTransactionUseCase = $handleCaisseTransactionUseCase;
         $this->emProvider = $emProvider;
         $this->security = $security;
+        $this->handleBookingUseCase = $handleBookingUseCase;
     }
 
     public function execute(ICreateOrderDTO $orderDTO)
@@ -69,6 +72,8 @@ class CreateOrderUseCase
             if ($order instanceof JsonResponse) {
                 throw new \Exception($order->getContent());
             }
+            // GESTION DES RÉSERVATIONS POUR LES PRODUITS BOOKING
+            $this->handleBookingUseCase->execute($order, $orderDTO->getItems());
 
             try {
                 $subtotal = $this->processOrderItemsUseCase->execute($order, $orderDTO->getItems(), $this->updateStockAndInventoryUseCase, $typeOrderId, $orderDTO->getPriceShipping());

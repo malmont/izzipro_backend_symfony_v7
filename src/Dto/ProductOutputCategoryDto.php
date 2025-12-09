@@ -5,11 +5,7 @@ namespace App\Dto;
 use App\Entity\Product;
 use App\Entity\ProductVariant;
 use App\Entity\ProductOptionValue;
-use App\Entity\Category;
-use App\Entity\Style;
-use App\Entity\Color;
-use App\Entity\Size;
-use App\Entity\ProductOption;
+use App\Enum\ProductMode; 
 
 class ProductOutputCategoryDto
 {
@@ -31,6 +27,12 @@ class ProductOutputCategoryDto
     public ?float $purchasePrice;
     public ?float $coefficientMultiplier;
     public ?string $barcode;
+    
+    // --- NOUVEAUX CHAMPS POUR LE BOOKING ---
+    public string $mode;
+    public ?array $bookingConfig = null;
+    // ---------------------------------------
+
     public ?array $style;
     public array $variants;
     public ?array $category;
@@ -43,11 +45,14 @@ class ProductOutputCategoryDto
         $this->name = $productTranslation?->getName() ?? $product->getName(); 
         $this->description = $productTranslation?->getDescription() ?? $product->getDescription();
         $this->moreinformations = $productTranslation?->getMoreinformations() ?? $product->getMoreinformations();
+        
         $this->price = $product->getPrice();
+        
         $this->isbestseller = $product->isIsbestseller();
         $this->isnewarrival = $product->isIsnewarrival();
         $this->isfeatured = $product->isIsfeatured();
         $this->isspecialoffer = $product->isIsspecialoffer();
+        
         $imagePath = $product->getImage();
         if (empty($imagePath)) {
             $this->image = null;
@@ -57,7 +62,9 @@ class ProductOutputCategoryDto
             $cleanedHost = rtrim($host, '/');
             $this->image = $cleanedHost . '/assets/uploads/products/' . $imagePath;
         }
+        
         $this->quantity = $product->getQuantity();
+        
         $this->freezeQuantity = $product->getFreezeQuantity() ?? 0;
         $this->createdAt = $product->getCreatedAt()->format('Y-m-d H:i:s');
         $this->tags = $productTranslation?->getTags() ?? $product->getTags(); 
@@ -65,6 +72,19 @@ class ProductOutputCategoryDto
         $this->purchasePrice = $product->getPurchasePrice();
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->barcode = $product->getBarcode();
+ 
+        $this->mode = $product->getMode()->value;
+
+        if ($product->isBookable() && $config = $product->getBookingConfiguration()) {
+            $this->bookingConfig = [
+                'granularity'   => $config->getGranularity(),
+                'minDuration'   => $config->getMinDuration(),
+                'stockQuantity' => $config->getStockQuantity(),
+                'bufferTime'    => $config->getBufferTime(),
+            ];
+        }
+        // --------------------------------
+
         $style = $product->getStyle();
         if ($style) {
             if (method_exists($style, '__isInitialized') && !$style->__isInitialized()) {
@@ -82,7 +102,7 @@ class ProductOutputCategoryDto
             $this->style = null;
         }
 
-         $this->variants = array_map(function (ProductVariant $variant) use ($locale){
+        $this->variants = array_map(function (ProductVariant $variant) use ($locale){
             $color = $variant->getColor();
             $size = $variant->getSize();
             
@@ -117,11 +137,13 @@ class ProductOutputCategoryDto
             return [
                 'id'          => $category->getId(),
                 'name'        => $category->getTranslation($locale)?->getName(),
-                    'description' => $category->getTranslation($locale)?->getDescription(),
+                'description' => $category->getTranslation($locale)?->getDescription(),
                 'image'       => $category->getImage() 
                     ? $host . '/assets/uploads/categories/' . $category->getImage() 
                     : null,
             ];
         }, $product->getCategory()->toArray());
+        
+        // $this->specifications = $product->getSpecifications();
     }
 }

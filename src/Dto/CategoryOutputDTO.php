@@ -28,9 +28,7 @@ class CategoryOutputDTO
             $this->image = $cleanedHost . '/assets/uploads/categories/' . $imagePath;
         }
         
-        // $this->image = $category->getImage() 
-        //     ? rtrim($host, '/') . '/assets/uploads/categories/' . $category->getImage() 
-        //     : null;
+
     }
 
     public function toArray(): array

@@ -1,6 +1,7 @@
 <?php
 namespace App\Entity;
 
+use App\Enum\ProductMode;
 use DateTime;
 use App\Entity\Categories;
 use Doctrine\DBAL\Types\Types;
@@ -140,6 +141,18 @@ class Product implements TranslatableInterface
     #[Groups(['product:read'])]
     private ?bool $isPreOrder = false;
 
+    #[ORM\Column(type: 'string', length: 20, enumType: ProductMode::class, options: ['default' => 'retail'])]
+    private ProductMode $mode = ProductMode::RETAIL;
+
+    #[ORM\OneToOne(mappedBy: 'product', cascade: ['persist', 'remove'])]
+    private ?BookingConfiguration $bookingConfiguration = null;
+
+    /**
+     * @var Collection<int, Booking>
+     */
+    #[ORM\OneToMany(mappedBy: 'product', targetEntity: Booking::class)]
+    private Collection $bookings;
+
     public function __construct()
     {
         $this->category = new ArrayCollection();
@@ -148,7 +161,8 @@ class Product implements TranslatableInterface
         $this->createdAt = new DateTimeImmutable();
         $this->variants = new ArrayCollection();
         $this->updateQuantity();
-        $this->translations = new ArrayCollection(); 
+        $this->translations = new ArrayCollection();
+        $this->bookings = new ArrayCollection(); 
     }
 
     public function getId(): ?int
@@ -759,6 +773,74 @@ class Product implements TranslatableInterface
             return true;
         }
         return $this->quantity > 0;
+    }
+
+    public function getMode(): ProductMode
+    {
+        return $this->mode;
+    }
+
+    public function setMode(ProductMode $mode): static
+    {
+        $this->mode = $mode;
+        return $this;
+    }
+
+    public function isBookable(): bool
+    {
+        return $this->mode === ProductMode::BOOKING;
+    }
+
+    public function getBookingConfiguration(): ?BookingConfiguration
+    {
+        return $this->bookingConfiguration;
+    }
+
+    public function setBookingConfiguration(?BookingConfiguration $bookingConfiguration): static
+    {
+        // unset the owning side of the relation if necessary
+        if ($bookingConfiguration === null && $this->bookingConfiguration !== null) {
+            $this->bookingConfiguration->setProduct(null);
+        }
+
+        // set the owning side of the relation if necessary
+        if ($bookingConfiguration !== null && $bookingConfiguration->getProduct() !== $this) {
+            $bookingConfiguration->setProduct($this);
+        }
+
+        $this->bookingConfiguration = $bookingConfiguration;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Booking>
+     */
+    public function getBookings(): Collection
+    {
+        return $this->bookings;
+    }
+
+    public function addBooking(Booking $booking): static
+    {
+        if (!$this->bookings->contains($booking)) {
+            $this->bookings->add($booking);
+            $booking->setProduct($this);
+        }
+
+        return $this;
+    }
+
+    public function removeBooking(Booking $booking): static
+    {
+        if ($this->bookings->removeElement($booking)) {
+            // set the owning side to null (unless already changed)
+            if ($booking->getProduct() === $this) {
+                $booking->setProduct(null);
+            }
+        }
+
+        return $this;
     }
 
 }

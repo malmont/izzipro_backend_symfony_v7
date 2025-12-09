@@ -9,12 +9,13 @@ use App\Entity\Style;
 use App\Entity\Color;
 use App\Entity\Size;
 use App\Entity\ProductVariant;
-use App\Entity\ProductOptionValue; // <-- AJOUT 1
-use App\Entity\ProductOption;    // <-- AJOUT 2
+use App\Entity\ProductOptionValue;
+use App\Entity\ProductOption;
+use App\Enum\ProductMode; // <-- AJOUT IMPORTANT
 
 class ProductDetailedOutputDTO
 {
-     public int $id;
+    public int $id;
     public ?string $name;
     public ?string $description;
     public ?string $moreinformations;
@@ -32,6 +33,12 @@ class ProductDetailedOutputDTO
     public ?float $purchasePrice;
     public ?float $coefficientMultiplier;
     public ?string $barcode;
+    
+    // --- NOUVEAUX CHAMPS BOOKING ---
+    public string $mode;
+    public ?array $bookingConfig = null;
+    // -------------------------------
+
     public ?array $style;
     public array $variants;
     public ?array $category;
@@ -49,8 +56,8 @@ class ProductDetailedOutputDTO
         $this->isnewarrival = $product->isIsnewarrival();
         $this->isfeatured = $product->isIsfeatured();
         $this->isspecialoffer = $product->isIsspecialoffer();
-        $imagePath = $product->getImage();
         
+        $imagePath = $product->getImage();
         if (empty($imagePath)) {
             $this->image = null;
         } elseif (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
@@ -59,7 +66,10 @@ class ProductDetailedOutputDTO
             $cleanedHost = rtrim($host, '/');
             $this->image = $cleanedHost . '/assets/uploads/products/' . $imagePath;
         }
+
+        // Pour le booking, ceci retourne la capacité totale (Pool)
         $this->quantity = $product->getQuantity();
+        
         $this->freezeQuantity = $product->getFreezeQuantity() ?? 0;
         $this->createdAt = $product->getCreatedAt()->format('Y-m-d H:i:s');
         $this->tags = $productTranslation?->getTags() ?? $product->getTags();
@@ -67,19 +77,32 @@ class ProductDetailedOutputDTO
         $this->purchasePrice = $product->getPurchasePrice();
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->barcode = $product->getBarcode();
+
+        // --- LOGIQUE BOOKING ---
+        // 1. Le Mode (retail vs booking)
+        $this->mode = $product->getMode()->value;
+
+        // 2. La Config (pour le calendrier Front)
+        if ($product->isBookable() && $config = $product->getBookingConfiguration()) {
+            $this->bookingConfig = [
+                'granularity'   => $config->getGranularity(),
+                'minDuration'   => $config->getMinDuration(),
+                'stockQuantity' => $config->getStockQuantity(),
+                'bufferTime'    => $config->getBufferTime(),
+            ];
+        }
+        // -----------------------
     
         $this->style = $product->getStyle() ? [
             'id' => $product->getStyle()->getId(),
-            'name' => $product->getStyle()->getName(), // Note : Le style n'est pas traduit ici
+            'name' => $product->getStyle()->getName(),
         ] : null;
         $this->specifications = $product->getSpecifications();
 
-        // --- BLOC DE VARIANTES MIS À JOUR ---
         $this->variants = array_map(function (ProductVariant $variant) use ($locale) {
             $color = $variant->getColor();
             $size = $variant->getSize();
 
-            // --- AJOUT 3 : On boucle sur les 'optionValues' ---
             $options = array_map(function (ProductOptionValue $optionValue) use ($locale) {
                 $parentOption = $optionValue->getProductOption();
                 return [
@@ -90,7 +113,6 @@ class ProductDetailedOutputDTO
                     'option_code' => $parentOption ? $parentOption->getCode() : null,
                 ];
             }, $variant->getOptionValues()->toArray());
-            // --- FIN AJOUT ---
 
             return [
                 'id' => $variant->getId(),
@@ -104,18 +126,15 @@ class ProductDetailedOutputDTO
                     'name' => $size->getTranslation($locale)?->getName() ?? $size->getName(),
                 ] : null,
                 'stockQuantity' => $variant->getStockQuantity(),
-                'options' => $options, // <-- AJOUT 4 : On ajoute le tableau
+                'options' => $options, 
             ];
         }, $product->getVariants()->toArray());
-        // --- FIN BLOC ---
     
         $categoriesCollection = $product->getCategory();
         if ($categoriesCollection && !$categoriesCollection->isEmpty()) {
             
-            // --- BLOC CATÉGORIE CORRIGÉ ---
-            $this->category = array_map(function (Categories $category) use ($locale, $host) { // <-- CORRECTION : Type 'Categories'
+            $this->category = array_map(function (Categories $category) use ($locale, $host) {
                 
-                // --- CORRECTION : On utilise la traduction de la catégorie, pas du produit ---
                 $translation = $category->getTranslation($locale); 
                 
                 return [
@@ -127,10 +146,9 @@ class ProductDetailedOutputDTO
                         : null,
                 ];
             }, $categoriesCollection->toArray());
-            // --- FIN CORRECTION ---
 
         } else {
-            $this->category = []; // Initialisé à un tableau vide, cohérent avec $variants
+            $this->category = []; 
         }   
     }   
- }
+}

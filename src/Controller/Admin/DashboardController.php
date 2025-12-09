@@ -87,6 +87,10 @@ use App\Entity\Video;
 use App\Entity\Embed;
 use App\Entity\BaniereStatique;
 use App\Entity\NewsletterSubscriber;
+use App\Entity\BookingConfiguration;
+use App\Entity\Booking;
+
+
 
 class DashboardController extends AbstractDashboardController
 {
@@ -219,6 +223,15 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Types d\'options', 'fas fa-tag', ProductOption::class);
         yield MenuItem::linkToCrud('Valeurs d\'options', 'fas fa-palette', ProductOptionValue::class)->setController(ProductOptionValueCrudController::class);
         yield MenuItem::linkToCrud('Types de Produit', 'fas fa-box', ProductType::class);
+        
+
+        yield MenuItem::section('Location / Réservation');
+
+        yield MenuItem::linkToCrud('Planning & Réservations', 'fas fa-calendar-check', Booking::class)
+            ->setController(BookingCrudController::class);
+
+        yield MenuItem::linkToCrud('Règles & Stocks', 'fas fa-sliders-h', BookingConfiguration::class)
+            ->setController(BookingConfigurationCrudController::class);
 
               
     }

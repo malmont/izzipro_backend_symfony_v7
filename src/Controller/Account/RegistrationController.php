@@ -22,6 +22,7 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Psr\Log\LoggerInterface;
+use App\Dto\TenantConfig;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
 
 class RegistrationController extends AbstractController
@@ -114,21 +115,36 @@ class RegistrationController extends AbstractController
         $lastName = $decoded['lastName'];
         $username = $email;
 
+        // Validation Email
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return $this->json(['error' => 'Invalid email format'], Response::HTTP_BAD_REQUEST);
         }
 
+        // Vérification DNS simple
         [$local, $domain] = explode('@', $email, 2);
         if (!checkdnsrr($domain, 'MX') && !checkdnsrr($domain, 'A')) {
             return $this->json(['error' => 'Email domain appears invalid'], Response::HTTP_BAD_REQUEST);
         }
 
+        // Vérification doublon
         $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if ($existingUser) {
             return $this->json(['error' => 'User already exists'], Response::HTTP_CONFLICT);
         }
 
-        // 2. Création du Client Gemsuite & User
+        // 2. Détermination du "Tenant Host" (Domaine du client)
+        // C'est l'information CRUCIALE pour retrouver la bonne BDD plus tard
+        $tenantHost = $request->headers->get('x-tenant-host');
+
+        // Fallback : Si le header est manquant, on tente de le deviner via l'Origin (ex: https://karaandb.com)
+        if (!$tenantHost) {
+            $origin = $request->headers->get('origin');
+            if ($origin) {
+                $tenantHost = parse_url($origin, PHP_URL_HOST);
+            }
+        }
+
+        // 3. Création du Client Gemsuite & User
         $tenantCode = $this->tenantManager->getCurrentTenantCode();
         $gemsuiteClient = $this->gemsuiteClientManager->findOrCreateClient($email, $firstName, $lastName, $tenantCode);
 
@@ -157,47 +173,46 @@ class RegistrationController extends AbstractController
         $em->persist($user);
         $em->flush();
 
-        $this->logger->info("[Register API] User créé avec ID: " . $user->getId());
+        $this->logger->info("[Register API] User créé ID: " . $user->getId() . " pour le domaine: " . ($tenantHost ?? 'Inconnu'));
 
-        // 3. Gestion de l'Email (AVEC DEBUG LOGS) 🕵️‍♂️
-        
-        $this->logger->info("[Register API] Recherche Config Email pour locale: $locale");
-
+        // 4. Gestion de l'Email
         $emailConfig = $this->emailConfigurationService->findOneByLocale($locale);
         $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
 
-        // Diagnostic précis si la config manque
-        if (!$emailConfig) {
-            $this->logger->error("[Register API] ERREUR: Aucune entité 'EmailConfiguration' trouvée en BDD !");
-        } elseif (!$emailConfigTranslation) {
-            $this->logger->error("[Register API] ERREUR: Config trouvée mais pas de traduction pour la locale '$locale'.");
-        }
-
-        // Si la config existe, on tente l'envoi
         if ($emailConfig && $emailConfigTranslation) {
-            
             try {
-                $this->logger->info("[Register API] Config OK. Préparation de l'email via : " . $emailConfig->getFromEmail());
+                // --- CONSTRUCTION DE L'URL INTELLIGENTE ---
+                // On génère un lien vers le Backend, MAIS on y ajoute l'info du domaine client (?tenant_host=...)
+                // Ex: https://gem-portal-backend.com/verify/email?token=XYZ&tenant_host=karaandb.com
+                
+                $routeParams = ['token' => $verificationToken];
+                if ($tenantHost) {
+                    $routeParams['tenant_host'] = $tenantHost;
+                }
 
                 $verificationUrl = $urlGenerator->generate(
                     'app_verify_email',
-                    ['token' => $verificationToken],
+                    $routeParams,
                     UrlGeneratorInterface::ABSOLUTE_URL
                 );
+
+                // Pour les assets (logos), on utilise le domaine actuel de l'API pour éviter les problèmes SSL/CORS
+                $baseUrl = $request->getSchemeAndHttpHost();
+                $fullLogoUrl = null;
+
+                if ($emailConfig->getLogo()) {
+                    $fullLogoUrl = $baseUrl . '/assets/uploads/email-logos/' . $emailConfig->getLogo();
+                }
 
                 $fromEmail = $emailConfig->getFromEmail();
                 $fromName  = $emailConfigTranslation->getFromName();
                 $signature = $emailConfigTranslation->getSignature();
-                $logoUrl   = $emailConfig->getLogo();
-                
-                $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
 
                 $emailContent = $this->renderView('verification/validation_email.html.twig', [
                     'user'            => $user,
                     'fromName'        => $fromName,
                     'signature'       => $signature,
-                    'logoUrl'         => $logoUrl,
-                    'domain'          => $domain,
+                    'logoUrl'         => $fullLogoUrl,
                     'verificationUrl' => $verificationUrl,
                 ]);
 
@@ -208,28 +223,12 @@ class RegistrationController extends AbstractController
                     ->html($emailContent);
 
                 $mailer->send($emailMessage);
-                
-                $this->logger->info("[Register API] SUCCÈS: Email remis au transporteur (ou file d'attente).");
-
-                return $this->json([
-                    'message' => 'Registered Successfully. Please check your email to verify your account.'
-                ], Response::HTTP_CREATED);
 
             } catch (\Throwable $e) {
-                // En cas d'erreur SMTP, on loggue mais on ne fait pas planter l'inscription
-                $this->logger->critical("[Register API] EXCEPTION MAILER : " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-                
-                // On peut décider de retourner le succès quand même, ou une erreur. 
-                // Ici je garde la logique "Succès" pour ne pas bloquer le user, mais l'admin verra les logs.
+                $this->logger->critical("[Register API] ERREUR EMAIL : " . $e->getMessage());
             }
-
         } else {
-            // Config manquante : On loggue le SKIP
-            $this->logger->warning("[Register API] SKIP EMAIL: Passage dans le else (pas de config email valide). L'utilisateur est inscrit mais non notifié.");
-            
-            $user->setIsVerified(false);
-            $user->setVerificationToken(null);
-            $em->flush();
+            $this->logger->warning("[Register API] Pas de config email trouvée. User créé sans notification.");
         }
 
         return $this->json([
@@ -240,40 +239,178 @@ class RegistrationController extends AbstractController
     #[Route('/verify/email', name: 'app_verify_email', methods: ['GET'])]
     public function verifyEmail(Request $request): Response
     {
-        $em = $this->tenantEmProvider->getEntityManager();
-        $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
-        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
-        if (!$emailConfig) {
-            $emailConfig = null;
+        // 1. Bascule Tenant
+        $targetHost = $request->query->get('tenant_host');
+        if ($targetHost) {
+            try {
+                $tenantConfig = $this->tenantManager->findTenantConfigByHost($targetHost);
+                if ($tenantConfig) {
+                    $this->tenantManager->switchToTenant($tenantConfig);
+                    $this->logger->info("[Verify Email] Bascule réussie sur : " . $tenantConfig->getDbname());
+                } else {
+                    $this->logger->warning("[Verify Email] Tenant introuvable pour le host : " . $targetHost);
+                }
+            } catch (\Exception $e) {
+                $this->logger->error("[Verify Email] Erreur bascule : " . $e->getMessage());
+                // On continue pour tenter d'afficher l'erreur proprement
+            }
         }
+
+        $em = $this->tenantEmProvider->getEntityManager();
+        $connection = $em->getConnection();
+        
+        // 2. Récupération Config Email (Indispensable pour votre Twig)
+        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        $baseUrl = $request->getSchemeAndHttpHost();
+        
+        // Pré-calcul du logo pour le passer proprement
+        $logoUrl = ($emailConfig && $emailConfig->getLogo()) 
+            ? $baseUrl . '/assets/uploads/email-logos/' . $emailConfig->getLogo() 
+            : null;
 
         $token = $request->query->get('token');
+        
+        // 3. Cas : Token manquant
         if (!$token) {
             return $this->render('verification/error.html.twig', [
-                'message' => 'Token manquant.',
-                'emailConfig' => $emailConfig,
-                'domain' => $domain
+                'message'     => 'Token manquant.',
+                'logoUrl'     => $logoUrl,
+                'domain'      => $baseUrl,
+                'emailConfig' => $emailConfig // <--- AJOUTÉ ICI
             ]);
         }
 
-        $user = $em->getRepository(User::class)->findOneBy(['verificationToken' => $token]);
+        // 4. Recherche User via SQL Brut (Contournement bug Doctrine table "user")
+        $result = null;
+        try {
+            $sql = 'SELECT id FROM "user" WHERE verification_token = :token LIMIT 1';
+            $result = $connection->fetchAssociative($sql, ['token' => $token]);
+        } catch (\Exception $e) {
+            $this->logger->error("[Verify Email] Erreur SQL : " . $e->getMessage());
+        }
+
+        // 5. Validation si trouvé
+        if (is_array($result) && isset($result['id'])) {
+             // Chargement entité via ID
+             $user = $em->getRepository(User::class)->find($result['id']);
+             
+             if ($user) {
+                 $user->setIsVerified(true);
+                 $user->setVerificationToken(null);
+                 $em->flush();
+                 
+                 // Redirection Front Client
+                 if ($targetHost) {
+                     return $this->redirect('https://' . $targetHost . '/login?verified=true');
+                 }
+
+                 // Succès Backend
+                 return $this->render('verification/success.html.twig', [
+                     'user'        => $user,
+                     'logoUrl'     => $logoUrl,
+                     'domain'      => $baseUrl,
+                     'emailConfig' => $emailConfig
+                 ]);
+             }
+        }
+
+        // 6. Cas : Token invalide ou expiré
+        return $this->render('verification/error.html.twig', [
+            'message'     => 'Ce lien de validation est invalide ou a expiré.',
+            'logoUrl'     => $logoUrl,
+            'domain'      => $baseUrl,
+            'emailConfig' => $emailConfig 
+        ]);
+    }
+    #[Route('/api/resend-verification', name: 'api_resend_verification', methods: ['POST'])]
+    public function resendVerificationEmail(
+        Request $request,
+        MailerInterface $mailer,
+        UrlGeneratorInterface $urlGenerator
+    ): Response {
+        $em = $this->tenantEmProvider->getEntityManager();
+        $decoded = json_decode($request->getContent(), true);
+        $email = $decoded['email'] ?? null;
+        $locale = $request->query->get('locale', 'fr');
+
+        if (!$email) {
+            return $this->json(['error' => 'Email manquant'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // 1. Recherche de l'utilisateur
+        /** @var User|null $user */
+        $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
 
         if (!$user) {
-            return $this->render('verification/error.html.twig', [
-                'message' => 'Token invalide ou expiré.',
-                'emailConfig' => $emailConfig,
-                'domain' => $domain
-            ]);
+
+            return $this->json(['error' => 'Utilisateur introuvable'], Response::HTTP_NOT_FOUND);
         }
 
-        $user->setIsVerified(true);
-        $user->setVerificationToken(null);
+        if ($user->isVerified()) {
+            return $this->json(['message' => 'Ce compte est déjà vérifié.'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $verificationToken = bin2hex(random_bytes(32));
+        $user->setVerificationToken($verificationToken);
         $em->flush();
 
-        return $this->render('verification/success.html.twig', [
-            'user' => $user,
-            'emailConfig' => $emailConfig,
-            'domain' => $domain
-        ]);
+        $tenantHost = $request->headers->get('x-tenant-host');
+        if (!$tenantHost) {
+            $origin = $request->headers->get('origin');
+            if ($origin) {
+                $tenantHost = parse_url($origin, PHP_URL_HOST);
+            }
+        }
+
+        // 4. Envoi de l'email
+        $emailConfig = $this->emailConfigurationService->findOneByLocale($locale);
+        $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
+
+        if ($emailConfig && $emailConfigTranslation) {
+            try {
+                // Construction URL Bilingue
+                $routeParams = ['token' => $verificationToken];
+                if ($tenantHost) {
+                    $routeParams['tenant_host'] = $tenantHost;
+                }
+
+                $verificationUrl = $urlGenerator->generate(
+                    'app_verify_email',
+                    $routeParams,
+                    UrlGeneratorInterface::ABSOLUTE_URL
+                );
+
+                // URL Logo Absolue
+                $baseUrl = $request->getSchemeAndHttpHost();
+                $fullLogoUrl = null;
+                if ($emailConfig->getLogo()) {
+                    $fullLogoUrl = $baseUrl . '/assets/uploads/email-logos/' . $emailConfig->getLogo();
+                }
+
+                $emailContent = $this->renderView('verification/validation_email.html.twig', [
+                    'user'            => $user,
+                    'fromName'        => $emailConfigTranslation->getFromName(),
+                    'signature'       => $emailConfigTranslation->getSignature(),
+                    'logoUrl'         => $fullLogoUrl,
+                    'verificationUrl' => $verificationUrl,
+                ]);
+
+                $emailMessage = (new Email())
+                    ->from(sprintf('%s <%s>', $emailConfigTranslation->getFromName(), $emailConfig->getFromEmail()))
+                    ->to($user->getEmail())
+                    ->subject('Nouveau lien de validation de compte')
+                    ->html($emailContent);
+
+                $mailer->send($emailMessage);
+
+                return $this->json(['message' => 'Email de vérification renvoyé avec succès.'], Response::HTTP_OK);
+
+            } catch (\Throwable $e) {
+                $this->logger->critical("[Resend Verif] Erreur envoi : " . $e->getMessage());
+                return $this->json(['error' => 'Erreur lors de l\'envoi de l\'email.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+        }
+
+        return $this->json(['error' => 'Configuration email introuvable.'], Response::HTTP_INTERNAL_SERVER_ERROR);
     }
 }

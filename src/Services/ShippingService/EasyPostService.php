@@ -82,6 +82,16 @@ class EasyPostService
 
         try {
             $shipment = $client->shipment->create($data);
+            // if (empty($shipment->rates)) {
+            //     dd(
+            //         "=== ERREUR PUROLATOR (Pas de tarifs) ===",
+            //         "ID du compte demandé : " . $carrierAccountId,
+            //         "MESSAGES D'ERREUR DU TRANSPORTEUR :",
+            //         $shipment->messages, // <--- C'est ici que la vérité se trouve
+            //         "Données envoyées :", 
+            //         $data
+            //     );
+            // }
             
             $rateToBuy = null;
             

@@ -9,8 +9,9 @@ use App\Entity\Style;
 use App\Entity\Color;
 use App\Entity\Size;
 use App\Entity\ProductVariant;
-use App\Entity\ProductOptionValue; // <-- AJOUT 1 : On importe l'entité
-use App\Entity\ProductOption; // <-- AJOUT 2 : On importe le parent
+use App\Entity\ProductOptionValue;
+use App\Entity\ProductOption;
+use App\Enum\ProductMode;
 
 class ProductOutputDTO
 {
@@ -21,6 +22,11 @@ class ProductOutputDTO
     public ?float $coefficientMultiplier;
     public ?string $slug;
     public ?string $image;
+    
+    public string $mode;
+    public ?array $bookingConfig = null;
+    // -------------------------------
+
     public ?array $categories;
     public ?array $style;
     public array $variants;
@@ -36,6 +42,7 @@ class ProductOutputDTO
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->slug = $productTranslation?->getSlug() ?? $product->getSlug();
         $this->specifications = $product->getSpecifications();
+        
         $imagePath = $product->getImage();
         if (empty($imagePath)) {
             $this->image = null;
@@ -46,7 +53,19 @@ class ProductOutputDTO
             $this->image = $cleanedHost . '/assets/uploads/products/' . $imagePath;
         }
         
-        // ... (votre logique pour 'categories' et 'style' reste inchangée) ...
+
+        $this->mode = $product->getMode()->value;
+
+        if ($product->isBookable() && $config = $product->getBookingConfiguration()) {
+            $this->bookingConfig = [
+                'granularity'   => $config->getGranularity(), 
+                'minDuration'   => $config->getMinDuration(),
+                'stockQuantity' => $config->getStockQuantity(),
+                'bufferTime'    => $config->getBufferTime(),
+            ];
+        }
+        // -----------------------
+
         $categoriesCollection = $product->getCategory();
         if ($categoriesCollection && !$categoriesCollection->isEmpty()) {
             $this->categories = array_map(function (Category $category) use ($locale) {
@@ -66,12 +85,10 @@ class ProductOutputDTO
         ] : null;
 
 
-        // --- DÉBUT DU BLOC MODIFIÉ ---
         $this->variants = array_map(function (ProductVariant $variant) use ($locale) {
             $color = $variant->getColor();
             $size = $variant->getSize();
 
-            // --- AJOUT 3 : On boucle sur les 'optionValues' de la variante ---
             $options = array_map(function (ProductOptionValue $optionValue) use ($locale) {
                 $parentOption = $optionValue->getProductOption();
                 
@@ -80,10 +97,9 @@ class ProductOutputDTO
                     'value'       => $optionValue->getTranslation($locale)?->getValue() ?? $optionValue->getValue(),
                     'option_name' => $parentOption ? ($parentOption->getTranslation($locale)?->getName() ?? $parentOption->getName()) : null,
                     'option_id'   => $parentOption ? $parentOption->getId() : null,
-                    'option_code' => $parentOption ? $parentOption->getCode() : null, // Très utile pour le front !
+                    'option_code' => $parentOption ? $parentOption->getCode() : null,
                 ];
             }, $variant->getOptionValues()->toArray());
-            // --- FIN DE L'AJOUT ---
 
             return [
                 'id' => $variant->getId(),
@@ -97,9 +113,8 @@ class ProductOutputDTO
                     'name' => $size->getTranslation($locale)?->getName(),
                 ] : null,
                 'stockQuantity' => $variant->getStockQuantity(),
-                'options' => $options, // <-- AJOUT 4 : On ajoute le tableau d'options à la variante
+                'options' => $options,
             ];
         }, $product->getVariants()->toArray());
-        // --- FIN DU BLOC MODIFIÉ ---
     }
 }

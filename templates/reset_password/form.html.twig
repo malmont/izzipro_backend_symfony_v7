@@ -1,13 +1,16 @@
+{# templates/reset_password/form.html.twig #}
 {% extends 'base.email.html.twig' %}
 
 {% block title %}Réinitialiser le mot de passe{% endblock %}
 
 {% block body %}
   <div style="text-align: center; margin-bottom: 20px;">
-    {# On utilise maintenant les variables directes 'logoUrl' et 'fromName' #}
+    
+    {# CORRECTION IMPORTANTE : On concatène 'domain' et 'logoUrl' #}
     {% if logoUrl %}
-      <img src="{{ domain ~ logoUrl }}" alt="{{ fromName }} Logo" style="max-width: 200px;">
+      <img src="{{ domain }}{{ logoUrl }}" alt="{{ fromName }} Logo" style="max-width: 200px;">
     {% endif %}
+
     {% if fromName %}
       <h1>{{ fromName }}</h1>
     {% endif %}
@@ -15,13 +18,23 @@
 
   <div class="container mt-5">
     <h2 style="text-align: center;">Réinitialisation du mot de passe</h2>
-    <form action="{{ path('app_password_reset_confirm') }}" method="post" style="margin-top: 20px;">
+    
+    {# Formulaire avec action incluant le tenant_host #}
+    <form action="{{ path('app_password_reset_confirm', {'tenant_host': tenant_host}) }}" method="post" style="margin-top: 20px;">
+      
       <input type="hidden" name="token" value="{{ token }}">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token('app_password_reset_confirm') }}">
+      
+      {# Ce champ caché est une sécurité supplémentaire #}
+      <input type="hidden" name="tenant_host" value="{{ tenant_host }}">
+      
+      {# Si tu n'as pas activé CSRF pour cette route API/Front hybride, tu peux retirer cette ligne, sinon garde-la #}
+      {# <input type="hidden" name="_csrf_token" value="{{ csrf_token('app_password_reset_confirm') }}"> #}
+      
       <div class="form-group" style="margin-bottom: 15px;">
         <label for="newPassword">Nouveau mot de passe</label>
         <input type="password" id="newPassword" name="newPassword" class="form-control" required>
       </div>
+      
       <div style="text-align: center;">
         <button type="submit" class="btn btn-primary">Changer mon mot de passe</button>
       </div>

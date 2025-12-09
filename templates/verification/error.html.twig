@@ -1,25 +1,35 @@
-{# templates/emails/verification_error.html.twig #}
-{% extends 'base.email.html.twig' %}
+{# templates/verification/error.html.twig #}
+{% extends 'base.html.twig' %}
 
 {% block title %}Erreur de vérification{% endblock %}
 
 {% block body %}
-<div class="container mt-5">
-    {% if emailConfig and emailConfig.logo %}
+<div class="container mt-5" style="max-width: 600px;">
+    
+    {# 1. AFFICHER LE LOGO via la variable sécurisée 'logoUrl' #}
+    {% if logoUrl is defined and logoUrl %}
         <div class="text-center mb-4">
-            <img src="{{ domain ~ asset(emailConfig.logo) }}" alt="{{ emailConfig.name }} Logo" style="max-width: 200px;">
+            <img src="{{ logoUrl }}" alt="Logo" style="max-width: 200px;">
+        </div>
+    {% elseif emailConfig and emailConfig.fromName %}
+        {# Fallback : Nom de l'expéditeur si pas d'image #}
+        <div class="text-center mb-4">
+            <h2>{{ emailConfig.fromName }}</h2>
         </div>
     {% endif %}
-    {% if emailConfig and emailConfig.name %}
-        <div class="text-center mb-4">
-            <h2>{{ emailConfig.name }}</h2>
-        </div>
-    {% endif %}
-    <div class="alert alert-danger" role="alert">
-        <h4 class="alert-heading">Erreur</h4>
-        <p>{{ message }}</p>
+
+    <div class="alert alert-danger shadow-sm" role="alert">
+        <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> Erreur</h4>
+        <p class="mt-3">{{ message }}</p>
         <hr>
         <p class="mb-0">Veuillez réessayer ou contacter le support si le problème persiste.</p>
+        
+        {# Boutons d'action pour ne pas bloquer l'utilisateur #}
+        <div class="mt-4 d-flex gap-2">
+            <a href="/login" class="btn btn-outline-danger">Retour à la connexion</a>
+            {# Si vous avez une page de contact #}
+            {# <a href="/contact" class="btn btn-link">Contacter le support</a> #}
+        </div>
     </div>
 </div>
 {% endblock %}

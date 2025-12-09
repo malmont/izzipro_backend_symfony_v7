@@ -4,175 +4,235 @@ namespace App\Controller\Account;
 
 use App\Entity\User;
 use App\Entity\EmailConfiguration;
-use App\Services\TenantEntityManagerProvider; // Ajouté
+use App\Services\TenantConnectionManager;
+use App\Services\TenantEntityManagerProvider;
+use App\Services\EmailConfigurationService\EmailConfigurationService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
-use App\Services\EmailConfigurationService\EmailConfigurationService; 
+use Psr\Log\LoggerInterface;
+use DateTimeImmutable;
 
 class ResetPasswordController extends AbstractController
 {
-    private TenantEntityManagerProvider $tenantEmProvider;
-    private EmailConfigurationService $emailConfigService;
+    public function __construct(
+        private TenantEntityManagerProvider $tenantEmProvider,
+        private TenantConnectionManager $tenantManager,
+        private EmailConfigurationService $emailConfigService,
+        private LoggerInterface $logger
+    ) {}
 
-    public function __construct(TenantEntityManagerProvider $tenantEmProvider, EmailConfigurationService $emailConfigService)
-    {
-        $this->tenantEmProvider = $tenantEmProvider;
-        $this->emailConfigService = $emailConfigService;
-    }
-
+    // --- ÉTAPE 1 : DEMANDE DE RESET (API POST) ---
     #[Route('/api/password-reset/request', name: 'app_password_reset_request', methods: ['POST'])]
     public function requestPasswordReset(
         Request $request,
         MailerInterface $mailer,
         UrlGeneratorInterface $urlGenerator
-    ): Response {
+    ): JsonResponse {
         $locale = $request->query->get('locale', $request->getLocale());
-
         $data = json_decode($request->getContent(), true);
-        if (!isset($data['email'])) {
+        $emailInput = $data['email'] ?? null;
+
+        if (!$emailInput) {
             return $this->json(['error' => 'Email is required.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $emailInput = $data['email'];
+        // 1. Détection du Host Client (Frontend)
+        $clientHost = $request->headers->get('x-tenant-host');
+        if (!$clientHost) {
+            $origin = $request->headers->get('origin') ?? $request->headers->get('referer');
+            if ($origin) {
+                $clientHost = parse_url($origin, PHP_URL_HOST);
+            }
+        }
+        // Fallback
+        if (!$clientHost) {
+            $clientHost = $request->getHttpHost();
+        }
+
+        // 2. Bascule sur le bon Tenant pour trouver l'user
+        if ($clientHost) {
+            try {
+                $tenantConfig = $this->tenantManager->findTenantConfigByHost($clientHost);
+                if ($tenantConfig) {
+                    $this->tenantManager->switchToTenant($tenantConfig);
+                }
+            } catch (\Exception $e) {
+                // On log mais on continue (au cas où on serait sur le default)
+                $this->logger->warning("[Pwd Reset] Tenant non trouvé pour host: " . $clientHost);
+            }
+        }
+
+        // 3. Recherche User
         $em = $this->tenantEmProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['email' => $emailInput]);
 
         if (!$user) {
-            return $this->json(['message' => 'If your email exists in our system, you will receive a password reset link.']);
+            return $this->json(['message' => 'Link sent if email exists.']);
         }
 
+        // 4. Génération Token
         $resetToken = bin2hex(random_bytes(32));
         $user->setResetToken($resetToken);
-        $user->setResetTokenExpiresAt(new \DateTime('+1 hour'));
-        $em->persist($user);
+        $user->setResetTokenExpiresAt(new DateTimeImmutable('+1 hour'));
         $em->flush();
 
+        // 5. Génération URL (avec tenant_host pour que le lien cliquable sache où aller)
         $resetUrl = $urlGenerator->generate(
-            'app_password_reset_confirm_form',
-            ['token' => $resetToken],
+            'app_password_reset_confirm_form', 
+            ['token' => $resetToken, 'tenant_host' => $clientHost], 
             UrlGeneratorInterface::ABSOLUTE_URL
         );
 
-
+        // 6. Config Email
         $emailConfig = $this->emailConfigService->findOneByLocale($locale);
         $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
         
-        $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@votredomaine.com';
-        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
+        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Support');
         $signature = $translation?->getSignature() ?? '';
         $logoUrl   = $emailConfig?->getLogo();
-
-
-        $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
-
+        $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@gem-portal.com';
+        
+        // CORRECTION ASSETS : Toujours utiliser le domaine du Backend (API)
+        $assetsDomain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
 
         $emailContent = $this->renderView('reset_password/reset.html.twig', [
-            'resetUrl'    => $resetUrl,
-            'user'        => $user,
-            'fromName'    => $fromName, // On passe les variables traduites
-            'signature'   => $signature,
-            'logoUrl'     => $logoUrl,
-            'domain'      => $domain,
+            'resetUrl'  => $resetUrl,
+            'user'      => $user,
+            'fromName'  => $fromName,
+            'signature' => $signature,
+            'logoUrl'   => $logoUrl,
+            'domain'    => $assetsDomain
         ]);
 
-
-        $emailMessage = (new Email())
+        $mailer->send((new Email())
             ->from(sprintf('%s <%s>', $fromName, $fromEmail))
             ->to($user->getEmail())
-            ->subject('Réinitialisation de votre mot de passe')
-            ->html($emailContent);
+            ->subject('Password Reset')
+            ->html($emailContent)
+        );
 
-        $mailer->send($emailMessage);
-
-        return $this->json([
-            'message' => 'If your email exists in our system, you will receive a password reset link.'
-        ], Response::HTTP_CREATED);
+        return $this->json(['message' => 'Link sent if email exists.']);
     }
 
+    // --- ÉTAPE 2 : FORMULAIRE D'AFFICHAGE (GET) ---
+    #[Route('/password-reset/form', name: 'app_password_reset_confirm_form', methods: ['GET'])]
+    public function resetPasswordForm(Request $request): Response
+    {
+        $token = $request->query->get('token');
+        $targetHost = $request->query->get('tenant_host');
+        $locale = $request->getLocale();
+
+        // 1. Switch de base de données (Tenant)
+        if ($targetHost) {
+            try {
+                $tenantConfig = $this->tenantManager->findTenantConfigByHost($targetHost);
+                if ($tenantConfig) {
+                    $this->tenantManager->switchToTenant($tenantConfig);
+                }
+            } catch (\Exception $e) {
+                $this->logger->error("[Pwd Form] Erreur switch tenant : " . $e->getMessage());
+            }
+        }
+
+        // 2. Récupération Config (Via Repository direct pour bypasser le cache du service)
+        $em = $this->tenantEmProvider->getEntityManager();
+        /** @var EmailConfiguration|null $emailConfig */
+        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+
+        // 3. Traduction
+        $translation = ($emailConfig) ? $emailConfig->getTranslation($locale) : null;
+        
+        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Support');
+        $signature = $translation?->getSignature() ?? '';
+        $logoUrl   = $emailConfig?->getLogo();
+        $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@gem-portal.com';
+        
+        // 4. CORRECTION ASSETS : On force le domaine du backend
+        $assetsDomain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+
+        return $this->render('reset_password/form.html.twig', [
+            'token'       => $token,
+            'tenant_host' => $targetHost,
+            'fromName'    => $fromName,
+            'signature'   => $signature,
+            'logoUrl'     => $logoUrl,
+            'fromEmail'   => $fromEmail,
+            'domain'      => $assetsDomain,
+        ]);
+    }
+
+    // --- ÉTAPE 3 : CONFIRMATION DU CHANGEMENT (POST) ---
     #[Route('/password-reset/confirm', name: 'app_password_reset_confirm', methods: ['POST'])]
     public function confirmPasswordReset(
         Request $request,
         UserPasswordHasherInterface $passwordHasher
     ): Response {
-        $locale = $request->getLocale();
-        $data = json_decode($request->getContent(), true) ?: $request->request->all();
+        $content = json_decode($request->getContent(), true);
+        
+        $token = $content['token'] ?? $request->request->get('token');
+        $newPassword = $content['newPassword'] ?? $request->request->get('newPassword') ?? $request->request->get('password');
+        $targetHost = $request->query->get('tenant_host');
 
-        if (!isset($data['token'], $data['newPassword'])) {
-            return $this->json(['error' => 'Token and new password are required.'], Response::HTTP_BAD_REQUEST);
+        // 1. Switch Tenant
+        if ($targetHost) {
+            try {
+                $tenantConfig = $this->tenantManager->findTenantConfigByHost($targetHost);
+                if ($tenantConfig) {
+                    $this->tenantManager->switchToTenant($tenantConfig);
+                }
+            } catch (\Exception $e) {
+                $this->logger->error("[Pwd Confirm] Erreur switch tenant : " . $e->getMessage());
+            }
         }
 
-        $token = $data['token'];
-        $newPassword = $data['newPassword'];
+        if (!$token || !$newPassword) {
+             return $this->json(['error' => 'Missing data'], 400);
+        }
+
         $em = $this->tenantEmProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['resetToken' => $token]);
 
-        if (!$user) {
-            return $this->json(['error' => 'Invalid token.'], Response::HTTP_BAD_REQUEST);
+        if (!$user || $user->getResetTokenExpiresAt() < new \DateTime()) {
+            return $this->json(['error' => 'Invalid or expired token.'], 400);
         }
 
-        if ($user->getResetTokenExpiresAt() < new \DateTime()) {
-            return $this->json(['error' => 'The token has expired.'], Response::HTTP_BAD_REQUEST);
-        }
-
-        $hashedPassword = $passwordHasher->hashPassword($user, $newPassword);
-        $user->setPassword($hashedPassword);
+        // Hash & Save
+        $user->setPassword($passwordHasher->hashPassword($user, $newPassword));
         $user->setResetToken(null);
         $user->setResetTokenExpiresAt(null);
-        $em->persist($user);
         $em->flush();
 
-        $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@votredomaine.com';
-        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
-        $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
-        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
+        // 2. Récupération Config (Via Repository direct)
+        /** @var EmailConfiguration|null $emailConfig */
+        $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
+        
+        $translation = ($emailConfig) ? $emailConfig->getTranslation($request->getLocale()) : null;
+        
+        // CORRECTION ASSETS
+        $assetsDomain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+        
+        $fromName = $translation?->getFromName() ?? ($emailConfig?->getFromName() ?? 'Support');
         $signature = $translation?->getSignature() ?? '';
-        $logoUrl   = $emailConfig?->getLogo();
 
-        $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
-
+        if ($content) {
+             return $this->json(['message' => 'Success']);
+        }
 
         return $this->render('reset_password/success.html.twig', [
-            'message' => 'Password reset successfully.',
-            'domain' => $domain,
-            'fromName' => $fromName,
+            'message'   => 'Password reset successfully.',
+            'domain'    => $assetsDomain,
+            'fromName'  => $fromName,
             'signature' => $signature,
-            'logoUrl' => $logoUrl,
-            'fromEmail' => $fromEmail,
-            'user' => $user
-        ]);
-    }
-
-    #[Route('/password-reset/form', name: 'app_password_reset_confirm_form', methods: ['GET'])]
-    public function resetPasswordForm(Request $request): Response
-    {
-
-        $locale = $request->getLocale();
-
-        $token = $request->query->get('token');
-        $em = $this->tenantEmProvider->getEntityManager();
-        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
-        $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
-        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
-        $signature = $translation?->getSignature() ?? '';
-        $logoUrl   = $emailConfig?->getLogo();
-        $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@votredomaine.com';
-
-
-        $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
-
-        return $this->render('reset_password/form.html.twig', [
-            'token' => $token,
-            'fromName' => $fromName,
-            'signature' => $signature,
-            'logoUrl' => $logoUrl,
-            'fromEmail' => $fromEmail,
-            'domain' => $domain,
+            'logoUrl'   => $emailConfig?->getLogo(),
+            'fromEmail' => $emailConfig?->getFromEmail(),
+            'user'      => $user
         ]);
     }
 }

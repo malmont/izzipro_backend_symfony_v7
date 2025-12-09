@@ -18,18 +18,14 @@ class TenantController extends AbstractController
     #[Route('/api/tenant/check', name: 'api_tenant_check', methods: ['GET'])]
     public function check(Request $request, TenantConnectionManager $tenantManager): JsonResponse
     {
-        // 1. Récupération du Host (Priorité au Header envoyé par le Front React)
-        // C'est ça qui permet au Front et au Back d'être sur des domaines différents
         $host = $request->headers->get('X-Tenant-Host');
 
         if (!$host) {
             $host = $request->getHost();
         }
         
-        // Nettoyage du port éventuel (ex: localhost:3000 -> localhost)
         $cleanHost = explode(':', $host)[0];
 
-        // 2. Connexion PDO Master
         try {
             $pdoMaster = $tenantManager->getPdoMaster();
         } catch (\Throwable $e) {
@@ -38,7 +34,6 @@ class TenantController extends AbstractController
 
         $tenantExists = false;
 
-        // --- PRIORITÉ 1 : DOMAINE PERSONNALISÉ (ex: www.dailydrip.ca) ---
         try {
             $altHost = str_starts_with($cleanHost, 'www.') ? substr($cleanHost, 4) : 'www.' . $cleanHost;
 
@@ -51,10 +46,8 @@ class TenantController extends AbstractController
                 $tenantExists = true;
             }
         } catch (\Throwable $e) {
-             // On continue, ce n'est peut-être pas un domaine custom
         }
 
-        // --- PRIORITÉ 2 : SOUS-DOMAINE (ex: testmessenger.gem-portal.ca) ---
         if (!$tenantExists) {
             $tenantCode = null;
             

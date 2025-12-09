@@ -6,9 +6,10 @@
 {% block body %}
 <div class="container mt-5">
 
-    {% if logoUrl %}
+    {# CORRECTION : On concatène domain + logoUrl #}
+    {% if logoUrl is defined and logoUrl %}
         <div class="text-center mb-4">
-            <img src="{{ domain ~ logoUrl }}" alt="{{ fromName }}" style="max-width: 200px;">
+            <img src="{{ domain }}{{ logoUrl }}" alt="{{ fromName }}" style="max-width: 200px;">
         </div>
     {% endif %}
 
@@ -19,11 +20,16 @@
     {% endif %}
 
     <div class="alert alert-info" role="alert">
-        <h4 class="alert-heading">Bonjour, {{ user.firstname }}!</h4>
+        <h4 class="alert-heading">Bonjour, {{ user.firstname }} !</h4>
         <p>Vous avez demandé la réinitialisation de votre mot de passe.</p>
         <hr>
-        <p class="mb-0">Cliquez sur le lien ci-dessous pour réinitialiser votre mot de passe :</p>
-        <p class="mb-0"><a href="{{ resetUrl }}">Réinitialiser mon mot de passe</a></p>
+        <p class="mb-0">Cliquez sur le lien ci-dessous pour créer un nouveau mot de passe :</p>
+        
+        {# Le resetUrl est déjà absolu et contient le tenant_host #}
+        <p class="mb-0" style="margin: 20px 0;">
+            <a href="{{ resetUrl }}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Réinitialiser mon mot de passe</a>
+        </p>
+        
         <p class="mt-3">Ce lien expirera dans 1 heure.</p>
         
         {% if signature %}
