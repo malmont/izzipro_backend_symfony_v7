@@ -28,6 +28,10 @@ class Booking
     #[ORM\Column(length: 40)]
     private ?string $status = null;
 
+    #[ORM\OneToOne(inversedBy: 'booking', targetEntity: OrderItems::class, cascade: ['persist', 'remove'])]
+    #[ORM\JoinColumn(nullable: true)]
+    private ?OrderItems $orderItem = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -90,6 +94,16 @@ class Booking
     {
         $this->status = $status;
 
+        return $this;
+    }
+    public function getOrderItem(): ?OrderItems
+    {
+        return $this->orderItem;
+    }
+
+    public function setOrderItem(?OrderItems $orderItem): self
+    {
+        $this->orderItem = $orderItem;
         return $this;
     }
 }

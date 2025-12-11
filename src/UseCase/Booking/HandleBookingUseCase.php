@@ -4,7 +4,7 @@ namespace App\UseCase\Booking;
 
 use App\Entity\Order;
 use App\Entity\Booking;
-use App\Entity\Product;
+use App\Entity\OrderItems;
 use App\Entity\ProductVariant;
 use App\Services\Booking\BookingAvailabilityService;
 use App\Services\TenantEntityManagerProvider;
@@ -27,9 +27,17 @@ class HandleBookingUseCase
         $em = $this->emProvider->getEntityManager();
         $variantRepo = $em->getRepository(ProductVariant::class);
 
+
+        $orderItemsMap = [];
+        foreach ($order->getOrderItems() as $item) {
+            if ($variant = $item->getProductVariant()) {
+                $orderItemsMap[$variant->getId()][] = $item;
+            }
+        }
+
         foreach ($itemsArray as $itemData) {
             
-            // 1. On récupère la variante (car ton front envoie productVariantId)
+            // Si pas d'ID de variant, on ignore (ne devrait pas arriver si validé avant)
             if (!isset($itemData['productVariantId'])) {
                 continue; 
             }
@@ -39,12 +47,12 @@ class HandleBookingUseCase
 
             if (!$variant) continue;
 
-            // 2. On remonte au Produit Parent (car c'est lui qui porte le mode 'booking')
             $product = $variant->getProduct();
 
-            // 3. ON NE TRAITE QUE LES PRODUITS "BOOKING"
+            // On ne traite que les produits "réservables"
             if ($product && $product->isBookable()) {
                 
+                // --- VALIDATION DES DATES ---
                 if (empty($itemData['booking']['start']) || empty($itemData['booking']['end'])) {
                     throw new BadRequestHttpException(sprintf(
                         "Dates manquantes pour le produit '%s' (Variante #%d).", 
@@ -62,7 +70,6 @@ class HandleBookingUseCase
 
                 $quantity = (int) ($itemData['quantity'] ?? 1);
 
-                // 4. LE GARDIEN (Vérification Ultime du Stock)
                 if (!$this->bookingAvailabilityService->isAvailable($product, $start, $end, $quantity)) {
                     throw new ConflictHttpException(sprintf(
                         "Désolé, le créneau pour '%s' n'est plus disponible.", 
@@ -70,13 +77,22 @@ class HandleBookingUseCase
                     ));
                 }
 
-                // 5. CRÉATION DU BOOKING
                 $booking = new Booking();
                 $booking->setProduct($product);
                 $booking->setStartAt($start);
                 $booking->setEndAt($end);
                 $booking->setQuantity($quantity);
                 $booking->setStatus('PENDING_PAYMENT'); 
+
+                if (isset($orderItemsMap[$variantId]) && count($orderItemsMap[$variantId]) > 0) {
+                    /** @var OrderItems $relatedOrderItem */
+                    // array_shift prend le premier élément et le retire du tableau (pour ne pas le réutiliser)
+                    $relatedOrderItem = array_shift($orderItemsMap[$variantId]);
+                    
+                    $booking->setOrderItem($relatedOrderItem);
+                    $relatedOrderItem->setBooking($booking);
+                }
+
                 $em->persist($booking);
             }
         }

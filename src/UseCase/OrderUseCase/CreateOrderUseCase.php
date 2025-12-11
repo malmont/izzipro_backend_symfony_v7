@@ -72,9 +72,6 @@ class CreateOrderUseCase
             if ($order instanceof JsonResponse) {
                 throw new \Exception($order->getContent());
             }
-            // GESTION DES RÉSERVATIONS POUR LES PRODUITS BOOKING
-            $this->handleBookingUseCase->execute($order, $orderDTO->getItems());
-
             try {
                 $subtotal = $this->processOrderItemsUseCase->execute($order, $orderDTO->getItems(), $this->updateStockAndInventoryUseCase, $typeOrderId, $orderDTO->getPriceShipping());
             } catch (BadRequestHttpException $e) {
@@ -82,6 +79,7 @@ class CreateOrderUseCase
             } catch (\Exception $e) {
                 throw new \Exception('Insufficient stock for product variant');
             }
+            $this->handleBookingUseCase->execute($order, $orderDTO->getItems());
             
             $subtotal = $typeOrderId === 1 ? $subtotal : -$subtotal;
             

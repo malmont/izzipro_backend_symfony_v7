@@ -69,18 +69,28 @@ class OrderController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
-        if (!isset($data['orderSource'], $data['paymentMethod'], $data['addressId'], $data['carrierId'], $data['items'])) {
+
+        if (!isset($data['orderSource'], $data['paymentMethod'], $data['addressId'], $data['items'])) {
             return $this->json(['error' => 'Missing required fields'], JsonResponse::HTTP_BAD_REQUEST);
         }
+        // ---------------------------------------------------------------------
+
         $em = $this->emProvider->getEntityManager();
         $address = $em->getRepository(Adress::class)->find($data['addressId']);
         if (!$address || $address->getUserAdress() !== $user) {
             return $this->json(['error' => 'Unauthorized: Invalid address'], JsonResponse::HTTP_FORBIDDEN);
         }
-        $carrier = $em->getRepository(Carrier::class)->find($data['carrierId']);
-        if (!$carrier) {
-            return $this->json(['error' => 'Carrier not found'], JsonResponse::HTTP_NOT_FOUND);
+
+        $carrierId = $data['carrierId'] ?? null;
+        $carrier = null;
+
+        if ($carrierId) {
+            $carrier = $em->getRepository(Carrier::class)->find($carrierId);
+            if (!$carrier) {
+                return $this->json(['error' => 'Carrier not found'], JsonResponse::HTTP_NOT_FOUND);
+            }
         }
+        
         $paymentData = $data['payment'] ?? [];
 
         $dto = new CreateOrderDTO(
@@ -88,7 +98,7 @@ class OrderController extends AbstractController
             $data['orderSource'],
             $data['paymentMethod'],
             $data['addressId'],
-            $data['carrierId'],
+            $carrierId,
             $data['typeOrder'] ?? null,
             $data['items'],
             $data['priceShipping'] ?? null,

@@ -4,15 +4,13 @@ namespace App\Services\OrderService;
 
 use App\Entity\Order;
 use App\Entity\Entreprise;
-use App\Entity\ShippingLabel;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
 use App\Services\TenantEntityManagerProvider;
-use App\Repository\EntrepriseRepository;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Mailer\MailerInterface;
 use Twig\Environment;
-use Doctrine\ORM\EntityManagerInterface;
+use DateTimeInterface; // Important pour le typage des dates
 
 class OrderMailerService
 {
@@ -36,36 +34,33 @@ class OrderMailerService
         $this->emProvider = $emProvider;
     }
 
-    /**
-     * Envoie un email de confirmation de commande au client.
-     */
     public function sendOrderConfirmation(Order $order, string $locale, string $domain): void
     {
         try {
             $user = $order->getUserId();
-            if (!$user) {
-                throw new \Exception("La commande n'a pas d'utilisateur associé.");
-            }
+            if (!$user) throw new \Exception("La commande n'a pas d'utilisateur associé.");
 
             $emailConfig = $this->emailConfigService->findOneByLocale($locale);
             $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
 
             if (!$emailConfig || !$emailConfigTranslation) {
-                $this->logger->warning('EmailConfiguration introuvable pour la locale ' . $locale . '. Email de confirmation de commande non envoyé.');
+                $this->logger->warning('EmailConfiguration introuvable pour la locale ' . $locale);
                 return;
             }
 
             $fromEmail = $emailConfig->getFromEmail();
             $fromName = $emailConfigTranslation->getFromName();
             
-            // Le domaine est maintenant passé en argument.
+            // ✅ AJOUT SÉCURISÉ : On prépare les données
+            $itemsData = $this->prepareOrderItemsData($order, $locale);
 
             $emailContent = $this->twig->render('emails/order_confirmation.html.twig', [
                 'order'     => $order,
+                'itemsData' => $itemsData, // On passe la variable
                 'fromName'  => $fromName,
                 'signature' => $emailConfigTranslation->getSignature(),
                 'logoUrl'   => $emailConfig->getLogo(),
-                'domain'    => $domain, // <-- Il est passé ici
+                'domain'    => $domain,
             ]);
 
             $emailMessage = (new Email())
@@ -77,43 +72,29 @@ class OrderMailerService
             $this->mailer->send($emailMessage);
 
         } catch (\Exception $e) {
-            $this->logger->error("Erreur lors de l'envoi de l'email de confirmation de commande : " . $e->getMessage(), [
-                'orderId' => $order->getId(),
-                'exception' => $e
-            ]);
+            $this->logger->error("Erreur email confirmation: " . $e->getMessage());
         }
     }
 
-    /**
-     * Envoie un email à l'entreprise avec les étiquettes d'expédition.
-     */
     public function sendShippingNotification(Order $order, string $locale, string $domain): void
     {
         try {
             $tenantEm = $this->emProvider->getEntityManager();
             $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
             
-            if (!$entreprise || !$entreprise->getEmail()) {
-                $this->logger->warning("Email de l'entreprise non configuré. Email d'étiquette non envoyé.");
-                return;
-            }
+            if (!$entreprise || !$entreprise->getEmail()) return;
             $toEmail = $entreprise->getEmail();
+
             $emailConfig = $this->emailConfigService->findOneByLocale($locale);
             $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
 
-            if (!$emailConfig || !$emailConfigTranslation) {
-                $this->logger->warning("EmailConfiguration introuvable. Email d'étiquette non envoyé.");
-                return;
-            }
+            if (!$emailConfig || !$emailConfigTranslation) return;
             
-            // Logique pour récupérer le domaine et le logo
             $fromEmail = $emailConfig->getFromEmail();
             $fromName = $emailConfigTranslation->getFromName();
-            // La variable $domain vient des arguments de la fonction
             $logoUrl = $emailConfig->getLogo();
             $signature = $emailConfigTranslation->getSignature();
 
-            // Logique pour récupérer les étiquettes
             $labels = [];
             if ($order->getShippingOrder() && $order->getShippingOrder()->getParcels()) {
                 foreach ($order->getShippingOrder()->getParcels() as $parcel) {
@@ -123,19 +104,17 @@ class OrderMailerService
                 }
             }
 
-            // Log corrigé : on informe qu'on envoie SANS étiquette
-            if (empty($labels)) {
-                $this->logger->info("Aucune étiquette d'expédition trouvée pour la commande " . $order->getId() . ". Envoi de la notification sans étiquettes.");
-            }
-            
-            // Variables manquantes (signature, logoUrl, domain) ajoutées
+            // ✅ AJOUT SÉCURISÉ
+            $itemsData = $this->prepareOrderItemsData($order, $locale);
+
             $emailContent = $this->twig->render('emails/shipping_notification.html.twig', [
                 'order'     => $order,
+                'itemsData' => $itemsData, // On passe la variable
                 'labels'    => $labels,
                 'fromName'  => $fromName,
                 'signature' => $signature,
                 'logoUrl'   => $logoUrl,
-                'domain'    => $domain, // <-- Il est passé ici
+                'domain'    => $domain,
             ]);
 
             $emailMessage = (new Email())
@@ -147,10 +126,62 @@ class OrderMailerService
             $this->mailer->send($emailMessage);
 
         } catch (\Exception $e) {
-            $this->logger->error("Erreur lors de l'envoi de l'email d'expédition : " . $e->getMessage(), [
-                'orderId' => $order->getId(),
-                'exception' => $e
-            ]);
+            $this->logger->error("Erreur email shipping: " . $e->getMessage());
         }
+    }
+
+    /**
+     * Méthode PRIVÉE pour extraire Booking et Options sans planter
+     */
+    private function prepareOrderItemsData(Order $order, string $locale): array
+    {
+        $data = [];
+        // Formatage simple pour éviter les erreurs de locale PHP
+        $dateFormat = 'Y-m-d H:i'; 
+
+        foreach ($order->getOrderItems() as $item) {
+            $variant = $item->getProductVariant();
+            
+            // 1. Options Dynamiques (Sans traduction pour éviter le crash)
+            $options = [];
+            if ($variant) {
+                // On suppose que getOptionValues existe (c'est dans ton entité)
+                foreach ($variant->getOptionValues() as $optionValue) {
+                    $parent = $optionValue->getProductOption();
+                    if ($parent) {
+                        // On prend juste le nom de base en BDD
+                        $options[$parent->getName()] = $optionValue->getValue();
+                    }
+                }
+            }
+
+            // 2. Booking
+            $bookingData = null;
+              if (method_exists($item, 'getBooking')) {
+                $booking = $item->getBooking();
+                if ($booking) {
+                    $bookingData = [
+                        'start' => $booking->getStartAt()->format($dateFormat),
+                        'end'   => $booking->getEndAt()->format($dateFormat),
+                    ];
+                }
+            }
+
+            // 3. Legacy (Taille/Couleur) - Sans traduction complexe
+            $legacyOptions = [];
+            if ($variant) {
+                if ($variant->getSize()) $legacyOptions['Taille'] = $variant->getSize()->getName();
+                if ($variant->getColor()) $legacyOptions['Couleur'] = $variant->getColor()->getName();
+            }
+
+            $data[] = [
+                'entity'  => $item,        
+                'options' => $options,     
+                'legacy'  => $legacyOptions, 
+                'booking' => $bookingData  
+            ];
+        }
+
+        return $data;
     }
 }

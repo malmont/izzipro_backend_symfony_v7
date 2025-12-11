@@ -38,7 +38,12 @@ class CreateOrderCommandUseCase
         try {
             $orderSource = $this->entityRetrieverService->findOrFail(OrderSource::class, $orderDTO->getOrderSource(), 'Invalid order source ID');
             $address = $this->entityRetrieverService->findOrFail(Adress::class, $orderDTO->getAddressId(), 'Invalid address ID');
-            $carrier = $this->entityRetrieverService->findOrFail(Carrier::class, $orderDTO->getCarrierId(), 'Invalid carrier ID');
+            $carrierId = $orderDTO->getCarrierId();
+            $carrier = null;
+            
+            if ($carrierId) {
+                $carrier = $this->entityRetrieverService->findOrFail(Carrier::class, $carrierId, 'Invalid carrier ID');
+            }
             $statusCommande = $this->entityRetrieverService->findOrFail(StatusCommande::class, 3, 'Invalid status ID');
             $orderType = $this->entityRetrieverService->findOrFail(OrderType::class, $orderDTO->getTypeOrder(), 'Invalid order type ID');
         } catch (NotFoundHttpException $e) {

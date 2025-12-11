@@ -15,7 +15,7 @@ class OrderCreationService
         User $user,
         OrderSource $orderSource,
         Adress $address,
-        Carrier $carrier,
+        ?Carrier $carrier,
         StatusCommande $statusCommande,
         OrderType $orderType
     ): Order {
@@ -27,7 +27,7 @@ class OrderCreationService
         $order->setOrderDate(new \DateTime());
         $order->setStatusUpdatedAt(new \DateTime());
         $order->setShippingAdress($address);
-        $order->setCarrier($carrier);
+        $order->setCarrier($carrier); 
         $order->setStatus($statusCommande);
 
         return $order;

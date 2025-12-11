@@ -28,6 +28,9 @@ class OrderItems
     #[ORM\Column]
     private ?float $totalPrice = null;
 
+    #[ORM\OneToOne(mappedBy: 'orderItem', targetEntity: Booking::class, cascade: ['persist', 'remove'])]
+    private ?Booking $booking = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -96,6 +99,19 @@ class OrderItems
     public function __toString(): string
     {
         return $this->productVariant ? $this->productVariant->getProduct()->getName() . ' - ' . $this->quantity . ' pcs' : '';
+    }
+    public function getBooking(): ?Booking
+    {
+        return $this->booking;
+    }
+
+    public function setBooking(?Booking $booking): self
+    {
+        if ($booking !== null && $booking->getOrderItem() !== $this) {
+            $booking->setOrderItem($this);
+        }
+        $this->booking = $booking;
+        return $this;
     }
    
     

@@ -36,21 +36,34 @@ class ProcessOrderItemsUseCase
         $order->setShippingCost($priceShipping);
         $carrierPrice = $priceShipping; 
         $subtotal += $carrierPrice;
+
         foreach ($items as $itemData) {
             $productVariant = $this->entityRetrieverService->findOrFail(ProductVariant::class, $itemData['productVariantId'], 'Product variant not found');
+            
+            $product = $productVariant->getProduct();
+            $isBookable = $product && method_exists($product, 'isBookable') && $product->isBookable();
 
-            if ($productVariant->getStockQuantity() < $itemData['quantity'] && !$isCancel) {
-                throw new BadRequestHttpException('Insufficient stock for product variant');
+            if (!$isBookable) {
+                if ($productVariant->getStockQuantity() < $itemData['quantity'] && !$isCancel) {
+                    throw new BadRequestHttpException(sprintf(
+                        'Stock insuffisant pour le produit "%s" (Stock: %d, Demandé: %d)',
+                        $productVariant->getName() ?? $product->getName(),
+                        $productVariant->getStockQuantity(),
+                        $itemData['quantity']
+                    ));
+                }
+
+                $updateStockAndInventory->execute($productVariant, $itemData['quantity'], $isCancel);
             }
 
-            $updateStockAndInventory->execute($productVariant, $itemData['quantity'], $isCancel);
             $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $itemData['quantity']);
 
             $em->persist($order);
-
             $em->persist($orderItem);
+            
             $subtotal += $orderItem->getTotalPrice();
         }
+        
         return $subtotal;
     }
 }

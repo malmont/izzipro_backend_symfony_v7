@@ -8,7 +8,10 @@ class CreateOrderDTO implements ICreateOrderDTO
     private int $orderSource;
     private int $paymentMethod;
     private int $addressId;
-    private int $carrierId;
+    
+    // CORRECTION 1 : Ajout du '?' pour accepter null
+    private ?int $carrierId;
+    
     private int $typeOrder;
     private array $items;
     private ?float $priceShipping;
@@ -35,7 +38,10 @@ class CreateOrderDTO implements ICreateOrderDTO
         int $orderSource,
         int $paymentMethod,
         int $addressId,
-        int $carrierId,
+        
+        // CORRECTION 2 : Ajout du '?' ici aussi dans le constructeur
+        ?int $carrierId,
+        
         int $typeOrder,
         array $items,
         ?float $priceShipping = null,
@@ -82,7 +88,10 @@ class CreateOrderDTO implements ICreateOrderDTO
     public function getUserId(): int { return $this->userId; }
     public function getOrderSource(): int { return $this->orderSource; }
     public function getAddressId(): int { return $this->addressId; }
-    public function getCarrierId(): int { return $this->carrierId; }
+    
+    // CORRECTION 3 : Le getter doit pouvoir retourner null
+    public function getCarrierId(): ?int { return $this->carrierId; }
+    
     public function getTypeOrder(): int { return $this->typeOrder; }
     public function getItems(): array { return $this->items; }
     public function getPaymentMethod(): int { return $this->paymentMethod; }
