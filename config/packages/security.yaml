@@ -12,7 +12,7 @@ security:
 
 
         api:
-            pattern:   ^/api(?!/login)
+            pattern:   ^/api(?!/(login|tenant/check))
             stateless: true
             provider:  tenant_user_provider
             jwt: ~
