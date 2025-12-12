@@ -179,4 +179,5 @@ services:
 
     App\Controller\TenantSetupController\TenantController:
         arguments:
-            $frontendBaseDomain: '%env(resolve:FRONTEND_BASE_DOMAIN)%'  
+            $frontendBaseDomain: '%env(resolve:FRONTEND_BASE_DOMAIN)%'
+            $backendBaseDomain: '%env(resolve:BACKEND_BASE_DOMAIN)%'
