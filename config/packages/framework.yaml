@@ -10,8 +10,9 @@ framework:
     # Remove or comment this section to explicitly disable session support.
     session:
         handler_id: '%env(REDIS_URL)%'
-        cookie_secure: auto
-        cookie_samesite: strict
+        cookie_secure: true
+        cookie_samesite: none
+        gc_maxlifetime: 3600
 
     #esi: true
     #fragments: true

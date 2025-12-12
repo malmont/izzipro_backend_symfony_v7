@@ -77,8 +77,8 @@ class TokenService
                 ->withSecure(true)
                 ->withSameSite(Cookie::SAMESITE_NONE) 
                 ->withExpires(time() + $ttlJwt)
-                ->withPath($cookiePath)
-                ->withDomain($host); 
+                ->withPath($cookiePath);
+                // ->withDomain($host); 
             
             $refreshCookie = Cookie::create('refresh_token')
                 ->withValue($tokens['refresh_token'])
@@ -86,8 +86,8 @@ class TokenService
                 ->withSecure(true)
                 ->withSameSite(Cookie::SAMESITE_NONE)
                 ->withExpires(time() + $ttlRefresh)
-                ->withPath($cookiePath)
-                ->withDomain($host); 
+                ->withPath($cookiePath);
+                // ->withDomain($host); 
 
             $response->headers->setCookie($jwtCookie);
             $response->headers->setCookie($refreshCookie);
