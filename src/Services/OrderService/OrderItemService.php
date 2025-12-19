@@ -11,6 +11,7 @@ class OrderItemService
     {
         $orderItem = new OrderItems();
         $orderItem->setOrderAssociated($order);
+        $order->addOrderItem($orderItem);
         $orderItem->setProductVariant($productVariant);
         $orderItem->setQuantity($quantity);
         $orderItem->setUnitPrice($productVariant->getProduct()->getPrice());

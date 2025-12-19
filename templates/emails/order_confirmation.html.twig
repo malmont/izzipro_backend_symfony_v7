@@ -52,11 +52,44 @@
                         
                         <hr style="border: 0; border-top: 1px dashed #ccc; margin: 20px 0;">
                         
-                        {# TOTAUX #}
+                        {# TOTAUX DÉTAILLÉS #}
                         <table width="100%" border="0" cellspacing="0" cellpadding="5">
+                            {# Sous-total #}
+                             {% if order.subTotal is not null %}
+                              <tr>
+                                <td style="font-size: 14px; color: #666;">Sous-total :</td>
+                                <td align="right" style="font-size: 14px;">
+                                    {{ (order.subTotal / 100) | format_currency('CAD') }}
+                                </td>
+                            </tr>
+                            {% endif %}
+                           
+
+                            {# Livraison #}
+                            {% if order.shippingCost is not null %}
                             <tr>
-                                <td style="font-size: 18px; font-weight: bold;">Total :</td>
-                                <td align="right" style="font-size: 18px; font-weight: bold;">
+                                <td style="font-size: 14px; color: #666;">Livraison :</td>
+                                <td align="right" style="font-size: 14px;">
+                                    {{ (order.shippingCost / 100) | format_currency('CAD') }}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            
+
+                            {# Taxes #}
+                            {% if order.totalTax is not null %}
+                            <tr>
+                                <td style="font-size: 14px; color: #666;">Taxes :</td>
+                                <td align="right" style="font-size: 14px;">
+                                    {{ (order.totalTax / 100) | format_currency('CAD') }}
+                                </td>
+                            </tr>
+                            {% endif %}
+                            
+                            {# Total Final #}
+                            <tr>
+                                <td style="font-size: 18px; font-weight: bold; border-top: 1px solid #ddd; padding-top: 10px;">Total :</td>
+                                <td align="right" style="font-size: 18px; font-weight: bold; color: #007bff; border-top: 1px solid #ddd; padding-top: 10px;">
                                     {{ (order.totalAmount / 100) | format_currency('CAD') }}
                                 </td>
                             </tr>

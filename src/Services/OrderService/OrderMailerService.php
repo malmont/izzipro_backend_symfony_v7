@@ -10,7 +10,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Mailer\MailerInterface;
 use Twig\Environment;
-use DateTimeInterface; // Important pour le typage des dates
+use DateTimeInterface;
 
 class OrderMailerService
 {
@@ -56,7 +56,7 @@ class OrderMailerService
 
             $emailContent = $this->twig->render('emails/order_confirmation.html.twig', [
                 'order'     => $order,
-                'itemsData' => $itemsData, // On passe la variable
+                'itemsData' => $itemsData,
                 'fromName'  => $fromName,
                 'signature' => $emailConfigTranslation->getSignature(),
                 'logoUrl'   => $emailConfig->getLogo(),
@@ -109,7 +109,7 @@ class OrderMailerService
 
             $emailContent = $this->twig->render('emails/shipping_notification.html.twig', [
                 'order'     => $order,
-                'itemsData' => $itemsData, // On passe la variable
+                'itemsData' => $itemsData,
                 'labels'    => $labels,
                 'fromName'  => $fromName,
                 'signature' => $signature,
@@ -136,20 +136,16 @@ class OrderMailerService
     private function prepareOrderItemsData(Order $order, string $locale): array
     {
         $data = [];
-        // Formatage simple pour éviter les erreurs de locale PHP
         $dateFormat = 'Y-m-d H:i'; 
 
         foreach ($order->getOrderItems() as $item) {
             $variant = $item->getProductVariant();
             
-            // 1. Options Dynamiques (Sans traduction pour éviter le crash)
             $options = [];
             if ($variant) {
-                // On suppose que getOptionValues existe (c'est dans ton entité)
                 foreach ($variant->getOptionValues() as $optionValue) {
                     $parent = $optionValue->getProductOption();
                     if ($parent) {
-                        // On prend juste le nom de base en BDD
                         $options[$parent->getName()] = $optionValue->getValue();
                     }
                 }

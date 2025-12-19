@@ -1,0 +1,47 @@
+{% extends 'base.html.twig' %}
+{% block title %}Mes Produits{% endblock %}
+
+{% block body %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📦 Produits GemSuite</h2>
+        <a href="{{ path('app_booking_logout') }}" class="btn btn-outline-danger btn-sm">Déconnexion</a>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 100px;">Image</th>
+                    <th>Produit</th>
+                    <th>Mode Actuel</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for product in products %}
+                <tr>
+                    <td><img src="{{ product.image }}" class="rounded" style="height: 60px; width: 60px; object-fit: cover;"></td>
+                    <td class="fw-bold">{{ product.name }}</td>
+                    <td>
+                        {# On vérifie l'enum ou la string #}
+                        {% if product.mode == constant('App\\Enum\\ProductMode::BOOKING') or product.mode == 'booking' %}
+                            <span class="badge bg-success rounded-pill px-3">📅 Réservation</span>
+                        {% else %}
+                            <span class="badge bg-secondary rounded-pill px-3">🛒 Vente Standard</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a href="{{ path('app_booking_configure', {id: product.id}) }}" class="btn btn-primary btn-sm">
+                            Paramétrer
+                        </a>
+                    </td>
+                </tr>
+            {% else %}
+                <tr><td colspan="4" class="text-center py-5 text-muted">Aucun produit synchronisé.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

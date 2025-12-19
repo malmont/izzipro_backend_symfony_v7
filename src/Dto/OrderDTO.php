@@ -8,6 +8,9 @@ class OrderDTO
     public int $id;
     public string $reference;
     public float $totalAmount;
+    public ?float $subTotal;
+    public ?float $totalTax;
+    public ?float $shippingCost;
     public string $orderDate;
     public ?int $userId;
     public ?AdressOutputDTO $shippingAdress; 
@@ -19,6 +22,9 @@ class OrderDTO
         int $id,
         string $reference,
         float $totalAmount,
+        ?float $subTotal,
+        ?float $totalTax,
+        ?float $shippingCost,
         string $orderDate,
         ?int $userId,
         ?AdressOutputDTO $shippingAdress, 
@@ -29,6 +35,9 @@ class OrderDTO
         $this->id = $id;
         $this->reference = $reference;
         $this->totalAmount = $totalAmount;
+        $this->subTotal = $subTotal;
+        $this->totalTax = $totalTax;
+        $this->shippingCost = $shippingCost;
         $this->orderDate = $orderDate;
         $this->userId = $userId;
         $this->shippingAdress = $shippingAdress;
@@ -43,6 +52,9 @@ class OrderDTO
             'id' => $this->id,
             'reference' => $this->reference,
             'totalAmount' => $this->totalAmount,
+            'subTotal' => $this->subTotal,
+            'priceTax' => $this->totalTax,
+            'priceShipping' => $this->shippingCost,
             'orderDate' => $this->orderDate,
             'userId' => $this->userId,
             'shippingAdress' => $this->shippingAdress,

@@ -41,15 +41,29 @@
                         {% endfor %}
                         </ul>
 
+                        {# RÉSUMÉ FINANCIER RAPIDE #}
+                        <div style="margin-top: 20px; padding: 10px; border: 1px solid #eee; background: #f9f9f9; border-radius: 5px;">
+                            {% if order.subTotal is not null %}
+                             <p style="margin: 5px 0;"><strong>Sous-total :</strong> {{ (order.subTotal / 100) | format_currency('CAD') }}</p>
+                                {% endif %}
+                             {% if order.shippingCost is not null %}
+                                <p style="margin: 5px 0;"><strong>Livraison :</strong> {{ (order.shippingCost / 100) | format_currency('CAD') }}</p>
+                             {% endif %}
+                             {% if order.totalTax is not null %}
+                                <p style="margin: 5px 0;"><strong>Taxes :</strong> {{ (order.totalTax / 100) | format_currency('CAD') }}</p>
+                             {% endif %}
+                             <p style="margin: 5px 0; font-size: 1.1em; color: #d9534f;"><strong>Total : {{ (order.totalAmount / 100) | format_currency('CAD') }}</strong></p>
+                        </div>
+
                         {% if labels is not empty %}
-                            <h3 style="border-bottom: 2px solid #eee;">Étiquettes</h3>
+                            <h3 style="border-bottom: 2px solid #eee; margin-top: 20px;">Étiquettes</h3>
                             <ul>
                                 {% for label in labels %}
                                     <li><a href="{{ label.labelUrl }}">Imprimer étiquette ({{ label.trackingCode }})</a></li>
                                 {% endfor %}
                             </ul>
                         {% else %}
-                            <p style="color: red; border: 1px solid red; padding: 10px;">⚠️ Aucune étiquette générée.</p>
+                            <p style="color: red; border: 1px solid red; padding: 10px; margin-top: 20px;">⚠️ Aucune étiquette générée.</p>
                         {% endif %}
 
                         {# --- AJOUT DU BLOC ADRESSE ICI --- #}

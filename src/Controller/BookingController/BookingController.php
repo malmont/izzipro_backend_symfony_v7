@@ -16,17 +16,15 @@ class BookingController extends AbstractController
 {
     #[Route('/check/{productId}', name: 'api_booking_check', methods: ['GET'])]
     public function check(
-        int $productId, // 2. Ajoute l'argument ici (Symfony l'extrait de l'URL)
+        int $productId,
         Request $request,
         ValidatorInterface $validator,
         CheckAvailabilityUseCase $useCase
     ): JsonResponse {
         $dto = new AvailabilityCheckDto();
         
-        // 3. Utilise l'argument de la méthode au lieu de chercher dans la query string
         $dto->productId = $productId; 
         
-        // Le reste (quantity) reste dans la query string, c'est très bien
         $dto->quantity = (int) $request->query->get('quantity', 1);
 
         try {
@@ -46,15 +44,11 @@ class BookingController extends AbstractController
         }
 
         try {
-            // Ton UseCase fait le travail, c'est parfait
             $result = $useCase->execute($dto);
             
-            // Adapter la réponse pour le Front si nécessaire
-            // Ton Front attend { available: true/false }, assure-toi que $result renvoie ça
             return $this->json($result);
             
         } catch (\Exception $e) {
-            // Si c'est une erreur "Stock insuffisant", renvoie un 409 pour que le Front le détecte
             $code = $e->getCode() ?: 500;
             if ($e->getMessage() === 'Stock insuffisant' || str_contains($e->getMessage(), 'Stock')) {
                 $code = 409;

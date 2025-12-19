@@ -5,7 +5,7 @@ use App\Entity\Collections;
 use App\Entity\NoteDeFrais;
 use App\Entity\TypeNoteDeFrais;
 use App\Dto\NoteDeFraisInputDTO;
-use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
+use App\Services\TenantEntityManagerProvider;
 
 class NoteDeFraisService
 {

@@ -25,9 +25,12 @@ class HandleBookingUseCase
     public function execute(Order $order, array $itemsArray): void
     {
         $em = $this->emProvider->getEntityManager();
+        
+        if ($order->getId()) {
+            $em->refresh($order);
+        }
+        
         $variantRepo = $em->getRepository(ProductVariant::class);
-
-
         $orderItemsMap = [];
         foreach ($order->getOrderItems() as $item) {
             if ($variant = $item->getProductVariant()) {
@@ -37,22 +40,24 @@ class HandleBookingUseCase
 
         foreach ($itemsArray as $itemData) {
             
-            // Si pas d'ID de variant, on ignore (ne devrait pas arriver si validé avant)
             if (!isset($itemData['productVariantId'])) {
                 continue; 
             }
 
-            $variantId = $itemData['productVariantId'];
-            $variant = $variantRepo->find($variantId);
+            $variantId = (int) $itemData['productVariantId']; 
+
+            if (isset($orderItemsMap[$variantId]) && count($orderItemsMap[$variantId]) > 0) {
+                $variant = $orderItemsMap[$variantId][0]->getProductVariant();
+            } else {
+                $variant = $variantRepo->find($variantId);
+            }
 
             if (!$variant) continue;
 
             $product = $variant->getProduct();
 
-            // On ne traite que les produits "réservables"
-            if ($product && $product->isBookable()) {
+            if ($product && method_exists($product, 'isBookable') && $product->isBookable()) {
                 
-                // --- VALIDATION DES DATES ---
                 if (empty($itemData['booking']['start']) || empty($itemData['booking']['end'])) {
                     throw new BadRequestHttpException(sprintf(
                         "Dates manquantes pour le produit '%s' (Variante #%d).", 
@@ -86,7 +91,7 @@ class HandleBookingUseCase
 
                 if (isset($orderItemsMap[$variantId]) && count($orderItemsMap[$variantId]) > 0) {
                     /** @var OrderItems $relatedOrderItem */
-                    // array_shift prend le premier élément et le retire du tableau (pour ne pas le réutiliser)
+
                     $relatedOrderItem = array_shift($orderItemsMap[$variantId]);
                     
                     $booking->setOrderItem($relatedOrderItem);
@@ -96,5 +101,6 @@ class HandleBookingUseCase
                 $em->persist($booking);
             }
         }
+        
     }
 }

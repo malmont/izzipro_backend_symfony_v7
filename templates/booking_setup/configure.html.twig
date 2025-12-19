@@ -1,0 +1,73 @@
+{% extends 'base.html.twig' %}
+{% block title %}Config {{ product.name }}{% endblock %}
+
+{% block body %}
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <a href="{{ path('app_booking_list') }}" class="text-decoration-none mb-3 d-block fw-bold">
+                <i class="fas fa-arrow-left"></i> Retour à la liste
+            </a>
+
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-primary text-white p-4">
+                    <h3 class="h4 fw-bold mb-0">{{ product.name }}</h3>
+                </div>
+
+                <div class="card-body p-4">
+                    {{ form_start(form) }}
+                        
+                        {# SWITCH ACTIVATION #}
+                        <div class="bg-light p-3 rounded border mb-4 d-flex justify-content-between align-items-center">
+                            <label class="form-check-label fw-bold fs-5" for="{{ form.enableBooking.vars.id }}">
+                                {{ form.enableBooking.vars.label }}
+                            </label>
+                            <div class="form-check form-switch fs-3 m-0">
+                                {{ form_widget(form.enableBooking, {'attr': {'role': 'switch', 'class': 'form-check-input toggle-booking'}}) }}
+                            </div>
+                        </div>
+
+                        {# ZONE OPTIONS (JS toggle) #}
+                        <div id="booking-options" style="display: none;">
+                            <h5 class="mb-3 text-primary border-bottom pb-2">Paramètres de location</h5>
+                            
+                            {{ form_row(form.granularity) }}
+                            
+                            <div class="row">
+                                <div class="col-md-6">{{ form_row(form.stockQuantity) }}</div>
+                                <div class="col-md-6">{{ form_row(form.minDuration) }}</div>
+                            </div>
+
+                            {{ form_row(form.bufferTime) }}
+                        </div>
+
+                        {{ form_widget(form.save) }}
+
+                    {{ form_end(form) }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const toggle = document.querySelector('.toggle-booking');
+        const opts = document.getElementById('booking-options');
+        
+        const update = () => {
+            if(toggle.checked) {
+                opts.style.display = 'block';
+                setTimeout(() => opts.style.opacity = '1', 10);
+            } else {
+                opts.style.display = 'none';
+                opts.style.opacity = '0';
+            }
+        };
+        
+        opts.style.transition = 'opacity 0.3s ease';
+        toggle.addEventListener('change', update);
+        update(); // Init
+    });
+</script>
+{% endblock %}
