@@ -36,7 +36,6 @@ jobs:
           docker build -t $IMAGE_NAME -f Dockerfile .
           docker push $IMAGE_NAME
       
-      # ⬇️⬇️ C'EST CE BLOC QUI EST ENTIÈREMENT CORRIGÉ ⬇️⬇️
       - name: 🔄 Update K8s Config Repository
         run: |
           echo "🌀 Cloning K8s config repository..."
@@ -53,19 +52,27 @@ jobs:
             exit 1
           fi
 
-          # On utilise le nom dynamique du dépôt, comme vous le faites déjà
+          # On utilise le nom dynamique du dépôt
           IMAGE_URL="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ env.IMAGE_TAG }}"
           echo "Generated image URL: $IMAGE_URL"
 
+          # --- MISE À JOUR DU BACKEND (Existante) ---
           echo "✏️ Updating image tag in deployment.yaml (main container)..."
           yq e -i ".spec.template.spec.containers[0].image = \"$IMAGE_URL\"" ./apps/backend-symfony/deployment.yaml
 
           echo "✏️ Updating image tag in deployment.yaml (initContainer)..."
-          # La commande que vous avez correctement identifiée comme manquante
           yq e -i ".spec.template.spec.initContainers[0].image = \"$IMAGE_URL\"" ./apps/backend-symfony/deployment.yaml
 
           echo "✏️ Updating image tag in job-postsync-backend.yaml..."
           yq e -i ".spec.template.spec.containers[0].image = \"$IMAGE_URL\"" ./apps/backend-symfony/job-postsync-backend.yaml
+
+          # --- 👇👇 MISE À JOUR DU WORKER (Ajoutée) 👇👇 ---
+          echo "✏️ Updating WORKER deployment (main container)..."
+          yq e -i ".spec.template.spec.containers[0].image = \"$IMAGE_URL\"" ./apps/worker/deployment.yaml
+
+          echo "✏️ Updating WORKER deployment (initContainer)..."
+          yq e -i ".spec.template.spec.initContainers[0].image = \"$IMAGE_URL\"" ./apps/worker/deployment.yaml
+          # ------------------------------------------------
 
           echo "🚀 Pushing configuration changes..."
           git config --global user.name "GitHub Actions"
@@ -75,7 +82,7 @@ jobs:
           if git diff-index --quiet HEAD; then
             echo "No changes to commit. Skipping push."
           else
-            git commit -m "Deploy backend image ${{ env.IMAGE_TAG }}"
+            git commit -m "Deploy backend & worker image ${{ env.IMAGE_TAG }}"
             git push
             echo "✅ Config repository updated."
           fi
