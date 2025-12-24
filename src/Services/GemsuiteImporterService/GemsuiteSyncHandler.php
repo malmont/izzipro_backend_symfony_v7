@@ -46,7 +46,6 @@ class GemsuiteSyncHandler
         }
 
         try {
-            // 1. Récupération de la donnée brute via API
             $gemProductData = $this->fetchProductFromApi($productId, $token);
             
             if (!$gemProductData) {
@@ -58,23 +57,25 @@ class GemsuiteSyncHandler
             $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
             $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
 
-            // 2. Vérification Statut Actif/Inactif
             if (!$this->isProductActive($gemProductData)) {
                 $this->logger->info("Produit #$productId détecté comme inactif. Désactivation locale.");
                 $this->deactivateProductOrVariant($tenantEm, $gemProductData);
             } else {
-                // 3. Logique Parents / Variantes
                 $isParent = ($gemProductData['id'] === $gemProductData['origin_product_id']);
                 
                 if ($isParent) {
                     $this->logger->info("Traitement du produit PARENT #$productId");
-                    // On met à jour les catégories avant pour être sûr des liaisons
                     $categoryMap = $this->importCategories($tenantEm, $token, $companyIdentifier); 
                     $this->updateOrCreateProductParent($tenantEm, $gemProductData, $categoryMap, $companyIdentifier);
+
+                    if (!empty($gemProductData['attributs'])) {
+                        $this->logger->info("Parent #$productId possède des attributs : Traitement comme Variante hybride.");
+                        $this->updateOrCreateProductVariant($tenantEm, $gemProductData, $token, $companyIdentifier);
+                    }
+                    // -----------------------------
+
                 } else {
                     $this->logger->info("Traitement de la VARIANTE #$productId (Liée au Parent #{$gemProductData['origin_product_id']})");
-                    
-                    // On passe le token pour permettre l'auto-guérison (récupération du parent si manquant)
                     $this->updateOrCreateProductVariant($tenantEm, $gemProductData, $token, $companyIdentifier);
                 }
             }
@@ -87,10 +88,8 @@ class GemsuiteSyncHandler
         }
     }
 
-    // ... (handleCategoryUpdate, handleClientUpdate restent inchangés, je ne les remets pas pour raccourcir) ...
     public function handleCategoryUpdate(string $tenantCode, int $categoryId): void
     {
-        // (Garder votre code existant pour les catégories)
         $this->logger->info(sprintf('Webhook Catégorie #%d', $categoryId));
         $token = $this->tenantManager->getTenantToken($tenantCode);
         if (!$token) return;
@@ -106,9 +105,7 @@ class GemsuiteSyncHandler
 
     public function handleClientUpdate(string $tenantCode, int $clientId): void
     {
-        // (Garder votre code existant pour les clients)
         $this->logger->info(sprintf('Webhook Client #%d', $clientId));
-        // ... logique client identique au fichier précédent
     }
 
     // -------------------------------------------------------------------------
@@ -172,7 +169,7 @@ class GemsuiteSyncHandler
         $shipping->setWidthCm((float)($gemProductData['dimensions_width'] ?? 0));
         $shipping->setHeightCm((float)($gemProductData['dimensions_height'] ?? 0));
 
-        // Création variante par défaut UNIQUEMENT si produit simple (sans attributs)
+        // Gestion du produit simple (sans attributs ni variantes distinctes) - ID 32
         if (empty($gemProductData['attributs']) && empty($gemProductData['variantes'])) {
             $variant = $product->getVariants()->first() ?: null;
             if (!$variant) {
@@ -182,8 +179,12 @@ class GemsuiteSyncHandler
                 $product->addVariant($variant);
                 $em->persist($variant);
             }
-            $variant->setStockQuantity((int)($gemProductData['default_quantity'] ?? 0));
+            
+            // Calcul du stock pour le produit simple (Parent = Stock)
+            $realStock = $this->calculateTotalStock($gemProductData);
+            $variant->setStockQuantity($realStock);
         }
+        // Note: Si le produit a des attributs (ID 4), on ignore ce bloc, et on laisse le bloc IF dans handleProductUpdate lancer updateOrCreateProductVariant.
 
         $em->persist($product);
         
@@ -194,17 +195,17 @@ class GemsuiteSyncHandler
 
     /**
      * C'est ICI que la magie des attributs opère.
-     * Inspiré directement de ProcessGemsuiteEntityJobHandler.
+     * Gestion du Stock corrigée : Base + Ajustements
      */
     private function updateOrCreateProductVariant(EntityManagerInterface $em, array $gemProductData, string $token, ?string $companyIdentifier): void
     {
         $parentProductId = $gemProductData['origin_product_id'];
         $productRepo = $em->getRepository(Product::class);
         
-        // 1. Recherche locale du parent
+        // 1. Récupération du Parent
         $product = $productRepo->findOneBy(['gemsuiteProductId' => $parentProductId]);
         
-        // 2. AUTO-GUÉRISON : Si parent manquant, on va le chercher
+        // Auto-fix si le parent n'existe pas encore
         if (!$product) {
             $this->logger->warning(sprintf('AUTO-FIX: Parent #%d manquant pour la variante #%d. Téléchargement immédiat...', $parentProductId, $gemProductData['id']));
             
@@ -213,7 +214,7 @@ class GemsuiteSyncHandler
             if ($parentData) {
                 $catMap = $this->importCategories($em, $token, $companyIdentifier);
                 $this->updateOrCreateProductParent($em, $parentData, $catMap, $companyIdentifier);
-                $em->flush(); // Flush obligatoire pour générer l'ID local
+                $em->flush();
                 $product = $productRepo->findOneBy(['gemsuiteProductId' => $parentProductId]);
             }
         }
@@ -223,7 +224,7 @@ class GemsuiteSyncHandler
             return;
         }
 
-        // 3. Création/Update de la Variante
+        // 2. Récupération/Création de la Variante
         $variant = $em->getRepository(ProductVariant::class)->findOneBy(['gemsuiteVariantId' => $gemProductData['id']]); 
         if (!$variant) {
             $variant = new ProductVariant();
@@ -236,19 +237,42 @@ class GemsuiteSyncHandler
             }
         }
         
-        // 4. GESTION DES ATTRIBUTS (LA CLÉ DU SUCCÈS)
-        // C'est exactement la même logique que ton Job Handler qui fonctionne
-        if (isset($gemProductData['attributs'])) {
+        // 3. Calcul du Stock (Addition Base + Tableau)
+        $realStock = $this->calculateTotalStock($gemProductData);
+        
+        // 4. Application du Stock à la variante
+        $variant->setStockQuantity($realStock);
+
+        // 5. Gestion des attributs (Couleur/Taille)
+        if (isset($gemProductData['attributs']) && !empty($gemProductData['attributs'])) {
             $this->attributeProcessor->process(
                 $em, 
                 $variant, 
-                $gemProductData['attributs'], 
-                $gemProductData['default_quantity'] ?? 0
+                $gemProductData['attributs']
             );
-        } else {
-            // Fallback si pas d'attributs mais une quantité (ex: produit simple traité comme variante)
-            $variant->setStockQuantity((int)($gemProductData['default_quantity'] ?? 0));
+        } 
+    }
+
+    /**
+     * Calcule le stock TOTAL en additionnant la quantité par défaut
+     * et les ajustements du tableau 'quantite'.
+     */
+    private function calculateTotalStock(array $data): int
+    {
+        // 1. Stock de base (Fiche produit)
+        $baseStock = (float) ($data['default_quantity'] ?? 0);
+        
+        // 2. Ajustements (Mouvements entrepôt, réservations...)
+        $adjustments = 0.0;
+        if (!empty($data['quantite']) && is_array($data['quantite'])) {
+            foreach ($data['quantite'] as $q) {
+                // On additionne tous les mouvements du tableau
+                $adjustments += (float) ($q['quantite'] ?? 0);
+            }
         }
+
+        // 3. Retourne la somme
+        return (int) ($adjustments);
     }
 
     private function importCategories(EntityManagerInterface $em, string $token, ?string $companyIdentifier): array
@@ -273,7 +297,6 @@ class GemsuiteSyncHandler
                 $category->setGemsuiteCategoryId($gemCategoryData['id']);
             }
             
-            // Correction variable
             $category->setName(trim($gemCategoryData['name_fr'] ?? 'Catégorie'));
             
             $imagePath = $gemCategoryData['img_paths'] ?? null;

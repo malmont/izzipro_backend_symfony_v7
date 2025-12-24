@@ -27,25 +27,28 @@ class GemsuiteAttributeProcessor
 
     /**
      * Traite le tableau 'attributs' pour une variante donnée.
-     * C'est l'ancienne méthode "processAttributes", maintenant dans son propre service.
+     * NETTOYAGE : Le stock n'est plus géré ici (il est géré par le Handler), 
+     * on se concentre uniquement sur la création des Options et Valeurs.
      */
-    public function process(EntityManagerInterface $em, ProductVariant $variant, array $attributes, string $defaultQuantity): void
+    public function process(EntityManagerInterface $em, ProductVariant $variant, array $attributes): void
     {
         $optionRepo = $em->getRepository(ProductOption::class);
         $valueRepo = $em->getRepository(ProductOptionValue::class);
+        
+        // On vide les anciennes options pour éviter les doublons lors d'une mise à jour
         $variant->getOptionValues()->clear(); 
-
-        $quantity = (int)($defaultQuantity ?? 0);
 
         foreach ($attributes as $attribute) {
             $valueName = trim($attribute['value'] ?? '');
+            // On récupère l'ID du label (ex: "2" pour Couleur)
             $labelId = trim(explode(',', $attribute['labels'] ?? '')[0] ?? '');
             
+            // Filtres de sécurité
             if ($labelId === '4' || empty($valueName) || empty($labelId)) {
                 continue; 
             }
 
-            // 1. Trouver ou créer ProductOption
+            // 1. Trouver ou créer l'Option (ex: "Couleur")
             $productOption = $optionRepo->findOneBy(['gemsuiteLabelId' => $labelId]);
             if (!$productOption) {
                 $productOption = new ProductOption();
@@ -61,10 +64,14 @@ class GemsuiteAttributeProcessor
                 
                 $productOption->setGemsuiteLabelId($labelId);
                 $em->persist($productOption);
+                // Flush nécessaire ici pour avoir l'ID si on crée une valeur juste après
                 $em->flush();
             }
 
+            // Génération traduction pour l'Option
             $this->translationGenerator->generateTranslations($productOption);
+
+            // 2. Trouver ou créer la Valeur (ex: "Noir")
             $productOptionValue = $valueRepo->findOneBy(['value' => $valueName, 'productOption' => $productOption]);
             if (!$productOptionValue) {
                 $productOptionValue = new ProductOptionValue();
@@ -73,12 +80,15 @@ class GemsuiteAttributeProcessor
                 $em->persist($productOptionValue);
                 $em->flush();
             }
+
+            // Génération traduction pour la Valeur
             $this->translationGenerator->generateTranslations($productOptionValue);
+
             // 3. Lier la valeur à la variante
             $variant->addOptionValue($productOptionValue);
         }
         
-        // 4. Mettre à jour la quantité
-        $variant->setStockQuantity($quantity);
+        // RETIRÉ : $variant->setStockQuantity($stockQuantity);
+        // C'est désormais le GemsuiteSyncHandler qui applique le stock calculé.
     }
 }
