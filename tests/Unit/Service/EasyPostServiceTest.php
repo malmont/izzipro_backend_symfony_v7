@@ -73,7 +73,7 @@ class EasyPostServiceTest extends TestCase
     {
         // 1. Préparation des données API simulées
         $shipmentData = ['to_address' => [], 'from_address' => [], 'parcel' => []];
-        
+
         $mockRates = [
             (object)['id' => 'rate_1', 'service' => 'Express', 'rate' => '10.00'],
             (object)['id' => 'rate_2', 'service' => 'Standard', 'rate' => '5.00']
@@ -100,7 +100,7 @@ class EasyPostServiceTest extends TestCase
         // 4. PARTIAL MOCK du Service
         // On remplace SEULEMENT getTenantClient pour qu'il renvoie notre faux client
         $emProvider = $this->createMock(TenantEntityManagerProvider::class);
-        
+
         $service = $this->getMockBuilder(EasyPostService::class)
             ->setConstructorArgs([$emProvider, 'dev'])
             ->onlyMethods(['getTenantClient']) // On mocke uniquement cette méthode protected
@@ -124,9 +124,9 @@ class EasyPostServiceTest extends TestCase
         $serviceName = 'Regular';
 
         // 2. Simulation des Rates
-        $rate1 = (object)['id' => 'r1', 'carrier_account_id' => 'ca_999', 'service' => 'Express'];
-        $rate2 = (object)['id' => 'r2', 'carrier_account_id' => 'ca_123', 'service' => 'Regular']; // Celui qu'on veut
-        
+        $rate1 = (object)['id' => 'r1', 'carrier_account_id' => 'ca_999', 'service' => 'Express', 'rate' => '20.00', 'currency' => 'CAD'];
+        $rate2 = (object)['id' => 'r2', 'carrier_account_id' => 'ca_123', 'service' => 'Regular', 'rate' => '15.50', 'currency' => 'CAD']; // Celui qu'on veut
+
         $mockShipment = new \stdClass();
         $mockShipment->id = 'shp_123';
         $mockShipment->rates = [$rate1, $rate2];
@@ -186,7 +186,7 @@ class EasyPostServiceTest extends TestCase
         $mockTrackerService = $this->getMockBuilder(\stdClass::class)
             ->addMethods(['create'])
             ->getMock();
-        
+
         $mockTrackerService->expects($this->once())
             ->method('create')
             ->with(['tracking_code' => '12345'])

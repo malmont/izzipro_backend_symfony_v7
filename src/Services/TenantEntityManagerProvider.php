@@ -32,7 +32,7 @@ class TenantEntityManagerProvider
     public function getEntityManager(): EntityManagerInterface
     {
         $connection = $this->connectionProvider->getConnection();
-        
+
         // On s'assure que la connexion est active pour pouvoir lire le nom de la BDD.
         if (!$connection->isConnected()) {
             $connection->connect();
@@ -49,16 +49,25 @@ class TenantEntityManagerProvider
 
         // On crée le nouvel EM. On utilise `new EntityManager` car c'est plus direct
         // quand on a déjà la connexion et la config.
-        $this->em = new EntityManager($connection, $config);
-        
+        // On crée le nouvel EM via une méthode protégée (pour pouvoir la mocker en test)
+        $this->em = $this->createEntityManager($connection, $config);
+
         // On mémorise pour quelle BDD cet EM a été créé.
         $this->currentDbName = $targetDbName;
 
         return $this->em;
     }
-      public function switchTenant(string $tenantDbName, ?string $tenantCode = null): void
+    public function switchTenant(string $tenantDbName, ?string $tenantCode = null): void
     {
         $this->connectionProvider->switchTenant($tenantDbName, $tenantCode);
         // Ici, pas besoin de stocker d'EM : getEntityManager() le fera sur la bonne connexion ensuite
+    }
+
+    /**
+     * Factory method pour créer l'EntityManager (Permet le Mocking en test unitaires)
+     */
+    protected function createEntityManager(\Doctrine\DBAL\Connection $connection, Configuration $config): EntityManagerInterface
+    {
+        return new EntityManager($connection, $config);
     }
 }

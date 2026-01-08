@@ -25,11 +25,8 @@ class GemsuiteSaleManager
     {
         $user = $order->getUserId();
         
-        // --- CORRECTION CLIENT ID ---
-        // 1. On cherche d'abord dans la relation (Entité GemsuiteClient)
         $gemsuiteClientId = $user?->getGemsuiteClient()?->getGemsuiteId();
         
-        // 2. Si pas de relation, on cherche dans le champ integer direct
         if (!$gemsuiteClientId) {
             $gemsuiteClientId = $user?->getGemsuiteClientId();
         }
@@ -101,17 +98,12 @@ class GemsuiteSaleManager
             $gemProductId = null;
 
             if ($variant) {
-                // 1. On récupère l'ID de la variante
                 $variantId = $variant->getGemsuiteVariantId();
                 
-                // ⚠️ SÉCURITÉ RÉTROCOMPATIBILITÉ :
-                // Si l'ID est "32-default", le (int) va le transformer en 32 (ID du parent).
-                // Si l'ID est "1055" (Variant réel), il reste 1055.
                 if ($variantId) {
                     $gemProductId = (int) $variantId; 
                 }
 
-                // 2. FALLBACK : Si toujours pas d'ID, on prend le parent direct
                 if (!$gemProductId && $variant->getProduct()) {
                     $gemProductId = $variant->getProduct()->getGemsuiteProductId();
                 }
@@ -124,7 +116,7 @@ class GemsuiteSaleManager
                     'auth_bearer' => $token,
                     'json' => [
                         'sale_id' => $saleId,
-                        'product_id' => $gemProductId, // Sera "32" ou "1055" (propre)
+                        'product_id' => $gemProductId,
                         'product_quantity' => $item->getQuantity(),
                         'product_price' => $price,
                     ],

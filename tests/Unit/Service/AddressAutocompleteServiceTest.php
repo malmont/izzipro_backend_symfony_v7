@@ -15,9 +15,9 @@ class AddressAutocompleteServiceTest extends TestCase
     {
         $client = $this->createMock(HttpClientInterface::class);
         $logger = $this->createMock(LoggerInterface::class);
-        
+
         $keyProvider = $this->createMock(GooglePlacesKeyProvider::class);
-        $keyProvider->method('getKey')->willReturn(''); 
+        $keyProvider->method('getKey')->willReturn('');
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('La clé API Google Places n\'est pas configurée');
@@ -113,7 +113,7 @@ class AddressAutocompleteServiceTest extends TestCase
 
         // 2. On vérifie que le Logger est appelé !
         $logger = $this->createMock(LoggerInterface::class);
-        $logger->expects($this->once())->method('error'); 
+        $logger->expects($this->once())->method('error');
 
         $service = new AddressAutocompleteService($client, $keyProvider, $logger);
 
@@ -121,5 +121,61 @@ class AddressAutocompleteServiceTest extends TestCase
         $this->expectExceptionMessage('API Google Places: The provided API key is invalid.');
 
         $service->suggest('Fail');
+    }
+
+    public function testGetDetailsThrowsExceptionIfNoApiKey(): void
+    {
+        $client = $this->createMock(HttpClientInterface::class);
+        $logger = $this->createMock(LoggerInterface::class);
+
+        $keyProvider = $this->createMock(GooglePlacesKeyProvider::class);
+        $keyProvider->method('getKey')->willReturn('');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('La clé API Google Places n\'est pas configurée');
+
+        $service = new AddressAutocompleteService($client, $keyProvider, $logger);
+        $service->getDetails('some_id');
+    }
+
+    public function testGetDetailsApiErrorLogsAndThrowsException(): void
+    {
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getStatusCode')->willReturn(500);
+        $mockResponse->method('toArray')->willReturn(['error_message' => 'Internal Server Error']);
+
+        $client = $this->createMock(HttpClientInterface::class);
+        $client->method('request')->willReturn($mockResponse);
+
+        $keyProvider = $this->createMock(GooglePlacesKeyProvider::class);
+        $keyProvider->method('getKey')->willReturn('KEY');
+
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects($this->once())->method('error');
+
+        $service = new AddressAutocompleteService($client, $keyProvider, $logger);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('API Google Places: Internal Server Error');
+
+        $service->getDetails('some_id');
+    }
+
+    public function testSuggestReturnsEmptyArrayIfNoPredictions(): void
+    {
+        $mockResponse = $this->createMock(ResponseInterface::class);
+        $mockResponse->method('getStatusCode')->willReturn(200);
+        // Simulation réponse valide mais sans predictions ou predictions vide
+        $mockResponse->method('toArray')->willReturn(['status' => 'ZERO_RESULTS']);
+
+        $client = $this->createMock(HttpClientInterface::class);
+        $client->method('request')->willReturn($mockResponse);
+
+        $keyProvider = $this->createMock(GooglePlacesKeyProvider::class);
+        $keyProvider->method('getKey')->willReturn('KEY');
+
+        $service = new AddressAutocompleteService($client, $keyProvider, $this->createMock(LoggerInterface::class));
+
+        $this->assertEmpty($service->suggest('Nowhere'));
     }
 }

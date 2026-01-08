@@ -16,7 +16,7 @@ class AddressVerificationServiceTest extends TestCase
         $mockResult = new \stdClass();
         $mockResult->verifications = new \stdClass();
         $mockResult->verifications->delivery = new \stdClass();
-        $mockResult->verifications->delivery->errors = []; 
+        $mockResult->verifications->delivery->errors = [];
 
         $mockResult->street1 = '123 Normalized St';
         $mockResult->street2 = null;
@@ -30,7 +30,7 @@ class AddressVerificationServiceTest extends TestCase
         $mockAddressResource = $this->getMockBuilder(\stdClass::class)
             ->addMethods(['create'])
             ->getMock();
-        
+
         $mockAddressResource->expects($this->once())
             ->method('create')
             ->willReturn($mockResult);
@@ -38,7 +38,7 @@ class AddressVerificationServiceTest extends TestCase
         // 3. Mock du Client EasyPost (Le point bloquant précédent)
         // On mock la vraie classe pour satisfaire le typage strict
         $mockClient = $this->createMock(EasyPostClient::class);
-        
+
         // On injecte notre fausse ressource d'adresse dans la propriété publique du client
         // Note : PHPUnit permet d'écrire sur les propriétés d'un mock
         $mockClient->address = $mockAddressResource;
@@ -49,12 +49,12 @@ class AddressVerificationServiceTest extends TestCase
 
         // 5. Exécution
         $service = new AddressVerificationService($easyPostService);
-        
+
         $normalized = $service->verify([
-            'street1' => '123 main st', 
-            'city' => 'sf', 
-            'province' => 'ca', 
-            'postal_code' => '94105', 
+            'street1' => '123 main st',
+            'city' => 'sf',
+            'province' => 'ca',
+            'postal_code' => '94105',
             'country' => 'US'
         ]);
 
@@ -69,10 +69,10 @@ class AddressVerificationServiceTest extends TestCase
         $mockResult = new \stdClass();
         $mockResult->verifications = new \stdClass();
         $mockResult->verifications->delivery = new \stdClass();
-        
+
         $error1 = new \stdClass();
         $error1->message = 'Address not found';
-        
+
         $mockResult->verifications->delivery->errors = [$error1];
 
         // 2. Mock Address Resource
@@ -98,7 +98,7 @@ class AddressVerificationServiceTest extends TestCase
 
         // 6. Exécution avec TOUS les champs requis (Même faux)
         $service = new AddressVerificationService($easyPostService);
-        
+
         // CORRECTION ICI : On fournit un tableau complet pour ne pas planter PHP
         $service->verify([
             'street1'     => 'Nowhere',
@@ -107,6 +107,40 @@ class AddressVerificationServiceTest extends TestCase
             'province'    => 'ZZ',
             'postal_code' => '00000',
             'country'     => 'US'
+        ]);
+    }
+
+    public function testVerifyPropagatesEasyPostExceptions(): void
+    {
+        // 1. Mock Address Resource qui lance une exception
+        $mockAddressResource = $this->getMockBuilder(\stdClass::class)
+            ->addMethods(['create'])
+            ->getMock();
+
+        $mockAddressResource->expects($this->once())
+            ->method('create')
+            ->willThrowException(new \Exception('EasyPost API Down'));
+
+        // 2. Mock Client
+        $mockClient = $this->createMock(EasyPostClient::class);
+        $mockClient->address = $mockAddressResource;
+
+        // 3. Mock Service Wrapper
+        $easyPostService = $this->createMock(EasyPostService::class);
+        $easyPostService->method('getClient')->willReturn($mockClient);
+
+        // 4. Vérification que l'exception remonte
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('EasyPost API Down');
+
+        $service = new AddressVerificationService($easyPostService);
+
+        $service->verify([
+            'street1'     => '123 Main St',
+            'city'        => 'Test',
+            'province'    => 'TS',
+            'postal_code' => '12345',
+            'country'     => 'TS'
         ]);
     }
 }

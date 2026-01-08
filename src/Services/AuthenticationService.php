@@ -7,7 +7,7 @@ use App\Entity\User;
 use App\Services\TokenService;
 use App\Services\OtpService;
 // MODIFICATION : On importe notre provider
-use App\Services\TenantEntityManagerProvider; 
+use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -34,36 +34,28 @@ class AuthenticationService
 
     public function login(string $email, string $password, string $platform, Request $request): Response
     {
- 
+
         $em = $this->emProvider->getEntityManager();
-        
-        $dbName = $em->getConnection()->getDatabase();
+
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
 
-        if (!$user instanceof UserInterface) {
+        if (!$user instanceof User || !$this->passwordHasher->isPasswordValid($user, $password)) {
             return new JsonResponse(
-                ['error' => 'Unauthorized'],             
+                ['code' => 'LOGIN_INVALID', 'message' => 'Identifiants invalides'],
                 Response::HTTP_UNAUTHORIZED
             );
         }
 
-        if (!$user instanceof UserInterface || !$this->passwordHasher->isPasswordValid($user, $password)) {
-            return new JsonResponse(
-                ['code' => 'LOGIN_INVALID', 'message' => 'Identifiants invalides'], 
-                Response::HTTP_UNAUTHORIZED
-            );
-        }
-        
         if (!$user->isVerified()) {
             return new JsonResponse(
                 ['code' => 'ACCOUNT_NOT_VERIFIED', 'message' => 'Votre compte n\'est pas vérifié. Veuillez consulter vos e-mails.'],
                 Response::HTTP_UNAUTHORIZED
             );
         }
-        
+
         if (in_array($platform, ['web', 'mobile'])) {
             if (!in_array('ROLE_USER_INTERNET', $user->getRoles(), true)) {
-               return new JsonResponse(
+                return new JsonResponse(
                     ['error' => 'This account is not allowed to access the web/mobile platform.'],
                     Response::HTTP_FORBIDDEN
                 );
@@ -88,9 +80,9 @@ class AuthenticationService
                 ['Content-Type' => 'application/json']
             );
         }
-        
+
         $tokens = $this->tokenService->generateTokens($user);
         $host = $request->getHost();
-        return $this->tokenService->createResponseWithTokens($tokens, $platform,$host);
+        return $this->tokenService->createResponseWithTokens($tokens, $platform, $host);
     }
 }

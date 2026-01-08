@@ -104,4 +104,31 @@ class GooglePlacesKeyProviderTest extends TestCase
         $service = new GooglePlacesKeyProvider($provider);
         $service->getKey();
     }
+
+    public function testGetKeyReturnsEmptyStringIfKeyIsNull(): void
+    {
+        // 1. Env TEST
+        $_ENV['APP_ENV'] = 'test';
+
+        // 2. Mock Config avec clé null
+        $config = $this->createMock(GooglePlacesConfig::class);
+        $config->method('getGoogleApiKeyTest')->willReturn(null);
+
+        // 3. Mocks
+        $repository = $this->createMock(ObjectRepository::class);
+        $repository->method('findOneBy')->willReturn($config);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturn($repository);
+
+        $provider = $this->createMock(TenantEntityManagerProvider::class);
+        $provider->method('getEntityManager')->willReturn($em);
+
+        // 4. Exécution
+        $service = new GooglePlacesKeyProvider($provider);
+        $key = $service->getKey();
+
+        // 5. Vérification
+        $this->assertSame('', $key);
+    }
 }
