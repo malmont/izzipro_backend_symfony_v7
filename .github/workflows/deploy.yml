@@ -25,7 +25,10 @@ jobs:
           extensions: mbstring, intl, pdo, pdo_mysql
           coverage: none
 
-      - name: 📥 Install Dependencies
+      - name: � Create .env file
+        run: cp .env.test .env
+
+      - name: �📥 Install Dependencies
         run: composer install --prefer-dist --no-progress --no-suggest
 
       - name: 🧪 Run Unit Tests
