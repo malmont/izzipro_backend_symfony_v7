@@ -19,30 +19,36 @@ class TenantDoctrineSwitcherListener
     private \PDO $pdoMaster;
     private LoggerInterface $logger;
     private TenantConnectionProvider $tenantConnectionProvider;
-    private string $frontendMainDomain; 
-    private string $backendMainDomain; 
+    private string $frontendMainDomain;
+    private string $backendMainDomain;
 
     public function __construct(
         TenantConnectionProvider $tenantConnectionProvider,
         LoggerInterface $logger,
         string $masterDatabaseUrl,
-        string $frontendMainDomain, 
-        string $backendMainDomain  
+        string $frontendMainDomain,
+        string $backendMainDomain,
+        ?\PDO $pdo = null
     ) {
-        $parts = parse_url($masterDatabaseUrl);
-        $scheme = $parts['scheme'] === 'postgresql' ? 'pgsql' : $parts['scheme'];
-        $host   = $parts['host'];
-        $port   = $parts['port'] ?? 5432;
-        $db     = ltrim($parts['path'], '/');
-        $user   = rawurldecode($parts['user'] ?? '');
-        $pass   = rawurldecode($parts['pass'] ?? '');
-        $pdoDsn = sprintf('%s:host=%s;port=%d;dbname=%s', $scheme, $host, $port, $db);
-        
-        $this->pdoMaster = new \PDO($pdoDsn, $user, $pass, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
         $this->tenantConnectionProvider = $tenantConnectionProvider;
         $this->logger = $logger;
-        $this->frontendMainDomain = $frontendMainDomain; 
+        $this->frontendMainDomain = $frontendMainDomain;
         $this->backendMainDomain = $backendMainDomain;
+
+        if ($pdo) {
+            $this->pdoMaster = $pdo;
+        } else {
+            $parts = parse_url($masterDatabaseUrl);
+            $scheme = $parts['scheme'] === 'postgresql' ? 'pgsql' : $parts['scheme'];
+            $host   = $parts['host'];
+            $port   = $parts['port'] ?? 5432;
+            $db     = ltrim($parts['path'], '/');
+            $user   = rawurldecode($parts['user'] ?? '');
+            $pass   = rawurldecode($parts['pass'] ?? '');
+            $pdoDsn = sprintf('%s:host=%s;port=%d;dbname=%s', $scheme, $host, $port, $db);
+
+            $this->pdoMaster = new \PDO($pdoDsn, $user, $pass, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+        }
     }
 
     public function onKernelRequest(RequestEvent $event): void
@@ -64,7 +70,7 @@ class TenantDoctrineSwitcherListener
             $this->logger->info("Chemin '{$currentPath}' exclu. Le listener ne s'applique pas.");
             return;
         }
-        
+
         // --- LOGIQUE "BILINGUE" ---
         // 2. Identification du Host
         $host = $request->headers->get('X-Tenant-Host');
@@ -80,12 +86,12 @@ class TenantDoctrineSwitcherListener
 
         $tenantCode = null;
         $targetDb = null;
-        
+
         // 3. Priorité 1 : Vérifier si c'est un DOMAINE PERSONNALISÉ
         try {
             $altHost = $host;
             if (str_starts_with($host, 'www.')) {
-                $altHost = substr($host, 4); 
+                $altHost = substr($host, 4);
             } else {
                 $altHost = 'www.' . $host;
             }
@@ -104,28 +110,28 @@ class TenantDoctrineSwitcherListener
         } catch (\PDOException $e) {
             $this->logger->error("Erreur lors de la recherche du custom_domain: " . $e->getMessage());
         }
-        
+
         // 4. Priorité 2 : Vérifier si c'est un SOUS-DOMAINE
         if (!$tenantCode) {
             $isFrontendSubdomain = str_ends_with($host, $this->frontendMainDomain) && $host !== $this->frontendMainDomain;
             $isBackendSubdomain = str_ends_with($host, $this->backendMainDomain) && $host !== $this->backendMainDomain;
 
             if ($isFrontendSubdomain || $isBackendSubdomain) {
-                
+
                 $hostParts = explode('.', $host);
-                
+
                 if ($hostParts[0] === 'www') {
                     $tenantCode = $hostParts[1] ?? null;
                 } else {
                     $tenantCode = $hostParts[0];
                 }
-                
+
                 if ($tenantCode) {
-                     $this->logger->info("Tenant trouvé par sous-domaine (P2) via {$source}: '$host'. Code: '$tenantCode'.");
+                    $this->logger->info("Tenant trouvé par sous-domaine (P2) via {$source}: '$host'. Code: '$tenantCode'.");
                 }
             }
         }
-        
+
         // 5. Priorité 3 : Domaine racine par défaut (NE S'APPLIQUE QUE SI LA REQUETE VIENT DU BACKEND)
         if (!$tenantCode && $host === $this->backendMainDomain) {
             $this->logger->info("Domaine racine Backend (P3) détecté. Application du tenant par défaut 'tenantdefaut'.");

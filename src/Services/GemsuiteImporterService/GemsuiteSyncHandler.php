@@ -27,10 +27,9 @@ class GemsuiteSyncHandler
         private LoggerInterface $logger,
         private GemsuiteImageUrlBuilder $imageUrlBuilder,
         private TranslationGeneratorService $translationGenerator,
-        private GemsuiteAttributeProcessor $attributeProcessor, 
+        private GemsuiteAttributeProcessor $attributeProcessor,
         private string $gemsuiteApiUrl
-    ) {
-    }
+    ) {}
 
     /**
      * Point d'entrée principal pour les Webhooks Produits
@@ -39,7 +38,7 @@ class GemsuiteSyncHandler
     {
         $this->logger->info(sprintf('Webhook Produit: Sync ID #%d pour tenant "%s"', $productId, $tenantCode));
         $token = $this->tenantManager->getTenantToken($tenantCode);
-        
+
         if (!$token) {
             $this->logger->error("Token manquant pour le tenant $tenantCode");
             return;
@@ -47,12 +46,12 @@ class GemsuiteSyncHandler
 
         try {
             $gemProductData = $this->fetchProductFromApi($productId, $token);
-            
+
             if (!$gemProductData) {
                 $this->logger->warning("Produit #$productId introuvable sur l'API (ou erreur réseau).");
                 return;
             }
-            
+
             $tenantEm = $this->getTenantEntityManager($tenantCode);
             $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
             $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
@@ -62,10 +61,10 @@ class GemsuiteSyncHandler
                 $this->deactivateProductOrVariant($tenantEm, $gemProductData);
             } else {
                 $isParent = ($gemProductData['id'] === $gemProductData['origin_product_id']);
-                
+
                 if ($isParent) {
                     $this->logger->info("Traitement du produit PARENT #$productId");
-                    $categoryMap = $this->importCategories($tenantEm, $token, $companyIdentifier); 
+                    $categoryMap = $this->importCategories($tenantEm, $token, $companyIdentifier);
                     $this->updateOrCreateProductParent($tenantEm, $gemProductData, $categoryMap, $companyIdentifier);
 
                     if (!empty($gemProductData['attributs'])) {
@@ -82,8 +81,8 @@ class GemsuiteSyncHandler
 
             $tenantEm->flush();
             $this->logger->info("Sync terminée avec succès pour #$productId");
-        
         } catch (\Throwable $e) {
+
             $this->logger->error("Erreur Critique Sync Produit #$productId : " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
         }
     }
@@ -130,29 +129,31 @@ class GemsuiteSyncHandler
         if (!isset($gemProductData['id'], $gemProductData['name_fr'])) {
             return;
         }
-        
+
         $product = $em->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
         if (!$product) {
             $product = new Product();
             $product->setGemsuiteProductId($gemProductData['id']);
         }
 
-        $product->getCategory()->clear(); 
+        $product->getCategory()->clear();
         $product->setName(trim($gemProductData['name_fr']));
         $product->setDescription($gemProductData['additional_fr'] ?? 'Pas de description.');
-        $product->setPrice((float)($gemProductData['price'] ?? 0) * 100); 
+        $product->setPrice((float)($gemProductData['price'] ?? 0) * 100);
         $product->setSlug(strtolower($this->slugger->slug($product->getName())));
         $product->setIsWeb(true);
         $product->setIsnewarrival((bool)($gemProductData['is_new_arrival'] ?? true));
         $product->setIsbestseller((bool)($gemProductData['is_bestseller'] ?? true));
-        
+
         $defaultStyle = $em->getRepository(Style::class)->find(2);
-        if ($defaultStyle) { $product->setStyle($defaultStyle); }
+        if ($defaultStyle) {
+            $product->setStyle($defaultStyle);
+        }
 
         if (isset($gemProductData['category_id']) && isset($categoryMap[$gemProductData['category_id']])) {
             $product->addCategory($categoryMap[$gemProductData['category_id']]);
         }
-        
+
         $imagePath = $gemProductData['medias'][0]['path'] ?? null;
         if ($imagePath) {
             $product->setImage($this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath));
@@ -179,15 +180,17 @@ class GemsuiteSyncHandler
                 $product->addVariant($variant);
                 $em->persist($variant);
             }
-            
+
             // Calcul du stock pour le produit simple (Parent = Stock)
             $realStock = $this->calculateTotalStock($gemProductData);
             $variant->setStockQuantity($realStock);
         }
-        // Note: Si le produit a des attributs (ID 4), on ignore ce bloc, et on laisse le bloc IF dans handleProductUpdate lancer updateOrCreateProductVariant.
+        if (!empty($gemProductData['attributs']) && empty($gemProductData['variantes'])) {
+            // Skip
+        }
 
         $em->persist($product);
-        
+
         if (method_exists($this->translationGenerator, 'generateTranslations')) {
             $this->translationGenerator->generateTranslations($product);
         }
@@ -201,16 +204,16 @@ class GemsuiteSyncHandler
     {
         $parentProductId = $gemProductData['origin_product_id'];
         $productRepo = $em->getRepository(Product::class);
-        
+
         // 1. Récupération du Parent
         $product = $productRepo->findOneBy(['gemsuiteProductId' => $parentProductId]);
-        
+
         // Auto-fix si le parent n'existe pas encore
         if (!$product) {
             $this->logger->warning(sprintf('AUTO-FIX: Parent #%d manquant pour la variante #%d. Téléchargement immédiat...', $parentProductId, $gemProductData['id']));
-            
+
             $parentData = $this->fetchProductFromApi($parentProductId, $token);
-            
+
             if ($parentData) {
                 $catMap = $this->importCategories($em, $token, $companyIdentifier);
                 $this->updateOrCreateProductParent($em, $parentData, $catMap, $companyIdentifier);
@@ -225,32 +228,32 @@ class GemsuiteSyncHandler
         }
 
         // 2. Récupération/Création de la Variante
-        $variant = $em->getRepository(ProductVariant::class)->findOneBy(['gemsuiteVariantId' => $gemProductData['id']]); 
+        $variant = $em->getRepository(ProductVariant::class)->findOneBy(['gemsuiteVariantId' => $gemProductData['id']]);
         if (!$variant) {
             $variant = new ProductVariant();
             $variant->setProduct($product);
-            $variant->setGemsuiteVariantId($gemProductData['id']); 
+            $variant->setGemsuiteVariantId($gemProductData['id']);
             $em->persist($variant);
-            
+
             if (!$product->getVariants()->contains($variant)) {
-                $product->addVariant($variant); 
+                $product->addVariant($variant);
             }
         }
-        
+
         // 3. Calcul du Stock (Addition Base + Tableau)
         $realStock = $this->calculateTotalStock($gemProductData);
-        
+
         // 4. Application du Stock à la variante
         $variant->setStockQuantity($realStock);
 
         // 5. Gestion des attributs (Couleur/Taille)
         if (isset($gemProductData['attributs']) && !empty($gemProductData['attributs'])) {
             $this->attributeProcessor->process(
-                $em, 
-                $variant, 
+                $em,
+                $variant,
                 $gemProductData['attributs']
             );
-        } 
+        }
     }
 
     /**
@@ -261,7 +264,7 @@ class GemsuiteSyncHandler
     {
         // 1. Stock de base (Fiche produit)
         $baseStock = (float) ($data['default_quantity'] ?? 0);
-        
+
         // 2. Ajustements (Mouvements entrepôt, réservations...)
         $adjustments = 0.0;
         if (!empty($data['quantite']) && is_array($data['quantite'])) {
@@ -296,14 +299,14 @@ class GemsuiteSyncHandler
                 $category = new Categories();
                 $category->setGemsuiteCategoryId($gemCategoryData['id']);
             }
-            
+
             $category->setName(trim($gemCategoryData['name_fr'] ?? 'Catégorie'));
-            
+
             $imagePath = $gemCategoryData['img_paths'] ?? null;
             if (!empty($imagePath)) {
                 $category->setImage($this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath));
             }
-            
+
             $em->persist($category);
             if (method_exists($this->translationGenerator, 'generateTranslations')) {
                 $this->translationGenerator->generateTranslations($category);
@@ -317,7 +320,7 @@ class GemsuiteSyncHandler
     private function deactivateProductOrVariant(EntityManagerInterface $em, array $gemProductData): void
     {
         $isParent = ($gemProductData['id'] === $gemProductData['origin_product_id']);
-        
+
         if ($isParent) {
             $product = $em->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
             if ($product) {
@@ -325,9 +328,9 @@ class GemsuiteSyncHandler
             }
         } else {
             $variant = $em->getRepository(ProductVariant::class)->findOneBy(['gemsuiteVariantId' => $gemProductData['id']]);
-             if ($variant) {
-                 $em->remove($variant);
-             }
+            if ($variant) {
+                $em->remove($variant);
+            }
         }
     }
 
@@ -338,7 +341,7 @@ class GemsuiteSyncHandler
         $name = trim($gemProductData['name_fr'] ?? '');
         return $status === 1 && $syncWeb === true && !empty($name);
     }
-    
+
     private function getTenantEntityManager(string $tenantCode): EntityManagerInterface
     {
         $dbname = 'db_' . $tenantCode;

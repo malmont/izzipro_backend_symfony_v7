@@ -12,9 +12,8 @@ use DateTimeInterface;
 class BookingAvailabilityService
 {
     public function __construct(
-        private TenantEntityManagerProvider $emProvider 
-    ) {
-    }
+        private TenantEntityManagerProvider $emProvider
+    ) {}
 
     private function getRepository()
     {
@@ -25,12 +24,12 @@ class BookingAvailabilityService
     public function getRemainingStock(Product $product, DateTimeInterface $start, DateTimeInterface $end): int
     {
         if ($product->getMode() !== ProductMode::BOOKING) {
-            return $product->getQuantity(); 
+            return $product->getQuantity();
         }
 
         $config = $product->getBookingConfiguration();
         if (!$config) {
-            return 0; 
+            return 0;
         }
 
         $totalStock = $config->getStockQuantity();
@@ -48,7 +47,7 @@ class BookingAvailabilityService
     {
         return $this->getRemainingStock($product, $start, $end) >= $quantityRequested;
     }
-    
+
 
     public function getAvailabilitiesForRange(Product $product, DateTimeInterface $start, DateTimeInterface $end): array
     {
@@ -57,7 +56,7 @@ class BookingAvailabilityService
 
         $granularity = $config->getGranularity();
         $totalStock = $config->getStockQuantity();
-        
+
         $intervalSpec = match ($granularity) {
             'days' => 'P1D',
             'hours' => 'PT1H',
@@ -73,7 +72,7 @@ class BookingAvailabilityService
 
         foreach ($period as $dt) {
             $slotStart = $dt;
-            $slotEnd = (clone $dt)->add(new \DateInterval($intervalSpec));
+            $slotEnd = \DateTime::createFromInterface($dt)->add(new \DateInterval($intervalSpec));
 
             $occupied = 0;
 

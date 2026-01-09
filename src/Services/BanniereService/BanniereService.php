@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services\BanniereService;
 
 use App\Dto\BanniereInputDto;
@@ -8,6 +9,8 @@ use App\Services\TenantEntityManagerProvider;
 class BanniereService
 {
 
+
+    private $repository;
 
     public function __construct(private TenantEntityManagerProvider $emProvider)
     {
@@ -29,11 +32,11 @@ class BanniereService
     public function createBanniere(BanniereInputDto $dto): Banniere
     {
         $tenantEm = $this->emProvider->getEntityManager();
-        
+
         $banniere = new Banniere();
         $banniere->setTitre($dto->titre);
         $banniere->setTexte($dto->texte);
-        
+
         $tenantEm->persist($banniere);
         $tenantEm->flush();
 
@@ -46,7 +49,7 @@ class BanniereService
 
         $banniere->setTitre($dto->titre ?? $banniere->getTitre());
         $banniere->setTexte($dto->texte ?? $banniere->getTexte());
-        
+
         $tenantEm->flush();
 
         return $banniere;

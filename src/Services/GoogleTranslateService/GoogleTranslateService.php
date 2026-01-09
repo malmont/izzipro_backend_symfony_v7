@@ -17,11 +17,17 @@ class GoogleTranslateService
         $key = $googleApiKey ? trim($googleApiKey) : null;
 
         if (!empty($key) && $key !== 'VOTRE_CLÉ_ICI') {
-            $this->translateClient = new TranslateClient(['key' => $key]);
+            $this->translateClient = $this->createTranslateClient($key);
         } else {
             $this->logger->warning('Google API Key is not configured. The translation service will return original texts.');
         }
     }
+
+    protected function createTranslateClient(string $key): TranslateClient
+    {
+        return new TranslateClient(['key' => $key]);
+    }
+
 
     public function translate(?string $text, string $targetLocale, ?string $sourceLocale = 'fr'): ?string
     {

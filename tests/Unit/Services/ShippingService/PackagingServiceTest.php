@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Tests\Unit\Service;
+namespace App\Tests\Unit\Services\ShippingService;
 
 use App\Entity\PackagingType;
 use App\Entity\ProductShipping;
@@ -17,17 +17,26 @@ class PackagingServiceTest extends TestCase
      * Crée un Mock intelligent de ProductShipping.
      */
     private function createMockItem(
-        int $width, int $length, int $depth, int $weight, 
-        string $description, ?int $shippingClassId = null
+        int $width,
+        int $length,
+        int $depth,
+        int $weight,
+        string $description,
+        ?int $shippingClassId = null
     ): ProductShipping {
-        
+
         $builder = $this->getMockBuilder(ProductShipping::class)
             ->disableOriginalConstructor();
 
         // Liste des méthodes à mocker pour l'Item
         $methodsToMock = [
-            'getWidth', 'getLength', 'getDepth', 'getWeight', 
-            'getDescription', 'getKeepFlat', 'getShippingClassEntity',
+            'getWidth',
+            'getLength',
+            'getDepth',
+            'getWeight',
+            'getDescription',
+            'getKeepFlat',
+            'getShippingClassEntity',
             'getAllowedRotation'
         ];
 
@@ -57,7 +66,7 @@ class PackagingServiceTest extends TestCase
         $item->method('getDepth')->willReturn($depth);
         $item->method('getWeight')->willReturn($weight);
         $item->method('getDescription')->willReturn($description);
-        
+
         if (method_exists($item, 'getKeepFlat') || in_array('getKeepFlat', $addMethods)) {
             $item->method('getKeepFlat')->willReturn(false);
         }
@@ -94,15 +103,25 @@ class PackagingServiceTest extends TestCase
      * Crée un Mock intelligent de PackagingType.
      */
     private function createMockBox(
-        string $ref, int $width, int $length, int $depth, int $maxWeight
+        string $ref,
+        int $width,
+        int $length,
+        int $depth,
+        int $maxWeight
     ): PackagingType {
-        
+
         $builder = $this->getMockBuilder(PackagingType::class)
             ->disableOriginalConstructor();
 
         $methodsToMock = [
-            'getReference', 'getOuterWidth', 'getOuterLength', 'getOuterDepth',
-            'getEmptyWeight', 'getInnerWidth', 'getInnerLength', 'getInnerDepth', 
+            'getReference',
+            'getOuterWidth',
+            'getOuterLength',
+            'getOuterDepth',
+            'getEmptyWeight',
+            'getInnerWidth',
+            'getInnerLength',
+            'getInnerDepth',
             'getMaxWeight'
         ];
 

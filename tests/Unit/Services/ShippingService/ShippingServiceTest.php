@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Tests\Unit\Service;
+namespace App\Tests\Unit\Services\ShippingService;
 
 use App\Dto\RateOptionDto;
 use App\Entity\PackagingType;
@@ -13,7 +13,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ObjectRepository;
 use DVDoug\BoxPacker\PackedBox;
 use DVDoug\BoxPacker\PackedBoxList;
-use DVDoug\BoxPacker\PackedItemList; // <--- IMPORT CORRIGÉ
+use DVDoug\BoxPacker\PackedItemList;
 use PHPUnit\Framework\TestCase;
 
 class ShippingServiceTest extends TestCase
@@ -48,24 +48,27 @@ class ShippingServiceTest extends TestCase
     }
 
     // --- TEST 2 : ORCHESTRATION (GetRates) ---
-    
+
     public function testGetRatesOrchestratesPackingAndEasyPostCall(): void
     {
         // 1. MOCK DES ENTITÉS (Boîte)
         $boxTemplate = $this->createMock(PackagingType::class);
-        $boxTemplate->method('getOuterLength')->willReturn(100); 
+        $boxTemplate->method('getOuterLength')->willReturn(100);
         $boxTemplate->method('getOuterWidth')->willReturn(100);
         $boxTemplate->method('getOuterDepth')->willReturn(100);
-        $boxTemplate->method('getEmptyWeight')->willReturn(1000); 
+        $boxTemplate->method('getEmptyWeight')->willReturn(1000);
         $boxTemplate->method('getInnerLength')->willReturn(90);
         $boxTemplate->method('getInnerWidth')->willReturn(90);
         $boxTemplate->method('getInnerDepth')->willReturn(90);
 
         // 2. INSTANCIATION RÉELLE DE PACKEDBOX (Correction Type)
         $packedBox = new PackedBox(
-            $boxTemplate, 
-            new PackedItemList(), // <--- CORRECTION ICI (PackedItemList)
-            0, 0, 0, 0
+            $boxTemplate,
+            new PackedItemList(),
+            0,
+            0,
+            0,
+            0
         );
 
         $packedBoxList = new PackedBoxList();
@@ -89,7 +92,7 @@ class ShippingServiceTest extends TestCase
 
         // 5. MOCK EASYPOST
         $easyPost = $this->createMock(EasyPostService::class);
-        
+
         $easyPost->expects($this->once())
             ->method('getRates')
             ->with($this->callback(function ($payload) {
@@ -100,17 +103,17 @@ class ShippingServiceTest extends TestCase
             }))
             ->willReturn([
                 (object)[
-                    'carrier' => 'UPS', 
-                    'service' => 'Standard', 
-                    'rate' => 12.50, 
-                    'currency' => 'USD', 
+                    'carrier' => 'UPS',
+                    'service' => 'Standard',
+                    'rate' => 12.50,
+                    'currency' => 'USD',
                     'est_delivery_days' => 3
                 ]
             ]);
 
         // 6. EXECUTION
         $service = new ShippingService($emProvider, $easyPost, $packager);
-        
+
         $items = [$this->createMock(ProductShipping::class)];
         $result = $service->getRates($items, ['addr_to'], ['addr_from'], ['ca_123']);
 
@@ -124,24 +127,27 @@ class ShippingServiceTest extends TestCase
     {
         // Configuration similaire
         $boxTemplate = $this->createMock(PackagingType::class);
-        $boxTemplate->method('getOuterLength')->willReturn(100); 
+        $boxTemplate->method('getOuterLength')->willReturn(100);
         $boxTemplate->method('getOuterWidth')->willReturn(100);
         $boxTemplate->method('getOuterDepth')->willReturn(100);
-        $boxTemplate->method('getEmptyWeight')->willReturn(500); 
+        $boxTemplate->method('getEmptyWeight')->willReturn(500);
         $boxTemplate->method('getInnerLength')->willReturn(90);
         $boxTemplate->method('getInnerWidth')->willReturn(90);
         $boxTemplate->method('getInnerDepth')->willReturn(90);
 
         // Instantiation réelle avec PackedItemList
         $packedBox = new PackedBox(
-            $boxTemplate, 
-            new PackedItemList(), // <--- CORRECTION ICI
-            0, 0, 0, 0
+            $boxTemplate,
+            new PackedItemList(),
+            0,
+            0,
+            0,
+            0
         );
 
         $packedBoxList = new PackedBoxList();
         $packedBoxList->insert($packedBox);
-        $packedBoxList->insert($packedBox); 
+        $packedBoxList->insert($packedBox);
 
         // Mocks Services
         $emProvider = $this->createMock(TenantEntityManagerProvider::class);
@@ -161,7 +167,7 @@ class ShippingServiceTest extends TestCase
 
         // Execution
         $service = new ShippingService($emProvider, $easyPost, $packager);
-        
+
         $labels = $service->purchase([], [], [], 'ca_123', 'Standard');
 
         $this->assertCount(2, $labels);

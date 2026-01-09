@@ -18,15 +18,14 @@ class GemsuiteSaleManager
         private TenantConnectionManager $tenantManager,
         private LoggerInterface $logger,
         private string $gemsuiteApiUrl
-    ) {
-    }
+    ) {}
 
     public function createSale(Order $order): ?array
     {
         $user = $order->getUserId();
-        
+
         $gemsuiteClientId = $user?->getGemsuiteClient()?->getGemsuiteId();
-        
+
         if (!$gemsuiteClientId) {
             $gemsuiteClientId = $user?->getGemsuiteClientId();
         }
@@ -38,7 +37,7 @@ class GemsuiteSaleManager
 
         $tenantCode = $this->tenantManager->getCurrentTenantCode();
         $token = $this->tenantManager->getTenantToken($tenantCode);
-        
+
         if (!$token) {
             $this->logger->error(sprintf('Token manquant pour le tenant "%s".', $tenantCode));
             return null;
@@ -52,15 +51,14 @@ class GemsuiteSaleManager
             if (!$saleId) {
                 throw new \Exception('ID de vente non retourné par GEM-SUITE lors de la création.');
             }
-            
+
             $this->addProductsToSale($order, $saleId, $token);
             $this->finalizeSaleAsInvoice($saleId, $token);
             $this->createPaymentForSale($order, $saleId, $token);
 
             $this->logger->info(sprintf('Succès: Commande #%d synchronisée et facturée (GemSuite ID: %d).', $order->getId(), $saleId));
-            
-            return $saleData;
 
+            return $saleData;
         } catch (\Throwable $e) {
             $this->logger->error('Erreur critique synchro GEM-SUITE : ' . $e->getMessage());
             return null;
@@ -71,7 +69,7 @@ class GemsuiteSaleManager
     {
         $shippingTotal = $order->getShippingCost() ?? 0;
         $shippingCostForGem = $shippingTotal > 0 ? $shippingTotal / 100 : 0;
-        
+
         $payload = [
             'client_id' => $clientId, // Ici on a un INT propre (ex: 12484)
             'date' => $order->getOrderDate()->format('Y-m-d'),
@@ -99,9 +97,9 @@ class GemsuiteSaleManager
 
             if ($variant) {
                 $variantId = $variant->getGemsuiteVariantId();
-                
+
                 if ($variantId) {
-                    $gemProductId = (int) $variantId; 
+                    $gemProductId = (int) $variantId;
                 }
 
                 if (!$gemProductId && $variant->getProduct()) {
@@ -130,7 +128,7 @@ class GemsuiteSaleManager
     private function finalizeSaleAsInvoice(int $saleId, string $token): void
     {
         $payload = [
-            'id' => $saleId, 
+            'id' => $saleId,
             'action' => 'invoice'
         ];
 
@@ -147,7 +145,7 @@ class GemsuiteSaleManager
     private function createPaymentForSale(Order $order, int $saleId, string $token): void
     {
         /** @var Payments|null $payment */
-        $payment = $order->getPayments()->first(); 
+        $payment = $order->getPayments()->first();
 
         if (!$payment) {
             $this->logger->info("Aucun paiement trouvé pour la commande #{$order->getId()}.");
@@ -162,11 +160,11 @@ class GemsuiteSaleManager
             'invoice_id' => $saleId,
             'amount' => $formattedAmount,
             'date_payment' => $payment->getPaymentDate()->format('Y-m-d'),
-            'method_id' => self::METHOD_ID_STRIPE, 
+            'method_id' => self::METHOD_ID_STRIPE,
         ];
 
         if ($stripeRef) {
-            $payload['reference'] = $stripeRef; 
+            $payload['reference'] = $stripeRef;
             $payload['note'] = "Stripe ID: " . $stripeRef;
         }
 

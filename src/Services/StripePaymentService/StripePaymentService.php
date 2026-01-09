@@ -20,15 +20,15 @@ class StripePaymentService
     private TenantConnectionManager $connectionManager;
 
     public function __construct(
-        string $stripeSecretKey, 
-        TenantEntityManagerProvider $emProvider, 
+        string $stripeSecretKey,
+        TenantEntityManagerProvider $emProvider,
         LoggerInterface $logger,
         TenantConnectionManager $connectionManager
     ) {
         $this->stripeSecretKey = $stripeSecretKey;
         $this->emProvider = $emProvider;
         $this->logger = $logger;
-        $this->connectionManager = $connectionManager; 
+        $this->connectionManager = $connectionManager;
     }
 
     /**
@@ -51,7 +51,6 @@ class StripePaymentService
 
             if ($isInternal) {
                 $this->logger->info("Vérification de paiement interne (V2V) pour le tenant: $tenantCode");
-
             } else {
                 $em = $this->emProvider->getEntityManager();
                 $config = $em->getRepository(StripeConfig::class)->findOneBy(['isActive' => true]);
@@ -64,18 +63,25 @@ class StripePaymentService
                     return ['success' => false, 'errors' => ['Le compte Stripe de cette boutique n\'est pas actif.']];
                 }
             }
-            $paymentIntent = PaymentIntent::retrieve($paymentIntentId, $stripeOptions);
+            $paymentIntent = $this->retrieveStripePaymentIntent($paymentIntentId, $stripeOptions);
             if ($paymentIntent->status !== 'succeeded') {
                 return ['success' => false, 'errors' => ['Le paiement n\'a pas abouti. Statut : ' . $paymentIntent->status]];
             }
             return [
-                'success' => true, 
-                'payment' => $paymentIntent 
+                'success' => true,
+                'payment' => $paymentIntent
             ];
-
         } catch (ApiErrorException $e) {
             $this->logger->error("Erreur API Stripe (createPayment) pour $tenantCode: " . $e->getMessage());
             return ['success' => false, 'errors' => [$e->getMessage()]];
         }
+    }
+
+    /**
+     * Wrapper pour PaymentIntent::retrieve afin de faciliter le mocking dans les tests.
+     */
+    protected function retrieveStripePaymentIntent(string $paymentIntentId, array $options = []): PaymentIntent
+    {
+        return PaymentIntent::retrieve($paymentIntentId, $options);
     }
 }

@@ -7,18 +7,23 @@ use App\Entity\EasyPostConfiguration;
 use App\Services\TenantEntityManagerProvider;
 use EasyPost\EasyPostClient;
 use LogicException;
+use Psr\Log\LoggerInterface;
 use RuntimeException;
 
 class EasyPostService
 {
     private TenantEntityManagerProvider $emProvider;
     private string $appEnv;
+    private LoggerInterface $logger;
+
     public function __construct(
         TenantEntityManagerProvider $emProvider,
-        string $appEnv
+        string $appEnv,
+        LoggerInterface $logger
     ) {
         $this->emProvider = $emProvider;
         $this->appEnv = $appEnv;
+        $this->logger = $logger;
     }
 
     protected function getTenantClient(): EasyPostClient
@@ -70,7 +75,7 @@ class EasyPostService
                 ]);
             }
             return $shipment->rates;
-        } catch (\EasyPost\Exception\Api\BaseException $e) {
+        } catch (\EasyPost\Exception\Api\ApiException $e) {
             error_log("EasyPost API Error (getRates): " . $e->getMessage());
             throw new RuntimeException("Erreur lors de la récupération des tarifs EasyPost: " . $e->getMessage(), 0, $e);
         }
@@ -92,9 +97,9 @@ class EasyPostService
             //         $data
             //     );
             // }
-            
+
             $rateToBuy = null;
-            
+
             $targetAccountId = trim($carrierAccountId);
             $targetService = trim($service);
 
@@ -104,7 +109,7 @@ class EasyPostService
                     break;
                 }
             }
-            
+
             if (!$rateToBuy) {
 
                 $availableServices = array_map(fn($r) => $r->service . ' (' . $r->carrier_account_id . ')', $shipment->rates);
@@ -112,7 +117,7 @@ class EasyPostService
 
                 $rateToBuy = $shipment->lowestRate();
                 if (!isset($rateToBuy->id)) {
-                     throw new RuntimeException("Impossible de trouver un tarif achetable pour cette expédition.");
+                    throw new RuntimeException("Impossible de trouver un tarif achetable pour cette expédition.");
                 }
             }
 
@@ -124,10 +129,9 @@ class EasyPostService
                 'price'         => $rateToBuy->rate,
                 'currency'      => $rateToBuy->currency
             ];
-
-        } catch (\EasyPost\Exception\Api\BaseException $e) {
-             error_log("EasyPost API Error (buyShipment): " . $e->getMessage());
-             throw new RuntimeException("Erreur lors de l'achat de l'étiquette EasyPost: " . $e->getMessage(), 0, $e);
+        } catch (\EasyPost\Exception\Api\ApiException $e) {
+            error_log("EasyPost API Error (buyShipment): " . $e->getMessage());
+            throw new RuntimeException("Erreur lors de l'achat de l'étiquette EasyPost: " . $e->getMessage(), 0, $e);
         }
     }
 
@@ -137,9 +141,9 @@ class EasyPostService
         try {
             $tracker = $client->tracker->create(['tracking_code' => $code]);
             return $tracker->status_history ?? [];
-        } catch (\EasyPost\Exception\Api\BaseException $e) {
-             error_log("EasyPost API Error (track): " . $e->getMessage());
-             throw new RuntimeException("Erreur lors du suivi EasyPost: " . $e->getMessage(), 0, $e);
+        } catch (\EasyPost\Exception\Api\ApiException $e) {
+            error_log("EasyPost API Error (track): " . $e->getMessage());
+            throw new RuntimeException("Erreur lors du suivi EasyPost: " . $e->getMessage(), 0, $e);
         }
     }
 }

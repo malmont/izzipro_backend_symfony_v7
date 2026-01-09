@@ -50,8 +50,8 @@ class ProductVariant
     #[ORM\ManyToMany(targetEntity: ProductOptionValue::class, inversedBy: 'productVariants')]
     private Collection $optionValues;
 
-    #[ORM\Column(nullable: true)]
-    private ?int $gemsuiteVariantId = null;
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $gemsuiteVariantId = null;
 
     public function __construct()
     {
@@ -204,7 +204,7 @@ class ProductVariant
 
     public function __toString(): string
     {
-        return (string)  ' id: ' .$this->id . ' - ' .' qt: ' .$this->stockQuantity. ' - '. ($this->product ? $this->product->getName(). ' - ' .$this->color. ' taille ' .$this->size  : 'Sans produit associé');
+        return (string)  ' id: ' . $this->id . ' - ' . ' qt: ' . $this->stockQuantity . ' - ' . ($this->product ? $this->product->getName() . ' - ' . $this->color . ' taille ' . $this->size  : 'Sans produit associé');
     }
 
     /**
@@ -231,12 +231,12 @@ class ProductVariant
         return $this;
     }
 
-    public function getGemsuiteVariantId(): ?int
+    public function getGemsuiteVariantId(): ?string
     {
         return $this->gemsuiteVariantId;
     }
 
-    public function setGemsuiteVariantId(?int $gemsuiteVariantId): static
+    public function setGemsuiteVariantId(?string $gemsuiteVariantId): static
     {
         $this->gemsuiteVariantId = $gemsuiteVariantId;
 

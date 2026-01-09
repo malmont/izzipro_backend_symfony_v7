@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Tests\Unit\Service;
+namespace App\Tests\Unit\Services\ShippingService;
 
 use App\Entity\AddressEntreprise;
 use App\Entity\Entreprise;
