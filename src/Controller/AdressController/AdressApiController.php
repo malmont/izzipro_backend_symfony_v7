@@ -63,15 +63,17 @@ class AdressApiController extends AbstractController
         }
 
         $cacheKey = "adresses_user_" . $user->getId();
-         $adresses = $this->cache->get(
+        $adresses = $this->cache->get(
             $cacheKey,
-            function(ItemInterface $item) use ($user) {
+            function (ItemInterface $item) use ($user) {
                 $item->expiresAfter(3600);
                 $item->tag(['adresses_user']);
                 return $this->getUserAdressesUseCase->execute($user);
             },
-            /* ttl */ 3600,
-            /* extraTags */ ['adresses_user']
+            /* ttl */
+            3600,
+            /* extraTags */
+            ['adresses_user']
         );
 
         return $this->json($adresses, Response::HTTP_OK);
@@ -83,6 +85,7 @@ class AdressApiController extends AbstractController
     #[Route('', name: 'create_adress', methods: ['POST'])]
     public function createAdress(Request $request, ValidatorInterface $validator, EntityManagerInterface $em): JsonResponse
     {
+        /** @var User $user */
         $user = $this->getUser();
         if (!$user) {
             return $this->json(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
@@ -141,6 +144,7 @@ class AdressApiController extends AbstractController
     #[Route('/{id}', name: 'edit_adress', methods: ['PUT'])]
     public function editAdress(Request $request, ValidatorInterface $validator, Adress $adress, EntityManagerInterface $em): JsonResponse
     {
+        /** @var User $user */
         $user = $this->getUser();
         if (!$user || $adress->getUserAdress() !== $user) {
             return $this->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
@@ -188,8 +192,7 @@ class AdressApiController extends AbstractController
         if ($dto->isPrimary) {
             $user->setPrimaryAddress($adress);
             $this->gemsuiteUpdater->syncAddress($user, $adress);
-        } 
-        elseif ($user->getPrimaryAddress() === $adress) {
+        } elseif ($user->getPrimaryAddress() === $adress) {
             $user->setPrimaryAddress(null);
         }
 
@@ -203,6 +206,7 @@ class AdressApiController extends AbstractController
     #[Route('/{id}/set-primary', name: 'set_primary_adress', methods: ['PUT'])]
     public function setPrimaryAddress(Adress $adress, EntityManagerInterface $em): JsonResponse
     {
+        /** @var User $user */
         $user = $this->getUser();
         if (!$user || $adress->getUserAdress() !== $user) {
             return $this->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
@@ -223,6 +227,7 @@ class AdressApiController extends AbstractController
     #[Route('/{id}', name: 'delete_adress', methods: ['DELETE'])]
     public function deleteAdress(Adress $adress): JsonResponse
     {
+        /** @var User $user */
         $user = $this->getUser();
         if (!$user || $adress->getUserAdress() !== $user) {
             return $this->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
@@ -232,4 +237,3 @@ class AdressApiController extends AbstractController
         return $this->json(['success' => 'Adresse supprimée avec succès'], Response::HTTP_NO_CONTENT);
     }
 }
-  

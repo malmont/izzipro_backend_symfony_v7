@@ -31,14 +31,14 @@ class AdminSettingsController extends AbstractController
     /**
      * @Route("/api/admin-settings", name="get_admin_settings", methods={"GET"})
      */
-     public function getAdminSettings(): JsonResponse
+    public function getAdminSettings(): JsonResponse
     {
         $settingsData = $this->cache->get(
             'admin_settings',
-            function(ItemInterface $item) {
+            function (ItemInterface $item) {
                 $item->expiresAfter(43200);
                 $entityManager = $this->tenantEmProvider->getEntityManager();
-                $entityManager->clear(AdminSettings::class); 
+                $entityManager->clear(AdminSettings::class);
                 $settings = $entityManager->find(AdminSettings::class, 1, LockMode::NONE, true);
                 if (!$settings) {
                     return null;
@@ -80,7 +80,8 @@ class AdminSettingsController extends AbstractController
                     'carrierListCardComponent' => $settings->getCarrierListCardComponent(),
                 ];
             },
-            /* ttl */ 43200
+            /* ttl */
+            43200
         );
 
         if (!$settingsData) {
@@ -137,8 +138,10 @@ class AdminSettingsController extends AbstractController
         $settings->setOrderListCardComponent($data['orderListCardComponent'] ?? $settings->getOrderListCardComponent());
         $settings->setAdressListCardComponent($data['adressListCardComponent'] ?? $settings->getAdressListCardComponent());
         $settings->setCarrierListCardComponent($data['carrierListCardComponent'] ?? $settings->getCarrierListCardComponent());
-        
+
         $entityManager->flush();
+
+        $this->cache->delete('admin_settings');
 
         return new JsonResponse(['message' => 'Settings updated successfully']);
     }

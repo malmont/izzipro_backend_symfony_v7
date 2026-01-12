@@ -11,7 +11,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Security\Core\Security;
-use App\Entity\Order; 
+use App\Entity\Order;
 use App\UseCase\OrderUseCase\CreateOrderCommandUseCase;
 use App\UseCase\OrderUseCase\ProcessOrderItemsUseCase;
 use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
@@ -61,7 +61,7 @@ class CreateOrderUseCase
     {
         $em = $this->emProvider->getEntityManager();
         $em->getConnection()->beginTransaction();
-        
+
         $caisseAmount = 0;
         try {
             $user = $this->security->getUser();
@@ -80,9 +80,9 @@ class CreateOrderUseCase
                 throw new \Exception('Insufficient stock for product variant');
             }
             $this->handleBookingUseCase->execute($order, $orderDTO->getItems());
-            
+
             $subtotal = $typeOrderId === 1 ? $subtotal : -$subtotal;
-            
+
             $totalTax = $this->calculateTaxesUseCase->execute($order, $subtotal);
             if ($totalTax instanceof JsonResponse) {
                 throw new \Exception('Tax calculation failed');
@@ -93,16 +93,16 @@ class CreateOrderUseCase
             if ($orderDTO instanceof CreateOrderMultiPaymentDTO) {
                 foreach ($orderDTO->getPaymentMethods() as $paymentMethod) {
                     $orderDtoValue = $orderDTO;
-            
+
                     if ($paymentMethod->getType() == 2) {
                         $caisseAmount += $paymentMethod->getAmount();
                         $orderDtoValue = null;
                     }
-            
-                    $amountPaymentMethod = $typeOrderId === 1 
-                        ? $paymentMethod->getAmount() 
+
+                    $amountPaymentMethod = $typeOrderId === 1
+                        ? $paymentMethod->getAmount()
                         : -$paymentMethod->getAmount();
-            
+
                     $this->paymentHandlerUseCase->handlePayment(
                         $order,
                         $amountPaymentMethod * 100,
@@ -113,7 +113,7 @@ class CreateOrderUseCase
                         $orderDtoValue
                     );
                 }
-            } else {
+            } elseif ($orderDTO instanceof CreateOrderDTO) {
                 $this->paymentHandlerUseCase->handlePayment(
                     $order,
                     $totalAmount,
@@ -130,7 +130,7 @@ class CreateOrderUseCase
             $order->setTotalAmount($totalAmount);
 
             $em->persist($order);
-            
+
             $caisseAmount = $caisseAmount * 100;
             if ($order->getOrderSource()->getId() === 2) {
                 $transactionTypeId = $typeOrderId === 1 ? 1 : 2;

@@ -1,9 +1,10 @@
 <?php
+
 namespace App\UseCase\OrderUseCase;
 
 use App\Entity\Order;
 use App\Entity\User;
-use App\DTO\ICreateOrderDTO;
+use App\Dto\ICreateOrderDTO;
 use App\Services\EntityRetrieverService;
 use App\Services\OrderService\OrderCreationService;
 use App\Services\TenantEntityManagerProvider;
@@ -24,7 +25,7 @@ class CreateOrderCommandUseCase
     private OrderCreationService $orderCreationService;
 
     public function __construct(
-        TenantEntityManagerProvider $emProvider, 
+        TenantEntityManagerProvider $emProvider,
         EntityRetrieverService $entityRetrieverService,
         OrderCreationService $orderCreationService
     ) {
@@ -40,7 +41,7 @@ class CreateOrderCommandUseCase
             $address = $this->entityRetrieverService->findOrFail(Adress::class, $orderDTO->getAddressId(), 'Invalid address ID');
             $carrierId = $orderDTO->getCarrierId();
             $carrier = null;
-            
+
             if ($carrierId) {
                 $carrier = $this->entityRetrieverService->findOrFail(Carrier::class, $carrierId, 'Invalid carrier ID');
             }

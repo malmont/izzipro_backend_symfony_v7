@@ -1,10 +1,11 @@
 <?php
+
 namespace App\UseCase\OrderUseCase;
 
 use App\Entity\Order;
 use App\Entity\ProductVariant;
 use App\Services\EntityRetrieverService;
-use App\Services\TenantEntityManagerProvider; 
+use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use App\Services\OrderService\OrderItemService;
 use Psr\Log\LoggerInterface;
@@ -28,18 +29,18 @@ class ProcessOrderItemsUseCase
         $this->logger = $logger;
     }
 
-    public function execute(Order $order, array $items, UpdateStockAndInventoryUseCase $updateStockAndInventory, int $typeOrderId, float $priceShipping)
+    public function execute(Order $order, array $items, UpdateStockAndInventoryUseCase $updateStockAndInventory, int $typeOrderId, ?float $priceShipping)
     {
         $em = $this->emProvider->getEntityManager();
         $isCancel = $typeOrderId !== 1;
         $subtotal = 0;
         $order->setShippingCost($priceShipping);
-        $carrierPrice = $priceShipping; 
+        $carrierPrice = $priceShipping ?? 0.0;
         $subtotal += $carrierPrice;
 
         foreach ($items as $itemData) {
             $productVariant = $this->entityRetrieverService->findOrFail(ProductVariant::class, $itemData['productVariantId'], 'Product variant not found');
-            
+
             $product = $productVariant->getProduct();
             $isBookable = $product && method_exists($product, 'isBookable') && $product->isBookable();
 
@@ -47,7 +48,7 @@ class ProcessOrderItemsUseCase
                 if ($productVariant->getStockQuantity() < $itemData['quantity'] && !$isCancel) {
                     throw new BadRequestHttpException(sprintf(
                         'Stock insuffisant pour le produit "%s" (Stock: %d, Demandé: %d)',
-                        $productVariant->getName() ?? $product->getName(),
+                        $product->getName(),
                         $productVariant->getStockQuantity(),
                         $itemData['quantity']
                     ));
@@ -60,10 +61,10 @@ class ProcessOrderItemsUseCase
 
             $em->persist($order);
             $em->persist($orderItem);
-            
+
             $subtotal += $orderItem->getTotalPrice();
         }
-        
+
         return $subtotal;
     }
 }

@@ -12,6 +12,9 @@ interface ICreateOrderDTO
     public function getItems(): array;
     public function getPriceShipping(): ?float;
 
+    // Ajout de la méthode pour récupérer le moyen de paiement (ou null en cas de multiple)
+    public function getPaymentMethod(): ?int;
+
     // Square
     public function getSquarePaymentId(): ?string;
     public function getSquareOrderId(): ?string;

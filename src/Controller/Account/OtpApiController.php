@@ -63,6 +63,6 @@ class OtpApiController extends AbstractController
 
         $tokens = $this->tokenService->generateTokens($user);
 
-        return $this->tokenService->createResponseWithTokens($tokens, $platform);
+        return $this->tokenService->createResponseWithTokens($tokens, $platform, $request->getHost());
     }
 }

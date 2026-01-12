@@ -22,7 +22,7 @@ use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 use App\Services\GemsuiteImporterService\GemsuiteSaleManager;
 use Psr\Log\LoggerInterface;
-use App\Services\OrderService\OrderMailerService; 
+use App\Services\OrderService\OrderMailerService;
 
 class OrderController extends AbstractController
 {
@@ -63,6 +63,7 @@ class OrderController extends AbstractController
      */
     public function createOrder(Request $request): JsonResponse
     {
+        /** @var \App\Entity\User $user */
         $user = $this->getUser();
         if (!$user) {
             return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
@@ -90,7 +91,7 @@ class OrderController extends AbstractController
                 return $this->json(['error' => 'Carrier not found'], JsonResponse::HTTP_NOT_FOUND);
             }
         }
-        
+
         $paymentData = $data['payment'] ?? [];
 
         $dto = new CreateOrderDTO(
@@ -117,18 +118,17 @@ class OrderController extends AbstractController
             $paymentData['riskLevel'] ?? null
         );
 
-         $result = $this->createOrderUseCase->execute($dto);
+        $result = $this->createOrderUseCase->execute($dto);
 
-    if ($result instanceof Order) {
-        $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->refresh($result);
-        $this->gemsuiteSaleManager->createSale($result);
-        try {
-                $locale = $request->query->get('locale', 'fr'); 
+        if ($result instanceof Order) {
+            $tenantEm = $this->emProvider->getEntityManager();
+            $tenantEm->refresh($result);
+            $this->gemsuiteSaleManager->createSale($result);
+            try {
+                $locale = $request->query->get('locale', 'fr');
                 $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
                 $this->orderMailerService->sendOrderConfirmation($result, $locale, $domain);
                 $this->orderMailerService->sendShippingNotification($result, $locale, $domain);
-
             } catch (\Exception $e) {
                 $this->logger->error("Le service d'email a échoué mais la commande est créée : " . $e->getMessage(), [
                     'orderId' => $result->getId(),
@@ -150,6 +150,7 @@ class OrderController extends AbstractController
     public function createOrderWithMultiplePayments(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
+        /** @var \App\Entity\User $user */
         $user = $this->getUser();
         if (!$user) {
             return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
@@ -182,12 +183,12 @@ class OrderController extends AbstractController
             $paymentData['last4'] ?? null,
             $paymentData['riskLevel'] ?? null
         );
-         $result = $this->createOrderUseCase->execute($dto);
-         if ($result instanceof Order) {
+        $result = $this->createOrderUseCase->execute($dto);
+        if ($result instanceof Order) {
             $this->gemsuiteSaleManager->createSale($result);
-            
+
             try {
-                $locale = $request->query->get('locale', 'fr'); 
+                $locale = $request->query->get('locale', 'fr');
                 $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
                 $this->orderMailerService->sendOrderConfirmation($result, $locale, $domain);
                 $this->orderMailerService->sendShippingNotification($result, $locale, $domain);
@@ -230,10 +231,10 @@ class OrderController extends AbstractController
         return $this->cancelOrderUseCase->execute($id, $data['paymentMethod'] ?? null);
     }
 
-    #[Route("api/orders", name:"get_orders", methods:["GET"])]
+    #[Route("api/orders", name: "get_orders", methods: ["GET"])]
     public function getOrders(Request $request): JsonResponse
     {
-        $this->denyAccessUnlessGranted('ROLE_ADMIN'); 
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
         $orderSourceId = $request->query->get('orderSource');
         if (!$orderSourceId) {
@@ -246,7 +247,7 @@ class OrderController extends AbstractController
         $orderDTOs = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($orderSourceId, $host, $days) {
-                $item->expiresAfter(300); 
+                $item->expiresAfter(300);
                 $item->tag(['orders_source']);
                 return $this->getOrdersBySourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
             },
@@ -256,7 +257,7 @@ class OrderController extends AbstractController
         return $this->json($orderData);
     }
 
-    #[Route("api/ordersuser", name:"get_user_orders", methods:["GET"])]
+    #[Route("api/ordersuser", name: "get_user_orders", methods: ["GET"])]
     public function getUserOrders(Request $request, Security $security): JsonResponse
     {
         /** @var User $user */ // Type hint pour clarté
@@ -272,9 +273,9 @@ class OrderController extends AbstractController
 
         $orderDTOs = $this->cache->get(
             $cacheKeySuffix,
-            function (ItemInterface $item) use ($user, $host, $locale, $cacheKeySuffix) { 
+            function (ItemInterface $item) use ($user, $host, $locale, $cacheKeySuffix) {
                 $this->logger->info('Cache MISS for getUserOrders. Computing...', [
-                     'key_suffix_requested' => $cacheKeySuffix 
+                    'key_suffix_requested' => $cacheKeySuffix
                 ]);
                 return $this->getOrdersByUserUseCase->execute($user->getId(), $host, $locale);
             },

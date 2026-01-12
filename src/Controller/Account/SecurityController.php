@@ -18,7 +18,7 @@ use App\Entity\OtpCode;
 use App\Entity\Entreprise;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use App\Services\OtpService;
-use App\Entity\User; 
+use App\Entity\User;
 use App\Services\AuthenticationService;
 use App\Services\TenantEntityManagerProvider; // Ajout
 
@@ -34,8 +34,8 @@ class SecurityController extends AbstractController
         $this->tokenService  = $tokenService;
         $this->otpService    = $otpService;
     }
-    
-    
+
+
     #[Route(path: '/', name: 'app_login')]
     public function login(AuthenticationUtils $authenticationUtils): Response
     {
@@ -44,13 +44,13 @@ class SecurityController extends AbstractController
 
         return $this->render('security/login.html.twig', ['last_username' => $lastUsername, 'error' => $error]);
     }
-    
+
     #[Route(path: '/logout', name: 'app_logout')]
     public function logout(): void
     {
         throw new \LogicException('This method can be blank - it will be intercepted by the logout key on your firewall.');
     }
-    
+
     #[Route(path: '/api/login', name: 'api_login', methods: ['POST'])]
     public function loginApi(Request $request, AuthenticationService $auth): Response
     {
@@ -63,7 +63,7 @@ class SecurityController extends AbstractController
         );
     }
 
-    
+
     #[Route('/api/token/refresh', name: 'api_token_refresh', methods: ['POST'])]
     public function refreshToken(
         Request $request,
@@ -74,20 +74,31 @@ class SecurityController extends AbstractController
         if (!$refreshToken) {
             return $this->json(['error' => 'Refresh token not found'], Response::HTTP_UNAUTHORIZED);
         }
-        
+
         $validRefreshToken = $refreshTokenManager->get($refreshToken);
-        if (!$validRefreshToken || !$refreshTokenManager->isValid($validRefreshToken)) {
+        if (!$validRefreshToken || !$validRefreshToken->isValid()) {
             return $this->json(['error' => 'Invalid refresh token'], Response::HTTP_UNAUTHORIZED);
         }
-        
-        $user = $validRefreshToken->getUser();
+
+        // Fix: RefreshToken entity has getUsername(), not getUser()
+        $username = $validRefreshToken->getUsername();
+        if (!$username) {
+            return $this->json(['error' => 'User identity not found in token'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $em = $this->tenantEmProvider->getEntityManager();
+        $user = $em->getRepository(User::class)->findOneBy(['email' => $username]); // Assuming username is email in this app logic
+
         if (!$user instanceof UserInterface) {
             return $this->json(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
         }
-        
+
         $newToken = $JWTManager->create($user);
-        
-        $response = new Response();
+
+        $response = $this->json([
+            'message' => 'Token refreshed successfully'
+        ], Response::HTTP_OK);
+
         $response->headers->setCookie(
             Cookie::create('jwt')
                 ->withValue($newToken)
@@ -96,14 +107,13 @@ class SecurityController extends AbstractController
                 ->withSameSite(Cookie::SAMESITE_NONE)
                 ->withExpires(time() + 3600)
         );
-        
-        return $this->json([
-            'message' => 'Token refreshed successfully'
-        ], Response::HTTP_OK, [], $response->headers->all());
+
+        return $response;
     }
-    
+
     #[Route('/api/validate-token', name: 'api_validate_token', methods: ['GET'])]
-    public function validateToken(): Response {
+    public function validateToken(): Response
+    {
         $user = $this->getUser();
         if ($user instanceof UserInterface) {
             return $this->json([
@@ -116,10 +126,11 @@ class SecurityController extends AbstractController
             'message' => 'Token is invalid or expired',
         ], 401);
     }
-    
+
 
     #[Route(path: '/api/logout', name: 'api_logout', methods: ['POST'])]
-    public function logoutWeb(Request $request): Response {
+    public function logoutWeb(Request $request): Response
+    {
         $domain = $request->getHost();
         $response = $this->json([
             'message' => 'Successfully logged out',

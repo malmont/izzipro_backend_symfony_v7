@@ -2,7 +2,7 @@
 
 namespace App\UseCase\Booking;
 
-use App\DTO\BookingSetupRequest;
+use App\Dto\BookingSetupRequest;
 use App\Entity\BookingConfiguration;
 use App\Entity\Product;
 use App\Enum\ProductMode;
@@ -25,7 +25,7 @@ class UpdateBookingConfiguration
 
         // 1. Récupérer ou créer la configuration
         $config = $product->getBookingConfiguration();
-        
+
         if (!$config) {
             $config = new BookingConfiguration();
             $config->setProduct($product);
@@ -47,7 +47,7 @@ class UpdateBookingConfiguration
         // 4. Persistance sur la bonne base de données
         $em->persist($config);
         $em->persist($product);
-        
+
         $em->flush();
     }
 }

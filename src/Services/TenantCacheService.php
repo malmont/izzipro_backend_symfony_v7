@@ -33,7 +33,7 @@ class TenantCacheService
         ?array $extraTags = null
     ): mixed {
         $key = $this->getTenantPrefix() . $keySuffix;
-        
+
         $tenantCode = $this->getTenantCode();
         $tags = [];
         if ($extraTags) {
@@ -42,12 +42,18 @@ class TenantCacheService
         $tags[] = $tenantCode;
 
 
-        return $this->cache->get($key, function(ItemInterface $item) use ($compute, $ttl, $tags) {
+        return $this->cache->get($key, function (ItemInterface $item) use ($compute, $ttl, $tags) {
             if ($ttl !== null) {
                 $item->expiresAfter($ttl);
             }
             $item->tag($tags);
             return $compute($item);
         });
+    }
+
+    public function delete(string $keySuffix): bool
+    {
+        $key = $this->getTenantPrefix() . $keySuffix;
+        return $this->cache->delete($key);
     }
 }

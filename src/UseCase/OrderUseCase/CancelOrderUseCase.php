@@ -37,10 +37,10 @@ class CancelOrderUseCase
     {
         // On récupère l'EM du tenant une seule fois
         $em = $this->emProvider->getEntityManager();
-        
+
         // La gestion de la transaction se fait sur la connexion de l'EM du tenant
         $em->getConnection()->beginTransaction();
-        
+
         $caisseAmount = 0;
         try {
             // On récupère les entités via le bon EM
@@ -49,7 +49,7 @@ class CancelOrderUseCase
                 throw new Exception('Order not found');
             }
 
-            $paymentTypeId = 1; 
+            $paymentTypeId = 1;
             $statusPaymentId = 2;
             $refundAmount = $order->getTotalAmount();
 
@@ -89,7 +89,7 @@ class CancelOrderUseCase
             }
             $transactionTypeId = 2; // Type de transaction "Remboursement"
             if ($order->getOrderSource()->getId() === 2) { // Supposons que 2 = POS
-                $this->handleCaisseTransactionUseCase->execute($order, $order->getUser(), $refundAmount, $transactionTypeId, [], $caisseAmount);
+                $this->handleCaisseTransactionUseCase->execute($order, $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount);
             }
 
             // Valider la transaction en base de données
@@ -97,7 +97,6 @@ class CancelOrderUseCase
             $em->getConnection()->commit();
 
             return new JsonResponse(['message' => 'Order canceled and refunded successfully'], Response::HTTP_OK);
-
         } catch (Exception $e) {
             // En cas d'erreur, on annule toutes les opérations
             $em->getConnection()->rollback();
