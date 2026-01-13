@@ -180,4 +180,31 @@ class CreateOrderDTO implements ICreateOrderDTO
     {
         return $this->stripeRiskLevel;
     }
+
+    public function toArray(): array
+    {
+        return [
+            'userId' => $this->userId,
+            'orderSource' => $this->orderSource,
+            'paymentMethod' => $this->paymentMethod,
+            'addressId' => $this->addressId,
+            'carrierId' => $this->carrierId,
+            'typeOrder' => $this->typeOrder,
+            'items' => $this->items,
+            'priceShipping' => $this->priceShipping,
+            'squarePaymentId' => $this->squarePaymentId,
+            'squareOrderId' => $this->squareOrderId,
+            'squareReceiptUrl' => $this->squareReceiptUrl,
+            'squareStatus' => $this->squareStatus,
+            'squareCardBrand' => $this->squareCardBrand,
+            'squareLast4' => $this->squareLast4,
+            'squareRiskLevel' => $this->squareRiskLevel,
+            'stripePaymentId' => $this->stripePaymentId,
+            'stripeReceiptUrl' => $this->stripeReceiptUrl,
+            'stripeStatus' => $this->stripeStatus,
+            'stripeCardBrand' => $this->stripeCardBrand,
+            'stripeLast4' => $this->stripeLast4,
+            'stripeRiskLevel' => $this->stripeRiskLevel,
+        ];
+    }
 }

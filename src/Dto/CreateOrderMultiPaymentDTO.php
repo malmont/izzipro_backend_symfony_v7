@@ -36,7 +36,7 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
         int $orderSource,
         array $paymentMethods,
         int $addressId,
-        int $carrierId,
+        ?int $carrierId,
         int $typeOrder,
         array $items,
         ?float $priceShipping = null,
@@ -100,7 +100,7 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     {
         return $this->addressId;
     }
-    public function getCarrierId(): int
+    public function getCarrierId(): ?int
     {
         return $this->carrierId;
     }

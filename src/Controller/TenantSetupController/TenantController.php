@@ -23,7 +23,7 @@ class TenantController extends AbstractController
         if (!$host) {
             $host = $request->getHost();
         }
-        
+
         // Nettoyage du port (ex: localhost:3000 -> localhost)
         $cleanHost = explode(':', $host)[0];
 
@@ -50,14 +50,13 @@ class TenantController extends AbstractController
             // Recherche par sous-domaine (code)
             if (!$tenantData) {
                 $tenantCode = $this->extractSubdomainCode($cleanHost);
-                
+
                 if ($tenantCode) {
                     $stmt = $pdoMaster->prepare('SELECT code, name FROM tenants WHERE code = :code');
                     $stmt->execute(['code' => $tenantCode]);
                     $tenantData = $stmt->fetch(\PDO::FETCH_ASSOC);
                 }
             }
-
         } catch (\Throwable $e) {
             return new JsonResponse(['status' => 'error', 'message' => 'Erreur SQL verification.'], 500);
         }
@@ -79,18 +78,18 @@ class TenantController extends AbstractController
 
         // Vérification si c'est un sous-domaine valide de la plateforme (Prod)
         $isPlatformSubdomain = str_ends_with($cleanHost, $this->frontendBaseDomain);
-        
+
         // AJOUT : Vérification pour le développement (Localhost et sous-domaines .localhost)
         if (!$isPlatformSubdomain) {
             if ($cleanHost === 'localhost' || $cleanHost === '127.0.0.1' || str_ends_with($cleanHost, '.localhost')) {
-                $isPlatformSubdomain = true; 
+                $isPlatformSubdomain = true;
             }
         }
 
         if ($isPlatformSubdomain) {
-            
+
             $protocol = ($cleanHost === 'localhost' || str_ends_with($cleanHost, '.localhost')) ? 'http://' : 'https://';
-            
+
             $currentSubdomain = $this->extractSubdomainCode($cleanHost);
 
             if ($currentSubdomain && $currentSubdomain !== 'www') {
@@ -106,9 +105,15 @@ class TenantController extends AbstractController
                 'status' => 'not_found',
                 'action' => 'redirect_create',
                 'message' => "Cette boutique n'existe pas encore. Voulez-vous la créer ?",
-                'setup_url' => $absoluteSetupUrl 
+                'setup_url' => $absoluteSetupUrl
             ], 404);
         }
+
+        return new JsonResponse([
+            'exists' => false,
+            'status' => 'error',
+            'message' => 'Domaine non reconnu.'
+        ], 400);
     }
 
     /**

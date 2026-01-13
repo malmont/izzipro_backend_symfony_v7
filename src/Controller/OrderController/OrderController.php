@@ -14,6 +14,7 @@ use App\Dto\PaymentMethodDTO;
 use App\Dto\CreateOrderMultiPaymentDTO;
 use Symfony\Component\Security\Core\Security;
 use App\UseCase\OrderUseCase\GetOrdersByUserUseCase;
+use App\Entity\User;
 use App\Entity\Adress;
 use App\Entity\Carrier;
 use App\Entity\Order;
@@ -71,7 +72,7 @@ class OrderController extends AbstractController
 
         $data = json_decode($request->getContent(), true);
 
-        if (!isset($data['orderSource'], $data['paymentMethod'], $data['addressId'], $data['items'])) {
+        if (!isset($data['orderSource'], $data['paymentMethod'], $data['addressId'], $data['items'], $data['typeOrder'])) {
             return $this->json(['error' => 'Missing required fields'], JsonResponse::HTTP_BAD_REQUEST);
         }
         // ---------------------------------------------------------------------
@@ -223,7 +224,7 @@ class OrderController extends AbstractController
         if (!$order) {
             return $this->json(['error' => 'Order not found'], JsonResponse::HTTP_NOT_FOUND);
         }
-        if ($order->getUser() !== $user) {
+        if ($order->getUserId() !== $user) {
             return $this->json(['error' => 'Unauthorized: You can only cancel your own orders'], JsonResponse::HTTP_FORBIDDEN);
         }
 
