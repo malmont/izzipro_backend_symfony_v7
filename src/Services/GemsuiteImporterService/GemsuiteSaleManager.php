@@ -128,7 +128,7 @@ class GemsuiteSaleManager
     private function finalizeSaleAsInvoice(int $saleId, string $token): void
     {
         $payload = [
-            'id' => $saleId,
+            // 'id' => $saleId,
             'action' => 'invoice'
         ];
 
