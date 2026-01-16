@@ -14,7 +14,7 @@ use App\Entity\Banniere;
 use App\Entity\HomeSlider;
 use App\Entity\Product;
 use App\Entity\Payments;
-use App\Entity\BanniereStatique;
+use App\Entity\BaniereStatique;
 use App\Entity\ExploreCard;
 use App\Entity\EmailConfiguration;
 use App\Entity\Feature;
@@ -42,7 +42,7 @@ use App\Entity\Emploi;
 use App\Entity\Candidature;
 use App\Entity\Marque;
 use App\Entity\CategorieMarque;
-use App\Entity\Multilien; 
+use App\Entity\Multilien;
 use App\Entity\Recherche;
 use App\Entity\ServiceOffer;
 use App\Entity\Video;
@@ -61,7 +61,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
 {
     private CacheInterface $cache;
     private TenantConnectionProvider $tcp;
-    
+
 
     /**
      * Tableau de correspondance définissant pour chaque groupe d'entités
@@ -78,12 +78,12 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'delete' => ['videos_all'],
             'invalidate_tags' => ['videos'],
         ],
-         [
+        [
             'classes' => [ServiceOffer::class],
             'delete' => [],
             'invalidate_tags' => ['service_offers_all'],
         ],
-         [
+        [
             'classes' => [Recherche::class],
             'delete' => [],
             'invalidate_tags' => ['recherches_all'],
@@ -136,7 +136,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
         [
             'classes' => [Candidature::class],
             'delete' => ['candidatures_all'],
-            'invalidate_tags' => ['candidatures', 'emplois'], 
+            'invalidate_tags' => ['candidatures', 'emplois'],
         ],
         [
             'classes' => [Emploi::class],
@@ -144,7 +144,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'invalidate_tags' => ['emplois_all'],
         ],
         [
-            'classes' => [Banniere::class, BanniereStatique::class],
+            'classes' => [Banniere::class, BaniereStatique::class],
             'delete' => [],
             'invalidate_tags' => ['bannieres_all', 'bannieres_statiques_all'],
         ],
@@ -185,9 +185,9 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'invalidate_tags' => ['products_by_category'],
         ],
         [
-        'classes' => [Categories::class],
-        'delete' => ['categories_all'], 
-        'invalidate_tags' => ['categories_all', 'products_by_category'],
+            'classes' => [Categories::class],
+            'delete' => ['categories_all'],
+            'invalidate_tags' => ['categories_all', 'products_by_category'],
         ],
         // Collections
         [
@@ -207,7 +207,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'invalidate_tags' => ['explore_cards_all'],
         ],
         [
-            'classes' => [Entreprise::class], 
+            'classes' => [Entreprise::class],
             'delete' => [],
             'invalidate_tags' => ['entreprise'],
         ],
@@ -272,7 +272,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
         ],
         // Pour product_variants (Style, ProductVariant, Categories)
         [
-            'classes' => [Style::class,Categories::class],
+            'classes' => [Style::class, Categories::class],
             'delete' => [],
             'invalidate_tags' => ['product_variants'],
         ],
@@ -342,38 +342,42 @@ class CacheInvalidationSubscriber implements EventSubscriber
      * Parcourt la table de correspondance pour appliquer les opérations
      * d'invalidation du cache selon le type de l'entité modifiée.
      */
-     private function invalidateCache(LifecycleEventArgs $args): void
+    private function invalidateCache(LifecycleEventArgs $args): void
     {
         $entity = $args->getEntity();
         $tenantCode = $this->tcp->getTenantCode() ?: 'master';
         $prefix = $tenantCode . ':';
         $tagPrefix = $tenantCode;
 
-         if ($entity instanceof BanniereStatique) {
-            if ($entity->getId()) {
+        if ($entity instanceof BaniereStatique) {
+            if ($entity->getId() && $this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags(['baniere_statique_' . $entity->getId()]);
             }
         }
         if ($entity instanceof Banniere) {
-            if ($entity->getId()) {
+            if ($entity->getId() && $this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags(['banniere_' . $entity->getId()]);
             }
         }
         if ($entity instanceof Carrier) {
-            if ($entity->getId()) {
+            if ($entity->getId() && $this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags(['carrier_' . $entity->getId()]);
             }
         }
         if ($entity instanceof CategorieMarque) {
-            if ($entity->getId()) {
+            if ($entity->getId() && $this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags(['categorie_marque_' . $entity->getId()]);
             }
         }
         if ($entity instanceof ExploreCard && $entity->getId()) {
-            $this->cache->invalidateTags(['explore_card_' . $entity->getId()]);
+            if ($this->cache instanceof TagAwareCacheInterface) {
+                $this->cache->invalidateTags(['explore_card_' . $entity->getId()]);
+            }
         }
         if ($entity instanceof Entreprise && $entity->getId()) {
-            $this->cache->invalidateTags(['entreprise_' . $entity->getId()]);
+            if ($this->cache instanceof TagAwareCacheInterface) {
+                $this->cache->invalidateTags(['entreprise_' . $entity->getId()]);
+            }
         }
 
         if ($entity instanceof Adress) {
@@ -385,7 +389,6 @@ class CacheInvalidationSubscriber implements EventSubscriber
             if ($this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags([$tagPrefix . 'adresses_user']);
             }
-            
         }
         if ($entity instanceof Entreprise) {
             $specificKeyToDelete = $prefix . 'entreprise_' . $entity->getId();
@@ -393,7 +396,6 @@ class CacheInvalidationSubscriber implements EventSubscriber
             if ($this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags([$tagPrefix . 'entreprise']);
             }
-            
         }
         if ($entity instanceof FraisDePort) {
             $commande = $entity->getCommande();
@@ -401,11 +403,10 @@ class CacheInvalidationSubscriber implements EventSubscriber
                 $specificKeyToDelete = $prefix . 'frais_de_port_commande_' . $commande->getId();
                 $this->cache->delete($specificKeyToDelete);
             }
-            
+
             if ($this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags([$tagPrefix . 'frais_de_port']);
             }
-            
         }
         if ($entity instanceof NoteDeFrais) {
             $collection = $entity->getCollection();
@@ -416,7 +417,6 @@ class CacheInvalidationSubscriber implements EventSubscriber
             if ($this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags([$tagPrefix . 'notes_de_frais']);
             }
-            
         }
         if ($entity instanceof Order) {
             /** @var User|null $user */
@@ -427,20 +427,20 @@ class CacheInvalidationSubscriber implements EventSubscriber
                 $userTagPrefixed = $tenantCode . $userTagSimple;
                 $tagsToInvalidate = [$userTagPrefixed, $tenantCode];
                 $this->cache->invalidateTags($tagsToInvalidate);
-            } 
+            }
         }
         if ($entity instanceof ProductVariant || $entity instanceof Product) {
-            
+
             $productId = null;
             if ($entity instanceof ProductVariant) {
                 $product = $entity->getProduct();
                 if ($product) {
                     $productId = $product->getId();
                 }
-            } else { 
+            } else {
                 $productId = $entity->getId();
             }
-            
+
             if ($productId) {
                 $specificKeyToDelete = $prefix . 'product_variants_' . $productId;
                 $this->cache->delete($specificKeyToDelete);
@@ -454,7 +454,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
             foreach ($operation['classes'] as $class) {
                 if ($entity instanceof $class) {
                     foreach ($operation['delete'] as $key) {
-                       if ($key) {
+                        if ($key) {
                             $this->cache->delete($prefix . $key);
                         }
                     }
@@ -462,10 +462,8 @@ class CacheInvalidationSubscriber implements EventSubscriber
                         $tags = array_map(fn($tag) => $tagPrefix . $tag, $operation['invalidate_tags']);
                         $this->cache->invalidateTags($tags);
                     }
-                  
                 }
             }
         }
     }
-
 }
