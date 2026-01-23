@@ -11,4 +11,6 @@ interface TranslatableInterface
 
 
     public function findTranslationByLocale(string $locale): ?object;
+
+    public function getId(): ?int;
 }

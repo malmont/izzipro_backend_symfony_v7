@@ -21,7 +21,7 @@ class TenantConnectionProvider
         $this->config = $defaultConnection->getConfiguration();
         $this->eventManager = $defaultConnection->getEventManager();
     }
-
+    // Ferme la connexion active et en initialise une nouvelle pointant vers la base de données cible.
     public function switchTenant(string $tenantDbName, ?string $tenantCode = null): void
     {
         if ($this->connection && $this->connection->isConnected()) {
@@ -32,7 +32,7 @@ class TenantConnectionProvider
         $this->tenantCode = $tenantCode;
         $this->connection = DriverManager::getConnection($params, $this->config, $this->eventManager);
     }
-
+    // Retourne la connexion active ou l'initialise si nécessaire (Lazy Loading).
     public function getConnection(): Connection
     {
         if (!$this->connection) {
@@ -44,6 +44,4 @@ class TenantConnectionProvider
     {
         return $this->tenantCode;
     }
-    
-    
 }

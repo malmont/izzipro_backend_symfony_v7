@@ -27,6 +27,17 @@
         <include>
             <directory suffix=".php">src</directory>
         </include>
+        <exclude>
+            <directory suffix=".php">src/Entity</directory>
+            <directory suffix=".php">src/Dto</directory>
+            <directory suffix=".php">src/Repository</directory>
+            <directory suffix=".php">src/Form</directory>
+            <directory suffix=".php">src/Exception</directory>
+            <directory suffix=".php">src/Enum</directory>
+            <directory suffix=".php">src/Serializer</directory>
+            <directory suffix=".php">src/Command</directory>
+            <file>src/Kernel.php</file>
+        </exclude>
     </coverage>
 
     <listeners>

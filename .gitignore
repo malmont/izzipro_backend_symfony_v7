@@ -26,3 +26,8 @@
 /config/jwt/*.pem
 ###< lexik/jwt-authentication-bundle ###
 .env
+
+###> phpunit/coverage ###
+/coverage-report/
+/public/coverage/
+###< phpunit/coverage ###

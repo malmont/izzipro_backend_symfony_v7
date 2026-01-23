@@ -2,7 +2,9 @@
 
 namespace App\Tests\Unit\EventListener;
 
+use App\Dto\TenantConfig;
 use App\EventListener\TenantDoctrineSwitcherListener;
+use App\Services\TenantConnectionManager;
 use App\Services\TenantConnectionProvider;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
@@ -14,39 +16,38 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 class TenantDoctrineSwitcherListenerTest extends TestCase
 {
     private $tenantConnectionProvider;
+    private $tenantManager;
     private $logger;
-    private $pdoMaster;
     private $listener;
+
+    private const BACKEND_DOMAIN = 'backend.com';
 
     protected function setUp(): void
     {
         $this->tenantConnectionProvider = $this->createMock(TenantConnectionProvider::class);
+        $this->tenantManager = $this->createMock(TenantConnectionManager::class);
         $this->logger = $this->createMock(LoggerInterface::class);
-        $this->pdoMaster = $this->createMock(\PDO::class);
 
         $this->listener = new TenantDoctrineSwitcherListener(
             $this->tenantConnectionProvider,
+            $this->tenantManager,
             $this->logger,
-            'postgresql://user:pass@host:5432/db',
-            'frontend.com',
-            'backend.com',
-            $this->pdoMaster
+            self::BACKEND_DOMAIN
         );
     }
 
-    private function createEvent(Request $request): RequestEvent
+    private function createEvent(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST): RequestEvent
     {
         $kernel = $this->createMock(HttpKernelInterface::class);
-        return new RequestEvent($kernel, $request, HttpKernelInterface::MAIN_REQUEST);
+        return new RequestEvent($kernel, $request, $type);
     }
 
     public function testOnKernelRequestExcludesSubRequests(): void
     {
-        $kernel = $this->createMock(HttpKernelInterface::class);
         $request = new Request();
-        $event = new RequestEvent($kernel, $request, HttpKernelInterface::SUB_REQUEST);
+        $event = $this->createEvent($request, HttpKernelInterface::SUB_REQUEST);
 
-        $this->pdoMaster->expects($this->never())->method('prepare');
+        $this->tenantManager->expects($this->never())->method('findTenantConfigByHost');
         $this->listener->onKernelRequest($event);
     }
 
@@ -55,30 +56,29 @@ class TenantDoctrineSwitcherListenerTest extends TestCase
         $request = Request::create('/api/tenant/check');
         $event = $this->createEvent($request);
 
-        $this->pdoMaster->expects($this->never())->method('prepare');
+        $this->tenantManager->expects($this->never())->method('findTenantConfigByHost');
         $this->listener->onKernelRequest($event);
     }
 
-    public function testOnKernelRequestCustomDomainFound(): void
+    public function testOnKernelRequestSwitchWhenConfigFound(): void
     {
         $request = Request::create('/');
-        $request->headers->set('X-Tenant-Host', 'custom.com');
+        $request->headers->set('HOST', 'tenant.example.com');
         $event = $this->createEvent($request);
 
-        $stmt = $this->createMock(\PDOStatement::class);
-        $stmt->expects($this->once())
-            ->method('execute')
-            ->with(['host' => 'custom.com', 'altHost' => 'www.custom.com']);
-        $stmt->expects($this->once())
-            ->method('fetch')
-            ->willReturn(['code' => 'tenant1', 'dbname' => 'db_tenant1']);
+        $tenantConfig = new TenantConfig();
+        $tenantConfig->setCode('tenant1')->setDbname('db_tenant1');
 
-        $this->pdoMaster->method('prepare')->willReturn($stmt);
+        $this->tenantManager->expects($this->once())
+            ->method('findTenantConfigByHost')
+            ->with('tenant.example.com')
+            ->willReturn($tenantConfig);
 
-        // Expectation: Switch to tenant1 / db_tenant1
+        // Mock current connection state
         $connection = $this->createMock(Connection::class);
         $connection->method('getParams')->willReturn(['dbname' => 'db_master']);
         $this->tenantConnectionProvider->method('getConnection')->willReturn($connection);
+        $this->tenantConnectionProvider->method('getTenantCode')->willReturn(null);
 
         $this->tenantConnectionProvider->expects($this->once())
             ->method('switchTenant')
@@ -87,73 +87,85 @@ class TenantDoctrineSwitcherListenerTest extends TestCase
         $this->listener->onKernelRequest($event);
     }
 
-    public function testOnKernelRequestFrontendSubdomainFound(): void
+    public function testOnKernelRequestSwitchWhenUsingCustomHeader(): void
     {
         $request = Request::create('/');
-        // Host: tenant2.frontend.com
-        $request->headers->set('HOST', 'tenant2.frontend.com');
+        $request->headers->set('X-Tenant-Host', 'custom.com');
         $event = $this->createEvent($request);
 
-        // P1 Custom Domain check fails
-        $stmtP1 = $this->createMock(\PDOStatement::class);
-        $stmtP1->method('fetch')->willReturn(false);
+        $tenantConfig = new TenantConfig();
+        $tenantConfig->setCode('custom_tenant')->setDbname('db_custom');
 
-        // P2 Logic: tenant2 extracted. Need to look up DB.
-        $stmtP2 = $this->createMock(\PDOStatement::class);
-        $stmtP2->expects($this->once())
-            ->method('execute')
-            ->with(['c' => 'tenant2']);
-        $stmtP2->expects($this->once())
-            ->method('fetch')
-            ->willReturn(['dbname' => 'db_tenant2']);
-
-        $this->pdoMaster->expects($this->exactly(2))
-            ->method('prepare')
-            ->willReturnOnConsecutiveCalls($stmtP1, $stmtP2);
+        $this->tenantManager->expects($this->once())
+            ->method('findTenantConfigByHost')
+            ->with('custom.com')
+            ->willReturn($tenantConfig);
 
         $connection = $this->createMock(Connection::class);
         $connection->method('getParams')->willReturn(['dbname' => 'db_master']);
         $this->tenantConnectionProvider->method('getConnection')->willReturn($connection);
+        $this->tenantConnectionProvider->method('getTenantCode')->willReturn(null);
 
         $this->tenantConnectionProvider->expects($this->once())
             ->method('switchTenant')
-            ->with('db_tenant2', 'tenant2');
+            ->with('db_custom', 'custom_tenant');
 
         $this->listener->onKernelRequest($event);
     }
 
-    public function testOnKernelRequestBackendDefaultTenant(): void
+    public function testOnKernelRequestBackendDefaultTenantFallback(): void
     {
         $request = Request::create('/');
-        $request->headers->set('HOST', 'backend.com');
+        $request->headers->set('HOST', self::BACKEND_DOMAIN);
         $event = $this->createEvent($request);
 
-        // P1 fails
-        $stmtP1 = $this->createMock(\PDOStatement::class);
-        $stmtP1->method('fetch')->willReturn(false);
-
-        // P2 fails (backend.com == backendMainDomain)
-
-        // P3 Logic: backend.com -> tenantdefaut
-        $stmtP3 = $this->createMock(\PDOStatement::class);
-        $stmtP3->expects($this->once())
-            ->method('execute')
-            ->with(['c' => 'tenantdefaut']);
-        $stmtP3->expects($this->once())
-            ->method('fetch')
-            ->willReturn(['dbname' => 'db_default']);
-
-        $this->pdoMaster->expects($this->exactly(2))
-            ->method('prepare')
-            ->willReturnOnConsecutiveCalls($stmtP1, $stmtP3);
+        // First call returns null (no specific config for backend domain)
+        $this->tenantManager->expects($this->exactly(2))
+            ->method('findTenantConfigByHost')
+            ->withConsecutive([self::BACKEND_DOMAIN], ['tenantdefaut'])
+            ->willReturnOnConsecutiveCalls(null, (new TenantConfig())->setCode('tenantdefaut')->setDbname('db_default'));
 
         $connection = $this->createMock(Connection::class);
         $connection->method('getParams')->willReturn(['dbname' => 'db_master']);
         $this->tenantConnectionProvider->method('getConnection')->willReturn($connection);
+        $this->tenantConnectionProvider->method('getTenantCode')->willReturn(null);
 
         $this->tenantConnectionProvider->expects($this->once())
             ->method('switchTenant')
             ->with('db_default', 'tenantdefaut');
+
+        $this->listener->onKernelRequest($event);
+    }
+
+    public function testOnKernelRequestNoSwitchIfAlreadyConnected(): void
+    {
+        $request = Request::create('/');
+        $request->headers->set('HOST', 'tenant1.example.com');
+        $event = $this->createEvent($request);
+
+        $tenantConfig = (new TenantConfig())->setCode('tenant1')->setDbname('db_tenant1');
+
+        $this->tenantManager->method('findTenantConfigByHost')->willReturn($tenantConfig);
+
+        // Mock current connection already matching
+        $connection = $this->createMock(Connection::class);
+        $connection->method('getParams')->willReturn(['dbname' => 'db_tenant1']);
+        $this->tenantConnectionProvider->method('getConnection')->willReturn($connection);
+        $this->tenantConnectionProvider->method('getTenantCode')->willReturn('tenant1');
+
+        $this->tenantConnectionProvider->expects($this->never())->method('switchTenant');
+
+        $this->listener->onKernelRequest($event);
+    }
+
+    public function testOnKernelRequestNoValuesFound(): void
+    {
+        $request = Request::create('/');
+        $request->headers->set('HOST', 'unknown.example.com');
+        $event = $this->createEvent($request);
+
+        $this->tenantManager->method('findTenantConfigByHost')->willReturn(null);
+        $this->tenantConnectionProvider->expects($this->never())->method('switchTenant');
 
         $this->listener->onKernelRequest($event);
     }

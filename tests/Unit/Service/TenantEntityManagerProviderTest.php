@@ -28,8 +28,8 @@ class TenantEntityManagerProviderTest extends TestCase
         // 1. Mocks Dependencies
         $connection = $this->createMock(Connection::class);
         $connection->method('isConnected')->willReturn(false);
-        $connection->expects($this->once())->method('connect');
-        $connection->method('getDatabase')->willReturn('db_tenant_1');
+        // The service now uses lazy loading via getParams, so we mock that instead of relying on connect()
+        $connection->method('getParams')->willReturn(['dbname' => 'db_tenant_1']);
 
         $connProvider = $this->createMock(TenantConnectionProvider::class);
         $connProvider->method('getConnection')->willReturn($connection);
@@ -59,7 +59,8 @@ class TenantEntityManagerProviderTest extends TestCase
     {
         $connection = $this->createMock(Connection::class);
         $connection->method('isConnected')->willReturn(true);
-        $connection->method('getDatabase')->willReturn('db_tenant_1');
+        // Optimisation lazy loading: la DB est lue depuis les params
+        $connection->method('getParams')->willReturn(['dbname' => 'db_tenant_1']);
 
         $connProvider = $this->createMock(TenantConnectionProvider::class);
         $connProvider->method('getConnection')->willReturn($connection);
@@ -104,10 +105,10 @@ class TenantEntityManagerProviderTest extends TestCase
         $connection = $this->createMock(Connection::class);
         $connection->method('isConnected')->willReturn(true);
 
-        // Séquence : 2 bases de données différentes
+        // Séquence : 2 bases de données différentes via getParams
         $connection->expects($this->exactly(2))
-            ->method('getDatabase')
-            ->willReturnOnConsecutiveCalls('db_1', 'db_2');
+            ->method('getParams')
+            ->willReturnOnConsecutiveCalls(['dbname' => 'db_1'], ['dbname' => 'db_2']);
 
         $connProvider = $this->createMock(TenantConnectionProvider::class);
         $connProvider->method('getConnection')->willReturn($connection);
