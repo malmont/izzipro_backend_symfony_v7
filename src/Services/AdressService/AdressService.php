@@ -33,7 +33,7 @@ class AdressService
 
     public function createAdress(AdressInputDTO $inputDTO, $user): Adress
     {
-         $entityManager = $this->tenantEmProvider->getEntityManager();
+        $entityManager = $this->tenantEmProvider->getEntityManager();
         $adress = new Adress();
         $adress->setFirstname($inputDTO->firstname);
         $adress->setLastname($inputDTO->lastname);
