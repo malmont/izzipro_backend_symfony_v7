@@ -91,8 +91,11 @@ class PaymentsControllerTest extends TestCase
         $token = $this->createMock(TokenInterface::class);
         $token->method('getUser')->willReturn($user);
         $this->tokenStorage->method('getToken')->willReturn($token);
+        // Also mock the security service injected in constructor
+        $this->security->method('getUser')->willReturn($user);
         return $user;
     }
+
 
     public function testGetPaymentsUnauthorized(): void
     {
@@ -211,13 +214,22 @@ class PaymentsControllerTest extends TestCase
     public function testCreateStripePaymentIntentSuccess(): void
     {
         $this->mockUser();
-        $payload = ['amount' => 1000];
+        $payload = [
+            'items' => [['productVariantId' => 1, 'quantity' => 1]],
+            'priceShipping' => 10.0
+        ];
         $request = new Request([], [], [], [], [], [], json_encode($payload));
 
+        $expectedResult = [
+            'success' => true,
+            'clientSecret' => 'client_secret_123',
+            'calculatedAmount' => 115.0
+        ];
+
         $this->stripeService->expects($this->once())
-            ->method('createPaymentIntent')
-            ->with(1000, 'cad')
-            ->willReturn('client_secret_123');
+            ->method('createPaymentIntentFromItems')
+            ->with($payload['items'], $payload['priceShipping'])
+            ->willReturn($expectedResult);
 
         $response = $this->controller->createStripePaymentIntent($request);
 

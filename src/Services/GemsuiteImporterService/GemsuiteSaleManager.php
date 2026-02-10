@@ -11,7 +11,7 @@ use App\Services\TenantConnectionManager;
 class GemsuiteSaleManager
 {
     // ID 207 validé ensemble précédemment
-    private const METHOD_ID_STRIPE = 207;
+    private const METHOD_ID_STRIPE = 104;
 
     public function __construct(
         private HttpClientInterface $client,

@@ -1,10 +1,11 @@
 <?php
+
 namespace App\Services\OrderService;
 
 use App\Entity\Order;
 use App\Entity\OrderTax;
-use App\Entity\Tax; 
-use App\Services\TenantEntityManagerProvider; 
+use App\Entity\Tax;
+use App\Services\TenantEntityManagerProvider;
 
 class TaxCalculationService
 {
@@ -18,7 +19,7 @@ class TaxCalculationService
         $this->emProvider = $emProvider;
     }
 
-    public function calculateTaxes(Order $order, float $subtotal): float
+    public function calculateTaxes(Order $order, float $subtotal, bool $persist = true): float
     {
         // Get the tenant-specific EntityManager here
         $em = $this->emProvider->getEntityManager();
@@ -32,11 +33,14 @@ class TaxCalculationService
             $totalTax += $taxAmount;
 
             $orderTax = new OrderTax();
-            $orderTax->setOrderTax($order); 
+            $orderTax->setOrderTax($order);
             $orderTax->setTax($tax);
             $orderTax->setAmount($taxAmount);
             $order->addOrderTax($orderTax);
-            $em->persist($orderTax);
+
+            if ($persist) {
+                $em->persist($orderTax);
+            }
         }
         return $totalTax;
     }

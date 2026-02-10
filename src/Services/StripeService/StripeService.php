@@ -4,7 +4,7 @@
 namespace App\Services\StripeService;
 
 use App\Entity\StripeConfig;
-use App\Services\TenantEntityManagerProvider; 
+use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantConnectionManager;
 use Stripe\Account;
 use Stripe\AccountLink;
@@ -21,18 +21,25 @@ class StripeService
     private \Doctrine\ORM\EntityManagerInterface $em;
     private TenantConnectionManager $connectionManager;
     private LoggerInterface $logger;
+    private \App\Services\EntityRetrieverService $entityRetrieverService;
+    private \App\UseCase\OrderUseCase\CalculateTaxesUseCase $calculateTaxesUseCase;
+
 
     public function __construct(
-        string $stripeSecretKey, 
+        string $stripeSecretKey,
         TenantEntityManagerProvider $emProvider,
         TenantConnectionManager $connectionManager,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        \App\Services\EntityRetrieverService $entityRetrieverService,
+        \App\UseCase\OrderUseCase\CalculateTaxesUseCase $calculateTaxesUseCase
     ) {
         $this->stripeSecretKey = $stripeSecretKey;
-        $this->emProvider = $emProvider; 
-        $this->em = $emProvider->getEntityManager(); 
+        $this->emProvider = $emProvider;
+        $this->em = $emProvider->getEntityManager();
         $this->connectionManager = $connectionManager;
-        $this->logger = $logger; 
+        $this->logger = $logger;
+        $this->entityRetrieverService = $entityRetrieverService;
+        $this->calculateTaxesUseCase = $calculateTaxesUseCase;
     }
 
     public function createOnboardingLink(string $refreshUrl, string $returnUrl): string
@@ -49,7 +56,7 @@ class StripeService
 
             $stripeConfig = new StripeConfig();
             $stripeConfig->setAccountId($account->id);
-            $stripeConfig->setIsActive(false); 
+            $stripeConfig->setIsActive(false);
             $this->em->persist($stripeConfig);
             $this->em->flush();
         }
@@ -108,13 +115,12 @@ class StripeService
                 'payment_method_types' => ['card'],
                 'metadata' => ['store_code' => $tenantCode]
             ];
-            
+
             $stripeOptions = [];
             $isInternal = $this->connectionManager->isTenantInternal($tenantCode);
 
             if ($isInternal) {
                 $this->logger->info("Paiement interne (V2V) pour le tenant: $tenantCode");
-            
             } else {
                 $stripeConfig = $this->getStripeConfigForCurrentTenant();
                 if ($stripeConfig && $stripeConfig->isActive()) {
@@ -127,11 +133,67 @@ class StripeService
             }
             $paymentIntent = PaymentIntent::create($options, $stripeOptions);
             return $paymentIntent->client_secret;
-
         } catch (ApiErrorException $e) {
             $this->logger->error("Erreur API Stripe (createPaymentIntent) pour $tenantCode: " . $e->getMessage());
             return null;
         }
+    }
+
+    public function createPaymentIntentFromItems(array $items, float $priceShipping, string $currency = 'cad'): array
+    {
+        if (empty($items)) {
+            return ['error' => 'Items requis', 'status' => 400];
+        }
+
+        $itemsTotal = 0.0;
+        foreach ($items as $itemData) {
+            $productVariantId = $itemData['productVariantId'] ?? null;
+            $quantity = $itemData['quantity'] ?? 0;
+
+            if (!$productVariantId || $quantity <= 0) {
+                return ['error' => 'Invalid item data', 'status' => 400];
+            }
+
+            try {
+                $productVariant = $this->entityRetrieverService->findOrFail(
+                    \App\Entity\ProductVariant::class,
+                    $productVariantId,
+                    'Product variant not found'
+                );
+            } catch (\Exception $e) {
+                return ['error' => $e->getMessage(), 'status' => 400];
+            }
+
+            $product = $productVariant->getProduct();
+            $price = $product->getPrice();
+            $itemsTotal += $price * $quantity;
+        }
+
+        $subtotal = $itemsTotal + $priceShipping;
+
+        // Create a dummy order for tax calculation (NOT PERSISTED)
+        $dummyOrder = new \App\Entity\Order();
+
+        $totalTax = $this->calculateTaxesUseCase->execute($dummyOrder, $subtotal, false);
+        $totalAmount = $subtotal + $totalTax;
+
+        $amountInCents = (int) round($totalAmount);
+
+        if ($amountInCents <= 0) {
+            return ['error' => 'Montant invalide calculé', 'status' => 400];
+        }
+
+        $clientSecret = $this->createPaymentIntent($amountInCents, $currency);
+
+        if (!$clientSecret) {
+            return ['error' => 'Impossible de créer l\'intention de paiement.', 'status' => 500];
+        }
+
+        return [
+            'success' => true,
+            'clientSecret' => $clientSecret,
+            'calculatedAmount' => $totalAmount
+        ];
     }
 
     public function getStripeConfigForCurrentTenant(): ?StripeConfig
@@ -140,7 +202,7 @@ class StripeService
         return $stripeConfigRepo->findOneBy([]);
     }
 
-     public function disconnectCurrentTenant(): bool
+    public function disconnectCurrentTenant(): bool
     {
         $stripeConfig = $this->getStripeConfigForCurrentTenant();
 

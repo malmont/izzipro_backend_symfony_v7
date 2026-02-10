@@ -1,9 +1,10 @@
 <?php
+
 namespace App\UseCase\OrderUseCase;
 
 use App\Entity\Order;
 use App\Services\OrderService\TaxCalculationService;
-use App\Services\TenantEntityManagerProvider; 
+use App\Services\TenantEntityManagerProvider;
 
 class CalculateTaxesUseCase
 {
@@ -18,9 +19,9 @@ class CalculateTaxesUseCase
         $this->taxCalculationService = $taxCalculationService;
     }
 
-    public function execute(Order $order, float $subtotal): float
+    public function execute(Order $order, float $subtotal, bool $persist = true): float
     {
-        $totalTax = $this->taxCalculationService->calculateTaxes($order, $subtotal);
+        $totalTax = $this->taxCalculationService->calculateTaxes($order, $subtotal, $persist);
         return $totalTax;
     }
 }

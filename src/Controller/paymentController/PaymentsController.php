@@ -16,7 +16,7 @@ use App\Services\TenantCacheService;
 use App\Services\StripeService\StripeService;
 use Symfony\Contracts\Cache\ItemInterface;
 use App\Entity\StripeConfig;
-use App\Services\TenantConnectionManager; 
+use App\Services\TenantConnectionManager;
 
 class PaymentsController extends AbstractController
 {
@@ -26,7 +26,7 @@ class PaymentsController extends AbstractController
     private Security $security;
     private TenantCacheService $cache;
     private StripeService $stripeService;
-    private TenantConnectionManager $connectionManager; 
+    private TenantConnectionManager $connectionManager;
 
     public function __construct(
         GetPaymentsByOrderSourceUseCase $getPaymentsByOrderSourceUseCase,
@@ -35,7 +35,7 @@ class PaymentsController extends AbstractController
         Security $security,
         TenantCacheService $cache,
         StripeService $stripeService,
-        TenantConnectionManager $connectionManager 
+        TenantConnectionManager $connectionManager
     ) {
         $this->getPaymentsByOrderSourceUseCase = $getPaymentsByOrderSourceUseCase;
         $this->createPaymentUseCase = $createPaymentUseCase;
@@ -43,7 +43,7 @@ class PaymentsController extends AbstractController
         $this->security = $security;
         $this->cache = $cache;
         $this->stripeService = $stripeService;
-        $this->connectionManager = $connectionManager; 
+        $this->connectionManager = $connectionManager;
     }
 
     #[Route('api/payments', name: 'get_payments', methods: ['GET'])]
@@ -100,24 +100,26 @@ class PaymentsController extends AbstractController
         }
         return $this->json(['success' => false, 'errors' => $result['errors']], JsonResponse::HTTP_INTERNAL_SERVER_ERROR);
     }
-    
+
     #[Route('/api/stripe/create-intent', name: 'api_stripe_create_intent', methods: ['POST'])]
     public function createStripePaymentIntent(Request $request): JsonResponse
     {
-        $user = $this->getUser();
+        $user = $this->security->getUser();
         if (!$user) {
             return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
+
         $data = json_decode($request->getContent(), true);
-        $amount = $data['amount'] ?? null; 
-        if (!$amount || $amount <= 0) {
-            return $this->json(['error' => 'Montant invalide ou non fourni'], JsonResponse::HTTP_BAD_REQUEST);
+        $items = $data['items'] ?? [];
+        $priceShipping = $data['priceShipping'] ?? 0.0;
+
+        $result = $this->stripeService->createPaymentIntentFromItems($items, $priceShipping);
+
+        if (isset($result['error'])) {
+            return $this->json(['error' => $result['error']], $result['status'] ?? 500);
         }
-        $clientSecret = $this->stripeService->createPaymentIntent((int)$amount, 'cad');
-        if (!$clientSecret) {
-            return $this->json(['error' => 'Impossible de créer l\'intention de paiement. Vérifiez la configuration Stripe du tenant.'], 500);
-        }
-        return $this->json(['clientSecret' => $clientSecret]);
+
+        return $this->json($result);
     }
 
     /**
@@ -129,31 +131,31 @@ class PaymentsController extends AbstractController
     {
         $publicKey = $_ENV['STRIPE_PUBLIC_KEY'] ?? null;
         if (!$publicKey) {
-             return $this->json(['error' => 'Clé publique Stripe non configurée sur le serveur.'], 500);
+            return $this->json(['error' => 'Clé publique Stripe non configurée sur le serveur.'], 500);
         }
-        
+
         $tenantCode = $this->connectionManager->getCurrentTenantCode();
         if (!$tenantCode) {
             return $this->json(['error' => 'Tenant non identifiable.'], 400);
         }
-        
+
         $isInternal = $this->connectionManager->isTenantInternal($tenantCode);
 
         if ($isInternal) {
 
             return $this->json([
                 'publicKey' => $publicKey,
-                'stripeAccountId' => null 
+                'stripeAccountId' => null
             ]);
         }
 
         $em = $emProvider->getEntityManager();
         $stripeConfig = $em->getRepository(StripeConfig::class)->findOneBy(['isActive' => true]);
-        
+
         if (!$stripeConfig) {
             return $this->json(['error' => 'Aucun compte Stripe actif n\'est connecté pour ce site.'], 404);
         }
-        
+
         return $this->json([
             'publicKey' => $publicKey,
             'stripeAccountId' => $stripeConfig->getAccountId()
@@ -161,7 +163,7 @@ class PaymentsController extends AbstractController
     }
 
 
-      // --- MÉTHODES SQUARE MISES EN COMMENTAIRE ---
+    // --- MÉTHODES SQUARE MISES EN COMMENTAIRE ---
     /*
     #[Route('/api/square-config', name: 'get_square_config', methods: ['GET'])]
     public function getSquareConfig(Request $request): JsonResponse
