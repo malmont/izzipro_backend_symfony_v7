@@ -28,6 +28,7 @@ class GemsuiteSyncHandler
         private GemsuiteImageUrlBuilder $imageUrlBuilder,
         private TranslationGeneratorService $translationGenerator,
         private GemsuiteAttributeProcessor $attributeProcessor,
+        private GemsuiteStockCalculator $stockCalculator,
         private string $gemsuiteApiUrl
     ) {}
 
@@ -71,8 +72,6 @@ class GemsuiteSyncHandler
                         $this->logger->info("Parent #$productId possède des attributs : Traitement comme Variante hybride.");
                         $this->updateOrCreateProductVariant($tenantEm, $gemProductData, $token, $companyIdentifier);
                     }
-                    // -----------------------------
-
                 } else {
                     $this->logger->info("Traitement de la VARIANTE #$productId (Liée au Parent #{$gemProductData['origin_product_id']})");
                     $this->updateOrCreateProductVariant($tenantEm, $gemProductData, $token, $companyIdentifier);
@@ -107,9 +106,6 @@ class GemsuiteSyncHandler
         $this->logger->info(sprintf('Webhook Client #%d', $clientId));
     }
 
-    // -------------------------------------------------------------------------
-    // MÉTHODES PRIVÉES (LOGIQUE MÉTIER)
-    // -------------------------------------------------------------------------
 
     private function fetchProductFromApi(int $id, string $token): ?array
     {
@@ -182,7 +178,7 @@ class GemsuiteSyncHandler
             }
 
             // Calcul du stock pour le produit simple (Parent = Stock)
-            $realStock = $this->calculateTotalStock($gemProductData);
+            $realStock = $this->stockCalculator->calculateTotalStock($gemProductData);
             $variant->setStockQuantity($realStock);
         }
         if (!empty($gemProductData['attributs']) && empty($gemProductData['variantes'])) {
@@ -241,7 +237,7 @@ class GemsuiteSyncHandler
         }
 
         // 3. Calcul du Stock (Addition Base + Tableau)
-        $realStock = $this->calculateTotalStock($gemProductData);
+        $realStock = $this->stockCalculator->calculateTotalStock($gemProductData);
 
         // 4. Application du Stock à la variante
         $variant->setStockQuantity($realStock);
@@ -256,27 +252,7 @@ class GemsuiteSyncHandler
         }
     }
 
-    /**
-     * Calcule le stock TOTAL en additionnant la quantité par défaut
-     * et les ajustements du tableau 'quantite'.
-     */
-    private function calculateTotalStock(array $data): int
-    {
-        // 1. Stock de base (Fiche produit)
-        $baseStock = (float) ($data['default_quantity'] ?? 0);
 
-        // 2. Ajustements (Mouvements entrepôt, réservations...)
-        $adjustments = 0.0;
-        if (!empty($data['quantite']) && is_array($data['quantite'])) {
-            foreach ($data['quantite'] as $q) {
-                // On additionne tous les mouvements du tableau
-                $adjustments += (float) ($q['quantite'] ?? 0);
-            }
-        }
-
-        // 3. Retourne la somme
-        return (int) ($adjustments);
-    }
 
     private function importCategories(EntityManagerInterface $em, string $token, ?string $companyIdentifier): array
     {

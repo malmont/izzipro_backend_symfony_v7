@@ -15,6 +15,7 @@ use App\Message\ProcessGemsuiteEntityJob;
 use App\Message\TranslateEntityJob;
 use App\Services\GemsuiteImporterService\GemsuiteAttributeProcessor;
 use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
+use App\Services\GemsuiteImporterService\GemsuiteStockCalculator;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\EntityManagerInterface;
@@ -33,9 +34,9 @@ class ProcessGemsuiteEntityJobHandler
         private MessageBusInterface $messageBus,
         private GemsuiteImageUrlBuilder $imageUrlBuilder,
         private GemsuiteAttributeProcessor $attributeProcessor,
+        private GemsuiteStockCalculator $stockCalculator,
         private SluggerInterface $slugger
-    ) {
-    }
+    ) {}
 
     public function __invoke(ProcessGemsuiteEntityJob $message)
     {
@@ -45,14 +46,18 @@ class ProcessGemsuiteEntityJobHandler
 
         $this->logger->info(sprintf(
             '[Micro-Job Start] Traitement de "%s" ID %s pour Tenant ID %d',
-            $type, $entityId, $message->getTenantId()
+            $type,
+            $entityId,
+            $message->getTenantId()
         ));
 
         $tenant = $this->tenantManager->findTenantById($message->getTenantId());
         if (!$tenant) {
             $this->logger->error(sprintf(
                 '[Micro-Job Fail] Tenant ID %d non trouvé pour le job %s ID %s.',
-                $message->getTenantId(), $type, $entityId
+                $message->getTenantId(),
+                $type,
+                $entityId
             ));
             return;
         }
@@ -62,22 +67,22 @@ class ProcessGemsuiteEntityJobHandler
         try {
             $this->emProvider->switchTenant($tenant['dbname'], $tenant['code']);
             $tenantEm = $this->emProvider->getEntityManager();
-            
+
             $entity = null;
 
             switch ($type) {
                 case 'client':
                     $entity = $this->processClient($tenantEm, $data);
                     break;
-                
+
                 case 'categories':
                     $entity = $this->processCategory($tenantEm, $data);
                     break;
-                
+
                 case 'product_parent':
                     $entity = $this->processProductParent($tenantEm, $data);
                     break;
-                
+
                 case 'product_variant':
                     $this->processProductVariant($tenantEm, $data);
                     break;
@@ -89,7 +94,7 @@ class ProcessGemsuiteEntityJobHandler
 
             if ($entity && method_exists($entity, 'getTranslatableFields')) {
                 if ($tenantEm->contains($entity)) {
-                    $tenantEm->flush(); 
+                    $tenantEm->flush();
                 }
 
                 $this->messageBus->dispatch(new TranslateEntityJob(
@@ -98,14 +103,13 @@ class ProcessGemsuiteEntityJobHandler
                     $entity->getId()
                 ));
             } else if ($type !== 'product_variant' && $entity !== null) {
-                 $tenantEm->flush();
+                $tenantEm->flush();
             }
 
             $this->updateSyncJobCounter($tenantEm, $message->getSyncJobId());
-
         } catch (\Throwable $e) {
             $this->logger->error("[Micro-Job Fail] Erreur sur '{$type}' ID {$entityId}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            throw $e; 
+            throw $e;
         }
     }
 
@@ -120,7 +124,7 @@ class ProcessGemsuiteEntityJobHandler
         $client->setName($data['name'] ?? 'N/A');
         $email = strtolower($data['email'] ?? '');
         $client->setEmail(empty($email) ? null : $email);
-        
+
         $em->persist($client);
         return $client;
     }
@@ -135,7 +139,9 @@ class ProcessGemsuiteEntityJobHandler
             $categoryName = $data['name_fr'] ?? 'ID ' . $id;
             $this->logger->warning(sprintf(
                 '[processCategory ID %s] IGNORÉE. Motif : (status: %d, sync_web: %s).',
-                $id, $status, $syncWeb ? 'true' : 'false'
+                $id,
+                $status,
+                $syncWeb ? 'true' : 'false'
             ));
             return null;
         }
@@ -146,7 +152,7 @@ class ProcessGemsuiteEntityJobHandler
             $category = new Categories();
             $category->setGemsuiteCategoryId($data['id']);
         }
-        
+
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
         $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
 
@@ -156,17 +162,17 @@ class ProcessGemsuiteEntityJobHandler
                 $this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath)
             );
         }
-        
+
         $category->setName(trim($data['name_fr']));
         $em->persist($category);
-        
+
         return $category;
     }
 
     private function processProductParent(EntityManagerInterface $em, array $data): ?Product
     {
         if (!$this->isEntityActive($data)) {
-             $this->logger->warning(sprintf('Produit parent #%d ignoré (inactif)', $data['id']));
+            $this->logger->warning(sprintf('Produit parent #%d ignoré (inactif)', $data['id']));
             return null;
         }
 
@@ -177,42 +183,44 @@ class ProcessGemsuiteEntityJobHandler
             $product->setGemsuiteProductId($data['id']);
         }
 
-        $product->getCategory()->clear(); 
+        $product->getCategory()->clear();
         $product->setName(trim($data['name_fr']));
         $product->setDescription($data['additional_fr'] ?? 'Pas de description.');
-        $product->setPrice((float)($data['price'] ?? 0) * 100); 
+        $product->setPrice((float)($data['price'] ?? 0) * 100);
         $product->setSlug(strtolower($this->slugger->slug($product->getName())));
         $product->setIsWeb(true);
         $product->setIsnewarrival($data['is_new_arrival'] ?? true);
         $product->setIsbestseller($data['is_bestseller'] ?? true);
 
         $defaultStyle = $em->getRepository(Style::class)->find(2);
-        if ($defaultStyle) { $product->setStyle($defaultStyle); }
+        if ($defaultStyle) {
+            $product->setStyle($defaultStyle);
+        }
 
         if (isset($data['category_id'])) {
-           $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $data['category_id']]);
-           if ($category) {
-               $product->addCategory($category);
-           }
+            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $data['category_id']]);
+            if ($category) {
+                $product->addCategory($category);
+            }
         }
-        
+
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
         $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
         $imagePath = $data['medias'][0]['path'] ?? null;
-        
+
         if (!empty($imagePath)) {
             $product->setImage($this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath));
         }
-        
+
         $shipping = $product->getProductShipping() ?? new ProductShipping();
-        
+
         $shipping->setWeightKg((float)($data['weight'] ?? 0));
         $shipping->setLengthCm((float)($data['dimensions_length'] ?? 0));
         $shipping->setWidthCm((float)($data['dimensions_width'] ?? 0));
         $shipping->setHeightCm((float)($data['dimensions_height'] ?? 0));
         $product->setProductShipping($shipping);
 
-        $em->persist($product); 
+        $em->persist($product);
         return $product;
     }
 
@@ -224,7 +232,7 @@ class ProcessGemsuiteEntityJobHandler
 
         $productRepo = $em->getRepository(Product::class);
         $variantRepo = $em->getRepository(ProductVariant::class);
-        
+
         $parentProductId = $data['origin_product_id'];
         $product = $productRepo->findOneBy(['gemsuiteProductId' => $parentProductId]);
 
@@ -237,15 +245,18 @@ class ProcessGemsuiteEntityJobHandler
         if (!$variant) {
             $variant = new ProductVariant();
             $variant->setProduct($product);
-            $variant->setGemsuiteVariantId($data['id']); 
+            $variant->setGemsuiteVariantId($data['id']);
             $em->persist($variant);
             if (!$product->getVariants()->contains($variant)) {
                 $product->addVariant($variant);
             }
         }
-        
-        $this->attributeProcessor->process($em, $variant, $data['attributs'], $data['default_quantity']);
-        
+
+        $realStock = $this->stockCalculator->calculateTotalStock($data);
+        $variant->setStockQuantity($realStock);
+
+        $this->attributeProcessor->process($em, $variant, $data['attributs'] ?? []);
+
         $em->flush();
     }
 
@@ -253,10 +264,10 @@ class ProcessGemsuiteEntityJobHandler
     {
         $status = (int)($data['status'] ?? 1);
         $syncWeb = (bool)($data['sync_web'] ?? true);
-        
+
         $name = trim($data['name_fr'] ?? '');
         $isVariant = ($data['id'] ?? 0) !== ($data['origin_product_id'] ?? 0);
-        
+
         if ($isVariant) {
             return $status === 1 && $syncWeb === true;
         } else {
@@ -271,6 +282,6 @@ class ProcessGemsuiteEntityJobHandler
              SET j.processedItems = j.processedItems + 1 
              WHERE j.id = :id'
         )->setParameter('id', $syncJobId)
-         ->execute();
+            ->execute();
     }
 }
