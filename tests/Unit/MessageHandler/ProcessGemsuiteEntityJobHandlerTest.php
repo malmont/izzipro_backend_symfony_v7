@@ -11,6 +11,7 @@ use App\Message\TranslateEntityJob;
 use App\MessageHandler\ProcessGemsuiteEntityJobHandler;
 use App\Services\GemsuiteImporterService\GemsuiteAttributeProcessor;
 use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
+use App\Services\GemsuiteImporterService\GemsuiteStockCalculator;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\AbstractQuery;
@@ -35,7 +36,7 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
         while (!$reflection->hasProperty('id') && $reflection->getParentClass()) {
             $reflection = $reflection->getParentClass();
         }
-        
+
         if ($reflection->hasProperty('id')) {
             $property = $reflection->getProperty('id');
             $property->setAccessible(true);
@@ -88,7 +89,7 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
 
         // 5. ENTITY MANAGER (C'EST ICI LA CORRECTION 🛠️)
         $em = $this->createMock(EntityManagerInterface::class);
-        
+
         $em->method('getRepository')->willReturnMap([
             [Product::class, $productRepo],
             [Style::class, $styleRepo],
@@ -105,7 +106,7 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
             ->will($this->returnCallback(function ($entity) {
                 $this->simulateEntityId($entity, 12345); // <-- LE FIX EST LÀ
             }));
-        
+
         $em->expects($this->atLeastOnce())->method('flush');
 
         // On doit aussi mocker 'contains' pour que le code sache que l'entité est gérée
@@ -132,12 +133,22 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
 
         $attProcessor = $this->createMock(GemsuiteAttributeProcessor::class);
 
+        $stockCalculator = $this->createMock(GemsuiteStockCalculator::class);
+        $stockCalculator->method('calculateTotalStock')->willReturn(10);
+
         $slugger = $this->createMock(SluggerInterface::class);
         $slugger->method('slug')->willReturn(new UnicodeString('t-shirt-super'));
 
         // 8. EXECUTION
         $handler = new ProcessGemsuiteEntityJobHandler(
-            $logger, $tenantManager, $emProvider, $bus, $imgBuilder, $attProcessor, $slugger
+            $logger,
+            $tenantManager,
+            $emProvider,
+            $bus,
+            $imgBuilder,
+            $attProcessor,
+            $stockCalculator,
+            $slugger
         );
 
         $message = new ProcessGemsuiteEntityJob(1, 999, 'product_parent', $productData);
@@ -154,7 +165,7 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
 
         $mockQuery = $this->createMock(AbstractQuery::class);
         $mockQuery->method('setParameter')->willReturn($mockQuery);
-        
+
         $em = $this->createMock(EntityManagerInterface::class);
         $em->method('createQuery')->willReturn($mockQuery);
         $em->expects($this->never())->method('persist');
@@ -166,12 +177,13 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
         $bus->expects($this->never())->method('dispatch');
 
         $handler = new ProcessGemsuiteEntityJobHandler(
-            $logger, 
-            $tenantManager, 
-            $emProvider, 
-            $bus, 
-            $this->createMock(GemsuiteImageUrlBuilder::class), 
-            $this->createMock(GemsuiteAttributeProcessor::class), 
+            $logger,
+            $tenantManager,
+            $emProvider,
+            $bus,
+            $this->createMock(GemsuiteImageUrlBuilder::class),
+            $this->createMock(GemsuiteAttributeProcessor::class),
+            $this->createMock(GemsuiteStockCalculator::class),
             $this->createMock(SluggerInterface::class)
         );
 

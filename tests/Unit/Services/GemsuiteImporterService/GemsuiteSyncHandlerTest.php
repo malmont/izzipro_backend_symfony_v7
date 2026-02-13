@@ -8,6 +8,7 @@ use App\Entity\Product;
 use App\Entity\ProductVariant;
 use App\Services\GemsuiteImporterService\GemsuiteAttributeProcessor;
 use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
+use App\Services\GemsuiteImporterService\GemsuiteStockCalculator;
 use App\Services\GemsuiteImporterService\GemsuiteSyncHandler;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
@@ -32,6 +33,7 @@ class GemsuiteSyncHandlerTest extends TestCase
     private $imageUrlBuilder;
     private $translationGenerator;
     private $attributeProcessor;
+    private $stockCalculator;
     private $gemsuiteApiUrl = 'https://api.example.com/';
     private $handler;
 
@@ -45,6 +47,7 @@ class GemsuiteSyncHandlerTest extends TestCase
         $this->imageUrlBuilder = $this->createMock(GemsuiteImageUrlBuilder::class);
         $this->translationGenerator = $this->createMock(TranslationGeneratorService::class);
         $this->attributeProcessor = $this->createMock(GemsuiteAttributeProcessor::class);
+        $this->stockCalculator = $this->createMock(GemsuiteStockCalculator::class);
 
         $this->handler = new GemsuiteSyncHandler(
             $this->client,
@@ -55,6 +58,7 @@ class GemsuiteSyncHandlerTest extends TestCase
             $this->imageUrlBuilder,
             $this->translationGenerator,
             $this->attributeProcessor,
+            $this->stockCalculator,
             $this->gemsuiteApiUrl
         );
     }
@@ -151,6 +155,7 @@ class GemsuiteSyncHandlerTest extends TestCase
         $this->emProvider->method('getEntityManager')->willReturn($em);
 
         $this->slugger->method('slug')->willReturn(new UnicodeString('test-product'));
+        $this->stockCalculator->method('calculateTotalStock')->willReturn(100);
 
         // Expect Persist calls
         // 1. Category
