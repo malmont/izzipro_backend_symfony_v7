@@ -12,11 +12,9 @@ use App\Services\TranslationGeneratorService\TranslationGeneratorService;
 
 class GemsuiteAttributeProcessor
 {
-    // La "documentation" (table de mappage) vit ici, en un seul endroit.
     private const LABEL_MAP = [
         '1' => ['name' => 'Taille',  'code' => 'taille'],
         '2' => ['name' => 'Couleur', 'code' => 'couleur'],
-        // Ajoutez ici tous vos autres labels...
     ];
 
     public function __construct(
@@ -25,11 +23,6 @@ class GemsuiteAttributeProcessor
     ) {
     }
 
-    /**
-     * Traite le tableau 'attributs' pour une variante donnée.
-     * NETTOYAGE : Le stock n'est plus géré ici (il est géré par le Handler), 
-     * on se concentre uniquement sur la création des Options et Valeurs.
-     */
     public function process(EntityManagerInterface $em, ProductVariant $variant, array $attributes): void
     {
         $optionRepo = $em->getRepository(ProductOption::class);
@@ -81,14 +74,10 @@ class GemsuiteAttributeProcessor
                 $em->flush();
             }
 
-            // Génération traduction pour la Valeur
             $this->translationGenerator->generateTranslations($productOptionValue);
 
-            // 3. Lier la valeur à la variante
             $variant->addOptionValue($productOptionValue);
         }
         
-        // RETIRÉ : $variant->setStockQuantity($stockQuantity);
-        // C'est désormais le GemsuiteSyncHandler qui applique le stock calculé.
     }
 }

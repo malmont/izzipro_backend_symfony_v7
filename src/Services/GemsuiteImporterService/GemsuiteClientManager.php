@@ -107,4 +107,53 @@ class GemsuiteClientManager
         $this->emProvider->switchTenant($dbname, $tenantCode);
         return $this->emProvider->getEntityManager();
     }
+
+    public function updateClientGemsuite(string $tenantCode, int $clientId): void
+    {
+        $tenantEm = $this->getTenantEntityManager($tenantCode);
+        $clientGemSuite = $this->getClientFromGemsuite($clientId, $tenantCode);
+        $client = $tenantEm->getRepository(GemsuiteClient::class)->findOneBy(['gemsuiteId' => $clientId]);
+        if (!$client) {
+            $this->logger->warning(sprintf('Client #%d non trouvé localement.', $clientId));
+            
+            if (!$clientGemSuite) {
+                $this->logger->warning(sprintf('Client #%d non trouvé sur GEM-SUITE.', $clientId));
+                return;
+            }
+            $newLocalClient = new GemsuiteClient();
+            $newLocalClient->setGemsuiteId($clientGemSuite['id']);
+            $newLocalClient->setEmail(strtolower($clientGemSuite['email'])); 
+            $newLocalClient->setName($clientGemSuite['name']);
+            
+            $tenantEm->persist($newLocalClient);
+            $tenantEm->flush();
+            
+            $this->logger->info(sprintf('Client créé sur GEM-SUITE (ID: %d) et synchronisé localement.', $clientGemSuite['id']));
+            return;
+        } 
+      
+    }
+
+    private function getClientFromGemsuite(int $clientId, string $tenantCode): ?array
+    {
+        $token = $this->tenantManager->getTenantToken($tenantCode);
+        if (!$token) {
+            $this->logger->warning(sprintf('Aucun token pour le tenant "%s".', $tenantCode));
+            return null;
+        }
+        $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'clients/' . $clientId, [
+            'auth_bearer' => $token,
+        ]);
+
+        if ($response->getStatusCode() === 200 || $response->getStatusCode() === 201) {
+            return $response->toArray()['data'] ?? null;
+        }
+        
+        $this->logger->error('La récupération du client sur GEM-SUITE a échoué.', [
+            'status_code' => $response->getStatusCode(),
+            'response' => $response->getContent(false)
+        ]);
+
+        return null;
+    }
 }

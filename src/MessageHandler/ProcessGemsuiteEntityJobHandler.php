@@ -11,6 +11,7 @@ use App\Entity\ProductShipping;
 use App\Entity\ProductVariant;
 use App\Entity\Style;
 use App\Entity\SyncJob;
+use App\Entity\ShippingClass;
 use App\Message\ProcessGemsuiteEntityJob;
 use App\Message\TranslateEntityJob;
 use App\Services\GemsuiteImporterService\GemsuiteAttributeProcessor;
@@ -164,6 +165,7 @@ class ProcessGemsuiteEntityJobHandler
         }
 
         $category->setName(trim($data['name_fr']));
+        $category->setExternalShippingClassId((int)($data['expedition_classes'] ?? 0));
         $em->persist($category);
 
         return $category;
@@ -201,6 +203,17 @@ class ProcessGemsuiteEntityJobHandler
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $data['category_id']]);
             if ($category) {
                 $product->addCategory($category);
+
+                // Associer la ShippingClass de la catégorie au produit
+                $shippingClassId = $category->getExternalShippingClassId();
+                if ($shippingClassId > 0) {
+                    $shippingClass = $em->getRepository(ShippingClass::class)->find($shippingClassId);
+                    if ($shippingClass) {
+                        $shipping = $product->getProductShipping() ?? new ProductShipping();
+                        $shipping->setShippingClassEntity($shippingClass);
+                        $product->setProductShipping($shipping);
+                    }
+                }
             }
         }
 

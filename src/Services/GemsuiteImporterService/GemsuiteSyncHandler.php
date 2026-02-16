@@ -6,6 +6,7 @@ use App\Entity\Categories;
 use App\Entity\Product;
 use App\Entity\ProductShipping;
 use App\Entity\ProductVariant;
+use App\Entity\ShippingClass;
 use App\Entity\Style;
 use App\Entity\GemsuiteClient;
 use App\Entity\Entreprise;
@@ -16,6 +17,7 @@ use Symfony\Component\String\Slugger\SluggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
+use App\Services\GemsuiteImporterService\GemsuiteClientManager;
 
 class GemsuiteSyncHandler
 {
@@ -29,7 +31,8 @@ class GemsuiteSyncHandler
         private TranslationGeneratorService $translationGenerator,
         private GemsuiteAttributeProcessor $attributeProcessor,
         private GemsuiteStockCalculator $stockCalculator,
-        private string $gemsuiteApiUrl
+        private string $gemsuiteApiUrl,
+        private GemsuiteClientManager $clientManager
     ) {}
 
     /**
@@ -65,8 +68,8 @@ class GemsuiteSyncHandler
 
                 if ($isParent) {
                     $this->logger->info("Traitement du produit PARENT #$productId");
-                    $categoryMap = $this->importCategories($tenantEm, $token, $companyIdentifier);
-                    $this->updateOrCreateProductParent($tenantEm, $gemProductData, $categoryMap, $companyIdentifier);
+                    [$categoryMap, $shippingClassMap] = $this->importCategories($tenantEm, $token, $companyIdentifier);
+                    $this->updateOrCreateProductParent($tenantEm, $gemProductData, $categoryMap, $shippingClassMap, $companyIdentifier);
 
                     if (!empty($gemProductData['attributs'])) {
                         $this->logger->info("Parent #$productId possède des attributs : Traitement comme Variante hybride.");
@@ -103,7 +106,8 @@ class GemsuiteSyncHandler
 
     public function handleClientUpdate(string $tenantCode, int $clientId): void
     {
-        $this->logger->info(sprintf('Webhook Client #%d', $clientId));
+        $this->clientManager->updateClientGemsuite($tenantCode, $clientId);
+       
     }
 
 
@@ -120,7 +124,7 @@ class GemsuiteSyncHandler
         }
     }
 
-    private function updateOrCreateProductParent(EntityManagerInterface $em, array $gemProductData, array $categoryMap, ?string $companyIdentifier): void
+    private function updateOrCreateProductParent(EntityManagerInterface $em, array $gemProductData, array $categoryMap, array $shippingClassMap, ?string $companyIdentifier): void
     {
         if (!isset($gemProductData['id'], $gemProductData['name_fr'])) {
             return;
@@ -165,6 +169,17 @@ class GemsuiteSyncHandler
         $shipping->setLengthCm((float)($gemProductData['dimensions_length'] ?? 0));
         $shipping->setWidthCm((float)($gemProductData['dimensions_width'] ?? 0));
         $shipping->setHeightCm((float)($gemProductData['dimensions_height'] ?? 0));
+
+        // --- GESTION SHIPPING CLASS VIA CATEGORIE ---
+        $categoryId = $gemProductData['category_id'] ?? null;
+        if ($categoryId && isset($shippingClassMap[$categoryId])) {
+            $shippingClassId = (int) $shippingClassMap[$categoryId];
+            $shippingClass = $shippingClassId > 0 ? $em->getRepository(ShippingClass::class)->find($shippingClassId) : null;
+            if ($shippingClass) {
+                $shipping->setShippingClassEntity($shippingClass);
+            }
+        }
+
 
         // Gestion du produit simple (sans attributs ni variantes distinctes) - ID 32
         if (empty($gemProductData['attributs']) && empty($gemProductData['variantes'])) {
@@ -211,8 +226,8 @@ class GemsuiteSyncHandler
             $parentData = $this->fetchProductFromApi($parentProductId, $token);
 
             if ($parentData) {
-                $catMap = $this->importCategories($em, $token, $companyIdentifier);
-                $this->updateOrCreateProductParent($em, $parentData, $catMap, $companyIdentifier);
+                [$catMap, $shpClassMap] = $this->importCategories($em, $token, $companyIdentifier);
+                $this->updateOrCreateProductParent($em, $parentData, $catMap, $shpClassMap, $companyIdentifier);
                 $em->flush();
                 $product = $productRepo->findOneBy(['gemsuiteProductId' => $parentProductId]);
             }
@@ -261,14 +276,23 @@ class GemsuiteSyncHandler
         ]);
         $data = $response->toArray();
         $categoryMap = [];
+        $shippingClassMap = [];
 
-        if (!isset($data['data'])) return [];
+        if (!isset($data['data'])) return [[], []];
 
         foreach ($data['data'] as $gemCategoryData) {
             $status = (int)($gemCategoryData['status'] ?? 1);
             $syncWeb = (bool)($gemCategoryData['sync_web'] ?? true);
 
-            if ($status !== 1 || $syncWeb !== true) continue;
+            if ($status !== 1 || $syncWeb !== true) {
+                $categoryToDelete = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
+
+                if ($categoryToDelete) {
+                    $this->logger->info("Suppression de la catégorie #{$gemCategoryData['id']} car inactive ou non synchronisée.");
+                    $em->remove($categoryToDelete);
+                }
+                continue;
+            }
 
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
             if (!$category) {
@@ -288,9 +312,10 @@ class GemsuiteSyncHandler
                 $this->translationGenerator->generateTranslations($category);
             }
             $categoryMap[$gemCategoryData['id']] = $category;
+            $shippingClassMap[$gemCategoryData['id']] = $gemCategoryData['expedition_classes'] ?? 0;
         }
         $em->flush();
-        return $categoryMap;
+        return [$categoryMap, $shippingClassMap];
     }
 
     private function deactivateProductOrVariant(EntityManagerInterface $em, array $gemProductData): void

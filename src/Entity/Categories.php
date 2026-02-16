@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Entity;
+
 use ApiPlatform\Metadata\ApiResource;
 use App\Repository\CategoriesRepository;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -33,12 +34,16 @@ class Categories implements TranslatableInterface
     #[ORM\Column(nullable: true)]
     private ?int $gemsuiteCategoryId = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $externalShippingClassId = null;
+
     #[ORM\OneToMany(
-    mappedBy: 'category', 
-    targetEntity: CategoriesTranslation::class, 
-    cascade: ['persist', 'remove'], 
-    orphanRemoval: true,
-    fetch: 'EXTRA_LAZY')]
+        mappedBy: 'category',
+        targetEntity: CategoriesTranslation::class,
+        cascade: ['persist', 'remove'],
+        orphanRemoval: true,
+        fetch: 'EXTRA_LAZY'
+    )]
     private Collection $translations;
 
     public function __construct()
@@ -131,10 +136,23 @@ class Categories implements TranslatableInterface
 
         return $this;
     }
+
+    public function getExternalShippingClassId(): ?int
+    {
+        return $this->externalShippingClassId;
+    }
+
+    public function setExternalShippingClassId(?int $externalShippingClassId): static
+    {
+        $this->externalShippingClassId = $externalShippingClassId;
+
+        return $this;
+    }
+
     /**
      * @return Collection<int, CategoriesTranslation>
      */
-    public function getTranslations(): Collection 
+    public function getTranslations(): Collection
     {
         return $this->translations;
     }
@@ -171,10 +189,10 @@ class Categories implements TranslatableInterface
                 return $translation;
             }
         }
-        
+
         return $this->translations->first() ?: null;
     }
-     public function getTranslatableFields(): array
+    public function getTranslatableFields(): array
     {
         return ['name', 'description'];
     }
