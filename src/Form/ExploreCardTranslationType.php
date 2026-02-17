@@ -22,11 +22,11 @@ class ExploreCardTranslationType extends AbstractType
                 'required' => true,
             ])
             ->add('standardTitle', TextareaType::class, [
-                'label' => 'Titre Standard',
+                'label' => 'standardTitle',
                 'required' => false,
             ])
             ->add('differentTitle', TextareaType::class, [
-                'label' => 'Titre Vidéo',
+                'label' => 'differentTitle',
                 'required' => false,
             ])
             ->add('description', TextareaType::class, [

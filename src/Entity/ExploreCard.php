@@ -42,11 +42,11 @@ class ExploreCard implements TranslatableInterface
      * @var Collection<int, ExploreCardTranslation>
      */
     #[ORM\OneToMany(
-    mappedBy: 'exploreCard', 
-    targetEntity: ExploreCardTranslation::class, 
-    cascade: ['persist', 'remove'], 
-    orphanRemoval: true,
-    fetch: 'EXTRA_LAZY'
+        mappedBy: 'exploreCard',
+        targetEntity: ExploreCardTranslation::class,
+        cascade: ['persist', 'remove'],
+        orphanRemoval: true,
+        fetch: 'EXTRA_LAZY'
     )]
     private Collection $translations;
 
@@ -172,7 +172,7 @@ class ExploreCard implements TranslatableInterface
         return $this;
     }
 
-     public function getTranslation(string $locale): ?ExploreCardTranslation
+    public function getTranslation(string $locale): ?ExploreCardTranslation
     {
         foreach ($this->translations as $translation) {
             if ($translation->getLanguage() === $locale) {
@@ -185,7 +185,7 @@ class ExploreCard implements TranslatableInterface
                 return $translation;
             }
         }
-        
+
         return $this->translations->first() ?: null;
     }
     public function getTranslatableFields(): array

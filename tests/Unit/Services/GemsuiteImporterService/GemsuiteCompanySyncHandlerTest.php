@@ -5,6 +5,7 @@ namespace App\Tests\Unit\Services\GemsuiteImporterService;
 use App\Entity\AddressEntreprise;
 use App\Entity\Entreprise;
 use App\Entity\HomeSlider;
+use App\Entity\ExploreCard;
 use App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler;
 use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
 use App\Services\TenantConnectionManager;
@@ -104,29 +105,41 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
         ];
 
         $response = $this->createMock(ResponseInterface::class);
-        $response->method('toArray')->willReturn(['data' => [$companyData]]);
-        $this->client->method('request')->willReturn($response);
+        $responseData = [
+            'data' => [$companyData]
+        ];
+        $response->method('toArray')->willReturn($responseData);
+
+        $this->client->expects($this->once())
+            ->method('request')
+            ->willReturn($response);
 
         // Mock EntityManager and Repositories
         $entrepriseRepo = $this->createMock(EntityRepository::class);
-        $entrepriseRepo->method('findOneBy')->willReturn(null); // Return null to simulate new entity
+        $entrepriseRepo->method('findOneBy')->willReturn(null);
 
         $homeSliderRepo = $this->createMock(EntityRepository::class);
-        $homeSliderRepo->method('findOneBy')->willReturn(null); // Return null for new entity
+        $homeSliderRepo->method('findAll')->willReturn([]);
+
+        $exploreCardRepo = $this->createMock(EntityRepository::class);
+        $exploreCardRepo->method('findAll')->willReturn([]);
 
         $entityManager = $this->createMock(EntityManagerInterface::class);
         $entityManager->method('getRepository')
             ->will($this->returnValueMap([
                 [Entreprise::class, $entrepriseRepo],
                 [HomeSlider::class, $homeSliderRepo],
+                [ExploreCard::class, $exploreCardRepo],
             ]));
 
-        $entityManager->expects($this->atLeast(2))->method('persist');
+        // We expect persist for Entreprise. HomeSlider/ExploreCard loop won't persist anything as data is empty
+        $entityManager->expects($this->atLeast(1))->method('persist');
         $entityManager->expects($this->once())->method('flush');
 
         $this->emProvider->method('getEntityManager')->willReturn($entityManager);
 
-        $this->translationGenerator->expects($this->exactly(2))->method('generateTranslations');
+        // Only Entreprise translation is generated because banner/explore data is missing in $companyData
+        $this->translationGenerator->expects($this->exactly(1))->method('generateTranslations');
 
         $this->handler->handleCompanyUpdate($tenantCode);
     }

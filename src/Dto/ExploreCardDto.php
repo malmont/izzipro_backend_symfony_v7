@@ -25,9 +25,17 @@ class ExploreCardDto
         $dto->id          = $entity->getId();
         $dto->isDifferent = $entity->getIsDifferent();
         $dto->link        = $entity->getLink();
-        
-        $basePath = rtrim($host, '/') . '/assets/uploads/explore/';
-        $dto->imageUrl    = $entity->getImagePath() ? $basePath . $entity->getImagePath() : null;
+
+        $imagePath = $entity->getImagePath();
+        if (str_starts_with((string)$imagePath, 'http')) {
+            $image = $imagePath;
+        } else if ($imagePath) {
+            $cleanedHost = rtrim($host, '/');
+            $image = $cleanedHost . '/assets/uploads/explore/' . $imagePath;
+        } else {
+            $image = null;
+        }
+        $dto->imageUrl    = $image;
         $dto->videoUrl    = $entity->getVideoPath();
 
         $dto->standardTitle  = $translation?->getStandardTitle() ?? $entity->getStandardTitle();

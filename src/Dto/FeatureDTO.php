@@ -20,9 +20,15 @@ class FeatureDTO
         $dto->title = $translation?->getTitle() ?? $feature->getTitle();
         
         $path = $feature->getIconpath();
-        $dto->iconUrl = $path
-            ? rtrim($host, '/') . '/assets/uploads/icons/' . $path
-            : null;
+        if (str_starts_with((string)$path, 'http')) {
+            $image = $path;
+        } else if ($path) {
+            $cleanedHost = rtrim($host, '/');
+            $image = $cleanedHost . '/assets/uploads/icons/' . $path;
+        } else {
+            $image = null;
+        }
+        $dto->iconUrl = $image;
         
         return $dto;
     }

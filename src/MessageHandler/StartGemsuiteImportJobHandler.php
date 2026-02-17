@@ -8,6 +8,7 @@ use App\Entity\EmailConfiguration;
 use App\Entity\Entreprise;
 use App\Entity\HomeSlider;
 use App\Entity\SyncJob;
+use App\Entity\ExploreCard;
 use App\Message\StartGemsuiteImportJob;
 use App\Message\ImportGemsuiteCollectionJob;
 use App\Services\DefaultAssetSynchronizer;
@@ -19,7 +20,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Doctrine\ORM\EntityManagerInterface; 
+use Doctrine\ORM\EntityManagerInterface;
 
 #[AsMessageHandler]
 class StartGemsuiteImportJobHandler
@@ -36,19 +37,19 @@ class StartGemsuiteImportJobHandler
         private HttpClientInterface $client,
         private MessageBusInterface $messageBus,
         private string $gemsuiteApiUrl
-    ) {
-    }
+    ) {}
 
 
     public function __invoke(StartGemsuiteImportJob $message)
     {
         $this->logger->info(sprintf(
             '[Job Start] Démarrage du job pour Tenant ID %d (Sync ID: %d)',
-            $message->getTenantId(), $message->getSyncJobId() ?? 0
+            $message->getTenantId(),
+            $message->getSyncJobId() ?? 0
         ));
 
         $tenant = $this->tenantManager->findTenantById($message->getTenantId());
-        
+
         if (!$tenant) {
             $this->logger->error("[Job Fail] Tenant ID {$message->getTenantId()} non trouvé dans la table 'master'. Arrêt.");
             return;
@@ -60,7 +61,7 @@ class StartGemsuiteImportJobHandler
         try {
             $this->emProvider->switchTenant($tenant['dbname'], $tenant['code']);
             $tenantEm = $this->emProvider->getEntityManager();
-            
+
             $syncJob = $tenantEm->getRepository(SyncJob::class)->find($message->getSyncJobId());
             if (!$syncJob) {
                 $this->logger->error("[Job Fail] SyncJob ID {$message->getSyncJobId()} non trouvé pour tenant {$tenant['code']}.");
@@ -78,31 +79,32 @@ class StartGemsuiteImportJobHandler
             if (!$companyData) {
                 throw new \Exception('Aucune donnée d\'entreprise (company) trouvée via l\'API GEM-SUITE.');
             }
-            
+
             // --- Bloc de création de coquille ---
             $this->assetSynchronizer->synchronize($tenantEm);
-            
+
             $entreprise = new Entreprise();
             $entreprise->setName($companyData['nom']);
             $entreprise->setEmail($companyData['email'] ?? null);
             $entreprise->setTel($companyData['tel'] ?? null);
-            $entreprise->setTvaIntracommunautaire($companyData['tps'] ?? null); 
+            $entreprise->setTvaIntracommunautaire($companyData['tps'] ?? null);
             $entreprise->setEin($companyData['federal'] ?? null);
-            $entreprise->setApropos($companyData['website_about_intro'] ?? null);
-            $entreprise->setConditionOfUse($companyData['website_terms'] ?? null);
-            $entreprise->setPrivacyPolicy($companyData['website_conf'] ?? null);
+            $entreprise->setApropos($companyData['gemportal_about'] ?? null);
+            $entreprise->setConditionOfUse($companyData['gemportal_conditions'] ?? null);
+            $entreprise->setPrivacyPolicy($companyData['gemportal_politics'] ?? null);
+            $entreprise->setLegalNotice($companyData['gemportal_legal'] ?? null);
 
             if (isset($companyData['website_link'])) {
                 $pathParts = explode('/', rtrim($companyData['website_link'], '/'));
                 $identifier = end($pathParts);
                 $entreprise->setGemsuiteIdentifier($identifier);
             }
-            
-            $logoPath = $companyData['website_logo1'] ?? null;
+
+            $logoPath = $companyData['gemportal_logo'] ?? null;
             $entreprise->setLogo(
                 $this->imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $logoPath)
             );
-          
+
             if ($companyData && !empty($companyData['adresse'])) {
                 $addressEntreprise = new AddressEntreprise();
                 $addressEntreprise->setStreet1($companyData['adresse']);
@@ -119,31 +121,62 @@ class StartGemsuiteImportJobHandler
 
             $this->translationGenerator->generateTranslations($entreprise);
 
-            if($companyData){
+            if ($companyData) {
                 $emailConfiguration = $tenantEm->getRepository(EmailConfiguration::class)->findOneBy([]) ?? new EmailConfiguration();
                 $emailConfiguration->setFromName($companyData['nom'] ?? 'Votre Entreprise');
-                $logoPath = $companyData['website_logo1'] ?? null;
+                $logoPath = $companyData['gemportal_logo'] ?? null;
                 $emailConfiguration->setLogo(
                     $this->imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $logoPath)
                 );
-                $tenantEm->persist($emailConfiguration); 
+                $tenantEm->persist($emailConfiguration);
             }
 
             if ($companyData) {
-                $homeSlider = new HomeSlider();
-                $homeSlider->setTitle(strip_tags($companyData['website_intro_text1'] ?? 'Bienvenue'));
-                $homeSlider->setDescription(strip_tags($companyData['website_intro_text2'] ?? 'Découvrez nos produits'));
-                $homeSlider->setButtonMessage('Voir la boutique');
-                $homeSlider->setButtonUrl('/shop');
-                $homeSlider->setIsDiplayed(true);
+                for ($i = 1; $i <= 3; $i++) {
+                    $bannerKey = 'gemportal_banner' . $i;
 
-                $bannerPath = $companyData['website_banner'] ?? null;
-                $homeSlider->setImage(
-                    $this->imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $bannerPath)
-                );
-                $tenantEm->persist($homeSlider);
+                    if (!empty($companyData[$bannerKey])) {
 
-                $this->translationGenerator->generateTranslations($homeSlider);
+                        $homeSlider = new HomeSlider();
+                        $homeSlider->setTitle(strip_tags($companyData['gemportal_title'] ?? 'Bienvenue'));
+                        $homeSlider->setDescription(strip_tags($companyData['gemportal_desc'] ?? 'Découvrez nos produits'));
+                        $homeSlider->setButtonMessage(strip_tags($companyData['gemportal_button'] ?? 'voir nos produit'));
+                        $homeSlider->setButtonUrl('/shop');
+                        $homeSlider->setIsDiplayed(true);
+
+                        $homeSlider->setImage(
+                            $this->imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $companyData[$bannerKey])
+                        );
+                        $tenantEm->persist($homeSlider);
+
+                        $this->translationGenerator->generateTranslations($homeSlider);
+                    }
+                }
+            }
+
+            if ($companyData) {
+                for ($i = 1; $i <= 3; $i++) {
+                    $baseKey = 'gemportal_features' . $i;
+
+                    if (!empty($companyData[$baseKey])) {
+                        $exploreCard = new ExploreCard();
+
+                        $titleKey = $baseKey . '_title';
+                        $descKey = $baseKey . '_desc';
+
+                        $exploreCard->setStandardTitle(strip_tags($companyData[$titleKey] ?? 'Bienvenue'));
+                        $exploreCard->setDescription(strip_tags($companyData[$descKey] ?? 'Découvrez cette fonctionnalité'));
+                        $exploreCard->setIsDifferent(false);
+
+                        $imagePath = $companyData[$baseKey] ?? null;
+                        $exploreCard->setImagePath(
+                            $this->imageUrlBuilder->buildUrl($identifier, $imagePath)
+                        );
+
+                        $tenantEm->persist($exploreCard);
+                        $this->translationGenerator->generateTranslations($exploreCard);
+                    }
+                }
             }
 
             $tenantEm->flush();
@@ -163,7 +196,7 @@ class StartGemsuiteImportJobHandler
                 $message->getGemsuiteToken(),
                 $message->getSyncJobId(),
                 'clients_contacts',
-                1 
+                1
             ));
 
             $this->logger->info(sprintf(
@@ -175,10 +208,9 @@ class StartGemsuiteImportJobHandler
                 '[Job Success] Le "Chef de Chantier" (StartGemsuiteImportJobHandler) a fini sa mission pour le Tenant ID %d',
                 $message->getTenantId()
             ));
-
         } catch (\Throwable $e) {
             $this->logger->error('[Job Fail] Erreur critique durant l\'exécution du job: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            
+
             if (isset($syncJob) && $tenantEm instanceof EntityManagerInterface) {
                 $syncJob->setStatus('failed');
                 $syncJob->setLastError(substr($e->getMessage(), 0, 500));

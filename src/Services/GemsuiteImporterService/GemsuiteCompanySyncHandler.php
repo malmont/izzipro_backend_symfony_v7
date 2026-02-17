@@ -6,6 +6,7 @@ namespace App\Services\GemsuiteImporterService;
 use App\Entity\Entreprise;
 use App\Entity\HomeSlider;
 use App\Entity\AddressEntreprise;
+use App\Entity\ExploreCard;
 use App\Services\TranslationGeneratorService\TranslationGeneratorService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -27,8 +28,7 @@ class GemsuiteCompanySyncHandler
         private GemsuiteImageUrlBuilder $imageUrlBuilder,
         private TranslationGeneratorService $translationGenerator,
         private string $gemsuiteApiUrl
-    ) {
-    }
+    ) {}
 
     /**
      * Gère la mise à jour des informations de l'entreprise.
@@ -52,15 +52,15 @@ class GemsuiteCompanySyncHandler
                 $this->logger->warning(sprintf('Données de l\'entreprise non trouvées sur GEM-SUITE pour le tenant "%s".', $tenantCode));
                 return;
             }
-            
+
             $tenantEm = $this->getTenantEntityManager($tenantCode);
-            
+
             $this->updateEntrepriseData($tenantEm, $companyData);
             $this->updateHomeSliderData($tenantEm, $companyData);
+            $this->updateExploreCardData($tenantEm, $companyData);
 
             $tenantEm->flush();
             $this->logger->info(sprintf('Configuration de l\'entreprise pour le tenant "%s" synchronisée avec succès.', $tenantCode));
-
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('Erreur lors de la synchronisation de la configuration de l\'entreprise : %s', $e->getMessage()));
         }
@@ -69,25 +69,26 @@ class GemsuiteCompanySyncHandler
     private function updateEntrepriseData(EntityManagerInterface $em, array $companyData): void
     {
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]) ?? new Entreprise();
-        
+
         $entreprise->setName($companyData['nom'] ?? $entreprise->getName());
         $entreprise->setEmail($companyData['email'] ?? $entreprise->getEmail());
         $entreprise->setTel($companyData['tel'] ?? $entreprise->getTel());
         $entreprise->setWebsite($companyData['website_link'] ?? $entreprise->getWebsite());
-        $entreprise->setApropos($companyData['website_about_intro'] ?? $entreprise->getApropos());
-        $entreprise->setConditionOfUse($companyData['website_terms'] ?? $entreprise->getConditionOfUse());
-        $entreprise->setPrivacyPolicy($companyData['website_conf'] ?? $entreprise->getPrivacyPolicy());
+        $entreprise->setApropos($companyData['gemportal_about'] ?? null);
+        $entreprise->setConditionOfUse($companyData['gemportal_conditions'] ?? null);
+        $entreprise->setPrivacyPolicy($companyData['gemportal_politics'] ?? null);
+        $entreprise->setLegalNotice($companyData['gemportal_legal'] ?? null);
 
-        $identifier = $entreprise->getGemsuiteIdentifier(); 
+        $identifier = $entreprise->getGemsuiteIdentifier();
         if (isset($companyData['website_link'])) {
             $pathParts = explode('/', rtrim($companyData['website_link'], '/'));
             $newIdentifier = end($pathParts);
             if ($newIdentifier) {
                 $entreprise->setGemsuiteIdentifier($newIdentifier);
-                $identifier = $newIdentifier; 
+                $identifier = $newIdentifier;
             }
         }
-        $logoPath = $companyData['website_logo1'] ?? null;
+        $logoPath = $companyData['gemportal_logo'] ?? null;
         $entreprise->setLogo(
             $this->imageUrlBuilder->buildUrl($identifier, $logoPath)
         );
@@ -104,7 +105,7 @@ class GemsuiteCompanySyncHandler
             $addressEntreprise->setEmail($companyData['email'] ?? '');
             $entreprise->setAddressEntreprise($addressEntreprise);
         }
-        
+
         $em->persist($entreprise);
 
         // --- AJOUT DE LA TRADUCTION ---
@@ -113,26 +114,34 @@ class GemsuiteCompanySyncHandler
 
     private function updateHomeSliderData(EntityManagerInterface $em, array $companyData): void
     {
-        $homeSlider = $em->getRepository(HomeSlider::class)->findOneBy([]) ?? new HomeSlider();
+        $existingSliders = $em->getRepository(HomeSlider::class)->findAll();
+        foreach ($existingSliders as $slider) {
+            $em->remove($slider);
+        }
 
-        $homeSlider->setTitle(strip_tags($companyData['website_intro_text1'] ?? 'Bienvenue'));
-        $homeSlider->setDescription(strip_tags($companyData['website_intro_text2'] ?? 'Découvrez nos produits'));
-        $homeSlider->setButtonMessage($companyData['website_cta_header'] ?? 'Voir la boutique');
-        $homeSlider->setButtonUrl($companyData['website_cta_link'] ?? '/shop');
-        $homeSlider->setIsDiplayed(true);
-        
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
         $identifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
-        
-        $bannerPath = $companyData['website_banner'] ?? null;
-        $homeSlider->setImage(
-            $this->imageUrlBuilder->buildUrl($identifier, $bannerPath)
-        );
-        
-        $em->persist($homeSlider);
 
-        // --- AJOUT DE LA TRADUCTION ---
-        $this->translationGenerator->generateTranslations($homeSlider);
+        for ($i = 1; $i <= 3; $i++) {
+            $bannerKey = 'gemportal_banner' . $i;
+
+            if (!empty($companyData[$bannerKey])) {
+
+                $homeSlider = new HomeSlider();
+                $homeSlider->setTitle(strip_tags($companyData['gemportal_title'] ?? 'Bienvenue'));
+                $homeSlider->setDescription(strip_tags($companyData['gemportal_desc'] ?? 'Découvrez nos produits'));
+                $homeSlider->setButtonMessage(strip_tags($companyData['gemportal_button'] ?? 'voir nos produit'));
+                $homeSlider->setButtonUrl('/shop');
+                $homeSlider->setIsDiplayed(true);
+
+                $homeSlider->setImage(
+                    $this->imageUrlBuilder->buildUrl($identifier, $companyData[$bannerKey])
+                );
+                $em->persist($homeSlider);
+
+                $this->translationGenerator->generateTranslations($homeSlider);
+            }
+        }
     }
 
     private function getTenantEntityManager(string $tenantCode): EntityManagerInterface
@@ -140,5 +149,38 @@ class GemsuiteCompanySyncHandler
         $dbname = 'db_' . $tenantCode;
         $this->emProvider->switchTenant($dbname, $tenantCode);
         return $this->emProvider->getEntityManager();
+    }
+
+    private function updateExploreCardData(EntityManagerInterface $em, array $companyData): void
+    {
+        $existingExploreCard = $em->getRepository(ExploreCard::class)->findAll();
+        $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
+        $identifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+        foreach ($existingExploreCard as $exploreCard) {
+            $em->remove($exploreCard);
+        }
+
+        for ($i = 1; $i <= 3; $i++) {
+            $baseKey = 'gemportal_features' . $i;
+
+            if (!empty($companyData[$baseKey])) {
+                $exploreCard = new ExploreCard();
+
+                $titleKey = $baseKey . '_title';
+                $descKey = $baseKey . '_desc';
+
+                $exploreCard->setStandardTitle(strip_tags($companyData[$titleKey] ?? 'Bienvenue'));
+                $exploreCard->setDescription(strip_tags($companyData[$descKey] ?? 'Découvrez cette fonctionnalité'));
+                $exploreCard->setIsDifferent(false);
+
+                $imagePath = $companyData[$baseKey] ?? null;
+                $exploreCard->setImagePath(
+                    $this->imageUrlBuilder->buildUrl($identifier, $imagePath)
+                );
+
+                $em->persist($exploreCard);
+                $this->translationGenerator->generateTranslations($exploreCard);
+            }
+        }
     }
 }
