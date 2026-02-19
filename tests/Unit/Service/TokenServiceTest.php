@@ -2,6 +2,7 @@
 
 namespace App\Tests\Unit\Service;
 
+use App\Services\TenantConnectionProvider;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TokenService;
 use DateTime;
@@ -38,8 +39,11 @@ class TokenServiceTest extends TestCase
         $emProvider = $this->createMock(TenantEntityManagerProvider::class);
         $emProvider->method('getEntityManager')->willReturn($em);
 
+        $tenantProvider = $this->createMock(TenantConnectionProvider::class);
+        $tenantProvider->method('getTenantCode')->willReturn('default');
+
         // 3. EXECUTION
-        $service = new TokenService($jwtManager, $emProvider);
+        $service = new TokenService($jwtManager, $emProvider, $tenantProvider);
         $result = $service->generateTokens($user);
 
         // 4. ASSERTIONS
@@ -56,10 +60,17 @@ class TokenServiceTest extends TestCase
         $platform = 'web';
         $host = 'example.com';
 
-        // 2. DEPENDENCIES (Not used in this method but required by constructor)
+        // 2. DEPENDENCIES
+        $jwtManager = $this->createMock(JWTTokenManagerInterface::class);
+        $emProvider = $this->createMock(TenantEntityManagerProvider::class);
+
+        $tenantProvider = $this->createMock(TenantConnectionProvider::class);
+        $tenantProvider->method('getTenantCode')->willReturn('default');
+
         $service = new TokenService(
-            $this->createMock(JWTTokenManagerInterface::class),
-            $this->createMock(TenantEntityManagerProvider::class)
+            $jwtManager,
+            $emProvider,
+            $tenantProvider
         );
 
         // 3. EXECUTION
@@ -67,14 +78,15 @@ class TokenServiceTest extends TestCase
 
         // 4. ASSERTIONS
         $cookies = $response->headers->getCookies();
-        $this->assertCount(2, $cookies);
+        // Now we expect 3 cookies: auth_token_default, refresh_token_default, XSRF-TOKEN
+        $this->assertCount(3, $cookies);
 
         // Vérification Cookie JWT
         $jwtCookie = null;
         foreach ($cookies as $c) {
-            if ($c->getName() === 'jwt') $jwtCookie = $c;
+            if ($c->getName() === 'auth_token_default') $jwtCookie = $c;
         }
-        $this->assertNotNull($jwtCookie);
+        $this->assertNotNull($jwtCookie, 'JWT cookie (auth_token_default) not found');
         $this->assertEquals('jwt_val', $jwtCookie->getValue());
         $this->assertTrue($jwtCookie->isHttpOnly());
         $this->assertTrue($jwtCookie->isSecure());
@@ -83,10 +95,18 @@ class TokenServiceTest extends TestCase
         // Vérification Cookie Refresh
         $refreshCookie = null;
         foreach ($cookies as $c) {
-            if ($c->getName() === 'refresh_token') $refreshCookie = $c;
+            if ($c->getName() === 'refresh_token_default') $refreshCookie = $c;
         }
-        $this->assertNotNull($refreshCookie);
+        $this->assertNotNull($refreshCookie, 'Refresh token cookie (refresh_token_default) not found');
         $this->assertEquals('refresh_val', $refreshCookie->getValue());
+
+        // Ensure XSRF-TOKEN is present
+        $xsrfCookie = null;
+        foreach ($cookies as $c) {
+            if ($c->getName() === 'XSRF-TOKEN') $xsrfCookie = $c;
+        }
+        $this->assertNotNull($xsrfCookie, 'XSRF-TOKEN cookie not found');
+        $this->assertFalse($xsrfCookie->isHttpOnly(), 'XSRF-TOKEN should NOT be HttpOnly');
     }
 
     public function testCreateResponseWithTokensDoesNotAddCookiesForMobilePlatform(): void
@@ -96,10 +116,16 @@ class TokenServiceTest extends TestCase
         $platform = 'mobile';
         $host = 'example.com';
 
-        // 2. EXECUTION
+        // 2. DEPENDENCIES
+        $jwtManager = $this->createMock(JWTTokenManagerInterface::class);
+        $emProvider = $this->createMock(TenantEntityManagerProvider::class);
+        $tenantProvider = $this->createMock(TenantConnectionProvider::class);
+
+        // 3. EXECUTION
         $service = new TokenService(
-            $this->createMock(JWTTokenManagerInterface::class),
-            $this->createMock(TenantEntityManagerProvider::class)
+            $jwtManager,
+            $emProvider,
+            $tenantProvider
         );
 
         $response = $service->createResponseWithTokens($tokens, $platform, $host);

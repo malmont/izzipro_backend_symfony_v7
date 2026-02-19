@@ -6,6 +6,7 @@ use App\Controller\Account\SecurityController;
 use App\Entity\User;
 use App\Services\AuthenticationService;
 use App\Services\OtpService;
+use App\Services\TenantConnectionProvider;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TokenService;
 use Doctrine\ORM\EntityManagerInterface;
@@ -22,6 +23,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 class SecurityControllerTest extends TestCase
 {
     private $tenantEmProvider;
+    private $tenantConnProvider;
     private $tokenService;
     private $otpService;
     private $controller;
@@ -31,14 +33,17 @@ class SecurityControllerTest extends TestCase
     protected function setUp(): void
     {
         $this->tenantEmProvider = $this->createMock(TenantEntityManagerProvider::class);
+        $this->tenantConnProvider = $this->createMock(TenantConnectionProvider::class);
         $this->tokenService = $this->createMock(TokenService::class);
         $this->otpService = $this->createMock(OtpService::class);
         $this->entityManager = $this->createMock(EntityManagerInterface::class);
 
         $this->tenantEmProvider->method('getEntityManager')->willReturn($this->entityManager);
+        $this->tenantConnProvider->method('getTenantCode')->willReturn('default');
 
         $this->controller = new SecurityController(
             $this->tenantEmProvider,
+            $this->tenantConnProvider,
             $this->tokenService,
             $this->otpService
         );
@@ -74,7 +79,8 @@ class SecurityControllerTest extends TestCase
     public function testRefreshTokenSuccess(): void
     {
         $request = new Request();
-        $request->cookies->set('refresh_token', 'valid_refresh_token');
+        // Updated to match the tenant-aware cookie name in the controller
+        $request->cookies->set('refresh_token_default', 'valid_refresh_token');
 
         $jwtManager = $this->createMock(JWTTokenManagerInterface::class);
         $refreshTokenManager = $this->createMock(RefreshTokenManagerInterface::class);
@@ -105,8 +111,17 @@ class SecurityControllerTest extends TestCase
         // Verify Cookies
         $cookies = $response->headers->getCookies();
         $this->assertNotEmpty($cookies);
-        $this->assertEquals('jwt', $cookies[0]->getName());
-        $this->assertEquals('new_jwt_token', $cookies[0]->getValue());
+
+        $authCookie = null;
+        foreach ($cookies as $cookie) {
+            if ($cookie->getName() === 'auth_token_default') {
+                $authCookie = $cookie;
+                break;
+            }
+        }
+
+        $this->assertNotNull($authCookie, 'Auth cookie (auth_token_default) not found');
+        $this->assertEquals('new_jwt_token', $authCookie->getValue());
     }
 
     public function testRefreshTokenMissingCookie(): void
@@ -125,7 +140,7 @@ class SecurityControllerTest extends TestCase
     public function testRefreshTokenInvalid(): void
     {
         $request = new Request();
-        $request->cookies->set('refresh_token', 'invalid_token');
+        $request->cookies->set('refresh_token_default', 'invalid_token');
 
         $jwtManager = $this->createMock(JWTTokenManagerInterface::class);
         $refreshTokenManager = $this->createMock(RefreshTokenManagerInterface::class);
@@ -143,7 +158,7 @@ class SecurityControllerTest extends TestCase
     {
         $user = $this->createMock(UserInterface::class);
 
-        $controller = new class($this->tenantEmProvider, $this->tokenService, $this->otpService) extends SecurityController {
+        $controller = new class($this->tenantEmProvider, $this->tenantConnProvider, $this->tokenService, $this->otpService) extends SecurityController {
             public $userMock;
             protected function getUser(): ?UserInterface
             {
@@ -162,7 +177,7 @@ class SecurityControllerTest extends TestCase
 
     public function testValidateTokenFailure(): void
     {
-        $controller = new class($this->tenantEmProvider, $this->tokenService, $this->otpService) extends SecurityController {
+        $controller = new class($this->tenantEmProvider, $this->tenantConnProvider, $this->tokenService, $this->otpService) extends SecurityController {
             protected function getUser(): ?UserInterface
             {
                 return null;
@@ -186,14 +201,22 @@ class SecurityControllerTest extends TestCase
         $this->assertEquals(200, $response->getStatusCode());
 
         $cookies = $response->headers->getCookies();
-        $this->assertCount(2, $cookies);
+        $this->assertNotEmpty($cookies);
 
-        $jwtCookie = $cookies[0];
-        $this->assertEquals('jwt', $jwtCookie->getName());
-        $this->assertLessThan(time(), $jwtCookie->getExpiresTime());
+        $clearedJwt = false;
+        $clearedRefresh = false;
 
-        $refreshCookie = $cookies[1];
-        $this->assertEquals('refresh_token', $refreshCookie->getName());
-        $this->assertLessThan(time(), $refreshCookie->getExpiresTime());
+        foreach ($cookies as $cookie) {
+            // Check for tenant specific cookies being cleared (expired)
+            if ($cookie->getName() === 'auth_token_default' && $cookie->getExpiresTime() < time()) {
+                $clearedJwt = true;
+            }
+            if ($cookie->getName() === 'refresh_token_default' && $cookie->getExpiresTime() < time()) {
+                $clearedRefresh = true;
+            }
+        }
+
+        $this->assertTrue($clearedJwt, 'JWT cookie (auth_token_default) was not cleared');
+        $this->assertTrue($clearedRefresh, 'Refresh token cookie (refresh_token_default) was not cleared');
     }
 }
