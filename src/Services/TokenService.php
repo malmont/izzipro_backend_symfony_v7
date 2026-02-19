@@ -15,11 +15,16 @@ class TokenService
 {
     private JWTTokenManagerInterface $JWTManager;
     private TenantEntityManagerProvider $tenantEmProvider;
+    private TenantConnectionProvider $tenantConnProvider;
 
-    public function __construct(JWTTokenManagerInterface $JWTManager, TenantEntityManagerProvider $tenantEmProvider)
-    {
+    public function __construct(
+        JWTTokenManagerInterface $JWTManager,
+        TenantEntityManagerProvider $tenantEmProvider,
+        TenantConnectionProvider $tenantConnProvider
+    ) {
         $this->JWTManager = $JWTManager;
         $this->tenantEmProvider = $tenantEmProvider;
+        $this->tenantConnProvider = $tenantConnProvider;
     }
 
     /**
@@ -35,7 +40,7 @@ class TokenService
 
         $em = $this->tenantEmProvider->getEntityManager();
 
- 
+
         $refreshToken = new RefreshToken();
         $refreshToken->setRefreshToken(base64_encode(random_bytes(64)));
         $refreshToken->setUsername($user->getUserIdentifier());
@@ -59,38 +64,61 @@ class TokenService
      * @param string $cookiePath Chemin du cookie (par défaut "/")
      * @return Response
      */
-     public function createResponseWithTokens(
-        array $tokens, 
+    public function createResponseWithTokens(
+        array $tokens,
         string $platform,
-        string $host, 
-        int $ttlJwt = 3600, 
-        int $ttlRefresh = 604800, 
+        string $host,
+        int $ttlJwt = 3600,
+        int $ttlRefresh = 604800,
         string $cookiePath = '/'
-    ): Response
-    {
+    ): Response {
         $response = new Response();
 
         if ($platform === 'web') {
-            $jwtCookie = Cookie::create('jwt')
+            // Fix: Isoler le cookie au domaine spécifique pour éviter le partage entre sous-domaines (Tenant isolation)
+            // Si sur localhost, domain=null est préférable. Sinon, on utilise le FQDN exact.
+            $cookieDomain = ($host === 'localhost') ? null : $host;
+
+
+
+            // Isolation Multi-Tenant par Suffixe du Cookie
+            // Comme le domaine peut être partagé (.gem-backend.online via wildcard navigateur), on différencie par le NOM
+            $tenantCode = $this->tenantConnProvider->getTenantCode() ?? 'default';
+            $jwtName = 'auth_token_' . $tenantCode;
+            $refreshName = 'refresh_token_' . $tenantCode;
+
+            $jwtCookie = Cookie::create($jwtName)
                 ->withValue($tokens['token'])
                 ->withHttpOnly(true)
                 ->withSecure(true)
-                ->withSameSite(Cookie::SAMESITE_NONE) 
+                ->withSameSite(Cookie::SAMESITE_NONE)
                 ->withExpires(time() + $ttlJwt)
-                ->withPath($cookiePath);
-                // ->withDomain($host); 
-            
-            $refreshCookie = Cookie::create('refresh_token')
+                ->withPath($cookiePath)
+                ->withDomain($cookieDomain);
+
+            $refreshCookie = Cookie::create($refreshName)
                 ->withValue($tokens['refresh_token'])
                 ->withHttpOnly(true)
                 ->withSecure(true)
                 ->withSameSite(Cookie::SAMESITE_NONE)
                 ->withExpires(time() + $ttlRefresh)
-                ->withPath($cookiePath);
-                // ->withDomain($host); 
+                ->withPath($cookiePath)
+                ->withDomain($cookieDomain);
+
+            // Réintroduction CSRF - Paramètres CRITIQUES
+            $csrfTokenValue = bin2hex(random_bytes(32));
+            $csrfCookie = Cookie::create('XSRF-TOKEN')
+                ->withValue($csrfTokenValue)
+                ->withHttpOnly(false) // Accessible JS
+                ->withSecure(true)    // HTTPS
+                ->withSameSite(Cookie::SAMESITE_NONE)
+                ->withExpires(time() + $ttlJwt)
+                ->withPath($cookiePath)
+                ->withDomain($cookieDomain);
 
             $response->headers->setCookie($jwtCookie);
             $response->headers->setCookie($refreshCookie);
+            $response->headers->setCookie($csrfCookie);
         }
 
         $response->setContent(json_encode($tokens));

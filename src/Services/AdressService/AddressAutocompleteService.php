@@ -50,6 +50,15 @@ class AddressAutocompleteService
 
         $data = $response->toArray();
 
+        if (isset($data['status']) && $data['status'] !== 'OK' && $data['status'] !== 'ZERO_RESULTS') {
+            $errorMessage = $data['error_message'] ?? $data['status'];
+            $this->logger->error('Erreur Google Places (Suggest)', [
+                'status' => $data['status'],
+                'message' => $errorMessage
+            ]);
+            throw new \RuntimeException('Google Places Error: ' . $errorMessage);
+        }
+
         if (empty($data['predictions']) || !is_array($data['predictions'])) {
             return [];
         }
@@ -105,6 +114,16 @@ class AddressAutocompleteService
         }
 
         $data = $response->toArray();
+
+        if (isset($data['status']) && $data['status'] !== 'OK') {
+            $errorMessage = $data['error_message'] ?? $data['status'];
+            $this->logger->error('Erreur Google Places (Details)', [
+                'status' => $data['status'],
+                'message' => $errorMessage
+            ]);
+            throw new \RuntimeException('Google Places Error: ' . $errorMessage);
+        }
+
         $components = $data['result']['address_components'] ?? [];
 
         // map des composants

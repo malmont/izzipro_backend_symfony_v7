@@ -20,17 +20,24 @@ use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use App\Services\OtpService;
 use App\Entity\User;
 use App\Services\AuthenticationService;
-use App\Services\TenantEntityManagerProvider; // Ajout
+use App\Services\TenantEntityManagerProvider;
+use App\Services\TenantConnectionProvider;
 
 class SecurityController extends AbstractController
 {
     private TenantEntityManagerProvider $tenantEmProvider;
+    private TenantConnectionProvider $tenantConnProvider;
     private TokenService $tokenService;
     private OtpService $otpService;
 
-    public function __construct(TenantEntityManagerProvider $tenantEmProvider, TokenService $tokenService, OtpService $otpService)
-    {
+    public function __construct(
+        TenantEntityManagerProvider $tenantEmProvider,
+        TenantConnectionProvider $tenantConnProvider,
+        TokenService $tokenService,
+        OtpService $otpService
+    ) {
         $this->tenantEmProvider = $tenantEmProvider;
+        $this->tenantConnProvider = $tenantConnProvider;
         $this->tokenService  = $tokenService;
         $this->otpService    = $otpService;
     }
@@ -70,8 +77,14 @@ class SecurityController extends AbstractController
         JWTTokenManagerInterface $JWTManager,
         RefreshTokenManagerInterface $refreshTokenManager
     ): Response {
-        $refreshToken = $request->cookies->get('refresh_token');
+        // Isolation Tenant par Cookie Name
+        $tenantCode = $this->tenantConnProvider->getTenantCode() ?? 'default';
+        $refreshName = 'refresh_token_' . $tenantCode;
+
+        // Migration: On lit le cookie strict
+        $refreshToken = $request->cookies->get($refreshName);
         if (!$refreshToken) {
+            // Fallback temporaire ? Non, sécurité stricte requise.
             return $this->json(['error' => 'Refresh token not found'], Response::HTTP_UNAUTHORIZED);
         }
 
@@ -99,13 +112,34 @@ class SecurityController extends AbstractController
             'message' => 'Token refreshed successfully'
         ], Response::HTTP_OK);
 
+        // Fix: Isoler le cookie au domaine (Tenant isolation)
+        $host = $request->getHost();
+        $cookieDomain = ($host === 'localhost') ? null : $host;
+
+        $tenantCode = $this->tenantConnProvider->getTenantCode() ?? 'default';
+        $jwtName = 'auth_token_' . $tenantCode;
+
+
         $response->headers->setCookie(
-            Cookie::create('jwt')
+            Cookie::create($jwtName)
                 ->withValue($newToken)
                 ->withHttpOnly(true)
                 ->withSecure(true)
                 ->withSameSite(Cookie::SAMESITE_NONE)
                 ->withExpires(time() + 3600)
+                ->withDomain($cookieDomain)
+        );
+
+        // Update CSRF token on refresh
+        $csrfTokenValue = bin2hex(random_bytes(32));
+        $response->headers->setCookie(
+            Cookie::create('XSRF-TOKEN')
+                ->withValue($csrfTokenValue)
+                ->withHttpOnly(false)
+                ->withSecure(true)
+                ->withSameSite(Cookie::SAMESITE_NONE)
+                ->withExpires(time() + 3600)
+                ->withDomain($cookieDomain)
         );
 
         return $response;
@@ -136,8 +170,34 @@ class SecurityController extends AbstractController
             'message' => 'Successfully logged out',
         ]);
 
-        $response->headers->clearCookie('jwt');
-        $response->headers->clearCookie('refresh_token');
+        // Fix: Tenant isolation domain
+        $host = $request->getHost();
+        $cookieDomain = ($host === 'localhost') ? null : $host;
+
+        // Retour à la méthode clearCookie qui fonctionnait, en s'assurant des paramètres EXACTS
+        // Path: '/', Domain: $cookieDomain, Secure: true, HttpOnly: true, SameSite: None
+
+        $tenantCode = $this->tenantConnProvider->getTenantCode() ?? 'default';
+        $jwtName = 'auth_token_' . $tenantCode;
+        $refreshName = 'refresh_token_' . $tenantCode;
+
+        // 1. Suppression Cookies du Tenant Courant
+        $response->headers->clearCookie($jwtName, '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
+        $response->headers->clearCookie($refreshName, '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
+
+        // 2. Nettoyage de sécurité (Anciens cookies potentiels)
+        $response->headers->clearCookie('auth_token_strict', '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
+        $response->headers->clearCookie('refresh_token_strict', '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
+        $response->headers->clearCookie('jwt', '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
+        $response->headers->clearCookie('refresh_token', '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
+        // On essaie aussi sans le domain pour nettoyer les cookies 'host-only'
+        $response->headers->clearCookie('jwt', '/', null, true, true, Cookie::SAMESITE_NONE);
+        $response->headers->clearCookie('refresh_token', '/', null, true, true, Cookie::SAMESITE_NONE);
+        // Important: HttpOnly doit être FALSE pour XSRF-TOKEN pour correspondre à sa création
+        $response->headers->clearCookie('XSRF-TOKEN', '/', $cookieDomain, true, false, Cookie::SAMESITE_NONE);
+
+
+
         return $response;
     }
 }

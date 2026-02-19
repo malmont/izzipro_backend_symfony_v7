@@ -289,7 +289,8 @@ class OrderController extends AbstractController
                 'user_id' => $user->getId(),
                 'locale' => $locale
             ]);
-            return $this->json(['message' => 'No orders found for the current user'], JsonResponse::HTTP_NOT_FOUND);
+            // Retourner un tableau vide avec 200 OK au lieu de 404
+            return $this->json([], JsonResponse::HTTP_OK);
         }
 
         $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);
