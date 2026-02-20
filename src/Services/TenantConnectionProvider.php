@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services;
 
 use Doctrine\DBAL\Connection;
@@ -20,6 +21,14 @@ class TenantConnectionProvider
         $this->baseParams = $defaultConnection->getParams();
         $this->config = $defaultConnection->getConfiguration();
         $this->eventManager = $defaultConnection->getEventManager();
+
+        // Ensure serverVersion is always set so Doctrine uses the correct
+        // PostgreSQL ID generation strategy (sequences) in all environments.
+        // Without this, production deployments without ?serverVersion= in
+        // DATABASE_URL cause Doctrine to omit the ID in INSERT statements.
+        if (!isset($this->baseParams['serverVersion'])) {
+            $this->baseParams['serverVersion'] = '14';
+        }
     }
     // Ferme la connexion active et en initialise une nouvelle pointant vers la base de données cible.
     public function switchTenant(string $tenantDbName, ?string $tenantCode = null): void
