@@ -29,7 +29,7 @@ class TenantConnectionManager
     private LoggerInterface  $logger;
     private string           $projectDir;
     private TenantConnectionProvider $connectionProvider;
-    
+
     // Ajout de la propriété Cache
     private TagAwareCacheInterface $cache;
 
@@ -88,11 +88,11 @@ class TenantConnectionManager
     // -------------------------------------------------------------------
 
     public function createTenant(
-        string $code, 
-        string $name, 
-        string $dbname, 
-        ?string $gemsuiteToken = null, 
-        bool $isInternal = false, 
+        string $code,
+        string $name,
+        string $dbname,
+        ?string $gemsuiteToken = null,
+        bool $isInternal = false,
         ?string $customDomain = null
     ): void {
         if (!preg_match('/^[a-z0-9_]+$/i', $code) || !preg_match('/^[a-z0-9_]+$/i', $dbname)) {
@@ -100,7 +100,7 @@ class TenantConnectionManager
         }
 
         try {
-            $templateDbName = 'gmasuite'; 
+            $templateDbName = 'gmasuite';
             $this->logger->info(sprintf('Tentative de terminaison des connexions pour la base template "%s"', $templateDbName));
             try {
                 $stmt = $this->pdoMaster->prepare(
@@ -116,6 +116,12 @@ class TenantConnectionManager
                 sprintf('CREATE DATABASE "%s" WITH TEMPLATE gmasuite', $dbname)
             );
 
+            // Fix sequences: ensure all id columns have their nextval() default
+            // attached. PostgreSQL copies sequences from the template but does not
+            // always preserve the DEFAULT nextval(...) binding on the columns, which
+            // causes Doctrine to insert NULL for the id, violating the NOT NULL constraint.
+            $this->fixSequences($dbname);
+
             // Insertion en base
             $stmt = $this->pdoMaster->prepare(
                 'INSERT INTO tenants(code, name, dbname, gemsuite_token, is_internal_store, custom_domain) 
@@ -126,7 +132,7 @@ class TenantConnectionManager
             $stmt->bindValue(':n', $name);
             $stmt->bindValue(':d', $dbname);
             $stmt->bindValue(':t', $gemsuiteToken);
-            $stmt->bindValue(':is_internal', $isInternal, \PDO::PARAM_BOOL); 
+            $stmt->bindValue(':is_internal', $isInternal, \PDO::PARAM_BOOL);
             $stmt->bindValue(':custom_domain', $customDomain);
 
             $stmt->execute();
@@ -135,7 +141,6 @@ class TenantConnectionManager
             // On force Redis à oublier tous les anciens mappings pour que le nouveau tenant soit visible tout de suite.
             $this->cache->invalidateTags(['tenants']);
             $this->logger->info("Cache 'tenants' invalidé après création de '$code'.");
-
         } catch (\Throwable $e) {
             $this->logger->error("Échec création tenant '{$code}' / '{$dbname}': " . $e->getMessage());
             try {
@@ -175,9 +180,9 @@ class TenantConnectionManager
     public function switchToTenant(TenantConfig $tenant): void
     {
         $this->logger->info("[Manager] Bascule demandée vers : " . $tenant->getDbname());
-        
+
         $this->connectionProvider->switchTenant(
-            $tenant->getDbname(), 
+            $tenant->getDbname(),
             $tenant->getCode()
         );
     }
@@ -277,7 +282,7 @@ class TenantConnectionManager
         return $result ?: null;
     }
 
-     public function getCurrentTenantCode(): ?string
+    public function getCurrentTenantCode(): ?string
     {
         return $this->connectionProvider->getTenantCode();
     }
@@ -297,11 +302,10 @@ class TenantConnectionManager
             );
             $stmt->execute(['code' => $tenantCode]);
             $result = $stmt->fetchColumn();
-            return $result === true; 
-
+            return $result === true;
         } catch (\Throwable $e) {
             $this->logger->error("Erreur statut interne tenant '{$tenantCode}': " . $e->getMessage());
-            return false; 
+            return false;
         }
     }
 
@@ -336,10 +340,9 @@ class TenantConnectionManager
             try {
                 $stmt = $this->pdoMaster->prepare('SELECT id, code, dbname FROM tenants WHERE code = :code');
                 $stmt->execute(['code' => $code]);
-                $result = $stmt->fetch(PDO::FETCH_ASSOC); 
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 return $result ?: null;
-
             } catch (\Throwable $e) {
                 $this->logger->error("Échec de findTenantByCode pour '{$code}': " . $e->getMessage());
                 return null;
@@ -358,13 +361,13 @@ class TenantConnectionManager
 
         // 2. Le cache gère tout : si trouvé, il retourne direct. Sinon, il exécute la fonction.
         return $this->cache->get($cacheKey, function (ItemInterface $item) use ($host) {
-            
+
             // CONFIGURATION DE L'ITEM CACHE
             $item->expiresAfter(3600); // Durée de vie : 1 heure
             $item->tag(['tenants']);   // Permet de tout vider avec invalidateTags(['tenants'])
 
             // --- DÉBUT DE LA LOGIQUE ORIGINALE ---
-            $pdo = $this->pdoMaster; 
+            $pdo = $this->pdoMaster;
             $tenantCode = null;
             $dbname = null;
             $name = 'Unknown';
@@ -372,7 +375,7 @@ class TenantConnectionManager
             // 1. Nettoyage et gestion du WWW
             $altHost = $host;
             if (str_starts_with($host, 'www.')) {
-                $altHost = substr($host, 4); 
+                $altHost = substr($host, 4);
             } else {
                 $altHost = 'www.' . $host;
             }
@@ -383,7 +386,7 @@ class TenantConnectionManager
                     'SELECT code, name, dbname FROM tenants WHERE custom_domain = :host OR custom_domain = :altHost LIMIT 1'
                 );
                 $stmt->execute(['host' => $host, 'altHost' => $altHost]);
-                
+
                 //tableau associatif
                 $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -399,7 +402,7 @@ class TenantConnectionManager
 
             // 3. PRIORITÉ 2 : SOUS-DOMAINE
             if (!$tenantCode) {
-                $cleanHost = explode(':', $host)[0]; 
+                $cleanHost = explode(':', $host)[0];
                 $parts = explode('.', $cleanHost);
 
                 $potentialCode = null;
@@ -437,11 +440,94 @@ class TenantConnectionManager
                 $config->setCode($tenantCode);
                 $config->setName($name);
                 $config->setDbname($dbname);
-                
+
                 return $config;
             }
 
             return null; // Redis cachera "null", évitant de refaire la requête pour un domaine invalide
         });
+    }
+
+    /**
+     * After copying gmasuite with WITH TEMPLATE, PostgreSQL copies sequences but does
+     * not always preserve the DEFAULT nextval(...) binding on id columns.
+     * This method re-attaches every sequence to its column on the newly created tenant DB.
+     * It must be called once right after CREATE DATABASE ... WITH TEMPLATE gmasuite.
+     */
+    private function fixSequences(string $dbname): void
+    {
+        $params = $this->tenantParams;
+        $params['dbname'] = $dbname;
+
+        // Use a dedicated PDO connection to the new tenant database
+        $dsn = sprintf(
+            '%s:host=%s;port=%d;dbname=%s',
+            'pgsql',
+            $params['host'] ?? $this->masterParams['host'],
+            $params['port'] ?? $this->masterParams['port'],
+            $dbname
+        );
+
+        try {
+            $user = $params['user'] ?? $params['username'] ?? '';
+            $pass = $params['password'] ?? '';
+            $pdo  = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+
+            // Find all tables where an _id_seq sequence exists but the column has no DEFAULT
+            $stmt = $pdo->query("
+                SELECT c.table_name
+                FROM information_schema.columns c
+                WHERE c.table_schema = 'public'
+                  AND c.column_name  = 'id'
+                  AND (c.column_default IS NULL OR c.column_default NOT LIKE 'nextval%')
+                  AND EXISTS (
+                      SELECT 1 FROM pg_class
+                      WHERE relkind = 'S'
+                        AND relname = c.table_name || '_id_seq'
+                  )
+                ORDER BY c.table_name
+            ");
+
+            $tables = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            $fixed  = 0;
+
+            foreach ($tables as $table) {
+                $seqName = $table . '_id_seq';
+                try {
+                    // Use double-quoted identifiers for table/sequence names (PostgreSQL)
+                    $pdo->exec(sprintf(
+                        'ALTER TABLE "%s" ALTER COLUMN id SET DEFAULT nextval(\'%s\'::regclass)',
+                        $table,
+                        $seqName
+                    ));
+                    $pdo->exec(sprintf(
+                        'ALTER SEQUENCE "%s" OWNED BY "%s".id',
+                        $seqName,
+                        $table
+                    ));
+                    $fixed++;
+                } catch (\Throwable $e) {
+                    $this->logger->warning(sprintf(
+                        '[fixSequences] Impossible de fixer "%s".id -> "%s": %s',
+                        $table,
+                        $seqName,
+                        $e->getMessage()
+                    ));
+                }
+            }
+
+            $this->logger->info(sprintf(
+                '[fixSequences] %d séquence(s) attachée(s) sur la base "%s".',
+                $fixed,
+                $dbname
+            ));
+        } catch (\Throwable $e) {
+            // Log but do not block tenant creation – the DB was created successfully
+            $this->logger->error(sprintf(
+                '[fixSequences] Échec sur la base "%s": %s',
+                $dbname,
+                $e->getMessage()
+            ));
+        }
     }
 }
