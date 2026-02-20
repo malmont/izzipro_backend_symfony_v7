@@ -21,7 +21,7 @@ class ProductType
     /**
      * @var Collection<int, Product>
      */
-    #[ORM\OneToMany(mappedBy: 'ProductType', targetEntity: Product::class)]
+    #[ORM\OneToMany(mappedBy: 'productType', targetEntity: Product::class)]
     private Collection $products;
 
     #[ORM\Column(length: 255)]

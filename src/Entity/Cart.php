@@ -44,7 +44,7 @@ class Cart
     #[ORM\OneToMany(mappedBy: 'Carts', targetEntity: CartDetails::class)]
     private Collection $CartDetails;
 
-    #[ORM\ManyToOne(inversedBy: 'Carts')]
+    #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: false)]
     private ?User $userCart = null;
 
