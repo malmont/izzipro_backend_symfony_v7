@@ -78,7 +78,7 @@ class TokenServiceTest extends TestCase
 
         // 4. ASSERTIONS
         $cookies = $response->headers->getCookies();
-        // Now we expect 3 cookies: auth_token_default, refresh_token_default, XSRF-TOKEN
+        // Now we expect 3 cookies: auth_token_default, refresh_token_default, XSRF-TOKEN_default
         $this->assertCount(3, $cookies);
 
         // Vérification Cookie JWT
@@ -100,12 +100,12 @@ class TokenServiceTest extends TestCase
         $this->assertNotNull($refreshCookie, 'Refresh token cookie (refresh_token_default) not found');
         $this->assertEquals('refresh_val', $refreshCookie->getValue());
 
-        // Ensure XSRF-TOKEN is present
+        // Ensure XSRF-TOKEN_default is present
         $xsrfCookie = null;
         foreach ($cookies as $c) {
-            if ($c->getName() === 'XSRF-TOKEN') $xsrfCookie = $c;
+            if ($c->getName() === 'XSRF-TOKEN_default') $xsrfCookie = $c;
         }
-        $this->assertNotNull($xsrfCookie, 'XSRF-TOKEN cookie not found');
+        $this->assertNotNull($xsrfCookie, 'XSRF-TOKEN_default cookie not found');
         $this->assertFalse($xsrfCookie->isHttpOnly(), 'XSRF-TOKEN should NOT be HttpOnly');
     }
 
