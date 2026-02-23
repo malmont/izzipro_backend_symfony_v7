@@ -105,12 +105,13 @@ class TokenService
                 ->withPath($cookiePath)
                 ->withDomain($cookieDomain);
 
-            // Réintroduction CSRF - Paramètres CRITIQUES
+            // Réintroduction CSRF - Paramètres CRITIQUES (Isolation Multi-Tenant)
             $csrfTokenValue = bin2hex(random_bytes(32));
-            $csrfCookie = Cookie::create('XSRF-TOKEN')
+            $csrfCookieName = 'XSRF-TOKEN_' . $tenantCode;
+            $csrfCookie = Cookie::create($csrfCookieName)
                 ->withValue($csrfTokenValue)
-                ->withHttpOnly(false) // Accessible JS
-                ->withSecure(true)    // HTTPS
+                ->withHttpOnly(false)
+                ->withSecure(true)
                 ->withSameSite(Cookie::SAMESITE_NONE)
                 ->withExpires(time() + $ttlJwt)
                 ->withPath($cookiePath)
@@ -119,6 +120,7 @@ class TokenService
             $response->headers->setCookie($jwtCookie);
             $response->headers->setCookie($refreshCookie);
             $response->headers->setCookie($csrfCookie);
+            $tokens['csrf_token'] = $csrfTokenValue;
         }
 
         $response->setContent(json_encode($tokens));

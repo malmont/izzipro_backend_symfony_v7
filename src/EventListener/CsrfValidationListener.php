@@ -41,8 +41,9 @@ class CsrfValidationListener
         }
 
         // 4. Validation Double Submit Cookie
-        // Le cookie XSRF-TOKEN (envoyé par le navigateur) doit correspondre au header X-XSRF-TOKEN (envoyé par le code JS)
-        $csrfCookie = $request->cookies->get('XSRF-TOKEN');
+        // Le cookie XSRF-TOKEN_<tenant> (envoyé par le navigateur) doit correspondre au header X-XSRF-TOKEN (envoyé par le code JS)
+        $csrfCookieName = 'XSRF-TOKEN_' . $tenantCode;
+        $csrfCookie = $request->cookies->get($csrfCookieName);
         $csrfHeader = $request->headers->get('X-XSRF-TOKEN');
 
         if (!$csrfCookie || !$csrfHeader || $csrfCookie !== $csrfHeader) {

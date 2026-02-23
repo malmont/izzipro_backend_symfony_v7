@@ -132,8 +132,9 @@ class SecurityController extends AbstractController
 
         // Update CSRF token on refresh
         $csrfTokenValue = bin2hex(random_bytes(32));
+        $csrfCookieName = 'XSRF-TOKEN_' . $tenantCode;
         $response->headers->setCookie(
-            Cookie::create('XSRF-TOKEN')
+            Cookie::create($csrfCookieName)
                 ->withValue($csrfTokenValue)
                 ->withHttpOnly(false)
                 ->withSecure(true)
@@ -141,6 +142,12 @@ class SecurityController extends AbstractController
                 ->withExpires(time() + 3600)
                 ->withDomain($cookieDomain)
         );
+
+        // Include the new CSRF token in the response body for cross-origin frontends
+        $response->setContent(json_encode([
+            'message'    => 'Token refreshed successfully',
+            'csrf_token' => $csrfTokenValue,
+        ]));
 
         return $response;
     }
@@ -194,6 +201,9 @@ class SecurityController extends AbstractController
         $response->headers->clearCookie('jwt', '/', null, true, true, Cookie::SAMESITE_NONE);
         $response->headers->clearCookie('refresh_token', '/', null, true, true, Cookie::SAMESITE_NONE);
         // Important: HttpOnly doit être FALSE pour XSRF-TOKEN pour correspondre à sa création
+        $csrfCookieName = 'XSRF-TOKEN_' . $tenantCode;
+        $response->headers->clearCookie($csrfCookieName, '/', $cookieDomain, true, false, Cookie::SAMESITE_NONE);
+        // Nettoyage de sécurité (Anciens cookies potentiels sans tenant)
         $response->headers->clearCookie('XSRF-TOKEN', '/', $cookieDomain, true, false, Cookie::SAMESITE_NONE);
 
 
