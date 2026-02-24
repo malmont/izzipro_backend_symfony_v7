@@ -24,6 +24,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Psr\Log\LoggerInterface;
 use App\Dto\TenantConfig;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
+use App\Services\EmailConfigurationService\EmailLogoHelper;
 
 class RegistrationController extends AbstractController
 {
@@ -34,6 +35,7 @@ class RegistrationController extends AbstractController
     private TenantConnectionManager $tenantManager;
     private GemsuiteClientManager $gemsuiteClientManager;
     private EmailConfigurationService $emailConfigurationService;
+    private EmailLogoHelper $emailLogoHelper;
 
 
     public function __construct(
@@ -43,7 +45,8 @@ class RegistrationController extends AbstractController
         TenantConnectionManager $tenantManager,
         LoggerInterface $logger,
         GemsuiteClientManager $gemsuiteClientManager,
-        EmailConfigurationService $emailConfigurationService
+        EmailConfigurationService $emailConfigurationService,
+        EmailLogoHelper $emailLogoHelper
     ) {
         $this->emailVerifier = $emailVerifier;
         $this->tenantEmProvider = $tenantEmProvider;
@@ -52,11 +55,12 @@ class RegistrationController extends AbstractController
         $this->gemsuiteClientManager = $gemsuiteClientManager;
         $this->logger = $logger;
         $this->emailConfigurationService = $emailConfigurationService;
+        $this->emailLogoHelper = $emailLogoHelper;
     }
 
     #[Route('/register', name: 'app_register')]
     public function register(
-        Request $request, 
+        Request $request,
         UserPasswordHasherInterface $userPasswordHasher
     ): Response {
         $user = new User();
@@ -72,11 +76,13 @@ class RegistrationController extends AbstractController
                     $form->get('plainPassword')->getData()
                 )
             );
-            
+
             $em->persist($user);
             $em->flush();
 
-            $this->emailVerifier->sendEmailConfirmation('app_verify_email', $user,
+            $this->emailVerifier->sendEmailConfirmation(
+                'app_verify_email',
+                $user,
                 (new TemplatedEmail())
                     ->from(new Address('michel.almont@gmail.com', '\"Ecommerce Contact\"'))
                     ->to($user->getEmail())
@@ -154,9 +160,9 @@ class RegistrationController extends AbstractController
         $user->setLastname($lastName);
         $user->setUsername($username);
         $user->setPassword($passwordHasher->hashPassword($user, $password));
-        
+
         if ($gemsuiteClient) {
-            $user->setGemsuiteClient($gemsuiteClient); 
+            $user->setGemsuiteClient($gemsuiteClient);
         }
 
         $platform = $decoded['platform'] ?? 'mobile';
@@ -184,7 +190,7 @@ class RegistrationController extends AbstractController
                 // --- CONSTRUCTION DE L'URL INTELLIGENTE ---
                 // On génère un lien vers le Backend, MAIS on y ajoute l'info du domaine client (?tenant_host=...)
                 // Ex: https://gem-portal-backend.com/verify/email?token=XYZ&tenant_host=karaandb.com
-                
+
                 $routeParams = ['token' => $verificationToken];
                 if ($tenantHost) {
                     $routeParams['tenant_host'] = $tenantHost;
@@ -198,11 +204,7 @@ class RegistrationController extends AbstractController
 
                 // Pour les assets (logos), on utilise le domaine actuel de l'API pour éviter les problèmes SSL/CORS
                 $baseUrl = $request->getSchemeAndHttpHost();
-                $fullLogoUrl = null;
-
-                if ($emailConfig->getLogo()) {
-                    $fullLogoUrl = $baseUrl . '/assets/uploads/email-logos/' . $emailConfig->getLogo();
-                }
+                $fullLogoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $baseUrl);
 
                 $fromEmail = $emailConfig->getFromEmail();
                 $fromName  = $emailConfigTranslation->getFromName();
@@ -223,7 +225,6 @@ class RegistrationController extends AbstractController
                     ->html($emailContent);
 
                 $mailer->send($emailMessage);
-
             } catch (\Throwable $e) {
                 $this->logger->critical("[Register API] ERREUR EMAIL : " . $e->getMessage());
             }
@@ -258,18 +259,16 @@ class RegistrationController extends AbstractController
 
         $em = $this->tenantEmProvider->getEntityManager();
         $connection = $em->getConnection();
-        
+
         // 2. Récupération Config Email (Indispensable pour votre Twig)
         $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
         $baseUrl = $request->getSchemeAndHttpHost();
-        
+
         // Pré-calcul du logo pour le passer proprement
-        $logoUrl = ($emailConfig && $emailConfig->getLogo()) 
-            ? $baseUrl . '/assets/uploads/email-logos/' . $emailConfig->getLogo() 
-            : null;
+        $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $baseUrl);
 
         $token = $request->query->get('token');
-        
+
         // 3. Cas : Token manquant
         if (!$token) {
             return $this->render('verification/error.html.twig', [
@@ -291,27 +290,27 @@ class RegistrationController extends AbstractController
 
         // 5. Validation si trouvé
         if (is_array($result) && isset($result['id'])) {
-             // Chargement entité via ID
-             $user = $em->getRepository(User::class)->find($result['id']);
-             
-             if ($user) {
-                 $user->setIsVerified(true);
-                 $user->setVerificationToken(null);
-                 $em->flush();
-                 
-                 // Redirection Front Client
-                 if ($targetHost) {
-                     return $this->redirect('https://' . $targetHost . '/login?verified=true');
-                 }
+            // Chargement entité via ID
+            $user = $em->getRepository(User::class)->find($result['id']);
 
-                 // Succès Backend
-                 return $this->render('verification/success.html.twig', [
-                     'user'        => $user,
-                     'logoUrl'     => $logoUrl,
-                     'domain'      => $baseUrl,
-                     'emailConfig' => $emailConfig
-                 ]);
-             }
+            if ($user) {
+                $user->setIsVerified(true);
+                $user->setVerificationToken(null);
+                $em->flush();
+
+                // Redirection Front Client
+                if ($targetHost) {
+                    return $this->redirect('https://' . $targetHost . '/login?verified=true');
+                }
+
+                // Succès Backend
+                return $this->render('verification/success.html.twig', [
+                    'user'        => $user,
+                    'logoUrl'     => $logoUrl,
+                    'domain'      => $baseUrl,
+                    'emailConfig' => $emailConfig
+                ]);
+            }
         }
 
         // 6. Cas : Token invalide ou expiré
@@ -319,7 +318,7 @@ class RegistrationController extends AbstractController
             'message'     => 'Ce lien de validation est invalide ou a expiré.',
             'logoUrl'     => $logoUrl,
             'domain'      => $baseUrl,
-            'emailConfig' => $emailConfig 
+            'emailConfig' => $emailConfig
         ]);
     }
     #[Route('/api/resend-verification', name: 'api_resend_verification', methods: ['POST'])]
@@ -382,10 +381,7 @@ class RegistrationController extends AbstractController
 
                 // URL Logo Absolue
                 $baseUrl = $request->getSchemeAndHttpHost();
-                $fullLogoUrl = null;
-                if ($emailConfig->getLogo()) {
-                    $fullLogoUrl = $baseUrl . '/assets/uploads/email-logos/' . $emailConfig->getLogo();
-                }
+                $fullLogoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $baseUrl);
 
                 $emailContent = $this->renderView('verification/validation_email.html.twig', [
                     'user'            => $user,
@@ -404,7 +400,6 @@ class RegistrationController extends AbstractController
                 $mailer->send($emailMessage);
 
                 return $this->json(['message' => 'Email de vérification renvoyé avec succès.'], Response::HTTP_OK);
-
             } catch (\Throwable $e) {
                 $this->logger->critical("[Resend Verif] Erreur envoi : " . $e->getMessage());
                 return $this->json(['error' => 'Erreur lors de l\'envoi de l\'email.'], Response::HTTP_INTERNAL_SERVER_ERROR);

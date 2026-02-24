@@ -7,6 +7,7 @@ use App\Entity\EmailConfiguration;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
+use App\Services\EmailConfigurationService\EmailLogoHelper;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,7 +26,8 @@ class ResetPasswordController extends AbstractController
         private TenantEntityManagerProvider $tenantEmProvider,
         private TenantConnectionManager $tenantManager,
         private EmailConfigurationService $emailConfigService,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private EmailLogoHelper $emailLogoHelper
     ) {}
 
     // --- ÉTAPE 1 : DEMANDE DE RESET (API POST) ---
@@ -85,22 +87,22 @@ class ResetPasswordController extends AbstractController
 
         // 5. Génération URL (avec tenant_host pour que le lien cliquable sache où aller)
         $resetUrl = $urlGenerator->generate(
-            'app_password_reset_confirm_form', 
-            ['token' => $resetToken, 'tenant_host' => $clientHost], 
+            'app_password_reset_confirm_form',
+            ['token' => $resetToken, 'tenant_host' => $clientHost],
             UrlGeneratorInterface::ABSOLUTE_URL
         );
 
         // 6. Config Email
         $emailConfig = $this->emailConfigService->findOneByLocale($locale);
         $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
-        
+
         $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Support');
         $signature = $translation?->getSignature() ?? '';
-        $logoUrl   = $emailConfig?->getLogo();
         $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@gem-portal.com';
-        
+
         // CORRECTION ASSETS : Toujours utiliser le domaine du Backend (API)
-        $assetsDomain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+        $baseUrl = $request->getSchemeAndHttpHost();
+        $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $baseUrl);
 
         $emailContent = $this->renderView('reset_password/reset.html.twig', [
             'resetUrl'  => $resetUrl,
@@ -108,14 +110,14 @@ class ResetPasswordController extends AbstractController
             'fromName'  => $fromName,
             'signature' => $signature,
             'logoUrl'   => $logoUrl,
-            'domain'    => $assetsDomain
+            'domain'    => ''
         ]);
 
         $mailer->send((new Email())
-            ->from(sprintf('%s <%s>', $fromName, $fromEmail))
-            ->to($user->getEmail())
-            ->subject('Password Reset')
-            ->html($emailContent)
+                ->from(sprintf('%s <%s>', $fromName, $fromEmail))
+                ->to($user->getEmail())
+                ->subject('Password Reset')
+                ->html($emailContent)
         );
 
         return $this->json(['message' => 'Link sent if email exists.']);
@@ -148,14 +150,14 @@ class ResetPasswordController extends AbstractController
 
         // 3. Traduction
         $translation = ($emailConfig) ? $emailConfig->getTranslation($locale) : null;
-        
+
         $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Support');
         $signature = $translation?->getSignature() ?? '';
-        $logoUrl   = $emailConfig?->getLogo();
         $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@gem-portal.com';
-        
+
         // 4. CORRECTION ASSETS : On force le domaine du backend
-        $assetsDomain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+        $baseUrl = $request->getSchemeAndHttpHost();
+        $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $baseUrl);
 
         return $this->render('reset_password/form.html.twig', [
             'token'       => $token,
@@ -164,7 +166,7 @@ class ResetPasswordController extends AbstractController
             'signature'   => $signature,
             'logoUrl'     => $logoUrl,
             'fromEmail'   => $fromEmail,
-            'domain'      => $assetsDomain,
+            'domain'      => '',
         ]);
     }
 
@@ -175,7 +177,7 @@ class ResetPasswordController extends AbstractController
         UserPasswordHasherInterface $passwordHasher
     ): Response {
         $content = json_decode($request->getContent(), true);
-        
+
         $token = $content['token'] ?? $request->request->get('token');
         $newPassword = $content['newPassword'] ?? $request->request->get('newPassword') ?? $request->request->get('password');
         $targetHost = $request->query->get('tenant_host');
@@ -193,7 +195,7 @@ class ResetPasswordController extends AbstractController
         }
 
         if (!$token || !$newPassword) {
-             return $this->json(['error' => 'Missing data'], 400);
+            return $this->json(['error' => 'Missing data'], 400);
         }
 
         $em = $this->tenantEmProvider->getEntityManager();
@@ -212,25 +214,26 @@ class ResetPasswordController extends AbstractController
         // 2. Récupération Config (Via Repository direct)
         /** @var EmailConfiguration|null $emailConfig */
         $emailConfig = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
-        
+
         $translation = ($emailConfig) ? $emailConfig->getTranslation($request->getLocale()) : null;
-        
+
         // CORRECTION ASSETS
-        $assetsDomain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
-        
+        $baseUrl = $request->getSchemeAndHttpHost();
+        $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $baseUrl);
+
         $fromName = $translation?->getFromName() ?? ($emailConfig?->getFromName() ?? 'Support');
         $signature = $translation?->getSignature() ?? '';
 
         if ($content) {
-             return $this->json(['message' => 'Success']);
+            return $this->json(['message' => 'Success']);
         }
 
         return $this->render('reset_password/success.html.twig', [
             'message'   => 'Password reset successfully.',
-            'domain'    => $assetsDomain,
+            'domain'    => '',
             'fromName'  => $fromName,
             'signature' => $signature,
-            'logoUrl'   => $emailConfig?->getLogo(),
+            'logoUrl'   => $logoUrl,
             'fromEmail' => $emailConfig?->getFromEmail(),
             'user'      => $user
         ]);

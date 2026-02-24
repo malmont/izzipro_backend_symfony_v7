@@ -5,6 +5,7 @@ namespace App\Services\OrderService;
 use App\Entity\Order;
 use App\Entity\Entreprise;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
+use App\Services\EmailConfigurationService\EmailLogoHelper;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mime\Email;
@@ -17,6 +18,7 @@ class OrderMailerService
     private $mailer;
     private $twig;
     private $emailConfigService;
+    private $emailLogoHelper;
     private $logger;
     private $emProvider;
 
@@ -24,12 +26,14 @@ class OrderMailerService
         MailerInterface $mailer,
         Environment $twig,
         EmailConfigurationService $emailConfigService,
+        EmailLogoHelper $emailLogoHelper,
         LoggerInterface $logger,
         TenantEntityManagerProvider $emProvider
     ) {
         $this->mailer = $mailer;
         $this->twig = $twig;
         $this->emailConfigService = $emailConfigService;
+        $this->emailLogoHelper = $emailLogoHelper;
         $this->logger = $logger;
         $this->emProvider = $emProvider;
     }
@@ -50,7 +54,8 @@ class OrderMailerService
 
             $fromEmail = $emailConfig->getFromEmail();
             $fromName = $emailConfigTranslation->getFromName();
-            
+            $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $domain);
+
             // ✅ AJOUT SÉCURISÉ : On prépare les données
             $itemsData = $this->prepareOrderItemsData($order, $locale);
 
@@ -59,8 +64,8 @@ class OrderMailerService
                 'itemsData' => $itemsData,
                 'fromName'  => $fromName,
                 'signature' => $emailConfigTranslation->getSignature(),
-                'logoUrl'   => $emailConfig->getLogo(),
-                'domain'    => $domain,
+                'logoUrl'   => $logoUrl,
+                'domain'    => '',
             ]);
 
             $emailMessage = (new Email())
@@ -70,7 +75,6 @@ class OrderMailerService
                 ->html($emailContent);
 
             $this->mailer->send($emailMessage);
-
         } catch (\Exception $e) {
             $this->logger->error("Erreur email confirmation: " . $e->getMessage());
         }
@@ -81,7 +85,7 @@ class OrderMailerService
         try {
             $tenantEm = $this->emProvider->getEntityManager();
             $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
-            
+
             if (!$entreprise || !$entreprise->getEmail()) return;
             $toEmail = $entreprise->getEmail();
 
@@ -89,10 +93,10 @@ class OrderMailerService
             $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
 
             if (!$emailConfig || !$emailConfigTranslation) return;
-            
+
             $fromEmail = $emailConfig->getFromEmail();
             $fromName = $emailConfigTranslation->getFromName();
-            $logoUrl = $emailConfig->getLogo();
+            $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $domain);
             $signature = $emailConfigTranslation->getSignature();
 
             $labels = [];
@@ -114,7 +118,7 @@ class OrderMailerService
                 'fromName'  => $fromName,
                 'signature' => $signature,
                 'logoUrl'   => $logoUrl,
-                'domain'    => $domain,
+                'domain'    => '',
             ]);
 
             $emailMessage = (new Email())
@@ -124,7 +128,6 @@ class OrderMailerService
                 ->html($emailContent);
 
             $this->mailer->send($emailMessage);
-
         } catch (\Exception $e) {
             $this->logger->error("Erreur email shipping: " . $e->getMessage());
         }
@@ -136,11 +139,11 @@ class OrderMailerService
     private function prepareOrderItemsData(Order $order, string $locale): array
     {
         $data = [];
-        $dateFormat = 'Y-m-d H:i'; 
+        $dateFormat = 'Y-m-d H:i';
 
         foreach ($order->getOrderItems() as $item) {
             $variant = $item->getProductVariant();
-            
+
             $options = [];
             if ($variant) {
                 foreach ($variant->getOptionValues() as $optionValue) {
@@ -153,7 +156,7 @@ class OrderMailerService
 
             // 2. Booking
             $bookingData = null;
-              if (method_exists($item, 'getBooking')) {
+            if (method_exists($item, 'getBooking')) {
                 $booking = $item->getBooking();
                 if ($booking) {
                     $bookingData = [
@@ -171,10 +174,10 @@ class OrderMailerService
             }
 
             $data[] = [
-                'entity'  => $item,        
-                'options' => $options,     
-                'legacy'  => $legacyOptions, 
-                'booking' => $bookingData  
+                'entity'  => $item,
+                'options' => $options,
+                'legacy'  => $legacyOptions,
+                'booking' => $bookingData
             ];
         }
 

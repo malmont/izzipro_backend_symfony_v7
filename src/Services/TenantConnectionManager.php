@@ -116,10 +116,7 @@ class TenantConnectionManager
                 sprintf('CREATE DATABASE "%s" WITH TEMPLATE gmasuite', $dbname)
             );
 
-            // Fix sequences: ensure all id columns have their nextval() default
-            // attached. PostgreSQL copies sequences from the template but does not
-            // always preserve the DEFAULT nextval(...) binding on the columns, which
-            // causes Doctrine to insert NULL for the id, violating the NOT NULL constraint.
+
             $this->fixSequences($dbname);
 
             // Insertion en base
@@ -137,8 +134,7 @@ class TenantConnectionManager
 
             $stmt->execute();
 
-            // --- INVALIDATION DU CACHE ---
-            // On force Redis à oublier tous les anciens mappings pour que le nouveau tenant soit visible tout de suite.
+
             $this->cache->invalidateTags(['tenants']);
             $this->logger->info("Cache 'tenants' invalidé après création de '$code'.");
         } catch (\Throwable $e) {

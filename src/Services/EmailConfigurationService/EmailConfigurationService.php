@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services\EmailConfigurationService; // Adaptez le namespace si besoin
 
 use App\Entity\EmailConfiguration;
