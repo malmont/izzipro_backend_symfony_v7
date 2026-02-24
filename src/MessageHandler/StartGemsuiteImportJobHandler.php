@@ -141,7 +141,7 @@ class StartGemsuiteImportJobHandler
                         $homeSlider->setTitle(strip_tags($companyData['gemportal_title'] ?? 'Bienvenue'));
                         $homeSlider->setDescription(strip_tags($companyData['gemportal_desc'] ?? 'Découvrez nos produits'));
                         $homeSlider->setButtonMessage(strip_tags($companyData['gemportal_button'] ?? 'voir nos produit'));
-                        $homeSlider->setButtonUrl('/shop');
+                        $homeSlider->setButtonUrl('/Product/0');
                         $homeSlider->setIsDiplayed(true);
 
                         $homeSlider->setImage(
