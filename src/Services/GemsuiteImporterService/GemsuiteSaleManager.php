@@ -11,7 +11,7 @@ use App\Services\TenantConnectionManager;
 class GemsuiteSaleManager
 {
     // ID 207 validé ensemble précédemment
-    private const METHOD_ID_STRIPE = 104;
+    private const METHOD_ID_STRIPE = 114;
 
     public function __construct(
         private HttpClientInterface $client,
@@ -53,8 +53,9 @@ class GemsuiteSaleManager
             }
 
             $this->addProductsToSale($order, $saleId, $token);
-            $this->finalizeSaleAsInvoice($saleId, $token);
             $this->createPaymentForSale($order, $saleId, $token);
+            $this->finalizeSaleAsInvoice($saleId, $token);
+           
 
             $this->logger->info(sprintf('Succès: Commande #%d synchronisée et facturée (GemSuite ID: %d).', $order->getId(), $saleId));
 
@@ -163,12 +164,12 @@ class GemsuiteSaleManager
             'method_id' => self::METHOD_ID_STRIPE,
         ];
 
-        if ($stripeRef) {
-            $payload['reference'] = $stripeRef;
-            $payload['note'] = "Stripe ID: " . $stripeRef;
-        }
+        // if ($stripeRef) {
+        //     $payload['reference'] = $stripeRef;
+        //     $payload['note'] = "Stripe ID: " . $stripeRef;
+        // }
 
-        $response = $this->client->request('POST', $this->gemsuiteApiUrl . 'sales_payment', [
+        $response = $this->client->request('POST', $this->gemsuiteApiUrl . 'sales_payments', [
             'auth_bearer' => $token,
             'json' => $payload,
         ]);
