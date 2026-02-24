@@ -8,6 +8,7 @@ use App\Entity\OtpCode;
 use App\Entity\Translation\EmailConfigurationTranslation;
 use App\Entity\User;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
+use App\Services\EmailConfigurationService\EmailLogoHelper;
 use App\Services\OtpService;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\EntityManagerInterface;
@@ -23,6 +24,7 @@ class OtpServiceTest extends TestCase
     private $mailer;
     private $twig;
     private $emailConfigService;
+    private $emailLogoHelper;
     private $em;
     private $otpService;
 
@@ -32,6 +34,7 @@ class OtpServiceTest extends TestCase
         $this->mailer = $this->createMock(MailerInterface::class);
         $this->twig = $this->createMock(Environment::class);
         $this->emailConfigService = $this->createMock(EmailConfigurationService::class);
+        $this->emailLogoHelper = $this->createMock(EmailLogoHelper::class);
         $this->em = $this->createMock(EntityManagerInterface::class);
 
         $this->tenantEmProvider->method('getEntityManager')->willReturn($this->em);
@@ -40,7 +43,8 @@ class OtpServiceTest extends TestCase
             $this->tenantEmProvider,
             $this->mailer,
             $this->twig,
-            $this->emailConfigService
+            $this->emailConfigService,
+            $this->emailLogoHelper
         );
     }
 

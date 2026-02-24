@@ -7,6 +7,7 @@ use App\Entity\EmailConfiguration;
 use App\Entity\EmailConfigurationTranslation;
 use App\Entity\User;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
+use App\Services\EmailConfigurationService\EmailLogoHelper;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\DBAL\Connection;
@@ -27,6 +28,7 @@ class ResetPasswordControllerTest extends TestCase
     private $tenantEmProvider;
     private $tenantManager;
     private $emailConfigService;
+    private $emailLogoHelper;
     private $logger;
     private $container;
     private $controller;
@@ -38,6 +40,7 @@ class ResetPasswordControllerTest extends TestCase
         $this->tenantEmProvider = $this->createMock(TenantEntityManagerProvider::class);
         $this->tenantManager = $this->createMock(TenantConnectionManager::class);
         $this->emailConfigService = $this->createMock(EmailConfigurationService::class);
+        $this->emailLogoHelper = $this->createMock(EmailLogoHelper::class);
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->entityManager = $this->createMock(EntityManagerInterface::class);
         $this->connection = $this->createMock(Connection::class);
@@ -50,7 +53,8 @@ class ResetPasswordControllerTest extends TestCase
             $this->tenantEmProvider,
             $this->tenantManager,
             $this->emailConfigService,
-            $this->logger
+            $this->logger,
+            $this->emailLogoHelper
         );
 
         // Mock Container for AbstractController helpers

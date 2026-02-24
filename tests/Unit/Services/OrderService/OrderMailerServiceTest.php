@@ -8,6 +8,7 @@ use App\Entity\Entreprise;
 use App\Entity\Order;
 use App\Entity\User;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
+use App\Services\EmailConfigurationService\EmailLogoHelper;
 use App\Services\OrderService\OrderMailerService;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\EntityManagerInterface;
@@ -23,6 +24,7 @@ class OrderMailerServiceTest extends TestCase
     private $mailer;
     private $twig;
     private $emailConfigService;
+    private $emailLogoHelper;
     private $logger;
     private $emProvider;
     private $orderMailerService;
@@ -32,6 +34,7 @@ class OrderMailerServiceTest extends TestCase
         $this->mailer = $this->createMock(MailerInterface::class);
         $this->twig = $this->createMock(Environment::class);
         $this->emailConfigService = $this->createMock(EmailConfigurationService::class);
+        $this->emailLogoHelper = $this->createMock(EmailLogoHelper::class);
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->emProvider = $this->createMock(TenantEntityManagerProvider::class);
 
@@ -39,6 +42,7 @@ class OrderMailerServiceTest extends TestCase
             $this->mailer,
             $this->twig,
             $this->emailConfigService,
+            $this->emailLogoHelper,
             $this->logger,
             $this->emProvider
         );

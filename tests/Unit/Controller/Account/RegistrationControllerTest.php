@@ -9,6 +9,7 @@ use App\Entity\GemsuiteClient;
 use App\Entity\User;
 use App\Security\EmailVerifier;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
+use App\Services\EmailConfigurationService\EmailLogoHelper;
 use App\Services\GemsuiteImporterService\GemsuiteClientManager;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
@@ -32,6 +33,7 @@ class RegistrationControllerTest extends TestCase
     private $logger;
     private $gemsuiteClientManager;
     private $emailConfigurationService;
+    private $emailLogoHelper;
     private $container;
     private $controller;
     private $entityManager;
@@ -45,6 +47,7 @@ class RegistrationControllerTest extends TestCase
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->gemsuiteClientManager = $this->createMock(GemsuiteClientManager::class);
         $this->emailConfigurationService = $this->createMock(EmailConfigurationService::class);
+        $this->emailLogoHelper = $this->createMock(EmailLogoHelper::class);
         $this->entityManager = $this->createMock(\Doctrine\ORM\EntityManagerInterface::class);
 
         // Setup EM provider
@@ -57,7 +60,8 @@ class RegistrationControllerTest extends TestCase
             $this->tenantManager,
             $this->logger,
             $this->gemsuiteClientManager,
-            $this->emailConfigurationService
+            $this->emailConfigurationService,
+            $this->emailLogoHelper
         );
 
         // Mock Container for AbstractController helpers
