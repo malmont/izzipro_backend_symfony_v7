@@ -125,7 +125,13 @@ class StripeService
                 $stripeConfig = $this->getStripeConfigForCurrentTenant();
                 if ($stripeConfig && $stripeConfig->isActive()) {
                     $stripeOptions['stripe_account'] = $stripeConfig->getAccountId();
-                    $this->logger->info("Paiement externe (Connect) pour le tenant: $tenantCode");
+
+                    // Calcul de la commission de 1% pour la plateforme (V2V)
+                    $platformFeePercent = 1;
+                    $applicationFeeAmount = (int) (($amount * $platformFeePercent) / 100);
+                    $options['application_fee_amount'] = $applicationFeeAmount;
+
+                    $this->logger->info("Paiement externe (Connect) pour le tenant: $tenantCode avec commission V2V de $applicationFeeAmount cents.");
                 } else {
                     $this->logger->error("BLOCAGE PAIEMENT: Tentative de paiement sur un client externe non-connecté à Stripe. Tenant: $tenantCode");
                     return null;

@@ -60,7 +60,7 @@ class GemsuiteSyncHandler
             $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
             $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
 
-            if (!$this->isProductActive($gemProductData)) {
+            if (!$this->isProductActive($tenantEm, $gemProductData)) {
                 $this->logger->info("Produit #$productId détecté comme inactif. Désactivation locale.");
                 $this->deactivateProductOrVariant($tenantEm, $gemProductData);
             } else {
@@ -107,7 +107,6 @@ class GemsuiteSyncHandler
     public function handleClientUpdate(string $tenantCode, int $clientId): void
     {
         $this->clientManager->updateClientGemsuite($tenantCode, $clientId);
-       
     }
 
 
@@ -335,12 +334,33 @@ class GemsuiteSyncHandler
         }
     }
 
-    private function isProductActive(array $gemProductData): bool
+    private function isProductActive(EntityManagerInterface $em, array $gemProductData): bool
     {
         $status = (int)($gemProductData['status'] ?? 0);
         $syncWeb = (bool)($gemProductData['sync_web'] ?? false);
         $name = trim($gemProductData['name_fr'] ?? '');
-        return $status === 1 && $syncWeb === true && !empty($name);
+
+        $isVariant = ($gemProductData['id'] ?? 0) !== ($gemProductData['origin_product_id'] ?? 0);
+
+        if ($isVariant) {
+            return $status === 1 && $syncWeb === true;
+        }
+
+        $isActiveIndividually = ($status === 1 && $syncWeb === true && !empty($name));
+        if ($isActiveIndividually) {
+            return true;
+        }
+
+        // Si inactif individuellement, on vérifie si la catégorie est active (présente localement)
+        // en ignorant le check du parent/variante car cet handler webhooks gère les mêmes payloads
+        if (isset($gemProductData['category_id']) && !empty($name)) {
+            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemProductData['category_id']]);
+            if ($category) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function getTenantEntityManager(string $tenantCode): EntityManagerInterface

@@ -173,7 +173,7 @@ class ProcessGemsuiteEntityJobHandler
 
     private function processProductParent(EntityManagerInterface $em, array $data): ?Product
     {
-        if (!$this->isEntityActive($data)) {
+        if (!$this->isEntityActive($em, $data)) {
             $this->logger->warning(sprintf('Produit parent #%d ignoré (inactif)', $data['id']));
             return null;
         }
@@ -239,7 +239,7 @@ class ProcessGemsuiteEntityJobHandler
 
     private function processProductVariant(EntityManagerInterface $em, array $data): void
     {
-        if (!$this->isEntityActive($data)) {
+        if (!$this->isEntityActive($em, $data)) {
             return; // Variante inactive
         }
 
@@ -273,7 +273,7 @@ class ProcessGemsuiteEntityJobHandler
         $em->flush();
     }
 
-    private function isEntityActive(array $data): bool
+    private function isEntityActive(EntityManagerInterface $em, array $data): bool
     {
         $status = (int)($data['status'] ?? 1);
         $syncWeb = (bool)($data['sync_web'] ?? true);
@@ -283,9 +283,22 @@ class ProcessGemsuiteEntityJobHandler
 
         if ($isVariant) {
             return $status === 1 && $syncWeb === true;
-        } else {
-            return $status === 1 && $syncWeb === true && !empty($name);
         }
+
+        $isActiveIndividually = ($status === 1 && $syncWeb === true && !empty($name));
+        if ($isActiveIndividually) {
+            return true;
+        }
+
+        // Si inactif individuellement, on vérifie si la catégorie est active (présente localement)
+        if (isset($data['category_id']) && !empty($name)) {
+            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $data['category_id']]);
+            if ($category) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function updateSyncJobCounter(EntityManagerInterface $em, int $syncJobId): void
