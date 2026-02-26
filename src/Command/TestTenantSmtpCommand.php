@@ -44,10 +44,10 @@ class TestTenantSmtpCommand extends Command
 
         // 1. Connexion au Tenant
         $tenant = $this->tenantManager->findTenantByCode($tenantCode);
-        
+
         if (!$tenant) {
-             $output->writeln("<error>❌ Tenant '$tenantCode' introuvable.</error>");
-             return Command::FAILURE;
+            $output->writeln("<error>❌ Tenant '$tenantCode' introuvable.</error>");
+            return Command::FAILURE;
         }
 
         $this->emProvider->switchTenant($tenant['dbname'], $tenant['code']);
@@ -64,10 +64,7 @@ class TestTenantSmtpCommand extends Command
 
         $fromEmail = $config->getFromEmail();
         // On récupère une traduction par défaut pour le nom, ou on met une valeur fallback
-        $fromName = 'Test Command'; 
-        if ($translation = $config->getTranslation('fr')) {
-            $fromName = $translation->getFromName();
-        }
+        $fromName = $config->getFromName() ?: 'Test Command';
 
         $output->writeln("📧 Expéditeur prévu (BDD): <comment>$fromName <$fromEmail></comment>");
         $output->writeln("🔌 Serveur SMTP utilisé : <comment>Celui défini dans le .env (MAILER_DSN)</comment>");
@@ -84,15 +81,14 @@ class TestTenantSmtpCommand extends Command
 
             $output->writeln("<info>✅ SUCCÈS ! L'email a été accepté par le serveur SMTP.</info>");
             return Command::SUCCESS;
-
         } catch (TransportExceptionInterface $e) {
             $output->writeln("<error>💥 ÉCHEC DE L'ENVOI</error>");
             $output->writeln("Erreur technique : " . $e->getMessage());
-            
+
             if (str_contains($e->getMessage(), '535')) {
                 $output->writeln("\n👉 <comment>Diagnostic :</comment> Erreur 535 = Le mot de passe dans ton fichier .env est FAUX.");
             }
-            
+
             return Command::FAILURE;
         } catch (\Throwable $e) {
             $output->writeln("<error>💥 ERREUR INCONNUE</error>");

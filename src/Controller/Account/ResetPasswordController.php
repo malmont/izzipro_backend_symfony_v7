@@ -6,7 +6,7 @@ use App\Entity\User;
 use App\Entity\EmailConfiguration;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
-use App\Services\EmailConfigurationService\EmailConfigurationService;
+use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\EmailConfigurationService\EmailLogoHelper;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -15,8 +15,6 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Email;
 use Psr\Log\LoggerInterface;
 use DateTimeImmutable;
 
@@ -25,7 +23,7 @@ class ResetPasswordController extends AbstractController
     public function __construct(
         private TenantEntityManagerProvider $tenantEmProvider,
         private TenantConnectionManager $tenantManager,
-        private EmailConfigurationService $emailConfigService,
+        private EmailSenderService $emailSenderService,
         private LoggerInterface $logger,
         private EmailLogoHelper $emailLogoHelper
     ) {}
@@ -34,7 +32,6 @@ class ResetPasswordController extends AbstractController
     #[Route('/api/password-reset/request', name: 'app_password_reset_request', methods: ['POST'])]
     public function requestPasswordReset(
         Request $request,
-        MailerInterface $mailer,
         UrlGeneratorInterface $urlGenerator
     ): JsonResponse {
         $locale = $request->query->get('locale', $request->getLocale());
@@ -92,32 +89,19 @@ class ResetPasswordController extends AbstractController
             UrlGeneratorInterface::ABSOLUTE_URL
         );
 
-        // 6. Config Email
-        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
-        $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
-
-        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Support');
-        $signature = $translation?->getSignature() ?? '';
-        $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@gem-portal.com';
-
         // CORRECTION ASSETS : Toujours utiliser le domaine du Backend (API)
         $baseUrl = $request->getSchemeAndHttpHost();
-        $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $baseUrl);
 
-        $emailContent = $this->renderView('reset_password/reset.html.twig', [
-            'resetUrl'  => $resetUrl,
-            'user'      => $user,
-            'fromName'  => $fromName,
-            'signature' => $signature,
-            'logoUrl'   => $logoUrl,
-            'domain'    => ''
-        ]);
-
-        $mailer->send((new Email())
-                ->from(sprintf('%s <%s>', $fromName, $fromEmail))
-                ->to($user->getEmail())
-                ->subject('Password Reset')
-                ->html($emailContent)
+        $this->emailSenderService->sendTemplatedEmail(
+            $user->getEmail(),
+            'Password Reset',
+            'reset_password/reset.html.twig',
+            [
+                'resetUrl'  => $resetUrl,
+                'user'      => $user,
+            ],
+            $locale,
+            $baseUrl
         );
 
         return $this->json(['message' => 'Link sent if email exists.']);
@@ -151,7 +135,7 @@ class ResetPasswordController extends AbstractController
         // 3. Traduction
         $translation = ($emailConfig) ? $emailConfig->getTranslation($locale) : null;
 
-        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Support');
+        $fromName  = $emailConfig?->getFromName() ?? 'Support';
         $signature = $translation?->getSignature() ?? '';
         $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@gem-portal.com';
 
@@ -221,7 +205,7 @@ class ResetPasswordController extends AbstractController
         $baseUrl = $request->getSchemeAndHttpHost();
         $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $baseUrl);
 
-        $fromName = $translation?->getFromName() ?? ($emailConfig?->getFromName() ?? 'Support');
+        $fromName = $emailConfig?->getFromName() ?? 'Support';
         $signature = $translation?->getSignature() ?? '';
 
         if ($content) {

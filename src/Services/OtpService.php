@@ -8,35 +8,21 @@ use App\Entity\EmailConfiguration;
 use App\Entity\Entreprise;
 use App\Entity\User;
 use DateTime;
-use Symfony\Component\Mailer\MailerInterface;
-use Symfony\Component\Mime\Email;
-use Twig\Environment;
 use Symfony\Component\HttpFoundation\Request;
 use App\Services\TenantEntityManagerProvider;
-use App\Services\EmailConfigurationService\EmailConfigurationService;
-use App\Services\EmailConfigurationService\EmailLogoHelper;
+use App\Services\EmailConfigurationService\EmailSenderService;
 
 class OtpService
 {
     private TenantEntityManagerProvider $tenantEmProvider;
-    private MailerInterface $mailer;
-    private Environment $twig;
-    private EmailConfigurationService $emailConfigService;
-    private EmailLogoHelper $emailLogoHelper;
-
+    private EmailSenderService $emailSenderService;
 
     public function __construct(
         TenantEntityManagerProvider $tenantEmProvider,
-        MailerInterface $mailer,
-        Environment $twig,
-        EmailConfigurationService $emailConfigService,
-        EmailLogoHelper $emailLogoHelper
+        EmailSenderService $emailSenderService
     ) {
         $this->tenantEmProvider = $tenantEmProvider;
-        $this->mailer        = $mailer;
-        $this->twig          = $twig;
-        $this->emailConfigService = $emailConfigService;
-        $this->emailLogoHelper = $emailLogoHelper;
+        $this->emailSenderService = $emailSenderService;
     }
 
     /**
@@ -84,34 +70,21 @@ class OtpService
         $em->persist($otpCode);
         $em->flush();
 
-        // On récupère la configuration et sa traduction
-        $emailConfig = $this->emailConfigService->findOneByLocale($locale);
-        $translation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
-
-        $fromEmail = $emailConfig?->getFromEmail() ?? 'no-reply@votredomaine.com';
-        $fromName  = $translation?->getFromName()  ?? ($emailConfig?->getFromName() ?? 'Votre Société');
-        $signature = $translation?->getSignature() ?? '';
-
         $baseUrl = $request->getSchemeAndHttpHost();
-        $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $baseUrl);
-
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
-        $domain = '';
-        $emailMessage = (new Email())
-            ->from(sprintf('%s <%s>', $fromName, $fromEmail))
-            ->to($userManaged->getEmail())
-            ->subject('Votre code OTP')
-            ->html(
-                $this->twig->render('security/2fa_email.html.twig', [
-                    'code'       => $otp,
-                    'lifetime'   => 300,
-                    'entreprise' => $entreprise,
-                    'domain'     => $domain,
-                    'fromName'   => $fromName,
-                    'signature'  => $signature,
-                    'logoUrl'    => $logoUrl,
-                ])
-            );
-        $this->mailer->send($emailMessage);
+
+        $this->emailSenderService->sendTemplatedEmail(
+            $userManaged->getEmail(),
+            'Votre code OTP',
+            'security/2fa_email.html.twig',
+            [
+                'code'       => $otp,
+                'lifetime'   => 300,
+                'entreprise' => $entreprise,
+                'domain'     => '',
+            ],
+            $locale,
+            $baseUrl
+        );
     }
 }

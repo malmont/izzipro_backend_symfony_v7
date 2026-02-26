@@ -1,98 +1,139 @@
 {% extends 'base.email.html.twig' %}
 
-{% block title %}Nouvelle commande à expédier - n°{{ order.reference }}{% endblock %}
+{% block title %}Nouvelle commande à expédier - n°{{ order.reference }}
+{% endblock %}
 
 {% block body %}
-<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: Arial, sans-serif; line-height: 1.6;">
-    <tr>
-        <td align="center" style="padding: 20px;">
-            <table width="600" border="0" cellspacing="0" cellpadding="20" style="border: 1px solid #ddd; border-radius: 8px;">
-                
-                {% if logoUrl is defined and logoUrl %}
-                    <tr><td align="center" style="padding-bottom: 20px; border-bottom: 1px solid #eee;"><img src="{{ domain ~ logoUrl }}" alt="{{ fromName }}" style="max-width: 200px;"></td></tr>
-                {% elseif fromName is defined %}
-                    <tr><td align="center" style="padding-bottom: 20px; border-bottom: 1px solid #eee;"><h1 style="margin:0;">{{ fromName }}</h1></td></tr>
-                {% endif %}
+	<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: Arial, sans-serif; line-height: 1.6;">
+		<tr>
+			<td align="center" style="padding: 20px;">
+				<table width="600" border="0" cellspacing="0" cellpadding="20" style="border: 1px solid #ddd; border-radius: 8px;">
 
-                <tr>
-                    <td style="padding: 30px;">
-                        <h1 style="color: #d9534f;">Nouvelle commande à préparer</h1>
-                        <p><strong>Client :</strong> {{ order.userId.firstname }} {{ order.userId.lastname }}</p>
+					{% if logoUrl is defined and logoUrl %}
+						<tr>
+							<td align="center" style="padding-bottom: 20px; border-bottom: 1px solid #eee;"><img src="{{ logoUrl }}" alt="{{ fromName }}" style="max-width: 200px;"></td>
+						</tr>
+					{% elseif fromName is defined %}
+						<tr>
+							<td align="center" style="padding-bottom: 20px; border-bottom: 1px solid #eee;">
+								<h1 style="margin:0;">{{ fromName }}</h1>
+							</td>
+						</tr>
+					{% endif %}
 
-                        <h3 style="background: #eee; padding: 10px;">📦 Articles à préparer</h3>
-                        <ul style="padding-left: 20px;">
-                        {% for itemData in itemsData %}
-                            {% set item = itemData.entity %}
-                            <li style="margin-bottom: 10px;">
-                                <strong>{{ item.quantity }}x {{ item.productVariant.product.name }}</strong>
-                                <br>
-                                
-                                {# BOOKING #}
-                                {% if itemData.booking %}
-                                    <span style="color: #0066cc;">📅 {{ itemData.booking.start }} / {{ itemData.booking.end }}</span><br>
-                                {% endif %}
+					<tr>
+						<td style="padding: 30px;">
+							<h1 style="color: #d9534f;">Nouvelle commande à préparer</h1>
+							<p>
+								<strong>Client :</strong>
+								{{ order.userId.firstname }}
+								{{ order.userId.lastname }}</p>
 
-                                {# OPTIONS #}
-                                <small style="color: #555;">
-                                    {% for k, v in itemData.legacy %} [{{ k }}: {{ v }}] {% endfor %}
-                                    {% for k, v in itemData.options %} [{{ k }}: {{ v }}] {% endfor %}
-                                </small>
-                            </li>
-                        {% endfor %}
-                        </ul>
+							<h3 style="background: #eee; padding: 10px;">📦 Articles à préparer</h3>
+							<ul style="padding-left: 20px;">
+								{% for itemData in itemsData %}
+									{% set item = itemData.entity %}
+									<li style="margin-bottom: 10px;">
+										<strong>{{ item.quantity }}x
+											{{ item.productVariant.product.name }}</strong>
+										<br>
 
-                        {# RÉSUMÉ FINANCIER RAPIDE #}
-                        <div style="margin-top: 20px; padding: 10px; border: 1px solid #eee; background: #f9f9f9; border-radius: 5px;">
-                            {% if order.subTotal is not null %}
-                             <p style="margin: 5px 0;"><strong>Sous-total :</strong> {{ (order.subTotal / 100) | format_currency('CAD') }}</p>
-                                {% endif %}
-                             {% if order.shippingCost is not null %}
-                                <p style="margin: 5px 0;"><strong>Livraison :</strong> {{ (order.shippingCost / 100) | format_currency('CAD') }}</p>
-                             {% endif %}
-                             {% if order.totalTax is not null %}
-                                <p style="margin: 5px 0;"><strong>Taxes :</strong> {{ (order.totalTax / 100) | format_currency('CAD') }}</p>
-                             {% endif %}
-                             <p style="margin: 5px 0; font-size: 1.1em; color: #d9534f;"><strong>Total : {{ (order.totalAmount / 100) | format_currency('CAD') }}</strong></p>
-                        </div>
+										{# BOOKING #}
+										{% if itemData.booking %}
+											<span style="color: #0066cc;">📅
+												{{ itemData.booking.start }}
+												/
+												{{ itemData.booking.end }}</span><br>
+										{% endif %}
 
-                        {% if labels is not empty %}
-                            <h3 style="border-bottom: 2px solid #eee; margin-top: 20px;">Étiquettes</h3>
-                            <ul>
-                                {% for label in labels %}
-                                    <li><a href="{{ label.labelUrl }}">Imprimer étiquette ({{ label.trackingCode }})</a></li>
-                                {% endfor %}
-                            </ul>
-                        {% else %}
-                            <p style="color: red; border: 1px solid red; padding: 10px; margin-top: 20px;">⚠️ Aucune étiquette générée.</p>
-                        {% endif %}
+										{# OPTIONS #}
+										<small style="color: #555;">
+											{% for k, v in itemData.legacy %}
+												[{{ k }}:
+												{{ v }}]
+											{% endfor %}
+											{% for k, v in itemData.options %}
+												[{{ k }}:
+												{{ v }}]
+											{% endfor %}
+										</small>
+									</li>
+								{% endfor %}
+							</ul>
 
-                        {# --- AJOUT DU BLOC ADRESSE ICI --- #}
-                        <h3 style="margin-top: 30px; border-bottom: 2px solid #eee; padding-bottom: 5px;">Adresse de livraison</h3>
-                        
-                        {% set adr = order.shippingAdress %}
-                        {% if adr %}
-                            <address style="font-style: normal; line-height: 1.5; background-color: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px solid #eee;">
-                                <strong>{{ adr.firstname }} {{ adr.lastname }}</strong><br>
-                                {% if adr.company %}{{ adr.company }}<br>{% endif %}
-                                
-                                {{ adr.address }}<br>
-                                {% if adr.complement %}{{ adr.complement }}<br>{% endif %}
-                                
-                                {{ adr.codepostal }} {{ adr.city }}<br>
-                                {% if adr.province %}{{ adr.province }}<br>{% endif %}
-                                {{ adr.country }}<br>
-                                
-                                {% if adr.phone %}<br>Tél : {{ adr.phone }}{% endif %}
-                            </address>
-                        {% else %}
-                            <p>Aucune adresse de livraison n'a été fournie pour cette commande.</p>
-                        {% endif %}
-                        {# --------------------------------- #}
+							{# RÉSUMÉ FINANCIER RAPIDE #}
+							<div style="margin-top: 20px; padding: 10px; border: 1px solid #eee; background: #f9f9f9; border-radius: 5px;">
+								{% if order.subTotal is not null %}
+									<p style="margin: 5px 0;">
+										<strong>Sous-total :</strong>
+										{{ (order.subTotal / 100) | format_currency('CAD') }}</p>
+								{% endif %}
+								{% if order.shippingCost is not null %}
+									<p style="margin: 5px 0;">
+										<strong>Livraison :</strong>
+										{{ (order.shippingCost / 100) | format_currency('CAD') }}</p>
+								{% endif %}
+								{% if order.totalTax is not null %}
+									<p style="margin: 5px 0;">
+										<strong>Taxes :</strong>
+										{{ (order.totalTax / 100) | format_currency('CAD') }}</p>
+								{% endif %}
+								<p style="margin: 5px 0; font-size: 1.1em; color: #d9534f;">
+									<strong>Total :
+										{{ (order.totalAmount / 100) | format_currency('CAD') }}</strong>
+								</p>
+							</div>
 
-                    </td>
-                </tr>
-            </table>
-        </td>
-    </tr>
-</table>
+							{% if labels is not empty %}
+								<h3 style="border-bottom: 2px solid #eee; margin-top: 20px;">Étiquettes</h3>
+								<ul>
+									{% for label in labels %}
+										<li>
+											<a href="{{ label.labelUrl }}">Imprimer étiquette ({{ label.trackingCode }})</a>
+										</li>
+									{% endfor %}
+								</ul>
+							{% else %}
+								<p style="color: red; border: 1px solid red; padding: 10px; margin-top: 20px;">⚠️ Aucune étiquette générée.</p>
+							{% endif %}
+
+							{# --- AJOUT DU BLOC ADRESSE ICI --- #}
+							<h3 style="margin-top: 30px; border-bottom: 2px solid #eee; padding-bottom: 5px;">Adresse de livraison</h3>
+
+							{% set adr = order.shippingAdress %}
+							{% if adr %}
+								<address style="font-style: normal; line-height: 1.5; background-color: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px solid #eee;">
+									<strong>{{ adr.firstname }}
+										{{ adr.lastname }}</strong><br>
+									{% if adr.company %}
+										{{ adr.company }}<br>
+									{% endif %}
+
+									{{ adr.address }}<br>
+									{% if adr.complement %}
+										{{ adr.complement }}<br>
+									{% endif %}
+
+									{{ adr.codepostal }}
+									{{ adr.city }}<br>
+									{% if adr.province %}
+										{{ adr.province }}<br>
+									{% endif %}
+									{{ adr.country }}<br>
+
+									{% if adr.phone %}<br>Tél :
+										{{ adr.phone }}
+									{% endif %}
+								</address>
+							{% else %}
+								<p>Aucune adresse de livraison n'a été fournie pour cette commande.</p>
+							{% endif %}
+							{# --------------------------------- #}
+
+						</td>
+					</tr>
+				</table>
+			</td>
+		</tr>
+	</table>
 {% endblock %}

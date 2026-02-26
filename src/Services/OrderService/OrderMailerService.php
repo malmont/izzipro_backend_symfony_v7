@@ -4,36 +4,23 @@ namespace App\Services\OrderService;
 
 use App\Entity\Order;
 use App\Entity\Entreprise;
-use App\Services\EmailConfigurationService\EmailConfigurationService;
-use App\Services\EmailConfigurationService\EmailLogoHelper;
+use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\Mime\Email;
-use Symfony\Component\Mailer\MailerInterface;
-use Twig\Environment;
 use DateTimeInterface;
 
 class OrderMailerService
 {
-    private $mailer;
-    private $twig;
-    private $emailConfigService;
-    private $emailLogoHelper;
+    private $emailSenderService;
     private $logger;
     private $emProvider;
 
     public function __construct(
-        MailerInterface $mailer,
-        Environment $twig,
-        EmailConfigurationService $emailConfigService,
-        EmailLogoHelper $emailLogoHelper,
+        EmailSenderService $emailSenderService,
         LoggerInterface $logger,
         TenantEntityManagerProvider $emProvider
     ) {
-        $this->mailer = $mailer;
-        $this->twig = $twig;
-        $this->emailConfigService = $emailConfigService;
-        $this->emailLogoHelper = $emailLogoHelper;
+        $this->emailSenderService = $emailSenderService;
         $this->logger = $logger;
         $this->emProvider = $emProvider;
     }
@@ -44,37 +31,19 @@ class OrderMailerService
             $user = $order->getUserId();
             if (!$user) throw new \Exception("La commande n'a pas d'utilisateur associé.");
 
-            $emailConfig = $this->emailConfigService->findOneByLocale($locale);
-            $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
-
-            if (!$emailConfig || !$emailConfigTranslation) {
-                $this->logger->warning('EmailConfiguration introuvable pour la locale ' . $locale);
-                return;
-            }
-
-            $fromEmail = $emailConfig->getFromEmail();
-            $fromName = $emailConfigTranslation->getFromName();
-            $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $domain);
-
-            // ✅ AJOUT SÉCURISÉ : On prépare les données
             $itemsData = $this->prepareOrderItemsData($order, $locale);
 
-            $emailContent = $this->twig->render('emails/order_confirmation.html.twig', [
-                'order'     => $order,
-                'itemsData' => $itemsData,
-                'fromName'  => $fromName,
-                'signature' => $emailConfigTranslation->getSignature(),
-                'logoUrl'   => $logoUrl,
-                'domain'    => '',
-            ]);
-
-            $emailMessage = (new Email())
-                ->from(sprintf('%s <%s>', $fromName, $fromEmail))
-                ->to($user->getEmail())
-                ->subject('Confirmation de votre commande n°' . $order->getReference())
-                ->html($emailContent);
-
-            $this->mailer->send($emailMessage);
+            $this->emailSenderService->sendTemplatedEmail(
+                $user->getEmail(),
+                'Confirmation de votre commande n°' . $order->getReference(),
+                'emails/order_confirmation.html.twig',
+                [
+                    'order'     => $order,
+                    'itemsData' => $itemsData,
+                ],
+                $locale,
+                $domain
+            );
         } catch (\Exception $e) {
             $this->logger->error("Erreur email confirmation: " . $e->getMessage());
         }
@@ -89,16 +58,6 @@ class OrderMailerService
             if (!$entreprise || !$entreprise->getEmail()) return;
             $toEmail = $entreprise->getEmail();
 
-            $emailConfig = $this->emailConfigService->findOneByLocale($locale);
-            $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
-
-            if (!$emailConfig || !$emailConfigTranslation) return;
-
-            $fromEmail = $emailConfig->getFromEmail();
-            $fromName = $emailConfigTranslation->getFromName();
-            $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $domain);
-            $signature = $emailConfigTranslation->getSignature();
-
             $labels = [];
             if ($order->getShippingOrder() && $order->getShippingOrder()->getParcels()) {
                 foreach ($order->getShippingOrder()->getParcels() as $parcel) {
@@ -111,23 +70,18 @@ class OrderMailerService
             // ✅ AJOUT SÉCURISÉ
             $itemsData = $this->prepareOrderItemsData($order, $locale);
 
-            $emailContent = $this->twig->render('emails/shipping_notification.html.twig', [
-                'order'     => $order,
-                'itemsData' => $itemsData,
-                'labels'    => $labels,
-                'fromName'  => $fromName,
-                'signature' => $signature,
-                'logoUrl'   => $logoUrl,
-                'domain'    => '',
-            ]);
-
-            $emailMessage = (new Email())
-                ->from(sprintf('%s <%s>', $fromName, $fromEmail))
-                ->to($toEmail)
-                ->subject('Nouvelle commande à expédier : ' . $order->getReference())
-                ->html($emailContent);
-
-            $this->mailer->send($emailMessage);
+            $this->emailSenderService->sendTemplatedEmail(
+                $toEmail,
+                'Nouvelle commande à expédier : ' . $order->getReference(),
+                'emails/shipping_notification.html.twig',
+                [
+                    'order'     => $order,
+                    'itemsData' => $itemsData,
+                    'labels'    => $labels,
+                ],
+                $locale,
+                $domain
+            );
         } catch (\Exception $e) {
             $this->logger->error("Erreur email shipping: " . $e->getMessage());
         }

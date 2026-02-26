@@ -20,6 +20,7 @@ use Symfony\Component\Security\Http\Authenticator\Passport\Credentials\PasswordC
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\CsrfTokenBadge;
 use Symfony\Component\Security\Http\Util\TargetPathTrait;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
 use Symfony\Component\Mailer\MailerInterface;
 use Twig\Environment;
 
@@ -31,24 +32,18 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
 
     private UrlGeneratorInterface $urlGenerator;
     private TenantEntityManagerProvider $tenantEmProvider;
-    private MailerInterface $mailer;
     private RequestStack $requestStack;
-    private Environment $twig;
     private OtpService $otpService;
 
     public function __construct(
         UrlGeneratorInterface $urlGenerator,
         TenantEntityManagerProvider $tenantEmProvider,
-        MailerInterface $mailer,
         RequestStack $requestStack,
-        Environment $twig,
         OtpService $otpService
     ) {
         $this->urlGenerator     = $urlGenerator;
         $this->tenantEmProvider = $tenantEmProvider;
-        $this->mailer           = $mailer;
         $this->requestStack     = $requestStack;
-        $this->twig             = $twig;
         $this->otpService       = $otpService;
     }
 
@@ -58,7 +53,7 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
         $request->getSession()->set(Security::LAST_USERNAME, $email);
 
         return new Passport(
-            new UserBadge($email, function(string $userIdentifier) {
+            new UserBadge($email, function (string $userIdentifier) {
                 // Si besoin de multi-tenant ici aussi, on peut initialiser
                 $em = $this->tenantEmProvider->getEntityManager();
                 $user = $em->getRepository(User::class)->findOneBy(['email' => $userIdentifier]);
