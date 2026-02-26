@@ -22,6 +22,7 @@ use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Twig\Environment;
+use App\Services\EmailConfigurationService\EmailSenderService;
 
 class ResetPasswordControllerTest extends TestCase
 {
@@ -34,7 +35,7 @@ class ResetPasswordControllerTest extends TestCase
     private $controller;
     private $entityManager;
     private $connection;
-
+    private $emailSenderService;
     protected function setUp(): void
     {
         $this->tenantEmProvider = $this->createMock(TenantEntityManagerProvider::class);
@@ -45,6 +46,8 @@ class ResetPasswordControllerTest extends TestCase
         $this->entityManager = $this->createMock(EntityManagerInterface::class);
         $this->connection = $this->createMock(Connection::class);
 
+        $this->emailSenderService = $this->createMock(EmailSenderService::class);
+
         // Setup EM and Connection mocks
         $this->tenantEmProvider->method('getEntityManager')->willReturn($this->entityManager);
         $this->entityManager->method('getConnection')->willReturn($this->connection);
@@ -52,7 +55,7 @@ class ResetPasswordControllerTest extends TestCase
         $this->controller = new ResetPasswordController(
             $this->tenantEmProvider,
             $this->tenantManager,
-            $this->emailConfigService,
+            $this->emailSenderService,
             $this->logger,
             $this->emailLogoHelper
         );
@@ -75,7 +78,6 @@ class ResetPasswordControllerTest extends TestCase
         $request = new Request([], [], [], [], [], ['HTTP_HOST' => 'locahost'], json_encode($requestData));
 
         // 2. Mocks
-        $mailer = $this->createMock(MailerInterface::class);
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
 
         $userRepo = $this->createMock(EntityRepository::class);
@@ -100,15 +102,15 @@ class ResetPasswordControllerTest extends TestCase
             ['twig', $twig]
         ]));
 
-        $twig->expects($this->once())->method('render')->willReturn('<body>Reset Link</body>');
+        $twig->method('render')->willReturn('<body>Reset Link</body>');
 
         // Expectations
         $this->entityManager->expects($this->once())->method('flush'); // Saving token
-        $mailer->expects($this->once())->method('send');
+        $this->emailSenderService->expects($this->once())->method('sendTemplatedEmail');
         $urlGenerator->expects($this->once())->method('generate')->willReturn('http://reset-link');
 
         // Execute
-        $response = $this->controller->requestPasswordReset($request, $mailer, $urlGenerator);
+        $response = $this->controller->requestPasswordReset($request, $urlGenerator);
 
         // Verify
         $this->assertInstanceOf(JsonResponse::class, $response);
@@ -119,14 +121,13 @@ class ResetPasswordControllerTest extends TestCase
     {
         $requestData = ['email' => 'unknown@example.com'];
         $request = new Request([], [], [], [], [], [], json_encode($requestData));
-        $mailer = $this->createMock(MailerInterface::class);
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
 
         $userRepo = $this->createMock(EntityRepository::class);
         $this->entityManager->method('getRepository')->willReturn($userRepo);
         $userRepo->method('findOneBy')->willReturn(null);
 
-        $response = $this->controller->requestPasswordReset($request, $mailer, $urlGenerator);
+        $response = $this->controller->requestPasswordReset($request, $urlGenerator);
 
         $this->assertInstanceOf(JsonResponse::class, $response);
         $this->assertEquals(200, $response->getStatusCode());

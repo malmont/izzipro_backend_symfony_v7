@@ -23,6 +23,7 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Twig\Environment;
+use App\Services\EmailConfigurationService\EmailSenderService;
 
 class RegistrationControllerTest extends TestCase
 {
@@ -37,7 +38,7 @@ class RegistrationControllerTest extends TestCase
     private $container;
     private $controller;
     private $entityManager;
-
+    private $emailSenderService;
     protected function setUp(): void
     {
         $this->emailVerifier = $this->createMock(EmailVerifier::class);
@@ -50,6 +51,8 @@ class RegistrationControllerTest extends TestCase
         $this->emailLogoHelper = $this->createMock(EmailLogoHelper::class);
         $this->entityManager = $this->createMock(\Doctrine\ORM\EntityManagerInterface::class);
 
+        $this->emailSenderService = $this->createMock(EmailSenderService::class);
+
         // Setup EM provider
         $this->tenantEmProvider->method('getEntityManager')->willReturn($this->entityManager);
 
@@ -60,7 +63,7 @@ class RegistrationControllerTest extends TestCase
             $this->tenantManager,
             $this->logger,
             $this->gemsuiteClientManager,
-            $this->emailConfigurationService,
+            $this->emailSenderService,
             $this->emailLogoHelper
         );
 
@@ -88,7 +91,6 @@ class RegistrationControllerTest extends TestCase
         $userPasswordHasher = $this->createMock(UserPasswordHasherInterface::class);
         $userPasswordHasher->method('hashPassword')->willReturn('hashed_secret');
 
-        $mailer = $this->createMock(MailerInterface::class);
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
         $urlGenerator->method('generate')->willReturn('https://example.com/verify');
 
@@ -133,15 +135,15 @@ class RegistrationControllerTest extends TestCase
             return false;
         });
 
-        $twig->expects($this->once())->method('render')->willReturn('<html>Email Content</html>');
+        $twig->method('render')->willReturn('<html>Email Content</html>');
 
         // Mailer Expectation
-        $mailer->expects($this->once())->method('send');
+        $this->emailSenderService->expects($this->once())->method('sendTemplatedEmail');
         // Logger Expectation
         $this->logger->expects($this->never())->method('critical');
 
         // Execute
-        $response = $this->controller->registerApi($request, $userPasswordHasher, $mailer, $urlGenerator);
+        $response = $this->controller->registerApi($request, $userPasswordHasher, $urlGenerator);
 
         // Verify
         $this->assertInstanceOf(JsonResponse::class, $response);
@@ -161,7 +163,6 @@ class RegistrationControllerTest extends TestCase
         $request = new Request([], [], [], [], [], [], json_encode($requestData));
 
         $userPasswordHasher = $this->createMock(UserPasswordHasherInterface::class);
-        $mailer = $this->createMock(MailerInterface::class);
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
 
         $userRepo = $this->createMock(EntityRepository::class);
@@ -170,7 +171,7 @@ class RegistrationControllerTest extends TestCase
         // User FOUND
         $userRepo->expects($this->once())->method('findOneBy')->willReturn(new User());
 
-        $response = $this->controller->registerApi($request, $userPasswordHasher, $mailer, $urlGenerator);
+        $response = $this->controller->registerApi($request, $userPasswordHasher, $urlGenerator);
 
         $this->assertEquals(409, $response->getStatusCode());
         $content = json_decode($response->getContent(), true);
@@ -188,10 +189,9 @@ class RegistrationControllerTest extends TestCase
         $request = new Request([], [], [], [], [], [], json_encode($requestData));
 
         $userPasswordHasher = $this->createMock(UserPasswordHasherInterface::class);
-        $mailer = $this->createMock(MailerInterface::class);
         $urlGenerator = $this->createMock(UrlGeneratorInterface::class);
 
-        $response = $this->controller->registerApi($request, $userPasswordHasher, $mailer, $urlGenerator);
+        $response = $this->controller->registerApi($request, $userPasswordHasher, $urlGenerator);
 
         $this->assertEquals(400, $response->getStatusCode());
         $content = json_decode($response->getContent(), true);

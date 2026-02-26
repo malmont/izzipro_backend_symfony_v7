@@ -17,11 +17,12 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Mailer\MailerInterface;
 use Twig\Environment;
+use App\Services\EmailConfigurationService\EmailSenderService;
 
 class OtpServiceTest extends TestCase
 {
     private $tenantEmProvider;
-    private $mailer;
+    private $emailSenderService;
     private $twig;
     private $emailConfigService;
     private $emailLogoHelper;
@@ -31,7 +32,7 @@ class OtpServiceTest extends TestCase
     protected function setUp(): void
     {
         $this->tenantEmProvider = $this->createMock(TenantEntityManagerProvider::class);
-        $this->mailer = $this->createMock(MailerInterface::class);
+        $this->emailSenderService = $this->createMock(EmailSenderService::class);
         $this->twig = $this->createMock(Environment::class);
         $this->emailConfigService = $this->createMock(EmailConfigurationService::class);
         $this->emailLogoHelper = $this->createMock(EmailLogoHelper::class);
@@ -41,10 +42,8 @@ class OtpServiceTest extends TestCase
 
         $this->otpService = new OtpService(
             $this->tenantEmProvider,
-            $this->mailer,
-            $this->twig,
-            $this->emailConfigService,
-            $this->emailLogoHelper
+            $this->emailSenderService,
+            $this->em
         );
     }
 
@@ -66,7 +65,7 @@ class OtpServiceTest extends TestCase
         $this->em->expects($this->exactly(2))->method('flush');
 
         // Expect Mail Sent
-        $this->mailer->expects($this->once())->method('send');
+        $this->emailSenderService->expects($this->once())->method('sendTemplatedEmail');
 
         // Mock basics for email config to avoid null errors if handled loosely
         $this->emailConfigService->method('findOneByLocale')->willReturn(null);
@@ -106,7 +105,7 @@ class OtpServiceTest extends TestCase
             ->method('persist')
             ->with($this->isInstanceOf(OtpCode::class));
 
-        $this->mailer->expects($this->once())->method('send');
+        $this->emailSenderService->expects($this->once())->method('sendTemplatedEmail');
         $this->twig->method('render')->willReturn('<body>Content</body>');
 
         $this->otpService->generateAndSendOtp($user, $request);

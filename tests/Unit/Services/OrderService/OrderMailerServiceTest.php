@@ -18,10 +18,11 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Twig\Environment;
+use App\Services\EmailConfigurationService\EmailSenderService;
 
 class OrderMailerServiceTest extends TestCase
 {
-    private $mailer;
+    private $emailSenderService;
     private $twig;
     private $emailConfigService;
     private $emailLogoHelper;
@@ -31,7 +32,7 @@ class OrderMailerServiceTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->mailer = $this->createMock(MailerInterface::class);
+        $this->emailSenderService = $this->createMock(EmailSenderService::class);
         $this->twig = $this->createMock(Environment::class);
         $this->emailConfigService = $this->createMock(EmailConfigurationService::class);
         $this->emailLogoHelper = $this->createMock(EmailLogoHelper::class);
@@ -39,10 +40,7 @@ class OrderMailerServiceTest extends TestCase
         $this->emProvider = $this->createMock(TenantEntityManagerProvider::class);
 
         $this->orderMailerService = new OrderMailerService(
-            $this->mailer,
-            $this->twig,
-            $this->emailConfigService,
-            $this->emailLogoHelper,
+            $this->emailSenderService,
             $this->logger,
             $this->emProvider
         );
@@ -75,12 +73,16 @@ class OrderMailerServiceTest extends TestCase
 
         $this->twig->method('render')->willReturn('<html>Content</html>');
 
-        $this->mailer->expects($this->once())
-            ->method('send')
-            ->with($this->callback(function (Email $emailMessage) use ($email) {
-                return $emailMessage->getTo()[0]->getAddress() === $email &&
-                    $emailMessage->getSubject() === 'Confirmation de votre commande n°REF123';
-            }));
+        $this->emailSenderService->expects($this->once())
+            ->method('sendTemplatedEmail')
+            ->with(
+                $email,
+                'Confirmation de votre commande n°REF123',
+                'emails/order_confirmation.html.twig',
+                $this->anything(),
+                $locale,
+                $domain
+            );
 
         $this->orderMailerService->sendOrderConfirmation($order, $locale, $domain);
     }
@@ -136,12 +138,16 @@ class OrderMailerServiceTest extends TestCase
 
         $this->twig->method('render')->willReturn('<html>Shipping Content</html>');
 
-        $this->mailer->expects($this->once())
-            ->method('send')
-            ->with($this->callback(function (Email $emailMessage) use ($companyEmail) {
-                return $emailMessage->getTo()[0]->getAddress() === $companyEmail &&
-                    $emailMessage->getSubject() === 'Nouvelle commande à expédier : REF456';
-            }));
+        $this->emailSenderService->expects($this->once())
+            ->method('sendTemplatedEmail')
+            ->with(
+                $companyEmail,
+                'Nouvelle commande à expédier : REF456',
+                'emails/shipping_notification.html.twig',
+                $this->anything(),
+                $locale,
+                $domain
+            );
 
         $this->orderMailerService->sendShippingNotification($order, $locale, $domain);
     }
