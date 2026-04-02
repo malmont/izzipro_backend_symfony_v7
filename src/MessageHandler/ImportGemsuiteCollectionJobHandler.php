@@ -67,43 +67,29 @@ class ImportGemsuiteCollectionJobHandler
             $itemCount = 0;
             $isLastPage = false;
             
-            if ($type === 'categories') {
-                $this->logger->warning(sprintf('Collection "%s" non paginée. Tentative de "Big Dump".', $type));
-                $response = $this->client->request('GET', $this->gemsuiteApiUrl . $type, [
-                    'auth_bearer' => $message->getGemsuiteToken(),
-                ]);
-                $data = $response->toArray();
-                $items = $data['data'] ?? []; // Sécurité
-                $itemCount = count($items);
-                $isLastPage = true;
+            $response = $this->client->request('GET', $this->gemsuiteApiUrl . $type, [
+                'auth_bearer' => $message->getGemsuiteToken(),
+                'query' => [
+                    'page' => $page,
+                    'per_page' => self::PAGE_LIMIT
+                ]
+            ]);
+        
+            $data = $response->toArray();
+            if (!isset($data['data'])) { throw new \Exception("Clé 'data' manquante de l'API {$type}"); }
 
-                $syncJob->setTotalItems($syncJob->getTotalItems() + $itemCount);
-
-            } else {
-                $response = $this->client->request('GET', $this->gemsuiteApiUrl . $type, [
-                    'auth_bearer' => $message->getGemsuiteToken(),
-                    'query' => [
-                        'page' => $page,
-                        'per_page' => self::PAGE_LIMIT
-                    ]
-                ]);
+            $items = $data['data'];
+            $itemCount = count($items);
             
-                $data = $response->toArray();
-                if (!isset($data['data'])) { throw new \Exception("Clé 'data' manquante de l'API {$type}"); }
-
-                $items = $data['data'];
-                $itemCount = count($items);
-                
-                if ($page === 1 && isset($data['meta']['total'])) {
-                    $totalFromApi = (int)$data['meta']['total'];
-                    $syncJob->setTotalItems($syncJob->getTotalItems() + $totalFromApi);
-                }
-                
-                if (isset($data['meta']['current_page']) && isset($data['meta']['last_page'])) {
-                    $isLastPage = ((int)$data['meta']['current_page'] === (int)$data['meta']['last_page']);
-                } else {
-                    $isLastPage = ($itemCount < self::PAGE_LIMIT);
-                }
+            if ($page === 1 && isset($data['meta']['total'])) {
+                $totalFromApi = (int)$data['meta']['total'];
+                $syncJob->setTotalItems($syncJob->getTotalItems() + $totalFromApi);
+            }
+            
+            if (isset($data['meta']['current_page']) && isset($data['meta']['last_page'])) {
+                $isLastPage = ((int)$data['meta']['current_page'] === (int)$data['meta']['last_page']);
+            } else {
+                $isLastPage = ($itemCount < self::PAGE_LIMIT);
             }
             
             $tenantEm->flush();
