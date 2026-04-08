@@ -9,27 +9,28 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Psr\Log\LoggerInterface;
+use App\Services\GemsuiteImporterService\GemsuiteRentalWebhookService;
 
 class GemsuiteWebhookController extends AbstractController
 {
     public function __construct(
         private GemsuiteSyncHandler $syncHandler,
         private GemsuiteCompanySyncHandler $companySyncHandler,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private GemsuiteRentalWebhookService $rentalWebhookService
     ) {
     }
 
 
     #[Route('/api/webhooks/gemsuite/{tenant_code}', name: 'api_webhook_gemsuite_test', methods: ['POST', 'PUT', 'GET'])]
-    
     #[Route('/api/webhooks/gemsuite/{tenant_code}/{endpoint}/{id}', name: 'api_webhook_gemsuite_event', methods: ['POST', 'PUT', 'GET'])]
     public function handleWebhook(
+        \Symfony\Component\HttpFoundation\Request $request,
         string $tenant_code,
         ?string $endpoint = null, 
         ?int $id = null  
     ): Response {
         
-
         if ($endpoint === null) {
             $this->logger->info(sprintf(
                 'Requête de validation de webhook reçue pour le tenant "%s". Réponse 200 OK.',
@@ -39,14 +40,16 @@ class GemsuiteWebhookController extends AbstractController
             return $this->json(['status' => 'validation_received']);
         }
 
+        $payload = $request->getContent() ? json_decode($request->getContent(), true) : [];
+
         $this->logger->info(sprintf(
-            'Webhook reçu pour tenant "%s" | Endpoint: "%s" | ID: %d',
+            'Webhook reçu pour tenant "%s" | Endpoint: "%s" | ID: %d | Payload: %s',
             $tenant_code,
             $endpoint,
-            $id
+            $id,
+            json_encode($payload)
         ));
         
-
         try {
             switch ($endpoint) {
                 case 'products':
@@ -60,9 +63,31 @@ class GemsuiteWebhookController extends AbstractController
                 case 'company':
                     $this->companySyncHandler->handleCompanyUpdate($tenant_code);
                     break;
+                
                 case 'clients':
                     $this->syncHandler->handleClientUpdate($tenant_code, $id);
-                    break;    
+                    break; 
+
+                case 'rentals':
+                    // TODO: TEMP WORKAROUND
+                    // The payload contains a 'data' array with multiple vehicles and their appointments
+                    $data = $payload['data'] ?? [];
+                    if (!empty($data)) {
+                        foreach ($data as $vehicleData) {
+                            $vId = $vehicleData['vehicle_id'] ?? null;
+                            $appointments = $vehicleData['appointments'] ?? [];
+                            if ($vId && !empty($appointments)) {
+                                $this->rentalWebhookService->handleRentalWebhook($tenant_code, $vId, $appointments);
+                            }
+                        }
+                    } else if (isset($payload['appointments'])) {
+                        // Fallback for single vehicle format
+                        $this->rentalWebhookService->handleRentalWebhook($tenant_code, $id, $payload['appointments']);
+                    } else {
+                        $this->logger->warning('[RentalWebhook] Webhook received but no data or appointments in payload.');
+                    }
+                    break;
+
                 default:
                     $this->logger->warning(sprintf('Endpoint de webhook non géré : "%s"', $endpoint));
                     break;

@@ -23,6 +23,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
+use App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService;
+use App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler;
 use Symfony\Component\String\Slugger\SluggerInterface;
 
 #[AsMessageHandler]
@@ -36,7 +38,9 @@ class ProcessGemsuiteEntityJobHandler
         private GemsuiteImageUrlBuilder $imageUrlBuilder,
         private GemsuiteAttributeProcessor $attributeProcessor,
         private GemsuiteStockCalculator $stockCalculator,
-        private SluggerInterface $slugger
+        private SluggerInterface $slugger,
+        private GemsuiteRentalWorkaroundService $rentalWorkaround,
+        private GemsuiteCompanySyncHandler $companySyncHandler
     ) {}
 
     public function __invoke(ProcessGemsuiteEntityJob $message)
@@ -87,9 +91,12 @@ class ProcessGemsuiteEntityJobHandler
                 case 'product_variant':
                     $this->processProductVariant($tenantEm, $data);
                     break;
+                case 'company_config':
+                    $this->companySyncHandler->handleCompanyUpdate($tenant['code']);
+                    break;
             }
 
-            if ($entity === null && $type !== 'product_variant') {
+            if ($entity === null && $type !== 'product_variant' && $type !== 'company_config') {
                 $this->logger->info(sprintf('[Micro-Job] Entité %s ID %s a été ignorée (process a retourné null).', $type, $entityId));
             }
 
@@ -103,9 +110,14 @@ class ProcessGemsuiteEntityJobHandler
                     get_class($entity),
                     $entity->getId()
                 ));
-            } else if ($type !== 'product_variant' && $entity !== null) {
+            } else if ($type !== 'product_variant' && $type !== 'company_config' && $entity !== null) {
                 $tenantEm->flush();
             }
+
+            // Clear the EntityManager to prevent Doctrine from caching old category values in the worker
+            $tenantEm->clear();
+
+            $this->logger->info(sprintf('[Micro-Job Success] Job terminé pour "%s" ID %s', $type, $entityId));
 
             $this->updateSyncJobCounter($tenantEm, $message->getSyncJobId());
         } catch (\Throwable $e) {
@@ -203,6 +215,11 @@ class ProcessGemsuiteEntityJobHandler
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $data['category_id']]);
             if ($category) {
                 $product->addCategory($category);
+
+                // TODO: TEMP WORKAROUND - Config de location
+                if ($category->isRentalCategory()) {
+                    $this->rentalWorkaround->applyRentalProductConfiguration($product, $data);
+                }
 
                 // Associer la ShippingClass de la catégorie au produit
                 $shippingClassId = $category->getExternalShippingClassId();

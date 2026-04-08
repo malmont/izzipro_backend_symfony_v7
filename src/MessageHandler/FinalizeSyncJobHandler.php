@@ -16,7 +16,10 @@ class FinalizeSyncJobHandler
     public function __construct(
         private TenantConnectionManager $tenantManager,
         private TenantEntityManagerProvider $emProvider,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private \Symfony\Contracts\HttpClient\HttpClientInterface $client,
+        private \App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService $workaroundService,
+        private string $gemsuiteApiUrl
     ) {
     }
 
@@ -42,6 +45,9 @@ class FinalizeSyncJobHandler
                 if ($syncJob->getTotalItems() > 0) {
                     $syncJob->setProcessedItems($syncJob->getTotalItems());
                 }
+
+                // TODO: TEMP WORKAROUND - Full Sync Rentals
+                $this->syncRentalsData($tenant['code']);
                 
                 $tenantEm->flush();
                 
@@ -49,6 +55,41 @@ class FinalizeSyncJobHandler
             }
         } catch (\Throwable $e) {
             $this->logger->error('[FinalizeJob Error] ' . $e->getMessage());
+        }
+    }
+
+    private function syncRentalsData(string $tenantCode): void
+    {
+        $token = $this->tenantManager->getTenantToken($tenantCode);
+        if (!$token) return;
+
+        try {
+            $this->logger->info(sprintf('[FinalizeJob] Syncing Vehicles for Workaround on tenant "%s"', $tenantCode));
+            $vehiclesResponse = $this->client->request('GET', $this->gemsuiteApiUrl . 'vehicles', [
+                'auth_bearer' => $token,
+            ]);
+            
+            // Assuming response looks like {"data": [...]}
+            $vehiclesData = $vehiclesResponse->toArray()['data'] ?? [];
+            if (!empty($vehiclesData)) {
+                $this->workaroundService->syncVehicles($vehiclesData);
+            }
+
+            $this->logger->info(sprintf('[FinalizeJob] Syncing Rentals for Workaround on tenant "%s"', $tenantCode));
+            $rentalsResponse = $this->client->request('GET', $this->gemsuiteApiUrl . 'rentals', [
+                'auth_bearer' => $token,
+            ]);
+            
+            $rentalsData = $rentalsResponse->toArray()['data'] ?? [];
+            foreach ($rentalsData as $rentalData) {
+                if (isset($rentalData['vehicle_id']) && isset($rentalData['appointments'])) {
+                    $this->workaroundService->syncRentalsForVehicle((int)$rentalData['vehicle_id'], $rentalData['appointments']);
+                }
+            }
+            
+            $this->logger->info('[FinalizeJob] Workaround location sync successful.');
+        } catch (\Throwable $e) {
+            $this->logger->error('[FinalizeJob] Rentals Sync failed: ' . $e->getMessage());
         }
     }
 }

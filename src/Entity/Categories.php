@@ -37,6 +37,9 @@ class Categories implements TranslatableInterface
     #[ORM\Column(nullable: true)]
     private ?int $externalShippingClassId = null;
 
+    #[ORM\Column(options: ['default' => false])]
+    private ?bool $isRentalCategory = false;
+
     #[ORM\OneToMany(
         mappedBy: 'category',
         targetEntity: CategoriesTranslation::class,
@@ -210,5 +213,17 @@ class Categories implements TranslatableInterface
             }
         }
         return null;
+    }
+
+    public function isRentalCategory(): ?bool
+    {
+        return $this->isRentalCategory;
+    }
+
+    public function setIsRentalCategory(bool $isRentalCategory): static
+    {
+        $this->isRentalCategory = $isRentalCategory;
+
+        return $this;
     }
 }

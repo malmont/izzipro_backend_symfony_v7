@@ -25,6 +25,7 @@ class ImportGemsuiteCollectionJobHandler
     private const IMPORT_CHAIN = [
         'clients_contacts',
         'categories',
+        'company_config',
         'products',
     ];
 
@@ -62,6 +63,17 @@ class ImportGemsuiteCollectionJobHandler
             $tenantEm = $this->emProvider->getEntityManager();
             $syncJob = $tenantEm->getRepository(SyncJob::class)->find($message->getSyncJobId());
             if (!$syncJob) { throw new \Exception("SyncJob non trouvé"); }
+
+            if ($type === 'company_config') {
+                $this->messageBus->dispatch(new ProcessGemsuiteEntityJob(
+                    $message->getTenantId(),
+                    $message->getSyncJobId(),
+                    'company_config',
+                    []
+                ));
+                $this->dispatchNextJob($type, $message);
+                return;
+            }
 
             $items = [];
             $itemCount = 0;

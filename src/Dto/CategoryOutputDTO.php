@@ -9,6 +9,7 @@ class CategoryOutputDTO
     public ?string $name;
     public ?string $description;
     public ?string $image;
+    public ?bool $isRentalCategory;
 
     public function __construct(Categories $category, string $host, string $locale)
     {
@@ -17,6 +18,7 @@ class CategoryOutputDTO
         $this->id = $category->getId();
         $this->name = $translation?->getName() ?? $category->getName(); 
         $this->description = $translation?->getDescription() ?? $category->getDescription(); 
+        $this->isRentalCategory = $category->isRentalCategory();
 
         $imagePath = $category->getImage();
         if (empty($imagePath)) {
@@ -38,6 +40,7 @@ class CategoryOutputDTO
             'name' => $this->name,
             'description' => $this->description,
             'image' => $this->image,
+            'isRentalCategory' => $this->isRentalCategory,
         ];
     }
 }

@@ -138,6 +138,7 @@ class ProductOutputCategoryDto
                 'id'          => $category->getId(),
                 'name'        => $category->getTranslation($locale)?->getName(),
                 'description' => $category->getTranslation($locale)?->getDescription(),
+                'isRentalCategory' => $category->isRentalCategory(),
                 'image'       => $category->getImage() 
                     ? $host . '/assets/uploads/categories/' . $category->getImage() 
                     : null,
