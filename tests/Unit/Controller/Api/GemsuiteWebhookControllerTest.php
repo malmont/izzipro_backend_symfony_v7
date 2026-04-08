@@ -30,7 +30,8 @@ class GemsuiteWebhookControllerTest extends TestCase
         $this->controller = new GemsuiteWebhookController(
             $this->syncHandler,
             $this->companySyncHandler,
-            $this->logger
+            $this->logger,
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWebhookService::class)
         );
 
         $this->container = $this->createMock(ContainerInterface::class);
@@ -54,7 +55,8 @@ class GemsuiteWebhookControllerTest extends TestCase
             ->method('info')
             ->with($this->stringContains('validation'));
 
-        $response = $this->controller->handleWebhook($tenant_code);
+        $request = new \Symfony\Component\HttpFoundation\Request();
+        $response = $this->controller->handleWebhook($request, $tenant_code);
 
         $this->assertInstanceOf(JsonResponse::class, $response);
         $this->assertEquals(Response::HTTP_OK, $response->getStatusCode());
@@ -70,7 +72,8 @@ class GemsuiteWebhookControllerTest extends TestCase
             ->method('handleProductUpdate')
             ->with($tenant_code, $id);
 
-        $response = $this->controller->handleWebhook($tenant_code, $endpoint, $id);
+        $request = new \Symfony\Component\HttpFoundation\Request();
+        $response = $this->controller->handleWebhook($request, $tenant_code, $endpoint, $id);
 
         $this->assertEquals(Response::HTTP_OK, $response->getStatusCode());
     }
@@ -85,7 +88,8 @@ class GemsuiteWebhookControllerTest extends TestCase
             ->method('handleCategoryUpdate')
             ->with($tenant_code, $id);
 
-        $response = $this->controller->handleWebhook($tenant_code, $endpoint, $id);
+        $request = new \Symfony\Component\HttpFoundation\Request();
+        $response = $this->controller->handleWebhook($request, $tenant_code, $endpoint, $id);
 
         $this->assertEquals(Response::HTTP_OK, $response->getStatusCode());
     }
@@ -100,7 +104,8 @@ class GemsuiteWebhookControllerTest extends TestCase
             ->method('handleCompanyUpdate')
             ->with($tenant_code);
 
-        $response = $this->controller->handleWebhook($tenant_code, $endpoint, $id);
+        $request = new \Symfony\Component\HttpFoundation\Request();
+        $response = $this->controller->handleWebhook($request, $tenant_code, $endpoint, $id);
 
         $this->assertEquals(Response::HTTP_OK, $response->getStatusCode());
     }
@@ -115,7 +120,8 @@ class GemsuiteWebhookControllerTest extends TestCase
             ->method('handleClientUpdate')
             ->with($tenant_code, $id);
 
-        $response = $this->controller->handleWebhook($tenant_code, $endpoint, $id);
+        $request = new \Symfony\Component\HttpFoundation\Request();
+        $response = $this->controller->handleWebhook($request, $tenant_code, $endpoint, $id);
 
         $this->assertEquals(Response::HTTP_OK, $response->getStatusCode());
     }
@@ -130,7 +136,8 @@ class GemsuiteWebhookControllerTest extends TestCase
             ->method('warning')
             ->with($this->stringContains('non géré'));
 
-        $response = $this->controller->handleWebhook($tenant_code, $endpoint, $id);
+        $request = new \Symfony\Component\HttpFoundation\Request();
+        $response = $this->controller->handleWebhook($request, $tenant_code, $endpoint, $id);
 
         $this->assertEquals(Response::HTTP_OK, $response->getStatusCode());
     }
@@ -149,7 +156,8 @@ class GemsuiteWebhookControllerTest extends TestCase
             ->method('error')
             ->with($this->stringContains('Erreur lors du traitement'));
 
-        $response = $this->controller->handleWebhook($tenant_code, $endpoint, $id);
+        $request = new \Symfony\Component\HttpFoundation\Request();
+        $response = $this->controller->handleWebhook($request, $tenant_code, $endpoint, $id);
 
         $this->assertEquals(Response::HTTP_INTERNAL_SERVER_ERROR, $response->getStatusCode());
     }

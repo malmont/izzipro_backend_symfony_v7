@@ -131,6 +131,11 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
                 [HomeSlider::class, $homeSliderRepo],
                 [ExploreCard::class, $exploreCardRepo],
             ]));
+            
+        $queryMock = $this->createMock(\Doctrine\ORM\AbstractQuery::class);
+        $queryMock->method('execute')->willReturn(1);
+        $queryMock->method('setParameter')->willReturn($queryMock);
+        $entityManager->method('createQuery')->willReturn($queryMock);
 
         // We expect persist for Entreprise. HomeSlider/ExploreCard loop won't persist anything as data is empty
         $entityManager->expects($this->atLeast(1))->method('persist');

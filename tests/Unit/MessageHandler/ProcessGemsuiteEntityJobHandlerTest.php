@@ -148,7 +148,9 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
             $imgBuilder,
             $attProcessor,
             $stockCalculator,
-            $slugger
+            $slugger,
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class)
         );
 
         $message = new ProcessGemsuiteEntityJob(1, 999, 'product_parent', $productData);
@@ -184,7 +186,9 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
             $this->createMock(GemsuiteImageUrlBuilder::class),
             $this->createMock(GemsuiteAttributeProcessor::class),
             $this->createMock(GemsuiteStockCalculator::class),
-            $this->createMock(SluggerInterface::class)
+            $this->createMock(SluggerInterface::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class)
         );
 
         $handler(new ProcessGemsuiteEntityJob(1, 999, 'product_parent', $inactiveData));

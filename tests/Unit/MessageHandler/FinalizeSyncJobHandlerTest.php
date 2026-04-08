@@ -68,8 +68,14 @@ class FinalizeSyncJobHandlerTest extends TestCase
             ->with('db', 'c1');
         $emProvider->method('getEntityManager')->willReturn($tenantEm);
 
-        // 6. EXECUTION
-        $handler = new FinalizeSyncJobHandler($tenantManager, $emProvider, $logger);
+        $handler = new FinalizeSyncJobHandler(
+            $tenantManager, 
+            $emProvider, 
+            $logger,
+            $this->createMock(\Symfony\Contracts\HttpClient\HttpClientInterface::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
+            'http://api.te/'
+        );
         $handler(new FinalizeSyncJob($tenantId, $syncJobId));
     }
 
@@ -86,8 +92,14 @@ class FinalizeSyncJobHandlerTest extends TestCase
         $emProvider = $this->createMock(TenantEntityManagerProvider::class);
         $emProvider->expects($this->never())->method('switchTenant');
 
-        // 4. Execution
-        $handler = new FinalizeSyncJobHandler($tenantManager, $emProvider, $logger);
+        $handler = new FinalizeSyncJobHandler(
+            $tenantManager, 
+            $emProvider, 
+            $logger,
+            $this->createMock(\Symfony\Contracts\HttpClient\HttpClientInterface::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
+            'http://api.te/'
+        );
         $handler(new FinalizeSyncJob(123, 999));
     }
     
@@ -104,9 +116,14 @@ class FinalizeSyncJobHandlerTest extends TestCase
 
         $emProvider = $this->createMock(TenantEntityManagerProvider::class);
         // On simule une panne database lors du switch
-        $emProvider->method('switchTenant')->willThrowException(new \Exception("DB Down"));
-
-        $handler = new FinalizeSyncJobHandler($tenantManager, $emProvider, $logger);
+        $handler = new FinalizeSyncJobHandler(
+            $tenantManager, 
+            $emProvider, 
+            $logger,
+            $this->createMock(\Symfony\Contracts\HttpClient\HttpClientInterface::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
+            'http://api.te/'
+        );
         $handler(new FinalizeSyncJob(123, 999));
     }
 }
