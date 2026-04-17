@@ -11,6 +11,8 @@ use App\Repository\ProductRepository;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\Common\Collections\ArrayCollection;
 use App\Entity\TranslatableInterface;
+use ApiPlatform\Metadata\ApiResource;
+use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: ProductRepository::class)]
 #[ApiResource]
@@ -153,7 +155,11 @@ class Product implements TranslatableInterface
     #[ORM\OneToMany(mappedBy: 'product', targetEntity: Booking::class)]
     private Collection $bookings;
 
+    #[ORM\ManyToOne(inversedBy: 'products')]
+    private ?SaleUnit $saleUnit = null;
+
     public function __construct()
+
     {
         $this->category = new ArrayCollection();
         $this->relatedProducts = new ArrayCollection();
@@ -309,6 +315,7 @@ class Product implements TranslatableInterface
     {
         if (!$this->category->contains($category)) {
             $this->category->add($category);
+            $category->addProduct($this);
         }
 
         return $this;
@@ -316,7 +323,9 @@ class Product implements TranslatableInterface
 
     public function removeCategory(Categories $category): self
     {
-        $this->category->removeElement($category);
+        if ($this->category->removeElement($category)) {
+            $category->removeProduct($this);
+        }
 
         return $this;
     }
@@ -597,6 +606,19 @@ class Product implements TranslatableInterface
         return $this;
     }
 
+    public function getSaleUnit(): ?SaleUnit
+    {
+        return $this->saleUnit;
+    }
+
+    public function setSaleUnit(?SaleUnit $saleUnit): static
+    {
+        $this->saleUnit = $saleUnit;
+
+        return $this;
+    }
+
+
     public function isLandingPage(): ?bool
     {
         return $this->isLandingPage;
@@ -843,4 +865,31 @@ class Product implements TranslatableInterface
         return $this;
     }
 
+    /**
+     * Récupère le RentalPack associé au produit via ses catégories.
+     */
+    public function getRentalPack(): ?RentalPack
+    {
+        foreach ($this->getCategory() as $category) {
+            foreach ($category->getRentalPacks() as $pack) {
+                return $pack;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Récupère TOUS les RentalPacks associés au produit via ses catégories.
+     * @return array
+     */
+    public function getRentalPacks(): array
+    {
+        $packs = [];
+        foreach ($this->getCategory() as $category) {
+            foreach ($category->getRentalPacks() as $pack) {
+                $packs[$pack->getId()] = $pack;
+            }
+        }
+        return array_values($packs);
+    }
 }

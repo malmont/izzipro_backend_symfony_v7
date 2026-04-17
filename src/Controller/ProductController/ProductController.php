@@ -123,7 +123,13 @@ class ProductController extends AbstractController
         return $this->json($products, JsonResponse::HTTP_OK);
     }
 
-    #[Route('/api/products/{offer}', name: 'get_products_by_offer', methods: ['GET'])]
+    #[Route(
+        '/api/products/{offer}', 
+        name: 'get_products_by_offer', 
+        methods: ['GET'], 
+        priority: 10,
+        requirements: ['offer' => 'bestsellers|newarrivals|specialoffers|isfeatured|isAccessory']
+    )]
     public function getProductsByOffer(string $offer, Request $request): JsonResponse
     {
         $host = $request->getSchemeAndHttpHost();

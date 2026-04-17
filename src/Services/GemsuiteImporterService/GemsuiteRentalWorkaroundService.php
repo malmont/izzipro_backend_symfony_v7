@@ -10,8 +10,10 @@ use App\Enum\ProductMode;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\GemsuiteImporterService\GemsuiteStockCalculator;
+use App\Entity\RentalPack;
 
 class GemsuiteRentalWorkaroundService
+
 {
     public function __construct(
         private TenantEntityManagerProvider $emProvider,
@@ -38,13 +40,89 @@ class GemsuiteRentalWorkaroundService
 
         $realStock = $this->stockCalculator->calculateTotalStock($data);
 
+        // Initial default, will be refined by updateSmartGranularity
         $bookingConfig->setGranularity('hours');
-        $bookingConfig->setStockQuantity($realStock); // Uses calculated stock
-        $bookingConfig->setMinDuration(1); // Minimum 1 hour
+        $bookingConfig->setStockQuantity($realStock);
+        $bookingConfig->setMinDuration(1); 
         $bookingConfig->setBufferTime(0);
 
         $product->setBookingConfiguration($bookingConfig);
+        
+        // Refine granularity based on packs
+        $this->updateSmartGranularity($product);
     }
+
+    /**
+     * Update granularity based on associated RentalPacks
+     */
+    public function updateSmartGranularity(Product $product): void
+    {
+        $categories = $product->getCategory();
+        $hasHourly = false;
+
+        foreach ($categories as $category) {
+            foreach ($category->getRentalPacks() as $pack) {
+                if (($pack->getHourRate() ?? 0) > 0 || ($pack->getHalfDayRate() ?? 0) > 0) {
+                    $hasHourly = true;
+                    break 2;
+                }
+            }
+        }
+
+        $bookingConfig = $product->getBookingConfiguration();
+        if ($bookingConfig) {
+            $bookingConfig->setGranularity($hasHourly ? 'hours' : 'days');
+            // Ensure mode is correct
+            $product->setMode(ProductMode::BOOKING);
+        }
+    }
+
+    /**
+     * Remove rental configuration correctly
+     */
+    public function removeRentalConfiguration(Product $product, EntityManagerInterface $em): void
+    {
+        $product->setMode(ProductMode::RETAIL);
+        $bookingConfig = $product->getBookingConfiguration();
+        
+        if ($bookingConfig) {
+            $em->remove($bookingConfig);
+            $product->setBookingConfiguration(null);
+        }
+    }
+
+    /**
+     * Update granularity via bulk DQL to avoid timeout
+     */
+    public function updateGranularityBulk(array $categories, RentalPack $pack, EntityManagerInterface $em): void
+    {
+        if (empty($categories)) {
+            return;
+        }
+
+        $hasHourly = ($pack->getHourRate() ?? 0) > 0 || ($pack->getHalfDayRate() ?? 0) > 0;
+        $granularity = $hasHourly ? 'hours' : 'days';
+
+        $categoryIds = array_map(fn($c) => $c->getId(), $categories);
+
+        $qbSub = $em->createQueryBuilder()
+            ->select('p_sub.id')
+            ->from(Product::class, 'p_sub')
+            ->join('p_sub.category', 'c_sub')
+            ->where('c_sub.id IN (:categoryIds)')
+            ->getDQL();
+
+        $qb = $em->createQueryBuilder();
+        $qb->update(BookingConfiguration::class, 'bc')
+           ->set('bc.granularity', ':granularity')
+           ->where($qb->expr()->in('bc.product', $qbSub))
+           ->setParameter('granularity', $granularity)
+           ->setParameter('categoryIds', $categoryIds);
+
+        $qb->getQuery()->execute();
+    }
+
+
 
     /**
      * TODO: TEMP WORKAROUND - Link vehicles to products locally

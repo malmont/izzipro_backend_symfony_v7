@@ -7,15 +7,17 @@ use App\Entity\ProductVariant;
 
 class OrderItemService
 {
-    public function createOrderItem(Order $order, ProductVariant $productVariant, int $quantity): OrderItems
+    public function createOrderItem(Order $order, ProductVariant $productVariant, int $quantity, ?float $unitPrice = null): OrderItems
     {
         $orderItem = new OrderItems();
         $orderItem->setOrderAssociated($order);
         $order->addOrderItem($orderItem);
         $orderItem->setProductVariant($productVariant);
         $orderItem->setQuantity($quantity);
-        $orderItem->setUnitPrice($productVariant->getProduct()->getPrice());
-        $orderItem->setTotalPrice($orderItem->getUnitPrice() * $quantity);
+        
+        $finalUnitPrice = $unitPrice ?? (float)$productVariant->getProduct()->getPrice();
+        $orderItem->setUnitPrice($finalUnitPrice);
+        $orderItem->setTotalPrice($finalUnitPrice * $quantity);
 
         return $orderItem;
     }

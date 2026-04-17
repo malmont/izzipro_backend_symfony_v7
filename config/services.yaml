@@ -80,6 +80,9 @@ services:
             - '../src/Repository/ShippingClassRepository.php'
             - '../src/Repository/ProductOptionRepository.php'
             - '../src/Repository/ProductOptionValueRepository.php'
+            - '../src/Repository/SaleUnitRepository.php'
+            - '../src/Repository/RentalPackRepository.php'
+
 
             
 

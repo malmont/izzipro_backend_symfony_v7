@@ -6,6 +6,8 @@ use App\Entity\Categories;
 use App\Entity\Product;
 use App\Entity\ProductShipping;
 use App\Entity\ProductVariant;
+use App\Entity\RentalPack;
+use App\Entity\SaleUnit;
 use App\Entity\ShippingClass;
 use App\Entity\Style;
 use App\Entity\GemsuiteClient;
@@ -21,6 +23,7 @@ use App\Services\GemsuiteImporterService\GemsuiteClientManager;
 
 class GemsuiteSyncHandler
 {
+
     public function __construct(
         private HttpClientInterface $client,
         private TenantEntityManagerProvider $emProvider,
@@ -32,7 +35,8 @@ class GemsuiteSyncHandler
         private GemsuiteAttributeProcessor $attributeProcessor,
         private GemsuiteStockCalculator $stockCalculator,
         private string $gemsuiteApiUrl,
-        private GemsuiteClientManager $clientManager
+        private GemsuiteClientManager $clientManager,
+        private GemsuiteRentalWorkaroundService $rentalWorkaround
     ) {}
 
     /**
@@ -130,6 +134,19 @@ class GemsuiteSyncHandler
         }
 
         $product = $em->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
+
+        // --- NOUVELLE LOGIQUE GEMS-LOCATION (PACKS) ---
+        if (isset($gemProductData['category_id']) && isset($categoryMap[$gemProductData['category_id']])) {
+            $category = $categoryMap[$gemProductData['category_id']];
+            if ($category->getCategoryType() === 10) {
+                $this->processRentalPack($em, $gemProductData);
+                if ($product) {
+                    $em->remove($product); // On nettoie si un produit existait par erreur
+                }
+                return;
+            }
+        }
+
         if (!$product) {
             $product = new Product();
             $product->setGemsuiteProductId($gemProductData['id']);
@@ -144,13 +161,32 @@ class GemsuiteSyncHandler
         $product->setIsnewarrival((bool)($gemProductData['is_new_arrival'] ?? true));
         $product->setIsbestseller((bool)($gemProductData['is_bestseller'] ?? true));
 
+        // --- GESTION UNITÉ DE VENTE ---
+        $unitId = (int)($gemProductData['unit'] ?? 0);
+        if ($unitId > 0) {
+            $saleUnit = $em->getRepository(SaleUnit::class)->find($unitId);
+            if ($saleUnit) {
+                $product->setSaleUnit($saleUnit);
+            }
+        } else {
+            $product->setSaleUnit(null);
+        }
+
+
         $defaultStyle = $em->getRepository(Style::class)->find(2);
         if ($defaultStyle) {
             $product->setStyle($defaultStyle);
         }
 
         if (isset($gemProductData['category_id']) && isset($categoryMap[$gemProductData['category_id']])) {
-            $product->addCategory($categoryMap[$gemProductData['category_id']]);
+            $category = $categoryMap[$gemProductData['category_id']];
+            $product->addCategory($category);
+
+            if ($category->isRentalCategory()) {
+                $this->rentalWorkaround->applyRentalProductConfiguration($product, $gemProductData);
+            } else {
+                $this->rentalWorkaround->removeRentalConfiguration($product, $em);
+            }
         }
 
         $imagePath = $gemProductData['medias'][0]['path'] ?? null;
@@ -285,13 +321,13 @@ class GemsuiteSyncHandler
 
             if ($status !== 1 || $syncWeb !== true) {
                 $categoryToDelete = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
-
                 if ($categoryToDelete) {
-                    $this->logger->info("Suppression de la catégorie #{$gemCategoryData['id']} car inactive ou non synchronisée.");
+                    $this->logger->info("Suppression de la catégorie #{$gemCategoryData['id']} car inactive ou sync_web=false.");
                     $em->remove($categoryToDelete);
                 }
                 continue;
             }
+
 
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
             if (!$category) {
@@ -299,7 +335,13 @@ class GemsuiteSyncHandler
                 $category->setGemsuiteCategoryId($gemCategoryData['id']);
             }
 
+
             $category->setName(trim($gemCategoryData['name_fr'] ?? 'Catégorie'));
+
+            // --- NOUVELLE LOGIQUE LOCATION ---
+            $category->setCategoryType((int)($gemCategoryData['category_type'] ?? 0));
+            $isRental = (int)($gemCategoryData['limit_lot'] ?? 0) === 1;
+            $category->setIsRentalCategory($isRental);
 
             $imagePath = $gemCategoryData['img_paths'] ?? null;
             if (!empty($imagePath)) {
@@ -336,25 +378,22 @@ class GemsuiteSyncHandler
 
     private function isProductActive(EntityManagerInterface $em, array $gemProductData): bool
     {
-        $status = (int)($gemProductData['status'] ?? 0);
-        $syncWeb = (bool)($gemProductData['sync_web'] ?? false);
+        $status = (int)($gemProductData['status'] ?? 1);
+        $syncWeb = (bool)($gemProductData['sync_web'] ?? true);
         $name = trim($gemProductData['name_fr'] ?? '');
 
         $isVariant = ($gemProductData['id'] ?? 0) !== ($gemProductData['origin_product_id'] ?? 0);
 
+        // 1. Variantes
         if ($isVariant) {
-            return $status === 1 && $syncWeb === true;
+            return $status === 1 && $syncWeb;
         }
 
-        $isActiveIndividually = ($status === 1 && $syncWeb === true && !empty($name));
-        if ($isActiveIndividually) {
-            return true;
-        }
-
-        // Si inactif individuellement, on vérifie si la catégorie est active (présente localement)
-        // en ignorant le check du parent/variante car cet handler webhooks gère les mêmes payloads
+        // 2. Produits Parents (Filtre par catégorie)
         if (isset($gemProductData['category_id']) && !empty($name)) {
-            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemProductData['category_id']]);
+            $catId = (int)$gemProductData['category_id'];
+            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
+
             if ($category) {
                 return true;
             }
@@ -368,5 +407,74 @@ class GemsuiteSyncHandler
         $dbname = 'db_' . $tenantCode;
         $this->emProvider->switchTenant($dbname, $tenantCode);
         return $this->emProvider->getEntityManager();
+    }
+
+    private function processRentalPack(EntityManagerInterface $em, array $data): void
+    {
+        $repo = $em->getRepository(RentalPack::class);
+        $pack = $repo->findOneBy(['gemsuiteProductId' => $data['id']]);
+
+        if (!$pack) {
+            $pack = new RentalPack();
+            $pack->setGemsuiteProductId($data['id']);
+        }
+
+        $pack->setName(trim($data['name_fr'] ?? 'Pack sans nom'));
+        $pack->setHourRate((float)($data['default_rate2'] ?? 0) * 100);
+        $pack->setHalfDayRate((float)($data['default_rate3'] ?? 0) * 100);
+        $pack->setDayRate((float)($data['default_rate4'] ?? 0) * 100);
+        $pack->setWeekRate((float)($data['default_rate5'] ?? 0) * 100);
+        $pack->setMonthRate((float)($data['default_rate6'] ?? 0) * 100);
+
+        // Mapping des catégories
+        foreach ($pack->getCategories()->toArray() as $oldCategory) {
+            $pack->removeCategory($oldCategory);
+        }
+        $targetCategoriesRaw = $data['limit_location_products'] ?? '';
+        $targetCategoryGemsuiteIds = [];
+        
+        if (is_array($targetCategoriesRaw)) {
+            $targetCategoryGemsuiteIds = $targetCategoriesRaw;
+        } elseif (is_string($targetCategoriesRaw)) {
+            // Check if it's a JSON string
+            $decoded = json_decode($targetCategoriesRaw, true);
+            if (is_array($decoded)) {
+                $targetCategoryGemsuiteIds = $decoded;
+            } else {
+                // If it's a regular string, clean it of any brackets and quotes before exploding
+                $cleaned = str_replace(['[', ']', '"', "'", ' '], '', $targetCategoriesRaw);
+                $targetCategoryGemsuiteIds = explode(',', $cleaned);
+            }
+        }
+
+        $targetCategoryGemsuiteIds = array_filter(array_map('intval', $targetCategoryGemsuiteIds));
+        
+        if (empty($targetCategoryGemsuiteIds)) {
+            // NOUVELLE RÈGLE MÉTIER : Si vide ou null, le pack s'applique à TOUTES les catégories de location
+            $categories = $em->getRepository(Categories::class)->findBy(['isRentalCategory' => true]);
+        } else {
+            // TODO: Si Gemsuite envoie des IDs de PRODUITS dans `limit_location_products`, il faudra adapter
+            // Pour l'instant on garde la logique de fallback si ce sont des catégories
+            $categories = $em->getRepository(Categories::class)->findBy(['gemsuiteCategoryId' => $targetCategoryGemsuiteIds]);
+        }
+
+        if (!empty($categories)) {
+            foreach ($categories as $category) {
+                $pack->addCategory($category);
+            }
+            
+            // Bulk update the granularity for all products in these categories
+            $this->rentalWorkaround->updateGranularityBulk($categories, $pack, $em);
+        }
+
+        $em->persist($pack);
+    }
+
+    /**
+     * Helper pour recuperer l ID du tenant de maniere robuste
+     */
+    private function getCurrentTenantId(EntityManagerInterface $em): string
+    {
+        return $em->getConnection()->getDatabase();
     }
 }

@@ -34,7 +34,7 @@ class CategoryController extends AbstractController
         $this->cache = $cache;
     }
 
-    #[Route('/api/products/by-category', name: 'get_products_by_category', methods: ['GET'])]
+    #[Route('/api/products/by-category', name: 'get_products_by_category', methods: ['GET'], priority: 10)]
     public function getProductsByCategory(Request $request): JsonResponse
     {
         $categoryIds = $request->query->get('categories');

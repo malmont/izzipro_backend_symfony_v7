@@ -59,9 +59,6 @@ class GemsuiteCompanySyncHandler
             $this->updateHomeSliderData($tenantEm, $companyData);
             $this->updateExploreCardData($tenantEm, $companyData);
             
-            // TODO: TEMP WORKAROUND - Marque les catégories de location
-            $this->updateRentalCategories($tenantEm, $companyData);
-
             $tenantEm->flush();
             $this->logger->info(sprintf('Configuration de l\'entreprise pour le tenant "%s" synchronisée avec succès.', $tenantCode));
         } catch (\Throwable $e) {
@@ -187,19 +184,5 @@ class GemsuiteCompanySyncHandler
         }
     }
 
-    private function updateRentalCategories(EntityManagerInterface $em, array $companyData): void
-    {
-        $rentalIdsRaw = $companyData['use_gem_location_products'] ?? '';
-        $rentalIds = array_filter(array_map('trim', explode(',', (string) $rentalIdsRaw)));
 
-        // On reset tout
-        $em->createQuery('UPDATE App\Entity\Categories c SET c.isRentalCategory = false')->execute();
-
-        if (!empty($rentalIds)) {
-            // On marque les catégories concernées
-            $em->createQuery('UPDATE App\Entity\Categories c SET c.isRentalCategory = true WHERE c.gemsuiteCategoryId IN (:ids)')
-               ->setParameter('ids', $rentalIds)
-               ->execute();
-        }
-    }
 }

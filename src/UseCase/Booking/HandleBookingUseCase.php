@@ -58,7 +58,9 @@ class HandleBookingUseCase
 
             if ($product && method_exists($product, 'isBookable') && $product->isBookable()) {
                 
-                if (empty($itemData['booking']['start']) || empty($itemData['booking']['end'])) {
+                $bookingData = $itemData['booking'] ?? $itemData['rental'] ?? [];
+
+                if (empty($bookingData['start']) || empty($bookingData['end'])) {
                     throw new BadRequestHttpException(sprintf(
                         "Dates manquantes pour le produit '%s' (Variante #%d).", 
                         $product->getName(), 
@@ -67,8 +69,8 @@ class HandleBookingUseCase
                 }
 
                 try {
-                    $start = new \DateTimeImmutable($itemData['booking']['start']);
-                    $end = new \DateTimeImmutable($itemData['booking']['end']);
+                    $start = new \DateTimeImmutable($bookingData['start']);
+                    $end = new \DateTimeImmutable($bookingData['end']);
                 } catch (\Exception $e) {
                     throw new BadRequestHttpException("Format de date invalide pour la réservation.");
                 }

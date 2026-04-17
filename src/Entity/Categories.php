@@ -40,6 +40,15 @@ class Categories implements TranslatableInterface
     #[ORM\Column(options: ['default' => false])]
     private ?bool $isRentalCategory = false;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $categoryType = null;
+
+    /**
+     * @var Collection<int, RentalPack>
+     */
+    #[ORM\ManyToMany(targetEntity: RentalPack::class, mappedBy: 'categories')]
+    private Collection $rentalPacks;
+
     #[ORM\OneToMany(
         mappedBy: 'category',
         targetEntity: CategoriesTranslation::class,
@@ -53,6 +62,7 @@ class Categories implements TranslatableInterface
     {
         $this->products = new ArrayCollection();
         $this->translations = new ArrayCollection();
+        $this->rentalPacks = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -223,6 +233,45 @@ class Categories implements TranslatableInterface
     public function setIsRentalCategory(bool $isRentalCategory): static
     {
         $this->isRentalCategory = $isRentalCategory;
+
+        return $this;
+    }
+
+    public function getCategoryType(): ?int
+    {
+        return $this->categoryType;
+    }
+
+    public function setCategoryType(?int $categoryType): static
+    {
+        $this->categoryType = $categoryType;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, RentalPack>
+     */
+    public function getRentalPacks(): Collection
+    {
+        return $this->rentalPacks;
+    }
+
+    public function addRentalPack(RentalPack $rentalPack): static
+    {
+        if (!$this->rentalPacks->contains($rentalPack)) {
+            $this->rentalPacks->add($rentalPack);
+            $rentalPack->addCategory($this);
+        }
+
+        return $this;
+    }
+
+    public function removeRentalPack(RentalPack $rentalPack): static
+    {
+        if ($this->rentalPacks->removeElement($rentalPack)) {
+            $rentalPack->removeCategory($this);
+        }
 
         return $this;
     }

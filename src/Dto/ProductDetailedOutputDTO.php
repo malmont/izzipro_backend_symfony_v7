@@ -33,6 +33,8 @@ class ProductDetailedOutputDTO
     public ?float $purchasePrice;
     public ?float $coefficientMultiplier;
     public ?string $barcode;
+    public ?array $saleUnit = null;
+    
     
     // --- NOUVEAUX CHAMPS BOOKING ---
     public string $mode;
@@ -90,8 +92,30 @@ class ProductDetailedOutputDTO
                 'stockQuantity' => $config->getStockQuantity(),
                 'bufferTime'    => $config->getBufferTime(),
             ];
+
+            $packs = $product->getRentalPacks();
+            if (!empty($packs)) {
+                $this->bookingConfig['rates'] = array_map(fn($pack) => [
+                    'id'          => $pack->getId(),
+                    'name'        => $pack->getName(),
+                    'hourRate'    => $pack->getHourRate(),
+                    'halfDayRate' => $pack->getHalfDayRate(),
+                    'dayRate'     => $pack->getDayRate(),
+                    'weekRate'    => $pack->getWeekRate(),
+                    'monthRate'   => $pack->getMonthRate(),
+                ], $packs);
+            } else {
+                $this->bookingConfig['rates'] = [];
+            }
         }
         // -----------------------
+
+        $this->saleUnit = $product->getSaleUnit() ? [
+            'id' => $product->getSaleUnit()->getId(),
+            'name' => $product->getSaleUnit()->getName(),
+        ] : null;
+
+
     
         $this->style = $product->getStyle() ? [
             'id' => $product->getStyle()->getId(),

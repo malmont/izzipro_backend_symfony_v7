@@ -8,6 +8,7 @@ use App\Services\EntityRetrieverService;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use App\Services\OrderService\OrderItemService;
+use App\Services\OrderService\RentalPriceCalculator;
 use Psr\Log\LoggerInterface;
 
 class ProcessOrderItemsUseCase
@@ -15,17 +16,20 @@ class ProcessOrderItemsUseCase
     private TenantEntityManagerProvider $emProvider;
     private EntityRetrieverService $entityRetrieverService;
     private OrderItemService $orderItemService;
+    private RentalPriceCalculator $rentalPriceCalculator;
     private LoggerInterface $logger;
 
     public function __construct(
         TenantEntityManagerProvider $emProvider,
         EntityRetrieverService $entityRetrieverService,
         OrderItemService $orderItemService,
+        RentalPriceCalculator $rentalPriceCalculator,
         LoggerInterface $logger
     ) {
         $this->emProvider = $emProvider;
         $this->entityRetrieverService = $entityRetrieverService;
         $this->orderItemService = $orderItemService;
+        $this->rentalPriceCalculator = $rentalPriceCalculator;
         $this->logger = $logger;
     }
 
@@ -57,7 +61,16 @@ class ProcessOrderItemsUseCase
                 $updateStockAndInventory->execute($productVariant, $itemData['quantity'], $isCancel);
             }
 
-            $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $itemData['quantity']);
+            $unitPrice = null;
+
+            if ($isBookable) {
+                // Determine duration and type for rental price calculation
+                // Support both 'booking' (standard) and 'rental' (legacy) keys
+                $rentalData = $itemData['booking'] ?? $itemData['rental'] ?? $itemData;
+                $unitPrice = $this->rentalPriceCalculator->calculate($product, $rentalData);
+            }
+
+            $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $itemData['quantity'], $unitPrice);
 
             $em->persist($order);
             $em->persist($orderItem);

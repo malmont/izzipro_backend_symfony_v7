@@ -89,6 +89,11 @@ use App\Entity\BaniereStatique;
 use App\Entity\NewsletterSubscriber;
 use App\Entity\BookingConfiguration;
 use App\Entity\Booking;
+use App\Entity\RentalPack;
+use App\Entity\SaleUnit;
+use App\Controller\Admin\RentalPackCrudController;
+use App\Controller\Admin\SaleUnitCrudController;
+
 
 
 
@@ -223,6 +228,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Types d\'options', 'fas fa-tag', ProductOption::class);
         yield MenuItem::linkToCrud('Valeurs d\'options', 'fas fa-palette', ProductOptionValue::class)->setController(ProductOptionValueCrudController::class);
         yield MenuItem::linkToCrud('Types de Produit', 'fas fa-box', ProductType::class);
+        yield MenuItem::linkToCrud('Unités de Vente', 'fas fa-balance-scale', SaleUnit::class)
+            ->setController(SaleUnitCrudController::class);
+
         
 
         yield MenuItem::section('Location / Réservation');
@@ -232,6 +240,9 @@ class DashboardController extends AbstractDashboardController
 
         yield MenuItem::linkToCrud('Règles & Stocks', 'fas fa-sliders-h', BookingConfiguration::class)
             ->setController(BookingConfigurationCrudController::class);
+
+        yield MenuItem::linkToCrud('Grilles Tarifaires (Packs)', 'fas fa-tags', RentalPack::class)
+            ->setController(RentalPackCrudController::class);
 
               
     }

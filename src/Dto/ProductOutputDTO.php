@@ -4,7 +4,7 @@
 namespace App\Dto;
 
 use App\Entity\Product;
-use App\Entity\Category; 
+use App\Entity\Categories; 
 use App\Entity\Style;
 use App\Entity\Color;
 use App\Entity\Size;
@@ -22,6 +22,8 @@ class ProductOutputDTO
     public ?float $coefficientMultiplier;
     public ?string $slug;
     public ?string $image;
+    public ?array $saleUnit = null;
+
     
     public string $mode;
     public ?array $bookingConfig = null;
@@ -63,12 +65,33 @@ class ProductOutputDTO
                 'stockQuantity' => $config->getStockQuantity(),
                 'bufferTime'    => $config->getBufferTime(),
             ];
+
+            $packs = $product->getRentalPacks();
+            if (!empty($packs)) {
+                $this->bookingConfig['rates'] = array_map(fn($pack) => [
+                    'id'          => $pack->getId(),
+                    'name'        => $pack->getName(),
+                    'hourRate'    => $pack->getHourRate(),
+                    'halfDayRate' => $pack->getHalfDayRate(),
+                    'dayRate'     => $pack->getDayRate(),
+                    'weekRate'    => $pack->getWeekRate(),
+                    'monthRate'   => $pack->getMonthRate(),
+                ], $packs);
+            } else {
+                $this->bookingConfig['rates'] = [];
+            }
         }
         // -----------------------
 
+        $this->saleUnit = $product->getSaleUnit() ? [
+            'id' => $product->getSaleUnit()->getId(),
+            'name' => $product->getSaleUnit()->getName(),
+        ] : null;
+
         $categoriesCollection = $product->getCategory();
+
         if ($categoriesCollection && !$categoriesCollection->isEmpty()) {
-            $this->categories = array_map(function (Category $category) use ($locale) {
+            $this->categories = array_map(function (Categories $category) use ($locale) {
                  return [
                     'id'          => $category->getId(),
                     'name'        => $category->getTranslation($locale)?->getName(),

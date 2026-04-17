@@ -9,6 +9,7 @@ use App\Entity\GemsuiteClient;
 use App\Entity\Product;
 use App\Entity\ProductShipping;
 use App\Entity\ProductVariant;
+use App\Entity\RentalPack;
 use App\Entity\Style;
 use App\Entity\SyncJob;
 use App\Entity\ShippingClass;
@@ -30,6 +31,7 @@ use Symfony\Component\String\Slugger\SluggerInterface;
 #[AsMessageHandler]
 class ProcessGemsuiteEntityJobHandler
 {
+
     public function __construct(
         private LoggerInterface $logger,
         private TenantConnectionManager $tenantManager,
@@ -73,6 +75,8 @@ class ProcessGemsuiteEntityJobHandler
             $this->emProvider->switchTenant($tenant['dbname'], $tenant['code']);
             $tenantEm = $this->emProvider->getEntityManager();
 
+
+            $startTime = microtime(true);
             $entity = null;
 
             switch ($type) {
@@ -114,10 +118,17 @@ class ProcessGemsuiteEntityJobHandler
                 $tenantEm->flush();
             }
 
-            // Clear the EntityManager to prevent Doctrine from caching old category values in the worker
+            // Clear settings
             $tenantEm->clear();
 
-            $this->logger->info(sprintf('[Micro-Job Success] Job terminé pour "%s" ID %s', $type, $entityId));
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+            $this->logger->info(sprintf(
+                '[Micro-Job Success] Item "%s" ID %d terminé en %sms (DB: %s)',
+                $type,
+                $entityId,
+                $duration,
+                $tenantEm->getConnection()->getDatabase()
+            ));
 
             $this->updateSyncJobCounter($tenantEm, $message->getSyncJobId());
         } catch (\Throwable $e) {
@@ -159,12 +170,14 @@ class ProcessGemsuiteEntityJobHandler
             return null;
         }
 
+
         $repo = $em->getRepository(Categories::class);
         $category = $repo->findOneBy(['gemsuiteCategoryId' => $data['id']]);
         if (!$category) {
             $category = new Categories();
             $category->setGemsuiteCategoryId($data['id']);
         }
+
 
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
         $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
@@ -178,6 +191,12 @@ class ProcessGemsuiteEntityJobHandler
 
         $category->setName(trim($data['name_fr']));
         $category->setExternalShippingClassId((int)($data['expedition_classes'] ?? 0));
+        $category->setCategoryType((int)($data['category_type'] ?? 0));
+
+        // --- NOUVELLE LOGIQUE LOCATION ---
+        $isRental = (int)($data['limit_lot'] ?? 0) === 1;
+        $category->setIsRentalCategory($isRental);
+
         $em->persist($category);
 
         return $category;
@@ -212,8 +231,16 @@ class ProcessGemsuiteEntityJobHandler
         }
 
         if (isset($data['category_id'])) {
-            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $data['category_id']]);
+            $catId = (int)$data['category_id'];
+            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
+
             if ($category) {
+                // --- NOUVELLE LOGIQUE GEMS-LOCATION (PACKS) ---
+                if ($category->getCategoryType() === 10) {
+                    $this->processRentalPack($em, $data);
+                    return null; // On ne crée pas de Product pour une configuration
+                }
+
                 $product->addCategory($category);
 
                 // TODO: TEMP WORKAROUND - Config de location
@@ -298,20 +325,28 @@ class ProcessGemsuiteEntityJobHandler
         $name = trim($data['name_fr'] ?? '');
         $isVariant = ($data['id'] ?? 0) !== ($data['origin_product_id'] ?? 0);
 
+        // 1. Les variantes ont leur propre statut d'activation
         if ($isVariant) {
-            return $status === 1 && $syncWeb === true;
+            return $status === 1 && $syncWeb;
         }
 
-        $isActiveIndividually = ($status === 1 && $syncWeb === true && !empty($name));
-        if ($isActiveIndividually) {
-            return true;
-        }
-
-        // Si inactif individuellement, on vérifie si la catégorie est active (présente localement)
+        // 2. Les produits parents dépendent de la présence de leur catégorie en base
         if (isset($data['category_id']) && !empty($name)) {
-            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $data['category_id']]);
+            $catId = (int)$data['category_id'];
+            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
+
             if ($category) {
                 return true;
+            }
+
+            // Si la catégorie est manquante mais que le produit est sensé être actif,
+            // on lance une RuntimeException pour déclencher un retry (Symfony Messenger).
+            if ($status === 1 && $syncWeb) {
+                throw new \RuntimeException(sprintf(
+                    'Catégorie Gemsuite #%d non trouvée localement. Mise en attente du produit ID %s (Retry).',
+                    $catId,
+                    $data['id'] ?? 'inconnu'
+                ));
             }
         }
 
@@ -326,5 +361,62 @@ class ProcessGemsuiteEntityJobHandler
              WHERE j.id = :id'
         )->setParameter('id', $syncJobId)
             ->execute();
+    }
+
+    private function processRentalPack(EntityManagerInterface $em, array $data): void
+    {
+        $repo = $em->getRepository(RentalPack::class);
+        $pack = $repo->findOneBy(['gemsuiteProductId' => $data['id']]);
+
+        if (!$pack) {
+            $pack = new RentalPack();
+            $pack->setGemsuiteProductId($data['id']);
+        }
+
+        $pack->setName(trim($data['name_fr'] ?? 'Pack sans nom'));
+        $pack->setHourRate((float)($data['default_rate2'] ?? 0) * 100);
+        $pack->setHalfDayRate((float)($data['default_rate3'] ?? 0) * 100);
+        $pack->setDayRate((float)($data['default_rate4'] ?? 0) * 100);
+        $pack->setWeekRate((float)($data['default_rate5'] ?? 0) * 100);
+        $pack->setMonthRate((float)($data['default_rate6'] ?? 0) * 100);
+
+        // Mapping des catégories
+        foreach ($pack->getCategories()->toArray() as $oldCategory) {
+            $pack->removeCategory($oldCategory);
+        }
+
+        $targetCategoriesRaw = $data['limit_location_products'] ?? '';
+        
+        // Support pour tableau JSON ou chaine csv
+        if (is_array($targetCategoriesRaw)) {
+            $targetCategoryGemsuiteIds = array_map('trim', $targetCategoriesRaw);
+        } else {
+            $targetCategoryGemsuiteIds = array_filter(array_map('trim', explode(',', (string)$targetCategoriesRaw)));
+        }
+
+        foreach ($targetCategoryGemsuiteIds as $gemsuiteId) {
+            $catId = (int)$gemsuiteId;
+            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
+            if ($category) {
+                $pack->addCategory($category);
+                
+                // Mettre à jour la granularité de tous les produits de cette catégorie
+                // Maintenant que la catégorie a le pack en mémoire, cette fonction le verra.
+                foreach ($category->getProducts() as $product) {
+                    $this->rentalWorkaround->updateSmartGranularity($product);
+                }
+            }
+        }
+
+        $em->persist($pack);
+        $em->flush();
+    }
+
+    /**
+     * Helper pour recuperer l ID du tenant de maniere robuste
+     */
+    private function getCurrentTenantId(EntityManagerInterface $em): string
+    {
+        return $em->getConnection()->getDatabase();
     }
 }
