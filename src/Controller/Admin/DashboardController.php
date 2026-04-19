@@ -63,6 +63,8 @@ use App\Entity\Presentation;
 use App\Entity\ProductType;
 use App\Entity\PresentationGroup;
 use App\Entity\BaniereStatiqueTranslation;
+use App\Entity\StripeConfig;
+use App\Controller\Admin\StripeConfigCrudController;
 
 
 
@@ -210,7 +212,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Payment Types', 'fas fa-credit-card', PaymentType::class);
         yield MenuItem::linkToCrud('Statuts de Paiement', 'fas fa-credit-card', StatusPayment::class);
         yield MenuItem::linkToCrud('Méthodes de Paiement', 'fas fa-credit-card', PaymentMethod::class);
-        yield MenuItem::linkToCrud('Configuration Square', 'fas fa-credit-card', SquareConfig::class);
+        yield MenuItem::linkToCrud('Configuration Stripe', 'fab fa-stripe', StripeConfig::class);
          
 
         yield MenuItem::section('Taxe');

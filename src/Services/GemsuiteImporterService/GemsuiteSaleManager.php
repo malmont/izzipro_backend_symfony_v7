@@ -10,14 +10,13 @@ use App\Services\TenantConnectionManager;
 
 class GemsuiteSaleManager
 {
-    // ID 207 validé ensemble précédemment
-    private const METHOD_ID_STRIPE = 114;
 
     public function __construct(
         private HttpClientInterface $client,
         private TenantConnectionManager $tenantManager,
         private LoggerInterface $logger,
-        private string $gemsuiteApiUrl
+        private string $gemsuiteApiUrl,
+        private \App\Services\TenantEntityManagerProvider $emProvider
     ) {}
 
     public function createSale(Order $order): ?array
@@ -92,33 +91,62 @@ class GemsuiteSaleManager
 
     private function addProductsToSale(Order $order, int $saleId, string $token): void
     {
+        $em = $this->emProvider->getEntityManager();
+
         foreach ($order->getOrderItems() as $item) {
             $variant = $item->getProductVariant();
             $gemProductId = null;
+            $payload = [
+                'sale_id' => $saleId,
+                'product_quantity' => $item->getQuantity(),
+                'product_price' => $item->getUnitPrice() / 100,
+            ];
 
-            if ($variant) {
-                $variantId = $variant->getGemsuiteVariantId();
+            $booking = $item->getBooking();
 
-                if ($variantId) {
-                    $gemProductId = (int) $variantId;
+            if ($booking) {
+                // LOGIQUE RENTAL
+                $this->logger->info("Synchro Gemsuite: Article détecté comme LOCATION pour l'item " . $item->getId());
+
+                // 1. Swap Product ID par celui du RentalPack
+                $packId = $booking->getRentalPackId();
+                if ($packId) {
+                    $pack = $em->getRepository(\App\Entity\RentalPack::class)->find($packId);
+                    if ($pack) {
+                        $gemProductId = $pack->getGemsuiteProductId();
+                    }
                 }
 
-                if (!$gemProductId && $variant->getProduct()) {
-                    $gemProductId = $variant->getProduct()->getGemsuiteProductId();
+                // 2. Récupération du Véhicule
+                $product = $booking->getProduct();
+                $vehicle = $em->getRepository(\App\Entity\Vehicle::class)->findOneBy(['product' => $product]);
+                if ($vehicle) {
+                    $payload['car_id'] = $vehicle->getGemsuiteVehicleId();
+                }
+
+                // 3. Dates de location
+                $payload['car_date_start'] = $booking->getStartAt()->format('Y-m-d H:i:s');
+                $payload['car_date_end'] = $booking->getEndAt()->format('Y-m-d H:i:s');
+
+            } else {
+                // LOGIQUE RETAIL (Standard)
+                if ($variant) {
+                    $variantId = $variant->getGemsuiteVariantId();
+                    if ($variantId) {
+                        $gemProductId = (int) $variantId;
+                    }
+                    if (!$gemProductId && $variant->getProduct()) {
+                        $gemProductId = $variant->getProduct()->getGemsuiteProductId();
+                    }
                 }
             }
 
             if ($gemProductId) {
-                $price = $item->getUnitPrice() / 100;
+                $payload['product_id'] = $gemProductId;
 
                 $this->client->request('POST', $this->gemsuiteApiUrl . 'sales_products', [
                     'auth_bearer' => $token,
-                    'json' => [
-                        'sale_id' => $saleId,
-                        'product_id' => $gemProductId,
-                        'product_quantity' => $item->getQuantity(),
-                        'product_price' => $price,
-                    ],
+                    'json' => $payload,
                 ]);
             } else {
                 $this->logger->warning("Impossible de trouver un ID GemSuite pour l'item commande " . $item->getId());
@@ -157,11 +185,15 @@ class GemsuiteSaleManager
 
         $formattedAmount = number_format($amount, 2, '.', '');
 
+        $tenantEm = $this->emProvider->getEntityManager();
+        $entreprise = $tenantEm->getRepository(\App\Entity\Entreprise::class)->findOneBy([]);
+        $methodId = $entreprise?->getGemsuitePaymentMethodId() ?: 114; // Fallback à 114 par défaut
+
         $payload = [
             'invoice_id' => $saleId,
             'amount' => $formattedAmount,
             'date_payment' => $payment->getPaymentDate()->format('Y-m-d'),
-            'method_id' => self::METHOD_ID_STRIPE,
+            'method_id' => $methodId,
         ];
 
         // if ($stripeRef) {

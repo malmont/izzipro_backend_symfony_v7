@@ -28,6 +28,9 @@ class Booking
     #[ORM\Column(length: 40)]
     private ?string $status = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $rentalPackId = null;
+
     #[ORM\OneToOne(inversedBy: 'booking', targetEntity: OrderItems::class, cascade: ['persist', 'remove'])]
     #[ORM\JoinColumn(nullable: true)]
     private ?OrderItems $orderItem = null;
@@ -104,6 +107,18 @@ class Booking
     public function setOrderItem(?OrderItems $orderItem): self
     {
         $this->orderItem = $orderItem;
+        return $this;
+    }
+
+    public function getRentalPackId(): ?int
+    {
+        return $this->rentalPackId;
+    }
+
+    public function setRentalPackId(?int $rentalPackId): static
+    {
+        $this->rentalPackId = $rentalPackId;
+
         return $this;
     }
 }

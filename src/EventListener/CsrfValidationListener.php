@@ -27,7 +27,16 @@ class CsrfValidationListener
         }
 
         // Exception vitale : Le logout doit passer pour nettoyer les cookies
-        if ($request->getPathInfo() === '/api/logout') {
+        // Exception Tunnel de Paiement : Sécurisé par JWT, ne doit pas bloquer la finalisation de la commande
+        $excludedPaths = [
+            '/api/logout',
+            '/api/stripe/create-intent',
+            '/api/payment',
+            '/api/order/create',
+            '/api/order/create-multi-payment'
+        ];
+
+        if (in_array($request->getPathInfo(), $excludedPaths)) {
             return;
         }
 

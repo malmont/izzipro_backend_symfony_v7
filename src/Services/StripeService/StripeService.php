@@ -23,6 +23,7 @@ class StripeService
     private LoggerInterface $logger;
     private \App\Services\EntityRetrieverService $entityRetrieverService;
     private \App\UseCase\OrderUseCase\CalculateTaxesUseCase $calculateTaxesUseCase;
+    private \App\Services\OrderService\RentalPriceCalculator $rentalPriceCalculator;
 
 
     public function __construct(
@@ -31,7 +32,8 @@ class StripeService
         TenantConnectionManager $connectionManager,
         LoggerInterface $logger,
         \App\Services\EntityRetrieverService $entityRetrieverService,
-        \App\UseCase\OrderUseCase\CalculateTaxesUseCase $calculateTaxesUseCase
+        \App\UseCase\OrderUseCase\CalculateTaxesUseCase $calculateTaxesUseCase,
+        \App\Services\OrderService\RentalPriceCalculator $rentalPriceCalculator
     ) {
         $this->stripeSecretKey = $stripeSecretKey;
         $this->emProvider = $emProvider;
@@ -40,6 +42,7 @@ class StripeService
         $this->logger = $logger;
         $this->entityRetrieverService = $entityRetrieverService;
         $this->calculateTaxesUseCase = $calculateTaxesUseCase;
+        $this->rentalPriceCalculator = $rentalPriceCalculator;
     }
 
     public function createOnboardingLink(string $refreshUrl, string $returnUrl): string
@@ -145,19 +148,22 @@ class StripeService
         }
     }
 
-    public function createPaymentIntentFromItems(array $items, float $priceShipping, string $currency = 'cad'): array
+    public function createPaymentIntentFromItems(array $payload, float $priceShipping, string $currency = 'cad'): array
     {
+        $items = $payload['items'] ?? [];
         if (empty($items)) {
             return ['error' => 'Items requis', 'status' => 400];
         }
 
+        $globalBooking = $payload['booking'] ?? $payload['rental'] ?? null;
         $itemsTotal = 0.0;
+
         foreach ($items as $itemData) {
             $productVariantId = $itemData['productVariantId'] ?? null;
             $quantity = $itemData['quantity'] ?? 0;
 
             if (!$productVariantId || $quantity <= 0) {
-                return ['error' => 'Invalid item data', 'status' => 400];
+                return ['error' => 'Invalid item data (ID ou quantité manquante)', 'status' => 400];
             }
 
             try {
@@ -171,8 +177,26 @@ class StripeService
             }
 
             $product = $productVariant->getProduct();
-            $price = $product->getPrice();
-            $itemsTotal += $price * $quantity;
+            
+            // Calcul du prix : Location si données de booking présentes, sinon Retail
+            $bookingData = $itemData['booking'] ?? $itemData['rental'] ?? $globalBooking;
+
+            if ($bookingData) {
+                $unitPrice = $this->rentalPriceCalculator->calculate($product, $bookingData);
+                $this->logger->info("Calcul prix LOCATION pour produit {$product->getId()}: $unitPrice CAD", ['bookingData' => $bookingData]);
+            } else {
+                $unitPrice = $product->getPrice();
+                $this->logger->info("Calcul prix RETAIL pour produit {$product->getId()}: $unitPrice CAD", [
+                    'available_keys' => array_keys($itemData),
+                    'global_booking_present' => !empty($globalBooking)
+                ]);
+            }
+
+            if ($unitPrice === null) {
+                return ['error' => "Impossible de calculer le prix pour le produit {$product->getName()}", 'status' => 400];
+            }
+
+            $itemsTotal += $unitPrice * $quantity;
         }
 
         $subtotal = $itemsTotal + $priceShipping;

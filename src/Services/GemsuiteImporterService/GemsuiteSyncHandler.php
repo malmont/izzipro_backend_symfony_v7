@@ -184,8 +184,6 @@ class GemsuiteSyncHandler
 
             if ($category->isRentalCategory()) {
                 $this->rentalWorkaround->applyRentalProductConfiguration($product, $gemProductData);
-            } else {
-                $this->rentalWorkaround->removeRentalConfiguration($product, $em);
             }
         }
 
@@ -430,44 +428,32 @@ class GemsuiteSyncHandler
         foreach ($pack->getCategories()->toArray() as $oldCategory) {
             $pack->removeCategory($oldCategory);
         }
+
         $targetCategoriesRaw = $data['limit_location_products'] ?? '';
-        $targetCategoryGemsuiteIds = [];
         
+        // Support pour tableau JSON ou chaine csv
         if (is_array($targetCategoriesRaw)) {
-            $targetCategoryGemsuiteIds = $targetCategoriesRaw;
-        } elseif (is_string($targetCategoriesRaw)) {
-            // Check if it's a JSON string
-            $decoded = json_decode($targetCategoriesRaw, true);
-            if (is_array($decoded)) {
-                $targetCategoryGemsuiteIds = $decoded;
-            } else {
-                // If it's a regular string, clean it of any brackets and quotes before exploding
-                $cleaned = str_replace(['[', ']', '"', "'", ' '], '', $targetCategoriesRaw);
-                $targetCategoryGemsuiteIds = explode(',', $cleaned);
-            }
-        }
-
-        $targetCategoryGemsuiteIds = array_filter(array_map('intval', $targetCategoryGemsuiteIds));
-        
-        if (empty($targetCategoryGemsuiteIds)) {
-            // NOUVELLE RÈGLE MÉTIER : Si vide ou null, le pack s'applique à TOUTES les catégories de location
-            $categories = $em->getRepository(Categories::class)->findBy(['isRentalCategory' => true]);
+            $targetCategoryGemsuiteIds = array_map('trim', $targetCategoriesRaw);
         } else {
-            // TODO: Si Gemsuite envoie des IDs de PRODUITS dans `limit_location_products`, il faudra adapter
-            // Pour l'instant on garde la logique de fallback si ce sont des catégories
-            $categories = $em->getRepository(Categories::class)->findBy(['gemsuiteCategoryId' => $targetCategoryGemsuiteIds]);
+            $targetCategoryGemsuiteIds = array_filter(array_map('trim', explode(',', (string)$targetCategoriesRaw)));
         }
 
-        if (!empty($categories)) {
-            foreach ($categories as $category) {
+        foreach ($targetCategoryGemsuiteIds as $gemsuiteId) {
+            $catId = (int)$gemsuiteId;
+            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
+            if ($category) {
                 $pack->addCategory($category);
+                
+                // Mettre à jour la granularité de tous les produits de cette catégorie
+                // Maintenant que la catégorie a le pack en mémoire, cette fonction le verra.
+                foreach ($category->getProducts() as $product) {
+                    $this->rentalWorkaround->updateSmartGranularity($product);
+                }
             }
-            
-            // Bulk update the granularity for all products in these categories
-            $this->rentalWorkaround->updateGranularityBulk($categories, $pack, $em);
         }
 
         $em->persist($pack);
+        $em->flush();
     }
 
     /**

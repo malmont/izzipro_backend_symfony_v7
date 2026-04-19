@@ -78,6 +78,7 @@ class GemsuiteCompanySyncHandler
         $entreprise->setConditionOfUse($companyData['gemportal_conditions'] ?? null);
         $entreprise->setPrivacyPolicy($companyData['gemportal_politics'] ?? null);
         $entreprise->setLegalNotice($companyData['gemportal_legal'] ?? null);
+        $entreprise->setGemsuitePaymentMethodId(isset($companyData['use_gem_payment']) ? (int)$companyData['use_gem_payment'] : $entreprise->getGemsuitePaymentMethodId());
 
         $identifier = $entreprise->getGemsuiteIdentifier();
         if (isset($companyData['website_link'])) {

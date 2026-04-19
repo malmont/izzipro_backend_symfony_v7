@@ -74,6 +74,9 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $faviconFilename = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $gemsuitePaymentMethodId = null;
+
     public function __construct()
     {
         $this->translations = new ArrayCollection();
@@ -339,6 +342,18 @@ class Entreprise implements TranslatableInterface
     public function setFaviconFilename(?string $faviconFilename): static
     {
         $this->faviconFilename = $faviconFilename;
+
+        return $this;
+    }
+
+    public function getGemsuitePaymentMethodId(): ?int
+    {
+        return $this->gemsuitePaymentMethodId;
+    }
+
+    public function setGemsuitePaymentMethodId(?int $gemsuitePaymentMethodId): static
+    {
+        $this->gemsuitePaymentMethodId = $gemsuitePaymentMethodId;
 
         return $this;
     }

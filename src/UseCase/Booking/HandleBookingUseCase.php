@@ -91,6 +91,10 @@ class HandleBookingUseCase
                 $booking->setQuantity($quantity);
                 $booking->setStatus('PENDING_PAYMENT'); 
 
+                if (isset($bookingData['rentalPackId'])) {
+                    $booking->setRentalPackId((int) $bookingData['rentalPackId']);
+                }
+
                 if (isset($orderItemsMap[$variantId]) && count($orderItemsMap[$variantId]) > 0) {
                     /** @var OrderItems $relatedOrderItem */
 

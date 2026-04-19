@@ -113,7 +113,7 @@ class PaymentsController extends AbstractController
         $items = $data['items'] ?? [];
         $priceShipping = $data['priceShipping'] ?? 0.0;
 
-        $result = $this->stripeService->createPaymentIntentFromItems($items, $priceShipping);
+        $result = $this->stripeService->createPaymentIntentFromItems($data, $priceShipping);
 
         if (isset($result['error'])) {
             return $this->json(['error' => $result['error']], $result['status'] ?? 500);

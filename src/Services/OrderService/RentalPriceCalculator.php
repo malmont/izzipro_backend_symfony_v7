@@ -102,7 +102,7 @@ class RentalPriceCalculator
     {
         return match ($type) {
             'hour' => (float)($pack->getHourRate() ?? 0),
-            'halfDay' => (float)($pack->getHalfDayRate() ?? 0),
+            'halfDay', 'half_day' => (float)($pack->getHalfDayRate() ?? 0),
             'day' => (float)($pack->getDayRate() ?? 0),
             'week' => (float)($pack->getWeekRate() ?? 0),
             'month' => (float)($pack->getMonthRate() ?? 0),
