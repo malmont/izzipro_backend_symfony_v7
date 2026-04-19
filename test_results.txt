@@ -1,0 +1,183 @@
+PHPUnit 9.6.31 by Sebastian Bergmann and contributors.
+
+Testing 
+...............................................................  63 / 400 ( 15%)
+.Cache miss for entreprise_1 in locale: fr
+.Cache miss for entreprise_999 in locale: fr
+.........F................................................... 126 / 400 ( 31%)
+.F................EE.....................................E..... 189 / 400 ( 47%)
+.......................................................EEEE.... 252 / 400 ( 63%)
+EEEEEE......................................................... 315 / 400 ( 78%)
+..................................EEE.......................... 378 / 400 ( 94%)
+......................                                          400 / 400 (100%)
+
+Time: 00:02.966, Memory: 46.00 MB
+
+There were 16 errors:
+
+1) App\Tests\Unit\MessageHandler\ProcessGemsuiteEntityJobHandlerTest::testInvokeCreatesProductAndDispatchesTranslation
+Error: Call to a member function getDatabase() on null
+
+/var/www/EcommerceSymfony/src/MessageHandler/ProcessGemsuiteEntityJobHandler.php:130
+/var/www/EcommerceSymfony/tests/Unit/MessageHandler/ProcessGemsuiteEntityJobHandlerTest.php:157
+
+2) App\Tests\Unit\MessageHandler\ProcessGemsuiteEntityJobHandlerTest::testInvokeIgnoredIfInactive
+Error: Call to a member function getDatabase() on null
+
+/var/www/EcommerceSymfony/src/MessageHandler/ProcessGemsuiteEntityJobHandler.php:130
+/var/www/EcommerceSymfony/tests/Unit/MessageHandler/ProcessGemsuiteEntityJobHandlerTest.php:194
+
+3) App\Tests\Unit\Service\StripeServiceTest::testCreatePaymentIntentFromItemsCalculatesCorrectly
+ArgumentCountError: Too few arguments to function App\Services\StripeService\StripeService::__construct(), 6 passed and exactly 7 expected
+
+/var/www/EcommerceSymfony/src/Services/StripeService/StripeService.php:29
+/var/www/EcommerceSymfony/tests/Unit/Service/StripeServiceTest.php:50
+
+4) App\Tests\Unit\Services\GemsuiteImporterService\GemsuiteSaleManagerTest::testCreateSaleReturnsNullIfNoGemsuiteClientId
+ArgumentCountError: Too few arguments to function App\Services\GemsuiteImporterService\GemsuiteSaleManager::__construct(), 4 passed in /var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSaleManagerTest.php on line 34 and exactly 5 expected
+
+/var/www/EcommerceSymfony/src/Services/GemsuiteImporterService/GemsuiteSaleManager.php:14
+/var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSaleManagerTest.php:34
+
+5) App\Tests\Unit\Services\GemsuiteImporterService\GemsuiteSaleManagerTest::testCreateSaleReturnsNullIfNoToken
+ArgumentCountError: Too few arguments to function App\Services\GemsuiteImporterService\GemsuiteSaleManager::__construct(), 4 passed in /var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSaleManagerTest.php on line 34 and exactly 5 expected
+
+/var/www/EcommerceSymfony/src/Services/GemsuiteImporterService/GemsuiteSaleManager.php:14
+/var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSaleManagerTest.php:34
+
+6) App\Tests\Unit\Services\GemsuiteImporterService\GemsuiteSaleManagerTest::testCreateSaleFullSuccess
+ArgumentCountError: Too few arguments to function App\Services\GemsuiteImporterService\GemsuiteSaleManager::__construct(), 4 passed in /var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSaleManagerTest.php on line 34 and exactly 5 expected
+
+/var/www/EcommerceSymfony/src/Services/GemsuiteImporterService/GemsuiteSaleManager.php:14
+/var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSaleManagerTest.php:34
+
+7) App\Tests\Unit\Services\GemsuiteImporterService\GemsuiteSaleManagerTest::testCreateSaleHandlesException
+ArgumentCountError: Too few arguments to function App\Services\GemsuiteImporterService\GemsuiteSaleManager::__construct(), 4 passed in /var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSaleManagerTest.php on line 34 and exactly 5 expected
+
+/var/www/EcommerceSymfony/src/Services/GemsuiteImporterService/GemsuiteSaleManager.php:14
+/var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSaleManagerTest.php:34
+
+8) App\Tests\Unit\Services\GemsuiteImporterService\GemsuiteSyncHandlerTest::testHandleProductUpdateAbortsValidation
+ArgumentCountError: Too few arguments to function App\Services\GemsuiteImporterService\GemsuiteSyncHandler::__construct(), 11 passed in /var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php on line 56 and exactly 12 expected
+
+/var/www/EcommerceSymfony/src/Services/GemsuiteImporterService/GemsuiteSyncHandler.php:27
+/var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php:56
+
+9) App\Tests\Unit\Services\GemsuiteImporterService\GemsuiteSyncHandlerTest::testHandleProductUpdateApiFail
+ArgumentCountError: Too few arguments to function App\Services\GemsuiteImporterService\GemsuiteSyncHandler::__construct(), 11 passed in /var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php on line 56 and exactly 12 expected
+
+/var/www/EcommerceSymfony/src/Services/GemsuiteImporterService/GemsuiteSyncHandler.php:27
+/var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php:56
+
+10) App\Tests\Unit\Services\GemsuiteImporterService\GemsuiteSyncHandlerTest::testHandleProductUpdateSyncsActiveParentProduct
+ArgumentCountError: Too few arguments to function App\Services\GemsuiteImporterService\GemsuiteSyncHandler::__construct(), 11 passed in /var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php on line 56 and exactly 12 expected
+
+/var/www/EcommerceSymfony/src/Services/GemsuiteImporterService/GemsuiteSyncHandler.php:27
+/var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php:56
+
+11) App\Tests\Unit\Services\GemsuiteImporterService\GemsuiteSyncHandlerTest::testHandleProductUpdateDeactivatesInactiveProduct
+ArgumentCountError: Too few arguments to function App\Services\GemsuiteImporterService\GemsuiteSyncHandler::__construct(), 11 passed in /var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php on line 56 and exactly 12 expected
+
+/var/www/EcommerceSymfony/src/Services/GemsuiteImporterService/GemsuiteSyncHandler.php:27
+/var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php:56
+
+12) App\Tests\Unit\Services\GemsuiteImporterService\GemsuiteSyncHandlerTest::testHandleCategoryUpdate
+ArgumentCountError: Too few arguments to function App\Services\GemsuiteImporterService\GemsuiteSyncHandler::__construct(), 11 passed in /var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php on line 56 and exactly 12 expected
+
+/var/www/EcommerceSymfony/src/Services/GemsuiteImporterService/GemsuiteSyncHandler.php:27
+/var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php:56
+
+13) App\Tests\Unit\Services\GemsuiteImporterService\GemsuiteSyncHandlerTest::testHandleClientUpdateDelegatesToManager
+ArgumentCountError: Too few arguments to function App\Services\GemsuiteImporterService\GemsuiteSyncHandler::__construct(), 11 passed in /var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php on line 56 and exactly 12 expected
+
+/var/www/EcommerceSymfony/src/Services/GemsuiteImporterService/GemsuiteSyncHandler.php:27
+/var/www/EcommerceSymfony/tests/Unit/Services/GemsuiteImporterService/GemsuiteSyncHandlerTest.php:56
+
+14) App\Tests\Unit\UseCase\OrderUseCase\ProcessOrderItemsUseCaseTest::testExecuteSuccessStandardOrder
+TypeError: App\UseCase\OrderUseCase\ProcessOrderItemsUseCase::__construct(): Argument #4 ($rentalPriceCalculator) must be of type App\Services\OrderService\RentalPriceCalculator, Mock_LoggerInterface_6c8ca9f5 given, called in /var/www/EcommerceSymfony/tests/Unit/UseCase/OrderUseCase/ProcessOrderItemsUseCaseTest.php on line 38
+
+/var/www/EcommerceSymfony/src/UseCase/OrderUseCase/ProcessOrderItemsUseCase.php:22
+/var/www/EcommerceSymfony/tests/Unit/UseCase/OrderUseCase/ProcessOrderItemsUseCaseTest.php:38
+
+15) App\Tests\Unit\UseCase\OrderUseCase\ProcessOrderItemsUseCaseTest::testExecuteInsufficientStock
+TypeError: App\UseCase\OrderUseCase\ProcessOrderItemsUseCase::__construct(): Argument #4 ($rentalPriceCalculator) must be of type App\Services\OrderService\RentalPriceCalculator, Mock_LoggerInterface_6c8ca9f5 given, called in /var/www/EcommerceSymfony/tests/Unit/UseCase/OrderUseCase/ProcessOrderItemsUseCaseTest.php on line 38
+
+/var/www/EcommerceSymfony/src/UseCase/OrderUseCase/ProcessOrderItemsUseCase.php:22
+/var/www/EcommerceSymfony/tests/Unit/UseCase/OrderUseCase/ProcessOrderItemsUseCaseTest.php:38
+
+16) App\Tests\Unit\UseCase\OrderUseCase\ProcessOrderItemsUseCaseTest::testExecuteSuccessCancelOrder
+TypeError: App\UseCase\OrderUseCase\ProcessOrderItemsUseCase::__construct(): Argument #4 ($rentalPriceCalculator) must be of type App\Services\OrderService\RentalPriceCalculator, Mock_LoggerInterface_6c8ca9f5 given, called in /var/www/EcommerceSymfony/tests/Unit/UseCase/OrderUseCase/ProcessOrderItemsUseCaseTest.php on line 38
+
+/var/www/EcommerceSymfony/src/UseCase/OrderUseCase/ProcessOrderItemsUseCase.php:22
+/var/www/EcommerceSymfony/tests/Unit/UseCase/OrderUseCase/ProcessOrderItemsUseCaseTest.php:38
+
+--
+
+There were 2 failures:
+
+1) App\Tests\Unit\Controller\PaymentsControllerTest::testCreateStripePaymentIntentDelegatesToService
+Expectation failed for method name is "createPaymentIntentFromItems" when invoked 1 time(s)
+Parameter 0 for invocation App\Services\StripeService\StripeService::createPaymentIntentFromItems(Array (...), 10.0, 'cad'): array does not match expected value.
+Failed asserting that two arrays are equal.
+--- Expected
++++ Actual
+@@ @@
+ Array (
+-    0 => Array (...)
++    'items' => Array (...)
++    'priceShipping' => 10
+ )
+
+/var/www/EcommerceSymfony/src/Controller/paymentController/PaymentsController.php:116
+/var/www/EcommerceSymfony/tests/Unit/Controller/PaymentsControllerTest.php:67
+
+2) App\Tests\Unit\Controller\paymentController\PaymentsControllerTest::testCreateStripePaymentIntentSuccess
+Expectation failed for method name is "createPaymentIntentFromItems" when invoked 1 time(s)
+Parameter 0 for invocation App\Services\StripeService\StripeService::createPaymentIntentFromItems(Array (...), 10.0, 'cad'): array does not match expected value.
+Failed asserting that two arrays are equal.
+--- Expected
++++ Actual
+@@ @@
+ Array (
+-    0 => Array (...)
++    'items' => Array (...)
++    'priceShipping' => 10
+ )
+
+/var/www/EcommerceSymfony/src/Controller/paymentController/PaymentsController.php:116
+/var/www/EcommerceSymfony/tests/Unit/Controller/paymentController/PaymentsControllerTest.php:234
+
+ERRORS!
+Tests: 400, Assertions: 1164, Errors: 16, Failures: 2.
+
+Remaining self deprecation notices (10)
+
+  3x: Creation of dynamic property Mock_EasyPostClient_587db78e::$address is deprecated
+    1x in AddressVerificationServiceTest::testVerifyReturnsNormalizedAddressOnSuccess from App\Tests\Unit\Service
+    1x in AddressVerificationServiceTest::testVerifyThrowsExceptionOnInvalidAddress from App\Tests\Unit\Service
+    1x in AddressVerificationServiceTest::testVerifyPropagatesEasyPostExceptions from App\Tests\Unit\Service
+
+  3x: Creation of dynamic property Mock_EasyPostClient_587db78e::$shipment is deprecated
+    3x in EasyPostServiceTest::setUp from App\Tests\Unit\Services\ShippingService
+
+  3x: Creation of dynamic property Mock_EasyPostClient_587db78e::$tracker is deprecated
+    3x in EasyPostServiceTest::setUp from App\Tests\Unit\Services\ShippingService
+
+  1x: Method "Symfony\Component\Security\Core\User\UserInterface::eraseCredentials()" might add "void" as a native return type declaration in the future. Do the same in implementation "App\Entity\User" now to avoid errors or add an explicit @return annotation to suppress this message.
+    1x in ApiLoginAuthenticatorTest::testAuthenticateSuccessMobile from App\Tests\Security
+
+Other deprecation notices (8)
+
+  4x: The Doctrine\ORM\Event\LifecycleEventArgs::getEntity method is deprecated (2.13. Use {@see getObject} instead.).
+    1x in CacheInvalidationSubscriberTest::testPostPersistWithContactInvalidatesCache from App\Tests\EventSubscriber
+    1x in CacheInvalidationSubscriberTest::testPostUpdateWithBanniereInvalidatesTags from App\Tests\EventSubscriber
+    1x in CacheInvalidationSubscriberTest::testPostRemoveWithEntrepriseInvalidatesTags from App\Tests\EventSubscriber
+    1x in CacheInvalidationSubscriberTest::testNonTagAwareCacheDoesNotCallInvalidateTags from App\Tests\EventSubscriber
+
+  3x: The Doctrine\DBAL\Connection::getEventManager method is deprecated ().
+    2x in TenantConnectionProviderTest::testGetConnectionReturnsDerivedConnection from App\Tests\Unit\Service
+    1x in TenantConnectionProviderTest::testSwitchTenantCreatesNewConnectionWithUpdatedParams from App\Tests\Unit\Service
+
+  1x: The SymfonyCasts\Bundle\VerifyEmail\VerifyEmailHelperInterface::validateEmailConfirmation method is deprecated (since v1.17.0, use validateEmailConfirmationFromRequest instead.  Validate a signed an email confirmation request.  If something is wrong with the email confirmation, a VerifyEmailExceptionInterface will be thrown.  The $userEmail should be the email address that the currently-authenticated user is trying to get validated. This is usually the current user's email address.  In more a complex setup, where you allow a user to verify multiple emails, this would be the email that the currently-authenticated user is trying to validate. You may even store a user's many email addresses (and whether or not each is verified) in another database table. In that case, you would need to call this method with each unverified email in that table (for the currently-authenticated user) to see if the signature is valid for any of the email addresses. If you find the one that is valid, you could then mark that email as "confirmed".).
+    1x in EmailVerifierTest::testHandleEmailConfirmation from App\Tests\Security
+

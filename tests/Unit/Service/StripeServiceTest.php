@@ -25,6 +25,7 @@ class StripeServiceTest extends TestCase
         $logger = $this->createMock(LoggerInterface::class);
         $entityRetrieverService = $this->createMock(EntityRetrieverService::class);
         $calculateTaxesUseCase = $this->createMock(CalculateTaxesUseCase::class);
+        $rentalPriceCalculator = $this->createMock(\App\Services\OrderService\RentalPriceCalculator::class);
 
         // Mock EntityManager (needed for constructor but accessed via provider in class)
         $em = $this->createMock(EntityManagerInterface::class);
@@ -44,13 +45,15 @@ class StripeServiceTest extends TestCase
                 $connectionManager,
                 $logger,
                 $entityRetrieverService,
-                $calculateTaxesUseCase
+                $calculateTaxesUseCase,
+                $rentalPriceCalculator
             ])
             ->onlyMethods(['createPaymentIntent'])
             ->getMock();
 
         // Data
-        $items = [['productVariantId' => 1, 'quantity' => 2]];
+        $itemsData = [['productVariantId' => 1, 'quantity' => 2]];
+        $payload = ['items' => $itemsData];
         $priceShipping = 10.0;
 
         // Mock Entity Retrieval
@@ -75,7 +78,7 @@ class StripeServiceTest extends TestCase
             ->with(115, 'cad')
             ->willReturn('client_secret_abc');
 
-        $result = $service->createPaymentIntentFromItems($items, $priceShipping);
+        $result = $service->createPaymentIntentFromItems($payload, $priceShipping);
 
         $this->assertTrue($result['success']);
         $this->assertEquals('client_secret_abc', $result['clientSecret']);

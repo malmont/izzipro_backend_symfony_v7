@@ -21,6 +21,7 @@ class ProcessOrderItemsUseCaseTest extends TestCase
     private $emProvider;
     private $entityRetriever;
     private $orderItemService;
+    private $rentalPriceCalculator;
     private $logger;
     private $entityManager;
     private $useCase;
@@ -30,6 +31,7 @@ class ProcessOrderItemsUseCaseTest extends TestCase
         $this->emProvider = $this->createMock(TenantEntityManagerProvider::class);
         $this->entityRetriever = $this->createMock(EntityRetrieverService::class);
         $this->orderItemService = $this->createMock(OrderItemService::class);
+        $this->rentalPriceCalculator = $this->createMock(\App\Services\OrderService\RentalPriceCalculator::class);
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->entityManager = $this->createMock(EntityManagerInterface::class);
 
@@ -39,6 +41,7 @@ class ProcessOrderItemsUseCaseTest extends TestCase
             $this->emProvider,
             $this->entityRetriever,
             $this->orderItemService,
+            $this->rentalPriceCalculator,
             $this->logger
         );
     }

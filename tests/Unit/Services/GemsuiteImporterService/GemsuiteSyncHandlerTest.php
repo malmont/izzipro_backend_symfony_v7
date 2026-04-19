@@ -37,6 +37,7 @@ class GemsuiteSyncHandlerTest extends TestCase
 
     private $stockCalculator;
     private $clientManager;
+    private $rentalWorkaround;
     private $gemsuiteApiUrl = 'https://api.example.com/';
     private $handler;
 
@@ -52,6 +53,7 @@ class GemsuiteSyncHandlerTest extends TestCase
         $this->attributeProcessor = $this->createMock(GemsuiteAttributeProcessor::class);
         $this->stockCalculator = $this->createMock(GemsuiteStockCalculator::class);
         $this->clientManager = $this->createMock(GemsuiteClientManager::class);
+        $this->rentalWorkaround = $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class);
 
         $this->handler = new GemsuiteSyncHandler(
             $this->client,
@@ -64,7 +66,8 @@ class GemsuiteSyncHandlerTest extends TestCase
             $this->attributeProcessor,
             $this->stockCalculator,
             $this->gemsuiteApiUrl,
-            $this->clientManager
+            $this->clientManager,
+            $this->rentalWorkaround
         );
     }
 
@@ -142,7 +145,7 @@ class GemsuiteSyncHandlerTest extends TestCase
         $repoProduct->method('findOneBy')->willReturn(null); // New Product
 
         $repoCategory = $this->createMock(EntityRepository::class);
-        $repoCategory->method('findOneBy')->willReturn(null); // New Category
+        $repoCategory->method('findOneBy')->willReturn(new Categories()); // Existing Category for Active check
 
         $repoStyle = $this->createMock(EntityRepository::class);
         $repoStyle->method('find')->willReturn(null);

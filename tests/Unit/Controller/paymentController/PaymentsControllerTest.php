@@ -228,7 +228,7 @@ class PaymentsControllerTest extends TestCase
 
         $this->stripeService->expects($this->once())
             ->method('createPaymentIntentFromItems')
-            ->with($payload['items'], $payload['priceShipping'])
+            ->with($payload, $payload['priceShipping'])
             ->willReturn($expectedResult);
 
         $response = $this->controller->createStripePaymentIntent($request);

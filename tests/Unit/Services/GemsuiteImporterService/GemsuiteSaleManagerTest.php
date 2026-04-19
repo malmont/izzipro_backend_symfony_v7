@@ -23,6 +23,8 @@ class GemsuiteSaleManagerTest extends TestCase
     private $tenantManager;
     private $logger;
     private $gemsuiteApiUrl = 'https://api.example.com/';
+    private $emProvider;
+    private $em;
     private $manager;
 
     protected function setUp(): void
@@ -30,12 +32,17 @@ class GemsuiteSaleManagerTest extends TestCase
         $this->client = $this->createMock(HttpClientInterface::class);
         $this->tenantManager = $this->createMock(TenantConnectionManager::class);
         $this->logger = $this->createMock(LoggerInterface::class);
+        $this->emProvider = $this->createMock(\App\Services\TenantEntityManagerProvider::class);
+        $this->em = $this->createMock(\Doctrine\ORM\EntityManagerInterface::class);
+
+        $this->emProvider->method('getEntityManager')->willReturn($this->em);
 
         $this->manager = new GemsuiteSaleManager(
             $this->client,
             $this->tenantManager,
             $this->logger,
-            $this->gemsuiteApiUrl
+            $this->gemsuiteApiUrl,
+            $this->emProvider
         );
     }
 
@@ -107,6 +114,13 @@ class GemsuiteSaleManagerTest extends TestCase
         $item->method('getUnitPrice')->willReturn(2500.0); // 25.00
 
         $order->method('getOrderItems')->willReturn(new ArrayCollection([$item]));
+
+        // --- Mock Entreprise for Payment Method ID ---
+        $entreprise = $this->createMock(\App\Entity\Entreprise::class);
+        $entreprise->method('getGemsuitePaymentMethodId')->willReturn(114);
+        $entRepo = $this->createMock(\Doctrine\ORM\EntityRepository::class);
+        $entRepo->method('findOneBy')->willReturn($entreprise);
+        $this->em->method('getRepository')->with(\App\Entity\Entreprise::class)->willReturn($entRepo);
 
         // --- HTTP Mocks for sequential calls ---
 

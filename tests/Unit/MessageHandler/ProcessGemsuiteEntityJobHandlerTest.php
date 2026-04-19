@@ -89,6 +89,9 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
 
         // 5. ENTITY MANAGER (C'EST ICI LA CORRECTION 🛠️)
         $em = $this->createMock(EntityManagerInterface::class);
+        $connection = $this->createMock(\Doctrine\DBAL\Connection::class);
+        $connection->method('getDatabase')->willReturn('test_db');
+        $em->method('getConnection')->willReturn($connection);
 
         $em->method('getRepository')->willReturnMap([
             [Product::class, $productRepo],
@@ -169,6 +172,9 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
         $mockQuery->method('setParameter')->willReturn($mockQuery);
 
         $em = $this->createMock(EntityManagerInterface::class);
+        $connection = $this->createMock(\Doctrine\DBAL\Connection::class);
+        $connection->method('getDatabase')->willReturn('test_db');
+        $em->method('getConnection')->willReturn($connection);
         $em->method('createQuery')->willReturn($mockQuery);
         $em->expects($this->never())->method('persist');
 
