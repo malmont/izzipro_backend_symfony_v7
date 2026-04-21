@@ -664,7 +664,8 @@ class GemsuiteSyncHandler
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
 
             if ($category) {
-                return true;
+                // On vérifie quand même le statut et sync_web ici
+                return $status === 1 && $syncWeb;
             }
         }
 

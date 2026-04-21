@@ -17,6 +17,7 @@ class BookingAvailabilityServiceTest extends TestCase
     private $emProvider;
     private $entityManager;
     private $bookingRepo;
+    private $vehicleRepo;
     private $service;
 
     protected function setUp(): void
@@ -24,10 +25,12 @@ class BookingAvailabilityServiceTest extends TestCase
         $this->emProvider = $this->createMock(TenantEntityManagerProvider::class);
         $this->entityManager = $this->createMock(EntityManagerInterface::class);
         $this->bookingRepo = $this->createMock(MockBookingRepository::class);
+        $this->vehicleRepo = $this->createMock(EntityRepository::class);
 
-        $this->entityManager->method('getRepository')
-            ->with(Booking::class)
-            ->willReturn($this->bookingRepo);
+        $this->entityManager->method('getRepository')->will($this->returnValueMap([
+            [Booking::class, $this->bookingRepo],
+            [\App\Entity\Vehicle::class, $this->vehicleRepo]
+        ]));
 
         $this->emProvider->method('getEntityManager')
             ->willReturn($this->entityManager);
@@ -69,6 +72,8 @@ class BookingAvailabilityServiceTest extends TestCase
             ->method('countReservedQuantityBetween')
             ->willReturn(10);
 
+        $this->vehicleRepo->method('count')->willReturn(1);
+
         $remaining = $this->service->getRemainingStock($product, new \DateTime(), new \DateTime());
         $this->assertEquals(40, $remaining); // 50 - 10
     }
@@ -86,6 +91,7 @@ class BookingAvailabilityServiceTest extends TestCase
         $product->method('getBookingConfiguration')->willReturn($config);
 
         $this->bookingRepo->method('countReservedQuantityBetween')->willReturn(2); // 5 - 2 = 3 remaining
+        $this->vehicleRepo->method('count')->willReturn(1);
 
         $this->assertTrue($this->service->isAvailable($product, new \DateTime(), new \DateTime(), 3));
         $this->assertFalse($this->service->isAvailable($product, new \DateTime(), new \DateTime(), 4));
@@ -113,6 +119,8 @@ class BookingAvailabilityServiceTest extends TestCase
             ->method('findBookingsOverlapping')
             ->with($product, $start, $end)
             ->willReturn([$booking1]);
+
+        $this->vehicleRepo->method('count')->willReturn(1);
 
         $results = $this->service->getAvailabilitiesForRange($product, $start, $end);
 

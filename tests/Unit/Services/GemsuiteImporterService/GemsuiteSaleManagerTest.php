@@ -54,11 +54,10 @@ class GemsuiteSaleManagerTest extends TestCase
 
         // Mock User returning null for everything
         $user->method('getGemsuiteClient')->willReturn(null);
-        $user->method('getGemsuiteClientId')->willReturn(null);
 
         $this->logger->expects($this->once())
             ->method('warning')
-            ->with($this->stringContains('Client GEM-SUITE manquant'));
+            ->with($this->stringContains('Client GEM-SUITE (relation introuvable)'));
 
         $this->assertNull($this->manager->createSale($order));
     }
@@ -69,7 +68,9 @@ class GemsuiteSaleManagerTest extends TestCase
         $user = $this->createMock(User::class);
         $order->method('getUserId')->willReturn($user);
 
-        $user->method('getGemsuiteClientId')->willReturn(12345);
+        $gsClient = $this->createMock(GemsuiteClient::class);
+        $gsClient->method('getGemsuiteId')->willReturn(12345);
+        $user->method('getGemsuiteClient')->willReturn($gsClient);
 
         $this->tenantManager->method('getCurrentTenantCode')->willReturn('TENANT');
         $this->tenantManager->method('getTenantToken')->willReturn(null);
@@ -91,7 +92,9 @@ class GemsuiteSaleManagerTest extends TestCase
         $order->method('getReference')->willReturn('REF-100');
         $order->method('getShippingCost')->willReturn(1500.0); // 15.00
 
-        $user->method('getGemsuiteClientId')->willReturn(12345);
+        $gsClient = $this->createMock(GemsuiteClient::class);
+        $gsClient->method('getGemsuiteId')->willReturn(12345);
+        $user->method('getGemsuiteClient')->willReturn($gsClient);
 
         $this->tenantManager->method('getCurrentTenantCode')->willReturn('TENANT');
         $this->tenantManager->method('getTenantToken')->willReturn('valid_token');
@@ -174,7 +177,11 @@ class GemsuiteSaleManagerTest extends TestCase
         $order = $this->createMock(Order::class);
         $user = $this->createMock(User::class);
         $order->method('getUserId')->willReturn($user);
-        $user->method('getGemsuiteClientId')->willReturn(12345);
+        
+        $gsClient = $this->createMock(GemsuiteClient::class);
+        $gsClient->method('getGemsuiteId')->willReturn(12345);
+        $user->method('getGemsuiteClient')->willReturn($gsClient);
+
         $order->method('getOrderDate')->willReturn(new \DateTime());
 
         $this->tenantManager->method('getCurrentTenantCode')->willReturn('TENANT');
