@@ -93,8 +93,10 @@ use App\Entity\BookingConfiguration;
 use App\Entity\Booking;
 use App\Entity\RentalPack;
 use App\Entity\SaleUnit;
+use App\Entity\Vehicle;
 use App\Controller\Admin\RentalPackCrudController;
 use App\Controller\Admin\SaleUnitCrudController;
+use App\Controller\Admin\VehicleCrudController;
 
 
 
@@ -245,6 +247,9 @@ class DashboardController extends AbstractDashboardController
 
         yield MenuItem::linkToCrud('Grilles Tarifaires (Packs)', 'fas fa-tags', RentalPack::class)
             ->setController(RentalPackCrudController::class);
+
+        yield MenuItem::linkToCrud('Véhicules Gemsuite', 'fas fa-car', Vehicle::class)
+            ->setController(VehicleCrudController::class);
 
               
     }

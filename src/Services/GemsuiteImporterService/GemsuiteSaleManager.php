@@ -26,11 +26,7 @@ class GemsuiteSaleManager
         $gemsuiteClientId = $user?->getGemsuiteClient()?->getGemsuiteId();
 
         if (!$gemsuiteClientId) {
-            $gemsuiteClientId = $user?->getGemsuiteClientId();
-        }
-
-        if (!$gemsuiteClientId) {
-            $this->logger->warning(sprintf('Client GEM-SUITE manquant pour la commande #%d (User ID: %d).', $order->getId(), $user?->getId()));
+            $this->logger->warning(sprintf('Client GEM-SUITE (relation introuvable) pour la commande #%d (User ID: %d).', $order->getId(), $user?->getId()));
             return null;
         }
 
@@ -54,7 +50,7 @@ class GemsuiteSaleManager
             $this->addProductsToSale($order, $saleId, $token);
             $this->createPaymentForSale($order, $saleId, $token);
             $this->finalizeSaleAsInvoice($saleId, $token);
-           
+
 
             $this->logger->info(sprintf('Succès: Commande #%d synchronisée et facturée (GemSuite ID: %d).', $order->getId(), $saleId));
 
@@ -122,12 +118,13 @@ class GemsuiteSaleManager
                 $vehicle = $em->getRepository(\App\Entity\Vehicle::class)->findOneBy(['product' => $product]);
                 if ($vehicle) {
                     $payload['car_id'] = $vehicle->getGemsuiteVehicleId();
+                } else {
+                    $this->logger->error(sprintf("Synchro Gemsuite SALE: Véhicule manquant pour le produit de location #%d. Le champ car_id sera manquant.", $product?->getId()));
                 }
 
                 // 3. Dates de location
                 $payload['car_date_start'] = $booking->getStartAt()->format('Y-m-d H:i:s');
                 $payload['car_date_end'] = $booking->getEndAt()->format('Y-m-d H:i:s');
-
             } else {
                 // LOGIQUE RETAIL (Standard)
                 if ($variant) {

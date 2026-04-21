@@ -64,6 +64,11 @@ class GemsuiteSyncHandler
             $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
             $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
 
+            // --- ROBUSTESSE WEBHOOK ---
+            // On synchronise les catégories au début pour éviter de désactiver un produit 
+            // dont la nouvelle catégorie n'existe pas encore localement (Race Condition).
+            [$categoryMap, $shippingClassMap] = $this->importCategories($tenantEm, $token, $companyIdentifier);
+
             if (!$this->isProductActive($tenantEm, $gemProductData)) {
                 $this->logger->info("Produit #$productId détecté comme inactif. Désactivation locale.");
                 $this->deactivateProductOrVariant($tenantEm, $gemProductData);
@@ -72,7 +77,6 @@ class GemsuiteSyncHandler
 
                 if ($isParent) {
                     $this->logger->info("Traitement du produit PARENT #$productId");
-                    [$categoryMap, $shippingClassMap] = $this->importCategories($tenantEm, $token, $companyIdentifier);
                     $this->updateOrCreateProductParent($tenantEm, $gemProductData, $categoryMap, $shippingClassMap, $companyIdentifier);
 
                     if (!empty($gemProductData['attributs'])) {
@@ -113,6 +117,215 @@ class GemsuiteSyncHandler
         $this->clientManager->updateClientGemsuite($tenantCode, $clientId);
     }
 
+    /**
+     * Webhook Véhicule
+     */
+    public function handleVehicleUpdate(string $tenantCode, int $vehicleId): void
+    {
+        $this->logger->info(sprintf('Webhook Véhicule: Sync ID #%d pour tenant "%s"', $vehicleId, $tenantCode));
+        $token = $this->tenantManager->getTenantToken($tenantCode);
+
+        if (!$token) {
+            $this->logger->error("Token manquant pour le tenant $tenantCode (Action: Sync Véhicule)");
+            return;
+        }
+
+        try {
+            $vehicleData = $this->fetchVehicleFromApi($vehicleId, $token);
+
+            if (!$vehicleData) {
+                $this->logger->warning("Véhicule #$vehicleId introuvable sur l'API.");
+                return;
+            }
+
+            $tenantEm = $this->getTenantEntityManager($tenantCode);
+            // Association Véhicule <-> Produit
+            $this->rentalWorkaround->syncVehicles([$vehicleData]);
+
+            $tenantEm->flush();
+            $this->logger->info("Sync Véhicule terminée avec succès pour #$vehicleId");
+        } catch (\Throwable $e) {
+            $this->logger->error("Erreur Sync Véhicule #$vehicleId : " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Webhook Réservations (Rentals)
+     */
+    public function handleRentalUpdate(string $tenantCode, int $vehicleId): void
+    {
+        $this->logger->info(sprintf('Webhook Rentals: Sync ID #%d pour tenant "%s"', $vehicleId, $tenantCode));
+        $token = $this->tenantManager->getTenantToken($tenantCode);
+
+        if (!$token) {
+            $this->logger->error("Token manquant pour le tenant $tenantCode (Action: Sync Rentals)");
+            return;
+        }
+
+        try {
+            $appointments = $this->fetchRentalsFromApi($vehicleId, $token);
+
+            // On switch l'EM pour le tenant
+            $this->getTenantEntityManager($tenantCode);
+
+            // Synchro des rendez-vous
+            $this->rentalWorkaround->syncRentalsForVehicle($vehicleId, $appointments);
+
+            $this->logger->info("Sync Rentals terminée avec succès pour véhicule #$vehicleId");
+        } catch (\Throwable $e) {
+            $this->logger->error("Erreur Sync Rentals #$vehicleId : " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Webhook Ventes (Sales)
+     * Coordonne la synchro Stock (Retail) et Disponibilités (Rentals)
+     */
+    public function handleSaleUpdate(string $tenantCode, int $saleId): void
+    {
+        $this->logger->info(sprintf('Webhook Sale: Sync ID #%d pour tenant "%s"', $saleId, $tenantCode));
+        $token = $this->tenantManager->getTenantToken($tenantCode);
+
+        if (!$token) {
+            $this->logger->error("Token manquant pour le tenant $tenantCode (Action: Sync Sale)");
+            return;
+        }
+
+        try {
+            $this->logger->info("Appel API pour Sale #$saleId...");
+            $saleData = $this->fetchSaleFromApi($saleId, $token);
+            
+            if (!$saleData) {
+                $this->logger->warning("Vente #$saleId introuvable sur l'API.");
+                return;
+            }
+
+            $this->logger->info(sprintf("Vente #%d récupérée. Analyse de %d lignes...", $saleId, count($saleData['products_lines'] ?? [])));
+
+            $productIds = [];
+            $carIds = [];
+
+            foreach ($saleData['products_lines'] ?? [] as $line) {
+                // 1. Collecte des IDs de produits (Retail)
+                if (isset($line['product_id']) && (int)$line['product_id'] > 0) {
+                    $productIds[] = (int) $line['product_id'];
+                    $this->logger->info("  - Produit trouvé : #" . $line['product_id']);
+                }
+                // 2. Collecte des IDs de véhicules (Rentals)
+                if (isset($line['car_id']) && (int)$line['car_id'] > 0) {
+                    $carIds[] = (int) $line['car_id'];
+                    $this->logger->info("  - Véhicule trouvé : #" . $line['car_id']);
+                }
+            }
+
+            // On filtre les doublons pour optimiser
+            $productIds = array_unique($productIds);
+            $carIds = array_unique($carIds);
+
+            $this->logger->info(sprintf("Lancement de la synchro pour %d produits et %d véhicules.", count($productIds), count($carIds)));
+
+            foreach ($productIds as $pId) {
+                $this->logger->info("Sync Produit #$pId en cours...");
+                $this->handleProductUpdate($tenantCode, $pId);
+            }
+
+            foreach ($carIds as $cId) {
+                $this->logger->info("Sync Rentals pour Véhicule #$cId en cours...");
+                $this->handleRentalUpdate($tenantCode, $cId);
+            }
+
+            $this->logger->info(sprintf('Sync Sale #%d terminée avec succès.', $saleId));
+        } catch (\Throwable $e) {
+            $this->logger->error("Erreur Sync Sale #$saleId : " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+        }
+    }
+
+    /**
+     * Webhook Ligne de Vente (Sale Product)
+     * Utile pour capter les Estimations (Quotes) avant qu'elles soient facturées
+     */
+    /*
+    public function handleSaleProductUpdate(string $tenantCode, int $lineId): void
+    {
+        $this->logger->info(sprintf('Webhook SaleProduct: Sync ID #%d pour tenant "%s"', $lineId, $tenantCode));
+        $token = $this->tenantManager->getTenantToken($tenantCode);
+
+        if (!$token) {
+            $this->logger->error("Token manquant pour le tenant $tenantCode (Action: Sync SaleProduct)");
+            return;
+        }
+
+        try {
+            $lineData = $this->fetchSaleProductFromApi($lineId, $token);
+            
+            if (!$lineData) {
+                $this->logger->warning("Ligne de vente #$lineId introuvable sur l'API.");
+                return;
+            }
+
+            // On déclenche la synchro des entités liées à cette ligne
+            
+            // 1. Produit (Retail / Stock)
+            if (isset($lineData['product_id']) && (int)$lineData['product_id'] > 0) {
+                $this->logger->info("  - Déclenchement Sync Produit #" . $lineData['product_id']);
+                $this->handleProductUpdate($tenantCode, (int)$lineData['product_id']);
+            }
+
+            // 2. Véhicule (Rentals / Calendar)
+            if (isset($lineData['car_id']) && (int)$lineData['car_id'] > 0) {
+                $this->logger->info("  - Déclenchement Sync Calendar pour Véhicule #" . $lineData['car_id']);
+                $this->handleRentalUpdate($tenantCode, (int)$lineData['car_id']);
+            }
+
+            $this->logger->info(sprintf('Sync SaleProduct #%d terminée.', $lineId));
+        } catch (\Throwable $e) {
+            $this->logger->error("Erreur Sync SaleProduct #$lineId : " . $e->getMessage());
+        }
+    }
+    */
+
+    private function fetchSaleFromApi(int $id, string $token): ?array
+    {
+        try {
+            $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'sales/' . $id, [
+                'auth_bearer' => $token,
+            ]);
+            $data = $response->toArray()['data'] ?? null;
+            
+            // Gestion format tableau
+            if (is_array($data) && isset($data[0])) {
+                return $data[0];
+            }
+            
+            return $data;
+        } catch (\Throwable $e) {
+            $this->logger->error("API Fail pour vente #$id: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /*
+    private function fetchSaleProductFromApi(int $id, string $token): ?array
+    {
+        try {
+            $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'sales_products/' . $id, [
+                'auth_bearer' => $token,
+            ]);
+            $data = $response->toArray()['data'] ?? null;
+
+            // Gestion format tableau (souvent le cas pour sales_products)
+            if (is_array($data) && isset($data[0])) {
+                return $data[0];
+            }
+
+            return $data;
+        } catch (\Throwable $e) {
+            $this->logger->error("API Fail pour ligne de vente #$id: " . $e->getMessage());
+            return null;
+        }
+    }
+    */
+
 
     private function fetchProductFromApi(int $id, string $token): ?array
     {
@@ -124,6 +337,43 @@ class GemsuiteSyncHandler
         } catch (\Throwable $e) {
             $this->logger->error("API Fail pour produit #$id: " . $e->getMessage());
             return null;
+        }
+    }
+
+    private function fetchVehicleFromApi(int $id, string $token): ?array
+    {
+        try {
+            $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'vehicles/' . $id, [
+                'auth_bearer' => $token,
+            ]);
+            return $response->toArray()['data'] ?? null;
+        } catch (\Throwable $e) {
+            $this->logger->error("API Fail pour véhicule #$id: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    private function fetchRentalsFromApi(int $vehicleId, string $token): array
+    {
+        try {
+            $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'rentals/' . $vehicleId, [
+                'auth_bearer' => $token,
+            ]);
+            $data = $response->toArray();
+
+            // Gestion de formats de retour flexibles (Objet ou Tableau dans 'data')
+            if (isset($data['data']['appointments'])) {
+                return $data['data']['appointments'];
+            }
+
+            if (isset($data['data'][0]['appointments'])) {
+                return $data['data'][0]['appointments'];
+            }
+
+            return $data['appointments'] ?? [];
+        } catch (\Throwable $e) {
+            $this->logger->error("API Fail pour rentals véhicule #$vehicleId: " . $e->getMessage());
+            return [];
         }
     }
 
@@ -145,6 +395,15 @@ class GemsuiteSyncHandler
                 }
                 return;
             }
+        }
+
+        // --- NETTOYAGE TRANSITION PACK -> PRODUIT ---
+        // Si cet ID était un pack mais ne l'est plus (ou n'est plus dans une catégorie de type 10),
+        // on supprime l'éventuel RentalPack existant pour laisser place au Produit normal.
+        $oldPack = $em->getRepository(RentalPack::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
+        if ($oldPack) {
+            $this->logger->info("L'ID #{$gemProductData['id']} n'est plus un pack. Suppression de l'ancien RentalPack.");
+            $em->remove($oldPack);
         }
 
         if (!$product) {
@@ -184,6 +443,10 @@ class GemsuiteSyncHandler
 
             if ($category->isRentalCategory()) {
                 $this->rentalWorkaround->applyRentalProductConfiguration($product, $gemProductData);
+            } else {
+                // --- NETTOYAGE RENTAL (MODIF WEBHOOK) ---
+                // Si le produit n'est plus dans une catégorie de location, on le repasse en mode RETAIL.
+                $this->rentalWorkaround->removeRentalConfiguration($product, $em);
             }
         }
 
@@ -333,13 +596,21 @@ class GemsuiteSyncHandler
                 $category->setGemsuiteCategoryId($gemCategoryData['id']);
             }
 
-
             $category->setName(trim($gemCategoryData['name_fr'] ?? 'Catégorie'));
 
             // --- NOUVELLE LOGIQUE LOCATION ---
+            $wasRental = $category->isRentalCategory();
             $category->setCategoryType((int)($gemCategoryData['category_type'] ?? 0));
             $isRental = (int)($gemCategoryData['limit_lot'] ?? 0) === 1;
             $category->setIsRentalCategory($isRental);
+
+            // --- NETTOYAGE TRANSITION CATEGORIE (Rental -> Normal) ---
+            if ($wasRental === true && $isRental === false) {
+                $this->logger->info("Catégorie #{$gemCategoryData['id']} passée de Rental à Normal. Nettoyage des produits.");
+                foreach ($category->getProducts() as $product) {
+                    $this->rentalWorkaround->removeRentalConfiguration($product, $em);
+                }
+            }
 
             $imagePath = $gemCategoryData['img_paths'] ?? null;
             if (!empty($imagePath)) {
@@ -430,7 +701,7 @@ class GemsuiteSyncHandler
         }
 
         $targetCategoriesRaw = $data['limit_location_products'] ?? '';
-        
+
         // Support pour tableau JSON ou chaine csv
         if (is_array($targetCategoriesRaw)) {
             $targetCategoryGemsuiteIds = array_map('trim', $targetCategoriesRaw);
@@ -438,17 +709,28 @@ class GemsuiteSyncHandler
             $targetCategoryGemsuiteIds = array_filter(array_map('trim', explode(',', (string)$targetCategoriesRaw)));
         }
 
-        foreach ($targetCategoryGemsuiteIds as $gemsuiteId) {
-            $catId = (int)$gemsuiteId;
-            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
-            if ($category) {
-                $pack->addCategory($category);
-                
-                // Mettre à jour la granularité de tous les produits de cette catégorie
-                // Maintenant que la catégorie a le pack en mémoire, cette fonction le verra.
-                foreach ($category->getProducts() as $product) {
-                    $this->rentalWorkaround->updateSmartGranularity($product);
+        /** @var Categories[] $targetCategories */
+        $targetCategories = [];
+
+        if (empty($targetCategoryGemsuiteIds)) {
+            $this->logger->info(sprintf('[processRentalPack Webhook] Pack #%d : limit_location_products vide. Association avec toutes les catégories de location.', $data['id'] ?? 0));
+            $targetCategories = $em->getRepository(Categories::class)->findBy(['isRentalCategory' => true]);
+        } else {
+            foreach ($targetCategoryGemsuiteIds as $gemsuiteId) {
+                $catId = (int)$gemsuiteId;
+                $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
+                if ($category) {
+                    $targetCategories[] = $category;
                 }
+            }
+        }
+
+        foreach ($targetCategories as $category) {
+            $pack->addCategory($category);
+
+            // Mettre à jour la granularité de tous les produits de cette catégorie
+            foreach ($category->getProducts() as $product) {
+                $this->rentalWorkaround->updateSmartGranularity($product);
             }
         }
 

@@ -386,7 +386,7 @@ class ProcessGemsuiteEntityJobHandler
         }
 
         $targetCategoriesRaw = $data['limit_location_products'] ?? '';
-        
+
         // Support pour tableau JSON ou chaine csv
         if (is_array($targetCategoriesRaw)) {
             $targetCategoryGemsuiteIds = array_map('trim', $targetCategoriesRaw);
@@ -394,17 +394,28 @@ class ProcessGemsuiteEntityJobHandler
             $targetCategoryGemsuiteIds = array_filter(array_map('trim', explode(',', (string)$targetCategoriesRaw)));
         }
 
-        foreach ($targetCategoryGemsuiteIds as $gemsuiteId) {
-            $catId = (int)$gemsuiteId;
-            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
-            if ($category) {
-                $pack->addCategory($category);
-                
-                // Mettre à jour la granularité de tous les produits de cette catégorie
-                // Maintenant que la catégorie a le pack en mémoire, cette fonction le verra.
-                foreach ($category->getProducts() as $product) {
-                    $this->rentalWorkaround->updateSmartGranularity($product);
+        /** @var Categories[] $targetCategories */
+        $targetCategories = [];
+
+        if (empty($targetCategoryGemsuiteIds)) {
+            $this->logger->info(sprintf('[processRentalPack] Pack #%d : limit_location_products vide. Association avec toutes les catégories de location.', $data['id'] ?? 0));
+            $targetCategories = $em->getRepository(Categories::class)->findBy(['isRentalCategory' => true]);
+        } else {
+            foreach ($targetCategoryGemsuiteIds as $gemsuiteId) {
+                $catId = (int)$gemsuiteId;
+                $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
+                if ($category) {
+                    $targetCategories[] = $category;
                 }
+            }
+        }
+
+        foreach ($targetCategories as $category) {
+            $pack->addCategory($category);
+
+            // Mettre à jour la granularité de tous les produits de cette catégorie
+            foreach ($category->getProducts() as $product) {
+                $this->rentalWorkaround->updateSmartGranularity($product);
             }
         }
 

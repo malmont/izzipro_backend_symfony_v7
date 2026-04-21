@@ -27,6 +27,17 @@ class BookingAvailabilityService
             return $product->getQuantity();
         }
 
+        // --- SÉCURITÉ VÉHICULE ---
+        // On vérifie qu'au moins un véhicule est associé à ce produit.
+        // Sans véhicule, on ne peut pas synchroniser avec Gemsuite (car_id manquant).
+        $vehicleCount = $this->emProvider->getEntityManager()
+            ->getRepository(\App\Entity\Vehicle::class)
+            ->count(['product' => $product]);
+
+        if ($vehicleCount === 0) {
+            return 0;
+        }
+
         $config = $product->getBookingConfiguration();
         if (!$config) {
             return 0;
@@ -51,11 +62,18 @@ class BookingAvailabilityService
 
     public function getAvailabilitiesForRange(Product $product, DateTimeInterface $start, DateTimeInterface $end): array
     {
+        // --- SÉCURITÉ VÉHICULE ---
+        $vehicleCount = $this->emProvider->getEntityManager()
+            ->getRepository(\App\Entity\Vehicle::class)
+            ->count(['product' => $product]);
+
         $config = $product->getBookingConfiguration();
         if (!$config) return [];
 
         $granularity = $config->getGranularity();
-        $totalStock = $config->getStockQuantity();
+        
+        // Si pas de véhicule, le stock effectif est de 0
+        $totalStock = ($vehicleCount > 0) ? $config->getStockQuantity() : 0;
 
         $intervalSpec = match ($granularity) {
             'days' => 'P1D',

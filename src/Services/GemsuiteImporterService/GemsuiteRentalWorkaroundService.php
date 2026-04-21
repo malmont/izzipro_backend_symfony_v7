@@ -11,13 +11,15 @@ use Doctrine\ORM\EntityManagerInterface;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\GemsuiteImporterService\GemsuiteStockCalculator;
 use App\Entity\RentalPack;
+use Psr\Log\LoggerInterface;
 
 class GemsuiteRentalWorkaroundService
 
 {
     public function __construct(
         private TenantEntityManagerProvider $emProvider,
-        private GemsuiteStockCalculator $stockCalculator
+        private GemsuiteStockCalculator $stockCalculator,
+        private LoggerInterface $logger
     ) {}
 
     private function getEm(): EntityManagerInterface
@@ -136,19 +138,36 @@ class GemsuiteRentalWorkaroundService
             $gemsuiteVehicleId = $vData['id'] ?? null;
             $gemsuiteProductId = $vData['product_id'] ?? null;
 
-            if (!$gemsuiteVehicleId || !$gemsuiteProductId) {
+            if (!$gemsuiteVehicleId) {
+                continue;
+            }
+
+            $vehicle = $vehicleRepo->findOneBy(['gemsuiteVehicleId' => $gemsuiteVehicleId]);
+
+            // OPTIMISATION : Si le produit est ID=0 ou non spécifié, on ignore/supprime le véhicule
+            if (!$gemsuiteProductId || (int)$gemsuiteProductId === 0) {
+                if ($vehicle) {
+                    $this->logger->info("[SyncVehicles] Suppression du véhicule Gemsuite #$gemsuiteVehicleId : plus de lien produit (ID=0).");
+                    $this->getEm()->remove($vehicle);
+                }
                 continue;
             }
 
             $product = $productRepo->findOneBy(['gemsuiteProductId' => $gemsuiteProductId]);
             if (!$product) {
-                continue; // Product does not exist locally yet
+                // Si le produit n'existe pas localement, le véhicule ne sert à rien sur le site
+                if ($vehicle) {
+                    $this->logger->warning("[SyncVehicles] Suppression du véhicule Gemsuite #$gemsuiteVehicleId : produit local #$gemsuiteProductId non trouvé.");
+                    $this->getEm()->remove($vehicle);
+                }
+                continue;
             }
 
-            $vehicle = $vehicleRepo->findOneBy(['gemsuiteVehicleId' => $gemsuiteVehicleId]);
+            // Création ou Mise à jour
             if (!$vehicle) {
                 $vehicle = new Vehicle();
                 $vehicle->setGemsuiteVehicleId($gemsuiteVehicleId);
+                $this->logger->info("[SyncVehicles] Création du véhicule Gemsuite #$gemsuiteVehicleId lié au produit #$gemsuiteProductId.");
             }
 
             $vehicle->setProduct($product);

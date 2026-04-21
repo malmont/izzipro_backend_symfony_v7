@@ -153,6 +153,9 @@ class RegistrationController extends AbstractController
         $tenantCode = $this->tenantManager->getCurrentTenantCode();
         $gemsuiteClient = $this->gemsuiteClientManager->findOrCreateClient($email, $firstName, $lastName, $tenantCode);
 
+        // On récupère l'EntityManager ICI, après le switch potentiel dans le manager de client
+        $em = $this->tenantEmProvider->getEntityManager();
+
         $user = new User();
         $user->setEmail($email);
         $user->setFirstname($firstName);
