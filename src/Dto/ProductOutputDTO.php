@@ -22,6 +22,7 @@ class ProductOutputDTO
     public ?float $coefficientMultiplier;
     public ?string $slug;
     public ?string $image;
+    public array $pictures = [];
     public ?array $saleUnit = null;
 
     
@@ -58,7 +59,17 @@ class ProductOutputDTO
 
         $this->mode = $product->getMode()->value;
 
+        $this->pictures = array_map(function ($picture) use ($host) {
+            $path = $picture->getImageUrl();
+            $cleanedHost = rtrim($host, '/');
+            return [
+                'id' => $picture->getId(),
+                'url' => str_starts_with($path, 'http') ? $path : $cleanedHost . '/assets/uploads/products/' . $path,
+            ];
+        }, (array)($product->getPictures() ? $product->getPictures()->toArray() : []));
+
         if ($product->isBookable() && $config = $product->getBookingConfiguration()) {
+
             $this->bookingConfig = [
                 'granularity'   => $config->getGranularity(), 
                 'minDuration'   => $config->getMinDuration(),

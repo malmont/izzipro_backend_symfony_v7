@@ -12,6 +12,7 @@ use App\Entity\ProductVariant;
 use App\Entity\RentalPack;
 use App\Entity\Style;
 use App\Entity\SyncJob;
+use App\Entity\ProductPicture;
 use App\Entity\ShippingClass;
 use App\Message\ProcessGemsuiteEntityJob;
 use App\Message\TranslateEntityJob;
@@ -263,10 +264,21 @@ class ProcessGemsuiteEntityJobHandler
 
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
         $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
-        $imagePath = $data['medias'][0]['path'] ?? null;
+        $product->getPictures()->clear();
+        $medias = $data['medias'] ?? [];
+        foreach ($medias as $index => $media) {
+            $path = $media['path'] ?? null;
+            if (!$path) continue;
 
-        if (!empty($imagePath)) {
-            $product->setImage($this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath));
+            $fullUrl = $this->imageUrlBuilder->buildUrl($companyIdentifier, $path);
+            
+            if ($index === 0) {
+                $product->setImage($fullUrl);
+            } else {
+                $picture = new ProductPicture();
+                $picture->setImageUrl($fullUrl);
+                $product->addPicture($picture);
+            }
         }
 
         $shipping = $product->getProductShipping() ?? new ProductShipping();
@@ -323,11 +335,12 @@ class ProcessGemsuiteEntityJobHandler
         $syncWeb = (bool)($data['sync_web'] ?? true);
 
         $name = trim($data['name_fr'] ?? '');
-        $isVariant = ($data['id'] ?? 0) !== ($data['origin_product_id'] ?? 0);
+        $isVariant = !empty($data['origin_product_id']) && (int)$data['origin_product_id'] !== (int)($data['id'] ?? 0);
 
-        // 1. Les variantes ont leur propre statut d'activation
+        // 1. Les variantes suivent le statut général et l'existence du parent
         if ($isVariant) {
-            return $status === 1 && $syncWeb;
+            $parent = $em->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $data['origin_product_id']]);
+            return $status === 1 && $syncWeb && $parent !== null;
         }
 
         // 2. Les produits parents dépendent de la présence de leur catégorie en base
@@ -337,16 +350,6 @@ class ProcessGemsuiteEntityJobHandler
 
             if ($category) {
                 return true;
-            }
-
-            // Si la catégorie est manquante mais que le produit est sensé être actif,
-            // on lance une RuntimeException pour déclencher un retry (Symfony Messenger).
-            if ($status === 1 && $syncWeb) {
-                throw new \RuntimeException(sprintf(
-                    'Catégorie Gemsuite #%d non trouvée localement. Mise en attente du produit ID %s (Retry).',
-                    $catId,
-                    $data['id'] ?? 'inconnu'
-                ));
             }
         }
 

@@ -18,14 +18,29 @@
 	<div class="container">
 		<div class="row">
             <div class="col-lg-6 col-md-6 mb-4 mb-md-0">
-              <div class="product-image">
+                <div class="product-image">
                     <div class="product_img_box">
-                        <img id="product_img" src="{{ asset('assets/uploads/products/' ~ product.image) }}"data-zoom-image="{{ asset('assets/uploads/products/' ~ product.image) }}" alt="{{product.name}}" />
+                        <img id="product_img" src="{{ asset('assets/uploads/products/' ~ product.image) }}" data-zoom-image="{{ asset('assets/uploads/products/' ~ product.image) }}" alt="{{product.name}}" />
                         <a href="#" class="product_img_zoom" title="Zoom">
                             <span class="linearicons-zoom-in"></span>
                         </a>
                     </div>
-
+                    {% if product.pictures|length > 0 %}
+                        <div id="pr_item_gallery" class="product_gallery_item owl-carousel owl-theme" data-margin="10" data-items="4" data-nav="false" data-dots="false">
+                            <div class="item">
+                                <a href="#" class="active" data-image="{{ asset('assets/uploads/products/' ~ product.image) }}" data-zoom-image="{{ asset('assets/uploads/products/' ~ product.image) }}">
+                                    <img src="{{ asset('assets/uploads/products/' ~ product.image) }}" alt="{{product.name}}_thumb1" />
+                                </a>
+                            </div>
+                            {% for picture in product.pictures %}
+                                <div class="item">
+                                    <a href="#" data-image="{{ asset('assets/uploads/products/' ~ picture.imageUrl) }}" data-zoom-image="{{ asset('assets/uploads/products/' ~ picture.imageUrl) }}">
+                                        <img src="{{ asset('assets/uploads/products/' ~ picture.imageUrl) }}" alt="{{product.name}}_thumb{{ loop.index + 1 }}" />
+                                    </a>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
                 </div>
             </div>
             <div class="col-lg-6 col-md-6">

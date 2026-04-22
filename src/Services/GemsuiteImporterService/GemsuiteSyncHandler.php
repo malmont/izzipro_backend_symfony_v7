@@ -12,6 +12,7 @@ use App\Entity\ShippingClass;
 use App\Entity\Style;
 use App\Entity\GemsuiteClient;
 use App\Entity\Entreprise;
+use App\Entity\ProductPicture;
 use App\Services\TranslationGeneratorService\TranslationGeneratorService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -194,7 +195,7 @@ class GemsuiteSyncHandler
         try {
             $this->logger->info("Appel API pour Sale #$saleId...");
             $saleData = $this->fetchSaleFromApi($saleId, $token);
-            
+
             if (!$saleData) {
                 $this->logger->warning("Vente #$saleId introuvable sur l'API.");
                 return;
@@ -234,6 +235,21 @@ class GemsuiteSyncHandler
                 $this->handleRentalUpdate($tenantCode, $cId);
             }
 
+            // --- FINALISATION DES BOOKINGS ---
+            // Si la vente est devenue une facture, on marque tous les bookings de cette vente comme finalisés
+            if (!empty($saleData['invoice_number'])) {
+                $tenantEm = $this->getTenantEntityManager($tenantCode);
+                $bookingRepo = $tenantEm->getRepository(\App\Entity\Booking::class);
+                $bookings = $bookingRepo->findBy(['gemsuiteSaleId' => $saleId]);
+                foreach ($bookings as $b) {
+                    if (!$b->isFinalized()) {
+                        $b->setIsFinalized(true);
+                        $this->logger->info("  - Booking #{$b->getId()} marqué comme finalisé via Sale #$saleId");
+                    }
+                }
+                $tenantEm->flush();
+            }
+
             $this->logger->info(sprintf('Sync Sale #%d terminée avec succès.', $saleId));
         } catch (\Throwable $e) {
             $this->logger->error("Erreur Sync Sale #$saleId : " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
@@ -241,10 +257,10 @@ class GemsuiteSyncHandler
     }
 
     /**
+    /**
      * Webhook Ligne de Vente (Sale Product)
-     * Utile pour capter les Estimations (Quotes) avant qu'elles soient facturées
+     * Utile pour capter les Estimations (Quotes) dès la création via Gemsuite
      */
-    /*
     public function handleSaleProductUpdate(string $tenantCode, int $lineId): void
     {
         $this->logger->info(sprintf('Webhook SaleProduct: Sync ID #%d pour tenant "%s"', $lineId, $tenantCode));
@@ -257,24 +273,56 @@ class GemsuiteSyncHandler
 
         try {
             $lineData = $this->fetchSaleProductFromApi($lineId, $token);
-            
+
             if (!$lineData) {
                 $this->logger->warning("Ligne de vente #$lineId introuvable sur l'API.");
                 return;
             }
 
-            // On déclenche la synchro des entités liées à cette ligne
-            
-            // 1. Produit (Retail / Stock)
+            // 1. Déclenchement Sync Stock (Retail)
             if (isset($lineData['product_id']) && (int)$lineData['product_id'] > 0) {
-                $this->logger->info("  - Déclenchement Sync Produit #" . $lineData['product_id']);
                 $this->handleProductUpdate($tenantCode, (int)$lineData['product_id']);
             }
 
-            // 2. Véhicule (Rentals / Calendar)
-            if (isset($lineData['car_id']) && (int)$lineData['car_id'] > 0) {
-                $this->logger->info("  - Déclenchement Sync Calendar pour Véhicule #" . $lineData['car_id']);
-                $this->handleRentalUpdate($tenantCode, (int)$lineData['car_id']);
+            // 2. Gestion spécifique des réservations de Location
+            if (isset($lineData['car_id'], $lineData['car_date_start'], $lineData['car_date_end']) && (int)$lineData['car_id'] > 0) {
+                $this->logger->info(sprintf("  - Ligne #%d est une location (Véhicule #%d).", $lineId, $lineData['car_id']));
+
+                $tenantEm = $this->getTenantEntityManager($tenantCode);
+                $vehicle = $tenantEm->getRepository(\App\Entity\Vehicle::class)->findOneBy(['gemsuiteVehicleId' => $lineData['car_id']]);
+
+                if ($vehicle && $vehicle->getProduct()) {
+                    $product = $vehicle->getProduct();
+                    $saleId = (int)($lineData['sale_id'] ?? 0);
+
+                    // On cherche si un booking existe déjà pour cette vente Gemsuite
+                    $bookingRepo = $tenantEm->getRepository(\App\Entity\Booking::class);
+                    $booking = $bookingRepo->findOneBy(['gemsuiteSaleId' => $saleId]);
+
+                    if (!$booking) {
+                        $booking = new \App\Entity\Booking();
+                        $booking->setGemsuiteSaleId($saleId);
+                    }
+
+                    $booking->setProduct($product);
+                    $booking->setStartAt(new \DateTimeImmutable($lineData['car_date_start']));
+                    $booking->setEndAt(new \DateTimeImmutable($lineData['car_date_end']));
+                    $booking->setQuantity(1);
+                    $booking->setStatus('gemsuite_sync');
+
+                    // Vérification de la finalisation via la vente parente
+                    $saleData = $this->fetchSaleFromApi($saleId, $token);
+                    if ($saleData && !empty($saleData['invoice_number'])) {
+                        $booking->setIsFinalized(true);
+                        $this->logger->info("  - Réservation finalisée (Facture #{$saleData['invoice_number']})");
+                    } else {
+                        $booking->setIsFinalized(false);
+                    }
+
+                    $tenantEm->persist($booking);
+                    $tenantEm->flush();
+                    $this->logger->info("  - Booking local mis à jour pour Sale #$saleId");
+                }
             }
 
             $this->logger->info(sprintf('Sync SaleProduct #%d terminée.', $lineId));
@@ -282,7 +330,14 @@ class GemsuiteSyncHandler
             $this->logger->error("Erreur Sync SaleProduct #$lineId : " . $e->getMessage());
         }
     }
-    */
+
+    public function getExternalSaleData(string $tenantCode, int $saleId): ?array
+    {
+        $token = $this->tenantManager->getTenantToken($tenantCode);
+        if (!$token) return null;
+
+        return $this->fetchSaleFromApi($saleId, $token);
+    }
 
     private function fetchSaleFromApi(int $id, string $token): ?array
     {
@@ -291,12 +346,12 @@ class GemsuiteSyncHandler
                 'auth_bearer' => $token,
             ]);
             $data = $response->toArray()['data'] ?? null;
-            
+
             // Gestion format tableau
             if (is_array($data) && isset($data[0])) {
                 return $data[0];
             }
-            
+
             return $data;
         } catch (\Throwable $e) {
             $this->logger->error("API Fail pour vente #$id: " . $e->getMessage());
@@ -304,7 +359,6 @@ class GemsuiteSyncHandler
         }
     }
 
-    /*
     private function fetchSaleProductFromApi(int $id, string $token): ?array
     {
         try {
@@ -324,7 +378,6 @@ class GemsuiteSyncHandler
             return null;
         }
     }
-    */
 
 
     private function fetchProductFromApi(int $id, string $token): ?array
@@ -450,10 +503,9 @@ class GemsuiteSyncHandler
             }
         }
 
-        $imagePath = $gemProductData['medias'][0]['path'] ?? null;
-        if ($imagePath) {
-            $product->setImage($this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath));
-        }
+        $this->logger->info(sprintf('Sync Produit #%d : %d médias trouvés.', $product->getGemsuiteProductId(), count($gemProductData['medias'] ?? [])));
+
+        $this->syncProductImages($product, $gemProductData, $companyIdentifier);
 
         $shipping = $product->getProductShipping();
         if (!$shipping) {
@@ -561,6 +613,38 @@ class GemsuiteSyncHandler
                 $gemProductData['attributs']
             );
         }
+
+        // --- SYNCHRO PHOTOS POUR VARIANTE ---
+        // On délègue à la logique du parent si des médias sont présents
+        if (!empty($gemProductData['medias'])) {
+            $this->logger->info(sprintf('Variante #%d : Présence de %d médias. Mise à jour de la galerie du parent #%d.', $gemProductData['id'], count($gemProductData['medias']), $parentProductId));
+
+            // On peut appeler une version allégée de processPictures ou juste copier la logique
+            $this->syncProductImages($product, $gemProductData, $companyIdentifier);
+        }
+    }
+
+    /**
+     * Logique mutualisée pour la synchro des images
+     */
+    private function syncProductImages(Product $product, array $gemProductData, ?string $companyIdentifier): void
+    {
+        $product->getPictures()->clear();
+        $medias = $gemProductData['medias'] ?? [];
+        foreach ($medias as $index => $media) {
+            $path = $media['path'] ?? null;
+            if (!$path) continue;
+
+            $fullUrl = $this->imageUrlBuilder->buildUrl($companyIdentifier, $path);
+
+            if ($index === 0) {
+                $product->setImage($fullUrl);
+            } else {
+                $picture = new ProductPicture();
+                $picture->setImageUrl($fullUrl);
+                $product->addPicture($picture);
+            }
+        }
     }
 
 
@@ -651,11 +735,12 @@ class GemsuiteSyncHandler
         $syncWeb = (bool)($gemProductData['sync_web'] ?? true);
         $name = trim($gemProductData['name_fr'] ?? '');
 
-        $isVariant = ($gemProductData['id'] ?? 0) !== ($gemProductData['origin_product_id'] ?? 0);
+        $isVariant = !empty($gemProductData['origin_product_id']) && (int)$gemProductData['origin_product_id'] !== (int)($gemProductData['id'] ?? 0);
 
-        // 1. Variantes
+        // 1. Variantes (Dépendent du parent local)
         if ($isVariant) {
-            return $status === 1 && $syncWeb;
+            $parentProduct = $em->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['origin_product_id']]);
+            return $status === 1 && $parentProduct !== null;
         }
 
         // 2. Produits Parents (Filtre par catégorie)
@@ -664,9 +749,12 @@ class GemsuiteSyncHandler
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
 
             if ($category) {
-                // On vérifie quand même le statut et sync_web ici
-                return $status === 1 && $syncWeb;
+                return true;
+            } else {
+                $this->logger->warning(sprintf('Produit #%d : Inactif car Catégorie Gemsuite #%d non trouvée localement.', $gemProductData['id'] ?? 0, $catId));
             }
+        } else {
+            $this->logger->warning(sprintf('Produit #%d : Inactif car category_id manquant ou name vide.', $gemProductData['id'] ?? 0));
         }
 
         return false;

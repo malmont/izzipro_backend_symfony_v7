@@ -61,6 +61,7 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
             'dimensions_width' => 10,
             'dimensions_height' => 2,
             'category_id' => 50,
+            'origin_product_id' => 100,
             'medias' => [['path' => 'img.jpg']]
         ];
 
@@ -162,7 +163,7 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
 
     public function testInvokeIgnoredIfInactive(): void
     {
-        $inactiveData = ['id' => 100, 'status' => 0, 'sync_web' => true, 'name_fr' => 'Off'];
+        $inactiveData = ['id' => 100, 'origin_product_id' => 100, 'status' => 0, 'sync_web' => true, 'name_fr' => 'Off'];
 
         $logger = $this->createMock(LoggerInterface::class);
         $tenantManager = $this->createMock(TenantConnectionManager::class);

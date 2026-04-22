@@ -158,6 +158,13 @@ class Product implements TranslatableInterface
     #[ORM\ManyToOne(inversedBy: 'products')]
     private ?SaleUnit $saleUnit = null;
 
+    /**
+     * @var Collection<int, ProductPicture>
+     */
+    #[ORM\OneToMany(mappedBy: 'product', targetEntity: ProductPicture::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    #[Groups(['product:read'])]
+    private Collection $pictures;
+
     public function __construct()
 
     {
@@ -169,6 +176,7 @@ class Product implements TranslatableInterface
         $this->updateQuantity();
         $this->translations = new ArrayCollection();
         $this->bookings = new ArrayCollection(); 
+        $this->pictures = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -802,9 +810,39 @@ class Product implements TranslatableInterface
         return $this->mode;
     }
 
-    public function setMode(ProductMode $mode): static
+    public function setMode(ProductMode $mode): self
     {
         $this->mode = $mode;
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, ProductPicture>
+     */
+    public function getPictures(): Collection
+    {
+        return $this->pictures;
+    }
+
+    public function addPicture(ProductPicture $picture): self
+    {
+        if (!$this->pictures->contains($picture)) {
+            $this->pictures->add($picture);
+            $picture->setProduct($this);
+        }
+
+        return $this;
+    }
+
+    public function removePicture(ProductPicture $picture): self
+    {
+        if ($this->pictures->removeElement($picture)) {
+            // set the owning side to null (unless already changed)
+            if ($picture->getProduct() === $this) {
+                $picture->setProduct(null);
+            }
+        }
+
         return $this;
     }
 

@@ -9,6 +9,7 @@ use App\Repository\ProductTypeRepository;
 use App\Repository\StyleRepository;
 use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use App\Form\ProductPictureType;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
@@ -99,12 +100,18 @@ class ProductCrudController extends BaseTenantCrudController
         yield TextField::new('tags')->setColumns('col-md-6');
         
         yield FormField::addPanel('Média');
-        yield ImageField::new('image')
+        yield ImageField::new('image', 'Image Principale')
             ->setBasePath('assets/uploads/products/')
             ->setUploadDir('public/assets/uploads/products/')
             ->setUploadedFileNamePattern('[randomhash].[extension]')
             ->setRequired(false)
             ->setColumns('col-md-12');
+
+        yield CollectionField::new('pictures', 'Galerie Photos (Photos additionnelles)')
+            ->setEntryType(ProductPictureType::class)
+            ->setColumns('col-md-12')
+            ->onlyOnForms();
+
 
 
         yield FormField::addTab('Visibilité & Options');

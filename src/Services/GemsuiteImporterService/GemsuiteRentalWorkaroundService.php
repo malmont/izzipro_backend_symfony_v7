@@ -190,20 +190,25 @@ class GemsuiteRentalWorkaroundService
         }
 
         $product = $vehicle->getProduct();
-
-        // 1. Purge ancient bookings (gemsuite_sync)
         $bookingRepo = $this->getEm()->getRepository(Booking::class);
-        $oldBookings = $bookingRepo->findBy([
+
+        // 1. On récupère les bookings existants pour ce produit (synchronisés via Gemsuite)
+        /** @var Booking[] $existingBookings */
+        $existingBookings = $bookingRepo->findBy([
             'product' => $product,
             'status' => 'gemsuite_sync'
         ]);
 
-        foreach ($oldBookings as $oldBooking) {
-            $this->getEm()->remove($oldBooking);
+        // On prépare un dictionnaire pour faciliter le matching par dates
+        $existingByDates = [];
+        foreach ($existingBookings as $eb) {
+            $key = $eb->getStartAt()->format('Y-m-d H:i') . '|' . $eb->getEndAt()->format('Y-m-d H:i');
+            $existingByDates[$key][] = $eb;
         }
-        $this->getEm()->flush();
 
-        // 2. Insert new appointments
+        $touchedIds = [];
+
+        // 2. Traitement des nouveaux rendez-vous renvoyés par l'API
         foreach ($appointments as $appt) {
             if (empty($appt['start']) || empty($appt['end'])) {
                 continue;
@@ -211,15 +216,32 @@ class GemsuiteRentalWorkaroundService
 
             $startAt = new \DateTimeImmutable($appt['start']);
             $endAt = new \DateTimeImmutable($appt['end']);
+            $key = $startAt->format('Y-m-d H:i') . '|' . $endAt->format('Y-m-d H:i');
 
-            $booking = new Booking();
-            $booking->setProduct($product);
-            $booking->setStartAt($startAt);
-            $booking->setEndAt($endAt);
-            $booking->setQuantity(1);
-            $booking->setStatus('gemsuite_sync');
+            if (isset($existingByDates[$key]) && !empty($existingByDates[$key])) {
+                // On a déjà un booking local avec ces dates exactes, on le réutilise
+                $booking = array_shift($existingByDates[$key]);
+                $touchedIds[] = $booking->getId();
+            } else {
+                // Nouveau rendez-vous (venant du calendrier général, sans sale_id forcément connu ici)
+                $booking = new Booking();
+                $booking->setProduct($product);
+                $booking->setStartAt($startAt);
+                $booking->setEndAt($endAt);
+                $booking->setQuantity(1);
+                $booking->setStatus('gemsuite_sync');
+                $this->getEm()->persist($booking);
+                // On ne flush pas encore, on flush à la fin
+            }
+        }
 
-            $this->getEm()->persist($booking);
+        // 3. Purge des anciens bookings qui n'étaient plus dans la liste renvoyée par Gemsuite
+        // ATTENTION : On ne supprime que ceux qui n'ont pas été "touched" 
+        // ET qui étaient de type "gemsuite_sync" (déjà filtré au début)
+        foreach ($existingByDates as $unusedList) {
+            foreach ($unusedList as $unusedBooking) {
+                $this->getEm()->remove($unusedBooking);
+            }
         }
 
         $this->getEm()->flush();

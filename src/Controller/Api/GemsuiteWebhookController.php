@@ -71,11 +71,9 @@ class GemsuiteWebhookController extends AbstractController
                     $this->syncHandler->handleSaleUpdate($tenant_code, $id);
                     break;
 
-                /* 
                 case 'sales_products':
                     $this->syncHandler->handleSaleProductUpdate($tenant_code, $id);
                     break;
-                */
 
                 case 'vehicles':
                     $this->syncHandler->handleVehicleUpdate($tenant_code, $id);

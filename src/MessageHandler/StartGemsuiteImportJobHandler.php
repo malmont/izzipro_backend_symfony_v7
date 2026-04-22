@@ -84,11 +84,11 @@ class StartGemsuiteImportJobHandler
             $this->assetSynchronizer->synchronize($tenantEm);
 
             $entreprise = new Entreprise();
-            $entreprise->setName($companyData['nom']);
-            $entreprise->setEmail($companyData['email'] ?? null);
-            $entreprise->setTel($companyData['tel'] ?? null);
-            $entreprise->setTvaIntracommunautaire($companyData['tps'] ?? null);
-            $entreprise->setEin($companyData['federal'] ?? null);
+            $entreprise->setName(substr($companyData['nom'], 0, 255));
+            $entreprise->setEmail(substr($companyData['email'] ?? null, 0, 255));
+            $entreprise->setTel(substr($companyData['tel'] ?? null, 0, 255));
+            $entreprise->setTvaIntracommunautaire(substr($companyData['tps'] ?? null, 0, 255));
+            $entreprise->setEin(substr($companyData['federal'] ?? null, 0, 255));
             $entreprise->setApropos($companyData['gemportal_about'] ?? null);
             $entreprise->setConditionOfUse($companyData['gemportal_conditions'] ?? null);
             $entreprise->setPrivacyPolicy($companyData['gemportal_politics'] ?? null);
@@ -138,9 +138,9 @@ class StartGemsuiteImportJobHandler
                     if (!empty($companyData[$bannerKey])) {
 
                         $homeSlider = new HomeSlider();
-                        $homeSlider->setTitle(strip_tags($companyData['gemportal_title'] ?? 'Bienvenue'));
-                        $homeSlider->setDescription(strip_tags($companyData['gemportal_desc'] ?? 'Découvrez nos produits'));
-                        $homeSlider->setButtonMessage(strip_tags($companyData['gemportal_button'] ?? 'voir nos produit'));
+                        $homeSlider->setTitle(substr(strip_tags($companyData['gemportal_title'] ?? 'Bienvenue'), 0, 255));
+                        $homeSlider->setDescription(substr(strip_tags($companyData['gemportal_desc'] ?? 'Découvrez nos produits'), 0, 255));
+                        $homeSlider->setButtonMessage(substr(strip_tags($companyData['gemportal_button'] ?? 'voir nos produit'), 0, 255));
                         $homeSlider->setButtonUrl('/Product/0');
                         $homeSlider->setIsDiplayed(true);
 

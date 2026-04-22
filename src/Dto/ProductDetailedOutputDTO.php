@@ -25,6 +25,7 @@ class ProductDetailedOutputDTO
     public bool $isfeatured;
     public bool $isspecialoffer;
     public ?string $image;
+    public array $pictures = [];
     public int $quantity;
     public ?int $freezeQuantity = null;
     public string $createdAt;
@@ -84,7 +85,17 @@ class ProductDetailedOutputDTO
         // 1. Le Mode (retail vs booking)
         $this->mode = $product->getMode()->value;
 
+        $this->pictures = array_map(function ($picture) use ($host) {
+            $path = $picture->getImageUrl();
+            $cleanedHost = rtrim($host, '/');
+            return [
+                'id' => $picture->getId(),
+                'url' => str_starts_with($path, 'http') ? $path : $cleanedHost . '/assets/uploads/products/' . $path,
+            ];
+        }, (array)($product->getPictures() ? $product->getPictures()->toArray() : []));
+
         // 2. La Config (pour le calendrier Front)
+
         if ($product->isBookable() && $config = $product->getBookingConfiguration()) {
             $this->bookingConfig = [
                 'granularity'   => $config->getGranularity(),

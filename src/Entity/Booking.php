@@ -35,6 +35,21 @@ class Booking
     #[ORM\JoinColumn(nullable: true)]
     private ?OrderItems $orderItem = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?int $gemsuiteSaleId = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $isFinalized = false;
+
+    #[ORM\Column]
+    private ?\DateTimeImmutable $createdAt = null;
+
+    public function __construct()
+    {
+        $this->createdAt = new \DateTimeImmutable();
+        $this->isFinalized = false;
+    }
+
     public function getId(): ?int
     {
         return $this->id;
@@ -118,6 +133,42 @@ class Booking
     public function setRentalPackId(?int $rentalPackId): static
     {
         $this->rentalPackId = $rentalPackId;
+
+        return $this;
+    }
+
+    public function getGemsuiteSaleId(): ?int
+    {
+        return $this->gemsuiteSaleId;
+    }
+
+    public function setGemsuiteSaleId(?int $gemsuiteSaleId): static
+    {
+        $this->gemsuiteSaleId = $gemsuiteSaleId;
+
+        return $this;
+    }
+
+    public function isFinalized(): bool
+    {
+        return $this->isFinalized;
+    }
+
+    public function setIsFinalized(bool $isFinalized): static
+    {
+        $this->isFinalized = $isFinalized;
+
+        return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
+    public function setCreatedAt(\DateTimeImmutable $createdAt): static
+    {
+        $this->createdAt = $createdAt;
 
         return $this;
     }
