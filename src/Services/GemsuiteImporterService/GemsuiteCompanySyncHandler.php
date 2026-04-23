@@ -129,9 +129,9 @@ class GemsuiteCompanySyncHandler
             if (!empty($companyData[$bannerKey])) {
 
                 $homeSlider = new HomeSlider();
-                $homeSlider->setTitle(strip_tags($companyData['gemportal_title'] ?? 'Bienvenue'));
-                $homeSlider->setDescription(strip_tags($companyData['gemportal_desc'] ?? 'Découvrez nos produits'));
-                $homeSlider->setButtonMessage(strip_tags($companyData['gemportal_button'] ?? 'voir nos produit'));
+                $homeSlider->setTitle($companyData['gemportal_title'] ?? 'Bienvenue');
+                $homeSlider->setDescription($companyData['gemportal_desc'] ?? 'Découvrez nos produits');
+                $homeSlider->setButtonMessage($companyData['gemportal_button'] ?? 'voir nos produit');
                 $homeSlider->setButtonUrl('/Product/0');
                 $homeSlider->setIsDiplayed(true);
 
@@ -170,8 +170,8 @@ class GemsuiteCompanySyncHandler
                 $titleKey = $baseKey . '_title';
                 $descKey = $baseKey . '_desc';
 
-                $exploreCard->setStandardTitle(strip_tags($companyData[$titleKey] ?? 'Bienvenue'));
-                $exploreCard->setDescription(strip_tags($companyData[$descKey] ?? 'Découvrez cette fonctionnalité'));
+                $exploreCard->setStandardTitle($companyData[$titleKey] ?? 'Bienvenue');
+                $exploreCard->setDescription($companyData[$descKey] ?? 'Découvrez cette fonctionnalité');
                 $exploreCard->setIsDifferent(false);
 
                 $imagePath = $companyData[$baseKey] ?? null;

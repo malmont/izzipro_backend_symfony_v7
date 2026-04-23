@@ -16,9 +16,7 @@ class ProductPictureType extends AbstractType
             ->add('imageUrl', FileUploadType::class, [
                 'label' => 'Image',
                 'upload_dir' => 'public/assets/uploads/products/',
-                'download_uri' => false,
                 'allow_delete' => true,
-                'value_parameter' => 'imageUrl',
                 'attr' => ['accept' => 'image/*'],
             ]);
     }

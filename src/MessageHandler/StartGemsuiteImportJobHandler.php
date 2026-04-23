@@ -138,9 +138,9 @@ class StartGemsuiteImportJobHandler
                     if (!empty($companyData[$bannerKey])) {
 
                         $homeSlider = new HomeSlider();
-                        $homeSlider->setTitle(substr(strip_tags($companyData['gemportal_title'] ?? 'Bienvenue'), 0, 255));
-                        $homeSlider->setDescription(substr(strip_tags($companyData['gemportal_desc'] ?? 'Découvrez nos produits'), 0, 255));
-                        $homeSlider->setButtonMessage(substr(strip_tags($companyData['gemportal_button'] ?? 'voir nos produit'), 0, 255));
+                        $homeSlider->setTitle(substr($companyData['gemportal_title'] ?? 'Bienvenue', 0, 255));
+                        $homeSlider->setDescription(substr($companyData['gemportal_desc'] ?? 'Découvrez nos produits', 0, 255));
+                        $homeSlider->setButtonMessage(substr($companyData['gemportal_button'] ?? 'voir nos produit', 0, 255));
                         $homeSlider->setButtonUrl('/Product/0');
                         $homeSlider->setIsDiplayed(true);
 
@@ -164,8 +164,8 @@ class StartGemsuiteImportJobHandler
                         $titleKey = $baseKey . '_title';
                         $descKey = $baseKey . '_desc';
 
-                        $exploreCard->setStandardTitle(strip_tags($companyData[$titleKey] ?? 'Bienvenue'));
-                        $exploreCard->setDescription(strip_tags($companyData[$descKey] ?? 'Découvrez cette fonctionnalité'));
+                        $exploreCard->setStandardTitle($companyData[$titleKey] ?? 'Bienvenue');
+                        $exploreCard->setDescription($companyData[$descKey] ?? 'Découvrez cette fonctionnalité');
                         $exploreCard->setIsDifferent(false);
 
                         $imagePath = $companyData[$baseKey] ?? null;
