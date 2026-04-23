@@ -143,6 +143,8 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
         $slugger = $this->createMock(SluggerInterface::class);
         $slugger->method('slug')->willReturn(new UnicodeString('t-shirt-super'));
 
+        $translationGenerator = $this->createMock(\App\Services\TranslationGeneratorService\TranslationGeneratorService::class);
+
         // 8. EXECUTION
         $handler = new ProcessGemsuiteEntityJobHandler(
             $logger,
@@ -154,7 +156,8 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
             $stockCalculator,
             $slugger,
             $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
-            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class)
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class),
+            $translationGenerator
         );
 
         $message = new ProcessGemsuiteEntityJob(1, 999, 'product_parent', $productData);
@@ -195,7 +198,8 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
             $this->createMock(GemsuiteStockCalculator::class),
             $this->createMock(SluggerInterface::class),
             $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
-            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class)
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class),
+            $this->createMock(\App\Services\TranslationGeneratorService\TranslationGeneratorService::class)
         );
 
         $handler(new ProcessGemsuiteEntityJob(1, 999, 'product_parent', $inactiveData));

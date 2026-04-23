@@ -824,6 +824,11 @@ class GemsuiteSyncHandler
         }
 
         $em->persist($pack);
+        
+        if (method_exists($this->translationGenerator, 'generateTranslations')) {
+            $this->translationGenerator->generateTranslations($pack);
+        }
+
         $em->flush();
     }
 

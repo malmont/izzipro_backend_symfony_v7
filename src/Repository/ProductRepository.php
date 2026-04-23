@@ -134,4 +134,35 @@ class ProductRepository extends EntityRepository
             ->getQuery()
             ->getOneOrNullResult();
     }
+
+    public function findBySlugAndLocale(string $slug, string $locale): ?Product
+    {
+        $dql = "SELECT p, t, t_fr, pict, b, s, v, vct, vst, vc, vs, vov, povt, po, pot, cat, ct, rp, su
+                FROM App\Entity\Product p
+                LEFT JOIN p.translations t WITH t.locale = :locale
+                LEFT JOIN p.translations t_fr WITH t_fr.locale = 'fr'
+                LEFT JOIN p.translations all_t
+                LEFT JOIN p.pictures pict
+                LEFT JOIN p.bookingConfiguration b
+                LEFT JOIN p.style s
+                LEFT JOIN p.variants v
+                LEFT JOIN v.color vc
+                LEFT JOIN vc.translations vct WITH vct.language = :locale
+                LEFT JOIN v.size vs
+                LEFT JOIN vs.translations vst WITH vst.language = :locale
+                LEFT JOIN v.optionValues vov
+                LEFT JOIN vov.translations povt WITH povt.language = :locale
+                LEFT JOIN vov.productOption po
+                LEFT JOIN po.translations pot WITH pot.language = :locale
+                LEFT JOIN p.category cat
+                LEFT JOIN cat.translations ct WITH ct.language = :locale
+                LEFT JOIN cat.rentalPacks rp
+                LEFT JOIN p.saleUnit su
+                WHERE p.slug = :slug OR all_t.slug = :slug";
+
+        return $this->getEntityManager()->createQuery($dql)
+            ->setParameter('slug', $slug)
+            ->setParameter('locale', $locale)
+            ->getOneOrNullResult();
+    }
 }

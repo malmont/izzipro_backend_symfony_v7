@@ -43,7 +43,8 @@ class ProcessGemsuiteEntityJobHandler
         private GemsuiteStockCalculator $stockCalculator,
         private SluggerInterface $slugger,
         private GemsuiteRentalWorkaroundService $rentalWorkaround,
-        private GemsuiteCompanySyncHandler $companySyncHandler
+        private GemsuiteCompanySyncHandler $companySyncHandler,
+        private \App\Services\TranslationGeneratorService\TranslationGeneratorService $translationGenerator
     ) {}
 
     public function __invoke(ProcessGemsuiteEntityJob $message)
@@ -75,8 +76,6 @@ class ProcessGemsuiteEntityJobHandler
         try {
             $this->emProvider->switchTenant($tenant['dbname'], $tenant['code']);
             $tenantEm = $this->emProvider->getEntityManager();
-
-
             $startTime = microtime(true);
             $entity = null;
 
@@ -96,6 +95,7 @@ class ProcessGemsuiteEntityJobHandler
                 case 'product_variant':
                     $this->processProductVariant($tenantEm, $data);
                     break;
+                    
                 case 'company_config':
                     $this->companySyncHandler->handleCompanyUpdate($tenant['code']);
                     break;
@@ -199,6 +199,7 @@ class ProcessGemsuiteEntityJobHandler
         $category->setIsRentalCategory($isRental);
 
         $em->persist($category);
+        $this->translationGenerator->generateTranslations($category);
 
         return $category;
     }
@@ -290,6 +291,7 @@ class ProcessGemsuiteEntityJobHandler
         $product->setProductShipping($shipping);
 
         $em->persist($product);
+        $this->translationGenerator->generateTranslations($product);
         return $product;
     }
 
@@ -423,6 +425,7 @@ class ProcessGemsuiteEntityJobHandler
         }
 
         $em->persist($pack);
+        $this->translationGenerator->generateTranslations($pack);
         $em->flush();
     }
 

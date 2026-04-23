@@ -9,6 +9,7 @@ use App\UseCase\ProductUseCase\GetProductsByCommandeUseCase;
 use App\UseCase\ProductUseCase\CreateProductByCommandeUseCase;
 use App\UseCase\ProductUseCase\GetLandingPageProductsUseCase;
 use App\UseCase\ProductUseCase\GetProductByIdUseCase; 
+use App\UseCase\ProductUseCase\GetProductBySlugUseCase;
 use App\UseCase\ProductUseCase\DeleteProductUseCase;
 use App\UseCase\ProductUseCase\GetAllProductsUseCase;
 use App\UseCase\ProductUseCase\GetProductsByOfferUseCase;
@@ -31,6 +32,7 @@ class ProductController extends AbstractController
     private GetProductsByOfferUseCase $getProductsByOfferUseCase;
     private TenantCacheService $cache;
     private GetProductByIdUseCase $getProductByIdUseCase; 
+    private GetProductBySlugUseCase $getProductBySlugUseCase;
 
     public function __construct(
         GetProductsByCommandeUseCase $getProductsByCommandeUseCase,
@@ -41,7 +43,8 @@ class ProductController extends AbstractController
         GetAllProductsUseCase $getAllProductsUseCase,
         GetProductsByOfferUseCase $getProductsByOfferUseCase,
         TenantCacheService $cache,
-        GetProductByIdUseCase $getProductByIdUseCase
+        GetProductByIdUseCase $getProductByIdUseCase,
+        GetProductBySlugUseCase $getProductBySlugUseCase
     ) {
         $this->getProductsByCommandeUseCase = $getProductsByCommandeUseCase;
         $this->createProductByCommandeUseCase = $createProductByCommandeUseCase;
@@ -52,6 +55,7 @@ class ProductController extends AbstractController
         $this->getProductsByOfferUseCase = $getProductsByOfferUseCase;
         $this->cache = $cache;
         $this->getProductByIdUseCase = $getProductByIdUseCase;
+        $this->getProductBySlugUseCase = $getProductBySlugUseCase;
     }
 
     #[Route('/api/commandes/{id}/products', name: 'get_products_by_commande', methods: ['GET'])]
@@ -167,6 +171,19 @@ class ProductController extends AbstractController
             $host = $request->getSchemeAndHttpHost();
             $locale = $request->query->get('locale', 'fr');
             $product = $this->getProductByIdUseCase->execute($id, $host, $locale); 
+            return $this->json($product, JsonResponse::HTTP_OK);
+        } catch (\Exception $e) {
+            return $this->json(['error' => $e->getMessage()], JsonResponse::HTTP_NOT_FOUND);
+        }
+    }
+
+    #[Route('/api/products/by-slug/{slug}', name: 'get_product_by_slug', methods: ['GET'])]
+    public function getProductBySlug(string $slug, Request $request): JsonResponse
+    {
+        try {
+            $host = $request->getSchemeAndHttpHost();
+            $locale = $request->query->get('locale', 'fr');
+            $product = $this->getProductBySlugUseCase->execute($slug, $host, $locale); 
             return $this->json($product, JsonResponse::HTTP_OK);
         } catch (\Exception $e) {
             return $this->json(['error' => $e->getMessage()], JsonResponse::HTTP_NOT_FOUND);

@@ -11,6 +11,7 @@ use App\UseCase\ProductUseCase\GetProductByIdUseCase;
 use App\UseCase\ProductUseCase\DeleteProductUseCase;
 use App\UseCase\ProductUseCase\GetAllProductsUseCase;
 use App\UseCase\ProductUseCase\GetProductsByOfferUseCase;
+use App\UseCase\ProductUseCase\GetProductBySlugUseCase;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
 use App\Entity\Commande;
@@ -36,6 +37,7 @@ class ProductControllerTest extends TestCase
     private $getProductsByOfferUseCase;
     private $cache;
     private $getProductByIdUseCase;
+    private $getProductBySlugUseCase;
     private $controller;
     private $container;
 
@@ -60,7 +62,8 @@ class ProductControllerTest extends TestCase
             $this->getAllProductsUseCase,
             $this->getProductsByOfferUseCase,
             $this->cache,
-            $this->getProductByIdUseCase
+            $this->getProductByIdUseCase,
+            $this->createMock(GetProductBySlugUseCase::class)
         );
 
         $this->container = $this->createMock(ContainerInterface::class);

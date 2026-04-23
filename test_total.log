@@ -1,0 +1,111 @@
+PHPUnit 9.6.31 by Sebastian Bergmann and contributors.
+
+Testing 
+...............................................................  63 / 399 ( 15%)
+.Cache miss for entreprise_1 in locale: fr
+.Cache miss for entreprise_999 in locale: fr
+..........EEEEEEEEEE......................................... 126 / 399 ( 31%)
+............................................................... 189 / 399 ( 47%)
+............................................................... 252 / 399 ( 63%)
+............................................................... 315 / 399 ( 78%)
+............................................................... 378 / 399 ( 94%)
+.....................                                           399 / 399 (100%)
+
+Time: 00:04.699, Memory: 46.00 MB
+
+There were 10 errors:
+
+1) App\Tests\Unit\Controller\ProductController\ProductControllerTest::testGetProductByIdSuccess
+ArgumentCountError: Too few arguments to function App\Controller\ProductController\ProductController::__construct(), 9 passed in /var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php on line 54 and exactly 10 expected
+
+/var/www/EcommerceSymfony/src/Controller/ProductController/ProductController.php:37
+/var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php:54
+
+2) App\Tests\Unit\Controller\ProductController\ProductControllerTest::testGetProductsByCommandeSuccess
+ArgumentCountError: Too few arguments to function App\Controller\ProductController\ProductController::__construct(), 9 passed in /var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php on line 54 and exactly 10 expected
+
+/var/www/EcommerceSymfony/src/Controller/ProductController/ProductController.php:37
+/var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php:54
+
+3) App\Tests\Unit\Controller\ProductController\ProductControllerTest::testCreateProductByCommandeSuccess
+ArgumentCountError: Too few arguments to function App\Controller\ProductController\ProductController::__construct(), 9 passed in /var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php on line 54 and exactly 10 expected
+
+/var/www/EcommerceSymfony/src/Controller/ProductController/ProductController.php:37
+/var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php:54
+
+4) App\Tests\Unit\Controller\ProductController\ProductControllerTest::testCreateProductByCommandeError
+ArgumentCountError: Too few arguments to function App\Controller\ProductController\ProductController::__construct(), 9 passed in /var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php on line 54 and exactly 10 expected
+
+/var/www/EcommerceSymfony/src/Controller/ProductController/ProductController.php:37
+/var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php:54
+
+5) App\Tests\Unit\Controller\ProductController\ProductControllerTest::testDeleteProductSuccess
+ArgumentCountError: Too few arguments to function App\Controller\ProductController\ProductController::__construct(), 9 passed in /var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php on line 54 and exactly 10 expected
+
+/var/www/EcommerceSymfony/src/Controller/ProductController/ProductController.php:37
+/var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php:54
+
+6) App\Tests\Unit\Controller\ProductController\ProductControllerTest::testDeleteProductError
+ArgumentCountError: Too few arguments to function App\Controller\ProductController\ProductController::__construct(), 9 passed in /var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php on line 54 and exactly 10 expected
+
+/var/www/EcommerceSymfony/src/Controller/ProductController/ProductController.php:37
+/var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php:54
+
+7) App\Tests\Unit\Controller\ProductController\ProductControllerTest::testGetAllProductsSuccess
+ArgumentCountError: Too few arguments to function App\Controller\ProductController\ProductController::__construct(), 9 passed in /var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php on line 54 and exactly 10 expected
+
+/var/www/EcommerceSymfony/src/Controller/ProductController/ProductController.php:37
+/var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php:54
+
+8) App\Tests\Unit\Controller\ProductController\ProductControllerTest::testGetProductsByOfferSuccess
+ArgumentCountError: Too few arguments to function App\Controller\ProductController\ProductController::__construct(), 9 passed in /var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php on line 54 and exactly 10 expected
+
+/var/www/EcommerceSymfony/src/Controller/ProductController/ProductController.php:37
+/var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php:54
+
+9) App\Tests\Unit\Controller\ProductController\ProductControllerTest::testGetLandingPageProductsSuccess
+ArgumentCountError: Too few arguments to function App\Controller\ProductController\ProductController::__construct(), 9 passed in /var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php on line 54 and exactly 10 expected
+
+/var/www/EcommerceSymfony/src/Controller/ProductController/ProductController.php:37
+/var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php:54
+
+10) App\Tests\Unit\Controller\ProductController\ProductControllerTest::testGetProductByIdNotFound
+ArgumentCountError: Too few arguments to function App\Controller\ProductController\ProductController::__construct(), 9 passed in /var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php on line 54 and exactly 10 expected
+
+/var/www/EcommerceSymfony/src/Controller/ProductController/ProductController.php:37
+/var/www/EcommerceSymfony/tests/Unit/Controller/ProductController/ProductControllerTest.php:54
+
+ERRORS!
+Tests: 399, Assertions: 1179, Errors: 10.
+
+Remaining self deprecation notices (10)
+
+  3x: Creation of dynamic property Mock_EasyPostClient_d82751ad::$address is deprecated
+    1x in AddressVerificationServiceTest::testVerifyReturnsNormalizedAddressOnSuccess from App\Tests\Unit\Service
+    1x in AddressVerificationServiceTest::testVerifyThrowsExceptionOnInvalidAddress from App\Tests\Unit\Service
+    1x in AddressVerificationServiceTest::testVerifyPropagatesEasyPostExceptions from App\Tests\Unit\Service
+
+  3x: Creation of dynamic property Mock_EasyPostClient_d82751ad::$shipment is deprecated
+    3x in EasyPostServiceTest::setUp from App\Tests\Unit\Services\ShippingService
+
+  3x: Creation of dynamic property Mock_EasyPostClient_d82751ad::$tracker is deprecated
+    3x in EasyPostServiceTest::setUp from App\Tests\Unit\Services\ShippingService
+
+  1x: Method "Symfony\Component\Security\Core\User\UserInterface::eraseCredentials()" might add "void" as a native return type declaration in the future. Do the same in implementation "App\Entity\User" now to avoid errors or add an explicit @return annotation to suppress this message.
+    1x in ApiLoginAuthenticatorTest::testAuthenticateSuccessMobile from App\Tests\Security
+
+Other deprecation notices (8)
+
+  4x: The Doctrine\ORM\Event\LifecycleEventArgs::getEntity method is deprecated (2.13. Use {@see getObject} instead.).
+    1x in CacheInvalidationSubscriberTest::testPostPersistWithContactInvalidatesCache from App\Tests\EventSubscriber
+    1x in CacheInvalidationSubscriberTest::testPostUpdateWithBanniereInvalidatesTags from App\Tests\EventSubscriber
+    1x in CacheInvalidationSubscriberTest::testPostRemoveWithEntrepriseInvalidatesTags from App\Tests\EventSubscriber
+    1x in CacheInvalidationSubscriberTest::testNonTagAwareCacheDoesNotCallInvalidateTags from App\Tests\EventSubscriber
+
+  3x: The Doctrine\DBAL\Connection::getEventManager method is deprecated ().
+    2x in TenantConnectionProviderTest::testGetConnectionReturnsDerivedConnection from App\Tests\Unit\Service
+    1x in TenantConnectionProviderTest::testSwitchTenantCreatesNewConnectionWithUpdatedParams from App\Tests\Unit\Service
+
+  1x: The SymfonyCasts\Bundle\VerifyEmail\VerifyEmailHelperInterface::validateEmailConfirmation method is deprecated (since v1.17.0, use validateEmailConfirmationFromRequest instead.  Validate a signed an email confirmation request.  If something is wrong with the email confirmation, a VerifyEmailExceptionInterface will be thrown.  The $userEmail should be the email address that the currently-authenticated user is trying to get validated. This is usually the current user's email address.  In more a complex setup, where you allow a user to verify multiple emails, this would be the email that the currently-authenticated user is trying to validate. You may even store a user's many email addresses (and whether or not each is verified) in another database table. In that case, you would need to call this method with each unverified email in that table (for the currently-authenticated user) to see if the signature is valid for any of the email addresses. If you find the one that is valid, you could then mark that email as "confirmed".).
+    1x in EmailVerifierTest::testHandleEmailConfirmation from App\Tests\Security
+

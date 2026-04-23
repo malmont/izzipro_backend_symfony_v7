@@ -92,6 +92,16 @@ class ProductService
         return new ProductDetailedOutputDTO($product, $host, $locale);
     }
 
+    public function getProductBySlug(string $slug, string $host, string $locale = 'fr'): ProductDetailedOutputDTO
+    {
+        $product = $this->repository->findBySlugAndLocale($slug, $locale);
+
+        if (!$product) {
+            throw new NotFoundHttpException('Product not found for slug: ' . $slug);
+        }
+        return new ProductDetailedOutputDTO($product, $host, $locale);
+    }
+
     public function getAllProducts(string $host, string $locale = 'fr'): array
     {
         $bestsellers   = $this->repository->findTranslatedByCriteria($locale, ['isbestseller' => true, 'isWeb' => true]);

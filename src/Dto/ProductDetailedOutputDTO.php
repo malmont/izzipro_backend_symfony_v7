@@ -108,7 +108,7 @@ class ProductDetailedOutputDTO
             if (!empty($packs)) {
                 $this->bookingConfig['rates'] = array_map(fn($pack) => [
                     'id'          => $pack->getId(),
-                    'name'        => $pack->getName(),
+                    'name'        => $pack->getTranslation($locale)?->getName() ?? $pack->getName(),
                     'hourRate'    => $pack->getHourRate(),
                     'halfDayRate' => $pack->getHalfDayRate(),
                     'dayRate'     => $pack->getDayRate(),

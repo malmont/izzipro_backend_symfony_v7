@@ -82,6 +82,8 @@ services:
             - '../src/Repository/ProductOptionValueRepository.php'
             - '../src/Repository/SaleUnitRepository.php'
             - '../src/Repository/RentalPackRepository.php'
+            - '../src/Repository/RentalPackTranslationRepository.php'
+            
 
 
             

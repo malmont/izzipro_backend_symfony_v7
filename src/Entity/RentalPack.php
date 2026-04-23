@@ -8,7 +8,7 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: \App\Repository\RentalPackRepository::class)]
-class RentalPack
+class RentalPack implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -42,9 +42,16 @@ class RentalPack
     #[ORM\ManyToMany(targetEntity: Categories::class, inversedBy: 'rentalPacks')]
     private Collection $categories;
 
+    /**
+     * @var Collection<int, RentalPackTranslation>
+     */
+    #[ORM\OneToMany(mappedBy: 'rentalPack', targetEntity: RentalPackTranslation::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    private Collection $translations;
+
     public function __construct()
     {
         $this->categories = new ArrayCollection();
+        $this->translations = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -161,5 +168,70 @@ class RentalPack
         }
 
         return $this;
+    }
+
+    /**
+     * @return Collection<int, RentalPackTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(object $translation): void
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setRentalPack($this);
+        }
+    }
+
+    public function removeTranslation(RentalPackTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            // set the owning side to null (unless already changed)
+            if ($translation->getRentalPack() === $this) {
+                $translation->setRentalPack(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getTranslation(string $locale): ?RentalPackTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+        
+        return $this->translations->first() ?: null;
+    }
+
+    public function getTranslatableFields(): array
+    {
+        return ['name'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return RentalPackTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

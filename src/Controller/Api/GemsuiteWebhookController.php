@@ -58,7 +58,7 @@ class GemsuiteWebhookController extends AbstractController
                 case 'categories':
                     $this->syncHandler->handleCategoryUpdate($tenant_code, $id);
                     break;
-
+ 
                 case 'company':
                     $this->companySyncHandler->handleCompanyUpdate($tenant_code);
                     break;
