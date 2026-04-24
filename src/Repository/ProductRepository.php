@@ -73,14 +73,16 @@ class ProductRepository extends EntityRepository
         ?bool $isPos
     ): array {
         $queryBuilder = $this->createQueryBuilder('p')
-            
             ->leftJoin('p.translations', 't', 'WITH', 't.locale = :locale')
-            ->addSelect('t')
+            ->leftJoin('p.saleUnit', 'su')
+            ->leftJoin('p.style', 's')
+            ->leftJoin('p.bookingConfiguration', 'b')
+            ->addSelect('t', 'su', 's', 'b')
             ->setParameter('locale', $locale);
 
         if ($categoryIds) {
-            $queryBuilder->join('p.category', 'c')
-                         ->andWhere('c.id IN (:categoryIds)')
+            $queryBuilder->join('p.category', 'filter_cat')
+                         ->andWhere('filter_cat.id IN (:categoryIds)')
                          ->setParameter('categoryIds', $categoryIds);
         }
 
@@ -107,7 +109,14 @@ class ProductRepository extends EntityRepository
         $queryBuilder->setFirstResult(($page - 1) * $pageSize)
                      ->setMaxResults($pageSize);
 
-        return $queryBuilder->getQuery()->getResult();
+        $paginator = new \Doctrine\ORM\Tools\Pagination\Paginator($queryBuilder, true);
+        
+        $results = [];
+        foreach ($paginator as $product) {
+            $results[] = $product;
+        }
+
+        return $results;
     }
     public function findTranslatedByCriteria(string $locale, array $criteria): array
     {

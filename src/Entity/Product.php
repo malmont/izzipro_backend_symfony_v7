@@ -15,6 +15,11 @@ use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: ProductRepository::class)]
+#[ORM\Index(name: 'idx_product_slug', fields: ['slug'])]
+#[ORM\Index(name: 'idx_product_barcode', fields: ['barcode'])]
+#[ORM\Index(name: 'idx_product_is_web', fields: ['isWeb'])]
+#[ORM\Index(name: 'idx_product_is_pos', fields: ['isPos'])]
+#[ORM\Index(name: 'idx_product_is_accessory', fields: ['isAccessory'])]
 #[ApiResource]
 class Product implements TranslatableInterface
 {

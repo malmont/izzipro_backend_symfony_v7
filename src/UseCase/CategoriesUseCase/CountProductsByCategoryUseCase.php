@@ -12,8 +12,8 @@ class CountProductsByCategoryUseCase
         $this->categoryService = $categoryService;
     }
 
-    public function execute(string $locale, ?array $categoryIds): int
+    public function execute(string $locale, ?array $categoryIds, ?string $keyword = null): int
     {
-        return $this->categoryService->countTotalProducts($locale, $categoryIds);
+        return $this->categoryService->countTotalProducts($locale, $categoryIds, $keyword);
     }
 }
