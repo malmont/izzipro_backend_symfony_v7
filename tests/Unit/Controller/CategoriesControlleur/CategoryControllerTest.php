@@ -78,7 +78,7 @@ class CategoryControllerTest extends TestCase
 
         $this->countProductsUseCase->expects($this->once())
             ->method('execute')
-            ->with('en', [1, 2])
+            ->with('en', [1, 2], null)
             ->willReturn(50); // Total fictif
 
         $response = $this->controller->getProductsByCategory($request);

@@ -13,15 +13,16 @@ class CountProductsByCategoryUseCaseTest extends TestCase
         $categoryService = $this->createMock(CategoryService::class);
         $locale = 'fr';
         $categoryIds = [1, 2];
+        $keyword = 'test_keyword';
         $expectedCount = 42;
 
         $categoryService->expects($this->once())
             ->method('countTotalProducts')
-            ->with($locale, $categoryIds)
+            ->with($locale, $categoryIds, $keyword)
             ->willReturn($expectedCount);
 
         $useCase = new CountProductsByCategoryUseCase($categoryService);
-        $result = $useCase->execute($locale, $categoryIds);
+        $result = $useCase->execute($locale, $categoryIds, $keyword);
         $this->assertEquals($expectedCount, $result);
     }
 }

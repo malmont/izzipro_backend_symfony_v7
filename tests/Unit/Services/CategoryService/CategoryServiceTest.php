@@ -82,12 +82,15 @@ class CategoryServiceTest extends TestCase
         $qb->expects($this->once())->method('join')->with('p.category', 'c')->willReturnSelf();
         $qb->expects($this->once())->method('andWhere')->with('c.id IN (:categoryIds)')->willReturnSelf();
         $qb->expects($this->once())->method('setParameter')->with('categoryIds', [1, 2])->willReturnSelf();
-        $qb->expects($this->once())->method('select')->with('COUNT(p.id)')->willReturnSelf();
+        
+        // When NO keyword is provided, we only have one andWhere and one setParameter above
+        
+        $qb->expects($this->once())->method('select')->with('COUNT(DISTINCT p.id)')->willReturnSelf();
         $qb->expects($this->once())->method('getQuery')->willReturn($query);
 
         $query->expects($this->once())->method('getSingleScalarResult')->willReturn(50);
 
-        $result = $this->service->countTotalProducts('fr', [1, 2]);
+        $result = $this->service->countTotalProducts('fr', [1, 2], null);
         $this->assertEquals(50, $result);
     }
 
