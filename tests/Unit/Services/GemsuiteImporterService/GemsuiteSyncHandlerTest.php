@@ -14,6 +14,7 @@ use App\Services\GemsuiteImporterService\GemsuiteSyncHandler;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TranslationGeneratorService\TranslationGeneratorService;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityRepository;
@@ -38,6 +39,7 @@ class GemsuiteSyncHandlerTest extends TestCase
     private $stockCalculator;
     private $clientManager;
     private $rentalWorkaround;
+    private $messageBus;
     private $gemsuiteApiUrl = 'https://api.example.com/';
     private $handler;
 
@@ -54,6 +56,7 @@ class GemsuiteSyncHandlerTest extends TestCase
         $this->stockCalculator = $this->createMock(GemsuiteStockCalculator::class);
         $this->clientManager = $this->createMock(GemsuiteClientManager::class);
         $this->rentalWorkaround = $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class);
+        $this->messageBus = $this->createMock(MessageBusInterface::class);
 
         $this->handler = new GemsuiteSyncHandler(
             $this->client,
@@ -67,7 +70,8 @@ class GemsuiteSyncHandlerTest extends TestCase
             $this->stockCalculator,
             $this->gemsuiteApiUrl,
             $this->clientManager,
-            $this->rentalWorkaround
+            $this->rentalWorkaround,
+            $this->messageBus
         );
     }
 

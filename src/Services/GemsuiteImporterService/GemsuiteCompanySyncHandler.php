@@ -27,7 +27,8 @@ class GemsuiteCompanySyncHandler
         private LoggerInterface $logger,
         private GemsuiteImageUrlBuilder $imageUrlBuilder,
         private TranslationGeneratorService $translationGenerator,
-        private string $gemsuiteApiUrl
+        private string $gemsuiteApiUrl,
+        private \Symfony\Component\Messenger\MessageBusInterface $messageBus
     ) {}
 
     /**
@@ -111,6 +112,7 @@ class GemsuiteCompanySyncHandler
 
         // --- AJOUT DE LA TRADUCTION ---
         $this->translationGenerator->generateTranslations($entreprise);
+        $this->dispatchTranslationJob($em, $entreprise);
     }
 
     private function updateHomeSliderData(EntityManagerInterface $em, array $companyData): void
@@ -141,6 +143,7 @@ class GemsuiteCompanySyncHandler
                 $em->persist($homeSlider);
 
                 $this->translationGenerator->generateTranslations($homeSlider);
+                $this->dispatchTranslationJob($em, $homeSlider);
             }
         }
     }
@@ -150,6 +153,30 @@ class GemsuiteCompanySyncHandler
         $dbname = 'db_' . $tenantCode;
         $this->emProvider->switchTenant($dbname, $tenantCode);
         return $this->emProvider->getEntityManager();
+    }
+
+    /**
+     * Dispatch un job de traduction asynchrone pour plus de robustesse.
+     */
+    private function dispatchTranslationJob(EntityManagerInterface $em, object $entity): void
+    {
+        try {
+            $tenantCode = $this->tenantManager->getCurrentTenantCode();
+            if (!$tenantCode) return;
+
+            $tenant = $this->tenantManager->findTenantByCode($tenantCode);
+            if (!$tenant) return;
+
+            if (method_exists($entity, 'getTranslatableFields')) {
+                $this->messageBus->dispatch(new \App\Message\TranslateEntityJob(
+                    (int)$tenant['id'],
+                    get_class($entity),
+                    $entity->getId()
+                ));
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error("Erreur dispatch TranslationJob (CompanySync): " . $e->getMessage());
+        }
     }
 
     private function updateExploreCardData(EntityManagerInterface $em, array $companyData): void
@@ -181,6 +208,7 @@ class GemsuiteCompanySyncHandler
 
                 $em->persist($exploreCard);
                 $this->translationGenerator->generateTranslations($exploreCard);
+                $this->dispatchTranslationJob($em, $exploreCard);
             }
         }
     }

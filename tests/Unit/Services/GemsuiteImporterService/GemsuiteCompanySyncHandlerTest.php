@@ -11,6 +11,7 @@ use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TranslationGeneratorService\TranslationGeneratorService;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityRepository;
 use PHPUnit\Framework\TestCase;
@@ -27,6 +28,7 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
     private $imageUrlBuilder;
     private $translationGenerator;
     private $gemsuiteApiUrl = 'https://api.example.com/';
+    private $messageBus;
     private $handler;
 
     protected function setUp(): void
@@ -37,6 +39,7 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->imageUrlBuilder = $this->createMock(GemsuiteImageUrlBuilder::class);
         $this->translationGenerator = $this->createMock(TranslationGeneratorService::class);
+        $this->messageBus = $this->createMock(MessageBusInterface::class);
 
         $this->handler = new GemsuiteCompanySyncHandler(
             $this->client,
@@ -45,7 +48,8 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
             $this->logger,
             $this->imageUrlBuilder,
             $this->translationGenerator,
-            $this->gemsuiteApiUrl
+            $this->gemsuiteApiUrl,
+            $this->messageBus
         );
     }
 

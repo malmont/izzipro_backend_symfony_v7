@@ -37,7 +37,8 @@ class GemsuiteSyncHandler
         private GemsuiteStockCalculator $stockCalculator,
         private string $gemsuiteApiUrl,
         private GemsuiteClientManager $clientManager,
-        private GemsuiteRentalWorkaroundService $rentalWorkaround
+        private GemsuiteRentalWorkaroundService $rentalWorkaround,
+        private \Symfony\Component\Messenger\MessageBusInterface $messageBus
     ) {}
 
     /**
@@ -68,7 +69,7 @@ class GemsuiteSyncHandler
             // --- ROBUSTESSE WEBHOOK ---
             // On synchronise les catégories au début pour éviter de désactiver un produit 
             // dont la nouvelle catégorie n'existe pas encore localement (Race Condition).
-            [$categoryMap, $shippingClassMap] = $this->importCategories($tenantEm, $token, $companyIdentifier);
+            [$categoryMap, $shippingClassMap] = $this->importCategories($tenantEm, $tenantCode, $token, $companyIdentifier);
 
             if (!$this->isProductActive($tenantEm, $gemProductData)) {
                 $this->logger->info("Produit #$productId détecté comme inactif. Désactivation locale.");
@@ -82,15 +83,19 @@ class GemsuiteSyncHandler
 
                     if (!empty($gemProductData['attributs'])) {
                         $this->logger->info("Parent #$productId possède des attributs : Traitement comme Variante hybride.");
-                        $this->updateOrCreateProductVariant($tenantEm, $gemProductData, $token, $companyIdentifier);
+                        $this->updateOrCreateProductVariant($tenantEm, $tenantCode, $gemProductData, $token, $companyIdentifier);
                     }
                 } else {
                     $this->logger->info("Traitement de la VARIANTE #$productId (Liée au Parent #{$gemProductData['origin_product_id']})");
-                    $this->updateOrCreateProductVariant($tenantEm, $gemProductData, $token, $companyIdentifier);
+                    $this->updateOrCreateProductVariant($tenantEm, $tenantCode, $gemProductData, $token, $companyIdentifier);
                 }
             }
 
             $tenantEm->flush();
+
+            // --- AJOUT : Déclenchement de la traduction asynchrone (comme en synchro de masse) ---
+            $this->dispatchTranslationJob($tenantCode, $gemProductData);
+
             $this->logger->info("Sync terminée avec succès pour #$productId");
         } catch (\Throwable $e) {
 
@@ -107,7 +112,7 @@ class GemsuiteSyncHandler
             $tenantEm = $this->getTenantEntityManager($tenantCode);
             $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
             $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
-            $this->importCategories($tenantEm, $token, $companyIdentifier);
+            $this->importCategories($tenantEm, $tenantCode, $token, $companyIdentifier);
         } catch (\Throwable $e) {
             $this->logger->error("Erreur Sync Catégorie: " . $e->getMessage());
         }
@@ -559,7 +564,7 @@ class GemsuiteSyncHandler
      * C'est ICI que la magie des attributs opère.
      * Gestion du Stock corrigée : Base + Ajustements
      */
-    private function updateOrCreateProductVariant(EntityManagerInterface $em, array $gemProductData, string $token, ?string $companyIdentifier): void
+    private function updateOrCreateProductVariant(EntityManagerInterface $em, string $tenantCode, array $gemProductData, string $token, ?string $companyIdentifier): void
     {
         $parentProductId = $gemProductData['origin_product_id'];
         $productRepo = $em->getRepository(Product::class);
@@ -574,7 +579,7 @@ class GemsuiteSyncHandler
             $parentData = $this->fetchProductFromApi($parentProductId, $token);
 
             if ($parentData) {
-                [$catMap, $shpClassMap] = $this->importCategories($em, $token, $companyIdentifier);
+                [$catMap, $shpClassMap] = $this->importCategories($em, $tenantCode, $token, $companyIdentifier);
                 $this->updateOrCreateProductParent($em, $parentData, $catMap, $shpClassMap, $companyIdentifier);
                 $em->flush();
                 $product = $productRepo->findOneBy(['gemsuiteProductId' => $parentProductId]);
@@ -649,7 +654,7 @@ class GemsuiteSyncHandler
 
 
 
-    private function importCategories(EntityManagerInterface $em, string $token, ?string $companyIdentifier): array
+    private function importCategories(EntityManagerInterface $em, string $tenantCode, string $token, ?string $companyIdentifier): array
     {
         $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'categories', [
             'auth_bearer' => $token,
@@ -709,6 +714,12 @@ class GemsuiteSyncHandler
             $shippingClassMap[$gemCategoryData['id']] = $gemCategoryData['expedition_classes'] ?? 0;
         }
         $em->flush();
+
+        // --- AJOUT : Déclenchement de la traduction asynchrone pour chaque catégorie ---
+        foreach ($categoryMap as $category) {
+            $this->dispatchTranslationJob($tenantCode, ['id' => $category->getGemsuiteCategoryId(), 'type' => 'categories'], $category);
+        }
+
         return [$categoryMap, $shippingClassMap];
     }
 
@@ -830,6 +841,40 @@ class GemsuiteSyncHandler
         }
 
         $em->flush();
+
+        // --- AJOUT : Déclenchement de la traduction asynchrone ---
+        $this->dispatchTranslationJob($this->tenantManager->getCurrentTenantCode() ?? '', ['id' => $pack->getGemsuiteProductId(), 'type' => 'rental_pack'], $pack);
+    }
+
+    /**
+     * Dispatch un job de traduction asynchrone pour plus de robustesse.
+     */
+    private function dispatchTranslationJob(string $tenantCode, array $gemData, ?object $entity = null): void
+    {
+        try {
+            $tenant = $this->tenantManager->findTenantByCode($tenantCode);
+            if (!$tenant) return;
+
+            // Résolution de l'entité si non fournie
+            if (!$entity) {
+                $tenantEm = $this->getTenantEntityManager($tenantCode);
+                $isParent = ($gemData['id'] === ($gemData['origin_product_id'] ?? $gemData['id']));
+                if ($isParent) {
+                    $entity = $tenantEm->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemData['id']]);
+                }
+            }
+
+            if ($entity && method_exists($entity, 'getTranslatableFields')) {
+                $this->messageBus->dispatch(new \App\Message\TranslateEntityJob(
+                    (int)$tenant['id'],
+                    get_class($entity),
+                    $entity->getId()
+                ));
+                $this->logger->info(sprintf("[Webhook Sync] Job de traduction dispatché pour %s ID %d", get_class($entity), $entity->getId()));
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error("Erreur dispatch TranslationJob: " . $e->getMessage());
+        }
     }
 
     /**
