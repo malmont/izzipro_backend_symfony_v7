@@ -244,4 +244,36 @@ class StripeService
 
         return false;
     }
+
+    public function verifyPaymentIntent(string $paymentIntentId): ?PaymentIntent
+    {
+        try {
+            Stripe::setApiKey($this->stripeSecretKey);
+            
+            $stripeOptions = [];
+            $tenantCode = $this->connectionManager->getCurrentTenantCode();
+            $isInternal = $this->connectionManager->isTenantInternal($tenantCode);
+
+            if (!$isInternal) {
+                $stripeConfig = $this->getStripeConfigForCurrentTenant();
+                if ($stripeConfig && $stripeConfig->isActive()) {
+                    $stripeOptions['stripe_account'] = $stripeConfig->getAccountId();
+                }
+            }
+
+            $paymentIntent = $this->retrieveStripePaymentIntent($paymentIntentId, $stripeOptions);
+            return $paymentIntent->status === 'succeeded' ? $paymentIntent : null;
+        } catch (ApiErrorException $e) {
+            $this->logger->error("Erreur verification Stripe PaymentIntent $paymentIntentId: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Wrapper pour PaymentIntent::retrieve afin de faciliter le mocking dans les tests.
+     */
+    protected function retrieveStripePaymentIntent(string $paymentIntentId, array $options = []): PaymentIntent
+    {
+        return PaymentIntent::retrieve($paymentIntentId, $options);
+    }
 }

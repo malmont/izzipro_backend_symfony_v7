@@ -57,14 +57,16 @@ class CreateOrderUseCase
         $this->handleBookingUseCase = $handleBookingUseCase;
     }
 
-    public function execute(ICreateOrderDTO $orderDTO)
+    public function execute(ICreateOrderDTO $orderDTO, ?\App\Entity\User $user = null)
     {
         $em = $this->emProvider->getEntityManager();
         $em->getConnection()->beginTransaction();
 
         $caisseAmount = 0;
         try {
-            $user = $this->security->getUser();
+            if (!$user) {
+                $user = $this->security->getUser();
+            }
             $typeOrderId = $orderDTO->getTypeOrder();
             $statusPaymentId = 2;
 

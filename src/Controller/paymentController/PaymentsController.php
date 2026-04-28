@@ -104,11 +104,6 @@ class PaymentsController extends AbstractController
     #[Route('/api/stripe/create-intent', name: 'api_stripe_create_intent', methods: ['POST'])]
     public function createStripePaymentIntent(Request $request): JsonResponse
     {
-        $user = $this->security->getUser();
-        if (!$user) {
-            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
-        }
-
         $data = json_decode($request->getContent(), true);
         $items = $data['items'] ?? [];
         $priceShipping = $data['priceShipping'] ?? 0.0;

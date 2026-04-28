@@ -40,6 +40,9 @@ class OrderControllerTest extends TestCase
     private $gemsuiteSaleManager;
     private $logger;
     private $orderMailerService;
+    private $stripeService;
+    private $gemsuiteClientManager;
+    private $tenantManager;
     private $controller;
     private $container;
     private $tokenStorage;
@@ -56,6 +59,9 @@ class OrderControllerTest extends TestCase
         $this->gemsuiteSaleManager = $this->createMock(GemsuiteSaleManager::class);
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->orderMailerService = $this->createMock(OrderMailerService::class);
+        $this->stripeService = $this->createMock(\App\Services\StripeService\StripeService::class);
+        $this->gemsuiteClientManager = $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteClientManager::class);
+        $this->tenantManager = $this->createMock(\App\Services\TenantConnectionManager::class);
 
         $this->controller = new OrderController(
             $this->createOrderUseCase,
@@ -66,7 +72,10 @@ class OrderControllerTest extends TestCase
             $this->cache,
             $this->gemsuiteSaleManager,
             $this->logger,
-            $this->orderMailerService
+            $this->orderMailerService,
+            $this->stripeService,
+            $this->gemsuiteClientManager,
+            $this->tenantManager
         );
 
         $this->container = $this->createMock(ContainerInterface::class);
@@ -160,6 +169,13 @@ class OrderControllerTest extends TestCase
 
         $carrier = $this->createMock(Carrier::class);
         $carrierRepo->method('find')->with(5)->willReturn($carrier);
+
+        // Mock Stripe Verification
+        $paymentIntent = $this->createMock(\Stripe\PaymentIntent::class);
+        $paymentIntent->id = 'pi_123';
+        $paymentIntent->status = 'succeeded';
+        $paymentIntent->charges = (object)['data' => []];
+        $this->stripeService->method('verifyPaymentIntent')->willReturn($paymentIntent);
 
         // Mock Order creation
         $order = $this->createMock(Order::class);

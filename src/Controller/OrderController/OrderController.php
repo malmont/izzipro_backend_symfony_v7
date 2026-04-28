@@ -22,8 +22,11 @@ use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 use App\Services\GemsuiteImporterService\GemsuiteSaleManager;
+use App\Services\GemsuiteImporterService\GemsuiteClientManager;
+use App\Services\TenantConnectionManager;
 use Psr\Log\LoggerInterface;
 use App\Services\OrderService\OrderMailerService;
+use App\Services\StripeService\StripeService;
 
 class OrderController extends AbstractController
 {
@@ -36,6 +39,9 @@ class OrderController extends AbstractController
     private GemsuiteSaleManager $gemsuiteSaleManager;
     private LoggerInterface $logger;
     private OrderMailerService $orderMailerService;
+    private StripeService $stripeService;
+    private GemsuiteClientManager $gemsuiteClientManager;
+    private TenantConnectionManager $tenantManager;
 
     public function __construct(
         CreateOrderUseCase $createOrderUseCase,
@@ -46,7 +52,10 @@ class OrderController extends AbstractController
         TenantCacheService $cache,
         GemsuiteSaleManager $gemsuiteSaleManager,
         LoggerInterface $logger,
-        OrderMailerService $orderMailerService
+        OrderMailerService $orderMailerService,
+        StripeService $stripeService,
+        GemsuiteClientManager $gemsuiteClientManager,
+        TenantConnectionManager $tenantManager
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -57,6 +66,9 @@ class OrderController extends AbstractController
         $this->gemsuiteSaleManager = $gemsuiteSaleManager;
         $this->logger = $logger;
         $this->orderMailerService = $orderMailerService;
+        $this->stripeService = $stripeService;
+        $this->gemsuiteClientManager = $gemsuiteClientManager;
+        $this->tenantManager = $tenantManager;
     }
 
     /**
@@ -94,6 +106,26 @@ class OrderController extends AbstractController
         }
 
         $paymentData = $data['payment'] ?? [];
+        $paymentIntentId = $data['paymentIntentId'] ?? $paymentData['stripePaymentId'] ?? null;
+
+        // --- SÉCURISATION : Vérification obligatoire du paiement Stripe ---
+        if ($paymentIntentId && ($data['paymentMethod'] ?? 2) == 2) {
+            $paymentIntent = $this->stripeService->verifyPaymentIntent($paymentIntentId);
+            if (!$paymentIntent) {
+                return $this->json(['error' => 'Payment verification failed or payment not completed'], JsonResponse::HTTP_PAYMENT_REQUIRED);
+            }
+
+            // On écrase les données du front par les données certifiées de Stripe
+            $charge = $paymentIntent->charges->data[0] ?? null;
+            $paymentData = [
+                'stripePaymentId' => $paymentIntent->id,
+                'status' => $paymentIntent->status,
+                'receiptUrl' => $charge ? $charge->receipt_url : null,
+                'cardBrand' => $charge ? $charge->payment_method_details->card->brand : null,
+                'last4' => $charge ? $charge->payment_method_details->card->last4 : null,
+                'riskLevel' => $charge ? $charge->outcome->risk_level : null,
+            ];
+        }
 
         $dto = new CreateOrderDTO(
             $user->getId(),
@@ -143,6 +175,158 @@ class OrderController extends AbstractController
             ], JsonResponse::HTTP_CREATED);
         }
         return $result;
+    }
+
+    /**
+     * @Route("api/order/create-guest", name="order_create_guest", methods={"POST"})
+     */
+    public function createGuestOrder(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+
+        if (!isset($data['guestInfo'], $data['items'], $data['shippingAddress'], $data['paymentIntentId'])) {
+            return $this->json(['error' => 'Missing required guest fields'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+
+        $guestInfo = $data['guestInfo'];
+        $email = $guestInfo['email'] ?? null;
+        if (!$email) {
+            return $this->json(['error' => 'Email is required'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+
+        $em = $this->emProvider->getEntityManager();
+        $userRepo = $em->getRepository(User::class);
+        $user = $userRepo->findOneBy(['email' => $email]);
+
+        $firstName = $guestInfo['firstName'] ?? 'Guest';
+        $lastName = $guestInfo['lastName'] ?? 'User';
+        $tenantCode = $this->tenantManager->getCurrentTenantCode();
+
+        // 1. S'assurer que le client existe dans Gemsuite (et en local)
+        $gemsuiteClient = $this->gemsuiteClientManager->findOrCreateClient($email, $firstName, $lastName, $tenantCode);
+        
+        // On récupère l'EM après le switch potentiel du GemsuiteClientManager
+        $em = $this->emProvider->getEntityManager();
+
+        if (!$user) {
+            $user = new User();
+            $user->setEmail($email);
+            $user->setFirstname($firstName);
+            $user->setLastname($lastName);
+            $user->setUsername($email);
+            $user->setPassword(bin2hex(random_bytes(10)));
+            $user->setIsVerified(true);
+            $user->setRoles(['ROLE_USER_INTERNET']);
+            
+            if ($gemsuiteClient) {
+                $user->setGemsuiteClient($gemsuiteClient);
+            }
+
+            $em->persist($user);
+            $em->flush();
+        } elseif ($gemsuiteClient && !$user->getGemsuiteClient()) {
+            // Si l'user existe mais n'était pas lié au client Gemsuite
+            $user->setGemsuiteClient($gemsuiteClient);
+            $em->flush();
+        }
+
+        // Verify Stripe Payment and extract details
+        $paymentIntent = $this->stripeService->verifyPaymentIntent($data['paymentIntentId']);
+        if (!$paymentIntent) {
+            return $this->json(['error' => 'Payment verification failed or payment not completed'], JsonResponse::HTTP_PAYMENT_REQUIRED);
+        }
+
+        $charge = $paymentIntent->charges->data[0] ?? null;
+        $paymentData = [
+            'stripePaymentId' => $paymentIntent->id,
+            'status' => $paymentIntent->status,
+            'receiptUrl' => $charge ? $charge->receipt_url : null,
+            'cardBrand' => $charge ? $charge->payment_method_details->card->brand : null,
+            'last4' => $charge ? $charge->payment_method_details->card->last4 : null,
+            'riskLevel' => $charge ? $charge->outcome->risk_level : null,
+        ];
+
+        // Handle Addresses
+        $shippingData = $data['shippingAddress'];
+        $billingData = $data['billingAddress'] ?? $shippingData;
+
+        $shippingAddress = $this->createAddressFromData($shippingData, $user);
+        $billingAddress = $this->createAddressFromData($billingData, $user);
+
+        $em->persist($shippingAddress);
+        $em->persist($billingAddress);
+        $em->flush();
+
+        $carrierId = $data['carrierId'] ?? null;
+
+        $dto = new CreateOrderDTO(
+            $user->getId(),
+            $data['orderSource'] ?? 1,
+            $data['paymentMethod'] ?? 2, // Stripe
+            $shippingAddress->getId(),
+            $carrierId,
+            $data['typeOrder'] ?? null,
+            $data['items'],
+            $data['priceShipping'] ?? null,
+            $paymentData['squarePaymentId'] ?? null,
+            $paymentData['squareOrderId'] ?? null,
+            $paymentData['squareReceiptUrl'] ?? null,
+            $paymentData['squareStatus'] ?? null,
+            $paymentData['squareCardBrand'] ?? null,
+            $paymentData['squareLast4'] ?? null,
+            $paymentData['squareRiskLevel'] ?? null,
+            $paymentData['stripePaymentId'] ?? null,
+            $paymentData['receiptUrl'] ?? null,
+            $paymentData['status'] ?? null,
+            $paymentData['cardBrand'] ?? null,
+            $paymentData['last4'] ?? null,
+            $paymentData['riskLevel'] ?? null
+        );
+
+        $result = $this->createOrderUseCase->execute($dto, $user);
+
+        if ($result instanceof Order) {
+            $em->refresh($result);
+            $this->gemsuiteSaleManager->createSale($result);
+            try {
+                $locale = $request->query->get('locale', 'fr');
+                $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+                $this->orderMailerService->sendOrderConfirmation($result, $locale, $domain);
+            } catch (\Exception $e) {
+                $this->logger->error("Le service d'email Guest a échoué : " . $e->getMessage(), [
+                    'orderId' => $result->getId()
+                ]);
+            }
+            return $this->json([
+                'success' => true,
+                'orderId' => $result->getId(),
+                'message' => 'Commande Guest créée avec succès.'
+            ], JsonResponse::HTTP_CREATED);
+        }
+
+        return $result;
+    }
+
+    private function createAddressFromData(array $data, User $user): Adress
+    {
+        $address = new Adress();
+        $address->setUserAdress($user);
+        $address->setFullname($data['fullname'] ?? ($user->getFirstname() . ' ' . $user->getLastname()));
+        
+        // Split fullname for firstname/lastname if possible, or just use user info
+        $nameParts = explode(' ', $address->getFullname(), 2);
+        $address->setFirstname($nameParts[1] ?? ($nameParts[0] ?? ''));
+        $address->setLastname($nameParts[0] ?? '');
+
+        $address->setAddress($data['addressLineOne'] ?? '');
+        $address->setComplement($data['addressLineTwo'] ?? null);
+        $address->setCity($data['city'] ?? '');
+        $address->setProvince($data['province'] ?? null);
+        $address->setCodepostal($data['zipCode'] ?? '');
+        $address->setCountry($data['country'] ?? '');
+        $address->setPhone($data['contactNumber'] ?? '');
+
+        return $address;
     }
 
     /**

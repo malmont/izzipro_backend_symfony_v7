@@ -84,4 +84,42 @@ class StripeServiceTest extends TestCase
         $this->assertEquals('client_secret_abc', $result['clientSecret']);
         $this->assertEquals(115.0, $result['calculatedAmount']);
     }
+
+    public function testVerifyPaymentIntentReturnsObjectOnSuccess()
+    {
+        $stripeSecretKey = 'sk_test_123';
+        $emProvider = $this->createMock(TenantEntityManagerProvider::class);
+        $connectionManager = $this->createMock(TenantConnectionManager::class);
+        $logger = $this->createMock(LoggerInterface::class);
+        $entityRetrieverService = $this->createMock(EntityRetrieverService::class);
+        $calculateTaxesUseCase = $this->createMock(CalculateTaxesUseCase::class);
+        $rentalPriceCalculator = $this->createMock(\App\Services\OrderService\RentalPriceCalculator::class);
+
+        $service = $this->getMockBuilder(StripeService::class)
+            ->setConstructorArgs([
+                $stripeSecretKey,
+                $emProvider,
+                $connectionManager,
+                $logger,
+                $entityRetrieverService,
+                $calculateTaxesUseCase,
+                $rentalPriceCalculator
+            ])
+            ->onlyMethods(['retrieveStripePaymentIntent'])
+            ->getMock();
+
+        $paymentIntent = \Stripe\PaymentIntent::constructFrom(['id' => 'pi_123', 'status' => 'succeeded']);
+
+        $connectionManager->method('getCurrentTenantCode')->willReturn('test_tenant');
+        $connectionManager->method('isTenantInternal')->with('test_tenant')->willReturn(true);
+
+        $service->expects($this->once())
+            ->method('retrieveStripePaymentIntent')
+            ->with('pi_123')
+            ->willReturn($paymentIntent);
+
+        $result = $service->verifyPaymentIntent('pi_123');
+
+        $this->assertSame($paymentIntent, $result);
+    }
 }
