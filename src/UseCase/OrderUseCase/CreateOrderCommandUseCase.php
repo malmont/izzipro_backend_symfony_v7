@@ -58,6 +58,14 @@ class CreateOrderCommandUseCase
             $statusCommande,
             $orderType
         );
+
+        if (method_exists($orderDTO, 'getGuestLicenseNumber') && $orderDTO->getGuestLicenseNumber()) {
+            $order->setGuestLicenseNumber($orderDTO->getGuestLicenseNumber());
+        }
+        if (method_exists($orderDTO, 'getGuestLicenseExpirationDate') && $orderDTO->getGuestLicenseExpirationDate()) {
+            $order->setGuestLicenseExpirationDate(new \DateTime($orderDTO->getGuestLicenseExpirationDate()));
+        }
+
         $em = $this->emProvider->getEntityManager();
         $em->persist($order);
         return $order;

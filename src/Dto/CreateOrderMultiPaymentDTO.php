@@ -30,6 +30,8 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     private ?string $stripeCardBrand;
     private ?string $stripeLast4;
     private ?string $stripeRiskLevel;
+    private ?string $guestLicenseNumber;
+    private ?string $guestLicenseExpirationDate;
 
     public function __construct(
         int $userId,
@@ -52,9 +54,9 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
         ?string $stripeStatus = null,
         ?string $stripeCardBrand = null,
         ?string $stripeLast4 = null,
-        ?string $stripeRiskLevel = null
-
-
+        ?string $stripeRiskLevel = null,
+        ?string $guestLicenseNumber = null,
+        ?string $guestLicenseExpirationDate = null
     ) {
         $this->userId = $userId;
         $this->orderSource = $orderSource;
@@ -81,6 +83,8 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
         $this->stripeCardBrand = $stripeCardBrand;
         $this->stripeLast4 = $stripeLast4;
         $this->stripeRiskLevel = $stripeRiskLevel;
+        $this->guestLicenseNumber = $guestLicenseNumber;
+        $this->guestLicenseExpirationDate = $guestLicenseExpirationDate;
     }
 
     // ✅ Getters existants
@@ -176,5 +180,15 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     public function getStripeRiskLevel(): ?string
     {
         return $this->stripeRiskLevel;
+    }
+
+    public function getGuestLicenseNumber(): ?string
+    {
+        return $this->guestLicenseNumber;
+    }
+
+    public function getGuestLicenseExpirationDate(): ?string
+    {
+        return $this->guestLicenseExpirationDate;
     }
 }

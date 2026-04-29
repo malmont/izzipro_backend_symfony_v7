@@ -97,6 +97,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\JoinColumn(nullable: true)]
     private ?GemsuiteClient $gemsuiteClient = null;
 
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $licenseNumber = null;
+
+    #[ORM\Column(type: 'date', nullable: true)]
+    private ?\DateTimeInterface $licenseExpirationDate = null;
+
     public function __construct()
     {
         $this->adresses = new ArrayCollection();
@@ -493,4 +500,26 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     }
 
 
+
+    public function getLicenseNumber(): ?string
+    {
+        return $this->licenseNumber;
+    }
+
+    public function setLicenseNumber(?string $licenseNumber): self
+    {
+        $this->licenseNumber = $licenseNumber;
+        return $this;
+    }
+
+    public function getLicenseExpirationDate(): ?\DateTimeInterface
+    {
+        return $this->licenseExpirationDate;
+    }
+
+    public function setLicenseExpirationDate(?\DateTimeInterface $licenseExpirationDate): self
+    {
+        $this->licenseExpirationDate = $licenseExpirationDate;
+        return $this;
+    }
 }

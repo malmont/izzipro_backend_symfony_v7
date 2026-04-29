@@ -35,6 +35,9 @@ class CreateOrderDTO implements ICreateOrderDTO
     private ?string $stripeLast4;
     private ?string $stripeRiskLevel;
 
+    private ?string $guestLicenseNumber;
+    private ?string $guestLicenseExpirationDate;
+
     public function __construct(
         int $userId,
         int $orderSource,
@@ -59,7 +62,9 @@ class CreateOrderDTO implements ICreateOrderDTO
         ?string $stripeStatus = null,
         ?string $stripeCardBrand = null,
         ?string $stripeLast4 = null,
-        ?string $stripeRiskLevel = null
+        ?string $stripeRiskLevel = null,
+        ?string $guestLicenseNumber = null,
+        ?string $guestLicenseExpirationDate = null
     ) {
         $this->userId = $userId;
         $this->orderSource = $orderSource;
@@ -84,6 +89,8 @@ class CreateOrderDTO implements ICreateOrderDTO
         $this->stripeCardBrand = $stripeCardBrand;
         $this->stripeLast4 = $stripeLast4;
         $this->stripeRiskLevel = $stripeRiskLevel;
+        $this->guestLicenseNumber = $guestLicenseNumber;
+        $this->guestLicenseExpirationDate = $guestLicenseExpirationDate;
     }
 
     // ✅ Getters existants
@@ -179,6 +186,16 @@ class CreateOrderDTO implements ICreateOrderDTO
     public function getStripeRiskLevel(): ?string
     {
         return $this->stripeRiskLevel;
+    }
+
+    public function getGuestLicenseNumber(): ?string
+    {
+        return $this->guestLicenseNumber;
+    }
+
+    public function getGuestLicenseExpirationDate(): ?string
+    {
+        return $this->guestLicenseExpirationDate;
     }
 
     public function toArray(): array

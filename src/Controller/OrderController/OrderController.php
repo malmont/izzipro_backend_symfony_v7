@@ -148,13 +148,33 @@ class OrderController extends AbstractController
             $paymentData['status'] ?? null,
             $paymentData['cardBrand'] ?? null,
             $paymentData['last4'] ?? null,
-            $paymentData['riskLevel'] ?? null
+            $paymentData['riskLevel'] ?? null,
+            $data['licenseNumber'] ?? null,
+            $data['licenseExpirationDate'] ?? null
         );
 
         $result = $this->createOrderUseCase->execute($dto);
 
         if ($result instanceof Order) {
             $tenantEm = $this->emProvider->getEntityManager();
+            
+            // Auto-update user profile if license info is missing
+            if ($user) {
+                $hasChanged = false;
+                if (!$user->getLicenseNumber() && isset($data['licenseNumber'])) {
+                    $user->setLicenseNumber($data['licenseNumber']);
+                    $hasChanged = true;
+                }
+                if (!$user->getLicenseExpirationDate() && isset($data['licenseExpirationDate'])) {
+                    $user->setLicenseExpirationDate(new \DateTime($data['licenseExpirationDate']));
+                    $hasChanged = true;
+                }
+                if ($hasChanged) {
+                    $tenantEm->persist($user);
+                    $tenantEm->flush();
+                }
+            }
+
             $tenantEm->refresh($result);
             $this->gemsuiteSaleManager->createSale($result);
             try {
@@ -280,12 +300,31 @@ class OrderController extends AbstractController
             $paymentData['status'] ?? null,
             $paymentData['cardBrand'] ?? null,
             $paymentData['last4'] ?? null,
-            $paymentData['riskLevel'] ?? null
+            $paymentData['riskLevel'] ?? null,
+            $data['guestInfo']['licenseNumber'] ?? null,
+            $data['guestInfo']['licenseExpirationDate'] ?? null
         );
 
         $result = $this->createOrderUseCase->execute($dto, $user);
 
         if ($result instanceof Order) {
+            // Auto-update user profile (for the newly created or existing user from guest info)
+            if ($user) {
+                $hasChanged = false;
+                if (!$user->getLicenseNumber() && isset($data['guestInfo']['licenseNumber'])) {
+                    $user->setLicenseNumber($data['guestInfo']['licenseNumber']);
+                    $hasChanged = true;
+                }
+                if (!$user->getLicenseExpirationDate() && isset($data['guestInfo']['licenseExpirationDate'])) {
+                    $user->setLicenseExpirationDate(new \DateTime($data['guestInfo']['licenseExpirationDate']));
+                    $hasChanged = true;
+                }
+                if ($hasChanged) {
+                    $em->persist($user);
+                    $em->flush();
+                }
+            }
+
             $em->refresh($result);
             $this->gemsuiteSaleManager->createSale($result);
             try {
@@ -366,10 +405,32 @@ class OrderController extends AbstractController
             $paymentData['status'] ?? null,
             $paymentData['cardBrand'] ?? null,
             $paymentData['last4'] ?? null,
-            $paymentData['riskLevel'] ?? null
+            $paymentData['riskLevel'] ?? null,
+            $data['licenseNumber'] ?? null,
+            $data['licenseExpirationDate'] ?? null
         );
         $result = $this->createOrderUseCase->execute($dto);
         if ($result instanceof Order) {
+            $tenantEm = $this->emProvider->getEntityManager();
+
+            // Auto-update user profile
+            if ($user) {
+                $hasChanged = false;
+                if (!$user->getLicenseNumber() && isset($data['licenseNumber'])) {
+                    $user->setLicenseNumber($data['licenseNumber']);
+                    $hasChanged = true;
+                }
+                if (!$user->getLicenseExpirationDate() && isset($data['licenseExpirationDate'])) {
+                    $user->setLicenseExpirationDate(new \DateTime($data['licenseExpirationDate']));
+                    $hasChanged = true;
+                }
+                if ($hasChanged) {
+                    $tenantEm->persist($user);
+                    $tenantEm->flush();
+                }
+            }
+
+            $tenantEm->refresh($result);
             $this->gemsuiteSaleManager->createSale($result);
 
             try {

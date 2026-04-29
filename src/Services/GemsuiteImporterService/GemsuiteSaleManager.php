@@ -125,6 +125,14 @@ class GemsuiteSaleManager
                 // 3. Dates de location
                 $payload['car_date_start'] = $booking->getStartAt()->format('Y-m-d H:i:s');
                 $payload['car_date_end'] = $booking->getEndAt()->format('Y-m-d H:i:s');
+
+                // 4. Permis de conduire
+                if ($item->getLicenseNumber()) {
+                    $payload['car_permit'] = $item->getLicenseNumber();
+                }
+                if ($item->getLicenseExpirationDate()) {
+                    $payload['car_expiration'] = $item->getLicenseExpirationDate()->format('Y-m-d');
+                }
             } else {
                 // LOGIQUE RETAIL (Standard)
                 if ($variant) {

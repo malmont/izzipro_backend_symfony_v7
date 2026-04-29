@@ -84,6 +84,12 @@ class Order
     #[ORM\Column(nullable: true)]
     private ?float $shippingCost = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $guestLicenseNumber = null;
+
+    #[ORM\Column(type: 'date', nullable: true)]
+    private ?\DateTimeInterface $guestLicenseExpirationDate = null;
+
     public function __construct()
     {
         $this->orderItems = new ArrayCollection();
@@ -394,4 +400,26 @@ class Order
     }
 
   
+
+    public function getGuestLicenseNumber(): ?string
+    {
+        return $this->guestLicenseNumber;
+    }
+
+    public function setGuestLicenseNumber(?string $guestLicenseNumber): self
+    {
+        $this->guestLicenseNumber = $guestLicenseNumber;
+        return $this;
+    }
+
+    public function getGuestLicenseExpirationDate(): ?\DateTimeInterface
+    {
+        return $this->guestLicenseExpirationDate;
+    }
+
+    public function setGuestLicenseExpirationDate(?\DateTimeInterface $guestLicenseExpirationDate): self
+    {
+        $this->guestLicenseExpirationDate = $guestLicenseExpirationDate;
+        return $this;
+    }
 }

@@ -72,6 +72,13 @@ class ProcessOrderItemsUseCase
 
             $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $itemData['quantity'], $unitPrice);
 
+            if (isset($itemData['licenseNumber'])) {
+                $orderItem->setLicenseNumber($itemData['licenseNumber']);
+            }
+            if (isset($itemData['licenseExpirationDate'])) {
+                $orderItem->setLicenseExpirationDate(new \DateTime($itemData['licenseExpirationDate']));
+            }
+
             $em->persist($order);
             $em->persist($orderItem);
 

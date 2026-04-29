@@ -31,6 +31,12 @@ class OrderItems
     #[ORM\OneToOne(mappedBy: 'orderItem', targetEntity: Booking::class, cascade: ['persist', 'remove'])]
     private ?Booking $booking = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $licenseNumber = null;
+
+    #[ORM\Column(type: 'date', nullable: true)]
+    private ?\DateTimeInterface $licenseExpirationDate = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -113,6 +119,25 @@ class OrderItems
         $this->booking = $booking;
         return $this;
     }
-   
-    
+    public function getLicenseNumber(): ?string
+    {
+        return $this->licenseNumber;
+    }
+
+    public function setLicenseNumber(?string $licenseNumber): self
+    {
+        $this->licenseNumber = $licenseNumber;
+        return $this;
+    }
+
+    public function getLicenseExpirationDate(): ?\DateTimeInterface
+    {
+        return $this->licenseExpirationDate;
+    }
+
+    public function setLicenseExpirationDate(?\DateTimeInterface $licenseExpirationDate): self
+    {
+        $this->licenseExpirationDate = $licenseExpirationDate;
+        return $this;
+    }
 }
