@@ -37,6 +37,9 @@ class OrderItems
     #[ORM\Column(type: 'date', nullable: true)]
     private ?\DateTimeInterface $licenseExpirationDate = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $saleUnit = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -104,7 +107,17 @@ class OrderItems
 
     public function __toString(): string
     {
-        return $this->productVariant ? $this->productVariant->getProduct()->getName() . ' - ' . $this->quantity . ' pcs' : '';
+        $unit = $this->saleUnit;
+        
+        if (empty($unit) && $this->productVariant && $this->productVariant->getProduct()->getSaleUnit()) {
+            $unit = $this->productVariant->getProduct()->getSaleUnit()->getName();
+        }
+
+        if (empty($unit)) {
+            $unit = 'pcs';
+        }
+            
+        return $this->productVariant ? $this->productVariant->getProduct()->getName() . ' - ' . $this->quantity . ' ' . $unit : '';
     }
     public function getBooking(): ?Booking
     {
@@ -138,6 +151,17 @@ class OrderItems
     public function setLicenseExpirationDate(?\DateTimeInterface $licenseExpirationDate): self
     {
         $this->licenseExpirationDate = $licenseExpirationDate;
+        return $this;
+    }
+
+    public function getSaleUnit(): ?string
+    {
+        return $this->saleUnit;
+    }
+
+    public function setSaleUnit(?string $saleUnit): self
+    {
+        $this->saleUnit = $saleUnit;
         return $this;
     }
 }

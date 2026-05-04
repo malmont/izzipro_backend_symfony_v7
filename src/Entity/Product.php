@@ -161,6 +161,7 @@ class Product implements TranslatableInterface
     private Collection $bookings;
 
     #[ORM\ManyToOne(inversedBy: 'products')]
+    #[Groups(['product:read'])]
     private ?SaleUnit $saleUnit = null;
 
     /**

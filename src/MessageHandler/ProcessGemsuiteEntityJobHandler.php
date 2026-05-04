@@ -232,6 +232,15 @@ class ProcessGemsuiteEntityJobHandler
             $product->setStyle($defaultStyle);
         }
 
+        // --- GESTION UNITÉ DE VENTE ---
+        $unitId = (int)($data['unit'] ?? 0);
+        if ($unitId > 0) {
+            $saleUnit = $em->getRepository(\App\Entity\SaleUnit::class)->find($unitId);
+            if ($saleUnit) {
+                $product->setSaleUnit($saleUnit);
+            }
+        }
+
         if (isset($data['category_id'])) {
             $catId = (int)$data['category_id'];
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);

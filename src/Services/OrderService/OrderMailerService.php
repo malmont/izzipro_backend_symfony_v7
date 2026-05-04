@@ -128,10 +128,11 @@ class OrderMailerService
             }
 
             $data[] = [
-                'entity'  => $item,
-                'options' => $options,
-                'legacy'  => $legacyOptions,
-                'booking' => $bookingData
+                'entity'   => $item,
+                'options'  => $options,
+                'legacy'   => $legacyOptions,
+                'booking'  => $bookingData,
+                'saleUnit' => $item->getSaleUnit() ?? (($variant && $variant->getProduct()->getSaleUnit()) ? $variant->getProduct()->getSaleUnit()->getName() : null)
             ];
         }
 

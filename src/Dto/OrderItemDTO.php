@@ -20,6 +20,7 @@ class OrderItemDTO
     public ?string $productVariantColor = null;
     
     public ?string $productImage;
+    public ?string $productSaleUnit = null;
     
     public ?array $booking = null;
 
@@ -37,6 +38,10 @@ class OrderItemDTO
         
         $this->productId = $product->getId();
         $this->productVariantName = $product->getName();
+        
+        // Use the snapshot stored in the entity first, fall back to product if empty (for older orders)
+        $this->productSaleUnit = $orderItem->getSaleUnit() 
+            ?? ($product->getSaleUnit() ? $product->getSaleUnit()->getName() : null);
 
 
         $this->productVariantColor = $variant->getColor() ? $variant->getColor()->getName() : null;
@@ -86,6 +91,7 @@ class OrderItemDTO
             'totalPrice' => $this->totalPrice,
             'productId' => $this->productId,
             'productVariantName' => $this->productVariantName,
+            'productSaleUnit' => $this->productSaleUnit,
             'productVariantColor' => $this->productVariantColor,
             'productVariantSize' => $this->productVariantSize,
             'productImage' => $this->productImage,

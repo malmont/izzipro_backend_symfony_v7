@@ -485,8 +485,6 @@ class GemsuiteSyncHandler
             if ($saleUnit) {
                 $product->setSaleUnit($saleUnit);
             }
-        } else {
-            $product->setSaleUnit(null);
         }
 
 

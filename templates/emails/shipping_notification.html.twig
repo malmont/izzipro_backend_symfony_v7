@@ -34,7 +34,7 @@
 								{% for itemData in itemsData %}
 									{% set item = itemData.entity %}
 									<li style="margin-bottom: 10px;">
-										<strong>{{ item.quantity }}x
+										<strong>{{ item.quantity }} {{ itemData.saleUnit ? itemData.saleUnit : 'pcs' }} x
 											{{ item.productVariant.product.name }}</strong>
 										<br>
 

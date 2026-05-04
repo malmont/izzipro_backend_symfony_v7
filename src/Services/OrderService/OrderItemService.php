@@ -19,6 +19,11 @@ class OrderItemService
         $orderItem->setUnitPrice($finalUnitPrice);
         $orderItem->setTotalPrice($finalUnitPrice * $quantity);
 
+        $saleUnit = $productVariant->getProduct()->getSaleUnit();
+        if ($saleUnit) {
+            $orderItem->setSaleUnit($saleUnit->getName());
+        }
+
         return $orderItem;
     }
 }
