@@ -14,6 +14,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
+use App\Entity\EmailConfiguration;
 
 class GemsuiteCompanySyncHandler
 {
@@ -56,9 +57,13 @@ class GemsuiteCompanySyncHandler
 
             $tenantEm = $this->getTenantEntityManager($tenantCode);
 
-            $this->updateEntrepriseData($tenantEm, $companyData);
-            $this->updateHomeSliderData($tenantEm, $companyData);
-            $this->updateExploreCardData($tenantEm, $companyData);
+            // OPTIMISATION : On récupère l'entreprise une seule fois
+            $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]) ?? new Entreprise();
+
+            $this->updateEntrepriseData($tenantEm, $entreprise, $companyData);
+            $this->updateEmailConfigurationData($tenantEm, $entreprise, $companyData);
+            $this->updateHomeSliderData($tenantEm, $entreprise, $companyData);
+            $this->updateExploreCardData($tenantEm, $entreprise, $companyData);
             
             $tenantEm->flush();
             $this->logger->info(sprintf('Configuration de l\'entreprise pour le tenant "%s" synchronisée avec succès.', $tenantCode));
@@ -67,9 +72,9 @@ class GemsuiteCompanySyncHandler
         }
     }
 
-    private function updateEntrepriseData(EntityManagerInterface $em, array $companyData): void
+    private function updateEntrepriseData(EntityManagerInterface $em, Entreprise $entreprise, array $companyData): void
     {
-        $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]) ?? new Entreprise();
+        // On n'a plus besoin du findOneBy([]) ici car on passe l'objet en paramètre
 
         $entreprise->setName($companyData['nom'] ?? $entreprise->getName());
         $entreprise->setEmail($companyData['email'] ?? $entreprise->getEmail());
@@ -115,15 +120,25 @@ class GemsuiteCompanySyncHandler
         $this->dispatchTranslationJob($em, $entreprise);
     }
 
-    private function updateHomeSliderData(EntityManagerInterface $em, array $companyData): void
+    private function updateEmailConfigurationData(EntityManagerInterface $em, Entreprise $entreprise, array $companyData): void
+    {
+        $emailConfiguration = $em->getRepository(EmailConfiguration::class)->findOneBy([]) ?? new EmailConfiguration();
+        $emailConfiguration->setFromName($companyData['nom'] ?? 'Votre Entreprise');
+        $logoPath = $companyData['gemportal_logo'] ?? null;
+        $emailConfiguration->setLogo(
+            $this->imageUrlBuilder->buildUrl($entreprise->getGemsuiteIdentifier(), $logoPath)
+        );
+        $em->persist($emailConfiguration);
+    }
+
+    private function updateHomeSliderData(EntityManagerInterface $em, Entreprise $entreprise, array $companyData): void
     {
         $existingSliders = $em->getRepository(HomeSlider::class)->findAll();
         foreach ($existingSliders as $slider) {
             $em->remove($slider);
         }
 
-        $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
-        $identifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+        $identifier = $entreprise->getGemsuiteIdentifier();
 
         for ($i = 1; $i <= 3; $i++) {
             $bannerKey = 'gemportal_banner' . $i;
@@ -179,11 +194,10 @@ class GemsuiteCompanySyncHandler
         }
     }
 
-    private function updateExploreCardData(EntityManagerInterface $em, array $companyData): void
+    private function updateExploreCardData(EntityManagerInterface $em, Entreprise $entreprise, array $companyData): void
     {
         $existingExploreCard = $em->getRepository(ExploreCard::class)->findAll();
-        $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
-        $identifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+        $identifier = $entreprise->getGemsuiteIdentifier();
         foreach ($existingExploreCard as $exploreCard) {
             $em->remove($exploreCard);
         }

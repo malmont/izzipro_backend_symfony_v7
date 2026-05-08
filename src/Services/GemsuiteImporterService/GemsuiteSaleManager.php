@@ -126,7 +126,12 @@ class GemsuiteSaleManager
                 $payload['car_date_start'] = $booking->getStartAt()->format('Y-m-d H:i:s');
                 $payload['car_date_end'] = $booking->getEndAt()->format('Y-m-d H:i:s');
 
-                // 4. Permis de conduire
+                // 4. Permis de conduire et Chauffeur
+                $user = $order->getUserId();
+                if ($user) {
+                    $payload['car_driver'] = trim($user->getFirstname() . ' ' . $user->getLastname());
+                }
+
                 if ($item->getLicenseNumber()) {
                     $payload['car_permit'] = $item->getLicenseNumber();
                 }

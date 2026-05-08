@@ -26,9 +26,27 @@ class ProductRepository extends EntityRepository
         }
     }
 
-    public function findWithSearch($search)
+    public function findWithSearch($search, string $locale = 'fr')
     {
-        $query = $this->createQueryBuilder('p');
+        $query = $this->createQueryBuilder('p')
+            ->leftJoin('p.translations', 't', 'WITH', 't.locale = :locale')
+            ->leftJoin('p.saleUnit', 'su')
+            ->leftJoin('p.style', 's')
+            ->leftJoin('p.bookingConfiguration', 'b')
+            ->leftJoin('p.pictures', 'pict')
+            ->leftJoin('p.category', 'cat')
+            ->leftJoin('cat.translations', 'ct', 'WITH', 'ct.language = :locale')
+            ->leftJoin('p.variants', 'v')
+            ->leftJoin('v.color', 'vc')
+            ->leftJoin('vc.translations', 'vct', 'WITH', 'vct.language = :locale')
+            ->leftJoin('v.size', 'vs')
+            ->leftJoin('vs.translations', 'vst', 'WITH', 'vst.language = :locale')
+            ->leftJoin('v.optionValues', 'vov')
+            ->leftJoin('vov.translations', 'vovt', 'WITH', 'vovt.language = :locale')
+            ->leftJoin('vov.productOption', 'po')
+            ->leftJoin('po.translations', 'pot', 'WITH', 'pot.language = :locale')
+            ->addSelect('t', 'su', 's', 'b', 'pict', 'cat', 'ct', 'v', 'vc', 'vct', 'vs', 'vst', 'vov', 'vovt', 'po', 'pot')
+            ->setParameter('locale', $locale);
             
         if ($search->getMinPrice()) {
             $query->andWhere('p.price > :minPrice')
@@ -39,8 +57,8 @@ class ProductRepository extends EntityRepository
                   ->setParameter('maxPrice', $search->getMaxPrice() * 100);
         }
         if ($search->getCategories()) {
-            $query->join('p.category', 'c')
-                  ->andWhere('c.id IN (:categories)')
+            $query->join('p.category', 'filter_cat')
+                  ->andWhere('filter_cat.id IN (:categories)')
                   ->setParameter('categories', $search->getCategories());
         }
         if ($search->getTags()) {
@@ -73,11 +91,28 @@ class ProductRepository extends EntityRepository
         ?bool $isPos
     ): array {
         $queryBuilder = $this->createQueryBuilder('p')
+            // Jointures de base déjà présentes
             ->leftJoin('p.translations', 't', 'WITH', 't.locale = :locale')
             ->leftJoin('p.saleUnit', 'su')
             ->leftJoin('p.style', 's')
             ->leftJoin('p.bookingConfiguration', 'b')
-            ->addSelect('t', 'su', 's', 'b')
+            // Nouvelles jointures pour optimiser le ProductOutputCategoryDto
+            ->leftJoin('p.pictures', 'pict')
+            ->leftJoin('p.category', 'cat')
+            ->leftJoin('cat.translations', 'ct', 'WITH', 'ct.language = :locale')
+            ->leftJoin('cat.rentalPacks', 'rp')
+            ->leftJoin('rp.translations', 'rpt', 'WITH', 'rpt.language = :locale')
+            ->leftJoin('p.variants', 'v')
+            ->leftJoin('v.color', 'vc')
+            ->leftJoin('vc.translations', 'vct', 'WITH', 'vct.language = :locale')
+            ->leftJoin('v.size', 'vs')
+            ->leftJoin('vs.translations', 'vst', 'WITH', 'vst.language = :locale')
+            ->leftJoin('v.optionValues', 'vov')
+            ->leftJoin('vov.translations', 'vovt', 'WITH', 'vovt.language = :locale')
+            ->leftJoin('vov.productOption', 'po')
+            ->leftJoin('po.translations', 'pot', 'WITH', 'pot.language = :locale')
+            // Sélection massive pour hydrater les objets en une seule requête
+            ->addSelect('t', 'su', 's', 'b', 'pict', 'cat', 'ct', 'rp', 'rpt', 'v', 'vc', 'vct', 'vs', 'vst', 'vov', 'vovt', 'po', 'pot')
             ->setParameter('locale', $locale);
 
         if ($categoryIds) {
@@ -122,7 +157,24 @@ class ProductRepository extends EntityRepository
     {
         $queryBuilder = $this->createQueryBuilder('p')
             ->leftJoin('p.translations', 't', 'WITH', 't.locale = :locale')
-            ->addSelect('t')
+            ->leftJoin('p.saleUnit', 'su')
+            ->leftJoin('p.style', 's')
+            ->leftJoin('p.bookingConfiguration', 'b')
+            ->leftJoin('p.pictures', 'pict')
+            ->leftJoin('p.category', 'cat')
+            ->leftJoin('cat.translations', 'ct', 'WITH', 'ct.language = :locale')
+            ->leftJoin('cat.rentalPacks', 'rp')
+            ->leftJoin('rp.translations', 'rpt', 'WITH', 'rpt.language = :locale')
+            ->leftJoin('p.variants', 'v')
+            ->leftJoin('v.color', 'vc')
+            ->leftJoin('vc.translations', 'vct', 'WITH', 'vct.language = :locale')
+            ->leftJoin('v.size', 'vs')
+            ->leftJoin('vs.translations', 'vst', 'WITH', 'vst.language = :locale')
+            ->leftJoin('v.optionValues', 'vov')
+            ->leftJoin('vov.translations', 'vovt', 'WITH', 'vovt.language = :locale')
+            ->leftJoin('vov.productOption', 'po')
+            ->leftJoin('po.translations', 'pot', 'WITH', 'pot.language = :locale')
+            ->addSelect('t', 'su', 's', 'b', 'pict', 'cat', 'ct', 'rp', 'rpt', 'v', 'vc', 'vct', 'vs', 'vst', 'vov', 'vovt', 'po', 'pot')
             ->setParameter('locale', $locale);
 
         foreach ($criteria as $field => $value) {
@@ -138,7 +190,24 @@ class ProductRepository extends EntityRepository
             ->where('p.id = :id')
             ->setParameter('id', $id)
             ->leftJoin('p.translations', 't', 'WITH', 't.locale = :locale')
-            ->addSelect('t')
+            ->leftJoin('p.saleUnit', 'su')
+            ->leftJoin('p.style', 's')
+            ->leftJoin('p.bookingConfiguration', 'b')
+            ->leftJoin('p.pictures', 'pict')
+            ->leftJoin('p.category', 'cat')
+            ->leftJoin('cat.translations', 'ct', 'WITH', 'ct.language = :locale')
+            ->leftJoin('cat.rentalPacks', 'rp')
+            ->leftJoin('rp.translations', 'rpt', 'WITH', 'rpt.language = :locale')
+            ->leftJoin('p.variants', 'v')
+            ->leftJoin('v.color', 'vc')
+            ->leftJoin('vc.translations', 'vct', 'WITH', 'vct.language = :locale')
+            ->leftJoin('v.size', 'vs')
+            ->leftJoin('vs.translations', 'vst', 'WITH', 'vst.language = :locale')
+            ->leftJoin('v.optionValues', 'vov')
+            ->leftJoin('vov.translations', 'vovt', 'WITH', 'vovt.language = :locale')
+            ->leftJoin('vov.productOption', 'po')
+            ->leftJoin('po.translations', 'pot', 'WITH', 'pot.language = :locale')
+            ->addSelect('t', 'su', 's', 'b', 'pict', 'cat', 'ct', 'rp', 'rpt', 'v', 'vc', 'vct', 'vs', 'vst', 'vov', 'vovt', 'po', 'pot')
             ->setParameter('locale', $locale)
             ->getQuery()
             ->getOneOrNullResult();
@@ -173,5 +242,32 @@ class ProductRepository extends EntityRepository
             ->setParameter('slug', $slug)
             ->setParameter('locale', $locale)
             ->getOneOrNullResult();
+    }
+
+    public function findAllOptimized(string $locale = 'fr'): array
+    {
+        return $this->createQueryBuilder('p')
+            ->leftJoin('p.translations', 't', 'WITH', 't.locale = :locale')
+            ->leftJoin('p.saleUnit', 'su')
+            ->leftJoin('p.style', 's')
+            ->leftJoin('p.bookingConfiguration', 'b')
+            ->leftJoin('p.pictures', 'pict')
+            ->leftJoin('p.category', 'cat')
+            ->leftJoin('cat.translations', 'ct', 'WITH', 'ct.language = :locale')
+            ->leftJoin('cat.rentalPacks', 'rp')
+            ->leftJoin('rp.translations', 'rpt', 'WITH', 'rpt.language = :locale')
+            ->leftJoin('p.variants', 'v')
+            ->leftJoin('v.color', 'vc')
+            ->leftJoin('vc.translations', 'vct', 'WITH', 'vct.language = :locale')
+            ->leftJoin('v.size', 'vs')
+            ->leftJoin('vs.translations', 'vst', 'WITH', 'vst.language = :locale')
+            ->leftJoin('v.optionValues', 'vov')
+            ->leftJoin('vov.translations', 'vovt', 'WITH', 'vovt.language = :locale')
+            ->leftJoin('vov.productOption', 'po')
+            ->leftJoin('po.translations', 'pot', 'WITH', 'pot.language = :locale')
+            ->addSelect('t', 'su', 's', 'b', 'pict', 'cat', 'ct', 'rp', 'rpt', 'v', 'vc', 'vct', 'vs', 'vst', 'vov', 'vovt', 'po', 'pot')
+            ->setParameter('locale', $locale)
+            ->getQuery()
+            ->getResult();
     }
 }

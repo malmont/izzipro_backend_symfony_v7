@@ -124,4 +124,46 @@ class OrderRepository extends EntityRepository
 
         return $result;
     }
+
+    public function findWithDetailsByUser(int $userId): array
+    {
+        return $this->createDetailsQueryBuilder()
+            ->andWhere('o.userId = :userId')
+            ->setParameter('userId', $userId)
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function findWithDetailsBySource(int $orderSourceId, ?DateTime $since = null): array
+    {
+        $qb = $this->createDetailsQueryBuilder()
+            ->andWhere('o.orderSource = :orderSourceId')
+            ->setParameter('orderSourceId', $orderSourceId);
+
+        if ($since) {
+            $qb->andWhere('o.orderDate >= :since')
+               ->setParameter('since', $since);
+        }
+
+        return $qb->getQuery()->getResult();
+    }
+
+    private function createDetailsQueryBuilder()
+    {
+        return $this->createQueryBuilder('o')
+            ->leftJoin('o.orderItems', 'oi')
+            ->leftJoin('o.shippingAdress', 'sa')
+            ->leftJoin('o.orderSource', 'os')
+            ->leftJoin('o.status', 'st')
+            ->leftJoin('st.translations', 'stt')
+            ->leftJoin('oi.productVariant', 'pv')
+            ->leftJoin('pv.product', 'p')
+            ->leftJoin('p.saleUnit', 'psu')
+            ->leftJoin('pv.color', 'pvc')
+            ->leftJoin('pv.size', 'pvs')
+            ->leftJoin('pv.optionValues', 'pvov')
+            ->leftJoin('pvov.productOption', 'pvpo')
+            ->leftJoin('oi.booking', 'bk')
+            ->addSelect('oi', 'sa', 'os', 'st', 'stt', 'pv', 'p', 'psu', 'pvc', 'pvs', 'pvov', 'pvpo', 'bk');
+    }
 }

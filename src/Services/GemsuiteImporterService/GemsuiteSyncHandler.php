@@ -446,8 +446,19 @@ class GemsuiteSyncHandler
         // --- NOUVELLE LOGIQUE GEMS-LOCATION (PACKS) ---
         if (isset($gemProductData['category_id']) && isset($categoryMap[$gemProductData['category_id']])) {
             $category = $categoryMap[$gemProductData['category_id']];
+            $isActive = (int)($gemProductData['status'] ?? 1) === 1;
+            
             if ($category->getCategoryType() === 10) {
-                $this->processRentalPack($em, $gemProductData);
+                if ($isActive) {
+                    $this->processRentalPack($em, $gemProductData);
+                } else {
+                    $oldPack = $em->getRepository(RentalPack::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
+                    if ($oldPack) {
+                        $this->logger->info("Pack #{$gemProductData['id']} inactif. Suppression du RentalPack.");
+                        $em->remove($oldPack);
+                    }
+                }
+                
                 if ($product) {
                     $em->remove($product); // On nettoie si un produit existait par erreur
                 }
@@ -497,11 +508,11 @@ class GemsuiteSyncHandler
             $category = $categoryMap[$gemProductData['category_id']];
             $product->addCategory($category);
 
-            if ($category->isRentalCategory()) {
+            if ($category->isRentalCategory() && $category->getCategoryType() !== 10) {
                 $this->rentalWorkaround->applyRentalProductConfiguration($product, $gemProductData);
             } else {
                 // --- NETTOYAGE RENTAL (MODIF WEBHOOK) ---
-                // Si le produit n'est plus dans une catégorie de location, on le repasse en mode RETAIL.
+                // Si le produit n'est plus dans une catégorie de location (ou est de type 10), on le repasse en mode RETAIL.
                 $this->rentalWorkaround->removeRentalConfiguration($product, $em);
             }
         }
@@ -730,6 +741,13 @@ class GemsuiteSyncHandler
             if ($product) {
                 $product->setIsWeb(false);
             }
+            
+            // --- AJOUT: Suppression du pack s'il s'agit d'un RentalPack ---
+            $pack = $em->getRepository(\App\Entity\RentalPack::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
+            if ($pack) {
+                $this->logger->info("Pack #{$gemProductData['id']} désactivé. Suppression dans deactivateProductOrVariant.");
+                $em->remove($pack);
+            }
         } else {
             $variant = $em->getRepository(ProductVariant::class)->findOneBy(['gemsuiteVariantId' => $gemProductData['id']]);
             if ($variant) {
@@ -758,7 +776,7 @@ class GemsuiteSyncHandler
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
 
             if ($category) {
-                return true;
+                return $status === 1;
             } else {
                 $this->logger->warning(sprintf('Produit #%d : Inactif car Catégorie Gemsuite #%d non trouvée localement.', $gemProductData['id'] ?? 0, $catId));
             }

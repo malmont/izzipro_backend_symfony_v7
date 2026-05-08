@@ -247,16 +247,34 @@ class ProcessGemsuiteEntityJobHandler
 
             if ($category) {
                 // --- NOUVELLE LOGIQUE GEMS-LOCATION (PACKS) ---
+                $isActive = (int)($data['status'] ?? 1) === 1;
                 if ($category->getCategoryType() === 10) {
-                    $this->processRentalPack($em, $data);
+                    if ($isActive) {
+                        $this->processRentalPack($em, $data);
+                    } else {
+                        $oldPack = $em->getRepository(RentalPack::class)->findOneBy(['gemsuiteProductId' => $data['id']]);
+                        if ($oldPack) {
+                            $this->logger->info("Pack #{$data['id']} inactif. Suppression du RentalPack.");
+                            $em->remove($oldPack);
+                        }
+                    }
                     return null; // On ne crée pas de Product pour une configuration
+                }
+
+                // --- NETTOYAGE TRANSITION PACK -> PRODUIT ---
+                $oldPack = $em->getRepository(RentalPack::class)->findOneBy(['gemsuiteProductId' => $data['id']]);
+                if ($oldPack) {
+                    $this->logger->info("L'ID #{$data['id']} n'est plus un pack. Suppression de l'ancien RentalPack.");
+                    $em->remove($oldPack);
                 }
 
                 $product->addCategory($category);
 
                 // TODO: TEMP WORKAROUND - Config de location
-                if ($category->isRentalCategory()) {
+                if ($category->isRentalCategory() && $category->getCategoryType() !== 10) {
                     $this->rentalWorkaround->applyRentalProductConfiguration($product, $data);
+                } else {
+                    $this->rentalWorkaround->removeRentalConfiguration($product, $em);
                 }
 
                 // Associer la ShippingClass de la catégorie au produit
@@ -360,7 +378,7 @@ class ProcessGemsuiteEntityJobHandler
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
 
             if ($category) {
-                return true;
+                return $status === 1;
             }
         }
 

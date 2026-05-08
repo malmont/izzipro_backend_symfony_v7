@@ -24,25 +24,19 @@ class OrderService
     public function getOrdersByOrderSource(int $orderSourceId, ?int $days = null)
     {
         $orderRepository = $this->getOrderRepository();
+        $date = null;
 
         if ($days) {
             $date = new DateTime();
             $date->modify("-$days days");
-
-            return $orderRepository->createQueryBuilder('o')
-                ->where('o.orderSource = :orderSourceId')
-                ->andWhere('o.orderDate >= :date')
-                ->setParameter('orderSourceId', $orderSourceId)
-                ->setParameter('date', $date)
-                ->getQuery()
-                ->getResult();
         }
-        return $orderRepository->findBy(['orderSource' => $orderSourceId]);
+
+        return $orderRepository->findWithDetailsBySource($orderSourceId, $date);
     }
 
     public function getOrdersByUser(int $userId)
     {
         $orderRepository = $this->getOrderRepository();
-        return $orderRepository->findBy(['userId' => $userId]);
+        return $orderRepository->findWithDetailsByUser($userId);
     }
 }
