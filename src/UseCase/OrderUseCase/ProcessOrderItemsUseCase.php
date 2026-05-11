@@ -68,6 +68,14 @@ class ProcessOrderItemsUseCase
                 // Support both 'booking' (standard) and 'rental' (legacy) keys
                 $rentalData = $itemData['booking'] ?? $itemData['rental'] ?? $itemData;
                 $unitPrice = $this->rentalPriceCalculator->calculate($product, $rentalData);
+
+                // if (isset($rentalData['price']) && (float)$rentalData['price'] !== (float)$unitPrice) {
+                //     throw new BadRequestHttpException(sprintf(
+                //         'Le prix soumis pour la location (%.2f) ne correspond pas au tarif en base de données (%.2f).',
+                //         (float)$rentalData['price'],
+                //         (float)$unitPrice
+                //     ));
+                // }
             }
 
             $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $itemData['quantity'], $unitPrice);

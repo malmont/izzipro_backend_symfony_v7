@@ -128,12 +128,16 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
         $exploreCardRepo = $this->createMock(EntityRepository::class);
         $exploreCardRepo->method('findAll')->willReturn([]);
 
+        $emailConfigRepo = $this->createMock(EntityRepository::class);
+        $emailConfigRepo->method('findOneBy')->willReturn(null);
+
         $entityManager = $this->createMock(EntityManagerInterface::class);
         $entityManager->method('getRepository')
             ->will($this->returnValueMap([
                 [Entreprise::class, $entrepriseRepo],
                 [HomeSlider::class, $homeSliderRepo],
                 [ExploreCard::class, $exploreCardRepo],
+                [\App\Entity\EmailConfiguration::class, $emailConfigRepo],
             ]));
             
         $queryMock = $this->createMock(\Doctrine\ORM\AbstractQuery::class);

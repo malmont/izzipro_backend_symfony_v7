@@ -1,0 +1,56 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Nouveau message de contact - {{ contact.service }}{% endblock %}
+
+{% block body %}
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <tr>
+            <td align="center" style="padding: 20px;">
+                <table width="600" border="0" cellspacing="0" cellpadding="20" style="border: 1px solid #ddd; border-radius: 8px;">
+                    {% if logoUrl is defined and logoUrl %}
+                        <tr>
+                            <td align="center" style="padding-bottom: 20px; border-bottom: 1px solid #eee;">
+                                <img src="{{ logoUrl }}" alt="{{ fromName }}" style="max-width: 200px;">
+                            </td>
+                        </tr>
+                    {% elseif fromName is defined %}
+                        <tr>
+                            <td align="center" style="padding-bottom: 20px; border-bottom: 1px solid #eee;">
+                                <h1 style="margin:0;">{{ fromName }}</h1>
+                            </td>
+                        </tr>
+                    {% endif %}
+
+                    <tr>
+                        <td style="padding: 30px;">
+                            <h2 style="color: #333; margin-top: 0;">Nouveau message reçu</h2>
+                            <p>Vous avez reçu une nouvelle demande via le formulaire de contact de votre site web.</p>
+
+                            <table width="100%" border="0" cellspacing="0" cellpadding="10" style="background-color: #f9f9f9; border-radius: 5px; margin-top: 20px;">
+                                <tr>
+                                    <td width="150" style="font-weight: bold; color: #666;">Nom :</td>
+                                    <td style="color: #333;">{{ contact.name }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: bold; color: #666;">Email :</td>
+                                    <td style="color: #333;"><a href="mailto:{{ contact.email }}" style="color: #007bff; text-decoration: none;">{{ contact.email }}</a></td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: bold; color: #666;">Téléphone :</td>
+                                    <td style="color: #333;">{{ contact.phone }}</td>
+                                </tr>
+                                <tr>
+                                    <td style="font-weight: bold; color: #666;">Service :</td>
+                                    <td style="color: #333;">{{ contact.service }}</td>
+                                </tr>
+                            </table>
+
+                            <h3 style="margin-top: 30px; border-bottom: 2px solid #eee; padding-bottom: 5px; color: #333;">Message</h3>
+                            <div style="padding: 15px; background-color: #fff; border: 1px solid #eee; border-radius: 5px; color: #555; white-space: pre-wrap;">{{ contact.message }}</div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+{% endblock %}

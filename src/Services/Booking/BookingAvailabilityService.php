@@ -43,12 +43,29 @@ class BookingAvailabilityService
             return 0;
         }
 
+        $bufferTime = $config->getBufferTime() ?? 0;
         $totalStock = $config->getStockQuantity();
+        
+        // On calcule l'intervalle effectif
+        // Le créneau demandé va de $start à $end + bufferTime
+        // Une réservation existante B va de B.start à B.end + bufferTime
+        // B chevauche le créneau si : B.start < (end + bufferTime) ET (B.end + bufferTime) > start
+        // Équivalent à : B.start < (end + bufferTime) ET B.end > (start - bufferTime)
+        
+        $effectiveEnd = \DateTimeImmutable::createFromInterface($end);
+        if ($bufferTime > 0) {
+            $effectiveEnd = $effectiveEnd->modify("+{$bufferTime} minutes");
+        }
+        
+        $effectiveStartForQuery = \DateTimeImmutable::createFromInterface($start);
+        if ($bufferTime > 0) {
+            $effectiveStartForQuery = $effectiveStartForQuery->modify("-{$bufferTime} minutes");
+        }
 
         $reservedQuantity = $this->getRepository()->countReservedQuantityBetween(
             $product,
-            $start,
-            $end
+            $effectiveStartForQuery,
+            $effectiveEnd
         );
 
         return $totalStock - $reservedQuantity;
@@ -93,9 +110,20 @@ class BookingAvailabilityService
             $slotEnd = \DateTime::createFromInterface($dt)->add(new \DateInterval($intervalSpec));
 
             $occupied = 0;
+            $bufferTime = $config->getBufferTime() ?? 0;
+            
+            $effectiveSlotEnd = \DateTimeImmutable::createFromInterface($slotEnd);
+            if ($bufferTime > 0) {
+                $effectiveSlotEnd = $effectiveSlotEnd->modify("+{$bufferTime} minutes");
+            }
 
             foreach ($existingBookings as $booking) {
-                if ($booking->getStartAt() < $slotEnd && $booking->getEndAt() > $slotStart) {
+                $bookingEffectiveEnd = \DateTimeImmutable::createFromInterface($booking->getEndAt());
+                if ($bufferTime > 0) {
+                    $bookingEffectiveEnd = $bookingEffectiveEnd->modify("+{$bufferTime} minutes");
+                }
+                
+                if ($booking->getStartAt() < $effectiveSlotEnd && $bookingEffectiveEnd > $slotStart) {
                     $occupied += $booking->getQuantity();
                 }
             }

@@ -35,40 +35,11 @@ class OrderServiceTest extends TestCase
     {
         $orderSourceId = 1;
         $days = 30;
-
-        $queryBuilder = $this->createMock(QueryBuilder::class);
-        $query = $this->createMock(AbstractQuery::class);
         $expectedResult = [];
 
         $this->orderRepository->expects($this->once())
-            ->method('createQueryBuilder')
-            ->with('o')
-            ->willReturn($queryBuilder);
-
-        $queryBuilder->expects($this->once())
-            ->method('where')
-            ->with('o.orderSource = :orderSourceId')
-            ->willReturnSelf();
-
-        $queryBuilder->expects($this->once())
-            ->method('andWhere')
-            ->with('o.orderDate >= :date')
-            ->willReturnSelf();
-
-        $queryBuilder->expects($this->exactly(2))
-            ->method('setParameter')
-            ->withConsecutive(
-                ['orderSourceId', $orderSourceId],
-                ['date', $this->isInstanceOf(\DateTime::class)]
-            )
-            ->willReturnSelf();
-
-        $queryBuilder->expects($this->once())
-            ->method('getQuery')
-            ->willReturn($query);
-
-        $query->expects($this->once())
-            ->method('getResult')
+            ->method('findWithDetailsBySource')
+            ->with($orderSourceId, $this->isInstanceOf(\DateTime::class))
             ->willReturn($expectedResult);
 
         $result = $this->orderService->getOrdersByOrderSource($orderSourceId, $days);
@@ -82,8 +53,8 @@ class OrderServiceTest extends TestCase
         $expectedResult = [];
 
         $this->orderRepository->expects($this->once())
-            ->method('findBy')
-            ->with(['orderSource' => $orderSourceId])
+            ->method('findWithDetailsBySource')
+            ->with($orderSourceId, null)
             ->willReturn($expectedResult);
 
         $result = $this->orderService->getOrdersByOrderSource($orderSourceId);
@@ -97,8 +68,8 @@ class OrderServiceTest extends TestCase
         $expectedResult = [];
 
         $this->orderRepository->expects($this->once())
-            ->method('findBy')
-            ->with(['userId' => $userId])
+            ->method('findWithDetailsByUser')
+            ->with($userId)
             ->willReturn($expectedResult);
 
         $result = $this->orderService->getOrdersByUser($userId);

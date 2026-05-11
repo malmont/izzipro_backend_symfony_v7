@@ -78,7 +78,7 @@ class RentalPriceCalculator
         
         $diff = $start->diff($end);
 
-        if ($granularity === 'hours') {
+        if (in_array($granularity, ['hours', 'minutes_30', 'minutes_15'])) {
             $hours = ($diff->days * 24) + $diff->h + ($diff->i / 60);
             return [
                 'duration' => $hours,

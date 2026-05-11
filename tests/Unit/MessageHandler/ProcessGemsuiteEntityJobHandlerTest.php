@@ -83,6 +83,12 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
         $entRepo = $this->createMock(EntityRepository::class);
         $entRepo->method('findOneBy')->willReturn(new Entreprise());
 
+        $rentalPackRepo = $this->createMock(EntityRepository::class);
+        $rentalPackRepo->method('findOneBy')->willReturn(null);
+
+        $saleUnitRepo = $this->createMock(EntityRepository::class);
+        $shippingClassRepo = $this->createMock(EntityRepository::class);
+
         // 4. QUERY (DQL)
         $mockQuery = $this->createMock(AbstractQuery::class);
         $mockQuery->method('setParameter')->willReturn($mockQuery);
@@ -99,6 +105,9 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
             [Style::class, $styleRepo],
             [Categories::class, $catRepo],
             [Entreprise::class, $entRepo],
+            [\App\Entity\RentalPack::class, $rentalPackRepo],
+            [\App\Entity\SaleUnit::class, $saleUnitRepo],
+            [\App\Entity\ShippingClass::class, $shippingClassRepo],
         ]);
         $em->method('createQuery')->willReturn($mockQuery);
 

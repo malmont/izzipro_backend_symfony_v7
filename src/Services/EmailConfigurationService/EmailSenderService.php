@@ -47,7 +47,8 @@ class EmailSenderService
         array $context,
         string $locale,
         string $domain,
-        ?string $customFromName = null
+        ?string $customFromName = null,
+        ?string $replyTo = null
     ): void {
         try {
             $emailConfig = $this->emailConfigService->findOneByLocale($locale);
@@ -95,6 +96,10 @@ class EmailSenderService
                 ->to($to)
                 ->subject($subject)
                 ->html($emailContent);
+
+            if ($replyTo) {
+                $emailMessage->replyTo($replyTo);
+            }
 
             $this->mailer->send($emailMessage);
         } catch (\Exception $e) {

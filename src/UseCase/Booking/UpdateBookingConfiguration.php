@@ -35,7 +35,7 @@ class UpdateBookingConfiguration
         $config->setGranularity($dto->granularity);
         $config->setStockQuantity($dto->stockQuantity);
         $config->setMinDuration($dto->minDuration);
-        $config->setBufferTime($dto->bufferTime ?? 0);
+        $config->setBufferTime($dto->bufferTime ?? 30);
 
         // 3. Appliquer la logique métier "Product Mode"
         if ($dto->enableBooking) {

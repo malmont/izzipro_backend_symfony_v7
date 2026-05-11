@@ -43,10 +43,10 @@ class GemsuiteRentalWorkaroundService
         $realStock = $this->stockCalculator->calculateTotalStock($data);
 
         // Initial default, will be refined by updateSmartGranularity
-        $bookingConfig->setGranularity('hours');
+        $bookingConfig->setGranularity('minutes_30');
         $bookingConfig->setStockQuantity($realStock);
         $bookingConfig->setMinDuration(1); 
-        $bookingConfig->setBufferTime(0);
+        $bookingConfig->setBufferTime(30);
 
         $product->setBookingConfiguration($bookingConfig);
         
@@ -73,7 +73,7 @@ class GemsuiteRentalWorkaroundService
 
         $bookingConfig = $product->getBookingConfiguration();
         if ($bookingConfig) {
-            $bookingConfig->setGranularity($hasHourly ? 'hours' : 'days');
+            $bookingConfig->setGranularity($hasHourly ? 'minutes_30' : 'days');
             // Ensure mode is correct
             $product->setMode(ProductMode::BOOKING);
         }
@@ -103,7 +103,7 @@ class GemsuiteRentalWorkaroundService
         }
 
         $hasHourly = ($pack->getHourRate() ?? 0) > 0 || ($pack->getHalfDayRate() ?? 0) > 0;
-        $granularity = $hasHourly ? 'hours' : 'days';
+        $granularity = $hasHourly ? 'minutes_30' : 'days';
 
         $categoryIds = array_map(fn($c) => $c->getId(), $categories);
 

@@ -1,0 +1,48 @@
+PHPUnit 9.6.31 by Sebastian Bergmann and contributors.
+
+Testing 
+...............................................................  63 / 400 ( 15%)
+.Cache miss for entreprise_1 in locale: fr
+.Cache miss for entreprise_999 in locale: fr
+............................................................. 126 / 400 ( 31%)
+............................................................... 189 / 400 ( 47%)
+............................................................... 252 / 400 ( 63%)
+............................................................... 315 / 400 ( 78%)
+............................................................... 378 / 400 ( 94%)
+......................                                          400 / 400 (100%)
+
+Time: 00:02.741, Memory: 46.00 MB
+
+OK (400 tests, 1204 assertions)
+
+Remaining self deprecation notices (10)
+
+  3x: Creation of dynamic property Mock_EasyPostClient_d6c899c7::$address is deprecated
+    1x in AddressVerificationServiceTest::testVerifyReturnsNormalizedAddressOnSuccess from App\Tests\Unit\Service
+    1x in AddressVerificationServiceTest::testVerifyThrowsExceptionOnInvalidAddress from App\Tests\Unit\Service
+    1x in AddressVerificationServiceTest::testVerifyPropagatesEasyPostExceptions from App\Tests\Unit\Service
+
+  3x: Creation of dynamic property Mock_EasyPostClient_d6c899c7::$shipment is deprecated
+    3x in EasyPostServiceTest::setUp from App\Tests\Unit\Services\ShippingService
+
+  3x: Creation of dynamic property Mock_EasyPostClient_d6c899c7::$tracker is deprecated
+    3x in EasyPostServiceTest::setUp from App\Tests\Unit\Services\ShippingService
+
+  1x: Method "Symfony\Component\Security\Core\User\UserInterface::eraseCredentials()" might add "void" as a native return type declaration in the future. Do the same in implementation "App\Entity\User" now to avoid errors or add an explicit @return annotation to suppress this message.
+    1x in ApiLoginAuthenticatorTest::testAuthenticateSuccessMobile from App\Tests\Security
+
+Other deprecation notices (8)
+
+  4x: The Doctrine\ORM\Event\LifecycleEventArgs::getEntity method is deprecated (2.13. Use {@see getObject} instead.).
+    1x in CacheInvalidationSubscriberTest::testPostPersistWithContactInvalidatesCache from App\Tests\EventSubscriber
+    1x in CacheInvalidationSubscriberTest::testPostUpdateWithBanniereInvalidatesTags from App\Tests\EventSubscriber
+    1x in CacheInvalidationSubscriberTest::testPostRemoveWithEntrepriseInvalidatesTags from App\Tests\EventSubscriber
+    1x in CacheInvalidationSubscriberTest::testNonTagAwareCacheDoesNotCallInvalidateTags from App\Tests\EventSubscriber
+
+  3x: The Doctrine\DBAL\Connection::getEventManager method is deprecated ().
+    2x in TenantConnectionProviderTest::testGetConnectionReturnsDerivedConnection from App\Tests\Unit\Service
+    1x in TenantConnectionProviderTest::testSwitchTenantCreatesNewConnectionWithUpdatedParams from App\Tests\Unit\Service
+
+  1x: The SymfonyCasts\Bundle\VerifyEmail\VerifyEmailHelperInterface::validateEmailConfirmation method is deprecated (since v1.17.0, use validateEmailConfirmationFromRequest instead.  Validate a signed an email confirmation request.  If something is wrong with the email confirmation, a VerifyEmailExceptionInterface will be thrown.  The $userEmail should be the email address that the currently-authenticated user is trying to get validated. This is usually the current user's email address.  In more a complex setup, where you allow a user to verify multiple emails, this would be the email that the currently-authenticated user is trying to validate. You may even store a user's many email addresses (and whether or not each is verified) in another database table. In that case, you would need to call this method with each unverified email in that table (for the currently-authenticated user) to see if the signature is valid for any of the email addresses. If you find the one that is valid, you could then mark that email as "confirmed".).
+    1x in EmailVerifierTest::testHandleEmailConfirmation from App\Tests\Security
+
