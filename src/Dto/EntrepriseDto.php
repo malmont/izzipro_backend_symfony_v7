@@ -19,6 +19,12 @@ class EntrepriseDto
     public ?string $LegalNotice = null;
     public ?string $privacyPolicy = null;
     public ?string $adress = null;
+    public ?string $street1 = null;
+    public ?string $street2 = null;
+    public ?string $city = null;
+    public ?string $zip = null;
+    public ?string $country = null;
+    public ?string $province = null;
 
     public static function fromEntity(Entreprise $entreprise, string $host, string $locale): self
     {
@@ -31,7 +37,27 @@ class EntrepriseDto
         $dto->website = $entreprise->getWebsite();
         $dto->ein = $entreprise->getEin();
         $dto->tvaIntracommunautaire = $entreprise->getTvaIntracommunautaire();
-        $dto->adress = $entreprise->getAdress();
+        
+        $addressObj = $entreprise->getAddressEntreprise();
+        if ($addressObj) {
+            $dto->street1 = $addressObj->getStreet1();
+            $dto->street2 = $addressObj->getStreet2();
+            $dto->city = $addressObj->getCity();
+            $dto->zip = $addressObj->getZip();
+            $dto->country = $addressObj->getCountry();
+            $dto->province = $addressObj->getState();
+            
+            // On construit l'adresse complète pour le champ 'adress'
+            $parts = array_filter([
+                $dto->street1,
+                $dto->street2,
+                $dto->zip . ' ' . $dto->city,
+                $dto->country
+            ]);
+            $dto->adress = implode(', ', $parts);
+        } else {
+            $dto->adress = $entreprise->getAdress();
+        }
         
         $imagePath = $entreprise->getLogo();
         if (str_starts_with((string)$imagePath, 'http')) {

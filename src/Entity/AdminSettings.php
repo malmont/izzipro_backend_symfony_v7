@@ -112,6 +112,9 @@ class AdminSettings
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $carrierListCardComponent = null;
 
+    #[ORM\Column(length: 255, nullable: true, options: ["default" => "typeA"])]
+    private ?string $footerComponent = "typeA";
+
     public function getId(): ?int
     {
         return $this->id;
@@ -509,6 +512,18 @@ class AdminSettings
     public function setCarrierListCardComponent(?string $carrierListCardComponent): static
     {
         $this->carrierListCardComponent = $carrierListCardComponent;
+
+        return $this;
+    }
+
+    public function getFooterComponent(): ?string
+    {
+        return $this->footerComponent;
+    }
+
+    public function setFooterComponent(?string $footerComponent): static
+    {
+        $this->footerComponent = $footerComponent;
 
         return $this;
     }

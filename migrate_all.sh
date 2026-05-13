@@ -9,8 +9,8 @@ PORT="5432"
 echo "Recherche des bases de données de type 'db_...' (PostgreSQL)"
 
 # Récupération de la liste des bases de données
-# On exclut postgres et les bases système, on se concentre sur celles commençant par 'db_'
-DB_LIST=$(PGPASSWORD=$PASSWORD psql -h $HOST -U $USER -t -c "SELECT datname FROM pg_database WHERE datname LIKE 'db_%' AND datname NOT IN ('db_master', 'db_testmessenger');")
+# On exclut postgres et les bases système, on se concentre sur celles commençant par 'db_' ou 'gmasuite'
+DB_LIST=$(PGPASSWORD=$PASSWORD psql -h $HOST -U $USER -t -c "SELECT datname FROM pg_database WHERE (datname LIKE 'db_%' OR datname = 'gmasuite') AND datname NOT IN ('db_master', 'db_testmessenger');")
 
 for DB in $DB_LIST; do
     # Supprimer les espaces éventuels
