@@ -219,13 +219,32 @@ class ProcessGemsuiteEntityJobHandler
         }
 
         $product->getCategory()->clear();
-        $product->setName(trim($data['name_fr']));
-        $product->setDescription($data['additional_fr'] ?? 'Pas de description.');
+        $isWebDisplay = (bool)($data['web_display'] ?? false);
+
+        $name = trim($data['name_fr'] ?? '');
+        if ($isWebDisplay && !empty($data['web_title_fr'])) {
+            $name = trim($data['web_title_fr']);
+        }
+        $product->setName($name);
+
+        $description = $data['additional_fr'] ?? 'Pas de description.';
+        if ($isWebDisplay && !empty($data['web_description_fr'])) {
+            $description = $data['web_description_fr'];
+        }
+        $product->setDescription($description);
+
         $product->setPrice((float)($data['price'] ?? 0) * 100);
-        $product->setSlug(strtolower($this->slugger->slug($product->getName())));
+
+        $slug = strtolower($this->slugger->slug($name));
+        if ($isWebDisplay && !empty($data['web_slug'])) {
+            $slug = $data['web_slug'];
+        }
+        $product->setSlug($slug);
+
         $product->setIsWeb(true);
-        $product->setIsnewarrival($data['is_new_arrival'] ?? true);
-        $product->setIsbestseller($data['is_bestseller'] ?? true);
+        $product->setIsnewarrival((bool)($data['new_product'] ?? $data['is_new_arrival'] ?? false));
+        $product->setIsfeatured((bool)($data['featured'] ?? false));
+        $product->setIsbestseller((bool)($data['is_bestseller'] ?? false));
 
         $defaultStyle = $em->getRepository(Style::class)->find(2);
         if ($defaultStyle) {

@@ -481,13 +481,32 @@ class GemsuiteSyncHandler
         }
 
         $product->getCategory()->clear();
-        $product->setName(trim($gemProductData['name_fr']));
-        $product->setDescription($gemProductData['additional_fr'] ?? 'Pas de description.');
+        $isWebDisplay = (bool)($gemProductData['web_display'] ?? false);
+
+        $name = trim($gemProductData['name_fr'] ?? '');
+        if ($isWebDisplay && !empty($gemProductData['web_title_fr'])) {
+            $name = trim($gemProductData['web_title_fr']);
+        }
+        $product->setName($name);
+
+        $description = $gemProductData['additional_fr'] ?? 'Pas de description.';
+        if ($isWebDisplay && !empty($gemProductData['web_description_fr'])) {
+            $description = $gemProductData['web_description_fr'];
+        }
+        $product->setDescription($description);
+
         $product->setPrice((float)($gemProductData['price'] ?? 0) * 100);
-        $product->setSlug(strtolower($this->slugger->slug($product->getName())));
+
+        $slug = strtolower($this->slugger->slug($name));
+        if ($isWebDisplay && !empty($gemProductData['web_slug'])) {
+            $slug = $gemProductData['web_slug'];
+        }
+        $product->setSlug($slug);
+
         $product->setIsWeb(true);
-        $product->setIsnewarrival((bool)($gemProductData['is_new_arrival'] ?? true));
-        $product->setIsbestseller((bool)($gemProductData['is_bestseller'] ?? true));
+        $product->setIsnewarrival((bool)($gemProductData['new_product'] ?? $gemProductData['is_new_arrival'] ?? false));
+        $product->setIsfeatured((bool)($gemProductData['featured'] ?? false));
+        $product->setIsbestseller((bool)($gemProductData['is_bestseller'] ?? false));
 
         // --- GESTION UNITÉ DE VENTE ---
         $unitId = (int)($gemProductData['unit'] ?? 0);
