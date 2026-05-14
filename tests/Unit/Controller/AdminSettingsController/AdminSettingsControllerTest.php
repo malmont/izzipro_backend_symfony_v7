@@ -17,6 +17,7 @@ class AdminSettingsControllerTest extends TestCase
 {
     private $tenantEmProvider;
     private $cacheService;
+    private $connectionManager;
     private $controller;
     private $entityManager;
     private $container;
@@ -25,13 +26,15 @@ class AdminSettingsControllerTest extends TestCase
     {
         $this->tenantEmProvider = $this->createMock(TenantEntityManagerProvider::class);
         $this->cacheService = $this->createMock(TenantCacheService::class);
+        $this->connectionManager = $this->createMock(\App\Services\TenantConnectionManager::class);
         $this->entityManager = $this->createMock(EntityManagerInterface::class);
 
         $this->tenantEmProvider->method('getEntityManager')->willReturn($this->entityManager);
 
         $this->controller = new AdminSettingsController(
             $this->tenantEmProvider,
-            $this->cacheService
+            $this->cacheService,
+            $this->connectionManager
         );
 
         $this->container = $this->createMock(\Psr\Container\ContainerInterface::class);

@@ -17,15 +17,17 @@ class AdminSettingsController extends AbstractController
 {
     private TenantEntityManagerProvider $tenantEmProvider;
     private TenantCacheService $cache;
+    private \App\Services\TenantConnectionManager $connectionManager;
 
 
     public function __construct(
         TenantEntityManagerProvider $tenantEmProvider,
         TenantCacheService $cache,
-
+        \App\Services\TenantConnectionManager $connectionManager
     ) {
         $this->tenantEmProvider = $tenantEmProvider;
         $this->cache = $cache;
+        $this->connectionManager = $connectionManager;
     }
 
     /**
@@ -146,5 +148,70 @@ class AdminSettingsController extends AbstractController
         $this->cache->delete('admin_settings');
 
         return new JsonResponse(['message' => 'Settings updated successfully']);
+    }
+
+    /**
+     * @Route("/api/admin-settings/presets", name="get_admin_presets", methods={"GET"})
+     */
+    public function getPresets(): JsonResponse
+    {
+        $pdo = $this->connectionManager->getPdoMaster();
+        $stmt = $pdo->query('SELECT id, title, settings FROM admin_presets ORDER BY id DESC');
+        $presets = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        $data = [];
+        foreach ($presets as $preset) {
+            $data[] = [
+                'id' => $preset['id'],
+                'title' => $preset['title'],
+                'settings' => json_decode($preset['settings'], true),
+            ];
+        }
+
+        return new JsonResponse($data);
+    }
+
+    /**
+     * @Route("/api/admin-settings/presets", name="save_admin_preset", methods={"POST"})
+     */
+    public function savePreset(Request $request): JsonResponse
+    {
+        $pdo = $this->connectionManager->getPdoMaster();
+        $data = json_decode($request->getContent(), true);
+
+        if (!isset($data['title']) || !isset($data['settings'])) {
+            return new JsonResponse(['error' => 'Missing title or settings'], 400);
+        }
+
+        $title = $data['title'];
+        $settings = json_encode($data['settings']);
+        $id = $data['id'] ?? null;
+
+        if ($id) {
+            $stmt = $pdo->prepare('UPDATE admin_presets SET title = :title, settings = :settings WHERE id = :id');
+            $stmt->execute(['title' => $title, 'settings' => $settings, 'id' => $id]);
+        } else {
+            $stmt = $pdo->prepare('INSERT INTO admin_presets (title, settings) VALUES (:title, :settings) RETURNING id');
+            $stmt->execute(['title' => $title, 'settings' => $settings]);
+            $id = $stmt->fetchColumn();
+        }
+
+        return new JsonResponse([
+            'id' => (int) $id,
+            'title' => $title,
+            'settings' => $data['settings'],
+        ]);
+    }
+
+    /**
+     * @Route("/api/admin-settings/presets/{id}", name="delete_admin_preset", methods={"DELETE"})
+     */
+    public function deletePreset(int $id): JsonResponse
+    {
+        $pdo = $this->connectionManager->getPdoMaster();
+        $stmt = $pdo->prepare('DELETE FROM admin_presets WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+
+        return new JsonResponse(['message' => 'Preset deleted successfully']);
     }
 }
