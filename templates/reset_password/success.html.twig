@@ -9,7 +9,7 @@
   <div style="text-align: center; margin-bottom: 20px;">
     {# CORRECTION : On concatène domain + logoUrl ici aussi #}
     {% if logoUrl is defined and logoUrl %}
-      <img src="{{ domain }}{{ logoUrl }}" alt="{{ fromName }}" style="max-width: 200px;">
+      <img src="{{ logoUrl }}" alt="{{ fromName }}" style="max-width: 200px;">
     {% endif %}
     
     {% if fromName %}
