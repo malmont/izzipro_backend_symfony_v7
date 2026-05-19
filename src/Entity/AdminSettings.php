@@ -115,6 +115,9 @@ class AdminSettings
     #[ORM\Column(length: 255, nullable: true, options: ["default" => "typeA"])]
     private ?string $footerComponent = "typeA";
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $categorySelectorComponent = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -524,6 +527,18 @@ class AdminSettings
     public function setFooterComponent(?string $footerComponent): static
     {
         $this->footerComponent = $footerComponent;
+
+        return $this;
+    }
+
+    public function getCategorySelectorComponent(): ?string
+    {
+        return $this->categorySelectorComponent;
+    }
+
+    public function setCategorySelectorComponent(?string $categorySelectorComponent): static
+    {
+        $this->categorySelectorComponent = $categorySelectorComponent;
 
         return $this;
     }

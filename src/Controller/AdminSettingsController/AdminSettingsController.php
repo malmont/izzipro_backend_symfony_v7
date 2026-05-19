@@ -81,6 +81,7 @@ class AdminSettingsController extends AbstractController
                     'adressListCardComponent' => $settings->getAdressListCardComponent(),
                     'carrierListCardComponent' => $settings->getCarrierListCardComponent(),
                     'footerComponent' => $settings->getFooterComponent(),
+                    'categorySelectorComponent' => $settings->getCategorySelectorComponent(),
                 ];
             },
             /* ttl */
@@ -142,6 +143,7 @@ class AdminSettingsController extends AbstractController
         $settings->setAdressListCardComponent($data['adressListCardComponent'] ?? $settings->getAdressListCardComponent());
         $settings->setCarrierListCardComponent($data['carrierListCardComponent'] ?? $settings->getCarrierListCardComponent());
         $settings->setFooterComponent($data['footerComponent'] ?? $settings->getFooterComponent());
+        $settings->setCategorySelectorComponent($data['categorySelectorComponent'] ?? $settings->getCategorySelectorComponent());
 
         $entityManager->flush();
 

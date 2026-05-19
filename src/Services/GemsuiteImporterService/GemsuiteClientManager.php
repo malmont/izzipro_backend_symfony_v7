@@ -112,26 +112,34 @@ class GemsuiteClientManager
     {
         $tenantEm = $this->getTenantEntityManager($tenantCode);
         $clientGemSuite = $this->getClientFromGemsuite($clientId, $tenantCode);
-        $client = $tenantEm->getRepository(GemsuiteClient::class)->findOneBy(['gemsuiteId' => $clientId]);
-        if (!$client) {
-            $this->logger->warning(sprintf('Client #%d non trouvé localement.', $clientId));
-            
-            if (!$clientGemSuite) {
-                $this->logger->warning(sprintf('Client #%d non trouvé sur GEM-SUITE.', $clientId));
-                return;
-            }
-            $newLocalClient = new GemsuiteClient();
-            $newLocalClient->setGemsuiteId($clientGemSuite['id']);
-            $newLocalClient->setEmail(strtolower($clientGemSuite['email'])); 
-            $newLocalClient->setName($clientGemSuite['name']);
-            
-            $tenantEm->persist($newLocalClient);
-            $tenantEm->flush();
-            
-            $this->logger->info(sprintf('Client créé sur GEM-SUITE (ID: %d) et synchronisé localement.', $clientGemSuite['id']));
+
+        if (!$clientGemSuite) {
+            $this->logger->warning(sprintf('Client #%d non trouvé sur GEM-SUITE. Impossible de synchroniser.', $clientId));
             return;
-        } 
-      
+        }
+
+        $client = $tenantEm->getRepository(GemsuiteClient::class)->findOneBy(['gemsuiteId' => $clientId]);
+        $isNew = false;
+
+        if (!$client) {
+            $this->logger->info(sprintf('Client #%d non trouvé localement. Création en cours...', $clientId));
+            $client = new GemsuiteClient();
+            $client->setGemsuiteId($clientGemSuite['id']);
+            $tenantEm->persist($client);
+            $isNew = true;
+        }
+
+        // Mise à jour des données
+        $client->setEmail(isset($clientGemSuite['email']) ? strtolower($clientGemSuite['email']) : $client->getEmail());
+        $client->setName($clientGemSuite['name'] ?? $client->getName());
+
+        $tenantEm->flush();
+
+        if ($isNew) {
+            $this->logger->info(sprintf('Client #%d importé avec succès depuis GEM-SUITE.', $clientId));
+        } else {
+            $this->logger->info(sprintf('Client #%d mis à jour avec succès depuis GEM-SUITE.', $clientId));
+        }
     }
 
     private function getClientFromGemsuite(int $clientId, string $tenantCode): ?array
