@@ -122,9 +122,11 @@ class GemsuiteSaleManager
                     $this->logger->error(sprintf("Synchro Gemsuite SALE: Véhicule manquant pour le produit de location #%d. Le champ car_id sera manquant.", $product?->getId()));
                 }
 
-                // 3. Dates de location
-                $payload['car_date_start'] = $booking->getStartAt()->format('Y-m-d H:i:s');
-                $payload['car_date_end'] = $booking->getEndAt()->format('Y-m-d H:i:s');
+                // 3. Dates de location — converties UTC → America/Toronto pour GemSuite
+                //    (GemSuite affiche sans conversion ; America/Toronto gère EST/EDT automatiquement)
+                $tz = new \DateTimeZone('America/Toronto');
+                $payload['car_date_start'] = (clone $booking->getStartAt())->setTimezone($tz)->format('Y-m-d H:i:s');
+                $payload['car_date_end']   = (clone $booking->getEndAt())->setTimezone($tz)->format('Y-m-d H:i:s');
 
                 // 4. Permis de conduire et Chauffeur
                 $user = $order->getUserId();
