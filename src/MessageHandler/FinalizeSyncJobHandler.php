@@ -4,6 +4,7 @@
 namespace App\MessageHandler;
 
 use App\Entity\SyncJob;
+use App\Entity\Categories;
 use App\Message\FinalizeSyncJob;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
@@ -49,6 +50,8 @@ class FinalizeSyncJobHandler
                 // TODO: TEMP WORKAROUND - Full Sync Rentals
                 $this->syncRentalsData($tenant['code']);
                 
+                $this->cleanupUnusedCategories($tenantEm);
+                
                 $tenantEm->flush();
                 
                 $this->logger->info('[Job Success] IMPORTATION TERMINÉE AVEC SUCCÈS ! LE SITE EST PRÊT.');
@@ -91,5 +94,35 @@ class FinalizeSyncJobHandler
         } catch (\Throwable $e) {
             $this->logger->error('[FinalizeJob] Rentals Sync failed: ' . $e->getMessage());
         }
+    }
+
+    private function cleanupUnusedCategories(\Doctrine\ORM\EntityManagerInterface $em): void
+    {
+        $conn = $em->getConnection();
+        
+        $conn->executeStatement('
+            DELETE FROM categories_translation 
+            WHERE category_id IN (
+                SELECT id FROM categories 
+                WHERE sync_web = false 
+                  AND id NOT IN (
+                      SELECT pc.categories_id 
+                      FROM product_categories pc 
+                      JOIN product p ON p.id = pc.product_id 
+                      WHERE p.is_web = true
+                  )
+            )
+        ');
+
+        $conn->executeStatement('
+            DELETE FROM categories 
+            WHERE sync_web = false 
+              AND id NOT IN (
+                  SELECT pc.categories_id 
+                  FROM product_categories pc 
+                  JOIN product p ON p.id = pc.product_id 
+                  WHERE p.is_web = true
+              )
+        ');
     }
 }

@@ -160,13 +160,12 @@ class ProcessGemsuiteEntityJobHandler
         $status = (int)($data['status'] ?? 1);
         $syncWeb = (bool)($data['sync_web'] ?? true);
 
-        if ($status !== 1 || $syncWeb !== true) {
+        if ($status !== 1) {
             $categoryName = $data['name_fr'] ?? 'ID ' . $id;
             $this->logger->warning(sprintf(
-                '[processCategory ID %s] IGNORÉE. Motif : (status: %d, sync_web: %s).',
+                '[processCategory ID %s] IGNORÉE. Motif : (status: %d).',
                 $id,
-                $status,
-                $syncWeb ? 'true' : 'false'
+                $status
             ));
             return null;
         }
@@ -197,6 +196,16 @@ class ProcessGemsuiteEntityJobHandler
         // --- NOUVELLE LOGIQUE LOCATION ---
         $isRental = (int)($data['limit_lot'] ?? 0) === 1;
         $category->setIsRentalCategory($isRental);
+
+        $category->setSyncWeb($syncWeb);
+        $hasActiveWebProducts = false;
+        foreach ($category->getProducts() as $product) {
+            if ($product->isWeb()) {
+                $hasActiveWebProducts = true;
+                break;
+            }
+        }
+        $category->setIsVisible(($syncWeb || $hasActiveWebProducts) && !$isRental);
 
         $em->persist($category);
         $this->translationGenerator->generateTranslations($category);
@@ -289,6 +298,13 @@ class ProcessGemsuiteEntityJobHandler
 
                 $product->addCategory($category);
 
+                // Mettre à jour la visibilité de la catégorie si le produit est synchronisé web
+                $isProductSyncWeb = (bool)($data['web_display'] ?? true);
+                if ($isProductSyncWeb && !$category->isVisible() && !$category->isRentalCategory()) {
+                    $category->setIsVisible(true);
+                    $em->persist($category);
+                }
+
                 // TODO: TEMP WORKAROUND - Config de location
                 if ($category->isRentalCategory() && $category->getCategoryType() !== 10) {
                     $this->rentalWorkaround->applyRentalProductConfiguration($product, $data);
@@ -380,7 +396,7 @@ class ProcessGemsuiteEntityJobHandler
     private function isEntityActive(EntityManagerInterface $em, array $data): bool
     {
         $status = (int)($data['status'] ?? 1);
-        $syncWeb = (bool)($data['sync_web'] ?? true);
+        $syncWeb = (bool)($data['web_display'] ?? true);
 
         $name = trim($data['name_fr'] ?? '');
         $isVariant = !empty($data['origin_product_id']) && (int)$data['origin_product_id'] !== (int)($data['id'] ?? 0);
@@ -391,13 +407,13 @@ class ProcessGemsuiteEntityJobHandler
             return $status === 1 && $syncWeb && $parent !== null;
         }
 
-        // 2. Les produits parents dépendent de la présence de leur catégorie en base
+        // 2. Les produits parents dépendent de la présence de leur catégorie en base et des options syncWeb
         if (isset($data['category_id']) && !empty($name)) {
             $catId = (int)$data['category_id'];
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
 
             if ($category) {
-                return $status === 1;
+                return $status === 1 && ($category->isSyncWeb() || $syncWeb);
             }
         }
 

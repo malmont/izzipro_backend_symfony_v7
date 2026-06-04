@@ -10,6 +10,8 @@ class CategoryOutputDTO
     public ?string $description;
     public ?string $image;
     public ?bool $isRentalCategory;
+    public ?bool $syncWeb;
+    public ?bool $isVisible;
 
     public function __construct(Categories $category, string $host, string $locale)
     {
@@ -19,6 +21,8 @@ class CategoryOutputDTO
         $this->name = $translation?->getName() ?? $category->getName(); 
         $this->description = $translation?->getDescription() ?? $category->getDescription(); 
         $this->isRentalCategory = $category->isRentalCategory();
+        $this->syncWeb = $category->isSyncWeb();
+        $this->isVisible = $category->isVisible();
 
         $imagePath = $category->getImage();
         if (empty($imagePath)) {
@@ -41,6 +45,8 @@ class CategoryOutputDTO
             'description' => $this->description,
             'image' => $this->image,
             'isRentalCategory' => $this->isRentalCategory,
+            'syncWeb' => $this->syncWeb,
+            'isVisible' => $this->isVisible,
         ];
     }
 }

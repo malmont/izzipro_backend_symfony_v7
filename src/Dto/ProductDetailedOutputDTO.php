@@ -176,6 +176,9 @@ class ProductDetailedOutputDTO
                     'id'          => $category->getId(),
                     'name'        => $translation?->getName() ?? $category->getName(),
                     'description' => $translation?->getDescription() ?? $category->getDescription(),
+                    'isRentalCategory' => $category->isRentalCategory(),
+                    'syncWeb'     => $category->isSyncWeb(),
+                    'isVisible'   => $category->isVisible(),
                     'image'       => $category->getImage()
                         ? rtrim($host, '/') . '/assets/uploads/categories/' . $category->getImage()
                         : null,

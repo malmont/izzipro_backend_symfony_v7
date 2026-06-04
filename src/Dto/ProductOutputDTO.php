@@ -107,6 +107,9 @@ class ProductOutputDTO
                     'id'          => $category->getId(),
                     'name'        => $category->getTranslation($locale)?->getName(),
                     'description' => $category->getTranslation($locale)?->getDescription(),
+                    'isRentalCategory' => $category->isRentalCategory(),
+                    'syncWeb'     => $category->isSyncWeb(),
+                    'isVisible'   => $category->isVisible(),
                 ];
             }, $categoriesCollection->toArray());
         } else {

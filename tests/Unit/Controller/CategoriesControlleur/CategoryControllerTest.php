@@ -117,7 +117,8 @@ class CategoryControllerTest extends TestCase
 
         // Retourner vide pour éviter DTO
         $repo->expects($this->once())
-            ->method('findAll')
+            ->method('findBy')
+            ->with(['isVisible' => true])
             ->willReturn([]);
 
         $response = $this->controller->getCategories($request);

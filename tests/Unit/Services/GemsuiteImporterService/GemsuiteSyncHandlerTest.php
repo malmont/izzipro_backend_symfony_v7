@@ -114,7 +114,7 @@ class GemsuiteSyncHandlerTest extends TestCase
             'origin_product_id' => 101, // Is Parent
             'name_fr' => 'Test Product',
             'status' => 1,
-            'sync_web' => true,
+            'web_display' => true,
             'price' => 10.0,
             'category_id' => 5,
             'default_quantity' => 100,
@@ -199,7 +199,7 @@ class GemsuiteSyncHandlerTest extends TestCase
             'origin_product_id' => 202,
             'name_fr' => 'Inactive',
             'status' => 0, // Inactive
-            'sync_web' => true,
+            'web_display' => true,
         ];
 
         $respProd = $this->createMock(ResponseInterface::class);

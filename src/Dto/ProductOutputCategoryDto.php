@@ -174,6 +174,8 @@ class ProductOutputCategoryDto
                 'name'        => $category->getTranslation($locale)?->getName(),
                 'description' => $category->getTranslation($locale)?->getDescription(),
                 'isRentalCategory' => $category->isRentalCategory(),
+                'syncWeb'     => $category->isSyncWeb(),
+                'isVisible'   => $category->isVisible(),
                 'image'       => $category->getImage() 
                     ? $host . '/assets/uploads/categories/' . $category->getImage() 
                     : null,

@@ -53,7 +53,7 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
             'additional_fr' => 'Description',
             'price' => 19.99,
             'status' => 1,
-            'sync_web' => true,
+            'web_display' => true,
             'is_new_arrival' => false,
             'is_bestseller' => true,
             'weight' => 0.5,
@@ -175,7 +175,7 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
 
     public function testInvokeIgnoredIfInactive(): void
     {
-        $inactiveData = ['id' => 100, 'origin_product_id' => 100, 'status' => 0, 'sync_web' => true, 'name_fr' => 'Off'];
+        $inactiveData = ['id' => 100, 'origin_product_id' => 100, 'status' => 0, 'web_display' => true, 'name_fr' => 'Off'];
 
         $logger = $this->createMock(LoggerInterface::class);
         $tenantManager = $this->createMock(TenantConnectionManager::class);

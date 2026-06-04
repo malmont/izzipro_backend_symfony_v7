@@ -31,7 +31,9 @@ class CategoriesRepository extends EntityRepository
         return $this->createQueryBuilder('c')
             ->leftJoin('c.translations', 't', 'WITH', 't.language = :locale')
             ->addSelect('t')
+            ->andWhere('c.isVisible = :isVisible')
             ->setParameter('locale', $locale)
+            ->setParameter('isVisible', true)
             ->getQuery()
             ->getResult();
     }

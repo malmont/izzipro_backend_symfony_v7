@@ -43,6 +43,12 @@ class Categories implements TranslatableInterface
     #[ORM\Column(nullable: true)]
     private ?int $categoryType = null;
 
+    #[ORM\Column(options: ['default' => true])]
+    private ?bool $syncWeb = true;
+
+    #[ORM\Column(options: ['default' => true])]
+    private ?bool $isVisible = true;
+
     /**
      * @var Collection<int, RentalPack>
      */
@@ -245,6 +251,30 @@ class Categories implements TranslatableInterface
     public function setCategoryType(?int $categoryType): static
     {
         $this->categoryType = $categoryType;
+
+        return $this;
+    }
+
+    public function isSyncWeb(): ?bool
+    {
+        return $this->syncWeb;
+    }
+
+    public function setSyncWeb(bool $syncWeb): static
+    {
+        $this->syncWeb = $syncWeb;
+
+        return $this;
+    }
+
+    public function isVisible(): ?bool
+    {
+        return $this->isVisible;
+    }
+
+    public function setIsVisible(bool $isVisible): static
+    {
+        $this->isVisible = $isVisible;
 
         return $this;
     }

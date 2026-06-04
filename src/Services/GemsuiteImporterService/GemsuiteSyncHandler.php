@@ -91,6 +91,7 @@ class GemsuiteSyncHandler
                 }
             }
 
+            $this->cleanupUnusedCategories($tenantEm);
             $tenantEm->flush();
 
             // --- AJOUT : Déclenchement de la traduction asynchrone (comme en synchro de masse) ---
@@ -113,6 +114,8 @@ class GemsuiteSyncHandler
             $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
             $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
             $this->importCategories($tenantEm, $tenantCode, $token, $companyIdentifier);
+            $this->cleanupUnusedCategories($tenantEm);
+            $tenantEm->flush();
         } catch (\Throwable $e) {
             $this->logger->error("Erreur Sync Catégorie: " . $e->getMessage());
         }
@@ -527,6 +530,13 @@ class GemsuiteSyncHandler
             $category = $categoryMap[$gemProductData['category_id']];
             $product->addCategory($category);
 
+            // Mettre à jour la visibilité de la catégorie si le produit est synchronisé web
+            $isProductSyncWeb = (bool)($gemProductData['web_display'] ?? true);
+            if ($isProductSyncWeb && !$category->isVisible() && !$category->isRentalCategory()) {
+                $category->setIsVisible(true);
+                $em->persist($category);
+            }
+
             if ($category->isRentalCategory() && $category->getCategoryType() !== 10) {
                 $this->rentalWorkaround->applyRentalProductConfiguration($product, $gemProductData);
             } else {
@@ -697,10 +707,10 @@ class GemsuiteSyncHandler
             $status = (int)($gemCategoryData['status'] ?? 1);
             $syncWeb = (bool)($gemCategoryData['sync_web'] ?? true);
 
-            if ($status !== 1 || $syncWeb !== true) {
+            if ($status !== 1) {
                 $categoryToDelete = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
                 if ($categoryToDelete) {
-                    $this->logger->info("Suppression de la catégorie #{$gemCategoryData['id']} car inactive ou sync_web=false.");
+                    $this->logger->info("Suppression de la catégorie #{$gemCategoryData['id']} car inactive.");
                     $em->remove($categoryToDelete);
                 }
                 continue;
@@ -733,6 +743,16 @@ class GemsuiteSyncHandler
             if (!empty($imagePath)) {
                 $category->setImage($this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath));
             }
+
+            $category->setSyncWeb($syncWeb);
+            $hasActiveWebProducts = false;
+            foreach ($category->getProducts() as $product) {
+                if ($product->isWeb()) {
+                    $hasActiveWebProducts = true;
+                    break;
+                }
+            }
+            $category->setIsVisible(($syncWeb || $hasActiveWebProducts) && !$isRental);
 
             $em->persist($category);
             if (method_exists($this->translationGenerator, 'generateTranslations')) {
@@ -778,7 +798,7 @@ class GemsuiteSyncHandler
     private function isProductActive(EntityManagerInterface $em, array $gemProductData): bool
     {
         $status = (int)($gemProductData['status'] ?? 1);
-        $syncWeb = (bool)($gemProductData['sync_web'] ?? true);
+        $syncWeb = (bool)($gemProductData['web_display'] ?? true);
         $name = trim($gemProductData['name_fr'] ?? '');
 
         $isVariant = !empty($gemProductData['origin_product_id']) && (int)$gemProductData['origin_product_id'] !== (int)($gemProductData['id'] ?? 0);
@@ -789,13 +809,13 @@ class GemsuiteSyncHandler
             return $status === 1 && $parentProduct !== null;
         }
 
-        // 2. Produits Parents (Filtre par catégorie)
+        // 2. Produits Parents (Filtre par catégorie et options syncWeb)
         if (isset($gemProductData['category_id']) && !empty($name)) {
             $catId = (int)$gemProductData['category_id'];
             $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $catId]);
 
             if ($category) {
-                return $status === 1;
+                return $status === 1 && ($category->isSyncWeb() || $syncWeb);
             } else {
                 $this->logger->warning(sprintf('Produit #%d : Inactif car Catégorie Gemsuite #%d non trouvée localement.', $gemProductData['id'] ?? 0, $catId));
             }
@@ -918,5 +938,35 @@ class GemsuiteSyncHandler
     private function getCurrentTenantId(EntityManagerInterface $em): string
     {
         return $em->getConnection()->getDatabase();
+    }
+
+    private function cleanupUnusedCategories(EntityManagerInterface $em): void
+    {
+        $conn = $em->getConnection();
+        
+        $conn->executeStatement('
+            DELETE FROM categories_translation 
+            WHERE category_id IN (
+                SELECT id FROM categories 
+                WHERE sync_web = false 
+                  AND id NOT IN (
+                      SELECT pc.categories_id 
+                      FROM product_categories pc 
+                      JOIN product p ON p.id = pc.product_id 
+                      WHERE p.is_web = true
+                  )
+            )
+        ');
+
+        $conn->executeStatement('
+            DELETE FROM categories 
+            WHERE sync_web = false 
+              AND id NOT IN (
+                  SELECT pc.categories_id 
+                  FROM product_categories pc 
+                  JOIN product p ON p.id = pc.product_id 
+                  WHERE p.is_web = true
+              )
+        ');
     }
 }
