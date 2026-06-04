@@ -56,8 +56,12 @@ class FinalizeSyncJobHandlerTest extends TestCase
             ->with($syncJobId)
             ->willReturn($syncJob);
 
+        $connection = $this->createMock(\Doctrine\DBAL\Connection::class);
+        $connection->method('executeStatement')->willReturn(0);
+
         $tenantEm = $this->createMock(EntityManagerInterface::class);
         $tenantEm->method('getRepository')->willReturn($repo);
+        $tenantEm->method('getConnection')->willReturn($connection);
         
         // Le plus important : on doit FLUSHER pour sauvegarder le statut "completed"
         $tenantEm->expects($this->once())->method('flush');
