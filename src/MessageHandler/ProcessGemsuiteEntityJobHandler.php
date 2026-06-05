@@ -194,18 +194,27 @@ class ProcessGemsuiteEntityJobHandler
         $category->setCategoryType((int)($data['category_type'] ?? 0));
 
         // --- NOUVELLE LOGIQUE LOCATION ---
+        $categoryType = (int)($data['category_type'] ?? 0);
         $isRental = (int)($data['limit_lot'] ?? 0) === 1;
         $category->setIsRentalCategory($isRental);
 
-        $category->setSyncWeb($syncWeb);
-        $hasActiveWebProducts = false;
-        foreach ($category->getProducts() as $product) {
-            if ($product->isWeb()) {
-                $hasActiveWebProducts = true;
-                break;
+        if ($categoryType === 10) {
+            $category->setSyncWeb(true);
+            $category->setIsVisible(false);
+        } elseif ($isRental) {
+            $category->setSyncWeb(true);
+            $category->setIsVisible(true);
+        } else {
+            $category->setSyncWeb($syncWeb);
+            $hasActiveWebProducts = false;
+            foreach ($category->getProducts() as $product) {
+                if ($product->isWeb()) {
+                    $hasActiveWebProducts = true;
+                    break;
+                }
             }
+            $category->setIsVisible($syncWeb || $hasActiveWebProducts);
         }
-        $category->setIsVisible(($syncWeb || $hasActiveWebProducts) && !$isRental);
 
         $em->persist($category);
         $this->translationGenerator->generateTranslations($category);

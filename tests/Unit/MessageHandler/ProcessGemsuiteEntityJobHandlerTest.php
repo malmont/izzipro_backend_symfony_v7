@@ -213,4 +213,152 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
 
         $handler(new ProcessGemsuiteEntityJob(1, 999, 'product_parent', $inactiveData));
     }
+
+    public function testInvokeProcessCategoryType10(): void
+    {
+        $categoryData = [
+            'id' => 50,
+            'name_fr' => 'Catégorie Type 10',
+            'status' => 1,
+            'category_type' => 10,
+            'limit_lot' => 0,
+            'sync_web' => false,
+        ];
+
+        $logger = $this->createMock(LoggerInterface::class);
+        $tenantManager = $this->createMock(TenantConnectionManager::class);
+        $tenantManager->method('findTenantById')->willReturn(['dbname' => 'db', 'code' => 'c1']);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $connection = $this->createMock(\Doctrine\DBAL\Connection::class);
+        $connection->method('getDatabase')->willReturn('test_db');
+        $em->method('getConnection')->willReturn($connection);
+
+        $mockQuery = $this->createMock(AbstractQuery::class);
+        $mockQuery->method('setParameter')->willReturn($mockQuery);
+        $mockQuery->method('execute')->willReturn(1);
+        $em->method('createQuery')->willReturn($mockQuery);
+
+        $catRepo = $this->createMock(EntityRepository::class);
+        $catRepo->method('findOneBy')->willReturn(null);
+        $entRepo = $this->createMock(EntityRepository::class);
+        $entRepo->method('findOneBy')->willReturn(new Entreprise());
+
+        $em->method('getRepository')->willReturnMap([
+            [Categories::class, $catRepo],
+            [Entreprise::class, $entRepo],
+        ]);
+
+        $createdCategory = null;
+        $em->expects($this->once())
+            ->method('persist')
+            ->with($this->isInstanceOf(Categories::class))
+            ->will($this->returnCallback(function ($entity) use (&$createdCategory) {
+                $this->simulateEntityId($entity, 50);
+                $createdCategory = $entity;
+            }));
+
+        $emProvider = $this->createMock(TenantEntityManagerProvider::class);
+        $emProvider->method('getEntityManager')->willReturn($em);
+
+        $bus = $this->createMock(MessageBusInterface::class);
+        $bus->method('dispatch')->willReturn(new Envelope(new \stdClass()));
+
+        $imgBuilder = $this->createMock(GemsuiteImageUrlBuilder::class);
+        $translationGenerator = $this->createMock(\App\Services\TranslationGeneratorService\TranslationGeneratorService::class);
+
+        $handler = new ProcessGemsuiteEntityJobHandler(
+            $logger,
+            $tenantManager,
+            $emProvider,
+            $bus,
+            $imgBuilder,
+            $this->createMock(GemsuiteAttributeProcessor::class),
+            $this->createMock(GemsuiteStockCalculator::class),
+            $this->createMock(SluggerInterface::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class),
+            $translationGenerator
+        );
+
+        $handler(new ProcessGemsuiteEntityJob(1, 999, 'categories', $categoryData));
+
+        $this->assertNotNull($createdCategory);
+        $this->assertTrue($createdCategory->isSyncWeb());
+        $this->assertFalse($createdCategory->isVisible());
+    }
+
+    public function testInvokeProcessCategoryLimitLot1(): void
+    {
+        $categoryData = [
+            'id' => 60,
+            'name_fr' => 'Catégorie Limit Lot 1',
+            'status' => 1,
+            'category_type' => 5,
+            'limit_lot' => 1,
+            'sync_web' => false,
+        ];
+
+        $logger = $this->createMock(LoggerInterface::class);
+        $tenantManager = $this->createMock(TenantConnectionManager::class);
+        $tenantManager->method('findTenantById')->willReturn(['dbname' => 'db', 'code' => 'c1']);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $connection = $this->createMock(\Doctrine\DBAL\Connection::class);
+        $connection->method('getDatabase')->willReturn('test_db');
+        $em->method('getConnection')->willReturn($connection);
+
+        $mockQuery = $this->createMock(AbstractQuery::class);
+        $mockQuery->method('setParameter')->willReturn($mockQuery);
+        $mockQuery->method('execute')->willReturn(1);
+        $em->method('createQuery')->willReturn($mockQuery);
+
+        $catRepo = $this->createMock(EntityRepository::class);
+        $catRepo->method('findOneBy')->willReturn(null);
+        $entRepo = $this->createMock(EntityRepository::class);
+        $entRepo->method('findOneBy')->willReturn(new Entreprise());
+
+        $em->method('getRepository')->willReturnMap([
+            [Categories::class, $catRepo],
+            [Entreprise::class, $entRepo],
+        ]);
+
+        $createdCategory = null;
+        $em->expects($this->once())
+            ->method('persist')
+            ->with($this->isInstanceOf(Categories::class))
+            ->will($this->returnCallback(function ($entity) use (&$createdCategory) {
+                $this->simulateEntityId($entity, 60);
+                $createdCategory = $entity;
+            }));
+
+        $emProvider = $this->createMock(TenantEntityManagerProvider::class);
+        $emProvider->method('getEntityManager')->willReturn($em);
+
+        $bus = $this->createMock(MessageBusInterface::class);
+        $bus->method('dispatch')->willReturn(new Envelope(new \stdClass()));
+
+        $imgBuilder = $this->createMock(GemsuiteImageUrlBuilder::class);
+        $translationGenerator = $this->createMock(\App\Services\TranslationGeneratorService\TranslationGeneratorService::class);
+
+        $handler = new ProcessGemsuiteEntityJobHandler(
+            $logger,
+            $tenantManager,
+            $emProvider,
+            $bus,
+            $imgBuilder,
+            $this->createMock(GemsuiteAttributeProcessor::class),
+            $this->createMock(GemsuiteStockCalculator::class),
+            $this->createMock(SluggerInterface::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class),
+            $translationGenerator
+        );
+
+        $handler(new ProcessGemsuiteEntityJob(1, 999, 'categories', $categoryData));
+
+        $this->assertNotNull($createdCategory);
+        $this->assertTrue($createdCategory->isSyncWeb());
+        $this->assertTrue($createdCategory->isVisible());
+    }
 }
