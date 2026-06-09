@@ -229,8 +229,8 @@ class GemsuiteRentalWorkaroundService
                 // Nouveau rendez-vous (venant du calendrier général, sans sale_id forcément connu ici)
                 $booking = new Booking();
                 $booking->setProduct($product);
-                $booking->setStartAt($startAt);
-                $booking->setEndAt($endAt);
+                $booking->setStartAt($startAt->setTimezone(new \DateTimeZone('UTC')));
+                $booking->setEndAt($endAt->setTimezone(new \DateTimeZone('UTC')));
                 $booking->setQuantity(1);
                 $booking->setStatus('gemsuite_sync');
                 $this->getEm()->persist($booking);

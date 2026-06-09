@@ -461,8 +461,9 @@ class GemsuiteSyncHandler
                     if (!$booking) {
                         // Fallback : cherche par date + produit (cas où syncRentalsForVehicle a déjà créé le booking)
                         $torontoTzCheck = new \DateTimeZone('America/Toronto');
-                        $startCheck = new \DateTimeImmutable($lineData['car_date_start'], $torontoTzCheck);
-                        $endCheck   = new \DateTimeImmutable($lineData['car_date_end'], $torontoTzCheck);
+                        $utcTzCheck = new \DateTimeZone('UTC');
+                        $startCheck = (new \DateTimeImmutable($lineData['car_date_start'], $torontoTzCheck))->setTimezone($utcTzCheck);
+                        $endCheck   = (new \DateTimeImmutable($lineData['car_date_end'], $torontoTzCheck))->setTimezone($utcTzCheck);
                         $booking = $bookingRepo->findOneBy([
                             'product'  => $product,
                             'startAt'  => $startCheck,
@@ -478,8 +479,9 @@ class GemsuiteSyncHandler
 
                     $booking->setProduct($product);
                     $torontoTz = new \DateTimeZone('America/Toronto');
-                    $booking->setStartAt(new \DateTimeImmutable($lineData['car_date_start'], $torontoTz));
-                    $booking->setEndAt(new \DateTimeImmutable($lineData['car_date_end'], $torontoTz));
+                    $utcTz = new \DateTimeZone('UTC');
+                    $booking->setStartAt((new \DateTimeImmutable($lineData['car_date_start'], $torontoTz))->setTimezone($utcTz));
+                    $booking->setEndAt((new \DateTimeImmutable($lineData['car_date_end'], $torontoTz))->setTimezone($utcTz));
                     $booking->setQuantity(1);
                     $booking->setStatus('gemsuite_sync');
 
