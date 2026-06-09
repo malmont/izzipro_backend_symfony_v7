@@ -13,6 +13,9 @@ class BookingRepository extends EntityRepository
 
     public function countReservedQuantityBetween(Product $product, DateTimeInterface $start, DateTimeInterface $end): int
     {
+        $startUtc = \DateTimeImmutable::createFromInterface($start)->setTimezone(new \DateTimeZone('UTC'));
+        $endUtc = \DateTimeImmutable::createFromInterface($end)->setTimezone(new \DateTimeZone('UTC'));
+
         $qb = $this->createQueryBuilder('b');
         
         $qb->select('SUM(b.quantity)')
@@ -22,8 +25,8 @@ class BookingRepository extends EntityRepository
            ->andWhere('b.endAt > :start')
            
            ->setParameter('product', $product)
-           ->setParameter('start', $start)
-           ->setParameter('end', $end)
+           ->setParameter('start', $startUtc)
+           ->setParameter('end', $endUtc)
            ->setParameter('cancelledStatuses', ['CANCELLED', 'REFUNDED', 'CART_ABANDONED']); 
         return (int) $qb->getQuery()->getSingleScalarResult();
     }
@@ -34,6 +37,9 @@ class BookingRepository extends EntityRepository
      */
     public function findBookingsOverlapping(Product $product, \DateTimeInterface $start, \DateTimeInterface $end): array
     {
+        $startUtc = \DateTimeImmutable::createFromInterface($start)->setTimezone(new \DateTimeZone('UTC'));
+        $endUtc = \DateTimeImmutable::createFromInterface($end)->setTimezone(new \DateTimeZone('UTC'));
+
         return $this->createQueryBuilder('b')
             ->where('b.product = :product')
             ->andWhere('b.status NOT IN (:cancelledStatuses)')
@@ -41,8 +47,8 @@ class BookingRepository extends EntityRepository
             ->andWhere('b.endAt > :start')
             
             ->setParameter('product', $product)
-            ->setParameter('start', $start)
-            ->setParameter('end', $end)
+            ->setParameter('start', $startUtc)
+            ->setParameter('end', $endUtc)
             ->setParameter('cancelledStatuses', ['CANCELLED', 'REFUNDED', 'CART_ABANDONED'])
             
             ->getQuery()

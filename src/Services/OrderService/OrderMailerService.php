@@ -113,9 +113,12 @@ class OrderMailerService
             if (method_exists($item, 'getBooking')) {
                 $booking = $item->getBooking();
                 if ($booking) {
+                    $tz = new \DateTimeZone('America/Toronto');
+                    $startAt = $booking->getStartAt() ? (clone $booking->getStartAt())->setTimezone($tz) : null;
+                    $endAt = $booking->getEndAt() ? (clone $booking->getEndAt())->setTimezone($tz) : null;
                     $bookingData = [
-                        'start' => $booking->getStartAt()->format($dateFormat),
-                        'end'   => $booking->getEndAt()->format($dateFormat),
+                        'start' => $startAt ? $startAt->format($dateFormat) : '',
+                        'end'   => $endAt ? $endAt->format($dateFormat) : '',
                     ];
                 }
             }

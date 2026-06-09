@@ -31,8 +31,20 @@ class BookingCrudController extends BaseTenantCrudController
     public function configureFilters(Filters $filters): Filters
     {
         return $filters
-            ->add(DateTimeFilter::new('startAt', 'Date de début'))
-            ->add(DateTimeFilter::new('endAt', 'Date de fin'));
+            ->add(DateTimeFilter::new('startAt', 'Date de début')
+                ->setFormTypeOption('value_type_options', [
+                    'widget' => 'single_text',
+                    'view_timezone' => 'America/Toronto',
+                    'model_timezone' => 'UTC',
+                ])
+            )
+            ->add(DateTimeFilter::new('endAt', 'Date de fin')
+                ->setFormTypeOption('value_type_options', [
+                    'widget' => 'single_text',
+                    'view_timezone' => 'America/Toronto',
+                    'model_timezone' => 'UTC',
+                ])
+            );
     }
 
     public function configureFields(string $pageName): iterable
@@ -49,8 +61,18 @@ class BookingCrudController extends BaseTenantCrudController
                 }
             ]);
         
-        yield DateTimeField::new('startAt', 'Début');
-        yield DateTimeField::new('endAt', 'Fin');
+        yield DateTimeField::new('startAt', 'Début')
+            ->setTimezone('America/Toronto')
+            ->setFormTypeOptions([
+                'view_timezone' => 'America/Toronto',
+                'model_timezone' => 'UTC',
+            ]);
+        yield DateTimeField::new('endAt', 'Fin')
+            ->setTimezone('America/Toronto')
+            ->setFormTypeOptions([
+                'view_timezone' => 'America/Toronto',
+                'model_timezone' => 'UTC',
+            ]);
         
         yield IntegerField::new('quantity', 'Qté');
         

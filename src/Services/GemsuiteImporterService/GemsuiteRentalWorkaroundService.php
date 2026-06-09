@@ -200,9 +200,12 @@ class GemsuiteRentalWorkaroundService
         ]);
 
         // On prépare un dictionnaire pour faciliter le matching par dates
+        $tz = new \DateTimeZone('America/Toronto');
         $existingByDates = [];
         foreach ($existingBookings as $eb) {
-            $key = $eb->getStartAt()->format('Y-m-d H:i') . '|' . $eb->getEndAt()->format('Y-m-d H:i');
+            $startLocal = $eb->getStartAt() ? (clone $eb->getStartAt())->setTimezone($tz) : null;
+            $endLocal = $eb->getEndAt() ? (clone $eb->getEndAt())->setTimezone($tz) : null;
+            $key = ($startLocal ? $startLocal->format('Y-m-d H:i') : '') . '|' . ($endLocal ? $endLocal->format('Y-m-d H:i') : '');
             $existingByDates[$key][] = $eb;
         }
 
@@ -214,8 +217,8 @@ class GemsuiteRentalWorkaroundService
                 continue;
             }
 
-            $startAt = new \DateTimeImmutable($appt['start']);
-            $endAt = new \DateTimeImmutable($appt['end']);
+            $startAt = new \DateTimeImmutable($appt['start'], $tz);
+            $endAt = new \DateTimeImmutable($appt['end'], $tz);
             $key = $startAt->format('Y-m-d H:i') . '|' . $endAt->format('Y-m-d H:i');
 
             if (isset($existingByDates[$key]) && !empty($existingByDates[$key])) {

@@ -71,8 +71,9 @@ class BookingController extends AbstractController
         }
 
         try {
-            $start = (new \DateTimeImmutable($startStr))->setTime(0, 0, 0);
-            $end = (new \DateTimeImmutable($endStr))->setTime(23, 59, 59);
+            $timezone = new \DateTimeZone('America/Toronto');
+            $start = (new \DateTimeImmutable($startStr, $timezone))->setTime(0, 0, 0);
+            $end = (new \DateTimeImmutable($endStr, $timezone))->setTime(23, 59, 59);
             
             $data = $useCase->execute($productId, $start, $end);
             return $this->json($data);
