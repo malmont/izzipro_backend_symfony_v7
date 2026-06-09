@@ -192,11 +192,10 @@ class GemsuiteRentalWorkaroundService
         $product = $vehicle->getProduct();
         $bookingRepo = $this->getEm()->getRepository(Booking::class);
 
-        // 1. On récupère les bookings existants pour ce produit (synchronisés via Gemsuite)
+        // 1. On récupère tous les bookings existants de ce produit pour éviter les doublons avec le front
         /** @var Booking[] $existingBookings */
         $existingBookings = $bookingRepo->findBy([
             'product' => $product,
-            'status' => 'gemsuite_sync'
         ]);
 
         // On prépare un dictionnaire pour faciliter le matching par dates
@@ -240,10 +239,12 @@ class GemsuiteRentalWorkaroundService
 
         // 3. Purge des anciens bookings qui n'étaient plus dans la liste renvoyée par Gemsuite
         // ATTENTION : On ne supprime que ceux qui n'ont pas été "touched" 
-        // ET qui étaient de type "gemsuite_sync" (déjà filtré au début)
+        // ET qui sont de type "gemsuite_sync" (les réservations web en cours/payées restent préservées)
         foreach ($existingByDates as $unusedList) {
             foreach ($unusedList as $unusedBooking) {
-                $this->getEm()->remove($unusedBooking);
+                if ($unusedBooking->getStatus() === 'gemsuite_sync') {
+                    $this->getEm()->remove($unusedBooking);
+                }
             }
         }
 

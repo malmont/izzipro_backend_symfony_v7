@@ -468,7 +468,6 @@ class GemsuiteSyncHandler
                             'product'  => $product,
                             'startAt'  => $startCheck,
                             'endAt'    => $endCheck,
-                            'status'   => 'gemsuite_sync',
                         ]);
                     }
 
