@@ -58,10 +58,10 @@ class CleanupPendingBookingsCommand extends Command
                 continue;
             }
 
-            // 1. Récupérer les bookings en attente (Estimations)
-            // On prend ceux de plus d'une heure (3600 secondes)
+            // --- PASSE 1 : Bookings créés depuis le front (avec gemsuiteSaleId) ---
+            // On vérifie si la vente Gemsuite existe encore ou a été facturée
             $oneHourAgo = (new \DateTimeImmutable('-1 hour'))->setTimezone(new \DateTimeZone('UTC'));
-            
+
             $pendingBookings = $em->getRepository(Booking::class)->createQueryBuilder('b')
                 ->where('b.isFinalized = :finalized')
                 ->andWhere('b.gemsuiteSaleId IS NOT NULL')
@@ -71,37 +71,26 @@ class CleanupPendingBookingsCommand extends Command
                 ->getQuery()
                 ->getResult();
 
-            if (empty($pendingBookings)) {
-                $io->text("Aucune réservation en attente pour ce tenant.");
-                continue;
-            }
-
-            $io->text(sprintf("Traitement de %d réservations en attente...", count($pendingBookings)));
+            $io->text(sprintf("Passe 1 : %d réservations avec saleId à vérifier...", count($pendingBookings)));
 
             foreach ($pendingBookings as $booking) {
                 $saleId = $booking->getGemsuiteSaleId();
                 $io->text(" - Vérification Vente #$saleId...");
 
-                // Appel ciblé à l'API Gemsuite pour cette vente
                 $saleData = $this->syncHandler->getExternalSaleData($tenantCode, $saleId);
 
                 if ($saleData === null) {
-                    // La vente n'existe plus ou erreur réseau
                     $io->warning("   -> Vente introuvable ou supprimée. Libération du créneau.");
-                    
-                    // On supprime d'abord le booking local en attente
                     $em->remove($booking);
                     $em->flush();
-                    $io->success("   -> Booking supprimé manuellement.");
-                    
-                    // On force un rafraîchissement complet du calendrier du véhicule pour être sûr
+                    $io->success("   -> Booking supprimé.");
+
                     $vehicle = $em->getRepository(Vehicle::class)->findOneBy(['product' => $booking->getProduct()]);
                     if ($vehicle) {
                         $this->syncHandler->handleRentalUpdate($tenantCode, $vehicle->getGemsuiteVehicleId());
                         $io->success("   -> Calendrier véhicule mis à jour.");
                     }
                 } elseif (!empty($saleData['invoice_number'])) {
-                    // La vente est devenue une facture
                     $booking->setIsFinalized(true);
                     $em->flush();
                     $io->success("   -> Booking finalisé (Facture #{$saleData['invoice_number']})");
@@ -109,6 +98,74 @@ class CleanupPendingBookingsCommand extends Command
                     $io->text("   -> Toujours en attente (Estimé).");
                 }
             }
+
+            // --- PASSE 2 : Bookings synchronisés depuis Gemsuite (sans gemsuiteSaleId) ---
+            // On vérifie uniquement les créneaux futurs (à partir d'aujourd'hui)
+            // pour s'assurer qu'ils existent encore dans le calendrier Gemsuite
+            $twoHoursAgo  = (new \DateTimeImmutable('-2 hours'))->setTimezone(new \DateTimeZone('UTC'));
+            $todayStart   = (new \DateTimeImmutable('today'))->setTimezone(new \DateTimeZone('UTC'));
+
+            $syncedBookings = $em->getRepository(Booking::class)->createQueryBuilder('b')
+                ->where('b.status = :status')
+                ->andWhere('b.gemsuiteSaleId IS NULL')
+                ->andWhere('b.startAt >= :todayStart')
+                ->andWhere('b.createdAt < :twoHoursAgo')
+                ->setParameter('status', 'gemsuite_sync')
+                ->setParameter('todayStart', $todayStart)
+                ->setParameter('twoHoursAgo', $twoHoursAgo)
+                ->getQuery()
+                ->getResult();
+
+            $io->text(sprintf("Passe 2 : %d créneaux synchronisés (futurs) à vérifier...", count($syncedBookings)));
+
+            // On regroupe par véhicule pour limiter les appels API
+            $vehicleAppointmentsCache = [];
+
+            foreach ($syncedBookings as $booking) {
+                $vehicle = $em->getRepository(Vehicle::class)->findOneBy(['product' => $booking->getProduct()]);
+                if (!$vehicle) {
+                    continue;
+                }
+
+                $vehicleId = $vehicle->getGemsuiteVehicleId();
+
+                // On ne rappelle l'API qu'une seule fois par véhicule (mise en cache)
+                if (!isset($vehicleAppointmentsCache[$vehicleId])) {
+                    $vehicleAppointmentsCache[$vehicleId] = $this->syncHandler->fetchRentalsForVehiclePublic($tenantCode, $vehicleId);
+                }
+
+                $appointments = $vehicleAppointmentsCache[$vehicleId];
+                $tz = new \DateTimeZone('America/Toronto');
+
+                // On vérifie si le créneau du booking existe encore dans la liste Gemsuite
+                $found = false;
+                foreach ($appointments as $appt) {
+                    if (empty($appt['start']) || empty($appt['end'])) {
+                        continue;
+                    }
+                    $apptStart = (new \DateTimeImmutable($appt['start'], $tz))->format('Y-m-d H:i');
+                    $apptEnd   = (new \DateTimeImmutable($appt['end'], $tz))->format('Y-m-d H:i');
+
+                    $bookingStart = (clone $booking->getStartAt())->setTimezone($tz)->format('Y-m-d H:i');
+                    $bookingEnd   = (clone $booking->getEndAt())->setTimezone($tz)->format('Y-m-d H:i');
+
+                    if ($apptStart === $bookingStart && $apptEnd === $bookingEnd) {
+                        $found = true;
+                        break;
+                    }
+                }
+
+                if (!$found) {
+                    $io->warning(sprintf(
+                        "   -> Créneau %s-%s introuvable dans Gemsuite. Suppression.",
+                        (clone $booking->getStartAt())->setTimezone($tz)->format('H:i'),
+                        (clone $booking->getEndAt())->setTimezone($tz)->format('H:i')
+                    ));
+                    $em->remove($booking);
+                }
+            }
+
+            $em->flush();
         }
 
         $io->success('Fin du nettoyage des réservations.');

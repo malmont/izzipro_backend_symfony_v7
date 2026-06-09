@@ -459,9 +459,22 @@ class GemsuiteSyncHandler
                     $booking = $bookingRepo->findOneBy(['gemsuiteSaleId' => $saleId]);
 
                     if (!$booking) {
-                        $booking = new \App\Entity\Booking();
-                        $booking->setGemsuiteSaleId($saleId);
+                        // Fallback : cherche par date + produit (cas où syncRentalsForVehicle a déjà créé le booking)
+                        $torontoTzCheck = new \DateTimeZone('America/Toronto');
+                        $startCheck = new \DateTimeImmutable($lineData['car_date_start'], $torontoTzCheck);
+                        $endCheck   = new \DateTimeImmutable($lineData['car_date_end'], $torontoTzCheck);
+                        $booking = $bookingRepo->findOneBy([
+                            'product'  => $product,
+                            'startAt'  => $startCheck,
+                            'endAt'    => $endCheck,
+                            'status'   => 'gemsuite_sync',
+                        ]);
                     }
+
+                    if (!$booking) {
+                        $booking = new \App\Entity\Booking();
+                    }
+                    $booking->setGemsuiteSaleId($saleId);
 
                     $booking->setProduct($product);
                     $torontoTz = new \DateTimeZone('America/Toronto');
@@ -497,6 +510,14 @@ class GemsuiteSyncHandler
         if (!$token) return null;
 
         return $this->fetchSaleFromApi($saleId, $token);
+    }
+
+    public function fetchRentalsForVehiclePublic(string $tenantCode, int $vehicleId): array
+    {
+        $token = $this->tenantManager->getTenantToken($tenantCode);
+        if (!$token) return [];
+
+        return $this->fetchRentalsFromApi($vehicleId, $token);
     }
 
     private function fetchSaleFromApi(int $id, string $token): ?array
