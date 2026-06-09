@@ -60,7 +60,7 @@ class CleanupPendingBookingsCommand extends Command
 
             // 1. Récupérer les bookings en attente (Estimations)
             // On prend ceux de plus d'une heure (3600 secondes)
-            $oneHourAgo = new \DateTimeImmutable('-1 hour');
+            $oneHourAgo = (new \DateTimeImmutable('-1 hour'))->setTimezone(new \DateTimeZone('UTC'));
             
             $pendingBookings = $em->getRepository(Booking::class)->createQueryBuilder('b')
                 ->where('b.isFinalized = :finalized')
@@ -89,15 +89,16 @@ class CleanupPendingBookingsCommand extends Command
                     // La vente n'existe plus ou erreur réseau
                     $io->warning("   -> Vente introuvable ou supprimée. Libération du créneau.");
                     
+                    // On supprime d'abord le booking local en attente
+                    $em->remove($booking);
+                    $em->flush();
+                    $io->success("   -> Booking supprimé manuellement.");
+                    
                     // On force un rafraîchissement complet du calendrier du véhicule pour être sûr
                     $vehicle = $em->getRepository(Vehicle::class)->findOneBy(['product' => $booking->getProduct()]);
                     if ($vehicle) {
                         $this->syncHandler->handleRentalUpdate($tenantCode, $vehicle->getGemsuiteVehicleId());
                         $io->success("   -> Calendrier véhicule mis à jour.");
-                    } else {
-                        $em->remove($booking);
-                        $em->flush();
-                        $io->success("   -> Booking supprimé manuellement.");
                     }
                 } elseif (!empty($saleData['invoice_number'])) {
                     // La vente est devenue une facture
