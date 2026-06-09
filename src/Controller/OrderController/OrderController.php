@@ -270,8 +270,9 @@ class OrderController extends AbstractController
         $shippingData = $data['shippingAddress'];
         $billingData = $data['billingAddress'] ?? $shippingData;
 
-        $shippingAddress = $this->createAddressFromData($shippingData, $user);
-        $billingAddress = $this->createAddressFromData($billingData, $user);
+        $guestPhone = $guestInfo['phone'] ?? $guestInfo['phoneNumber'] ?? $guestInfo['contactNumber'] ?? null;
+        $shippingAddress = $this->createAddressFromData($shippingData, $user, $guestPhone);
+        $billingAddress = $this->createAddressFromData($billingData, $user, $guestPhone);
 
         $em->persist($shippingAddress);
         $em->persist($billingAddress);
@@ -331,6 +332,7 @@ class OrderController extends AbstractController
                 $locale = $request->query->get('locale', 'fr');
                 $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
                 $this->orderMailerService->sendOrderConfirmation($result, $locale, $domain);
+                $this->orderMailerService->sendShippingNotification($result, $locale, $domain);
             } catch (\Exception $e) {
                 $this->logger->error("Le service d'email Guest a échoué : " . $e->getMessage(), [
                     'orderId' => $result->getId()
@@ -346,24 +348,29 @@ class OrderController extends AbstractController
         return $result;
     }
 
-    private function createAddressFromData(array $data, User $user): Adress
+    private function createAddressFromData(array $data, User $user, ?string $fallbackPhone = null): Adress
     {
         $address = new Adress();
         $address->setUserAdress($user);
-        $address->setFullname($data['fullname'] ?? ($user->getFirstname() . ' ' . $user->getLastname()));
-        
-        // Split fullname for firstname/lastname if possible, or just use user info
-        $nameParts = explode(' ', $address->getFullname(), 2);
-        $address->setFirstname($nameParts[1] ?? ($nameParts[0] ?? ''));
-        $address->setLastname($nameParts[0] ?? '');
 
-        $address->setAddress($data['addressLineOne'] ?? '');
-        $address->setComplement($data['addressLineTwo'] ?? null);
+        // Robust name detection for Guest Checkout
+        $firstname = $data['firstname'] ?? $data['firstName'] ?? $user->getFirstname() ?? '';
+        $lastname = $data['lastname'] ?? $data['lastName'] ?? $user->getLastname() ?? '';
+        $address->setFirstname($firstname);
+        $address->setLastname($lastname);
+        $address->setFullname($data['fullname'] ?? trim($firstname . ' ' . $lastname));
+        
+        $address->setCompany($data['company'] ?? null);
+        $address->setAddress($data['addressLineOne'] ?? $data['address'] ?? $data['street'] ?? $data['street1'] ?? '');
+        $address->setComplement($data['addressLineTwo'] ?? $data['complement'] ?? $data['street2'] ?? null);
         $address->setCity($data['city'] ?? '');
         $address->setProvince($data['province'] ?? null);
-        $address->setCodepostal($data['zipCode'] ?? '');
+        $address->setCodepostal($data['zipCode'] ?? $data['zip'] ?? $data['postalCode'] ?? $data['postcode'] ?? $data['codepostal'] ?? '');
         $address->setCountry($data['country'] ?? '');
-        $address->setPhone($data['contactNumber'] ?? '');
+
+        // Phone fallback checks
+        $phone = $data['contactNumber'] ?? $data['phone'] ?? $data['phoneNumber'] ?? $data['telephone'] ?? $fallbackPhone ?? '';
+        $address->setPhone($phone);
 
         return $address;
     }
