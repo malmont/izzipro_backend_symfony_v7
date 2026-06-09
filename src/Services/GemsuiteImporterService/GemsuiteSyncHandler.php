@@ -116,8 +116,159 @@ class GemsuiteSyncHandler
             $this->importCategories($tenantEm, $tenantCode, $token, $companyIdentifier);
             $this->cleanupUnusedCategories($tenantEm);
             $tenantEm->flush();
+
+            // Déclencher la synchro de ses produits en arrière-plan (création, modification, désactivation ou suppression)
+            $tenantRecord = $this->tenantManager->findTenantByCode($tenantCode);
+            if ($tenantRecord) {
+                $this->logger->info(sprintf('Catégorie #%d mise à jour/supprimée. Dispatch de SyncCategoryProductsJob.', $categoryId));
+                $this->messageBus->dispatch(new \App\Message\SyncCategoryProductsJob(
+                    (int)$tenantRecord['id'],
+                    $categoryId
+                ));
+            }
         } catch (\Throwable $e) {
             $this->logger->error("Erreur Sync Catégorie: " . $e->getMessage());
+        }
+    }
+
+    public function syncCategoryProducts(string $tenantCode, int $categoryId): void
+    {
+        $this->logger->info(sprintf('Synchronisation en arrière-plan des produits pour la catégorie #%d', $categoryId));
+        $token = $this->tenantManager->getTenantToken($tenantCode);
+        if (!$token) {
+            $this->logger->error("Token manquant pour le tenant $tenantCode (Action: Sync Produits Catégorie)");
+            return;
+        }
+
+        try {
+            $tenantEm = $this->getTenantEntityManager($tenantCode);
+
+            // Charger la catégorie locale correspondante
+            $category = $tenantEm->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $categoryId]);
+
+            if ($category && !$category->isSyncWeb()) {
+                $this->logger->info(sprintf('Désactivation LOCALE (rapide) des produits pour la catégorie #%d', $categoryId));
+
+                foreach ($category->getProducts() as $product) {
+                    $syncWeb = (bool)$product->isGemsuiteWebDisplay();
+                    // Règle d'activation : category->isSyncWeb() || syncWeb
+                    // Puisque category->isSyncWeb() est false, cela dépend uniquement de syncWeb
+                    $isActive = $syncWeb;
+
+                    if (!$isActive) {
+                        $this->logger->info(sprintf('Produit parent #%d inactif localement (Catégorie désactivée et webDisplay = false). Désactivation.', $product->getGemsuiteProductId()));
+                        $product->setIsWeb(false);
+
+                        $pack = $tenantEm->getRepository(RentalPack::class)->findOneBy(['gemsuiteProductId' => $product->getGemsuiteProductId()]);
+                        if ($pack) {
+                            $tenantEm->remove($pack);
+                        }
+
+                        foreach ($product->getVariants() as $variant) {
+                            $tenantEm->remove($variant);
+                        }
+                    }
+                }
+
+                $tenantEm->flush();
+                $this->logger->info(sprintf('Désactivation locale des produits pour la catégorie #%d terminée.', $categoryId));
+                return;
+            }
+
+            // Charger toutes les catégories existantes pour la synchro classique (via API)
+            $categoriesList = $tenantEm->getRepository(Categories::class)->findAll();
+            $categoryMap = [];
+            $shippingClassMap = [];
+            foreach ($categoriesList as $cat) {
+                $categoryMap[$cat->getGemsuiteCategoryId()] = $cat;
+                $shippingClassMap[$cat->getGemsuiteCategoryId()] = $cat->getExternalShippingClassId();
+            }
+
+            $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
+            $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+
+            // Charger les produits de l\'API page par page
+            $page = 1;
+            $perPage = 50;
+            $hasMore = true;
+
+            $parentsToProcess = [];
+            $variantsToProcess = [];
+
+            while ($hasMore) {
+                $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'products', [
+                    'auth_bearer' => $token,
+                    'query' => [
+                        'page' => $page,
+                        'per_page' => $perPage,
+                    ]
+                ]);
+                $data = $response->toArray();
+                $items = $data['data'] ?? [];
+                if (empty($items)) {
+                    $hasMore = false;
+                    break;
+                }
+
+                foreach ($items as $item) {
+                    $productCatId = isset($item['category_id']) ? (int)$item['category_id'] : null;
+                    if ($productCatId === $categoryId) {
+                        $isParent = ($item['id'] === $item['origin_product_id']);
+                        if ($isParent) {
+                            $parentsToProcess[] = $item;
+                        } else {
+                            $variantsToProcess[] = $item;
+                        }
+                    }
+                }
+
+                if (isset($data['meta']['current_page'], $data['meta']['last_page'])) {
+                    $hasMore = ((int)$data['meta']['current_page'] < (int)$data['meta']['last_page']);
+                } else {
+                    $hasMore = (count($items) === $perPage);
+                }
+                $page++;
+            }
+
+            $this->logger->info(sprintf(
+                'Catégorie #%d : %d parents et %d variantes à traiter.',
+                $categoryId,
+                count($parentsToProcess),
+                count($variantsToProcess)
+            ));
+
+            // 1. Parents
+            foreach ($parentsToProcess as $parentData) {
+                if (!$this->isProductActive($tenantEm, $parentData)) {
+                    $this->logger->info(sprintf('Produit parent #%d inactif, désactivation locale.', $parentData['id']));
+                    $this->deactivateProductOrVariant($tenantEm, $parentData);
+                } else {
+                    $this->updateOrCreateProductParent($tenantEm, $parentData, $categoryMap, $shippingClassMap, $companyIdentifier);
+                    if (!empty($parentData['attributs'])) {
+                        $this->updateOrCreateProductVariant($tenantEm, $tenantCode, $parentData, $token, $companyIdentifier);
+                    }
+                }
+            }
+
+            // 2. Variantes
+            foreach ($variantsToProcess as $variantData) {
+                if (!$this->isProductActive($tenantEm, $variantData)) {
+                    $this->logger->info(sprintf('Variante #%d inactive, désactivation locale.', $variantData['id']));
+                    $this->deactivateProductOrVariant($tenantEm, $variantData);
+                } else {
+                    $this->updateOrCreateProductVariant($tenantEm, $tenantCode, $variantData, $token, $companyIdentifier);
+                }
+            }
+
+            $tenantEm->flush();
+            $this->logger->info(sprintf('Synchronisation des produits pour la catégorie #%d terminée.', $categoryId));
+
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf(
+                'Erreur Sync Produits Catégorie #%d : %s',
+                $categoryId,
+                $e->getMessage()
+            ), ['trace' => $e->getTraceAsString()]);
         }
     }
 
@@ -313,8 +464,9 @@ class GemsuiteSyncHandler
                     }
 
                     $booking->setProduct($product);
-                    $booking->setStartAt(new \DateTimeImmutable($lineData['car_date_start']));
-                    $booking->setEndAt(new \DateTimeImmutable($lineData['car_date_end']));
+                    $torontoTz = new \DateTimeZone('America/Toronto');
+                    $booking->setStartAt(new \DateTimeImmutable($lineData['car_date_start'], $torontoTz));
+                    $booking->setEndAt(new \DateTimeImmutable($lineData['car_date_end'], $torontoTz));
                     $booking->setQuantity(1);
                     $booking->setStatus('gemsuite_sync');
 
@@ -506,6 +658,7 @@ class GemsuiteSyncHandler
         }
         $product->setSlug($slug);
 
+        $product->setGemsuiteWebDisplay($isWebDisplay);
         $product->setIsWeb(true);
         $product->setIsnewarrival((bool)($gemProductData['new_product'] ?? $gemProductData['is_new_arrival'] ?? false));
         $product->setIsfeatured((bool)($gemProductData['featured'] ?? false));
