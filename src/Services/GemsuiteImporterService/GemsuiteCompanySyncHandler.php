@@ -99,6 +99,10 @@ class GemsuiteCompanySyncHandler
         $entreprise->setLogo(
             $this->imageUrlBuilder->buildUrl($identifier, $logoPath)
         );
+        $faviconPath = $companyData['gemportal_favicon'] ?? null;
+        $entreprise->setFaviconFilename(
+            $this->imageUrlBuilder->buildUrl($identifier, $faviconPath) ?: null
+        );
 
         if (!empty($companyData['adresse'])) {
             $addressEntreprise = $entreprise->getAddressEntreprise() ?? new AddressEntreprise();

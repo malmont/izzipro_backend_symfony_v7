@@ -105,7 +105,8 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
             'country' => 1,
             'tel' => '555-5555',
             'website_intro_text1' => 'Welcome',
-            // ... add other needed fields
+            'gemportal_logo' => 'logos/my-logo.png',
+            'gemportal_favicon' => 'logos/my-favicon.ico',
         ];
 
         $response = $this->createMock(ResponseInterface::class);
@@ -117,6 +118,13 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
         $this->client->expects($this->once())
             ->method('request')
             ->willReturn($response);
+
+        // Configure imageUrlBuilder
+        $this->imageUrlBuilder->method('buildUrl')
+            ->will($this->returnValueMap([
+                ['shop', 'logos/my-logo.png', 'https://app.gem-books.com/logo.png'],
+                ['shop', 'logos/my-favicon.ico', 'https://app.gem-books.com/favicon.ico'],
+            ]));
 
         // Mock EntityManager and Repositories
         $entrepriseRepo = $this->createMock(EntityRepository::class);
@@ -145,8 +153,16 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
         $queryMock->method('setParameter')->willReturn($queryMock);
         $entityManager->method('createQuery')->willReturn($queryMock);
 
-        // We expect persist for Entreprise. HomeSlider/ExploreCard loop won't persist anything as data is empty
-        $entityManager->expects($this->atLeast(1))->method('persist');
+        // We expect persist for Entreprise and EmailConfiguration.
+        $entityManager->expects($this->atLeast(2))
+            ->method('persist')
+            ->with($this->callback(function ($entity) {
+                if ($entity instanceof Entreprise) {
+                    $this->assertEquals('https://app.gem-books.com/logo.png', $entity->getLogo());
+                    $this->assertEquals('https://app.gem-books.com/favicon.ico', $entity->getFaviconFilename());
+                }
+                return true;
+            }));
         $entityManager->expects($this->once())->method('flush');
 
         $this->emProvider->method('getEntityManager')->willReturn($entityManager);
