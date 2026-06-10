@@ -225,7 +225,16 @@ class ProcessGemsuiteEntityJobHandler
     private function processProductParent(EntityManagerInterface $em, array $data): ?Product
     {
         if (!$this->isEntityActive($em, $data)) {
-            $this->logger->warning(sprintf('Produit parent #%d ignoré (inactif)', $data['id']));
+            $this->logger->warning(sprintf('Produit parent #%d inactif - désactivation locale', $data['id']));
+            $product = $em->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $data['id']]);
+            if ($product) {
+                $product->setIsWeb(false);
+            }
+            $pack = $em->getRepository(RentalPack::class)->findOneBy(['gemsuiteProductId' => $data['id']]);
+            if ($pack) {
+                $em->remove($pack);
+            }
+            $em->flush();
             return null;
         }
 
@@ -259,6 +268,7 @@ class ProcessGemsuiteEntityJobHandler
         }
         $product->setSlug($slug);
 
+        $product->setGemsuiteWebDisplay($isWebDisplay);
         $product->setIsWeb(true);
         $product->setIsnewarrival((bool)($data['new_product'] ?? $data['is_new_arrival'] ?? false));
         $product->setIsfeatured((bool)($data['featured'] ?? false));
@@ -369,6 +379,11 @@ class ProcessGemsuiteEntityJobHandler
     private function processProductVariant(EntityManagerInterface $em, array $data): void
     {
         if (!$this->isEntityActive($em, $data)) {
+            $variant = $em->getRepository(ProductVariant::class)->findOneBy(['gemsuiteVariantId' => $data['id']]);
+            if ($variant) {
+                $em->remove($variant);
+                $em->flush();
+            }
             return; // Variante inactive
         }
 

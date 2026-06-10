@@ -142,6 +142,7 @@ class GemsuiteSyncHandler
 
         try {
             $tenantEm = $this->getTenantEntityManager($tenantCode);
+            $tenantEm->clear();
 
             // Charger la catégorie locale correspondante
             $category = $tenantEm->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $categoryId]);
