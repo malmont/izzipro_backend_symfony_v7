@@ -114,6 +114,9 @@ class Product implements TranslatableInterface
     private ?int $gemsuiteProductId = null;
 
     #[ORM\Column(nullable: true)]
+    private ?bool $gemsuiteWebDisplay = null;
+
+    #[ORM\Column(nullable: true)]
     private ?bool $isLandingPage = null;
 
     #[ORM\ManyToOne(inversedBy: 'products')]
@@ -616,6 +619,18 @@ class Product implements TranslatableInterface
     public function setGemsuiteProductId(?int $gemsuiteProductId): static
     {
         $this->gemsuiteProductId = $gemsuiteProductId;
+
+        return $this;
+    }
+
+    public function isGemsuiteWebDisplay(): ?bool
+    {
+        return $this->gemsuiteWebDisplay;
+    }
+
+    public function setGemsuiteWebDisplay(?bool $gemsuiteWebDisplay): static
+    {
+        $this->gemsuiteWebDisplay = $gemsuiteWebDisplay;
 
         return $this;
     }

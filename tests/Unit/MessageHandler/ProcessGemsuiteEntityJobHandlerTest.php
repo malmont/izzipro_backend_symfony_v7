@@ -188,6 +188,16 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
         $connection = $this->createMock(\Doctrine\DBAL\Connection::class);
         $connection->method('getDatabase')->willReturn('test_db');
         $em->method('getConnection')->willReturn($connection);
+        
+        $productRepo = $this->createMock(EntityRepository::class);
+        $productRepo->method('findOneBy')->willReturn(null);
+        $rentalPackRepo = $this->createMock(EntityRepository::class);
+        $rentalPackRepo->method('findOneBy')->willReturn(null);
+        $em->method('getRepository')->willReturnMap([
+            [Product::class, $productRepo],
+            [\App\Entity\RentalPack::class, $rentalPackRepo],
+        ]);
+        
         $em->method('createQuery')->willReturn($mockQuery);
         $em->expects($this->never())->method('persist');
 

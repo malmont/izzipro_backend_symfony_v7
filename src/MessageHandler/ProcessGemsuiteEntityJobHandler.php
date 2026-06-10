@@ -229,6 +229,20 @@ class ProcessGemsuiteEntityJobHandler
             $product = $em->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $data['id']]);
             if ($product) {
                 $product->setIsWeb(false);
+                $isWebDisplay = (bool)($data['web_display'] ?? false);
+                $product->setGemsuiteWebDisplay($isWebDisplay);
+
+                // --- RE-EVALUATION DE LA VISIBILITÉ DES CATÉGORIE(S) ASSOCIÉE(S) ---
+                foreach ($product->getCategory() as $cat) {
+                    $hasActiveWebProducts = false;
+                    foreach ($cat->getProducts() as $p) {
+                        if ($p->isWeb()) {
+                            $hasActiveWebProducts = true;
+                            break;
+                        }
+                    }
+                    $cat->setIsVisible($cat->isSyncWeb() || $hasActiveWebProducts);
+                }
             }
             $pack = $em->getRepository(RentalPack::class)->findOneBy(['gemsuiteProductId' => $data['id']]);
             if ($pack) {
@@ -240,6 +254,14 @@ class ProcessGemsuiteEntityJobHandler
 
         $productRepo = $em->getRepository(Product::class);
         $product = $productRepo->findOneBy(['gemsuiteProductId' => $data['id']]);
+
+        $oldCategories = [];
+        if ($product) {
+            foreach ($product->getCategory() as $cat) {
+                $oldCategories[$cat->getId()] = $cat;
+            }
+        }
+
         if (!$product) {
             $product = new Product();
             $product->setGemsuiteProductId($data['id']);
@@ -373,6 +395,24 @@ class ProcessGemsuiteEntityJobHandler
 
         $em->persist($product);
         $this->translationGenerator->generateTranslations($product);
+
+        // collect current categories
+        foreach ($product->getCategory() as $cat) {
+            $oldCategories[$cat->getId()] = $cat;
+        }
+
+        // re-evaluate visibility for all affected categories
+        foreach ($oldCategories as $cat) {
+            $hasActiveWebProducts = false;
+            foreach ($cat->getProducts() as $p) {
+                if ($p->isWeb()) {
+                    $hasActiveWebProducts = true;
+                    break;
+                }
+            }
+            $cat->setIsVisible($cat->isSyncWeb() || $hasActiveWebProducts);
+        }
+
         return $product;
     }
 

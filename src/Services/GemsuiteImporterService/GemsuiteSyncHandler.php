@@ -171,6 +171,16 @@ class GemsuiteSyncHandler
                     }
                 }
 
+                // --- RE-EVALUATION DE LA VISIBILITÉ DE LA CATÉGORIE ---
+                $hasActiveWebProducts = false;
+                foreach ($category->getProducts() as $product) {
+                    if ($product->isWeb()) {
+                        $hasActiveWebProducts = true;
+                        break;
+                    }
+                }
+                $category->setIsVisible($category->isSyncWeb() || $hasActiveWebProducts);
+
                 $tenantEm->flush();
                 $this->logger->info(sprintf('Désactivation locale des produits pour la catégorie #%d terminée.', $categoryId));
                 return;
@@ -653,6 +663,13 @@ class GemsuiteSyncHandler
             $em->remove($oldPack);
         }
 
+        $oldCategories = [];
+        if ($product) {
+            foreach ($product->getCategory() as $cat) {
+                $oldCategories[$cat->getId()] = $cat;
+            }
+        }
+
         if (!$product) {
             $product = new Product();
             $product->setGemsuiteProductId($gemProductData['id']);
@@ -771,6 +788,23 @@ class GemsuiteSyncHandler
 
         if (method_exists($this->translationGenerator, 'generateTranslations')) {
             $this->translationGenerator->generateTranslations($product);
+        }
+
+        // collect current categories
+        foreach ($product->getCategory() as $cat) {
+            $oldCategories[$cat->getId()] = $cat;
+        }
+
+        // re-evaluate visibility for all affected categories
+        foreach ($oldCategories as $cat) {
+            $hasActiveWebProducts = false;
+            foreach ($cat->getProducts() as $p) {
+                if ($p->isWeb()) {
+                    $hasActiveWebProducts = true;
+                    break;
+                }
+            }
+            $cat->setIsVisible($cat->isSyncWeb() || $hasActiveWebProducts);
         }
     }
 
@@ -964,6 +998,20 @@ class GemsuiteSyncHandler
             $product = $em->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
             if ($product) {
                 $product->setIsWeb(false);
+                $isWebDisplay = (bool)($gemProductData['web_display'] ?? false);
+                $product->setGemsuiteWebDisplay($isWebDisplay);
+
+                // --- RE-EVALUATION DE LA VISIBILITÉ DES CATÉGORIE(S) ASSOCIÉE(S) ---
+                foreach ($product->getCategory() as $cat) {
+                    $hasActiveWebProducts = false;
+                    foreach ($cat->getProducts() as $p) {
+                        if ($p->isWeb()) {
+                            $hasActiveWebProducts = true;
+                            break;
+                        }
+                    }
+                    $cat->setIsVisible($cat->isSyncWeb() || $hasActiveWebProducts);
+                }
             }
             
             // --- AJOUT: Suppression du pack s'il s'agit d'un RentalPack ---
