@@ -14,7 +14,7 @@ RUN chmod +x /usr/local/bin/install-php-extensions \
     unzip \
     postgresql-client \
     zip \
- && install-php-extensions pdo_pgsql zip intl opcache redis \
+ && install-php-extensions pdo_pgsql zip intl opcache redis-6.0.2 \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ✅ Configurer PHP
