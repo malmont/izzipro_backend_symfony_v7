@@ -55,6 +55,7 @@ use App\Entity\PaymentMethod;
 use App\Entity\OrderType;
 use Psr\Log\LoggerInterface;
 use App\Entity\User;
+use App\Entity\Team;
 
 
 class CacheInvalidationSubscriber implements EventSubscriber
@@ -306,6 +307,12 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'delete' => ['api_type_note_de_frais_all'],
             'invalidate_tags' => [],
         ],
+        // Pour Team
+        [
+            'classes' => [Team::class],
+            'delete' => [],
+            'invalidate_tags' => ['teams_all'],
+        ],
     ];
 
     public function __construct(CacheInterface $cache, TenantConnectionProvider $tcp)
@@ -377,6 +384,11 @@ class CacheInvalidationSubscriber implements EventSubscriber
         if ($entity instanceof Entreprise && $entity->getId()) {
             if ($this->cache instanceof TagAwareCacheInterface) {
                 $this->cache->invalidateTags(['entreprise_' . $entity->getId()]);
+            }
+        }
+        if ($entity instanceof Team && $entity->getId()) {
+            if ($this->cache instanceof TagAwareCacheInterface) {
+                $this->cache->invalidateTags(['team_' . $entity->getId()]);
             }
         }
 

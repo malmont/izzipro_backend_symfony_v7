@@ -77,6 +77,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
 use App\Entity\EmailConfiguration;
+use App\Entity\Team;
 use App\Entity\Banniere;
 use App\Entity\Emploi;
 use App\Entity\Candidature;
@@ -156,6 +157,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Entreprise');
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
         yield MenuItem::linkToCrud('AddressEntreprise', 'fa fa-map-marker', AddressEntreprise::class);
+        yield MenuItem::linkToCrud('Équipes', 'fa fa-users', Team::class);
 
         yield MenuItem::section('Livraison');
         yield MenuItem::linkToCrud('EasyPost Configuration', 'fa fa-cogs', EasyPostConfiguration::class);

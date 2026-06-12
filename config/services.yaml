@@ -83,8 +83,9 @@ services:
             - '../src/Repository/SaleUnitRepository.php'
             - '../src/Repository/RentalPackRepository.php'
             - '../src/Repository/RentalPackTranslationRepository.php'
+            - '../src/Repository/TeamRepository.php'
+            - '../src/Repository/TeamTranslationRepository.php'
             
-
 
             
 
