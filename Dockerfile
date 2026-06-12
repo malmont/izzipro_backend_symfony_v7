@@ -2,19 +2,22 @@
 FROM php:8.3-fpm
 
 # 🔧 Installer les dépendances système nécessaires
-ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
-
-RUN chmod +x /usr/local/bin/install-php-extensions \
- && apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y \
     iputils-ping \
     net-tools \
     curl \
     libfcgi-bin \
     git \
     unzip \
+    libpq-dev \
     postgresql-client \
+    libzip-dev \
     zip \
- && install-php-extensions pdo_pgsql zip intl opcache redis-6.0.2 \
+    libicu-dev \
+ && docker-php-ext-install pdo pdo_pgsql zip intl opcache \
+ && pecl update-channels \
+ && pecl install redis-6.0.2 \
+ && docker-php-ext-enable redis \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ✅ Configurer PHP
