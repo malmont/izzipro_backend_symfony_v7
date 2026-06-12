@@ -529,8 +529,8 @@ class ProcessGemsuiteEntityJobHandler
         $targetCategories = [];
 
         if (empty($targetCategoryGemsuiteIds)) {
-            $this->logger->info(sprintf('[processRentalPack] Pack #%d : limit_location_products vide. Association avec toutes les catégories de location.', $data['id'] ?? 0));
-            $targetCategories = $em->getRepository(Categories::class)->findBy(['isRentalCategory' => true]);
+            $this->logger->info(sprintf('[processRentalPack] Pack #%d : limit_location_products vide. Aucune catégorie de location associée.', $data['id'] ?? 0));
+            $targetCategories = [];
         } else {
             foreach ($targetCategoryGemsuiteIds as $gemsuiteId) {
                 $catId = (int)$gemsuiteId;
