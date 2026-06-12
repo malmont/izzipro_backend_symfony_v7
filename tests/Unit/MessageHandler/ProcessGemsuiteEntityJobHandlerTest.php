@@ -371,4 +371,83 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
         $this->assertTrue($createdCategory->isSyncWeb());
         $this->assertTrue($createdCategory->isVisible());
     }
+
+    public function testInvokeProcessRentalPackWithEmptyLimitLocationProducts(): void
+    {
+        $productData = [
+            'id' => 200,
+            'name_fr' => 'Pack Fibre 200',
+            'status' => 1,
+            'category_id' => 50,
+            'limit_location_products' => '',
+        ];
+
+        $logger = $this->createMock(LoggerInterface::class);
+        $tenantManager = $this->createMock(TenantConnectionManager::class);
+        $tenantManager->method('findTenantById')->willReturn(['dbname' => 'db', 'code' => 'c1']);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $connection = $this->createMock(\Doctrine\DBAL\Connection::class);
+        $connection->method('getDatabase')->willReturn('test_db');
+        $em->method('getConnection')->willReturn($connection);
+
+        $mockQuery = $this->createMock(AbstractQuery::class);
+        $mockQuery->method('setParameter')->willReturn($mockQuery);
+        $mockQuery->method('execute')->willReturn(1);
+        $em->method('createQuery')->willReturn($mockQuery);
+
+        $cat = new Categories();
+        $cat->setCategoryType(10); // Type 10 triggers processRentalPack
+
+        $catRepo = $this->createMock(EntityRepository::class);
+        $catRepo->method('findOneBy')->willReturn($cat);
+
+        $entRepo = $this->createMock(EntityRepository::class);
+        $entRepo->method('findOneBy')->willReturn(new Entreprise());
+
+        $rentalPackRepo = $this->createMock(EntityRepository::class);
+        $rentalPackRepo->method('findOneBy')->willReturn(null);
+
+        $em->method('getRepository')->willReturnMap([
+            [Categories::class, $catRepo],
+            [Entreprise::class, $entRepo],
+            [\App\Entity\RentalPack::class, $rentalPackRepo],
+        ]);
+
+        $createdPack = null;
+        $em->expects($this->once())
+            ->method('persist')
+            ->with($this->isInstanceOf(\App\Entity\RentalPack::class))
+            ->will($this->returnCallback(function ($entity) use (&$createdPack) {
+                $createdPack = $entity;
+            }));
+
+        $emProvider = $this->createMock(TenantEntityManagerProvider::class);
+        $emProvider->method('getEntityManager')->willReturn($em);
+
+        $bus = $this->createMock(MessageBusInterface::class);
+        $bus->method('dispatch')->willReturn(new Envelope(new \stdClass()));
+
+        $imgBuilder = $this->createMock(GemsuiteImageUrlBuilder::class);
+        $translationGenerator = $this->createMock(\App\Services\TranslationGeneratorService\TranslationGeneratorService::class);
+
+        $handler = new ProcessGemsuiteEntityJobHandler(
+            $logger,
+            $tenantManager,
+            $emProvider,
+            $bus,
+            $imgBuilder,
+            $this->createMock(GemsuiteAttributeProcessor::class),
+            $this->createMock(GemsuiteStockCalculator::class),
+            $this->createMock(SluggerInterface::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class),
+            $translationGenerator
+        );
+
+        $handler(new ProcessGemsuiteEntityJob(1, 999, 'product_parent', $productData));
+
+        $this->assertNotNull($createdPack);
+        $this->assertCount(0, $createdPack->getCategories());
+    }
 }
