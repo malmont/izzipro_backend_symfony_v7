@@ -26,6 +26,7 @@ class ImportGemsuiteCollectionJobHandler
         'clients_contacts',
         'categories',
         'company_config',
+        'resources',
         'products',
     ];
 

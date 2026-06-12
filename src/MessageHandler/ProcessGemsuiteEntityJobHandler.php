@@ -11,6 +11,7 @@ use App\Entity\ProductShipping;
 use App\Entity\ProductVariant;
 use App\Entity\RentalPack;
 use App\Entity\Style;
+use App\Entity\Team;
 use App\Entity\SyncJob;
 use App\Entity\ProductPicture;
 use App\Entity\ShippingClass;
@@ -98,6 +99,10 @@ class ProcessGemsuiteEntityJobHandler
                     
                 case 'company_config':
                     $this->companySyncHandler->handleCompanyUpdate($tenant['code']);
+                    break;
+
+                case 'resources':
+                    $entity = $this->processTeam($tenantEm, $data);
                     break;
             }
 
@@ -553,6 +558,41 @@ class ProcessGemsuiteEntityJobHandler
         $em->persist($pack);
         $this->translationGenerator->generateTranslations($pack);
         $em->flush();
+    }
+
+    private function processTeam(EntityManagerInterface $em, array $data): ?Team
+    {
+        $gemsuiteTeamId = $data['id'] ?? null;
+        if (!$gemsuiteTeamId) {
+            return null;
+        }
+
+        $inactive = (int)($data['inactive'] ?? 0);
+        $repo = $em->getRepository(Team::class);
+        $team = $repo->findOneBy(['gemsuiteTeamId' => $gemsuiteTeamId]);
+
+        if ($inactive === 1) {
+            if ($team) {
+                $em->remove($team);
+                $this->logger->info(sprintf('[processTeam] Membre de l\'équipe ID Gemsuite %d inactif. Suppression locale.', $gemsuiteTeamId));
+            }
+            return null;
+        }
+
+        if (!$team) {
+            $team = new Team();
+            $team->setGemsuiteTeamId($gemsuiteTeamId);
+            $team->setRole('Membre');
+            $team->setDescription('');
+        }
+
+        $team->setName(trim($data['name'] ?? ''));
+
+        $em->persist($team);
+
+        $this->translationGenerator->generateTranslations($team);
+
+        return $team;
     }
 
     /**

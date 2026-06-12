@@ -10,6 +10,7 @@ use App\Entity\RentalPack;
 use App\Entity\SaleUnit;
 use App\Entity\ShippingClass;
 use App\Entity\Style;
+use App\Entity\Team;
 use App\Entity\GemsuiteClient;
 use App\Entity\Entreprise;
 use App\Entity\ProductPicture;
@@ -286,6 +287,35 @@ class GemsuiteSyncHandler
     public function handleClientUpdate(string $tenantCode, int $clientId): void
     {
         $this->clientManager->updateClientGemsuite($tenantCode, $clientId);
+    }
+
+    public function handleResourceUpdate(string $tenantCode, int $resourceId): void
+    {
+        $this->logger->info(sprintf('Webhook Resource: Sync ID #%d pour tenant "%s"', $resourceId, $tenantCode));
+        $token = $this->tenantManager->getTenantToken($tenantCode);
+
+        if (!$token) {
+            $this->logger->error("Token manquant pour le tenant $tenantCode (Action: Sync Resource)");
+            return;
+        }
+
+        try {
+            $resourceData = $this->fetchResourceFromApi($resourceId, $token);
+
+            if (!$resourceData) {
+                $this->logger->warning("Resource #$resourceId introuvable sur l'API.");
+                return;
+            }
+
+            $tenantEm = $this->getTenantEntityManager($tenantCode);
+            
+            $this->processTeam($tenantEm, $resourceData);
+
+            $tenantEm->flush();
+            $this->logger->info("Sync Resource terminée avec succès pour #$resourceId");
+        } catch (\Throwable $e) {
+            $this->logger->error("Erreur Sync Resource #$resourceId : " . $e->getMessage());
+        }
     }
 
     /**
@@ -595,6 +625,24 @@ class GemsuiteSyncHandler
             return $response->toArray()['data'] ?? null;
         } catch (\Throwable $e) {
             $this->logger->error("API Fail pour véhicule #$id: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    private function fetchResourceFromApi(int $id, string $token): ?array
+    {
+        try {
+            $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'resources/' . $id, [
+                'auth_bearer' => $token,
+            ]);
+            $data = $response->toArray();
+
+            if (isset($data['data'][0])) {
+                return $data['data'][0];
+            }
+            return $data['data'] ?? null;
+        } catch (\Throwable $e) {
+            $this->logger->error("API Fail pour resource #$id: " . $e->getMessage());
             return null;
         }
     }
@@ -1201,5 +1249,57 @@ class GemsuiteSyncHandler
                   WHERE p.is_web = true
               )
         ');
+    }
+
+    private function processTeam(EntityManagerInterface $em, array $data): ?Team
+    {
+        $gemsuiteTeamId = $data['id'] ?? null;
+        if (!$gemsuiteTeamId) {
+            return null;
+        }
+
+        $inactive = (int)($data['inactive'] ?? 0);
+        $repo = $em->getRepository(Team::class);
+        $team = $repo->findOneBy(['gemsuiteTeamId' => $gemsuiteTeamId]);
+
+        if ($inactive === 1) {
+            if ($team) {
+                $em->remove($team);
+                $this->logger->info(sprintf('[processTeam Webhook] Membre de l\'équipe ID Gemsuite %d inactif. Suppression locale.', $gemsuiteTeamId));
+            }
+            return null;
+        }
+
+        if (!$team) {
+            $team = new Team();
+            $team->setGemsuiteTeamId($gemsuiteTeamId);
+            $team->setRole('Membre');
+            $team->setDescription('');
+        }
+
+        $team->setName(trim($data['name'] ?? ''));
+
+        $em->persist($team);
+
+        $this->translationGenerator->generateTranslations($team);
+
+        // Dispatch TranslateEntityJob
+        try {
+            $tenantCode = $this->tenantManager->getCurrentTenantCode();
+            if ($tenantCode) {
+                $tenant = $this->tenantManager->findTenantByCode($tenantCode);
+                if ($tenant && $team->getId()) {
+                    $this->messageBus->dispatch(new \App\Message\TranslateEntityJob(
+                         (int)$tenant['id'],
+                         Team::class,
+                         $team->getId()
+                    ));
+                }
+            }
+        } catch (\Throwable $ex) {
+            $this->logger->error("Erreur dispatch TranslationJob (TeamWebhook): " . $ex->getMessage());
+        }
+
+        return $team;
     }
 }

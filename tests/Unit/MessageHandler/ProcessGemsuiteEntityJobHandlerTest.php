@@ -6,6 +6,7 @@ use App\Entity\Categories;
 use App\Entity\Entreprise;
 use App\Entity\Product;
 use App\Entity\Style;
+use App\Entity\Team;
 use App\Message\ProcessGemsuiteEntityJob;
 use App\Message\TranslateEntityJob;
 use App\MessageHandler\ProcessGemsuiteEntityJobHandler;
@@ -460,5 +461,142 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
 
         $this->assertNotNull($createdPack);
         $this->assertCount(0, $createdPack->getCategories());
+    }
+
+    public function testInvokeProcessTeamCreatesMember(): void
+    {
+        $teamData = [
+            'id' => 615,
+            'name' => 'm. st-onge',
+            'inactive' => 0
+        ];
+
+        $logger = $this->createMock(LoggerInterface::class);
+        $tenantManager = $this->createMock(TenantConnectionManager::class);
+        $tenantManager->method('findTenantById')->willReturn(['dbname' => 'db', 'code' => 'c1']);
+
+        $teamRepo = $this->createMock(EntityRepository::class);
+        $teamRepo->method('findOneBy')->willReturn(null);
+
+        $mockQuery = $this->createMock(AbstractQuery::class);
+        $mockQuery->method('setParameter')->willReturn($mockQuery);
+        $mockQuery->method('execute')->willReturn(1);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $connection = $this->createMock(\Doctrine\DBAL\Connection::class);
+        $connection->method('getDatabase')->willReturn('test_db');
+        $em->method('getConnection')->willReturn($connection);
+        $em->method('createQuery')->willReturn($mockQuery);
+        $em->method('getRepository')->willReturnMap([
+            [Team::class, $teamRepo],
+        ]);
+
+        $createdTeam = null;
+        $em->expects($this->once())
+            ->method('persist')
+            ->with($this->isInstanceOf(Team::class))
+            ->will($this->returnCallback(function ($entity) use (&$createdTeam) {
+                $this->simulateEntityId($entity, 12345);
+                $createdTeam = $entity;
+            }));
+
+        $em->expects($this->atLeastOnce())->method('flush');
+        $em->method('contains')->willReturn(true);
+
+        $emProvider = $this->createMock(TenantEntityManagerProvider::class);
+        $emProvider->method('getEntityManager')->willReturn($em);
+
+        $bus = $this->createMock(MessageBusInterface::class);
+        $bus->expects($this->once())
+            ->method('dispatch')
+            ->with($this->callback(function ($message) {
+                return $message instanceof TranslateEntityJob
+                    && $message->getEntityClass() === Team::class
+                    && $message->getEntityId() === 12345;
+            }))
+            ->willReturn(new Envelope(new \stdClass()));
+
+        $translationGenerator = $this->createMock(\App\Services\TranslationGeneratorService\TranslationGeneratorService::class);
+
+        $handler = new ProcessGemsuiteEntityJobHandler(
+            $logger,
+            $tenantManager,
+            $emProvider,
+            $bus,
+            $this->createMock(GemsuiteImageUrlBuilder::class),
+            $this->createMock(GemsuiteAttributeProcessor::class),
+            $this->createMock(GemsuiteStockCalculator::class),
+            $this->createMock(SluggerInterface::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class),
+            $translationGenerator
+        );
+
+        $handler(new ProcessGemsuiteEntityJob(1, 999, 'resources', $teamData));
+
+        $this->assertNotNull($createdTeam);
+        $this->assertEquals('m. st-onge', $createdTeam->getName());
+        $this->assertEquals(615, $createdTeam->getGemsuiteTeamId());
+        $this->assertEquals('Membre', $createdTeam->getRole());
+    }
+
+    public function testInvokeProcessTeamRemovesMemberIfInactive(): void
+    {
+        $teamData = [
+            'id' => 615,
+            'name' => 'm. st-onge',
+            'inactive' => 1
+        ];
+
+        $logger = $this->createMock(LoggerInterface::class);
+        $tenantManager = $this->createMock(TenantConnectionManager::class);
+        $tenantManager->method('findTenantById')->willReturn(['dbname' => 'db', 'code' => 'c1']);
+
+        $existingMember = new Team();
+        $existingMember->setGemsuiteTeamId(615);
+
+        $teamRepo = $this->createMock(EntityRepository::class);
+        $teamRepo->method('findOneBy')->willReturn($existingMember);
+
+        $mockQuery = $this->createMock(AbstractQuery::class);
+        $mockQuery->method('setParameter')->willReturn($mockQuery);
+        $mockQuery->method('execute')->willReturn(1);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $connection = $this->createMock(\Doctrine\DBAL\Connection::class);
+        $connection->method('getDatabase')->willReturn('test_db');
+        $em->method('getConnection')->willReturn($connection);
+        $em->method('createQuery')->willReturn($mockQuery);
+        $em->method('getRepository')->willReturnMap([
+            [Team::class, $teamRepo],
+        ]);
+
+        $em->expects($this->once())
+            ->method('remove')
+            ->with($existingMember);
+
+        $emProvider = $this->createMock(TenantEntityManagerProvider::class);
+        $emProvider->method('getEntityManager')->willReturn($em);
+
+        $bus = $this->createMock(MessageBusInterface::class);
+        $bus->expects($this->never())->method('dispatch');
+
+        $translationGenerator = $this->createMock(\App\Services\TranslationGeneratorService\TranslationGeneratorService::class);
+
+        $handler = new ProcessGemsuiteEntityJobHandler(
+            $logger,
+            $tenantManager,
+            $emProvider,
+            $bus,
+            $this->createMock(GemsuiteImageUrlBuilder::class),
+            $this->createMock(GemsuiteAttributeProcessor::class),
+            $this->createMock(GemsuiteStockCalculator::class),
+            $this->createMock(SluggerInterface::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class),
+            $translationGenerator
+        );
+
+        $handler(new ProcessGemsuiteEntityJob(1, 999, 'resources', $teamData));
     }
 }
