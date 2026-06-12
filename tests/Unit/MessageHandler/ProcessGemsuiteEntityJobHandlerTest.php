@@ -408,10 +408,18 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
         $rentalPackRepo = $this->createMock(EntityRepository::class);
         $rentalPackRepo->method('findOneBy')->willReturn(null);
 
+        $productRepo = $this->createMock(EntityRepository::class);
+        $productRepo->method('findOneBy')->willReturn(null);
+
+        $styleRepo = $this->createMock(EntityRepository::class);
+        $styleRepo->method('find')->willReturn(new Style());
+
         $em->method('getRepository')->willReturnMap([
             [Categories::class, $catRepo],
             [Entreprise::class, $entRepo],
             [\App\Entity\RentalPack::class, $rentalPackRepo],
+            [Product::class, $productRepo],
+            [Style::class, $styleRepo],
         ]);
 
         $createdPack = null;
@@ -431,6 +439,9 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
         $imgBuilder = $this->createMock(GemsuiteImageUrlBuilder::class);
         $translationGenerator = $this->createMock(\App\Services\TranslationGeneratorService\TranslationGeneratorService::class);
 
+        $slugger = $this->createMock(SluggerInterface::class);
+        $slugger->method('slug')->willReturn(new UnicodeString('pack-fibre-200'));
+
         $handler = new ProcessGemsuiteEntityJobHandler(
             $logger,
             $tenantManager,
@@ -439,7 +450,7 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
             $imgBuilder,
             $this->createMock(GemsuiteAttributeProcessor::class),
             $this->createMock(GemsuiteStockCalculator::class),
-            $this->createMock(SluggerInterface::class),
+            $slugger,
             $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
             $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class),
             $translationGenerator
