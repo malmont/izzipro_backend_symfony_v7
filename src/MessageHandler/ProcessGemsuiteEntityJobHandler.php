@@ -289,6 +289,27 @@ class ProcessGemsuiteEntityJobHandler
 
         $product->setPrice((float)($data['price'] ?? 0) * 100);
 
+        $specialPrice = isset($data['special_price']) && $data['special_price'] !== null ? (float)$data['special_price'] : null;
+        if ($specialPrice !== null && $specialPrice > 0) {
+            $product->setSpecialPrice($specialPrice * 100);
+            $product->setIsspecialoffer(true);
+        } else {
+            $product->setSpecialPrice(null);
+            $product->setIsspecialoffer(false);
+        }
+
+        if (!empty($data['special_price_from'])) {
+            $product->setSpecialPriceFrom(new \DateTimeImmutable($data['special_price_from']));
+        } else {
+            $product->setSpecialPriceFrom(null);
+        }
+
+        if (!empty($data['special_price_to'])) {
+            $product->setSpecialPriceTo(new \DateTimeImmutable($data['special_price_to']));
+        } else {
+            $product->setSpecialPriceTo(null);
+        }
+
         $slug = strtolower($this->slugger->slug($name));
         if ($isWebDisplay && !empty($data['web_slug'])) {
             $slug = $data['web_slug'];

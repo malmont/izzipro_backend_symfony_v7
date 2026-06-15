@@ -29,6 +29,7 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
     private $translationGenerator;
     private $gemsuiteApiUrl = 'https://api.example.com/';
     private $messageBus;
+    private $socialNetworkService;
     private $handler;
 
     protected function setUp(): void
@@ -40,6 +41,7 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
         $this->imageUrlBuilder = $this->createMock(GemsuiteImageUrlBuilder::class);
         $this->translationGenerator = $this->createMock(TranslationGeneratorService::class);
         $this->messageBus = $this->createMock(MessageBusInterface::class);
+        $this->socialNetworkService = $this->createMock(\App\Services\SocialNetworkService\SocialNetworkService::class);
 
         $this->handler = new GemsuiteCompanySyncHandler(
             $this->client,
@@ -49,7 +51,8 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
             $this->imageUrlBuilder,
             $this->translationGenerator,
             $this->gemsuiteApiUrl,
-            $this->messageBus
+            $this->messageBus,
+            $this->socialNetworkService
         );
     }
 
@@ -169,6 +172,10 @@ class GemsuiteCompanySyncHandlerTest extends TestCase
 
         // Only Entreprise translation is generated because banner/explore data is missing in $companyData
         $this->translationGenerator->expects($this->exactly(1))->method('generateTranslations');
+
+        $this->socialNetworkService->expects($this->once())
+            ->method('updateSocialNetworksForEntreprise')
+            ->with($this->isInstanceOf(Entreprise::class), $companyData);
 
         $this->handler->handleCompanyUpdate($tenantCode);
     }

@@ -71,6 +71,18 @@ class Entreprise implements TranslatableInterface
     )]
     private Collection $translations;
 
+    /**
+     * @var Collection<int, SocialNetwork>
+     */
+    #[ORM\OneToMany(
+        mappedBy: 'entreprise',
+        targetEntity: SocialNetwork::class,
+        cascade: ['persist', 'remove'],
+        orphanRemoval: true,
+        fetch: 'EXTRA_LAZY'
+    )]
+    private Collection $socialNetworks;
+
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $faviconFilename = null;
 
@@ -80,6 +92,7 @@ class Entreprise implements TranslatableInterface
     public function __construct()
     {
         $this->translations = new ArrayCollection();
+        $this->socialNetworks = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -354,6 +367,35 @@ class Entreprise implements TranslatableInterface
     public function setGemsuitePaymentMethodId(?int $gemsuitePaymentMethodId): static
     {
         $this->gemsuitePaymentMethodId = $gemsuitePaymentMethodId;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, SocialNetwork>
+     */
+    public function getSocialNetworks(): Collection
+    {
+        return $this->socialNetworks;
+    }
+
+    public function addSocialNetwork(SocialNetwork $socialNetwork): static
+    {
+        if (!$this->socialNetworks->contains($socialNetwork)) {
+            $this->socialNetworks->add($socialNetwork);
+            $socialNetwork->setEntreprise($this);
+        }
+
+        return $this;
+    }
+
+    public function removeSocialNetwork(SocialNetwork $socialNetwork): static
+    {
+        if ($this->socialNetworks->removeElement($socialNetwork)) {
+            if ($socialNetwork->getEntreprise() === $this) {
+                $socialNetwork->setEntreprise(null);
+            }
+        }
 
         return $this;
     }

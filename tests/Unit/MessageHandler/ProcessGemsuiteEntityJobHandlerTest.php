@@ -53,6 +53,9 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
             'name_fr' => 'T-Shirt Super',
             'additional_fr' => 'Description',
             'price' => 19.99,
+            'special_price' => 14.99,
+            'special_price_from' => '2026-06-12 12:00:00',
+            'special_price_to' => '2026-06-12 18:00:00',
             'status' => 1,
             'web_display' => true,
             'is_new_arrival' => false,
@@ -114,11 +117,13 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
 
         // --- SIMULATION DE L'AUTO-INCREMENT ---
         // Quand persist($product) est appelé, on lui injecte l'ID 12345 immédiatement
+        $createdProduct = null;
         $em->expects($this->once())
             ->method('persist')
             ->with($this->isInstanceOf(Product::class))
-            ->will($this->returnCallback(function ($entity) {
+            ->will($this->returnCallback(function ($entity) use (&$createdProduct) {
                 $this->simulateEntityId($entity, 12345); // <-- LE FIX EST LÀ
+                $createdProduct = $entity;
             }));
 
         $em->expects($this->atLeastOnce())->method('flush');
@@ -172,6 +177,12 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
 
         $message = new ProcessGemsuiteEntityJob(1, 999, 'product_parent', $productData);
         $handler($message);
+
+        $this->assertNotNull($createdProduct);
+        $this->assertEquals(1499.0, $createdProduct->getSpecialPrice());
+        $this->assertTrue($createdProduct->isIsspecialoffer());
+        $this->assertEquals('2026-06-12 12:00:00', $createdProduct->getSpecialPriceFrom()->format('Y-m-d H:i:s'));
+        $this->assertEquals('2026-06-12 18:00:00', $createdProduct->getSpecialPriceTo()->format('Y-m-d H:i:s'));
     }
 
     public function testInvokeIgnoredIfInactive(): void

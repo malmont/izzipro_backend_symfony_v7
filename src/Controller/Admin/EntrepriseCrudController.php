@@ -2,7 +2,8 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Entreprise;
-use App\Form\EntrepriseTranslationType; 
+use App\Form\EntrepriseTranslationType;
+use App\Form\SocialNetworkType; 
 use App\Controller\Admin\BaseTenantCrudController; 
 use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
@@ -16,6 +17,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\UrlField;
+use App\Repository\SocialNetworkRepository;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 
 class EntrepriseCrudController extends BaseTenantCrudController
@@ -37,6 +39,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
 
     public function configureFields(string $pageName): iterable
     {
+        $tenantEm = $this->emProvider->getEntityManager();
+
         return [
             IdField::new('id')->onlyOnIndex(),
             
@@ -84,7 +88,14 @@ class EntrepriseCrudController extends BaseTenantCrudController
             CollectionField::new('translations', 'Contenus Traduits')
                 ->setEntryType(EntrepriseTranslationType::class)
                 ->setFormTypeOption('by_reference', false)
-                ->onlyOnForms(), 
+                ->onlyOnForms(),
+
+            AssociationField::new('socialNetworks', 'Réseaux Sociaux')
+                ->setFormTypeOptions([
+                    'em' => $tenantEm,
+                    'query_builder' => fn(SocialNetworkRepository $repo) => $repo->createQueryBuilder('sn')->orderBy('sn.name', 'ASC'),
+                ])
+                ->setColumns('col-md-6'),
         ];
     }
 }

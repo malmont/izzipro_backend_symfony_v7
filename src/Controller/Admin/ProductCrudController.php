@@ -16,6 +16,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\FormField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
@@ -71,6 +72,9 @@ class ProductCrudController extends BaseTenantCrudController
         yield MoneyField::new('purchasePrice', "Prix d'achat")->setCurrency('USD')->setColumns('col-md-4');
         yield NumberField::new('coefficientMultiplier', 'Coefficient')->setColumns('col-md-4');
         yield TextField::new('barcode', 'Code Barre')->setColumns('col-md-4');
+        yield MoneyField::new('specialPrice', 'Prix promotionnel')->setCurrency('USD')->setColumns('col-md-4');
+        yield DateTimeField::new('specialPriceFrom', 'Promotion du')->setColumns('col-md-4')->hideOnIndex();
+        yield DateTimeField::new('specialPriceTo', 'Promotion au')->setColumns('col-md-4')->hideOnIndex();
         yield IntegerField::new('quantity', 'Quantité')->onlyOnIndex();
         yield ChoiceField::new('mode', 'Type de Vente')
             ->setChoices([

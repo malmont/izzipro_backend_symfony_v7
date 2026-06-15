@@ -740,6 +740,27 @@ class GemsuiteSyncHandler
 
         $product->setPrice((float)($gemProductData['price'] ?? 0) * 100);
 
+        $specialPrice = isset($gemProductData['special_price']) && $gemProductData['special_price'] !== null ? (float)$gemProductData['special_price'] : null;
+        if ($specialPrice !== null && $specialPrice > 0) {
+            $product->setSpecialPrice($specialPrice * 100);
+            $product->setIsspecialoffer(true);
+        } else {
+            $product->setSpecialPrice(null);
+            $product->setIsspecialoffer(false);
+        }
+
+        if (!empty($gemProductData['special_price_from'])) {
+            $product->setSpecialPriceFrom(new \DateTimeImmutable($gemProductData['special_price_from']));
+        } else {
+            $product->setSpecialPriceFrom(null);
+        }
+
+        if (!empty($gemProductData['special_price_to'])) {
+            $product->setSpecialPriceTo(new \DateTimeImmutable($gemProductData['special_price_to']));
+        } else {
+            $product->setSpecialPriceTo(null);
+        }
+
         $slug = strtolower($this->slugger->slug($name));
         if ($isWebDisplay && !empty($gemProductData['web_slug'])) {
             $slug = $gemProductData['web_slug'];

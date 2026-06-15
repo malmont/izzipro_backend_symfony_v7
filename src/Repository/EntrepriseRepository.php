@@ -18,7 +18,8 @@ class EntrepriseRepository extends EntityRepository
             ->setParameter('id', $id)
             ->leftJoin('e.translations', 't', 'WITH', 't.language = :locale')
             ->leftJoin('e.addressEntreprise', 'ae')
-            ->addSelect('t', 'ae')
+            ->leftJoin('e.socialNetworks', 'sn')
+            ->addSelect('t', 'ae', 'sn')
             ->setParameter('locale', $locale)
             ->getQuery()
             ->getOneOrNullResult();

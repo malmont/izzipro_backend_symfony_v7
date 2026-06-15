@@ -25,6 +25,8 @@ class EntrepriseDto
     public ?string $zip = null;
     public ?string $country = null;
     public ?string $province = null;
+    /** @var SocialNetworkDto[] */
+    public array $socialNetworks = [];
 
     public static function fromEntity(Entreprise $entreprise, string $host, string $locale): self
     {
@@ -76,6 +78,10 @@ class EntrepriseDto
         $dto->LegalNotice = $translation?->getLegalNotice() ?? $entreprise->getLegalNotice();
         $dto->privacyPolicy = $translation?->getPrivacyPolicy() ?? $entreprise->getPrivacyPolicy();
         $dto->apropos = $translation?->getApropos() ?? $entreprise->getApropos();
+
+        foreach ($entreprise->getSocialNetworks() as $socialNetwork) {
+            $dto->socialNetworks[] = SocialNetworkDto::fromEntity($socialNetwork);
+        }
 
         return $dto;
     }

@@ -24,6 +24,9 @@ class ProductDetailedOutputDTO
     public bool $isnewarrival;
     public bool $isfeatured;
     public bool $isspecialoffer;
+    public ?float $specialPrice = null;
+    public ?string $specialPriceFrom = null;
+    public ?string $specialPriceTo = null;
     public ?string $image;
     public array $pictures = [];
     public int $quantity;
@@ -59,6 +62,9 @@ class ProductDetailedOutputDTO
         $this->isnewarrival = $product->isIsnewarrival();
         $this->isfeatured = $product->isIsfeatured();
         $this->isspecialoffer = $product->isIsspecialoffer();
+        $this->specialPrice = $product->getSpecialPrice();
+        $this->specialPriceFrom = $product->getSpecialPriceFrom()?->format('Y-m-d H:i:s');
+        $this->specialPriceTo = $product->getSpecialPriceTo()?->format('Y-m-d H:i:s');
         
         $imagePath = $product->getImage();
         if (empty($imagePath)) {

@@ -41,6 +41,7 @@ use App\Entity\OrderTax;
 use App\Entity\OrderType;
 use App\Entity\AdminSettings;
 use App\Entity\Entreprise;
+use App\Entity\SocialNetwork;
 use App\Entity\PaymentType;
 use App\Entity\CashDetails;
 use App\Entity\Denomination;
@@ -157,6 +158,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Entreprise');
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
         yield MenuItem::linkToCrud('AddressEntreprise', 'fa fa-map-marker', AddressEntreprise::class);
+        yield MenuItem::linkToCrud('Réseaux Sociaux', 'fa fa-share-alt', SocialNetwork::class);
         yield MenuItem::linkToCrud('Équipes', 'fa fa-users', Team::class);
 
         yield MenuItem::section('Livraison');

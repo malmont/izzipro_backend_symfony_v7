@@ -15,6 +15,7 @@ use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\GemsuiteImporterService\GemsuiteImageUrlBuilder;
 use App\Entity\EmailConfiguration;
+use App\Services\SocialNetworkService\SocialNetworkService;
 
 class GemsuiteCompanySyncHandler
 {
@@ -29,7 +30,8 @@ class GemsuiteCompanySyncHandler
         private GemsuiteImageUrlBuilder $imageUrlBuilder,
         private TranslationGeneratorService $translationGenerator,
         private string $gemsuiteApiUrl,
-        private \Symfony\Component\Messenger\MessageBusInterface $messageBus
+        private \Symfony\Component\Messenger\MessageBusInterface $messageBus,
+        private SocialNetworkService $socialNetworkService
     ) {}
 
     /**
@@ -116,6 +118,8 @@ class GemsuiteCompanySyncHandler
             $addressEntreprise->setEmail($companyData['email'] ?? '');
             $entreprise->setAddressEntreprise($addressEntreprise);
         }
+
+        $this->socialNetworkService->updateSocialNetworksForEntreprise($entreprise, $companyData);
 
         $em->persist($entreprise);
 
