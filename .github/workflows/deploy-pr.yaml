@@ -1,0 +1,148 @@
+name: Deploy PR Environment (Backend)
+
+on:
+  pull_request:
+    types: [opened, synchronize, closed]
+    branches:
+      - dev
+
+jobs:
+  deploy-pr:
+    name: Manage PR Environment
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: 📥 Checkout App Repository
+        uses: actions/checkout@v4
+
+      # ==========================================
+      # SCÉNARIO 1 : PR CRÉÉE OU MISE A JOUR
+      # ==========================================
+      - name: 🏗️ Build Docker Image (Open/Sync)
+        if: github.event.action != 'closed'
+        run: |
+          IMAGE_TAG="pr-${{ github.event.number }}"
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/lizipro:$IMAGE_TAG"
+          echo "Building image $IMAGE_NAME..."
+          docker build -t $IMAGE_NAME .
+          docker push $IMAGE_NAME
+
+      - name: 🔑 Login to GHCR (Runner Local)
+        if: github.event.action != 'closed'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: 🌐 Clone K8s Config Repo
+        if: github.event.action != 'closed'
+        run: |
+          git clone https://x-access-token:${{ secrets.PAT_FOR_CONFIG_REPO }}@github.com/v2v-technologies/ecommerce-k8s.git k8s-config
+
+      - name: 🗄️ Clone Postgres Database & Register Tenant
+        if: github.event.action != 'closed'
+        run: |
+          PR_NUM="${{ github.event.number }}"
+          DB_NAME="db_pr_$PR_NUM"
+          TENANT_CODE="qa-pr-$PR_NUM"
+          DOMAIN="pr-$PR_NUM.gem-portal.ca"
+          
+          echo "Cloning database db_expertnautique to $DB_NAME on QA DB server..."
+          # Exécution via client psql local du runner vers 172.16.7.18
+          export PGPASSWORD="${{ secrets.QA_DB_PASSWORD }}"
+          
+          # Dropper la base existante si synchro et recréer
+          psql -h 172.16.7.18 -U db_creator -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME WITH (FORCE);"
+          psql -h 172.16.7.18 -U db_creator -d postgres -c "CREATE DATABASE $DB_NAME TEMPLATE db_expertnautique OWNER db_creator;"
+          
+          # Enregistrer le locataire dans master.tenants
+          psql -h 172.16.7.18 -U db_creator -d master -c "DELETE FROM tenants WHERE code='$TENANT_CODE';"
+          psql -h 172.16.7.18 -U db_creator -d master -c "INSERT INTO tenants (id, code, name, dbname, custom_domain, gemsuite_token, is_internal_store) VALUES ($PR_NUM, '$TENANT_CODE', 'PR $PR_NUM', '$DB_NAME', '$DOMAIN', 'AbtGr19LzIQvc+LDvyHM/EZHy/ATuIRB+yeXyRtXslR0gHXqmyE0txPJTd4fDJAHmaq0ml3WdTw3VaV+Myugpg==', 'f');"
+
+      - name: ☸️ Setup K8s Namespace & Config
+        if: github.event.action != 'closed'
+        run: |
+          PR_NUM="${{ github.event.number }}"
+          NS="qa-pr-$PR_NUM"
+          
+          # 1. Créer le namespace
+          sed "s/__PR_NUMBER__/$PR_NUM/g" k8s-config/templates-pr/namespace.yaml | kubectl apply -f -
+          
+          # 2. Copier les secrets de base
+          kubectl get secret ghcr-credentials -n qa -o json | jq ".metadata.namespace = \"$NS\"" | kubectl apply -f -
+          kubectl get secret gem-portal-backend-com-wildcard-tls -n qa -o json | jq ".metadata.namespace = \"$NS\"" | kubectl apply -f -
+          kubectl get secret gem-portal-ca-wildcard-tls -n qa -o json | jq ".metadata.namespace = \"$NS\"" | kubectl apply -f -
+          kubectl get configmap nginx-conf -n qa -o json | jq ".metadata.namespace = \"$NS\"" | kubectl apply -f -
+
+          # 3. Récupérer le secret d'env, modifier la DATABASE_URL pour pointer vers la base éphémère et appliquer dans le namespace PR
+          DB_NAME="db_pr_$PR_NUM"
+          RAW_SECRET=$(kubectl get secret backend-env-secret -n qa -o json)
+          
+          # Décoder DATABASE_URL, remplacer le nom de la base et ré-encoder
+          DEC_URL=$(echo "$RAW_SECRET" | jq -r '.data.DATABASE_URL | @base64d' | sed "s/db_expertnautique/$DB_NAME/g")
+          ENC_URL=$(echo -n "$DEC_URL" | base64 -w 0)
+          
+          echo "$RAW_SECRET" | jq ".metadata.namespace = \"$NS\" | .data.DATABASE_URL = \"$ENC_URL\"" | kubectl apply -f -
+
+      - name: 🚀 Deploy App Components (Redis + Backend)
+        if: github.event.action != 'closed'
+        run: |
+          PR_NUM="${{ github.event.number }}"
+          IMAGE_TAG="pr-$PR_NUM"
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          
+          # Remplacer les variables dans les templates et appliquer
+          sed -e "s/__PR_NUMBER__/$PR_NUM/g" \
+              -e "s/__IMAGE_TAG__/$IMAGE_TAG/g" \
+              -e "s/__GITHUB_REPOSITORY_OWNER__/$OWNER/g" \
+              k8s-config/templates-pr/redis-pr.yaml | kubectl apply -f -
+
+          sed -e "s/__PR_NUMBER__/$PR_NUM/g" \
+              -e "s/__IMAGE_TAG__/$IMAGE_TAG/g" \
+              -e "s/__GITHUB_REPOSITORY_OWNER__/$OWNER/g" \
+              k8s-config/templates-pr/backend-pr.yaml | kubectl apply -f -
+
+      - name: ⚙️ Run Database Migrations in Pod
+        if: github.event.action != 'closed'
+        run: |
+          PR_NUM="${{ github.event.number }}"
+          NS="qa-pr-$PR_NUM"
+          
+          echo "Waiting for backend pod to be ready..."
+          kubectl rollout status deployment/backend-symfony -n $NS --timeout=90s
+          
+          POD_NAME=$(kubectl get pods -n $NS -l app=backend-symfony -o jsonpath='{.items[0].metadata.name}')
+          
+          echo "Running database migrations..."
+          kubectl exec -n $NS $POD_NAME -c app -- php bin/console doctrine:migrations:migrate --no-interaction --env=prod
+
+      - name: 💬 Add PR Review Link Comment
+        if: github.event.action != 'closed'
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          message: |
+            🚀 **Environnement éphémère déployé avec succès !**
+            * 🖥️ **Frontend** : [https://pr-${{ github.event.number }}.gem-portal.ca](<https://pr-${{ github.event.number }}.gem-portal.ca>)
+            * ⚙️ **API Backend** : [https://pr-${{ github.event.number }}.gem-portal-backend.com](<https://pr-${{ github.event.number }}.gem-portal-backend.com>)
+            * 🗄️ **Base de données isolée** : `db_pr_${{ github.event.number }}`
+          comment_tag: pr_preview_env
+
+      # ==========================================
+      # SCÉNARIO 2 : PR FERMÉE OU FUSIONNÉE
+      # ==========================================
+      - name: 🧹 Clean up PR Environment (Close)
+        if: github.event.action == 'closed'
+        run: |
+          PR_NUM="${{ github.event.number }}"
+          NS="qa-pr-$PR_NUM"
+          DB_NAME="db_pr_$PR_NUM"
+          TENANT_CODE="qa-pr-$PR_NUM"
+          
+          echo "Deleting namespace $NS..."
+          kubectl delete namespace $NS --ignore-not-found=true
+          
+          echo "Dropping database $DB_NAME and removing tenant..."
+          export PGPASSWORD="${{ secrets.QA_DB_PASSWORD }}"
+          psql -h 172.16.7.18 -U db_creator -d postgres -c "DROP DATABASE IF EXISTS $DB_NAME WITH (FORCE);"
+          psql -h 172.16.7.18 -U db_creator -d master -c "DELETE FROM tenants WHERE code='$TENANT_CODE';"
