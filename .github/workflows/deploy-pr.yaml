@@ -13,7 +13,9 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      packages: write 
+      packages: write
+    env:
+      PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
     steps:
       - name: 📥 Checkout App Repository
@@ -31,6 +33,8 @@ jobs:
           echo "DB_NAME=db_pr_$DB_SUFFIX" >> $GITHUB_ENV
           echo "TENANT_CODE=qa-pr-$PR_ID" >> $GITHUB_ENV
           echo "DOMAIN=pr-$PR_ID.gem-portal.ca" >> $GITHUB_ENV
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "OWNER=$OWNER" >> $GITHUB_ENV
 
       # ==========================================
       # SCÉNARIO 1 : PR CRÉÉE OU MISE A JOUR
@@ -44,7 +48,7 @@ jobs:
         if: github.event.action != 'closed'
         run: |
           IMAGE_TAG="pr-${{ env.PR_ID }}"
-          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/lizipro:$IMAGE_TAG"
+          IMAGE_NAME="ghcr.io/${{ env.OWNER }}/lizipro:$IMAGE_TAG"
           echo "Building image $IMAGE_NAME..."
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
@@ -58,16 +62,10 @@ jobs:
         if: github.event.action != 'closed'
         run: |
           echo "Cloning database db_expertnautique to ${{ env.DB_NAME }} on QA DB server..."
-          export PGPASSWORD="${{ secrets.QA_DB_PASSWORD }}"
-          
-          # Dropper la base existante si synchro et recréer
-          psql -h 172.16.7.18 -U db_creator -d postgres -c "DROP DATABASE IF EXISTS ${{ env.DB_NAME }} WITH (FORCE);"
-          psql -h 172.16.7.18 -U db_creator -d postgres -c "CREATE DATABASE ${{ env.DB_NAME }} TEMPLATE db_expertnautique OWNER db_creator;"
-          
-          # Enregistrer le locataire dans master.tenants
-          psql -h 172.16.7.18 -U db_creator -d master -c "DELETE FROM tenants WHERE code='${{ env.TENANT_CODE }}';"
-          # Note: Nous utilisons l'ID de la PR (github.event.number) comme ID numérique unique pour le tenant
-          psql -h 172.16.7.18 -U db_creator -d master -c "INSERT INTO tenants (id, code, name, dbname, custom_domain, gemsuite_token, is_internal_store) VALUES (${{ github.event.number }}, '${{ env.TENANT_CODE }}', 'PR ${{ github.event.number }} (${{ env.PR_ID }})', '${{ env.DB_NAME }}', '${{ env.DOMAIN }}', 'AbtGr19LzIQvc+LDvyHM/EZHy/ATuIRB+yeXyRtXslR0gHXqmyE0txPJTd4fDJAHmaq0ml3WdTw3VaV+Myugpg==', 'f');"
+          docker run --rm -e PGPASSWORD="${{ secrets.QA_DB_PASSWORD }}" postgres:14-alpine psql -h 172.16.7.18 -U db_creator -d postgres -c "DROP DATABASE IF EXISTS ${{ env.DB_NAME }} WITH (FORCE);"
+          docker run --rm -e PGPASSWORD="${{ secrets.QA_DB_PASSWORD }}" postgres:14-alpine psql -h 172.16.7.18 -U db_creator -d postgres -c "CREATE DATABASE ${{ env.DB_NAME }} TEMPLATE db_expertnautique OWNER db_creator;"
+          docker run --rm -e PGPASSWORD="${{ secrets.QA_DB_PASSWORD }}" postgres:14-alpine psql -h 172.16.7.18 -U db_creator -d master -c "DELETE FROM tenants WHERE code='${{ env.TENANT_CODE }}';"
+          docker run --rm -e PGPASSWORD="${{ secrets.QA_DB_PASSWORD }}" postgres:14-alpine psql -h 172.16.7.18 -U db_creator -d master -c "INSERT INTO tenants (id, code, name, dbname, custom_domain, gemsuite_token, is_internal_store) VALUES (${{ github.event.number }}, '${{ env.TENANT_CODE }}', 'PR ${{ github.event.number }} (${{ env.PR_ID }})', '${{ env.DB_NAME }}', '${{ env.DOMAIN }}', 'AbtGr19LzIQvc+LDvyHM/EZHy/ATuIRB+yeXyRtXslR0gHXqmyE0txPJTd4fDJAHmaq0ml3WdTw3VaV+Myugpg==', 'f');"
 
       - name: ☸️ Setup K8s Namespace & Config
         if: github.event.action != 'closed'
@@ -95,18 +93,17 @@ jobs:
         if: github.event.action != 'closed'
         run: |
           IMAGE_TAG="pr-${{ env.PR_ID }}"
-          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           
           # 1. Déployer Redis
           sed -e "s/__PR_NUMBER__/${{ env.PR_ID }}/g" \
               -e "s/__IMAGE_TAG__/dev/g" \
-              -e "s/__GITHUB_REPOSITORY_OWNER__/$OWNER/g" \
+              -e "s/__GITHUB_REPOSITORY_OWNER__/${{ env.OWNER }}/g" \
               k8s-config/templates-pr/redis-pr.yaml | kubectl apply -f -
 
           # 2. Déployer le Backend (avec l'image de la PR)
           sed -e "s/__PR_NUMBER__/${{ env.PR_ID }}/g" \
               -e "s/__IMAGE_TAG__/$IMAGE_TAG/g" \
-              -e "s/__GITHUB_REPOSITORY_OWNER__/$OWNER/g" \
+              -e "s/__GITHUB_REPOSITORY_OWNER__/${{ env.OWNER }}/g" \
               k8s-config/templates-pr/backend-pr.yaml | kubectl apply -f -
 
           # 3. Déployer le Frontend (avec l'image stable 'dev' par défaut, si le front n'a pas encore été déployé pour cette PR)
@@ -115,7 +112,7 @@ jobs:
             echo "Deploying default dev frontend..."
             sed -e "s/__PR_NUMBER__/${{ env.PR_ID }}/g" \
                 -e "s/__IMAGE_TAG__/dev/g" \
-                -e "s/__GITHUB_REPOSITORY_OWNER__/$OWNER/g" \
+                -e "s/__GITHUB_REPOSITORY_OWNER__/${{ env.OWNER }}/g" \
                 k8s-config/templates-pr/frontend-pr.yaml | kubectl apply -f -
           fi
 
@@ -155,6 +152,5 @@ jobs:
           kubectl delete namespace $NS --ignore-not-found=true
           
           echo "Dropping database ${{ env.DB_NAME }} and removing tenant..."
-          export PGPASSWORD="${{ secrets.QA_DB_PASSWORD }}"
-          psql -h 172.16.7.18 -U db_creator -d postgres -c "DROP DATABASE IF EXISTS ${{ env.DB_NAME }} WITH (FORCE);"
-          psql -h 172.16.7.18 -U db_creator -d master -c "DELETE FROM tenants WHERE code='${{ env.TENANT_CODE }}';"
+          docker run --rm -e PGPASSWORD="${{ secrets.QA_DB_PASSWORD }}" postgres:14-alpine psql -h 172.16.7.18 -U db_creator -d postgres -c "DROP DATABASE IF EXISTS ${{ env.DB_NAME }} WITH (FORCE);"
+          docker run --rm -e PGPASSWORD="${{ secrets.QA_DB_PASSWORD }}" postgres:14-alpine psql -h 172.16.7.18 -U db_creator -d master -c "DELETE FROM tenants WHERE code='${{ env.TENANT_CODE }}';"
