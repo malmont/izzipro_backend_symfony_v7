@@ -76,18 +76,18 @@ jobs:
           sed "s/__PR_NUMBER__/${{ env.PR_ID }}/g" k8s-config/templates-pr/namespace.yaml | kubectl apply -f -
           
           # 2. Copier les secrets de base
-          kubectl get secret ghcr-credentials -n qa -o json | jq ".metadata.namespace = \"$NS\"" | kubectl apply -f -
-          kubectl get secret backend-jwt-secret -n qa -o json | jq ".metadata.namespace = \"$NS\"" | kubectl apply -f -
-          kubectl get secret gem-portal-backend-com-wildcard-tls -n qa -o json | jq ".metadata.namespace = \"$NS\"" | kubectl apply -f -
-          kubectl get secret gem-portal-ca-wildcard-tls -n qa -o json | jq ".metadata.namespace = \"$NS\"" | kubectl apply -f -
-          kubectl get configmap nginx-conf -n qa -o json | jq ".metadata.namespace = \"$NS\"" | kubectl apply -f -
+          kubectl get secret ghcr-credentials -n qa -o json | jq "del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation, .metadata.ownerReferences) | .metadata.namespace = \"$NS\"" | kubectl apply -f -
+          kubectl get secret backend-jwt-secret -n qa -o json | jq "del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation, .metadata.ownerReferences) | .metadata.namespace = \"$NS\"" | kubectl apply -f -
+          kubectl get secret gem-portal-backend-com-wildcard-tls -n qa -o json | jq "del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation, .metadata.ownerReferences) | .metadata.namespace = \"$NS\"" | kubectl apply -f -
+          kubectl get secret gem-portal-ca-wildcard-tls -n qa -o json | jq "del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation, .metadata.ownerReferences) | .metadata.namespace = \"$NS\"" | kubectl apply -f -
+          kubectl get configmap nginx-conf -n qa -o json | jq "del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation, .metadata.ownerReferences) | .metadata.namespace = \"$NS\"" | kubectl apply -f -
 
           # 3. Récupérer le secret d'env, modifier la DATABASE_URL pour pointer vers la base éphémère et appliquer dans le namespace PR
           RAW_SECRET=$(kubectl get secret backend-env-secret -n qa -o json)
           DEC_URL=$(echo "$RAW_SECRET" | jq -r '.data.DATABASE_URL | @base64d' | sed "s/db_expertnautique/${{ env.DB_NAME }}/g")
           ENC_URL=$(echo -n "$DEC_URL" | base64 -w 0)
           
-          echo "$RAW_SECRET" | jq ".metadata.namespace = \"$NS\" | .data.DATABASE_URL = \"$ENC_URL\"" | kubectl apply -f -
+          echo "$RAW_SECRET" | jq "del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation, .metadata.ownerReferences) | .metadata.namespace = \"$NS\" | .data.DATABASE_URL = \"$ENC_URL\"" | kubectl apply -f -
 
       - name: 🚀 Deploy App Components (Redis + Backend + Frontend par défaut)
         if: github.event.action != 'closed'
