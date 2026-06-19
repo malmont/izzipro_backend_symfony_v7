@@ -75,11 +75,9 @@ jobs:
           # 1. Créer le namespace
           sed "s/__PR_NUMBER__/${{ env.PR_ID }}/g" k8s-config/templates-pr/namespace.yaml | kubectl apply -f -
           
-          # 2. Copier les secrets de base
+          # 2. Copier les secrets de base (sans copier/écraser les certificats TLS de letsencrypt)
           kubectl get secret ghcr-credentials -n qa -o json | jq "del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation, .metadata.ownerReferences) | .metadata.namespace = \"$NS\"" | kubectl apply -f -
           kubectl get secret backend-jwt-secret -n qa -o json | jq "del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation, .metadata.ownerReferences) | .metadata.namespace = \"$NS\"" | kubectl apply -f -
-          kubectl get secret gem-portal-backend-com-wildcard-tls -n qa -o json | jq "del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation, .metadata.ownerReferences) | .metadata.namespace = \"$NS\"" | kubectl apply -f -
-          kubectl get secret gem-portal-ca-wildcard-tls -n qa -o json | jq "del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation, .metadata.ownerReferences) | .metadata.namespace = \"$NS\"" | kubectl apply -f -
           kubectl get configmap nginx-conf -n qa -o json | jq "del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.generation, .metadata.ownerReferences) | .metadata.namespace = \"$NS\"" | kubectl apply -f -
 
           # 3. Récupérer le secret d'env, modifier la DATABASE_URL pour pointer vers la base éphémère et appliquer dans le namespace PR
@@ -123,6 +121,10 @@ jobs:
           
           echo "Waiting for backend pod to be ready..."
           kubectl rollout status deployment/backend-symfony -n $NS --timeout=300s
+
+          echo "Forcing pod restart to reload updated secrets (DATABASE_URL)..."
+          kubectl rollout restart deployment/backend-symfony -n $NS
+          kubectl rollout status deployment/backend-symfony -n $NS --timeout=300s
           
           POD_NAME=$(kubectl get pods -n $NS -l app=backend-symfony -o json | jq -r '.items[] | select(.status.phase=="Running" and .metadata.deletionTimestamp==null) | .metadata.name' | head -n 1)
           
@@ -135,8 +137,8 @@ jobs:
         with:
           message: |
             🚀 **Environnement éphémère déployé avec succès !**
-            * 🖥️ **Frontend** : [https://pr-${{ env.PR_ID }}.gem-portal.ca](<https://pr-${{ env.PR_ID }}.gem-portal.ca>)
-            * ⚙️ **API Backend** : [https://pr-${{ env.PR_ID }}.gem-portal-backend.com](<https://pr-${{ env.PR_ID }}.gem-portal-backend.com>)
+            * 🖥️ **Frontend** : [https://pr-${{ env.PR_ID }}.gem-portal.ca](https://pr-${{ env.PR_ID }}.gem-portal.ca)
+            * ⚙️ **API Backend** : [https://pr-${{ env.PR_ID }}.gem-portal-backend.com](https://pr-${{ env.PR_ID }}.gem-portal-backend.com)
             * 🗄️ **Base de données isolée** : `${{ env.DB_NAME }}`
           comment_tag: pr_preview_env
 

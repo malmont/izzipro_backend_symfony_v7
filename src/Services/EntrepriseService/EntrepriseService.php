@@ -43,6 +43,7 @@ class EntrepriseService
         $entreprise->setEin($dto->ein);
         $entreprise->setTvaIntracommunautaire($dto->tvaIntracommunautaire);
         $entreprise->setAdress($dto->adress);
+        $entreprise->setFacebookPixelId($dto->facebookPixelId);
         $translation = new EntrepriseTranslation();
         $translation->setLanguage('fr');
         $translation->setConditionOfUse($dto->conditionOfUse);
