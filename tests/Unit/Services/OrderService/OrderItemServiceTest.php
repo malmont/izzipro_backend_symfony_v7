@@ -20,7 +20,7 @@ class OrderItemServiceTest extends TestCase
         $price = 100.0;
         $quantity = 2;
 
-        $product->method('getPrice')->willReturn($price);
+        $product->method('getEffectivePrice')->willReturn($price);
         $productVariant->method('getProduct')->willReturn($product);
 
         // Expect existing of addOrderItem call on Order

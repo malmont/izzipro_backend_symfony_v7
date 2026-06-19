@@ -15,7 +15,7 @@ class OrderItemService
         $orderItem->setProductVariant($productVariant);
         $orderItem->setQuantity($quantity);
         
-        $finalUnitPrice = $unitPrice ?? (float)$productVariant->getProduct()->getPrice();
+        $finalUnitPrice = $unitPrice ?? (float)$productVariant->getProduct()->getEffectivePrice();
         $orderItem->setUnitPrice($finalUnitPrice);
         $orderItem->setTotalPrice($finalUnitPrice * $quantity);
 

@@ -122,9 +122,9 @@ jobs:
           NS="qa-pr-${{ env.PR_ID }}"
           
           echo "Waiting for backend pod to be ready..."
-          kubectl rollout status deployment/backend-symfony -n $NS --timeout=90s
+          kubectl rollout status deployment/backend-symfony -n $NS --timeout=300s
           
-          POD_NAME=$(kubectl get pods -n $NS -l app=backend-symfony -o jsonpath='{.items[0].metadata.name}')
+          POD_NAME=$(kubectl get pods -n $NS -l app=backend-symfony -o json | jq -r '.items[] | select(.status.phase=="Running" and .metadata.deletionTimestamp==null) | .metadata.name' | head -n 1)
           
           echo "Running database migrations..."
           kubectl exec -n $NS $POD_NAME -c app -- php bin/console doctrine:migrations:migrate --no-interaction --env=prod
