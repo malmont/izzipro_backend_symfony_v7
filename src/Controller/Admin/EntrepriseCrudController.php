@@ -62,6 +62,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             UrlField::new('website', 'Site web'),
             TextField::new('ein', 'SIRET'),
             TextField::new('tvaIntracommunautaire', 'TVA intracommunautaire'),
+            TextField::new('facebookPixelId', 'Facebook Pixel ID')->hideOnIndex(),
             TextareaField::new('conditionOfUse', 'Conditions d\'utilisation'),
             TextareaField::new('LegalNotice', 'Mentions légales'),
             TextareaField::new('privacyPolicy', 'Politique de confidentialité'),

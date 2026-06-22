@@ -25,8 +25,10 @@ class EntrepriseDto
     public ?string $zip = null;
     public ?string $country = null;
     public ?string $province = null;
+    public ?string $facebookPixelId = null;
     /** @var SocialNetworkDto[] */
     public array $socialNetworks = [];
+
 
     public static function fromEntity(Entreprise $entreprise, string $host, string $locale): self
     {
@@ -39,8 +41,10 @@ class EntrepriseDto
         $dto->website = $entreprise->getWebsite();
         $dto->ein = $entreprise->getEin();
         $dto->tvaIntracommunautaire = $entreprise->getTvaIntracommunautaire();
+        $dto->facebookPixelId = $entreprise->getFacebookPixelId();
         
         $addressObj = $entreprise->getAddressEntreprise();
+
         if ($addressObj) {
             $dto->street1 = $addressObj->getStreet1();
             $dto->street2 = $addressObj->getStreet2();

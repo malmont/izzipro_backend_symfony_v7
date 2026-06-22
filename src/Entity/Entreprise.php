@@ -89,6 +89,10 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(nullable: true)]
     private ?int $gemsuitePaymentMethodId = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $facebookPixelId = null;
+
+
     public function __construct()
     {
         $this->translations = new ArrayCollection();
@@ -370,6 +374,19 @@ class Entreprise implements TranslatableInterface
 
         return $this;
     }
+
+    public function getFacebookPixelId(): ?string
+    {
+        return $this->facebookPixelId;
+    }
+
+    public function setFacebookPixelId(?string $facebookPixelId): static
+    {
+        $this->facebookPixelId = $facebookPixelId;
+
+        return $this;
+    }
+
 
     /**
      * @return Collection<int, SocialNetwork>

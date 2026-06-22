@@ -30,6 +30,7 @@ class CreateEntrepriseUseCase
         $dto->LegalNotice = $data['LegalNotice'] ?? null;
         $dto->privacyPolicy = $data['privacyPolicy'] ?? null;
         $dto->adress = $data['adress'] ?? null;
+        $dto->facebookPixelId = $data['facebookPixelId'] ?? null;
 
         return $this->entrepriseService->createEntreprise($dto);
     }
