@@ -12,6 +12,7 @@ use App\Services\TenantEntityManagerProvider;
 use App\Services\GemsuiteImporterService\GemsuiteStockCalculator;
 use App\Entity\RentalPack;
 use Psr\Log\LoggerInterface;
+use App\Services\TenantCacheService;
 
 class GemsuiteRentalWorkaroundService
 
@@ -19,7 +20,9 @@ class GemsuiteRentalWorkaroundService
     public function __construct(
         private TenantEntityManagerProvider $emProvider,
         private GemsuiteStockCalculator $stockCalculator,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private GemsuiteImageUrlBuilder $imageUrlBuilder,
+        private TenantCacheService $cache
     ) {}
 
     private function getEm(): EntityManagerInterface
@@ -134,6 +137,10 @@ class GemsuiteRentalWorkaroundService
         $vehicleRepo = $this->getEm()->getRepository(Vehicle::class);
         $productRepo = $this->getEm()->getRepository(Product::class);
 
+        // Fetch company identifier once for resolving images
+        $entreprise = $this->getEm()->getRepository(\App\Entity\Entreprise::class)->findOneBy([]);
+        $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+
         foreach ($vehiclesData as $vData) {
             $gemsuiteVehicleId = $vData['id'] ?? null;
             $gemsuiteProductId = $vData['product_id'] ?? null;
@@ -171,10 +178,46 @@ class GemsuiteRentalWorkaroundService
             }
 
             $vehicle->setProduct($product);
+
+            // Populate the new carousel-related fields
+            $vehicle->setTitle($vData['web_title_fr'] ?? $vData['web_title'] ?? $vData['seo_title'] ?? null);
+            $vehicle->setDescription($vData['web_description_fr'] ?? $vData['web_description'] ?? null);
+            $vehicle->setYear($vData['year'] ?? null);
+            $vehicle->setColor($vData['color'] ?? null);
+            $vehicle->setTransmission($vData['transmission'] ?? null);
+            $vehicle->setGasType($vData['gas_type'] ?? null);
+            $vehicle->setNewVehicle(isset($vData['new_vehicle']) ? (bool)$vData['new_vehicle'] : null);
+            $vehicle->setFeaturedVehicle(isset($vData['featured_vehicle']) ? (bool)$vData['featured_vehicle'] : null);
+            $vehicle->setWebDisplay(isset($vData['web_display']) ? (bool)$vData['web_display'] : null);
+            $vehicle->setSlug($vData['web_slug'] ?? null);
+
+            // Resolve main picture
+            $pictureUrl = null;
+            $medias = $vData['media'] ?? [];
+            if (!empty($medias)) {
+                $mainMedia = null;
+                foreach ($medias as $media) {
+                    $mediaTypeId = $media['media_type_id'] ?? null;
+                    $nom = $media['nom'] ?? '';
+                    if ((int)$mediaTypeId === 1 || strtolower($nom) === 'principale') {
+                        $mainMedia = $media;
+                        break;
+                    }
+                }
+                if (!$mainMedia && !empty($medias)) {
+                    $mainMedia = $medias[0];
+                }
+                if ($mainMedia && isset($mainMedia['path']) && $companyIdentifier) {
+                    $pictureUrl = $this->imageUrlBuilder->buildUrl($companyIdentifier, $mainMedia['path']);
+                }
+            }
+            $vehicle->setPicture($pictureUrl);
+
             $this->getEm()->persist($vehicle);
         }
 
         $this->getEm()->flush();
+        $this->cache->delete('vehicles_carousel');
     }
 
     /**
