@@ -31,3 +31,5 @@
 /coverage-report/
 /public/coverage/
 ###< phpunit/coverage ###
+secrets.env
+*.sql
