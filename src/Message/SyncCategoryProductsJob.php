@@ -2,7 +2,7 @@
 
 namespace App\Message;
 
-class SyncCategoryProductsJob implements TenantJobInterface
+class SyncCategoryProductsJob
 {
     public function __construct(
         private int $tenantId,

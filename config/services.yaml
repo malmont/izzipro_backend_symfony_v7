@@ -186,3 +186,7 @@ services:
         arguments:
             $frontendBaseDomain: '%env(resolve:FRONTEND_BASE_DOMAIN)%'
             $backendBaseDomain: '%env(resolve:BACKEND_BASE_DOMAIN)%'
+
+    App\Messenger\TenantRoutingMiddleware:
+        arguments:
+            $numPartitions: 3

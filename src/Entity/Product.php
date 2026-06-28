@@ -88,7 +88,7 @@ class Product implements TranslatableInterface
     #[ORM\ManyToOne(inversedBy: 'products')]
     private ?Style $style = null;
 
-    #[ORM\OneToMany(mappedBy: 'product', targetEntity: ProductVariant::class)]
+    #[ORM\OneToMany(mappedBy: 'product', targetEntity: ProductVariant::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $variants;
 
     #[ORM\ManyToOne(inversedBy: 'products')]

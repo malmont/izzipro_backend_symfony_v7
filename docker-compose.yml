@@ -60,7 +60,56 @@ services:
     restart: always
   # --- FIN DES MODIFICATIONS ---
 
-  # Le service "caddy" est supprimé
+  worker-1:
+    image: ghcr.io/${CLIENT1_GITHUB_REPOSITORY_OWNER}/symfony-backend:latest
+    container_name: symfony_worker_1
+    command: php bin/console messenger:consume async_worker_1 -vv
+    volumes:
+      - public_data:/var/www/public
+      - ./jwt:/var/www/config/jwt
+    working_dir: /var/www
+    env_file:
+      - .env
+    networks:
+      - symfony
+    restart: always
+    depends_on:
+      - redis
+      - db
+
+  worker-2:
+    image: ghcr.io/${CLIENT1_GITHUB_REPOSITORY_OWNER}/symfony-backend:latest
+    container_name: symfony_worker_2
+    command: php bin/console messenger:consume async_worker_2 -vv
+    volumes:
+      - public_data:/var/www/public
+      - ./jwt:/var/www/config/jwt
+    working_dir: /var/www
+    env_file:
+      - .env
+    networks:
+      - symfony
+    restart: always
+    depends_on:
+      - redis
+      - db
+
+  worker-3:
+    image: ghcr.io/${CLIENT1_GITHUB_REPOSITORY_OWNER}/symfony-backend:latest
+    container_name: symfony_worker_3
+    command: php bin/console messenger:consume async_worker_3 -vv
+    volumes:
+      - public_data:/var/www/public
+      - ./jwt:/var/www/config/jwt
+    working_dir: /var/www
+    env_file:
+      - .env
+    networks:
+      - symfony
+    restart: always
+    depends_on:
+      - redis
+      - db
 
 volumes:
   db_data:

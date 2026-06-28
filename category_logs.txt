@@ -1,0 +1,3 @@
+[2026-06-26T20:38:01.788113+00:00] app.INFO: Webhook Catégorie #63 [] []
+[2026-06-26T20:38:04.284381+00:00] app.INFO: Catégorie #51 passée de Rental à Normal. Nettoyage des produits. [] []
+[2026-06-26T20:38:12.391699+00:00] app.ERROR: Erreur Sync Catégorie: An exception occurred while executing a query: SQLSTATE[23503]: Foreign key violation: 7 ERROR:  update or delete on table "product" violates foreign key constraint "fk_209aa41d4584665a" on table "product_variant" DETAIL:  Key (id)=(7288) is still referenced from table "product_variant". [] []

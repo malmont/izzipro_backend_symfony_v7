@@ -2,26 +2,56 @@
 
 framework:
     messenger:
-        # A. On définit notre "camion de livraison" (Transport)
+        buses:
+            messenger.bus.default:
+                middleware:
+                    - 'App\Messenger\TenantRoutingMiddleware'
+
+        # A. On définit nos "camions de livraison" (Transports)
         transports:
-            # On lui donne un nom, "async" est la convention
+            # On lui donne un nom, "async" est la convention (conservé en fallback)
             async:
-                # On lui dit d'utiliser notre NOUVELLE variable d'environnement
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
-                
                 options:
-                    # C'est le nom de la file d'attente dans Redis
                     stream: 'gemsuite_setup'
-                
-                # Stratégie en cas d'échec (ex: API GEM-SUITE indisponible)
                 retry_strategy:
-                    max_retries: 3       # Il réessaiera 3 fois
-                    delay: 1000          # Il attend 1 seconde avant le 1er essai
-                    multiplier: 2        # Il attend 2s (1s*2) avant le 2e, 4s (2s*2) avant le 3e
-                    max_delay: 0         # Pas de limite
+                    max_retries: 3
+                    delay: 1000
+                    multiplier: 2
+                    max_delay: 0
+
+            # Partitions pour équilibrer la charge par Tenant ID
+            async_worker_1:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    stream: 'gemsuite_worker_1'
+                retry_strategy:
+                    max_retries: 3
+                    delay: 1000
+                    multiplier: 2
+                    max_delay: 0
+
+            async_worker_2:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    stream: 'gemsuite_worker_2'
+                retry_strategy:
+                    max_retries: 3
+                    delay: 1000
+                    multiplier: 2
+                    max_delay: 0
+
+            async_worker_3:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    stream: 'gemsuite_worker_3'
+                retry_strategy:
+                    max_retries: 3
+                    delay: 1000
+                    multiplier: 2
+                    max_delay: 0
 
         # B. On définit le "centre de tri" (Routage)
         routing:
-            # On dit : "Tous les messages qui portent l'étiquette 
-            # 'TenantJobInterface' doivent aller dans le camion 'async'"
-            'App\Message\TenantJobInterface': async
+            # Règle de fallback (les messages seront de toute façon interceptés par le middleware si getTenantId() existe)
+            'App\Message\TenantJobInterface': async_worker_1
