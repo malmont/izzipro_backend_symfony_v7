@@ -199,9 +199,21 @@ class ProcessGemsuiteEntityJobHandler
         $category->setCategoryType((int)($data['category_type'] ?? 0));
 
         // --- NOUVELLE LOGIQUE LOCATION ---
+        $wasRental = $category->isRentalCategory();
         $categoryType = (int)($data['category_type'] ?? 0);
         $isRental = (int)($data['limit_lot'] ?? 0) === 1;
         $category->setIsRentalCategory($isRental);
+
+        // --- NETTOYAGE TRANSITION CATEGORIE (Rental -> Normal) ---
+        if ($wasRental === true && $isRental === false) {
+            $this->logger->info("Catégorie #{$data['id']} passée de Rental à Normal. Nettoyage des produits.");
+            foreach ($category->getProducts() as $product) {
+                $this->rentalWorkaround->removeRentalConfiguration($product, $em);
+            }
+            foreach ($category->getRentalPacks() as $pack) {
+                $pack->removeCategory($category);
+            }
+        }
 
         if ($categoryType === 10) {
             $category->setSyncWeb(true);
@@ -259,6 +271,7 @@ class ProcessGemsuiteEntityJobHandler
 
         $productRepo = $em->getRepository(Product::class);
         $product = $productRepo->findOneBy(['gemsuiteProductId' => $data['id']]);
+        $existed = ($product !== null);
 
         $oldCategories = [];
         if ($product) {
@@ -352,6 +365,11 @@ class ProcessGemsuiteEntityJobHandler
                             $this->logger->info("Pack #{$data['id']} inactif. Suppression du RentalPack.");
                             $em->remove($oldPack);
                         }
+                    }
+                    
+                    if ($existed) {
+                        $product->setIsWeb(false);
+                        $em->persist($product);
                     }
                     return null; // On ne crée pas de Product pour une configuration
                 }

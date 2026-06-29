@@ -678,6 +678,7 @@ class GemsuiteSyncHandler
         }
 
         $product = $em->getRepository(Product::class)->findOneBy(['gemsuiteProductId' => $gemProductData['id']]);
+        $existed = ($product !== null);
 
         // --- NOUVELLE LOGIQUE GEMS-LOCATION (PACKS) ---
         if (isset($gemProductData['category_id']) && isset($categoryMap[$gemProductData['category_id']])) {
@@ -695,8 +696,9 @@ class GemsuiteSyncHandler
                     }
                 }
                 
-                if ($product) {
-                    $em->remove($product); // On nettoie si un produit existait par erreur
+                if ($existed) {
+                    $product->setIsWeb(false);
+                    $em->persist($product);
                 }
                 return;
             }
@@ -1016,6 +1018,9 @@ class GemsuiteSyncHandler
                 $this->logger->info("Catégorie #{$gemCategoryData['id']} passée de Rental à Normal. Nettoyage des produits.");
                 foreach ($category->getProducts() as $product) {
                     $this->rentalWorkaround->removeRentalConfiguration($product, $em);
+                }
+                foreach ($category->getRentalPacks() as $pack) {
+                    $pack->removeCategory($category);
                 }
             }
 

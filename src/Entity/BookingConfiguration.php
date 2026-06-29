@@ -13,7 +13,7 @@ class BookingConfiguration
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\OneToOne(inversedBy: 'bookingConfiguration', cascade: ['persist', 'remove'])]
+    #[ORM\OneToOne(inversedBy: 'bookingConfiguration', cascade: ['persist'])]
     private ?Product $product = null;
 
     #[ORM\Column(length: 40)]
