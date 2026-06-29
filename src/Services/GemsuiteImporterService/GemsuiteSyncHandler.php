@@ -68,9 +68,13 @@ class GemsuiteSyncHandler
             $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
 
             // --- ROBUSTESSE WEBHOOK ---
-            // On synchronise les catégories au début pour éviter de désactiver un produit 
-            // dont la nouvelle catégorie n'existe pas encore localement (Race Condition).
-            [$categoryMap, $shippingClassMap] = $this->importCategories($tenantEm, $tenantCode, $token, $companyIdentifier);
+            // On essaie de récupérer les catégories localement d'abord.
+            [$categoryMap, $shippingClassMap] = $this->getLocalCategoryAndShippingClassMaps($tenantEm);
+            $requiredCatId = isset($gemProductData['category_id']) ? (int)$gemProductData['category_id'] : null;
+            if ($requiredCatId !== null && !isset($categoryMap[$requiredCatId])) {
+                $this->logger->info("Catégorie #$requiredCatId manquante localement. Import des catégories depuis l'API Gemsuite.");
+                [$categoryMap, $shippingClassMap] = $this->importCategories($tenantEm, $tenantCode, $token, $companyIdentifier);
+            }
 
             if (!$this->isProductActive($tenantEm, $gemProductData)) {
                 $this->logger->info("Produit #$productId détecté comme inactif. Désactivation locale.");
@@ -898,7 +902,11 @@ class GemsuiteSyncHandler
             $parentData = $this->fetchProductFromApi($parentProductId, $token);
 
             if ($parentData) {
-                [$catMap, $shpClassMap] = $this->importCategories($em, $tenantCode, $token, $companyIdentifier);
+                [$catMap, $shpClassMap] = $this->getLocalCategoryAndShippingClassMaps($em);
+                $requiredCatId = isset($parentData['category_id']) ? (int)$parentData['category_id'] : null;
+                if ($requiredCatId !== null && !isset($catMap[$requiredCatId])) {
+                    [$catMap, $shpClassMap] = $this->importCategories($em, $tenantCode, $token, $companyIdentifier);
+                }
                 $this->updateOrCreateProductParent($em, $parentData, $catMap, $shpClassMap, $companyIdentifier);
                 $em->flush();
                 $product = $productRepo->findOneBy(['gemsuiteProductId' => $parentProductId]);
@@ -972,6 +980,24 @@ class GemsuiteSyncHandler
     }
 
 
+
+    private function getLocalCategoryAndShippingClassMaps(EntityManagerInterface $em): array
+    {
+        $repo = $em->getRepository(Categories::class);
+        if (!$repo) {
+            return [[], []];
+        }
+        $categories = $repo->findAll();
+        $categoryMap = [];
+        $shippingClassMap = [];
+        foreach ($categories as $cat) {
+            if ($cat->getGemsuiteCategoryId() !== null) {
+                $categoryMap[$cat->getGemsuiteCategoryId()] = $cat;
+                $shippingClassMap[$cat->getGemsuiteCategoryId()] = $cat->getExternalShippingClassId() ?? 0;
+            }
+        }
+        return [$categoryMap, $shippingClassMap];
+    }
 
     private function importCategories(EntityManagerInterface $em, string $tenantCode, string $token, ?string $companyIdentifier): array
     {

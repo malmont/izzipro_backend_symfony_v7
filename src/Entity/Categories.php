@@ -31,7 +31,7 @@ class Categories implements TranslatableInterface
     #[ORM\ManyToMany(targetEntity: Product::class, mappedBy: 'category')]
     private Collection $products;
 
-    #[ORM\Column(nullable: true)]
+    #[ORM\Column(unique: true, nullable: true)]
     private ?int $gemsuiteCategoryId = null;
 
     #[ORM\Column(nullable: true)]
