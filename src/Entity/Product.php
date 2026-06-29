@@ -73,6 +73,9 @@ class Product implements TranslatableInterface
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $tags = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $code = null;
+
     #[ORM\Column(length: 255)]
     private ?string $slug = null;
 
@@ -950,5 +953,17 @@ class Product implements TranslatableInterface
             }
         }
         return array_values($packs);
+    }
+
+    public function getCode(): ?string
+    {
+        return $this->code;
+    }
+
+    public function setCode(?string $code): static
+    {
+        $this->code = $code;
+
+        return $this;
     }
 }

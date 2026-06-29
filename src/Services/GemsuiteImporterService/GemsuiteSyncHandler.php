@@ -778,6 +778,7 @@ class GemsuiteSyncHandler
         $product->setIsnewarrival((bool)($gemProductData['new_product'] ?? $gemProductData['is_new_arrival'] ?? false));
         $product->setIsfeatured((bool)($gemProductData['featured'] ?? false));
         $product->setIsbestseller((bool)($gemProductData['is_bestseller'] ?? false));
+        $product->setCode($gemProductData['code'] ?? null);
 
         // --- GESTION UNITÉ DE VENTE ---
         $unitId = (int)($gemProductData['unit'] ?? 0);

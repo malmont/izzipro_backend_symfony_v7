@@ -89,7 +89,7 @@ class CategoryController extends AbstractController
             },
         );
 
-        $totalProducts = $this->countProductsByCategoryUseCase->execute($locale, $categoryIds, $keyword);
+        $totalProducts = $this->countProductsByCategoryUseCase->execute($locale, $categoryIds, $keyword, $isWeb, $isPos);
         return new JsonResponse([
             'meta' => [
                 'total' => $totalProducts,

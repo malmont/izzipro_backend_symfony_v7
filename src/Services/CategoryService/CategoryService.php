@@ -26,7 +26,7 @@ class CategoryService
             ->findByCategoryAndFilters($locale, $categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos);
     }
 
-    public function countTotalProducts(string $locale, ?array $categoryIds = null, ?string $keyword = null): int
+    public function countTotalProducts(string $locale, ?array $categoryIds = null, ?string $keyword = null, ?bool $isWeb = null, ?bool $isPos = null): int
     {
         $queryBuilder = $this->em->getRepository(Product::class)->createQueryBuilder('p');
 
@@ -41,6 +41,16 @@ class CategoryService
                          ->andWhere('(LOWER(p.name) LIKE LOWER(:keyword) OR LOWER(p.description) LIKE LOWER(:keyword) OR LOWER(t.name) LIKE LOWER(:keyword) OR LOWER(t.description) LIKE LOWER(:keyword))')
                          ->setParameter('keyword', '%' . $keyword . '%')
                          ->setParameter('locale', $locale);
+        }
+
+        if ($isWeb !== null) {
+            $queryBuilder->andWhere('p.isWeb = :isWeb')
+                         ->setParameter('isWeb', $isWeb);
+        }
+
+        if ($isPos !== null) {
+            $queryBuilder->andWhere('p.isPos = :isPos')
+                         ->setParameter('isPos', $isPos);
         }
 
         return $queryBuilder->select('COUNT(DISTINCT p.id)')

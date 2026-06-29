@@ -37,6 +37,7 @@ class ProductDetailedOutputDTO
     public ?float $purchasePrice;
     public ?float $coefficientMultiplier;
     public ?string $barcode;
+    public ?string $code = null;
     public ?array $saleUnit = null;
     
     
@@ -86,6 +87,7 @@ class ProductDetailedOutputDTO
         $this->purchasePrice = $product->getPurchasePrice();
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->barcode = $product->getBarcode();
+        $this->code = $product->getCode();
 
         // --- LOGIQUE BOOKING ---
         // 1. Le Mode (retail vs booking)

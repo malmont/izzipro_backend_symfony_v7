@@ -334,6 +334,7 @@ class ProcessGemsuiteEntityJobHandler
         $product->setIsnewarrival((bool)($data['new_product'] ?? $data['is_new_arrival'] ?? false));
         $product->setIsfeatured((bool)($data['featured'] ?? false));
         $product->setIsbestseller((bool)($data['is_bestseller'] ?? false));
+        $product->setCode($data['code'] ?? null);
 
         $defaultStyle = $em->getRepository(Style::class)->find(2);
         if ($defaultStyle) {

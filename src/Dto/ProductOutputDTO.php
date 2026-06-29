@@ -24,6 +24,7 @@ class ProductOutputDTO
     public ?string $image;
     public array $pictures = [];
     public ?array $saleUnit = null;
+    public ?string $code = null;
 
     
     public string $mode;
@@ -45,6 +46,7 @@ class ProductOutputDTO
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->slug = $productTranslation?->getSlug() ?? $product->getSlug();
         $this->specifications = $product->getSpecifications();
+        $this->code = $product->getCode();
         
         $imagePath = $product->getImage();
         if (empty($imagePath)) {

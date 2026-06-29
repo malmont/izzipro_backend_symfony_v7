@@ -18,7 +18,7 @@ class CountProductsByCategoryUseCaseTest extends TestCase
 
         $categoryService->expects($this->once())
             ->method('countTotalProducts')
-            ->with($locale, $categoryIds, $keyword)
+            ->with($locale, $categoryIds, $keyword, null, null)
             ->willReturn($expectedCount);
 
         $useCase = new CountProductsByCategoryUseCase($categoryService);

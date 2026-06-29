@@ -31,6 +31,7 @@ class ProductOutputCategoryDto
     public ?float $purchasePrice;
     public ?float $coefficientMultiplier;
     public ?string $barcode;
+    public ?string $code = null;
     public ?array $saleUnit = null;
     
     
@@ -81,6 +82,7 @@ class ProductOutputCategoryDto
         $this->purchasePrice = $product->getPurchasePrice();
         $this->coefficientMultiplier = $product->getCoefficientMultiplier();
         $this->barcode = $product->getBarcode();
+        $this->code = $product->getCode();
  
         $this->mode = $product->getMode()->value;
 
