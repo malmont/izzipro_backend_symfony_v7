@@ -4,6 +4,7 @@ namespace App\Tests\Unit\MessageHandler;
 
 use App\Entity\SyncJob;
 use App\Message\FinalizeSyncJob;
+use App\Message\CollectionDoneBarrierJob;
 use App\Message\ImportGemsuiteCollectionJob;
 use App\Message\ProcessGemsuiteEntityJob;
 use App\MessageHandler\ImportGemsuiteCollectionJobHandler;
@@ -76,7 +77,7 @@ class ImportGemsuiteCollectionJobHandlerTest extends TestCase
         // ANALYSE DES DISPATCHS ATTENDUS :
         // 1. Passe 1 (Parents) : Item 10 est parent -> 1 Dispatch
         // 2. Passe 2 (Variantes) : On boucle sur tout le monde -> 2 Dispatchs
-        // 3. Fin de chaîne : Produits est le dernier -> 1 Dispatch (FinalizeSyncJob)
+        // 3. Fin de chaîne : Produits est le dernier -> 1 Dispatch (CollectionDoneBarrierJob)
         // TOTAL = 4 Dispatchs
         
         $bus->expects($this->exactly(4))
@@ -88,9 +89,9 @@ class ImportGemsuiteCollectionJobHandlerTest extends TestCase
                     return in_array($message->getEntityType(), ['product_parent', 'product_variant']);
                 }
 
-                // Cas B : C'est le job de finalisation (car 'products' est la fin de la chaine)
-                if ($message instanceof FinalizeSyncJob) {
-                    return true;
+                // Cas B : C'est le job barrière de fin de collection (car 'products' est fini)
+                if ($message instanceof CollectionDoneBarrierJob) {
+                    return $message->getCompletedCollectionType() === 'products';
                 }
 
                 return false; // Message inattendu

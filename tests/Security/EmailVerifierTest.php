@@ -23,7 +23,10 @@ class EmailVerifierTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->verifyEmailHelper = $this->createMock(VerifyEmailHelperInterface::class);
+        $this->verifyEmailHelper = $this->getMockBuilder(VerifyEmailHelperInterface::class)
+            ->onlyMethods(['generateSignature', 'validateEmailConfirmation'])
+            ->addMethods(['validateEmailConfirmationFromRequest'])
+            ->getMock();
         $this->mailer = $this->createMock(MailerInterface::class);
         $this->tenantEmProvider = $this->createMock(TenantEntityManagerProvider::class);
         $this->entityManager = $this->createMock(EntityManagerInterface::class);
@@ -81,11 +84,10 @@ class EmailVerifierTest extends TestCase
         $user->method('getEmail')->willReturn('user@example.com');
 
         $request = $this->createMock(Request::class);
-        $request->method('getUri')->willReturn('http://example.com/verify?signature=valid');
 
         $this->verifyEmailHelper->expects($this->once())
-            ->method('validateEmailConfirmation')
-            ->with('http://example.com/verify?signature=valid', '456', 'user@example.com');
+            ->method('validateEmailConfirmationFromRequest')
+            ->with($request, '456', 'user@example.com');
 
         $user->expects($this->once())->method('setIsVerified')->with(true);
 
