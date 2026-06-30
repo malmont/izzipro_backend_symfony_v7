@@ -20,7 +20,7 @@ class Vehicle
     private ?int $gemsuiteVehicleId = null;
 
     #[ORM\ManyToOne]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: true)]
     private ?Product $product = null;
 
     #[ORM\Column(length: 255, nullable: true)]

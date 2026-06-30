@@ -5,6 +5,7 @@ namespace App\MessageHandler;
 
 use App\Entity\Entreprise;
 use App\Entity\SyncJob;
+use App\Message\CollectionDoneBarrierJob;
 use App\Message\ImportGemsuiteCollectionJob;
 use App\Message\ProcessGemsuiteEntityJob;
 use App\Services\TenantConnectionManager;
@@ -14,7 +15,6 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use App\Message\FinalizeSyncJob;
 
 #[AsMessageHandler]
 class ImportGemsuiteCollectionJobHandler
@@ -72,7 +72,9 @@ class ImportGemsuiteCollectionJobHandler
                     'company_config',
                     []
                 ));
-                $this->dispatchNextJob($type, $message);
+                // La barrière garantit que le job company_config est traité
+                // avant de déclencher la collection suivante.
+                $this->dispatchBarrier($type, $message);
                 return;
             }
 
@@ -115,8 +117,12 @@ class ImportGemsuiteCollectionJobHandler
             }
 
             if ($isLastPage) {
-                $this->logger->info(sprintf('Fin de la collection "%s".', $type));
-                $this->dispatchNextJob($type, $message); 
+                // Fin de la collection : on dispatch la BARRIÈRE dans le même stream Redis.
+                // Le CollectionDoneBarrierJobHandler sera exécuté par le worker APRÈS tous
+                // les micro-jobs de cette collection (garantie FIFO de Redis Streams),
+                // et c'est lui qui déclenchera la collection suivante.
+                $this->logger->info(sprintf('[Barrier] Dispatch du CollectionDoneBarrierJob pour "%s".', $type));
+                $this->dispatchBarrier($type, $message);
             } else {
                 $this->logger->info(sprintf('Page %d de "%s" traitée. Demande de la page %d.', $page, $type, $page + 1));
                 $this->messageBus->dispatch(new ImportGemsuiteCollectionJob(
@@ -184,31 +190,21 @@ class ImportGemsuiteCollectionJobHandler
         }
     }
 
-   /**
-     * Gère la "chaîne de montage"
+    /**
+     * Dispatche un message CollectionDoneBarrierJob dans le même stream Redis que les micro-jobs.
+     *
+     * Grâce au TenantRoutingMiddleware (routing basé sur getTenantId()),
+     * ce message barrière sera envoyé dans le même async_worker_X que tous
+     * les micro-jobs de la collection. Redis Streams garantit l'ordre FIFO,
+     * donc le barrière sera traité en dernier, après tous les micro-jobs.
      */
-    private function dispatchNextJob(string $currentType, ImportGemsuiteCollectionJob $originalMessage): void
+    private function dispatchBarrier(string $currentType, ImportGemsuiteCollectionJob $originalMessage): void
     {
-        $currentIndex = array_search($currentType, self::IMPORT_CHAIN);
-        $nextJobType = ($currentIndex !== false && $currentIndex < count(self::IMPORT_CHAIN) - 1)
-            ? self::IMPORT_CHAIN[$currentIndex + 1]
-            : null;
-
-        if ($nextJobType) {
-            $this->logger->info(sprintf('Dispatch du job suivant : "%s"', $nextJobType));
-            $this->messageBus->dispatch(new ImportGemsuiteCollectionJob(
-                $originalMessage->getTenantId(),
-                $originalMessage->getGemsuiteToken(),
-                $originalMessage->getSyncJobId(),
-                $nextJobType,
-                1 
-            ));
-        } else {
-            $this->logger->info(sprintf('Fin de la chaîne d\'importation ("%s" était le dernier). Lancement du FINAL.', $currentType));
-            $this->messageBus->dispatch(new FinalizeSyncJob(
-                $originalMessage->getTenantId(),
-                $originalMessage->getSyncJobId()
-            ));
-        }
+        $this->messageBus->dispatch(new CollectionDoneBarrierJob(
+            $originalMessage->getTenantId(),
+            $originalMessage->getGemsuiteToken(),
+            $originalMessage->getSyncJobId(),
+            $currentType
+        ));
     }
 }

@@ -131,4 +131,63 @@ class GemsuiteVehicleSyncTest extends TestCase
 
         $service->syncVehicles($vehiclesData);
     }
+
+    public function testSyncVehiclesWorksWithNullableProduct(): void
+    {
+        $emProvider = $this->createMock(TenantEntityManagerProvider::class);
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $stockCalculator = $this->createMock(GemsuiteStockCalculator::class);
+        $logger = $this->createMock(LoggerInterface::class);
+        $imageUrlBuilder = $this->createMock(GemsuiteImageUrlBuilder::class);
+        $cache = $this->createMock(TenantCacheService::class);
+
+        $vehicleRepo = $this->createMock(EntityRepository::class);
+        $productRepo = $this->createMock(EntityRepository::class);
+        $entrepriseRepo = $this->createMock(EntityRepository::class);
+
+        $emProvider->method('getEntityManager')->willReturn($entityManager);
+        $entityManager->method('getRepository')->will($this->returnValueMap([
+            [Vehicle::class, $vehicleRepo],
+            [Product::class, $productRepo],
+            [Entreprise::class, $entrepriseRepo]
+        ]));
+
+        $entreprise = $this->createMock(Entreprise::class);
+        $entreprise->method('getGemsuiteIdentifier')->willReturn('test-company');
+        $entrepriseRepo->method('findOneBy')->willReturn($entreprise);
+
+        $productRepo->method('findOneBy')->willReturn(null);
+        $vehicleRepo->method('findOneBy')->willReturn(null);
+
+        $entityManager->expects($this->once())
+            ->method('persist')
+            ->with($this->callback(function (Vehicle $vehicle) {
+                $this->assertEquals(70, $vehicle->getGemsuiteVehicleId());
+                $this->assertNull($vehicle->getProduct());
+                $this->assertEquals('Prolite Eco 2024', $vehicle->getTitle());
+                return true;
+            }));
+
+        $entityManager->expects($this->once())->method('flush');
+
+        $service = new GemsuiteRentalWorkaroundService(
+            $emProvider,
+            $stockCalculator,
+            $logger,
+            $imageUrlBuilder,
+            $cache
+        );
+
+        $vehiclesData = [
+            [
+                "id" => 70,
+                "product_id" => 0,
+                "year" => 2024,
+                "web_display" => 1,
+                "web_title" => "Prolite Eco 2024",
+            ]
+        ];
+
+        $service->syncVehicles($vehiclesData);
+    }
 }

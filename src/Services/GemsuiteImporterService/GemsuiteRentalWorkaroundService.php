@@ -151,30 +151,16 @@ class GemsuiteRentalWorkaroundService
 
             $vehicle = $vehicleRepo->findOneBy(['gemsuiteVehicleId' => $gemsuiteVehicleId]);
 
-            // OPTIMISATION : Si le produit est ID=0 ou non spécifié, on ignore/supprime le véhicule
-            if (!$gemsuiteProductId || (int)$gemsuiteProductId === 0) {
-                if ($vehicle) {
-                    $this->logger->info("[SyncVehicles] Suppression du véhicule Gemsuite #$gemsuiteVehicleId : plus de lien produit (ID=0).");
-                    $this->getEm()->remove($vehicle);
-                }
-                continue;
-            }
-
-            $product = $productRepo->findOneBy(['gemsuiteProductId' => $gemsuiteProductId]);
-            if (!$product) {
-                // Si le produit n'existe pas localement, le véhicule ne sert à rien sur le site
-                if ($vehicle) {
-                    $this->logger->warning("[SyncVehicles] Suppression du véhicule Gemsuite #$gemsuiteVehicleId : produit local #$gemsuiteProductId non trouvé.");
-                    $this->getEm()->remove($vehicle);
-                }
-                continue;
+            $product = null;
+            if ($gemsuiteProductId && (int)$gemsuiteProductId !== 0) {
+                $product = $productRepo->findOneBy(['gemsuiteProductId' => $gemsuiteProductId]);
             }
 
             // Création ou Mise à jour
             if (!$vehicle) {
                 $vehicle = new Vehicle();
                 $vehicle->setGemsuiteVehicleId($gemsuiteVehicleId);
-                $this->logger->info("[SyncVehicles] Création du véhicule Gemsuite #$gemsuiteVehicleId lié au produit #$gemsuiteProductId.");
+                $this->logger->info("[SyncVehicles] Création du véhicule Gemsuite #$gemsuiteVehicleId.");
             }
 
             $vehicle->setProduct($product);
