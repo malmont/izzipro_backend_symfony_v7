@@ -38,7 +38,7 @@ class CategoryService
 
         if ($keyword) {
             $queryBuilder->leftJoin('p.translations', 't', 'WITH', 't.locale = :locale')
-                         ->andWhere('(LOWER(p.name) LIKE LOWER(:keyword) OR LOWER(p.description) LIKE LOWER(:keyword) OR LOWER(t.name) LIKE LOWER(:keyword) OR LOWER(t.description) LIKE LOWER(:keyword))')
+                         ->andWhere('(LOWER(p.name) LIKE LOWER(:keyword) OR LOWER(p.description) LIKE LOWER(:keyword) OR LOWER(t.name) LIKE LOWER(:keyword) OR LOWER(t.description) LIKE LOWER(:keyword) OR LOWER(p.code) LIKE LOWER(:keyword))')
                          ->setParameter('keyword', '%' . $keyword . '%')
                          ->setParameter('locale', $locale);
         }

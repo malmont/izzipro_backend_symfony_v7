@@ -114,6 +114,46 @@ class CategoryServiceTest extends TestCase
         $result = $this->service->countTotalProducts('fr');
         $this->assertEquals(100, $result);
     }
+
+    public function testCountTotalProductsWithKeyword(): void
+    {
+        $qb = $this->createMock(QueryBuilder::class);
+        $query = $this->createMock(AbstractQuery::class);
+        $repo = $this->createMock(EntityRepository::class);
+
+        $this->entityManager->expects($this->once())
+            ->method('getRepository')
+            ->with(Product::class)
+            ->willReturn($repo);
+
+        $repo->expects($this->once())
+            ->method('createQueryBuilder')
+            ->with('p')
+            ->willReturn($qb);
+
+        $qb->expects($this->once())->method('leftJoin')
+            ->with('p.translations', 't', 'WITH', 't.locale = :locale')
+            ->willReturnSelf();
+        
+        $qb->expects($this->once())->method('andWhere')
+            ->with('(LOWER(p.name) LIKE LOWER(:keyword) OR LOWER(p.description) LIKE LOWER(:keyword) OR LOWER(t.name) LIKE LOWER(:keyword) OR LOWER(t.description) LIKE LOWER(:keyword) OR LOWER(p.code) LIKE LOWER(:keyword))')
+            ->willReturnSelf();
+            
+        $qb->expects($this->exactly(2))->method('setParameter')
+            ->withConsecutive(
+                ['keyword', '%search%'],
+                ['locale', 'fr']
+            )
+            ->willReturnSelf();
+        
+        $qb->expects($this->once())->method('select')->with('COUNT(DISTINCT p.id)')->willReturnSelf();
+        $qb->expects($this->once())->method('getQuery')->willReturn($query);
+
+        $query->expects($this->once())->method('getSingleScalarResult')->willReturn(5);
+
+        $result = $this->service->countTotalProducts('fr', null, 'search');
+        $this->assertEquals(5, $result);
+    }
 }
 
 // Interfaces to help PHPUnit mock methods that don't exist in base EntityRepository

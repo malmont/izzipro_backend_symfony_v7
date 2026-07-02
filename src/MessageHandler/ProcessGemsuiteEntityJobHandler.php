@@ -289,9 +289,10 @@ class ProcessGemsuiteEntityJobHandler
         $isWebDisplay = (bool)($data['web_display'] ?? false);
 
         $name = trim($data['name_fr'] ?? '');
-        if ($isWebDisplay && !empty($data['web_title_fr'])) {
-            $name = trim($data['web_title_fr']);
-        }
+        // Force name_fr en priorité sous toutes les circonstances
+        // if ($isWebDisplay && !empty($data['web_title_fr'])) {
+        //     $name = trim($data['web_title_fr']);
+        // }
         $product->setName($name);
 
         $description = $data['additional_fr'] ?? 'Pas de description.';

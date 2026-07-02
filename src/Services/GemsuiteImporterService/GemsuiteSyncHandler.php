@@ -733,9 +733,10 @@ class GemsuiteSyncHandler
         $isWebDisplay = (bool)($gemProductData['web_display'] ?? false);
 
         $name = trim($gemProductData['name_fr'] ?? '');
-        if ($isWebDisplay && !empty($gemProductData['web_title_fr'])) {
-            $name = trim($gemProductData['web_title_fr']);
-        }
+        // Force name_fr en priorité sous toutes les circonstances
+        // if ($isWebDisplay && !empty($gemProductData['web_title_fr'])) {
+        //     $name = trim($gemProductData['web_title_fr']);
+        // }
         $product->setName($name);
 
         $description = $gemProductData['additional_fr'] ?? 'Pas de description.';
