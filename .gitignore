@@ -33,3 +33,4 @@
 ###< phpunit/coverage ###
 secrets.env
 *.sql
+migrate_all.sh
