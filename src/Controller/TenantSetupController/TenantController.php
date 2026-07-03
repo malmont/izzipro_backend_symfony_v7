@@ -88,14 +88,25 @@ class TenantController extends AbstractController
 
         if ($isPlatformSubdomain) {
 
-            $protocol = ($cleanHost === 'localhost' || str_ends_with($cleanHost, '.localhost')) ? 'http://' : 'https://';
+            $isLocal = ($cleanHost === 'localhost' || str_ends_with($cleanHost, '.localhost'));
+            $protocol = $isLocal ? 'http://' : 'https://';
 
             $currentSubdomain = $this->extractSubdomainCode($cleanHost);
 
-            if ($currentSubdomain && $currentSubdomain !== 'www') {
-                $targetDomain = $currentSubdomain . '.' . $this->backendBaseDomain;
+            if ($isLocal) {
+                $port = $request->getPort();
+                $portSuffix = ($port && !in_array($port, [80, 443])) ? ':' . $port : '';
+                if ($currentSubdomain && $currentSubdomain !== 'www') {
+                    $targetDomain = $currentSubdomain . '.localhost' . $portSuffix;
+                } else {
+                    $targetDomain = 'localhost' . $portSuffix;
+                }
             } else {
-                $targetDomain = $this->backendBaseDomain;
+                if ($currentSubdomain && $currentSubdomain !== 'www') {
+                    $targetDomain = $currentSubdomain . '.' . $this->backendBaseDomain;
+                } else {
+                    $targetDomain = $this->backendBaseDomain;
+                }
             }
 
             $absoluteSetupUrl = $protocol . $targetDomain . '/setup/new-store';
