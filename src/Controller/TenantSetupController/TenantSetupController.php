@@ -53,6 +53,8 @@ class TenantSetupController extends AbstractController
                 } elseif (isset($parts[1])) {
                     $subdomain = $parts[1];
                 }
+            } elseif (count($parts) === 2 && $parts[1] === 'localhost') {
+                $subdomain = $parts[0];
             }
         }
 
