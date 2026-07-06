@@ -16,12 +16,12 @@ class GetVehiclesForCarouselUseCase
      *
      * @return VehicleOutputDto[]
      */
-    public function execute(): array
+    public function execute(string $locale = 'fr'): array
     {
         $vehicles = $this->vehicleService->getVehiclesForCarousel();
 
-        return array_map(function ($vehicle) {
-            return new VehicleOutputDto($vehicle);
+        return array_map(function ($vehicle) use ($locale) {
+            return new VehicleOutputDto($vehicle, $locale);
         }, $vehicles);
     }
 }

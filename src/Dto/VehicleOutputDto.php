@@ -23,11 +23,11 @@ class VehicleOutputDto
     public ?bool $webDisplay;
     public ?string $slug;
 
-    public function __construct(Vehicle $vehicle)
+    public function __construct(Vehicle $vehicle, string $locale = 'fr')
     {
         $this->id = $vehicle->getId();
         $this->gemsuiteVehicleId = $vehicle->getGemsuiteVehicleId();
-        
+
         $product = $vehicle->getProduct();
         if ($product) {
             $this->productId = $product->getId();
@@ -35,8 +35,11 @@ class VehicleOutputDto
             $this->productPrice = $product->getPrice();
         }
 
-        $this->title = $vehicle->getTitle();
-        $this->description = $vehicle->getDescription();
+        // Use translated title/description; fall back to raw fields on the Vehicle
+        $translation = $vehicle->getTranslation($locale);
+        $this->title = ($translation?->getTitle()) ?? $vehicle->getTitle();
+        $this->description = ($translation?->getDescription()) ?? $vehicle->getDescription();
+
         $this->picture = $vehicle->getPicture();
         $this->year = $vehicle->getYear();
         $this->color = $vehicle->getColor();

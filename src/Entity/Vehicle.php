@@ -3,13 +3,16 @@
 namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use App\Repository\VehicleRepository;
+use App\Entity\TranslatableInterface;
 use Doctrine\DBAL\Types\Types;
 use ApiPlatform\Metadata\ApiResource;
 
 #[ORM\Entity(repositoryClass: VehicleRepository::class)]
 #[ApiResource]
-class Vehicle
+class Vehicle implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -55,6 +58,23 @@ class Vehicle
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $slug = null;
+
+    /**
+     * @var Collection<int, VehicleTranslation>
+     */
+    #[ORM\OneToMany(
+        mappedBy: 'vehicle',
+        targetEntity: VehicleTranslation::class,
+        cascade: ['persist', 'remove'],
+        orphanRemoval: true,
+        fetch: 'EXTRA_LAZY'
+    )]
+    private Collection $translations;
+
+    public function __construct()
+    {
+        $this->translations = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -215,5 +235,75 @@ class Vehicle
         $this->slug = $slug;
 
         return $this;
+    }
+
+    // ─── Translation methods ───────────────────────────────────────────────────
+
+    /**
+     * @return Collection<int, VehicleTranslation>
+     */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(object $translation): void
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setVehicle($this);
+        }
+    }
+
+    public function removeTranslation(VehicleTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            if ($translation->getVehicle() === $this) {
+                $translation->setVehicle(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * Returns the translation for $locale, falling back to 'fr', then the first available.
+     */
+    public function getTranslation(string $locale): ?VehicleTranslation
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+
+        // Fallback to French
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === 'fr') {
+                return $translation;
+            }
+        }
+
+        return $this->translations->first() ?: null;
+    }
+
+    public function getTranslatableFields(): array
+    {
+        return ['title', 'description'];
+    }
+
+    public function getTranslationEntityClass(): string
+    {
+        return VehicleTranslation::class;
+    }
+
+    public function findTranslationByLocale(string $locale): ?object
+    {
+        foreach ($this->translations as $translation) {
+            if ($translation->getLanguage() === $locale) {
+                return $translation;
+            }
+        }
+        return null;
     }
 }

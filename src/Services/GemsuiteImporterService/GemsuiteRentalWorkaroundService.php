@@ -6,6 +6,7 @@ use App\Entity\Booking;
 use App\Entity\BookingConfiguration;
 use App\Entity\Product;
 use App\Entity\Vehicle;
+use App\Entity\VehicleTranslation;
 use App\Enum\ProductMode;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Services\TenantEntityManagerProvider;
@@ -165,7 +166,7 @@ class GemsuiteRentalWorkaroundService
 
             $vehicle->setProduct($product);
 
-            // Populate the new carousel-related fields
+            // Populate scalar fields
             $vehicle->setTitle($vData['web_title_fr'] ?? $vData['web_title'] ?? $vData['seo_title'] ?? null);
             $vehicle->setDescription($vData['web_description_fr'] ?? $vData['web_description'] ?? null);
             $vehicle->setYear($vData['year'] ?? null);
@@ -176,6 +177,32 @@ class GemsuiteRentalWorkaroundService
             $vehicle->setFeaturedVehicle(isset($vData['featured_vehicle']) ? (bool)$vData['featured_vehicle'] : null);
             $vehicle->setWebDisplay(isset($vData['web_display']) ? (bool)$vData['web_display'] : null);
             $vehicle->setSlug($vData['web_slug'] ?? null);
+
+            // Persist translations (FR and EN)
+            $translationData = [
+                'fr' => [
+                    'title'       => $vData['web_title_fr'] ?? $vData['web_title'] ?? $vData['seo_title'] ?? null,
+                    'description' => $vData['web_description_fr'] ?? null,
+                ],
+                'en' => [
+                    'title'       => $vData['web_title'] ?? $vData['web_title_fr'] ?? $vData['seo_title'] ?? null,
+                    'description' => $vData['web_description'] ?? $vData['web_description_fr'] ?? null,
+                ],
+            ];
+
+            foreach ($translationData as $lang => $fields) {
+                /** @var VehicleTranslation|null $existingTranslation */
+                $existingTranslation = $vehicle->findTranslationByLocale($lang);
+
+                if (!$existingTranslation) {
+                    $existingTranslation = new VehicleTranslation();
+                    $existingTranslation->setLanguage($lang);
+                    $vehicle->addTranslation($existingTranslation);
+                }
+
+                $existingTranslation->setTitle($fields['title']);
+                $existingTranslation->setDescription($fields['description']);
+            }
 
             // Resolve main picture
             $pictureUrl = null;
