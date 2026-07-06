@@ -49,6 +49,7 @@ class ProductDetailedOutputDTO
     public ?array $style;
     public array $variants;
     public ?array $category;
+    public ?array $categories = null;
     public ?array $specifications;
 
     public function __construct(Product $product, string $host, string $locale = 'fr')
@@ -196,5 +197,6 @@ class ProductDetailedOutputDTO
         } else {
             $this->category = []; 
         }   
+        $this->categories = $this->category;
     }   
 }
