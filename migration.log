@@ -1,120 +1,175 @@
 Recherche des bases de données de type 'db_...' (PostgreSQL)
 >>> Migration de la base : db_serrurierrivesudlevis2
 
- [OK] Already at the latest version ("DoctrineMigrations\Version20260423173916")                                        
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.                
+
+ >> 2026-04-29 16:18:08 (DoctrineMigrations\Version20260429161635)
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 239.5ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
+
 
 ✅ Migration réussie pour db_serrurierrivesudlevis2
 ----------------------------------------------------
 >>> Migration de la base : db_dailydrip
 
- [OK] Already at the latest version ("DoctrineMigrations\Version20260423173916")                                        
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.                
+
+ >> 2026-04-29 16:18:09 (DoctrineMigrations\Version20260429161635)
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 310.1ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
+
 
 ✅ Migration réussie pour db_dailydrip
 ----------------------------------------------------
 >>> Migration de la base : db_gemportal
 
- [OK] Already at the latest version ("DoctrineMigrations\Version20260423173916")                                        
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.                
+
+ >> 2026-04-29 16:18:10 (DoctrineMigrations\Version20260429161635)
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 274.9ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
+
 
 ✅ Migration réussie pour db_gemportal
 ----------------------------------------------------
 >>> Migration de la base : db_grueshopinc
-[notice] Migrating up to DoctrineMigrations\Version20260423173916
-[notice] finished in 76.7ms, used 34.5M memory, 1 migrations executed, 4 sql queries
 
- [OK] Successfully migrated to version: DoctrineMigrations\Version20260423173916                                        
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.                
+
+ >> 2026-04-29 16:18:11 (DoctrineMigrations\Version20260429161635)
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 258.1ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
 
 
 ✅ Migration réussie pour db_grueshopinc
 ----------------------------------------------------
 >>> Migration de la base : db_demodb12
-[notice] Migrating up to DoctrineMigrations\Version20260423173916
-[notice] finished in 166.4ms, used 34.5M memory, 1 migrations executed, 4 sql queries
 
- [OK] Successfully migrated to version: DoctrineMigrations\Version20260423173916                                        
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.                
+
+ >> 2026-04-29 16:18:12 (DoctrineMigrations\Version20260429161635)
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 227.4ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
 
 
 ✅ Migration réussie pour db_demodb12
 ----------------------------------------------------
->>> Migration de la base : db_larameemarineinc2
-[notice] Migrating up to DoctrineMigrations\Version20260423173916
-[notice] finished in 112.9ms, used 34.5M memory, 1 migrations executed, 4 sql queries
-
- [OK] Successfully migrated to version: DoctrineMigrations\Version20260423173916                                        
-
-
-✅ Migration réussie pour db_larameemarineinc2
-----------------------------------------------------
 >>> Migration de la base : db_demondb13
-[notice] Migrating up to DoctrineMigrations\Version20260423173916
-[notice] finished in 108.3ms, used 34.5M memory, 2 migrations executed, 8 sql queries
 
- [OK] Successfully migrated to version: DoctrineMigrations\Version20260423173916                                        
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.                
+
+ >> 2026-04-29 16:18:15 (DoctrineMigrations\Version20260429161635)
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 222ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
 
 
 ✅ Migration réussie pour db_demondb13
 ----------------------------------------------------
 >>> Migration de la base : db_serrurepro
-[notice] Migrating up to DoctrineMigrations\Version20260423173916
-[notice] finished in 159.7ms, used 34.5M memory, 1 migrations executed, 4 sql queries
 
- [OK] Successfully migrated to version: DoctrineMigrations\Version20260423173916                                        
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.                
+
+ >> 2026-04-29 16:18:16 (DoctrineMigrations\Version20260429161635)
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 289.6ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
 
 
 ✅ Migration réussie pour db_serrurepro
 ----------------------------------------------------
 >>> Migration de la base : db_larameemarine
-[notice] Migrating up to DoctrineMigrations\Version20260423173916
-[notice] finished in 213.8ms, used 34.5M memory, 2 migrations executed, 8 sql queries
 
- [OK] Successfully migrated to version: DoctrineMigrations\Version20260423173916                                        
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.                
+
+ >> 2026-04-29 16:18:17 (DoctrineMigrations\Version20260429161635)
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 318.7ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
 
 
 ✅ Migration réussie pour db_larameemarine
 ----------------------------------------------------
 >>> Migration de la base : db_actifleonardo
-[notice] Migrating up to DoctrineMigrations\Version20260423173916
-[notice] finished in 68.8ms, used 34.5M memory, 1 migrations executed, 4 sql queries
 
- [OK] Successfully migrated to version: DoctrineMigrations\Version20260423173916                                        
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.                
+
+ >> 2026-04-29 16:18:18 (DoctrineMigrations\Version20260429161635)
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 193.1ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
 
 
 ✅ Migration réussie pour db_actifleonardo
 ----------------------------------------------------
->>> Migration de la base : db_demodb11
+>>> Migration de la base : db_expertnautique
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 190.9ms, used 34.5M memory, 1 migrations executed, 4 sql queries
 
- [OK] Already at the latest version ("DoctrineMigrations\Version20260423173916")                                        
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
 
-✅ Migration réussie pour db_demodb11
+
+✅ Migration réussie pour db_expertnautique
 ----------------------------------------------------
->>> Migration de la base : db_demodb11_test_test
-[notice] Migrating up to DoctrineMigrations\Version20260423173916
-[error] Migration DoctrineMigrations\Version20250530185355 failed during Execution. Error: "An exception occurred while executing a query: SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "Cart_id_seq" already exists"
-17:43:35 CRITICAL  [console] Error thrown while running command "doctrine:migrations:migrate --no-interaction --allow-no-migration". Message: "An exception occurred while executing a query: SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "Cart_id_seq" already exists" ["exception" => Doctrine\DBAL\Exception\TableExistsException { …},"command" => "doctrine:migrations:migrate --no-interaction --allow-no-migration","message" => "An exception occurred while executing a query: SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "Cart_id_seq" already exists"]
+>>> Migration de la base : db_acquisauto
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 238.7ms, used 34.5M memory, 1 migrations executed, 4 sql queries
 
-In ExceptionConverter.php line 74:
-                                                                                                                                    
-  An exception occurred while executing a query: SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "Cart_id_seq" already exists  
-                                                                                                                                    
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
 
-In Exception.php line 24:
-                                                                                     
-  SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "Cart_id_seq" already exists  
-                                                                                     
 
-In Connection.php line 71:
-                                                                                     
-  SQLSTATE[42P07]: Duplicate table: 7 ERROR:  relation "Cart_id_seq" already exists  
-                                                                                     
+✅ Migration réussie pour db_acquisauto
+----------------------------------------------------
+>>> Migration de la base : gmasuite
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 123.5ms, used 34.5M memory, 1 migrations executed, 4 sql queries
 
-doctrine:migrations:migrate [--write-sql [WRITE-SQL]] [--dry-run] [--query-time] [--allow-no-migration] [--all-or-nothing [ALL-OR-NOTHING]] [--no-all-or-nothing] [--configuration CONFIGURATION] [--em EM] [--conn CONN] [--] [<version>]
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
 
-❌ Échec de la migration pour db_demodb11_test_test
+
+✅ Migration réussie pour gmasuite
+----------------------------------------------------
+>>> Migration de la base : db_larameemarineinc2
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 54ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
+
+
+✅ Migration réussie pour db_larameemarineinc2
+----------------------------------------------------
+>>> Migration de la base : db_caravane201inc
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 43.3ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
+
+
+✅ Migration réussie pour db_caravane201inc
 ----------------------------------------------------
 >>> Migration de la base : db_serrurepro1
-[notice] Migrating up to DoctrineMigrations\Version20260423173916
-[notice] finished in 117.1ms, used 34.5M memory, 1 migrations executed, 4 sql queries
 
- [OK] Successfully migrated to version: DoctrineMigrations\Version20260423173916                                        
+ [WARNING] You have 1 previously executed migrations in the database that are not registered migrations.                
+
+ >> 2026-04-29 16:18:19 (DoctrineMigrations\Version20260429161635)
+[notice] Migrating up to DoctrineMigrations\Version20260706183647
+[notice] finished in 263.5ms, used 34.5M memory, 1 migrations executed, 4 sql queries
+
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20260706183647                                        
 
 
 ✅ Migration réussie pour db_serrurepro1

@@ -43,6 +43,7 @@ class OrderControllerTest extends TestCase
     private $stripeService;
     private $gemsuiteClientManager;
     private $tenantManager;
+    private $gemsuiteClientUpdater;
     private $controller;
     private $container;
     private $tokenStorage;
@@ -62,6 +63,7 @@ class OrderControllerTest extends TestCase
         $this->stripeService = $this->createMock(\App\Services\StripeService\StripeService::class);
         $this->gemsuiteClientManager = $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteClientManager::class);
         $this->tenantManager = $this->createMock(\App\Services\TenantConnectionManager::class);
+        $this->gemsuiteClientUpdater = $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteClientUpdater::class);
 
         $this->controller = new OrderController(
             $this->createOrderUseCase,
@@ -75,7 +77,8 @@ class OrderControllerTest extends TestCase
             $this->orderMailerService,
             $this->stripeService,
             $this->gemsuiteClientManager,
-            $this->tenantManager
+            $this->tenantManager,
+            $this->gemsuiteClientUpdater
         );
 
         $this->container = $this->createMock(ContainerInterface::class);

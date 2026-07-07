@@ -23,6 +23,7 @@ use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 use App\Services\GemsuiteImporterService\GemsuiteSaleManager;
 use App\Services\GemsuiteImporterService\GemsuiteClientManager;
+use App\Services\GemsuiteImporterService\GemsuiteClientUpdater;
 use App\Services\TenantConnectionManager;
 use Psr\Log\LoggerInterface;
 use App\Services\OrderService\OrderMailerService;
@@ -42,6 +43,7 @@ class OrderController extends AbstractController
     private StripeService $stripeService;
     private GemsuiteClientManager $gemsuiteClientManager;
     private TenantConnectionManager $tenantManager;
+    private GemsuiteClientUpdater $gemsuiteClientUpdater;
 
     public function __construct(
         CreateOrderUseCase $createOrderUseCase,
@@ -55,7 +57,8 @@ class OrderController extends AbstractController
         OrderMailerService $orderMailerService,
         StripeService $stripeService,
         GemsuiteClientManager $gemsuiteClientManager,
-        TenantConnectionManager $tenantManager
+        TenantConnectionManager $tenantManager,
+        GemsuiteClientUpdater $gemsuiteClientUpdater
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -69,6 +72,7 @@ class OrderController extends AbstractController
         $this->stripeService = $stripeService;
         $this->gemsuiteClientManager = $gemsuiteClientManager;
         $this->tenantManager = $tenantManager;
+        $this->gemsuiteClientUpdater = $gemsuiteClientUpdater;
     }
 
     /**
@@ -214,12 +218,40 @@ class OrderController extends AbstractController
             return $this->json(['error' => 'Email is required'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
-        $em = $this->emProvider->getEntityManager();
-        $userRepo = $em->getRepository(User::class);
-        $user = $userRepo->findOneBy(['email' => $email]);
+        // Validate driver's license only if it's a rental (at least one item has booking or rental info)
+        $hasRental = false;
+        if (isset($data['items']) && is_array($data['items'])) {
+            foreach ($data['items'] as $item) {
+                if (isset($item['booking']) || isset($item['rental'])) {
+                    $hasRental = true;
+                    break;
+                }
+            }
+        }
 
-        $firstName = $guestInfo['firstName'] ?? 'Guest';
-        $lastName = $guestInfo['lastName'] ?? 'User';
+        if ($hasRental) {
+            $licenseNumber = $guestInfo['licenseNumber'] ?? null;
+            $licenseExpirationDate = $guestInfo['licenseExpirationDate'] ?? null;
+            if (empty($licenseNumber) || empty($licenseExpirationDate)) {
+                return $this->json(['error' => 'License number and expiration date are required for rental orders.'], JsonResponse::HTTP_BAD_REQUEST);
+            }
+        }
+
+        // Extract first and last name with robust fallbacks
+        $firstName = $guestInfo['firstName'] ?? $data['shippingAddress']['firstname'] ?? null;
+        if (!$firstName && isset($data['shippingAddress']['fullname'])) {
+            $parts = explode(' ', $data['shippingAddress']['fullname'], 2);
+            $firstName = $parts[0] ?: 'Guest';
+        }
+        $firstName = $firstName ?? 'Guest';
+
+        $lastName = $guestInfo['lastName'] ?? $data['shippingAddress']['lastname'] ?? null;
+        if (!$lastName && isset($data['shippingAddress']['fullname'])) {
+            $parts = explode(' ', $data['shippingAddress']['fullname'], 2);
+            $lastName = $parts[1] ?? 'User';
+        }
+        $lastName = $lastName ?? 'User';
+
         $tenantCode = $this->tenantManager->getCurrentTenantCode();
 
         // 1. S'assurer que le client existe dans Gemsuite (et en local)
@@ -227,6 +259,8 @@ class OrderController extends AbstractController
         
         // On récupère l'EM après le switch potentiel du GemsuiteClientManager
         $em = $this->emProvider->getEntityManager();
+        $userRepo = $em->getRepository(User::class);
+        $user = $userRepo->findOneBy(['email' => $email]);
 
         if (!$user) {
             $user = new User();
@@ -238,16 +272,40 @@ class OrderController extends AbstractController
             $user->setIsVerified(true);
             $user->setRoles(['ROLE_USER_INTERNET']);
             
+            if (isset($guestInfo['licenseNumber'])) {
+                $user->setLicenseNumber($guestInfo['licenseNumber']);
+            }
+            if (isset($guestInfo['licenseExpirationDate']) && $guestInfo['licenseExpirationDate']) {
+                $user->setLicenseExpirationDate(new \DateTime($guestInfo['licenseExpirationDate']));
+            }
+
             if ($gemsuiteClient) {
                 $user->setGemsuiteClient($gemsuiteClient);
             }
 
             $em->persist($user);
             $em->flush();
-        } elseif ($gemsuiteClient && !$user->getGemsuiteClient()) {
-            // Si l'user existe mais n'était pas lié au client Gemsuite
-            $user->setGemsuiteClient($gemsuiteClient);
-            $em->flush();
+        } else {
+            $userChanged = false;
+            if ($gemsuiteClient && !$user->getGemsuiteClient()) {
+                $user->setGemsuiteClient($gemsuiteClient);
+                $userChanged = true;
+            }
+            if (isset($guestInfo['licenseNumber']) && $user->getLicenseNumber() !== $guestInfo['licenseNumber']) {
+                $user->setLicenseNumber($guestInfo['licenseNumber']);
+                $userChanged = true;
+            }
+            if (isset($guestInfo['licenseExpirationDate']) && $guestInfo['licenseExpirationDate']) {
+                $expDate = new \DateTime($guestInfo['licenseExpirationDate']);
+                if (!$user->getLicenseExpirationDate() || $user->getLicenseExpirationDate()->format('Y-m-d') !== $expDate->format('Y-m-d')) {
+                    $user->setLicenseExpirationDate($expDate);
+                    $userChanged = true;
+                }
+            }
+            if ($userChanged) {
+                $em->persist($user);
+                $em->flush();
+            }
         }
 
         // Verify Stripe Payment and extract details
@@ -270,13 +328,25 @@ class OrderController extends AbstractController
         $shippingData = $data['shippingAddress'];
         $billingData = $data['billingAddress'] ?? $shippingData;
 
-        $guestPhone = $guestInfo['phone'] ?? $guestInfo['phoneNumber'] ?? $guestInfo['contactNumber'] ?? null;
+        $guestPhone = $guestInfo['phone'] ?? $data['shippingAddress']['contactNumber'] ?? null;
         $shippingAddress = $this->createAddressFromData($shippingData, $user, $guestPhone);
         $billingAddress = $this->createAddressFromData($billingData, $user, $guestPhone);
 
         $em->persist($shippingAddress);
         $em->persist($billingAddress);
         $em->flush();
+
+        // Associate shippingAddress to user profile as primaryAddress
+        $user->setPrimaryAddress($shippingAddress);
+        $em->persist($user);
+        $em->flush();
+
+        // Synchronize the complete shipping address to GemSuite
+        try {
+            $this->gemsuiteClientUpdater->syncAddress($user, $shippingAddress);
+        } catch (\Exception $e) {
+            $this->logger->error("Failed to sync guest address to GemSuite: " . $e->getMessage());
+        }
 
         $carrierId = $data['carrierId'] ?? null;
 

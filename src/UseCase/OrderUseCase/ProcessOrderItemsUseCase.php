@@ -82,9 +82,18 @@ class ProcessOrderItemsUseCase
 
             if (isset($itemData['licenseNumber'])) {
                 $orderItem->setLicenseNumber($itemData['licenseNumber']);
+            } elseif ($order->getGuestLicenseNumber()) {
+                $orderItem->setLicenseNumber($order->getGuestLicenseNumber());
+            } elseif ($order->getUserId() && $order->getUserId()->getLicenseNumber()) {
+                $orderItem->setLicenseNumber($order->getUserId()->getLicenseNumber());
             }
+
             if (isset($itemData['licenseExpirationDate'])) {
                 $orderItem->setLicenseExpirationDate(new \DateTime($itemData['licenseExpirationDate']));
+            } elseif ($order->getGuestLicenseExpirationDate()) {
+                $orderItem->setLicenseExpirationDate($order->getGuestLicenseExpirationDate());
+            } elseif ($order->getUserId() && $order->getUserId()->getLicenseExpirationDate()) {
+                $orderItem->setLicenseExpirationDate($order->getUserId()->getLicenseExpirationDate());
             }
 
             $em->persist($order);
