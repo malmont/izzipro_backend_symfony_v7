@@ -81,6 +81,20 @@ class FinancementApiControllerTest extends TestCase
 
         $request = new Request([], [], [], [], [], [], json_encode($payload));
 
+        // Mock tenant manager and gemsuite client manager
+        $this->tenantManager->method('getCurrentTenantCode')->willReturn('tenant123');
+        $this->gemsuiteClientManager->expects($this->once())
+            ->method('findOrCreateClient')
+            ->with(
+                'john.doe@example.com',
+                'John',
+                'Doe',
+                'tenant123',
+                true,
+                '123 Rue de la caravane, Montreal, QC',
+                '514-123-4567'
+            );
+
         // Mock validation passing
         $this->validator->expects($this->once())
             ->method('validate')

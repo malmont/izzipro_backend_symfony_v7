@@ -30,7 +30,7 @@ class GemsuiteClientManager
      *
      * @return GemsuiteClient|null L'entité locale trouvée ou créée.
      */
-    public function findOrCreateClient(string $email, string $firstName, string $lastName, string $tenantCode, bool $isProspect = false): ?GemsuiteClient
+    public function findOrCreateClient(string $email, string $firstName, string $lastName, string $tenantCode, bool $isProspect = false, ?string $address = null, ?string $phone = null): ?GemsuiteClient
     {
         try {
             $tenantEm = $this->getTenantEntityManager($tenantCode);
@@ -38,12 +38,18 @@ class GemsuiteClientManager
             $localClient = $tenantEm->getRepository(GemsuiteClient::class)->findOneBy(['email' => strtolower($email)]);
             if ($localClient) {
                 $this->logger->info(sprintf('Client trouvé localement pour l\'email "%s" (ID Gemsuite: %d).', $email, $localClient->getGemsuiteId()));
-                if ($isProspect) {
+                if ($isProspect || $address !== null || $phone !== null) {
                     $token = $this->tenantManager->getTenantToken($tenantCode);
                     if ($token) {
-                        $this->updateClientProspectStatus($localClient->getGemsuiteId(), $token, true);
+                        $this->updateClientDetails(
+                            $localClient->getGemsuiteId(),
+                            $token,
+                            $isProspect ? true : null,
+                            $address,
+                            $phone
+                        );
                     } else {
-                        $this->logger->warning(sprintf('Aucun token pour le tenant "%s", impossible de mettre à jour le statut prospect.', $tenantCode));
+                        $this->logger->warning(sprintf('Aucun token pour le tenant "%s", impossible de mettre à jour le client.', $tenantCode));
                     }
                 }
                 return $localClient;
@@ -57,7 +63,7 @@ class GemsuiteClientManager
 
             $this->logger->info(sprintf('Client non trouvé localement pour l\'email "%s". Tentative de création sur GEM-SUITE.', $email));
             
-            $newClientData = $this->createClientOnGemsuite($email, $firstName, $lastName, $token, $isProspect);
+            $newClientData = $this->createClientOnGemsuite($email, $firstName, $lastName, $token, $isProspect, $address, $phone);
 
             if ($newClientData) {
                 $newLocalClient = new GemsuiteClient();
@@ -83,8 +89,15 @@ class GemsuiteClientManager
      * Crée un client sur GEM-SUITE via un appel API POST.
      * (Anciennement "createClient")
      */
-    private function createClientOnGemsuite(string $email, string $firstName, string $lastName, string $token, bool $isProspect = false): ?array
-    {
+    private function createClientOnGemsuite(
+        string $email,
+        string $firstName,
+        string $lastName,
+        string $token,
+        bool $isProspect = false,
+        ?string $address = null,
+        ?string $phone = null
+    ): ?array {
         $jsonPayload = [
             'name' => $firstName . ' ' . $lastName,
             'code' => 'IIZIPRO_' . strtoupper(substr($firstName, 0, 1) . substr($lastName, 0, 1)) . time(),
@@ -93,6 +106,14 @@ class GemsuiteClientManager
 
         if ($isProspect) {
             $jsonPayload['prospect'] = 1;
+        }
+
+        if ($address !== null) {
+            $jsonPayload['address'] = $address;
+        }
+
+        if ($phone !== null) {
+            $jsonPayload['phone'] = $phone;
         }
 
         $response = $this->client->request('POST', $this->gemsuiteApiUrl . 'clients', [
@@ -112,18 +133,36 @@ class GemsuiteClientManager
         return null;
     }
 
-    private function updateClientProspectStatus(int $gemsuiteClientId, string $token, bool $isProspect): void
-    {
+    private function updateClientDetails(
+        int $gemsuiteClientId,
+        string $token,
+        ?bool $isProspect = null,
+        ?string $address = null,
+        ?string $phone = null
+    ): void {
         try {
+            $json = [];
+            if ($isProspect !== null) {
+                $json['prospect'] = $isProspect ? 1 : 0;
+            }
+            if ($address !== null) {
+                $json['address'] = $address;
+            }
+            if ($phone !== null) {
+                $json['phone'] = $phone;
+            }
+
+            if (empty($json)) {
+                return;
+            }
+
             $this->client->request('PUT', $this->gemsuiteApiUrl . 'clients/' . $gemsuiteClientId, [
                 'auth_bearer' => $token,
-                'json' => [
-                    'prospect' => $isProspect ? 1 : 0
-                ]
+                'json' => $json
             ]);
-            $this->logger->info(sprintf('Statut prospect mis à jour pour le client #%d.', $gemsuiteClientId));
+            $this->logger->info(sprintf('Informations mises à jour pour le client #%d.', $gemsuiteClientId));
         } catch (\Throwable $e) {
-            $this->logger->error(sprintf('Impossible de mettre à jour le statut prospect du client #%d : %s', $gemsuiteClientId, $e->getMessage()));
+            $this->logger->error(sprintf('Impossible de mettre à jour le client #%d : %s', $gemsuiteClientId, $e->getMessage()));
         }
     }
 
