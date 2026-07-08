@@ -672,4 +672,80 @@ class ProcessGemsuiteEntityJobHandlerTest extends TestCase
 
         $handler(new ProcessGemsuiteEntityJob(1, 999, 'resources', $teamData));
     }
+
+    public function testInvokeProcessProductVariantUpdatesParentPriceAndSpecialPrice(): void
+    {
+        $variantData = [
+            'id' => 102,
+            'origin_product_id' => 100,
+            'status' => 1,
+            'price' => 15.00,
+            'special_price' => 0.0, // Special price removed
+            'special_price_from' => null,
+            'special_price_to' => null,
+            'attributs' => [],
+        ];
+
+        $logger = $this->createMock(LoggerInterface::class);
+        $tenantManager = $this->createMock(TenantConnectionManager::class);
+        $tenantManager->method('findTenantById')->willReturn(['dbname' => 'db', 'code' => 'c1']);
+
+        // Parent product
+        $parentProduct = new Product();
+        $parentProduct->setGemsuiteProductId(100);
+        $parentProduct->setPrice(10.0 * 100);
+        $parentProduct->setSpecialPrice(8.0 * 100);
+        $parentProduct->setIsspecialoffer(true);
+
+        $productRepo = $this->createMock(EntityRepository::class);
+        $productRepo->method('findOneBy')->with(['gemsuiteProductId' => 100])->willReturn($parentProduct);
+
+        // Variant product
+        $existingVariant = new \App\Entity\ProductVariant();
+        $existingVariant->setProduct($parentProduct);
+        $existingVariant->setGemsuiteVariantId(102);
+
+        $variantRepo = $this->createMock(EntityRepository::class);
+        $variantRepo->method('findOneBy')->with(['gemsuiteVariantId' => 102])->willReturn($existingVariant);
+
+        $mockQuery = $this->createMock(AbstractQuery::class);
+        $mockQuery->method('setParameter')->willReturn($mockQuery);
+        $mockQuery->method('execute')->willReturn(1);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $connection = $this->createMock(\Doctrine\DBAL\Connection::class);
+        $connection->method('getDatabase')->willReturn('test_db');
+        $em->method('getConnection')->willReturn($connection);
+        $em->method('createQuery')->willReturn($mockQuery);
+        $em->method('getRepository')->willReturnMap([
+            [Product::class, $productRepo],
+            [\App\Entity\ProductVariant::class, $variantRepo],
+        ]);
+
+        $emProvider = $this->createMock(TenantEntityManagerProvider::class);
+        $emProvider->method('getEntityManager')->willReturn($em);
+
+        $bus = $this->createMock(MessageBusInterface::class);
+
+        $handler = new ProcessGemsuiteEntityJobHandler(
+            $logger,
+            $tenantManager,
+            $emProvider,
+            $bus,
+            $this->createMock(GemsuiteImageUrlBuilder::class),
+            $this->createMock(GemsuiteAttributeProcessor::class),
+            $this->createMock(GemsuiteStockCalculator::class),
+            $this->createMock(SluggerInterface::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteRentalWorkaroundService::class),
+            $this->createMock(\App\Services\GemsuiteImporterService\GemsuiteCompanySyncHandler::class),
+            $this->createMock(\App\Services\TranslationGeneratorService\TranslationGeneratorService::class)
+        );
+
+        $handler(new ProcessGemsuiteEntityJob(1, 999, 'product_variant', $variantData));
+
+        $this->assertEquals(1500.0, $parentProduct->getPrice());
+        $this->assertNull($parentProduct->getSpecialPrice());
+        $this->assertFalse($parentProduct->isIsspecialoffer());
+    }
 }
+

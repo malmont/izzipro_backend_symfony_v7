@@ -414,6 +414,9 @@ class ProcessGemsuiteEntityJobHandler
 
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
         $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+        foreach ($product->getPictures() as $picture) {
+            $em->remove($picture);
+        }
         $product->getPictures()->clear();
         $medias = $data['medias'] ?? [];
         foreach ($medias as $index => $media) {
@@ -499,6 +502,34 @@ class ProcessGemsuiteEntityJobHandler
         $variant->setStockQuantity($realStock);
 
         $this->attributeProcessor->process($em, $variant, $data['attributs'] ?? []);
+
+        // Propager les prix et offre spéciale sur le parent depuis la variante
+        if (isset($data['price'])) {
+            $product->setPrice((float)$data['price'] * 100);
+        }
+
+        $specialPrice = isset($data['special_price']) && $data['special_price'] !== null ? (float)$data['special_price'] : null;
+        if ($specialPrice !== null && $specialPrice > 0) {
+            $product->setSpecialPrice($specialPrice * 100);
+            $product->setIsspecialoffer(true);
+        } else {
+            $product->setSpecialPrice(null);
+            $product->setIsspecialoffer(false);
+        }
+
+        if (!empty($data['special_price_from'])) {
+            $product->setSpecialPriceFrom(new \DateTimeImmutable($data['special_price_from']));
+        } else {
+            $product->setSpecialPriceFrom(null);
+        }
+
+        if (!empty($data['special_price_to'])) {
+            $product->setSpecialPriceTo(new \DateTimeImmutable($data['special_price_to']));
+        } else {
+            $product->setSpecialPriceTo(null);
+        }
+
+        $em->persist($product);
 
         $em->flush();
     }

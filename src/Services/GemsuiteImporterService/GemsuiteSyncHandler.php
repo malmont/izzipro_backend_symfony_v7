@@ -818,7 +818,7 @@ class GemsuiteSyncHandler
 
         $this->logger->info(sprintf('Sync Produit #%d : %d médias trouvés.', $product->getGemsuiteProductId(), count($gemProductData['medias'] ?? [])));
 
-        $this->syncProductImages($product, $gemProductData, $companyIdentifier);
+        $this->syncProductImages($em, $product, $gemProductData, $companyIdentifier);
 
         $shipping = $product->getProductShipping();
         if (!$shipping) {
@@ -948,21 +948,52 @@ class GemsuiteSyncHandler
             );
         }
 
+        // Propager les prix et offre spéciale sur le parent depuis la variante
+        if (isset($gemProductData['price'])) {
+            $product->setPrice((float)$gemProductData['price'] * 100);
+        }
+
+        $specialPrice = isset($gemProductData['special_price']) && $gemProductData['special_price'] !== null ? (float)$gemProductData['special_price'] : null;
+        if ($specialPrice !== null && $specialPrice > 0) {
+            $product->setSpecialPrice($specialPrice * 100);
+            $product->setIsspecialoffer(true);
+        } else {
+            $product->setSpecialPrice(null);
+            $product->setIsspecialoffer(false);
+        }
+
+        if (!empty($gemProductData['special_price_from'])) {
+            $product->setSpecialPriceFrom(new \DateTimeImmutable($gemProductData['special_price_from']));
+        } else {
+            $product->setSpecialPriceFrom(null);
+        }
+
+        if (!empty($gemProductData['special_price_to'])) {
+            $product->setSpecialPriceTo(new \DateTimeImmutable($gemProductData['special_price_to']));
+        } else {
+            $product->setSpecialPriceTo(null);
+        }
+
+        $em->persist($product);
+
         // --- SYNCHRO PHOTOS POUR VARIANTE ---
         // On délègue à la logique du parent si des médias sont présents
         if (!empty($gemProductData['medias'])) {
             $this->logger->info(sprintf('Variante #%d : Présence de %d médias. Mise à jour de la galerie du parent #%d.', $gemProductData['id'], count($gemProductData['medias']), $parentProductId));
 
             // On peut appeler une version allégée de processPictures ou juste copier la logique
-            $this->syncProductImages($product, $gemProductData, $companyIdentifier);
+            $this->syncProductImages($em, $product, $gemProductData, $companyIdentifier);
         }
     }
 
     /**
      * Logique mutualisée pour la synchro des images
      */
-    private function syncProductImages(Product $product, array $gemProductData, ?string $companyIdentifier): void
+    private function syncProductImages(EntityManagerInterface $em, Product $product, array $gemProductData, ?string $companyIdentifier): void
     {
+        foreach ($product->getPictures() as $picture) {
+            $em->remove($picture);
+        }
         $product->getPictures()->clear();
         $medias = $gemProductData['medias'] ?? [];
         foreach ($medias as $index => $media) {

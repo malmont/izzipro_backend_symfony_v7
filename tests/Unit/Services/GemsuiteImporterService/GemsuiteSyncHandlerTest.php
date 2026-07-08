@@ -419,4 +419,91 @@ class GemsuiteSyncHandlerTest extends TestCase
         // Verify that the product has been deactivated locally
         $this->assertFalse($product->isWeb());
     }
+
+    public function testHandleProductUpdateUpdatesParentPriceAndSpecialPriceForVariant(): void
+    {
+        $tenantCode = 'T1';
+        $productId = 102;
+        $token = 'token';
+
+        $this->logger->method('error')->will($this->returnCallback(function ($message) {
+            throw new \Exception("Logged Error: " . $message);
+        }));
+
+        $this->tenantManager->method('getTenantToken')->willReturn($token);
+
+        // API Data for Variant Product
+        $gemProductData = [
+            'id' => 102,
+            'origin_product_id' => 100, // Variant
+            'name_fr' => 'Variant test',
+            'status' => 1,
+            'web_display' => true,
+            'price' => 15.00,
+            'special_price' => 0.0, // Special price removed
+            'special_price_from' => null,
+            'special_price_to' => null,
+            'category_id' => 5,
+            'quantite' => [],
+            'attributs' => [],
+            'medias' => [],
+        ];
+
+        // Mock HTTP Call to fetch variant
+        $respProd = $this->createMock(ResponseInterface::class);
+        $respProd->method('toArray')->willReturn(['data' => $gemProductData]);
+        $this->client->method('request')->willReturn($respProd);
+
+        // Parent product
+        $parentProduct = new Product();
+        $parentProduct->setGemsuiteProductId(100);
+        $parentProduct->setPrice(10.0 * 100);
+        $parentProduct->setSpecialPrice(8.0 * 100);
+        $parentProduct->setIsspecialoffer(true);
+
+        $repoProduct = $this->createMock(EntityRepository::class);
+        $repoProduct->method('findOneBy')->with(['gemsuiteProductId' => 100])->willReturn($parentProduct);
+
+        // Variant product
+        $existingVariant = new ProductVariant();
+        $existingVariant->setProduct($parentProduct);
+        $existingVariant->setGemsuiteVariantId(102);
+
+        $repoVariant = $this->createMock(EntityRepository::class);
+        $repoVariant->method('findOneBy')->with(['gemsuiteVariantId' => 102])->willReturn($existingVariant);
+
+        $category = new Categories();
+        $category->setGemsuiteCategoryId(5);
+        $category->setSyncWeb(true);
+
+        $repoCategory = $this->createMock(EntityRepository::class);
+        $repoCategory->method('findAll')->willReturn([$category]);
+
+        $repoEntreprise = $this->createMock(EntityRepository::class);
+        $repoEntreprise->method('findOneBy')->willReturn(null);
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $connection = $this->createMock(\Doctrine\DBAL\Connection::class);
+        $em->method('getConnection')->willReturn($connection);
+
+        $em->method('getRepository')->willReturnCallback(function ($class) use ($repoEntreprise, $repoProduct, $repoCategory, $repoVariant) {
+            if ($class === Entreprise::class) return $repoEntreprise;
+            if ($class === Product::class) return $repoProduct;
+            if ($class === Categories::class) return $repoCategory;
+            if ($class === ProductVariant::class) return $repoVariant;
+            return null;
+        });
+
+        $this->emProvider->method('getEntityManager')->willReturn($em);
+        $this->stockCalculator->method('calculateTotalStock')->willReturn(50);
+
+        $em->expects($this->once())->method('flush');
+
+        $this->handler->handleProductUpdate($tenantCode, $productId);
+
+        $this->assertEquals(1500.0, $parentProduct->getPrice());
+        $this->assertNull($parentProduct->getSpecialPrice());
+        $this->assertFalse($parentProduct->isIsspecialoffer());
+    }
 }
+
