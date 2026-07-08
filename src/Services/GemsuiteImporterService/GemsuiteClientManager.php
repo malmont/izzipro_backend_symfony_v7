@@ -30,8 +30,16 @@ class GemsuiteClientManager
      *
      * @return GemsuiteClient|null L'entité locale trouvée ou créée.
      */
-    public function findOrCreateClient(string $email, string $firstName, string $lastName, string $tenantCode, bool $isProspect = false, ?string $address = null, ?string $phone = null): ?GemsuiteClient
-    {
+    public function findOrCreateClient(
+        string $email,
+        string $firstName,
+        string $lastName,
+        string $tenantCode,
+        bool $isProspect = false,
+        ?string $address = null,
+        ?string $phone = null,
+        ?int $prospectType = null
+    ): ?GemsuiteClient {
         try {
             $tenantEm = $this->getTenantEntityManager($tenantCode);
 
@@ -46,7 +54,8 @@ class GemsuiteClientManager
                             $token,
                             $isProspect ? true : null,
                             $address,
-                            $phone
+                            $phone,
+                            $prospectType
                         );
                     } else {
                         $this->logger->warning(sprintf('Aucun token pour le tenant "%s", impossible de mettre à jour le client.', $tenantCode));
@@ -63,7 +72,7 @@ class GemsuiteClientManager
 
             $this->logger->info(sprintf('Client non trouvé localement pour l\'email "%s". Tentative de création sur GEM-SUITE.', $email));
             
-            $newClientData = $this->createClientOnGemsuite($email, $firstName, $lastName, $token, $isProspect, $address, $phone);
+            $newClientData = $this->createClientOnGemsuite($email, $firstName, $lastName, $token, $isProspect, $address, $phone, $prospectType);
 
             if ($newClientData) {
                 $newLocalClient = new GemsuiteClient();
@@ -96,7 +105,8 @@ class GemsuiteClientManager
         string $token,
         bool $isProspect = false,
         ?string $address = null,
-        ?string $phone = null
+        ?string $phone = null,
+        ?int $prospectType = null
     ): ?array {
         $jsonPayload = [
             'name' => $firstName . ' ' . $lastName,
@@ -105,7 +115,7 @@ class GemsuiteClientManager
         ];
 
         if ($isProspect) {
-            $jsonPayload['prospect'] = 1;
+            $jsonPayload['type'] = $prospectType ?? 1;
         }
 
         if ($address !== null) {
@@ -116,7 +126,7 @@ class GemsuiteClientManager
             $jsonPayload['phone'] = $phone;
         }
 
-        $response = $this->client->request('POST', $this->gemsuiteApiUrl . 'clients', [
+        $response = $this->client->request('POST', $this->gemsuiteApiUrl . 'vehicle_leads', [
             'auth_bearer' => $token,
             'json' => $jsonPayload
         ]);
@@ -138,12 +148,13 @@ class GemsuiteClientManager
         string $token,
         ?bool $isProspect = null,
         ?string $address = null,
-        ?string $phone = null
+        ?string $phone = null,
+        ?int $prospectType = null
     ): void {
         try {
             $json = [];
             if ($isProspect !== null) {
-                $json['prospect'] = $isProspect ? 1 : 0;
+                $json['type'] = $prospectType ?? 1;
             }
             if ($address !== null) {
                 $json['address'] = $address;

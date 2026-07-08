@@ -76,7 +76,8 @@ class FinancementApiController extends AbstractController
                         $tenantCode,
                         true,
                         $dto->address,
-                        $dto->phone
+                        $dto->phone,
+                        1 // Type 1 for financing
                     );
                 } catch (\Throwable $e) {
                     $this->logger->error("Échec de la création du prospect sur GEM-SUITE : " . $e->getMessage());

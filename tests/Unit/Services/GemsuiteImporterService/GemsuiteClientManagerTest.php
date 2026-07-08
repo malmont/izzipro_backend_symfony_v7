@@ -127,7 +127,7 @@ class GemsuiteClientManagerTest extends TestCase
 
         $this->client->expects($this->once())
             ->method('request')
-            ->with('POST', $this->gemsuiteApiUrl . 'clients', $this->callback(function ($options) use ($token, $email) {
+            ->with('POST', $this->gemsuiteApiUrl . 'vehicle_leads', $this->callback(function ($options) use ($token, $email) {
                 return $options['auth_bearer'] === $token && $options['json']['email'] === $email;
             }))
             ->willReturn($response);

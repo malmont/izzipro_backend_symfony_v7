@@ -1313,13 +1313,15 @@ class GemsuiteSyncHandler
         }
 
         $inactive = (int)($data['inactive'] ?? 0);
+        $webDisplay = isset($data['web_display']) && ($data['web_display'] === true || $data['web_display'] === 1 || $data['web_display'] === '1' || $data['web_display'] === 'true');
+
         $repo = $em->getRepository(Team::class);
         $team = $repo->findOneBy(['gemsuiteTeamId' => $gemsuiteTeamId]);
 
-        if ($inactive === 1) {
+        if ($inactive === 1 || !$webDisplay) {
             if ($team) {
                 $em->remove($team);
-                $this->logger->info(sprintf('[processTeam Webhook] Membre de l\'équipe ID Gemsuite %d inactif. Suppression locale.', $gemsuiteTeamId));
+                $this->logger->info(sprintf('[processTeam Webhook] Membre de l\'équipe ID Gemsuite %d inactif ou non affiché sur le web. Suppression locale.', $gemsuiteTeamId));
             }
             return null;
         }
@@ -1332,6 +1334,7 @@ class GemsuiteSyncHandler
         }
 
         $team->setName(trim($data['name'] ?? ''));
+        $team->setImage($data['image'] ?? null);
 
         $em->persist($team);
 
