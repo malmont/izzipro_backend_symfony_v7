@@ -45,6 +45,18 @@ class SubmitContactUseCase
                 $dto->email // replyTo
             );
 
+            // Accusé de réception destiné au client
+            $this->emailSenderService->sendTemplatedEmail(
+                $dto->email,
+                'Accusé de réception - ' . $dto->service,
+                'emails/contact_acknowledgement.html.twig',
+                [
+                    'contact' => $dto,
+                ],
+                $locale,
+                $host
+            );
+
             // Synchronisation du prospect sur GEM-SUITE (Type 2 pour contact / pieces-services)
             $tenantCode = $this->tenantManager->getCurrentTenantCode();
             if ($tenantCode) {

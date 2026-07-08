@@ -40,18 +40,28 @@ class SubmitContactUseCaseTest extends TestCase
         $dto->service = 'Pièces';
         $dto->message = 'Hello, I need some parts.';
 
-        // Expect email sending
-        $emailSenderService->expects($this->once())
+        // Expect email sending: one to merchant, one to client/requester
+        $emailSenderService->expects($this->exactly(2))
             ->method('sendTemplatedEmail')
-            ->with(
-                'company@example.com',
-                'Nouveau message de contact - Pièces',
-                'emails/contact_form.html.twig',
-                ['contact' => $dto],
-                'fr',
-                'my-tenant.com',
-                null,
-                'jane.doe@example.com'
+            ->withConsecutive(
+                [
+                    'company@example.com',
+                    'Nouveau message de contact - Pièces',
+                    'emails/contact_form.html.twig',
+                    ['contact' => $dto],
+                    'fr',
+                    'my-tenant.com',
+                    null,
+                    'jane.doe@example.com'
+                ],
+                [
+                    'jane.doe@example.com',
+                    'Accusé de réception - Pièces',
+                    'emails/contact_acknowledgement.html.twig',
+                    ['contact' => $dto],
+                    'fr',
+                    'my-tenant.com'
+                ]
             );
 
         // Expect gemsuite prospect creation with type 2
