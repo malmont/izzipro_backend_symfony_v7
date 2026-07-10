@@ -11,34 +11,34 @@ monolog:
         main:
             type: stream
             path: "%kernel.logs_dir%/%kernel.environment%.log"
-            level: debug
+            level: info
             channels: ["!event", "!doctrine", "!security","!deprecation"]
 
         # -------------------------------------------------------------------
         # Handler dédié aux requêtes Doctrine (SQL, cache, etc.)
-        # Niveau DEBUG afin de capturer chaque requête SQL exécutée.
+        # Niveau WARNING afin de ne pas capturer chaque requête SQL exécutée en dev.
         doctrine:
             type:   stream
             path:   "%kernel.logs_dir%/dev-doctrine.log"
-            level:  debug
+            level:  warning
             channels: ["doctrine"]
 
         # -------------------------------------------------------------------
         # Handler dédié au composant Security (firewalls, providers, voters, etc.)
-        # Niveau DEBUG pour voir quel firewall est matché et comment l’auth s’effectue.
+        # Niveau INFO pour voir l’auth s’effectuer.
         security:
             type:   stream
             path:   "%kernel.logs_dir%/dev-security.log"
-            level:  debug
+            level:  info
             channels: ["security"]
 
         # -------------------------------------------------------------------
         # Handler pour le canal "deprecation"
-        # Permet de capturer toutes les dépréciations dans un fichier dédié.
+        # Permet de capturer toutes les dépréciations dans un fichier dédié au niveau ERROR uniquement.
         deprecation:
             type:   stream
             path:   "%kernel.logs_dir%/deprecations.log"
-            level:  debug
+            level:  error
             channels: ["deprecation"]
 
         # -------------------------------------------------------------------

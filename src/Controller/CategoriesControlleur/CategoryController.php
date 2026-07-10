@@ -66,7 +66,7 @@ class CategoryController extends AbstractController
             'locale'     => $locale,
         ]));
         $host = $request->getSchemeAndHttpHost();
-        $productsDTOArray = $this->cache->get(
+        $cacheData = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos, $host, $locale) {
                 $item->expiresAfter(300); 
@@ -80,23 +80,28 @@ class CategoryController extends AbstractController
                     $barcode,
                     $isWeb,
                     $isPos,
-                    
                 );
-                return array_map(function ($product) use ($host, $locale) {
+                $dtos = array_map(function ($product) use ($host, $locale) {
                     $dto = new ProductOutputCategoryDto($product, $host, $locale);
                     return $dto;
                 }, $products);
+
+                $total = $this->countProductsByCategoryUseCase->execute($locale, $categoryIds, $keyword, $isWeb, $isPos);
+
+                return [
+                    'products' => $dtos,
+                    'total'    => $total,
+                ];
             },
         );
 
-        $totalProducts = $this->countProductsByCategoryUseCase->execute($locale, $categoryIds, $keyword, $isWeb, $isPos);
         return new JsonResponse([
             'meta' => [
-                'total' => $totalProducts,
-                'page' => $page,
+                'total'    => $cacheData['total'],
+                'page'     => $page,
                 'pageSize' => $pageSize,
             ],
-            'data' => $productsDTOArray,
+            'data' => $cacheData['products'],
         ], JsonResponse::HTTP_OK);
     }
 
