@@ -661,7 +661,15 @@ class ProcessGemsuiteEntityJobHandler
         }
 
         $team->setName(trim($data['name'] ?? ''));
-        $team->setImage($data['image'] ?? null);
+        
+        $imagePath = $data['image'] ?? null;
+        if ($imagePath && !str_starts_with($imagePath, 'http')) {
+            $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
+            $companyIdentifier = $entreprise ? $entreprise->getGemsuiteIdentifier() : null;
+            $team->setImage($this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath));
+        } else {
+            $team->setImage($imagePath);
+        }
 
         $em->persist($team);
 

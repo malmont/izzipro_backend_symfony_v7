@@ -27,7 +27,7 @@ class GemsuiteWebhookController extends AbstractController
         \Symfony\Component\HttpFoundation\Request $request,
         string $tenant_code,
         ?string $endpoint = null,
-        ?int $id = null
+        ?string $id = null
     ): Response {
 
         if ($endpoint === null) {
@@ -40,27 +40,28 @@ class GemsuiteWebhookController extends AbstractController
         }
 
         $payload = $request->getContent() ? json_decode($request->getContent(), true) : [];
+        $idVal = $id !== null ? (int)$id : null;
 
         $this->logger->info(sprintf(
             'Webhook reçu pour tenant "%s" | Endpoint: "%s" | ID: %d | Payload: %s',
             $tenant_code,
             $endpoint,
-            $id,
+            $idVal,
             json_encode($payload)
         ));
 
         try {
             switch ($endpoint) {
                 case 'products':
-                    $this->syncHandler->handleProductUpdate($tenant_code, $id);
+                    $this->syncHandler->handleProductUpdate($tenant_code, $idVal);
                     break;
 
                 case 'resources':
-                    $this->syncHandler->handleResourceUpdate($tenant_code, $id);
+                    $this->syncHandler->handleResourceUpdate($tenant_code, $idVal);
                     break;
 
                 case 'categories':
-                    $this->syncHandler->handleCategoryUpdate($tenant_code, $id);
+                    $this->syncHandler->handleCategoryUpdate($tenant_code, $idVal);
                     break;
  
                 case 'company':
@@ -68,19 +69,19 @@ class GemsuiteWebhookController extends AbstractController
                     break;
 
                 case 'clients':
-                    $this->syncHandler->handleClientUpdate($tenant_code, $id);
+                    $this->syncHandler->handleClientUpdate($tenant_code, $idVal);
                     break;
 
                 case 'sales':
-                    $this->syncHandler->handleSaleUpdate($tenant_code, $id);
+                    $this->syncHandler->handleSaleUpdate($tenant_code, $idVal);
                     break;
 
                 case 'sales_products':
-                    $this->syncHandler->handleSaleProductUpdate($tenant_code, $id);
+                    $this->syncHandler->handleSaleProductUpdate($tenant_code, $idVal);
                     break;
 
                 case 'vehicles':
-                    $this->syncHandler->handleVehicleUpdate($tenant_code, $id);
+                    $this->syncHandler->handleVehicleUpdate($tenant_code, $idVal);
                     break;
 
                 default:
@@ -88,7 +89,7 @@ class GemsuiteWebhookController extends AbstractController
                     break;
             }
 
-            return $this->json(['status' => 'processed', 'endpoint' => $endpoint, 'id' => $id]);
+            return $this->json(['status' => 'processed', 'endpoint' => $endpoint, 'id' => $idVal]);
         } catch (\Throwable $e) {
             $this->logger->error(sprintf(
                 'Erreur lors du traitement du webhook pour tenant "%s": %s',
