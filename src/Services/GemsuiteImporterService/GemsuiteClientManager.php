@@ -126,7 +126,10 @@ class GemsuiteClientManager
             $jsonPayload['phone'] = $phone;
         }
 
-        $response = $this->client->request('POST', $this->gemsuiteApiUrl . 'vehicle_leads', [
+        // Les prospects utilisent /vehicle_leads, les clients normaux utilisent /clients
+        $endpoint = $isProspect ? 'vehicle_leads' : 'clients';
+
+        $response = $this->client->request('POST', $this->gemsuiteApiUrl . $endpoint, [
             'auth_bearer' => $token,
             'json' => $jsonPayload
         ]);
