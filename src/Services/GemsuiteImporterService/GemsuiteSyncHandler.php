@@ -96,8 +96,8 @@ class GemsuiteSyncHandler
                 }
             }
 
-            $this->cleanupUnusedCategories($tenantEm);
             $tenantEm->flush();
+            $this->cleanupUnusedCategories($tenantEm);
 
             // --- AJOUT : Déclenchement de la traduction asynchrone (comme en synchro de masse) ---
             $this->dispatchTranslationJob($tenantCode, $gemProductData);
@@ -1034,88 +1034,108 @@ class GemsuiteSyncHandler
 
     private function importCategories(EntityManagerInterface $em, string $tenantCode, string $token, ?string $companyIdentifier): array
     {
-        $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'categories', [
-            'auth_bearer' => $token,
-        ]);
-        $data = $response->toArray();
         $categoryMap = [];
         $shippingClassMap = [];
 
-        if (!isset($data['data'])) return [[], []];
+        // --- PAGINATION : on récupère toutes les pages pour ne manquer aucune catégorie ---
+        $page = 1;
+        $perPage = 200;
+        $hasMore = true;
 
-        foreach ($data['data'] as $gemCategoryData) {
-            $status = (int)($gemCategoryData['status'] ?? 1);
-            $syncWeb = (bool)($gemCategoryData['sync_web'] ?? true);
+        while ($hasMore) {
+            $response = $this->client->request('GET', $this->gemsuiteApiUrl . 'categories', [
+                'auth_bearer' => $token,
+                'query' => ['page' => $page, 'per_page' => $perPage],
+            ]);
+            $data = $response->toArray();
 
-            if ($status !== 1) {
-                $categoryToDelete = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
-                if ($categoryToDelete) {
-                    $this->logger->info("Suppression de la catégorie #{$gemCategoryData['id']} car inactive.");
-                    $em->remove($categoryToDelete);
+            if (!isset($data['data']) || empty($data['data'])) {
+                break;
+            }
+
+            foreach ($data['data'] as $gemCategoryData) {
+                $status = (int)($gemCategoryData['status'] ?? 1);
+                $syncWeb = (bool)($gemCategoryData['sync_web'] ?? true);
+
+                if ($status !== 1) {
+                    $categoryToDelete = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
+                    if ($categoryToDelete) {
+                        $this->logger->info("Suppression de la catégorie #{$gemCategoryData['id']} car inactive.");
+                        $em->remove($categoryToDelete);
+                    }
+                    continue;
                 }
-                continue;
-            }
 
-
-            $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
-            if (!$category) {
-                $category = new Categories();
-                $category->setGemsuiteCategoryId($gemCategoryData['id']);
-            }
-
-            $category->setName(trim($gemCategoryData['name_fr'] ?? 'Catégorie'));
-
-            // --- NOUVELLE LOGIQUE LOCATION ---
-            $wasRental = $category->isRentalCategory();
-            $categoryType = (int)($gemCategoryData['category_type'] ?? 0);
-            $category->setCategoryType($categoryType);
-            $isRental = (int)($gemCategoryData['limit_lot'] ?? 0) === 1;
-            $category->setIsRentalCategory($isRental);
-
-            // --- NETTOYAGE TRANSITION CATEGORIE (Rental -> Normal) ---
-            if ($wasRental === true && $isRental === false) {
-                $this->logger->info("Catégorie #{$gemCategoryData['id']} passée de Rental à Normal. Nettoyage des produits.");
-                foreach ($category->getProducts() as $product) {
-                    $this->rentalWorkaround->removeRentalConfiguration($product, $em);
+                $category = $em->getRepository(Categories::class)->findOneBy(['gemsuiteCategoryId' => $gemCategoryData['id']]);
+                if (!$category) {
+                    $category = new Categories();
+                    $category->setGemsuiteCategoryId($gemCategoryData['id']);
                 }
-                foreach ($category->getRentalPacks() as $pack) {
-                    $pack->removeCategory($category);
-                }
-            }
 
-            $imagePath = $gemCategoryData['img_paths'] ?? null;
-            if (!empty($imagePath)) {
-                $category->setImage($this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath));
-            }
+                $category->setName(trim($gemCategoryData['name_fr'] ?? 'Catégorie'));
 
-            if ($categoryType === 10) {
-                $category->setSyncWeb(true);
-                $category->setIsVisible(false);
-            } elseif ($isRental) {
-                $category->setSyncWeb(true);
-                $category->setIsVisible(true);
-            } else {
-                $category->setSyncWeb($syncWeb);
-                $hasActiveWebProducts = false;
-                foreach ($category->getProducts() as $product) {
-                    if ($product->isWeb()) {
-                        $hasActiveWebProducts = true;
-                        break;
+                // --- NOUVELLE LOGIQUE LOCATION ---
+                $wasRental = $category->isRentalCategory();
+                $categoryType = (int)($gemCategoryData['category_type'] ?? 0);
+                $category->setCategoryType($categoryType);
+                $isRental = (int)($gemCategoryData['limit_lot'] ?? 0) === 1;
+                $category->setIsRentalCategory($isRental);
+
+                // --- NETTOYAGE TRANSITION CATEGORIE (Rental -> Normal) ---
+                if ($wasRental === true && $isRental === false) {
+                    $this->logger->info("Catégorie #{$gemCategoryData['id']} passée de Rental à Normal. Nettoyage des produits.");
+                    foreach ($category->getProducts() as $product) {
+                        $this->rentalWorkaround->removeRentalConfiguration($product, $em);
+                    }
+                    foreach ($category->getRentalPacks() as $pack) {
+                        $pack->removeCategory($category);
                     }
                 }
-                $category->setIsVisible($syncWeb || $hasActiveWebProducts);
+
+                $imagePath = $gemCategoryData['img_paths'] ?? null;
+                if (!empty($imagePath)) {
+                    $category->setImage($this->imageUrlBuilder->buildUrl($companyIdentifier, $imagePath));
+                }
+
+                if ($categoryType === 10) {
+                    $category->setSyncWeb(true);
+                    $category->setIsVisible(false);
+                } elseif ($isRental) {
+                    $category->setSyncWeb(true);
+                    $category->setIsVisible(true);
+                } else {
+                    $category->setSyncWeb($syncWeb);
+                    $hasActiveWebProducts = false;
+                    foreach ($category->getProducts() as $product) {
+                        if ($product->isWeb()) {
+                            $hasActiveWebProducts = true;
+                            break;
+                        }
+                    }
+                    $category->setIsVisible($syncWeb || $hasActiveWebProducts);
+                }
+
+                $em->persist($category);
+                if (method_exists($this->translationGenerator, 'generateTranslations')) {
+                    $this->translationGenerator->generateTranslations($category);
+                }
+                $categoryMap[$gemCategoryData['id']] = $category;
+                $shippingClassMap[$gemCategoryData['id']] = $gemCategoryData['expedition_classes'] ?? 0;
             }
 
-            $em->persist($category);
-            if (method_exists($this->translationGenerator, 'generateTranslations')) {
-                $this->translationGenerator->generateTranslations($category);
+            // Déterminer s'il reste des pages
+            if (isset($data['meta']['current_page'], $data['meta']['last_page'])) {
+                $hasMore = ((int)$data['meta']['current_page'] < (int)$data['meta']['last_page']);
+            } else {
+                $hasMore = (count($data['data']) === $perPage);
             }
-            $categoryMap[$gemCategoryData['id']] = $category;
-            $shippingClassMap[$gemCategoryData['id']] = $gemCategoryData['expedition_classes'] ?? 0;
+            $page++;
         }
+
+        $this->logger->info(sprintf('importCategories : %d catégorie(s) actives importées depuis l\'API Gemsuite.', count($categoryMap)));
         $em->flush();
 
-        // --- AJOUT : Déclenchement de la traduction asynchrone pour chaque catégorie ---
+        // --- Déclenchement de la traduction asynchrone pour chaque catégorie ---
         foreach ($categoryMap as $category) {
             $this->dispatchTranslationJob($tenantCode, ['id' => $category->getGemsuiteCategoryId(), 'type' => 'categories'], $category);
         }
