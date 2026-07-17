@@ -209,6 +209,40 @@ class OrderController extends AbstractController
             }
 
             $tenantEm->refresh($result);
+
+            // Capture Stripe Payment Intent
+            if ($paymentIntentId) {
+                $this->logger->info("[CAPTURE DEBUG] Tentative de capture pour PaymentIntent ID: " . $paymentIntentId);
+                $capturedIntent = $this->stripeService->capturePaymentIntent($paymentIntentId);
+                if ($capturedIntent && $capturedIntent->status === 'succeeded') {
+                    $payments = $result->getPayments();
+                    if ($payments && !$payments->isEmpty()) {
+                        /** @var \App\Entity\Payments $payment */
+                        $payment = $payments->first();
+                        $payment->setStripeStatus('succeeded');
+                        $charge = $capturedIntent->charges->data[0] ?? null;
+                        if ($charge) {
+                            if ($charge->receipt_url) {
+                                $payment->setStripeReceiptUrl($charge->receipt_url);
+                            }
+                            if ($charge->payment_method_details?->card?->brand) {
+                                $payment->setStripeCardBrand($charge->payment_method_details->card->brand);
+                            }
+                            if ($charge->payment_method_details?->card?->last4) {
+                                $payment->setStripeLast4($charge->payment_method_details->card->last4);
+                            }
+                            if ($charge->outcome?->risk_level) {
+                                $payment->setStripeRiskLevel($charge->outcome->risk_level);
+                            }
+                        }
+                        $tenantEm->persist($payment);
+                        $tenantEm->flush();
+                    }
+                } else {
+                    $this->logger->error(sprintf("[createOrder] Échec de la capture du paiement Stripe pour PaymentIntent ID: %s. Commande ID: %d.", $paymentIntentId, $result->getId()));
+                }
+            }
+
             $this->gemsuiteSaleManager->createSale($result);
             try {
                 $locale = $request->query->get('locale', 'fr');
@@ -426,6 +460,41 @@ class OrderController extends AbstractController
             }
 
             $em->refresh($result);
+
+            // Capture Stripe Payment Intent
+            if (isset($data['paymentIntentId'])) {
+                error_log("[STRIPE ID] ID de transaction : " . $data['paymentIntentId']);
+                $this->logger->info("[CAPTURE DEBUG] Tentative de capture pour PaymentIntent ID: " . $data['paymentIntentId']);
+                $capturedIntent = $this->stripeService->capturePaymentIntent($data['paymentIntentId']);
+                if ($capturedIntent && $capturedIntent->status === 'succeeded') {
+                    $payments = $result->getPayments();
+                    if ($payments && !$payments->isEmpty()) {
+                        /** @var \App\Entity\Payments $payment */
+                        $payment = $payments->first();
+                        $payment->setStripeStatus('succeeded');
+                        $charge = $capturedIntent->charges->data[0] ?? null;
+                        if ($charge) {
+                            if ($charge->receipt_url) {
+                                $payment->setStripeReceiptUrl($charge->receipt_url);
+                            }
+                            if ($charge->payment_method_details?->card?->brand) {
+                                $payment->setStripeCardBrand($charge->payment_method_details->card->brand);
+                            }
+                            if ($charge->payment_method_details?->card?->last4) {
+                                $payment->setStripeLast4($charge->payment_method_details->card->last4);
+                            }
+                            if ($charge->outcome?->risk_level) {
+                                $payment->setStripeRiskLevel($charge->outcome->risk_level);
+                            }
+                        }
+                        $em->persist($payment);
+                        $em->flush();
+                    }
+                } else {
+                    $this->logger->error(sprintf("[createGuestOrder] Échec de la capture du paiement Stripe pour PaymentIntent ID: %s. Commande ID: %d.", $data['paymentIntentId'], $result->getId()));
+                }
+            }
+
             $this->gemsuiteSaleManager->createSale($result);
             try {
                 $locale = $request->query->get('locale', 'fr');
@@ -564,6 +633,43 @@ class OrderController extends AbstractController
             }
 
             $tenantEm->refresh($result);
+
+            // Capture Stripe Payment Intent
+            $paymentIntentId = $paymentData['stripePaymentId'] ?? null;
+            if ($paymentIntentId) {
+                $capturedIntent = $this->stripeService->capturePaymentIntent($paymentIntentId);
+                if ($capturedIntent && $capturedIntent->status === 'succeeded') {
+                    $payments = $result->getPayments();
+                    if ($payments && !$payments->isEmpty()) {
+                        /** @var \App\Entity\Payments $payment */
+                        foreach ($payments as $payment) {
+                            if ($payment->getPaymentMethod()?->getId() == 2 || $payment->getStripePaymentId() === $paymentIntentId) {
+                                $payment->setStripeStatus('succeeded');
+                                $charge = $capturedIntent->charges->data[0] ?? null;
+                                if ($charge) {
+                                    if ($charge->receipt_url) {
+                                        $payment->setStripeReceiptUrl($charge->receipt_url);
+                                    }
+                                    if ($charge->payment_method_details?->card?->brand) {
+                                        $payment->setStripeCardBrand($charge->payment_method_details->card->brand);
+                                    }
+                                    if ($charge->payment_method_details?->card?->last4) {
+                                        $payment->setStripeLast4($charge->payment_method_details->card->last4);
+                                    }
+                                    if ($charge->outcome?->risk_level) {
+                                        $payment->setStripeRiskLevel($charge->outcome->risk_level);
+                                    }
+                                }
+                                $tenantEm->persist($payment);
+                            }
+                        }
+                        $tenantEm->flush();
+                    }
+                } else {
+                    $this->logger->error(sprintf("[createOrderWithMultiplePayments] Échec de la capture du paiement Stripe pour PaymentIntent ID: %s. Commande ID: %d.", $paymentIntentId, $result->getId()));
+                }
+            }
+
             $this->gemsuiteSaleManager->createSale($result);
 
             try {

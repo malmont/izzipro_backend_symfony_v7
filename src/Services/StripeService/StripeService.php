@@ -116,7 +116,8 @@ class StripeService
                 'amount' => $amount,
                 'currency' => $currency,
                 'payment_method_types' => ['card'],
-                'metadata' => ['store_code' => $tenantCode]
+                'metadata' => ['store_code' => $tenantCode],
+                'capture_method' => 'manual'
             ];
 
             $stripeOptions = [];
@@ -262,9 +263,36 @@ class StripeService
             }
 
             $paymentIntent = $this->retrieveStripePaymentIntent($paymentIntentId, $stripeOptions);
-            return $paymentIntent->status === 'succeeded' ? $paymentIntent : null;
+            return in_array($paymentIntent->status, ['requires_capture', 'succeeded']) ? $paymentIntent : null;
         } catch (ApiErrorException $e) {
             $this->logger->error("Erreur verification Stripe PaymentIntent $paymentIntentId: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    public function capturePaymentIntent(string $paymentIntentId): ?PaymentIntent
+    {
+        try {
+            Stripe::setApiKey($this->stripeSecretKey);
+            
+            $stripeOptions = [];
+            $tenantCode = $this->connectionManager->getCurrentTenantCode();
+            $isInternal = $this->connectionManager->isTenantInternal($tenantCode);
+
+            if (!$isInternal) {
+                $stripeConfig = $this->getStripeConfigForCurrentTenant();
+                if ($stripeConfig && $stripeConfig->isActive()) {
+                    $stripeOptions['stripe_account'] = $stripeConfig->getAccountId();
+                }
+            }
+
+            $paymentIntent = $this->retrieveStripePaymentIntent($paymentIntentId, $stripeOptions);
+            if ($paymentIntent->status === 'requires_capture') {
+                return $paymentIntent->capture([], $stripeOptions);
+            }
+            return $paymentIntent;
+        } catch (ApiErrorException $e) {
+            $this->logger->error("Erreur capture Stripe PaymentIntent $paymentIntentId: " . $e->getMessage());
             return null;
         }
     }
