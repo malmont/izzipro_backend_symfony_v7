@@ -111,17 +111,19 @@ class ProcessGemsuiteEntityJobHandler
             }
 
             if ($entity && method_exists($entity, 'getTranslatableFields')) {
+                if ($tenantEm->contains($entity) && $entity->getId()) {
+                    $tenantEm->flush();
+
+                    $this->messageBus->dispatch(new TranslateEntityJob(
+                        $message->getTenantId(),
+                        get_class($entity),
+                        $entity->getId()
+                    ));
+                }
+            } else if ($type !== 'product_variant' && $type !== 'company_config' && $entity !== null) {
                 if ($tenantEm->contains($entity)) {
                     $tenantEm->flush();
                 }
-
-                $this->messageBus->dispatch(new TranslateEntityJob(
-                    $message->getTenantId(),
-                    get_class($entity),
-                    $entity->getId()
-                ));
-            } else if ($type !== 'product_variant' && $type !== 'company_config' && $entity !== null) {
-                $tenantEm->flush();
             }
 
             // Clear settings

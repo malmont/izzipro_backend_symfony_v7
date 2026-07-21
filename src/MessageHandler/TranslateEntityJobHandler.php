@@ -11,6 +11,7 @@ use App\Services\TranslationGeneratorService\TranslationGeneratorService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+use Symfony\Component\Messenger\Exception\UnrecoverableMessageHandlingException;
 
 #[AsMessageHandler]
 class TranslateEntityJobHandler
@@ -48,7 +49,11 @@ class TranslateEntityJobHandler
             $entity = $tenantEm->getRepository($message->getEntityClass())->find($message->getEntityId());
 
             if (!$entity) {
-                throw new \Exception(sprintf(
+                $this->logger->warning(sprintf(
+                    '[Traduction Fail] Entité %s (ID: %d) non trouvée pour Tenant ID %d. Job abandonné (Unrecoverable).',
+                    $message->getEntityClass(), $message->getEntityId(), $message->getTenantId()
+                ));
+                throw new UnrecoverableMessageHandlingException(sprintf(
                     'Entité %s (ID: %d) non trouvée. Impossible de traduire.',
                     $message->getEntityClass(), $message->getEntityId()
                 ));

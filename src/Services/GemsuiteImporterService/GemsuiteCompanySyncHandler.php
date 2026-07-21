@@ -190,7 +190,7 @@ class GemsuiteCompanySyncHandler
             $tenant = $this->tenantManager->findTenantByCode($tenantCode);
             if (!$tenant) return;
 
-            if (method_exists($entity, 'getTranslatableFields')) {
+            if (method_exists($entity, 'getTranslatableFields') && $entity->getId() && $em->contains($entity)) {
                 $this->messageBus->dispatch(new \App\Message\TranslateEntityJob(
                     (int)$tenant['id'],
                     get_class($entity),

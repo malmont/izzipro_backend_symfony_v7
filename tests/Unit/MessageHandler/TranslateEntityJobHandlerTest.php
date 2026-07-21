@@ -13,6 +13,8 @@ use Doctrine\Persistence\ObjectRepository;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
+use Symfony\Component\Messenger\Exception\UnrecoverableMessageHandlingException;
+
 class TranslateEntityJobHandlerTest extends TestCase
 {
     public function testInvokeCallsGeneratorAndFlushesForTranslatableEntity(): void
@@ -102,12 +104,13 @@ class TranslateEntityJobHandlerTest extends TestCase
         $handler(new TranslateEntityJob(1, $entityClass, 99));
     }
 
-    public function testInvokeThrowsExceptionIfEntityNotFound(): void
+    public function testInvokeThrowsUnrecoverableExceptionIfEntityNotFound(): void
     {
-        // SCÉNARIO : L'ID n'existe pas en base -> Retry Messenger
+        // SCÉNARIO : L'ID n'existe pas en base -> UnrecoverableMessageHandlingException (Pas de retry Messenger)
         
         $logger = $this->createMock(LoggerInterface::class);
-        // On s'attend à une erreur logguée avant que l'exception ne remonte
+        // On s'attend à un warning puis une erreur logguée
+        $logger->expects($this->once())->method('warning');
         $logger->expects($this->once())->method('error');
 
         $tenantManager = $this->createMock(TenantConnectionManager::class);
@@ -124,8 +127,8 @@ class TranslateEntityJobHandlerTest extends TestCase
 
         $generator = $this->createMock(TranslationGeneratorService::class);
 
-        // Assertion : On s'attend à ce que l'exception remonte (pour que Messenger puisse réessayer plus tard)
-        $this->expectException(\Exception::class);
+        // Assertion : UnrecoverableMessageHandlingException doit remonter pour stopper les retries Messenger
+        $this->expectException(UnrecoverableMessageHandlingException::class);
         $this->expectExceptionMessage('non trouvée');
 
         $handler = new TranslateEntityJobHandler($logger, $tenantManager, $emProvider, $generator);

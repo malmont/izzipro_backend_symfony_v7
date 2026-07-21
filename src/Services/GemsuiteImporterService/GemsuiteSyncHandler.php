@@ -1306,12 +1306,15 @@ class GemsuiteSyncHandler
             }
 
             if ($entity && method_exists($entity, 'getTranslatableFields')) {
-                $this->messageBus->dispatch(new \App\Message\TranslateEntityJob(
-                    (int)$tenant['id'],
-                    get_class($entity),
-                    $entity->getId()
-                ));
-                $this->logger->info(sprintf("[Webhook Sync] Job de traduction dispatché pour %s ID %d", get_class($entity), $entity->getId()));
+                $tenantEm = $this->getTenantEntityManager($tenantCode);
+                if ($tenantEm->contains($entity) && $entity->getId()) {
+                    $this->messageBus->dispatch(new \App\Message\TranslateEntityJob(
+                        (int)$tenant['id'],
+                        get_class($entity),
+                        $entity->getId()
+                    ));
+                    $this->logger->info(sprintf("[Webhook Sync] Job de traduction dispatché pour %s ID %d", get_class($entity), $entity->getId()));
+                }
             }
         } catch (\Throwable $e) {
             $this->logger->error("Erreur dispatch TranslationJob: " . $e->getMessage());
@@ -1404,7 +1407,7 @@ class GemsuiteSyncHandler
             $tenantCode = $this->tenantManager->getCurrentTenantCode();
             if ($tenantCode) {
                 $tenant = $this->tenantManager->findTenantByCode($tenantCode);
-                if ($tenant && $team->getId()) {
+                if ($tenant && $team->getId() && $em->contains($team)) {
                     $this->messageBus->dispatch(new \App\Message\TranslateEntityJob(
                          (int)$tenant['id'],
                          Team::class,
