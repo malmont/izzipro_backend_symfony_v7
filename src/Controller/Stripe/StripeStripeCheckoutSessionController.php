@@ -23,8 +23,8 @@ class StripeStripeCheckoutSessionController extends AbstractController
         return $this->redirectToRoute('app_home');
       }
 
-       $order = $orderServices->createOrder($cart);
-       Stripe::setApiKey('sk_test_51MdZibGaPkli494EGcx7ZxIDOS8nhNXcdg6LpW7lZW2JD5T7A6j0QB59pFuBNzbU4r4limwc7pOwkUY9ThDvUCCk00LFaSG55N');
+       $stripeSecretKey = $_ENV['STRIPE_SECRET_KEY'] ?? '';
+       Stripe::setApiKey($stripeSecretKey);
        $checkout_session = Session::create([
           'customer_email' => $this->getUser()->getEmail(),
          'payment_method_types'=>['card'],
