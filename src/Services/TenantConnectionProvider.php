@@ -20,17 +20,15 @@ class TenantConnectionProvider
     {
         $this->baseParams = $defaultConnection->getParams();
         $this->config = $defaultConnection->getConfiguration();
-        $this->eventManager = $defaultConnection->getEventManager();
+        if (method_exists($defaultConnection, 'getEventManager')) {
+            $this->eventManager = $defaultConnection->getEventManager();
+        }
 
-        // Ensure serverVersion is always set so Doctrine uses the correct
-        // PostgreSQL ID generation strategy (sequences) in all environments.
-        // Without this, production deployments without ?serverVersion= in
-        // DATABASE_URL cause Doctrine to omit the ID in INSERT statements.
         if (!isset($this->baseParams['serverVersion'])) {
             $this->baseParams['serverVersion'] = '14';
         }
     }
-    // Ferme la connexion active et en initialise une nouvelle pointant vers la base de données cible.
+
     public function switchTenant(string $tenantDbName, ?string $tenantCode = null): void
     {
         if ($this->connection && $this->connection->isConnected()) {
@@ -39,13 +37,21 @@ class TenantConnectionProvider
         $params = $this->baseParams;
         $params['dbname'] = $tenantDbName;
         $this->tenantCode = $tenantCode;
-        $this->connection = DriverManager::getConnection($params, $this->config, $this->eventManager);
+        if (isset($this->eventManager)) {
+            $this->connection = DriverManager::getConnection($params, $this->config, $this->eventManager);
+        } else {
+            $this->connection = DriverManager::getConnection($params, $this->config);
+        }
     }
-    // Retourne la connexion active ou l'initialise si nécessaire (Lazy Loading).
+
     public function getConnection(): Connection
     {
         if (!$this->connection) {
-            $this->connection = DriverManager::getConnection($this->baseParams, $this->config, $this->eventManager);
+            if (isset($this->eventManager)) {
+                $this->connection = DriverManager::getConnection($this->baseParams, $this->config, $this->eventManager);
+            } else {
+                $this->connection = DriverManager::getConnection($this->baseParams, $this->config);
+            }
         }
         return $this->connection;
     }

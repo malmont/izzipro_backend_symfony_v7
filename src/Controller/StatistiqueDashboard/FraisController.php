@@ -4,7 +4,7 @@ namespace App\Controller\StatistiqueDashboard;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 use App\UseCase\FraisUseCase\GetTotalFraisUseCase;
 
 class FraisController extends AbstractController
@@ -16,9 +16,7 @@ class FraisController extends AbstractController
         $this->getTotalFraisUseCase = $getTotalFraisUseCase;
     }
 
-    /**
-     * @Route("/api/frais/total", name="frais_total", methods={"GET"})
-     */
+    #[Route('/api/frais/total', name: 'frais_total', methods: ['GET'])]
     public function getTotalFrais(): JsonResponse
     {
         $data = $this->getTotalFraisUseCase->execute();

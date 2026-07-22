@@ -4,7 +4,7 @@ namespace App\Controller\StatistiqueDashboard;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 use App\UseCase\StatistiqueUseCase\StatistiqueRevenuUseCase\CalculateWeeklyRevenueUseCase;
 use App\UseCase\StatistiqueUseCase\StatistiqueRevenuUseCase\CalculateMonthlyRevenueUseCase;
 use App\UseCase\StatistiqueUseCase\StatistiqueRevenuUseCase\CalculateYearlyRevenueUseCase;
@@ -115,9 +115,7 @@ class StatistiqueGeneraleController extends AbstractController
         $this->calculateOrderCountForLastWeekUseCase =$calculateOrderCountForLastWeekUseCase;
     }
 
-    /**
-     * @Route("/api/statistiques/chiffre-affaires/{source}", name="statistiques_chiffre_affaires", methods={"GET"})
-     */
+    #[Route('/api/statistiques/chiffre-affaires/{source}', name: 'statistiques_chiffre_affaires', methods: ['GET'])]
     public function getChiffreAffaires(Request $request, ?string $source = null): JsonResponse
     {
         $startDateParam = $request->query->get('startDate');
@@ -175,9 +173,7 @@ class StatistiqueGeneraleController extends AbstractController
     }
 
 
-        /**
-     * @Route("/api/statistiques/nombre-commandes/{source}", name="statistiques_nombre_commandes", methods={"GET"}, defaults={"source"=null})
-     */
+    #[Route('/api/statistiques/nombre-commandes/{source}', name: 'statistiques_nombre_commandes', methods: ['GET'], defaults: ['source' => null])]
     public function getOrderStatistics(Request $request, ?string $source = null): JsonResponse
     {
         $types = [1 => 'AchatClient', 2 => 'RetourClient'];
@@ -223,9 +219,7 @@ class StatistiqueGeneraleController extends AbstractController
 
 
 
-    /**
-     * @Route("/api/statistiques/panier-moyen/{source}", name="statistiques_panier_moyen", methods={"GET"})
-     */
+    #[Route('/api/statistiques/panier-moyen/{source}', name: 'statistiques_panier_moyen', methods: ['GET'])]
     public function getAverageOrderValueStatistics(Request $request, ?string $source = null): JsonResponse
     {
         $sourceMap = [

@@ -10,7 +10,7 @@ use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use Symfony\Component\Security\Core\Security;
+use Symfony\Bundle\SecurityBundle\Security;
 use App\Entity\Order;
 use App\UseCase\OrderUseCase\CreateOrderCommandUseCase;
 use App\UseCase\OrderUseCase\ProcessOrderItemsUseCase;

@@ -4,7 +4,7 @@ namespace App\Controller\StockStatisticsController;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 use App\UseCase\StockEvolution\GetStockEvolutionForCurrentWeekUseCase;
 use App\UseCase\StockEvolution\GetStockEvolutionForCurrentMonthUseCase;
 use App\UseCase\StockEvolution\GetStockEvolutionForCurrentYearUseCase;
@@ -26,9 +26,7 @@ class StockStatisticsController extends AbstractController
         $this->getStockEvolutionForCurrentYearUseCase = $getStockEvolutionForCurrentYearUseCase;
     }
 
-    /**
-     * @Route("/api/stock-evolution", name="stock_evolution_all", methods={"GET"})
-     */
+    #[Route('/api/stock-evolution', name: 'stock_evolution_all', methods: ['GET'])]
     public function getStockEvolution(): JsonResponse
     {
         $weekData = $this->getStockEvolutionForCurrentWeekUseCase->execute();

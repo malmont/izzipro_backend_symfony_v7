@@ -4,7 +4,7 @@ namespace App\Controller\StockStatisticsController;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 use App\UseCase\StockValue\GetStockValueForCurrentMonthUseCase;
 use App\UseCase\StockValue\GetStockValueForLastMonthUseCase;
 use App\UseCase\StockValue\GetStockValueForTwoMonthsAgoUseCase;
@@ -29,9 +29,7 @@ class StockValueController extends AbstractController
         $this->getStockValueForCurrentUseCase = $getStockValueForCurrentUseCase;
     }
 
-    /**
-     * @Route("/api/stock-value", name="stock_value_all", methods={"GET"})
-     */
+    #[Route('/api/stock-value', name: 'stock_value_all', methods: ['GET'])]
     public function getStockValues(): JsonResponse
     {
         // $currentMonthValue = $this->getStockValueForCurrentMonthUseCase->execute();

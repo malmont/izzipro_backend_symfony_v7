@@ -11,7 +11,7 @@ use Symfony\Component\Routing\Annotation\Route;
 use App\Entity\SquareConfig;
 use App\Entity\Order;
 use App\Services\TenantEntityManagerProvider;
-use Symfony\Component\Security\Core\Security;
+use Symfony\Bundle\SecurityBundle\Security;
 use App\Services\TenantCacheService;
 use App\Services\StripeService\StripeService;
 use Symfony\Contracts\Cache\ItemInterface;

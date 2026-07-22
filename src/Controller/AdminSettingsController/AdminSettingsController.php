@@ -8,7 +8,7 @@ use Doctrine\DBAL\LockMode;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -30,9 +30,7 @@ class AdminSettingsController extends AbstractController
         $this->connectionManager = $connectionManager;
     }
 
-    /**
-     * @Route("/api/admin-settings", name="get_admin_settings", methods={"GET"})
-     */
+    #[Route('/api/admin-settings', name: 'get_admin_settings', methods: ['GET'])]
     public function getAdminSettings(): JsonResponse
     {
         $settingsData = $this->cache->get(
@@ -96,9 +94,8 @@ class AdminSettingsController extends AbstractController
     }
     /**
      * Mettre à jour la configuration d'admin (thèmes, couleurs, UI, etc.)
-     *
-     * @Route("/api/admin-settings", name="update_admin_settings", methods={"PUT"})
      */
+    #[Route('/api/admin-settings', name: 'update_admin_settings', methods: ['PUT'])]
     public function updateAdminSettings(Request $request): JsonResponse
     {
         $entityManager = $this->tenantEmProvider->getEntityManager();
@@ -152,9 +149,7 @@ class AdminSettingsController extends AbstractController
         return new JsonResponse(['message' => 'Settings updated successfully']);
     }
 
-    /**
-     * @Route("/api/admin-settings/presets", name="get_admin_presets", methods={"GET"})
-     */
+    #[Route('/api/admin-settings/presets', name: 'get_admin_presets', methods: ['GET'])]
     public function getPresets(): JsonResponse
     {
         $pdo = $this->connectionManager->getPdoMaster();
@@ -173,9 +168,7 @@ class AdminSettingsController extends AbstractController
         return new JsonResponse($data);
     }
 
-    /**
-     * @Route("/api/admin-settings/presets", name="save_admin_preset", methods={"POST"})
-     */
+    #[Route('/api/admin-settings/presets', name: 'save_admin_preset', methods: ['POST'])]
     public function savePreset(Request $request): JsonResponse
     {
         $pdo = $this->connectionManager->getPdoMaster();
@@ -205,9 +198,7 @@ class AdminSettingsController extends AbstractController
         ]);
     }
 
-    /**
-     * @Route("/api/admin-settings/presets/{id}", name="delete_admin_preset", methods={"DELETE"})
-     */
+    #[Route('/api/admin-settings/presets/{id}', name: 'delete_admin_preset', methods: ['DELETE'])]
     public function deletePreset(int $id): JsonResponse
     {
         $pdo = $this->connectionManager->getPdoMaster();

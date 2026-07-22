@@ -9,7 +9,7 @@ use App\UseCase\CommandeDashboardUseCase\GetLatestCommandeStatistiquesUseCase;
 use App\Dto\DashboardCommandeDTO;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -34,8 +34,8 @@ class DashboardCommandeController extends AbstractController
 
     /**
      * Fermer une commande
-     * @Route("/api/dashboard/commande/{id}/close", name="close_command", methods={"POST"})
      */
+    #[Route('/api/dashboard/commande/{id}/close', name: 'close_command', methods: ['POST'])]
     public function closeCommand(Commande $commande): JsonResponse
     {
         try {
@@ -48,8 +48,8 @@ class DashboardCommandeController extends AbstractController
 
     /**
      * Récupérer les métriques d'une commande pour le dashboard
-     * @Route("/api/dashboard/commande/{id}", name="dashboard_commande", methods={"GET"})
      */
+    #[Route('/api/dashboard/commande/{id}', name: 'dashboard_commande', methods: ['GET'])]
     public function getCommandeMetrics(Commande $commande): JsonResponse
     {
         $cacheKey = 'dashboard_commande_' . $commande->getId() . ($commande->getIsClosed() ? '_closed' : '_open');

@@ -10,6 +10,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
+use Symfony\Component\Console\Attribute\AsCommand;
+
+#[AsCommand(name: 'app:tenant:migrate-db', description: 'Migre un seul tenant (nom de la base).')]
 class MigrateTenantCommand extends Command
 {
     protected static $defaultName = 'app:tenant:migrate-db';

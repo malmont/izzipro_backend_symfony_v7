@@ -8,7 +8,7 @@ use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 use App\UseCase\CaisseUseCase\GestCaisseUseCase;
 use App\Services\TenantEntityManagerProvider;
 use App\UseCase\CaisseUseCase\GetTransactionsForOpenCaisseUseCase;
@@ -42,8 +42,8 @@ class CaisseController extends AbstractController
 
     /**
      * Ouvre une caisse
-     * @Route("api/caisse/open", name="caisse_open", methods={"POST"})
      */
+    #[Route('/api/caisse/open', name: 'caisse_open', methods: ['POST'])]
     public function openCaisse(): JsonResponse
     {
         // Vérifier si une caisse est déjà ouverte
@@ -73,8 +73,8 @@ class CaisseController extends AbstractController
 
     /**
      * Ferme la caisse ouverte
-     * @Route("api/caisse/close", name="caisse_close", methods={"POST"})
      */
+    #[Route('/api/caisse/close', name: 'caisse_close', methods: ['POST'])]
     public function closeCaisse(): JsonResponse
     {
         $caisse = $this->caisseService->getOpenCaisse();
@@ -95,8 +95,8 @@ class CaisseController extends AbstractController
 
     /**
      * Effectuer un dépôt sur la caisse
-     * @Route("api/caisse/deposit", name="caisse_deposit", methods={"POST"})
      */
+    #[Route('/api/caisse/deposit', name: 'caisse_deposit', methods: ['POST'])]
     public function deposit(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
@@ -121,8 +121,8 @@ class CaisseController extends AbstractController
 
     /**
      * Effectuer un dépôt de fond de caisse
-     * @Route("api/caisse/cashfunddeposit", name="caisse_cash_funddeposit", methods={"POST"})
      */
+    #[Route('/api/caisse/cashfunddeposit', name: 'caisse_cash_funddeposit', methods: ['POST'])]
     public function cashFundDeposit(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
@@ -144,8 +144,8 @@ class CaisseController extends AbstractController
 
     /**
      * Effectuer un retrait sur la caisse
-     * @Route("api/caisse/withdraw", name="caisse_withdraw", methods={"POST"})
      */
+    #[Route('/api/caisse/withdraw', name: 'caisse_withdraw', methods: ['POST'])]
     public function withdraw(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
@@ -171,8 +171,8 @@ class CaisseController extends AbstractController
 
     /**
      * Effectuer un retrait de fond de caisse
-     * @Route("api/caisse/cashfundwithdraw", name="caisse_cash_fund_withdraw", methods={"POST"})
      */
+    #[Route('/api/caisse/cashfundwithdraw', name: 'caisse_cash_fund_withdraw', methods: ['POST'])]
     public function cashFundWithdraw(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
@@ -198,8 +198,8 @@ class CaisseController extends AbstractController
 
     /**
      * Récupérer la liste des caisses avec un éventuel filtre sur le nombre de jours
-     * @Route("api/caisse", name="get_caisse", methods={"GET"})
      */
+    #[Route('/api/caisse', name: 'get_caisse', methods: ['GET'])]
     public function getCaisse(Request $request): JsonResponse
     {
         $days = $request->query->get('days');
@@ -224,8 +224,8 @@ class CaisseController extends AbstractController
 
     /**
      * Récupérer les transactions de la caisse ouverte
-     * @Route("api/caisse/transactions", name="get_open_caisse_transactions", methods={"GET"})
      */
+    #[Route('/api/caisse/transactions', name: 'get_open_caisse_transactions', methods: ['GET'])]
     public function getOpenCaisseTransactions(): JsonResponse
     {
         $cacheKey = "open_caisse_transactions";

@@ -11,7 +11,7 @@ use Picqer\Barcode\BarcodeGeneratorPNG;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Routing\Attribute\Route;
 
 class BarcodeManagementController extends AbstractController
 {
@@ -26,9 +26,7 @@ class BarcodeManagementController extends AbstractController
         $this->emProvider = $emProvider;
     }
 
-    /**
-     * @Route("/admin/barcode-management", name="admin_barcode_management")
-     */
+    #[Route('/admin/barcode-management', name: 'admin_barcode_management')]
     public function index(Request $request): Response
     {
         $em = $this->emProvider->getEntityManager();
@@ -63,9 +61,7 @@ class BarcodeManagementController extends AbstractController
         ]);
     }
 
-    /**
-     * @Route("/admin/barcode-image/{id}", name="admin_barcode_image", methods={"GET"})
-     */
+    #[Route('/admin/barcode-image/{id}', name: 'admin_barcode_image', methods: ['GET'])]
     public function barcodeImage(int $id): Response
     {
         $em = $this->emProvider->getEntityManager();
@@ -80,9 +76,7 @@ class BarcodeManagementController extends AbstractController
         return new Response($barcodeData, 200, ['Content-Type' => 'image/png']);
     }
 
-    /**
-     * @Route("/admin/print-barcode/{id}/{copies}", name="admin_print_barcode")
-     */
+    #[Route('/admin/print-barcode/{id}/{copies}', name: 'admin_print_barcode')]
     public function printBarcode(int $id, int $copies): Response
     {
         $em = $this->emProvider->getEntityManager();
@@ -107,9 +101,7 @@ class BarcodeManagementController extends AbstractController
         ]);
     }
 
-    /**
-     * @Route("/admin/pdf/print-barcode/{id}/{copies}", name="admin_pdf_print_barcode")
-     */
+    #[Route('/admin/pdf/print-barcode/{id}/{copies}', name: 'admin_pdf_print_barcode')]
     public function pdfPrintBarcode(int $id, int $copies): Response
     {
         $em = $this->emProvider->getEntityManager();
@@ -148,9 +140,7 @@ class BarcodeManagementController extends AbstractController
         );
     }
 
-    /**
-     * @Route("/admin/barcode-management/search", name="admin_barcode_management_search", methods={"GET"})
-     */
+    #[Route('/admin/barcode-management/search', name: 'admin_barcode_management_search', methods: ['GET'])]
     public function search(Request $request): Response
     {
         $em = $this->emProvider->getEntityManager();
