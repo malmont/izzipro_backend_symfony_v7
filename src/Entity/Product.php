@@ -26,23 +26,28 @@ use Symfony\Component\Serializer\Annotation\Groups;
 #[ApiResource]
 class Product implements TranslatableInterface
 {
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
     private ?int $id = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(length: 255)]
     private ?string $name = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(type: Types::TEXT, nullable: true)] 
     private ?string $description = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)] 
     private ?string $moreinformations =  '';
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column]
     private ?float $price = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column]
     private ?bool $isbestseller = false;
 
@@ -55,6 +60,7 @@ class Product implements TranslatableInterface
     #[ORM\Column(nullable: true)]
     private ?bool $isspecialoffer = false;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(length: 255, nullable: true)] 
     private ?string $image = null;
 
@@ -67,6 +73,7 @@ class Product implements TranslatableInterface
     #[ORM\OneToMany(mappedBy: 'productReviews', targetEntity: ReviewsProduct::class)]
     private Collection $reviewsProducts;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column]
     private ?int $quantity = null;
 
@@ -79,6 +86,7 @@ class Product implements TranslatableInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $code = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(length: 255)]
     private ?string $slug = null;
 

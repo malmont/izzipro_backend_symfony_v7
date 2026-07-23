@@ -5,41 +5,53 @@ namespace App\Entity;
 use ApiPlatform\Metadata\ApiResource;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity]
 #[ApiResource(
+    normalizationContext: ['groups' => ['vehicle_product:read']],
     paginationItemsPerPage: 24,
     paginationMaximumItemsPerPage: 50
 )]
 class VehicleProduct extends Product
 {
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(nullable: true)]
     private ?int $year = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $brand = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $model = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $vin = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $transmission = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $gasType = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $enginePower = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(nullable: true)]
     private ?int $hoursOrMileage = null;
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(length: 50, nullable: true)]
     private ?string $vehicleCondition = null; // 'neuf', 'occasion'
 
+    #[Groups(['vehicle_product:read'])]
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $color = null;
 
