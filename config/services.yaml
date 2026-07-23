@@ -165,6 +165,8 @@ services:
     App\Controller\TenantSetupController\TenantSetupController:
         bind:
             $frontendBaseDomain: '%env(FRONTEND_BASE_DOMAIN)%'
+            $tenantCreationSecretKey: '%env(TENANT_CREATION_SECRET_KEY)%'
+
 
     App\Services\GoogleTranslateService\GoogleTranslateService:
         arguments:

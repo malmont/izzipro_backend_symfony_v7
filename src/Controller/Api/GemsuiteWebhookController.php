@@ -29,74 +29,14 @@ class GemsuiteWebhookController extends AbstractController
         ?string $endpoint = null,
         ?string $id = null
     ): Response {
-
-        if ($endpoint === null) {
-            $this->logger->info(sprintf(
-                'Requête de validation de webhook reçue pour le tenant "%s". Réponse 200 OK.',
-                $tenant_code
-            ));
-
-            return $this->json(['status' => 'validation_received']);
-        }
-
-        $payload = $request->getContent() ? json_decode($request->getContent(), true) : [];
-        $idVal = $id !== null ? (int)$id : null;
-
         $this->logger->info(sprintf(
-            'Webhook reçu pour tenant "%s" | Endpoint: "%s" | ID: %d | Payload: %s',
-            $tenant_code,
-            $endpoint,
-            $idVal,
-            json_encode($payload)
+            'Tentative d\'appel Webhook GemSuite sur le tenant "%s" (GemSuite désactivé en mode Standalone).',
+            $tenant_code
         ));
 
-        try {
-            switch ($endpoint) {
-                case 'products':
-                    $this->syncHandler->handleProductUpdate($tenant_code, $idVal);
-                    break;
-
-                case 'resources':
-                    $this->syncHandler->handleResourceUpdate($tenant_code, $idVal);
-                    break;
-
-                case 'categories':
-                    $this->syncHandler->handleCategoryUpdate($tenant_code, $idVal);
-                    break;
- 
-                case 'company':
-                    $this->companySyncHandler->handleCompanyUpdate($tenant_code);
-                    break;
-
-                case 'clients':
-                    $this->syncHandler->handleClientUpdate($tenant_code, $idVal);
-                    break;
-
-                case 'sales':
-                    $this->syncHandler->handleSaleUpdate($tenant_code, $idVal);
-                    break;
-
-                case 'sales_products':
-                    $this->syncHandler->handleSaleProductUpdate($tenant_code, $idVal);
-                    break;
-
-                case 'vehicles':
-                    $this->syncHandler->handleVehicleUpdate($tenant_code, $idVal);
-                    break;
-
-                default:
-                    $this->logger->warning(sprintf('Endpoint de webhook non géré : "%s"', $endpoint));
-                    break;
-            }
-
-            return $this->json(['status' => 'processed', 'endpoint' => $endpoint, 'id' => $idVal]);
-        } catch (\Throwable $e) {
-            $this->logger->error(sprintf(
-                'Erreur lors du traitement du webhook pour tenant "%s": %s',
-                $tenant_code,
-                $e->getMessage()
-            ));
-            return $this->json(['status' => 'error', 'message' => 'Internal Server Error'], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
+        return $this->json([
+            'status' => 'disabled',
+            'message' => 'L\'intégration GemSuite est désactivée sur cette version Standalone.'
+        ], Response::HTTP_FORBIDDEN);
     }
 }

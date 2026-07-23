@@ -4,34 +4,27 @@ namespace App\Controller\TenantSetupController;
 
 use App\Dto\TenantSetupDTO;
 use App\Form\TenantSetupType;
-use App\Services\GemsuiteImporterService\GemsuiteImporter;
+use App\Entity\Entreprise;
+use App\Entity\AddressEntreprise;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\RedirectResponse;
-use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
-use App\Entity\SyncJob;
-use App\Message\StartGemsuiteImportJob;
-use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Routing\Attribute\Route;
 
 class TenantSetupController extends AbstractController
 {
     public function __construct(
         private string $frontendBaseDomain,
-        private string $gemsuiteApiUrl
+        private string $tenantCreationSecretKey
     ) {}
 
     #[Route('/setup/new-store', name: 'app_tenant_setup')]
     public function setup(
         Request $request,
         TenantConnectionManager $tenantManager,
-        TenantEntityManagerProvider $emProvider,
-        GemsuiteImporter $gemsuiteImporter,
-        HttpClientInterface $client,
-        MessageBusInterface $messageBus
+        TenantEntityManagerProvider $emProvider
     ): Response {
         
         $host = $request->getHost();
@@ -44,7 +37,6 @@ class TenantSetupController extends AbstractController
             $subdomain = 'localtest'; 
         } 
         else {
-
             $parts = explode('.', $cleanHost);
             
             if (count($parts) >= 3) {
@@ -89,101 +81,87 @@ class TenantSetupController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             
-            // A. Validation API GemSuite
-            $companyData = null;
-            if (!$dto->gemsuiteToken) {
-                $this->addFlash('danger', 'Le jeton GEM-SUITE est obligatoire.');
-                return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
-            }
-            try {
-                $response = $client->request('GET', $this->gemsuiteApiUrl . 'company', [
-                    'auth_bearer' => $dto->gemsuiteToken,
-                ]);
-                if ($response->getStatusCode() !== 200) { throw new \Exception('Jeton invalide ou erreur API.'); }
-                
-                $companyData = $response->toArray()['data'][0] ?? null;
-                if (!$companyData) { throw new \Exception('Aucune entreprise trouvée.'); }
-            } catch (\Throwable $e) {
-                $this->addFlash('danger', 'Erreur API GemSuite : ' . $e->getMessage());
+            // A. Validation de la clé secrète de création
+            if ($dto->secretKey !== $this->tenantCreationSecretKey) {
+                $this->addFlash('danger', 'La clé de sécurité de création est invalide.');
                 return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
 
-            // B. Vérification Pré-requis
-            try {
-                $gemsuiteImporter->checkPrerequisites($dto->gemsuiteToken);
-            } catch (\Throwable $e) {
-                $this->addFlash('danger', $e->getMessage());
-                return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
-            }
-
-            // C. Double Check (Race condition)
+            // B. Double Check (Race condition)
             if (!$this->isIdentifierAvailable($dto->code, $tenantManager)) {
                 $this->addFlash('danger', 'Ce nom a été pris pendant que vous remplissiez le formulaire.');
                 return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
 
-            // D. Création du Tenant
+            // C. Création de l'infrastructure Tenant
             $dbname = 'db_' . $dto->code;
-            $tenantId = null;
             try {
-
                 $tenantManager->createTenant(
                     $dto->code,
-                    $companyData['nom'],
+                    $dto->companyName,
                     $dbname,
-                    $dto->gemsuiteToken,
+                    null, // Pas de token GemSuite
                     false,
                     null 
                 );
                 
-                $this->addFlash('info', 'Infrastructure créée.');
-
-                // Récupération ID Tenant pour le Job
-                $pdoMaster = $tenantManager->getPdoMaster();
-                $stmt = $pdoMaster->prepare('SELECT id FROM tenants WHERE code = :code');
-                $stmt->execute(['code' => $dto->code]);
-                $tenantId = $stmt->fetchColumn();
-                if (!$tenantId) throw new \Exception("ID tenant introuvable après création.");
+                $this->addFlash('info', 'Infrastructure de la boutique créée.');
 
             } catch (\Throwable $e) {
-                $this->addFlash('error', 'Erreur création tenant : ' . $e->getMessage());
+                $this->addFlash('danger', 'Erreur lors de la création de la boutique : ' . $e->getMessage());
                 return $this->redirectToRoute('app_tenant_setup');
             }
 
-            // E. Lancement du Job Messenger
+            // D. Alimentation des données entreprise dans la base tenant
             try {
                 $emProvider->switchTenant($dbname, $dto->code);
                 $tenantEm = $emProvider->getEntityManager();
 
-                $syncJob = new SyncJob();
-                $syncJob->setStatus('pending');
-                $syncJob->setCurrentStep('Initialisation...');
-                $tenantEm->persist($syncJob);
-                $tenantEm->flush(); 
-
-                $message = new StartGemsuiteImportJob($tenantId, $dto->gemsuiteToken, $syncJob->getId());
-                $messageBus->dispatch($message);
+                $entrepriseRepo = $tenantEm->getRepository(Entreprise::class);
+                $entreprise = $entrepriseRepo->findOneBy([]) ?? new Entreprise();
                 
-                $this->addFlash('info', 'Importation démarrée en arrière-plan.');
+                $entreprise->setName($dto->companyName);
+                $entreprise->setEmail($dto->companyEmail);
+                $entreprise->setTel($dto->companyPhone);
+                $entreprise->setWebsite($dto->companyWebsite ?: $request->getSchemeAndHttpHost());
+                $entreprise->setEin($dto->companyEin);
+                $entreprise->setTvaIntracommunautaire($dto->companyTva);
+                
+                $fullAddress = sprintf('%s%s, %s %s, %s', 
+                    $dto->street1,
+                    $dto->street2 ? ', ' . $dto->street2 : '',
+                    $dto->city,
+                    $dto->zip,
+                    $dto->country
+                );
+                $entreprise->setAdress($fullAddress);
+
+                $addressEntreprise = $entreprise->getAddressEntreprise() ?? new AddressEntreprise();
+                $addressEntreprise->setStreet1($dto->street1);
+                $addressEntreprise->setStreet2($dto->street2 ?? '');
+                $addressEntreprise->setCity($dto->city);
+                $addressEntreprise->setZip($dto->zip);
+                $addressEntreprise->setState($dto->state ?? '');
+                $addressEntreprise->setCountry($dto->country);
+                $addressEntreprise->setPhone($dto->companyPhone ?? '');
+                $addressEntreprise->setEmail($dto->companyEmail);
+                $addressEntreprise->setEntreprise($entreprise);
+
+                $tenantEm->persist($entreprise);
+                $tenantEm->persist($addressEntreprise);
+                $tenantEm->flush();
+
+                $this->addFlash('success', 'Votre boutique a été configurée avec succès !');
 
             } catch (\Throwable $e) {
-                $this->addFlash('warning', 'Site créé mais échec du démarrage de l\'import : ' . $e->getMessage());
+                $this->addFlash('warning', 'Boutique créée mais échec de la configuration initiale de l\'entreprise : ' . $e->getMessage());
             }
 
-            $this->addFlash('success', 'Site prêt !');
-
-            // F. Redirection vers la page de statut
-            // On utilise $frontendBaseDomain pour l'URL finale, mais la redirection actuelle se fait sur le domaine courant
+            // E. Redirection vers la boutique
             $protocol = $request->isSecure() ? 'https' : 'http';
-            
-            // L'URL finale vers laquelle l'utilisateur ira une fois fini (sur le vrai domaine)
             $finalUrl = sprintf('%s://%s.%s', $protocol, $dto->code, $this->frontendBaseDomain);
             
-            return $this->redirectToRoute('app_setup_status', [
-                'tenantCode' => $dto->code,
-                'syncJobId' => $syncJob->getId(),
-                'finalUrl' => base64_encode($finalUrl) 
-            ]);
+            return $this->redirect($finalUrl);
         }
 
         return $this->render('tenant_setup/form.html.twig', [

@@ -15,30 +15,33 @@ class TenantSetupDTO
     #[Assert\Regex('/^[a-z0-9-]+$/i', message: "Le sous-domaine ne doit contenir que des lettres, chiffres ou tirets.")]
     public ?string $subdomain = null;
 
-    // #[Assert\NotBlank]
-    // public ?string $companyName = null;
+    #[Assert\NotBlank(message: "La clé de création est obligatoire.")]
+    public ?string $secretKey = null;
 
-    // #[Assert\Email]
-    // public ?string $companyEmail = null;
-    
-    // public ?string $companyTva = null;
-    // public ?string $companyEin = null;
+    #[Assert\NotBlank(message: "Le nom de l'entreprise est obligatoire.")]
+    public ?string $companyName = null;
 
-    // // Pour l'upload de fichier
-    // #[Assert\Image(maxSize: '1024k')]
-    // public ?UploadedFile $companyLogo = null;
-    
-    // #[Assert\NotBlank]
-    // public ?string $adminName = null;
-    
-    // #[Assert\NotBlank]
-    // #[Assert\Email]
-    // public ?string $adminEmail = null;
+    #[Assert\NotBlank(message: "L'email de l'entreprise est obligatoire.")]
+    #[Assert\Email(message: "L'adresse email n'est pas valide.")]
+    public ?string $companyEmail = null;
 
-    // #[Assert\NotBlank]
-    // #[Assert\Length(min: 8)]
-    // public ?string $plainPassword = null;
-    
-    // Optionnel pour la phase de test
-    public ?string $gemsuiteToken = null;
+    public ?string $companyPhone = null;
+    public ?string $companyWebsite = null;
+    public ?string $companyEin = null;
+    public ?string $companyTva = null;
+
+    #[Assert\NotBlank(message: "L'adresse est obligatoire.")]
+    public ?string $street1 = null;
+    public ?string $street2 = null;
+
+    #[Assert\NotBlank(message: "La ville est obligatoire.")]
+    public ?string $city = null;
+
+    #[Assert\NotBlank(message: "Le code postal est obligatoire.")]
+    public ?string $zip = null;
+
+    public ?string $state = null;
+
+    #[Assert\NotBlank(message: "Le pays est obligatoire.")]
+    public ?string $country = 'FR';
 }

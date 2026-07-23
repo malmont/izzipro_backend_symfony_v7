@@ -36,9 +36,41 @@
             </div>
 
             <div class="form-section">
-                <h2>Intégration GEM-SUITE</h2>
+                <h2>Sécurité & Autorisation</h2>
                 <div class="form-row">
-                    {{ form_row(form.gemsuiteToken) }}
+                    {{ form_row(form.secretKey) }}
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>Informations de l'Entreprise</h2>
+                <div class="form-row">
+                    {{ form_row(form.companyName) }}
+                    {{ form_row(form.companyEmail) }}
+                </div>
+                <div class="form-row">
+                    {{ form_row(form.companyPhone) }}
+                    {{ form_row(form.companyWebsite) }}
+                </div>
+                <div class="form-row">
+                    {{ form_row(form.companyEin) }}
+                    {{ form_row(form.companyTva) }}
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>Adresse de l'Entreprise</h2>
+                <div class="form-row">
+                    {{ form_row(form.street1) }}
+                    {{ form_row(form.street2) }}
+                </div>
+                <div class="form-row">
+                    {{ form_row(form.city) }}
+                    {{ form_row(form.zip) }}
+                </div>
+                <div class="form-row">
+                    {{ form_row(form.state) }}
+                    {{ form_row(form.country) }}
                 </div>
             </div>
 

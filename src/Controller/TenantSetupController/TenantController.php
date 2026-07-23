@@ -76,8 +76,9 @@ class TenantController extends AbstractController
 
         // --- CAS B : Le Tenant N'EXISTE PAS ---
 
-        // Vérification si c'est un sous-domaine valide de la plateforme (Prod)
-        $isPlatformSubdomain = str_ends_with($cleanHost, $this->frontendBaseDomain);
+        // Vérification si c'est un sous-domaine valide de la plateforme (Frontend ou Backend V7)
+        $isPlatformSubdomain = str_ends_with($cleanHost, $this->frontendBaseDomain) 
+                            || str_ends_with($cleanHost, $this->backendBaseDomain);
 
         // AJOUT : Vérification pour le développement (Localhost et sous-domaines .localhost)
         if (!$isPlatformSubdomain) {
@@ -136,7 +137,13 @@ class TenantController extends AbstractController
             return null; // Pas de sous-domaine sur la racine locale
         }
 
-        // Cas Production
+        // Cas Production Backend V7
+        if (str_ends_with($host, $this->backendBaseDomain)) {
+            $prefix = substr($host, 0, -strlen($this->backendBaseDomain));
+            return rtrim($prefix, '.');
+        }
+
+        // Cas Production Frontend
         if (str_ends_with($host, $this->frontendBaseDomain)) {
             $prefix = substr($host, 0, -strlen($this->frontendBaseDomain));
             return rtrim($prefix, '.');

@@ -26,7 +26,7 @@ class GemsuiteJwtAuthenticator extends AbstractAuthenticator
 
     public function supports(Request $request): ?bool
     {
-        return str_starts_with($request->getPathInfo(), '/api/webhook/gemsuite');
+        return false; // Désactivé en mode Standalone
     }
 
     public function authenticate(Request $request): Passport

@@ -14,36 +14,20 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 class GemsuiteTestController extends AbstractController
 {
     /**
-     * Endpoint pour tester l'appel sortant : Iizipro -> Simulateur
+     * Endpoint désactivé en mode Standalone
      */
     #[Route('/test/call-gemsuite', name: 'test_call_gemsuite')]
-    public function testCallGemsuite(HttpClientInterface $gemsuiteClient, IiziproJwtService $jwtService): Response
+    public function testCallGemsuite(): Response
     {
-        try {
-            $jwt = $jwtService->generateForGemsuite();
-            
-            $response = $gemsuiteClient->request('GET', '/', [
-                'auth_bearer' => $jwt,
-            ]);
-
-            return new JsonResponse($response->toArray());
-
-        } catch (\Exception $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 500);
-        }
+        return new JsonResponse(['status' => 'disabled', 'message' => 'GemSuite désactivé en mode Standalone.'], 403);
     }
 
     /**
-     * Endpoint pour tester l'appel entrant : Simulateur -> Iizipro
-     * La sécurité est gérée en amont par GemsuiteJwtAuthenticator.
+     * Endpoint désactivé en mode Standalone
      */
     #[Route('/api/webhook/gemsuite/order-update', name: 'webhook_gemsuite', methods: ['POST'])]
     public function handleGemsuiteWebhook(Request $request): JsonResponse
     {
-        $data = $request->toArray();
-        // Logique métier : traiter la mise à jour de la commande...
-        // ...
-
-        return new JsonResponse(['status' => 'OK', 'message' => '✅ Iizipro: Webhook traité avec succès.']);
+        return new JsonResponse(['status' => 'disabled', 'message' => 'GemSuite désactivé en mode Standalone.'], 403);
     }
 }
