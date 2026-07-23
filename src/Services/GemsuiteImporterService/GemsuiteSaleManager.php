@@ -113,11 +113,13 @@ class GemsuiteSaleManager
                     }
                 }
 
-                // 2. Récupération du Véhicule
+                // 2. Récupération du Véhicule (ou fallback sur le produit/VehicleProduct)
                 $product = $booking->getProduct();
                 $vehicle = $em->getRepository(\App\Entity\Vehicle::class)->findOneBy(['product' => $product]);
-                if ($vehicle) {
+                if ($vehicle && $vehicle->getGemsuiteVehicleId()) {
                     $payload['car_id'] = $vehicle->getGemsuiteVehicleId();
+                } else if ($product) {
+                    $payload['car_id'] = $product->getId();
                 } else {
                     $this->logger->error(sprintf("Synchro Gemsuite SALE: Véhicule manquant pour le produit de location #%d. Le champ car_id sera manquant.", $product?->getId()));
                 }
@@ -128,10 +130,19 @@ class GemsuiteSaleManager
                 $payload['car_date_start'] = (clone $booking->getStartAt())->setTimezone($tz)->format('Y-m-d H:i:s');
                 $payload['car_date_end']   = (clone $booking->getEndAt())->setTimezone($tz)->format('Y-m-d H:i:s');
 
-                // 4. Permis de conduire et Chauffeur
+                // 4. Permis de conduire, Chauffeur et Téléphone
                 $user = $order->getUserId();
                 if ($user) {
                     $payload['car_driver'] = trim($user->getFirstname() . ' ' . $user->getLastname());
+                    
+                    $phone = $order->getShippingAdress()?->getPhone() ?: $user->getPrimaryAddress()?->getPhone();
+                    if (!$phone && $user->getAdresses()->count() > 0) {
+                        $firstAddr = $user->getAdresses()->first();
+                        $phone = $firstAddr ? $firstAddr->getPhone() : null;
+                    }
+                    if ($phone) {
+                        $payload['car_phone'] = $phone;
+                    }
                 }
 
                 if ($item->getLicenseNumber()) {

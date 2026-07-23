@@ -28,13 +28,12 @@ class BookingAvailabilityService
         }
 
         // --- SÉCURITÉ VÉHICULE ---
-        // On vérifie qu'au moins un véhicule est associé à ce produit.
-        // Sans véhicule, on ne peut pas synchroniser avec Gemsuite (car_id manquant).
+        // On vérifie qu'un véhicule (ou VehicleProduct) est associé à ce produit.
         $vehicleCount = $this->emProvider->getEntityManager()
             ->getRepository(\App\Entity\Vehicle::class)
             ->count(['product' => $product]);
 
-        if ($vehicleCount === 0) {
+        if ($vehicleCount === 0 && !($product instanceof \App\Entity\VehicleProduct)) {
             return 0;
         }
 
