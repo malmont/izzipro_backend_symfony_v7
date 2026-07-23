@@ -7,7 +7,10 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
-#[ApiResource]
+#[ApiResource(
+    paginationItemsPerPage: 24,
+    paginationMaximumItemsPerPage: 50
+)]
 class VehicleProduct extends Product
 {
     #[ORM\Column(nullable: true)]
