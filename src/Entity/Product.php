@@ -165,11 +165,19 @@ class Product implements TranslatableInterface
     #[Groups(['product:read'])]
     private ?bool $isPreOrder = false;
 
+    #[Groups(['vehicle_product:read', 'product:read'])]
     #[ORM\Column(type: 'string', length: 20, enumType: ProductMode::class, options: ['default' => 'retail'])]
     private ProductMode $mode = ProductMode::RETAIL;
 
+    #[Groups(['vehicle_product:read', 'product:read'])]
     #[ORM\OneToOne(mappedBy: 'product', cascade: ['persist', 'remove'])]
     private ?BookingConfiguration $bookingConfiguration = null;
+
+    #[Groups(['vehicle_product:read', 'product:read'])]
+    public function getIsRental(): bool
+    {
+        return $this->mode === ProductMode::BOOKING || $this->bookingConfiguration !== null;
+    }
 
     /**
      * @var Collection<int, Booking>

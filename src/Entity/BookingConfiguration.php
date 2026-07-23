@@ -5,9 +5,12 @@ namespace App\Entity;
 use App\Repository\BookingConfigurationRepository;
 use Doctrine\ORM\Mapping as ORM;
 
+use Symfony\Component\Serializer\Annotation\Groups;
+
 #[ORM\Entity(repositoryClass: BookingConfigurationRepository::class)]
 class BookingConfiguration
 {
+    #[Groups(['vehicle_product:read', 'product:read'])]
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -16,15 +19,19 @@ class BookingConfiguration
     #[ORM\OneToOne(inversedBy: 'bookingConfiguration', cascade: ['persist'])]
     private ?Product $product = null;
 
+    #[Groups(['vehicle_product:read', 'product:read'])]
     #[ORM\Column(length: 40)]
     private ?string $granularity = null;
 
+    #[Groups(['vehicle_product:read', 'product:read'])]
     #[ORM\Column]
     private ?int $stockQuantity = null;
 
+    #[Groups(['vehicle_product:read', 'product:read'])]
     #[ORM\Column]
     private ?int $minDuration = null;
 
+    #[Groups(['vehicle_product:read', 'product:read'])]
     #[ORM\Column]
     private ?int $bufferTime = null;
 
