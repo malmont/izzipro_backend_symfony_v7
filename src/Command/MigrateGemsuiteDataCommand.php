@@ -34,9 +34,18 @@ class MigrateGemsuiteDataCommand extends Command
         $io = new SymfonyStyle($input, $output);
         $sourceDbName = $input->getArgument('sourceDbName');
 
-        $io->title("Migration GemSuite -> v7 pour la base: $sourceDbName");
+        // Mapping source GemSuite DB -> cible v7 dédiée
+        $targetDbName = match($sourceDbName) {
+            'db_larameemarineinc2', 'db_larameemarine' => 'v7_larameemarine',
+            'db_caravane201inc', 'db_caravane201'     => 'v7_caravane201',
+            'db_expertnautique'                        => 'v7_expertnautique',
+            default => throw new \InvalidArgumentException("Base source inconnue: $sourceDbName. Bases acceptées: db_larameemarineinc2, db_caravane201inc, db_expertnautique"),
+        };
 
-        // 1. Connexion DBAL vers la base source GemSuite
+        $io->title("Migration GemSuite -> v7");
+        $io->table(['Source (GemSuite)', 'Cible (v7 Dédiée)'], [[$sourceDbName, $targetDbName]]);
+
+        // 1. Connexion DBAL vers la base SOURCE GemSuite (lecture seule)
         $connectionParams = [
             'dbname' => $sourceDbName,
             'user' => 'postgres',
@@ -48,15 +57,29 @@ class MigrateGemsuiteDataCommand extends Command
         try {
             $sourceConn = DriverManager::getConnection($connectionParams);
             $sourceConn->getNativeConnection();
-            $io->success("Connexion établie avec succès à la base source: $sourceDbName");
+            $io->success("Connexion SOURCE établie: $sourceDbName");
         } catch (\Exception $e) {
             $io->error("Impossible de se connecter à la base source $sourceDbName: " . $e->getMessage());
             return Command::FAILURE;
         }
 
-        // 2. Récupération des données source
-        $em = $this->emProvider->getEntityManager();
-        $targetConn = $em->getConnection();
+        // 2. Connexion DBAL vers la base CIBLE v7 dédiée (écriture)
+        $targetParams = [
+            'dbname' => $targetDbName,
+            'user' => 'postgres',
+            'password' => 'Wipit2017',
+            'host' => '127.0.0.1',
+            'driver' => 'pdo_pgsql',
+        ];
+
+        try {
+            $targetConn = DriverManager::getConnection($targetParams);
+            $targetConn->getNativeConnection();
+            $io->success("Connexion CIBLE établie: $targetDbName");
+        } catch (\Exception $e) {
+            $io->error("Impossible de se connecter à la base cible $targetDbName: " . $e->getMessage());
+            return Command::FAILURE;
+        }
 
         // Ensure discriminator column 'product_type' exists in target table 'product'
         try {
