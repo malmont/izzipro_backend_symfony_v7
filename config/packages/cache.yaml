@@ -1,5 +1,6 @@
 framework:
     cache:
+        prefix_seed: 'v7_ecommerce'
         app: cache.adapter.redis_tag_aware
         default_redis_provider: '%env(REDIS_URL)%'
        

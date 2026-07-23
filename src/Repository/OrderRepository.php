@@ -90,7 +90,7 @@ class OrderRepository extends EntityRepository
             ->where('o.orderDate BETWEEN :startDate AND :endDate')
             ->andWhere('o.totalAmount > 0')
             ->setParameter('startDate', $startDate)
-            ->setParameter('endDate', 'endDate');
+            ->setParameter('endDate', $endDate);
             
             if ($orderSource !== null) {
                 $qb->andWhere('o.orderSource = :orderSource')

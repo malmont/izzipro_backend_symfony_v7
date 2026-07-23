@@ -72,13 +72,13 @@ class ProductRepository extends EntityRepository
     public function calculateCurrentStockValue(): float
     {
         $qb = $this->createQueryBuilder('p')
-            ->select('SUM(p.purchasePrice * p.coefficientMultiplier * p.quantity) as stockValue')
-            ->where('p.purchasePrice IS NOT NULL')
-            ->andWhere('p.coefficientMultiplier IS NOT NULL');
+            ->select('SUM(p.price * p.quantity) as stockValue')
+            ->where('p.quantity > 0')
+            ->andWhere('p.price IS NOT NULL');
 
         $result = $qb->getQuery()->getSingleScalarResult();
 
-        return (float) $result;
+        return ((float) ($result ?? 0.0)) / 100.0;
     }
     public function findByCategoryAndFilters(
         string $locale,
