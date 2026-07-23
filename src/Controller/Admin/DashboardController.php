@@ -424,9 +424,9 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Taxes', 'fas fa-percent', Tax::class);
         yield MenuItem::linkToCrud('Order Taxes', 'fas fa-receipt', OrderTax::class);
 
-        yield MenuItem::section('Product');
-        yield MenuItem::linkToCrud('Product Variants', 'fas fa-boxes', ProductVariant::class)->setController(ProductVariantCrudController::class);
-        yield MenuItem::linkToCrud('Product', 'fas fa-shopping-cart', Product::class);
+        yield MenuItem::section('Catalogue & Véhicules');
+        yield MenuItem::linkToCrud('Véhicules & Bateaux (Vente)', 'fas fa-ship', VehicleProduct::class)->setController(VehicleProductCrudController::class);
+        yield MenuItem::linkToCrud('Produits & Accessoires', 'fas fa-shopping-cart', Product::class);
         yield MenuItem::linkToCrud('Colors', 'fas fa-palette', Color::class);
         yield MenuItem::linkToCrud('Styles', 'fas fa-brush', Style::class);
         yield MenuItem::linkToCrud('Sizes', 'fas fa-ruler', Size::class);

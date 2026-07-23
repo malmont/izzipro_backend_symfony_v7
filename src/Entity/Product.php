@@ -15,6 +15,9 @@ use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: ProductRepository::class)]
+#[ORM\InheritanceType('JOINED')]
+#[ORM\DiscriminatorColumn(name: 'product_type', type: 'string')]
+#[ORM\DiscriminatorMap(['product' => Product::class, 'vehicle' => VehicleProduct::class])]
 #[ORM\Index(name: 'idx_product_slug', fields: ['slug'])]
 #[ORM\Index(name: 'idx_product_barcode', fields: ['barcode'])]
 #[ORM\Index(name: 'idx_product_is_web', fields: ['isWeb'])]
