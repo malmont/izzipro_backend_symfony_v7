@@ -39,10 +39,18 @@ class TenantConnectionProvider
             $this->defaultConnection->close();
         }
 
+        // Target dedicated v7 database to keep GemSuite DBs untouched
+        $targetDb = match($tenantDbName) {
+            'db_larameemarineinc2', 'db_larameemarine' => 'v7_larameemarine',
+            'db_caravane201inc', 'db_caravane201' => 'v7_caravane201',
+            'db_expertnautique' => 'v7_expertnautique',
+            default => $tenantDbName,
+        };
+
         // Basculer dynamiquement le nom de la base de données de la connexion Doctrine par défaut
         $refParams = new ReflectionProperty(Connection::class, 'params');
         $params = $refParams->getValue($this->defaultConnection);
-        $params['dbname'] = $tenantDbName;
+        $params['dbname'] = $targetDb;
         $refParams->setValue($this->defaultConnection, $params);
 
         $refConn = new ReflectionProperty(Connection::class, '_conn');
