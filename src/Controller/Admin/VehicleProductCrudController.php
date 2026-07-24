@@ -3,6 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\VehicleProduct;
+use App\Enum\ProductMode;
 use App\Repository\CategoriesRepository;
 use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -78,13 +79,29 @@ class VehicleProductCrudController extends BaseTenantCrudController
             ])
             ->setColumns('col-md-4');
 
-        yield FormField::addTab('Prix & Inventaire');
+        yield FormField::addTab('Prix & Mode de Commercialisation');
         yield FormField::addPanel('Tarification & Stock');
 
-        yield NumberField::new('price', 'Prix de Vente ($)')
-            ->setHelp('Prix en dollars. Ex: 45000 pour 450.00 $ ou 45000.00 $');
+        yield NumberField::new('price', 'Prix de Vente / Tarif de Base ($)')
+            ->setHelp('Prix en dollars. Ex: 45000.00 $');
 
         yield IntegerField::new('quantity', 'Quantité en Stock (Ex: 1)');
+
+        yield ChoiceField::new('mode', 'Mode de Commercialisation')
+            ->setChoices([
+                'Vente Sèche (Achat Direct)' => ProductMode::RETAIL,
+                'Location / Réservation' => ProductMode::BOOKING,
+            ])
+            ->renderAsBadges([
+                ProductMode::RETAIL->value => 'success',
+                ProductMode::BOOKING->value => 'warning',
+            ])
+            ->setColumns('col-md-6');
+
+        yield AssociationField::new('bookingConfiguration', 'Configuration de Location (Si Loué)')
+            ->setFormTypeOptions(['em' => $tenantEm])
+            ->setHelp('Associez un pool de stock et des règles de créneaux si ce véhicule est proposé à la location.')
+            ->setColumns('col-md-6');
 
         yield AssociationField::new('category', 'Catégorie')
             ->setFormTypeOptions([
