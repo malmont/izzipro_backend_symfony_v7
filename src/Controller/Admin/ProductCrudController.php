@@ -69,10 +69,11 @@ class ProductCrudController extends BaseTenantCrudController
         ->renderExpanded()
         ->setColumns('col-12');
         yield FormField::addPanel('Informations Commerciales');
-        yield MoneyField::new('purchasePrice', "Prix d'achat")->setCurrency('USD')->setColumns('col-md-4');
+        yield MoneyField::new('price', 'Prix de Vente ($)')->setCurrency('USD')->setStoredAsCents(true)->setColumns('col-md-4');
+        yield MoneyField::new('purchasePrice', "Prix d'achat ($)")->setCurrency('USD')->setStoredAsCents(true)->setColumns('col-md-4');
         yield NumberField::new('coefficientMultiplier', 'Coefficient')->setColumns('col-md-4');
         yield TextField::new('barcode', 'Code Barre')->setColumns('col-md-4');
-        yield MoneyField::new('specialPrice', 'Prix promotionnel')->setCurrency('USD')->setColumns('col-md-4');
+        yield MoneyField::new('specialPrice', 'Prix promotionnel ($)')->setCurrency('USD')->setStoredAsCents(true)->setColumns('col-md-4');
         yield DateTimeField::new('specialPriceFrom', 'Promotion du')->setColumns('col-md-4')->hideOnIndex();
         yield DateTimeField::new('specialPriceTo', 'Promotion au')->setColumns('col-md-4')->hideOnIndex();
         yield IntegerField::new('quantity', 'Quantité')->onlyOnIndex();
@@ -93,13 +94,13 @@ class ProductCrudController extends BaseTenantCrudController
         $tenantEm = $this->emProvider->getEntityManager();
         yield AssociationField::new('productType', 'Type de Produit')
             ->setRequired(true)
-            ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn(ProductTypeRepository $repo) => $repo->createQueryBuilder('pt')->orderBy('pt.name', 'ASC')])
+            ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn($repo) => $repo->createQueryBuilder('pt')->orderBy('pt.name', 'ASC')])
             ->setColumns('col-md-6');
         yield AssociationField::new('category', 'Catégorie')
-             ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn(CategoriesRepository $repo) => $repo->createQueryBuilder('c')->orderBy('c.name', 'ASC')])
+             ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn($repo) => $repo->createQueryBuilder('c')->orderBy('c.name', 'ASC')])
             ->setColumns('col-md-6');
         yield AssociationField::new('style', 'Style')
-             ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn(StyleRepository $repo) => $repo->createQueryBuilder('s')->orderBy('s.name', 'ASC')])
+             ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn($repo) => $repo->createQueryBuilder('s')->orderBy('s.name', 'ASC')])
             ->setColumns('col-md-6');
         yield TextField::new('tags')->setColumns('col-md-6');
         

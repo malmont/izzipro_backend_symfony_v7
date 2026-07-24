@@ -24,35 +24,7 @@ class ManualSyncController extends AbstractController
     #[Route('/admin/sync-gemsuite', name: 'admin_sync_gemsuite')]
     public function syncAll(): Response
     {
-        $this->denyAccessUnlessGranted('ROLE_ADMIN');
-
-        $tenantCode = $this->tenantManager->getCurrentTenantCode();
-        if (!$tenantCode) {
-            $this->addFlash('danger', 'Impossible de déterminer le tenant actuel.');
-            return $this->redirectToRoute('admin'); 
-        }
-
-        $token = $this->tenantManager->getTenantToken($tenantCode);
-        if (!$token) {
-            $this->addFlash('danger', sprintf('Aucun token GEM-SUITE n\'est configuré pour le tenant "%s".', $tenantCode));
-            return $this->redirectToRoute('admin');
-        }
-
-        $this->addFlash('info', 'Lancement de la synchronisation complète pour le tenant ' . $tenantCode . '. Cette opération peut prendre plusieurs minutes.');
-
-        try {
-            $this->companySyncHandler->handleCompanyUpdate($tenantCode);
-            $this->addFlash('success', 'Informations de l\'entreprise et du slider synchronisées.');
-            $this->importer->importDataForTenant($tenantCode, $token);
-            $this->addFlash('success', 'Clients, catégories et produits synchronisés.');
-
-            $this->addFlash('info', 'Synchronisation complète terminée avec succès !');
-
-        } catch (\Throwable $e) {
-            $this->logger->error('Erreur lors de la synchronisation manuelle : ' . $e->getMessage(), ['exception' => $e]);
-            $this->addFlash('danger', 'Une erreur est survenue pendant la synchronisation : ' . $e->getMessage());
-        }
-
-        return $this->redirectToRoute('admin'); 
+        $this->addFlash('warning', 'La synchronisation GemSuite a été désactivée. Le projet v7 fonctionne désormais en autonomie complète.');
+        return $this->redirectToRoute('admin');
     }
 }

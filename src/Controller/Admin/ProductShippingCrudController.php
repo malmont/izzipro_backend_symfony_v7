@@ -36,7 +36,7 @@ class ProductShippingCrudController extends BaseTenantCrudController
                 ->setRequired(true)
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
-                    'query_builder' => function (ProductRepository $repo) {
+                    'query_builder' => function ($repo) {
                         return $repo->createQueryBuilder('p')->orderBy('p.name', 'ASC');
                     },
                     'choice_label' => 'name',

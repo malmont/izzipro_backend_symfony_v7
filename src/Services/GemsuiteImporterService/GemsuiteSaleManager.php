@@ -151,6 +151,8 @@ class GemsuiteSaleManager
                 if ($item->getLicenseExpirationDate()) {
                     $payload['car_expiration'] = $item->getLicenseExpirationDate()->format('Y-m-d');
                 }
+
+                $payload['car_flat_rate'] = 0;
             } else {
                 // LOGIQUE RETAIL (Standard)
                 if ($variant) {

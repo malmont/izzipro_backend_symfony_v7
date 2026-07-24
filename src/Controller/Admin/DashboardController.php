@@ -321,13 +321,6 @@ class DashboardController extends AbstractDashboardController
     {
         yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
         
-        yield MenuItem::section('Synchronisation');
-        yield MenuItem::linkToRoute(
-            'Synchronisation GemSuite', 
-            'fas fa-sync-alt', 
-            'admin_sync_gemsuite' 
-        );
-        
         yield MenuItem::section('UI');
         yield MenuItem::linkToCrud('Home Slider', 'fas fa-images', HomeSlider::class);
         yield MenuItem::linkToCrud('Admin Settings', 'fas fa-cogs', AdminSettings::class);
@@ -450,10 +443,5 @@ class DashboardController extends AbstractDashboardController
 
         yield MenuItem::linkToCrud('Grilles Tarifaires (Packs)', 'fas fa-tags', RentalPack::class)
             ->setController(RentalPackCrudController::class);
-
-        yield MenuItem::linkToCrud('Véhicules Gemsuite', 'fas fa-car', Vehicle::class)
-            ->setController(VehicleCrudController::class);
-
-              
     }
 }

@@ -56,7 +56,7 @@ class BookingCrudController extends BaseTenantCrudController
         yield AssociationField::new('product', 'Produit')
             ->setFormTypeOptions([
                 'em' => $tenantEm,
-                'query_builder' => function (ProductRepository $repo) {
+                'query_builder' => function ($repo) {
                     return $repo->createQueryBuilder('p')->orderBy('p.name', 'ASC');
                 }
             ]);

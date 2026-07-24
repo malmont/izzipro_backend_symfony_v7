@@ -53,19 +53,19 @@ class ProductVariantCrudController extends BaseTenantCrudController
             AssociationField::new('product', 'Product')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
-                    'query_builder' => fn(ProductRepository $repo) => $repo->createQueryBuilder('p')->orderBy('p.name', 'ASC'),
+                    'query_builder' => fn($repo) => $repo->createQueryBuilder('p')->orderBy('p.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
             AssociationField::new('color', 'Color')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
-                    'query_builder' => fn(ColorRepository $repo) => $repo->createQueryBuilder('c')->orderBy('c.name', 'ASC'),
+                    'query_builder' => fn($repo) => $repo->createQueryBuilder('c')->orderBy('c.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
             AssociationField::new('size', 'Size')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
-                    'query_builder' => fn(SizeRepository $repo) => $repo->createQueryBuilder('s')->orderBy('s.name', 'ASC'),
+                    'query_builder' => fn($repo) => $repo->createQueryBuilder('s')->orderBy('s.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
             IntegerField::new('stockQuantity', 'Stock Quantity'),
@@ -74,7 +74,7 @@ class ProductVariantCrudController extends BaseTenantCrudController
                 ->setFormTypeOption('by_reference', false) 
                 ->setFormTypeOptions([
                     'em' => $tenantEm, 
-                    'query_builder' => fn(ProductOptionValueRepository $repo) => $repo->createQueryBuilder('pov')
+                    'query_builder' => fn($repo) => $repo->createQueryBuilder('pov')
                         ->join('pov.productOption', 'po')
                         ->orderBy('po.name', 'ASC')
                         ->addOrderBy('pov.value', 'ASC'),
