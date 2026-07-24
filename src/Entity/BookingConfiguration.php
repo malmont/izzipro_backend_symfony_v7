@@ -99,4 +99,12 @@ class BookingConfiguration
 
         return $this;
     }
+
+    public function __toString(): string
+    {
+        if ($this->id) {
+            return sprintf('Config #%d (Stock: %d, %s)', $this->id, $this->stockQuantity ?? 0, $this->granularity ?? 'N/A');
+        }
+        return 'Nouvelle Configuration';
+    }
 }

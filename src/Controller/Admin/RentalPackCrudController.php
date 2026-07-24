@@ -10,6 +10,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\NumberField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 
+use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
+
 class RentalPackCrudController extends BaseTenantCrudController
 {
     public function __construct(TenantEntityManagerProvider $emProvider)
@@ -28,11 +30,11 @@ class RentalPackCrudController extends BaseTenantCrudController
         yield TextField::new('name', 'Nom du Pack');
         yield IntegerField::new('gemsuiteProductId', 'ID Produit Gemsuite');
         
-        yield NumberField::new('hourRate', 'Tarif Horaire (€)');
-        yield NumberField::new('halfDayRate', 'Tarif Demi-Journée (€)');
-        yield NumberField::new('dayRate', 'Tarif Journalier (€)');
-        yield NumberField::new('weekRate', 'Tarif Hebdomadaire (€)');
-        yield NumberField::new('monthRate', 'Tarif Mensuel (€)');
+        yield MoneyField::new('hourRate', 'Tarif Horaire ($)')->setCurrency('USD')->setStoredAsCents(true);
+        yield MoneyField::new('halfDayRate', 'Tarif Demi-Journée ($)')->setCurrency('USD')->setStoredAsCents(true);
+        yield MoneyField::new('dayRate', 'Tarif Journalier ($)')->setCurrency('USD')->setStoredAsCents(true);
+        yield MoneyField::new('weekRate', 'Tarif Hebdomadaire ($)')->setCurrency('USD')->setStoredAsCents(true);
+        yield MoneyField::new('monthRate', 'Tarif Mensuel ($)')->setCurrency('USD')->setStoredAsCents(true);
 
         $tenantEm = $this->emProvider->getEntityManager();
         yield AssociationField::new('categories', 'Catégories associées')
