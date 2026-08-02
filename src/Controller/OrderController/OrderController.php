@@ -163,31 +163,8 @@ class OrderController extends AbstractController
             // --- CORRECTIF : S'assurer que l'utilisateur connecté a un client GemSuite lié ---
             // Si le client GemSuite n'a pas été créé à l'inscription (ex: timeout API GemSuite),
             // on le crée/récupère maintenant, avant de tenter la synchronisation de la vente.
-            if ($user && !$user->getGemsuiteClient()) {
-                try {
-                    $tenantCode = $this->tenantManager->getCurrentTenantCode();
-                    $gemsuiteClient = $this->gemsuiteClientManager->findOrCreateClient(
-                        $user->getEmail(),
-                        $user->getFirstname() ?? 'Utilisateur',
-                        $user->getLastname() ?? 'Connecté',
-                        $tenantCode
-                    );
-                    if ($gemsuiteClient) {
-                        $user->setGemsuiteClient($gemsuiteClient);
-                        $tenantEm->persist($user);
-                        $tenantEm->flush();
-                        $this->logger->info(sprintf(
-                            '[createOrder] Client GemSuite lié au user #%d (GemSuite ID: %d).',
-                            $user->getId(),
-                            $gemsuiteClient->getGemsuiteId()
-                        ));
-                    }
-                } catch (\Throwable $e) {
-                    $this->logger->error('[createOrder] Échec liaison client GemSuite : ' . $e->getMessage(), [
-                        'userId' => $user->getId()
-                    ]);
-                }
-            }
+            // Mode Autonome : Liaisons GemSuite désactivées
+            // if ($user && !$user->getGemsuiteClient()) { ... }
 
             // Auto-update user profile if license info is missing
             if ($user) {
@@ -241,7 +218,8 @@ class OrderController extends AbstractController
                 }
             }
 
-            $this->gemsuiteSaleManager->createSale($result);
+            // Mode Autonome : Export de la vente vers GemSuite désactivé
+            // $this->gemsuiteSaleManager->createSale($result);
             try {
                 $locale = $request->query->get('locale', 'fr');
                 $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
@@ -313,8 +291,8 @@ class OrderController extends AbstractController
 
         $tenantCode = $this->tenantManager->getCurrentTenantCode();
 
-        // 1. S'assurer que le client existe dans Gemsuite (et en local)
-        $gemsuiteClient = $this->gemsuiteClientManager->findOrCreateClient($email, $firstName, $lastName, $tenantCode);
+        // 1. Client local (Mode Autonome - GemSuite déconnecté)
+        $gemsuiteClient = null;
         
         // On récupère l'EM après le switch potentiel du GemsuiteClientManager
         $em = $this->emProvider->getEntityManager();
@@ -582,32 +560,8 @@ class OrderController extends AbstractController
         if ($result instanceof Order) {
             $tenantEm = $this->emProvider->getEntityManager();
 
-            // --- CORRECTIF : S'assurer que l'utilisateur connecté a un client GemSuite lié ---
-            if ($user && !$user->getGemsuiteClient()) {
-                try {
-                    $tenantCode = $this->tenantManager->getCurrentTenantCode();
-                    $gemsuiteClient = $this->gemsuiteClientManager->findOrCreateClient(
-                        $user->getEmail(),
-                        $user->getFirstname() ?? 'Utilisateur',
-                        $user->getLastname() ?? 'Connecté',
-                        $tenantCode
-                    );
-                    if ($gemsuiteClient) {
-                        $user->setGemsuiteClient($gemsuiteClient);
-                        $tenantEm->persist($user);
-                        $tenantEm->flush();
-                        $this->logger->info(sprintf(
-                            '[createOrderMultiPayment] Client GemSuite lié au user #%d (GemSuite ID: %d).',
-                            $user->getId(),
-                            $gemsuiteClient->getGemsuiteId()
-                        ));
-                    }
-                } catch (\Throwable $e) {
-                    $this->logger->error('[createOrderMultiPayment] Échec liaison client GemSuite : ' . $e->getMessage(), [
-                        'userId' => $user->getId()
-                    ]);
-                }
-            }
+            // Mode Autonome : Liaisons GemSuite désactivées
+            // if ($user && !$user->getGemsuiteClient()) { ... }
 
             // Auto-update user profile
             if ($user) {

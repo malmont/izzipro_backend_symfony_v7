@@ -149,11 +149,10 @@ class RegistrationController extends AbstractController
             }
         }
 
-        // 3. Création du Client Gemsuite & User
-        $tenantCode = $this->tenantManager->getCurrentTenantCode();
-        $gemsuiteClient = $this->gemsuiteClientManager->findOrCreateClient($email, $firstName, $lastName, $tenantCode);
+        // 3. Création du User (Mode Autonome - GemSuite déconnecté)
+        $gemsuiteClient = null;
 
-        // On récupère l'EntityManager ICI, après le switch potentiel dans le manager de client
+        // On récupère l'EntityManager ICI
         $em = $this->tenantEmProvider->getEntityManager();
 
         $user = new User();

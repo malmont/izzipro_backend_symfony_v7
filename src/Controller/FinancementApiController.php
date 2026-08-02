@@ -65,24 +65,8 @@ class FinancementApiController extends AbstractController
             $baseUrl = $request->getSchemeAndHttpHost();
             $locale = $request->getLocale() ?: 'fr';
 
-            // Create prospect on GEM-SUITE if tenant is active
-            $tenantCode = $this->tenantManager->getCurrentTenantCode();
-            if ($tenantCode) {
-                try {
-                    $this->gemsuiteClientManager->findOrCreateClient(
-                        $dto->email,
-                        $dto->firstName,
-                        $dto->lastName,
-                        $tenantCode,
-                        true,
-                        $dto->address,
-                        $dto->phone,
-                        1 // Type 1 for financing
-                    );
-                } catch (\Throwable $e) {
-                    $this->logger->error("Échec de la création du prospect sur GEM-SUITE : " . $e->getMessage());
-                }
-            }
+            // Mode Autonome : Création prospect GemSuite désactivée
+            // $tenantCode = $this->tenantManager->getCurrentTenantCode();
 
             // Load enterprise details from tenant database
             $tenantEm = $this->emProvider->getEntityManager();

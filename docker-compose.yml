@@ -1,126 +1,66 @@
-# docker-compose.yml
-
 version: '3.8'
 
 services:
   app:
-    image: ghcr.io/${CLIENT1_GITHUB_REPOSITORY_OWNER}/symfony-backend:latest
-    container_name: symfony_app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: symfony_app_v2
     volumes:
-      - public_data:/var/www/public
+      - .:/var/www
       - ./jwt:/var/www/config/jwt
+      - ./docker/php/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
     working_dir: /var/www
     env_file:
       - .env
     networks:
-      - symfony
+      - symfony_v2
     restart: always
-    healthcheck:
-      disable: true
 
   db:
     image: postgres:15
-    container_name: symfony_db
+    container_name: symfony_db_v2
     restart: always
     env_file:
       - .env
     volumes:
-      - db_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - db_data_v2:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
     networks:
-      - symfony
-    healthcheck:
-      disable: true
+      - symfony_v2
 
   redis:
     image: redis:7
-    container_name: redis_cache
+    container_name: redis_cache_v2
     restart: unless-stopped
     networks:
-      - symfony
+      - symfony_v2
     volumes:
-      - redis_data:/data
+      - redis_data_v2:/data
 
-  # --- MODIFICATIONS ICI ---
   nginx:
-    image: ghcr.io/${CLIENT1_GITHUB_REPOSITORY_OWNER}/symfony-nginx:latest
-    container_name: symfony_nginx
-    # On expose les ports directement sur Nginx
-    ports:
-      - "0.0.0.0:8443:80"
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: symfony_nginx_v2
     volumes:
-      - public_data:/var/www/public
+      - .:/var/www
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:rw
-      - /etc/ssl/caddy/64.187.182.48.pem:/etc/ssl/certs/64.187.182.48.pem:ro
-      - /etc/ssl/caddy/64.187.182.48-key.pem:/etc/ssl/private/64.187.182.48-key.pem:ro
     networks:
-      - symfony
+      symfony_v2:
+      web:
+        ipv4_address: 172.18.0.5
     depends_on:
       - app
     restart: always
-  # --- FIN DES MODIFICATIONS ---
-
-  worker-1:
-    image: ghcr.io/${CLIENT1_GITHUB_REPOSITORY_OWNER}/symfony-backend:latest
-    container_name: symfony_worker_1
-    command: php bin/console messenger:consume async_worker_1 -vv
-    volumes:
-      - public_data:/var/www/public
-      - ./jwt:/var/www/config/jwt
-    working_dir: /var/www
-    env_file:
-      - .env
-    networks:
-      - symfony
-    restart: always
-    depends_on:
-      - redis
-      - db
-
-  worker-2:
-    image: ghcr.io/${CLIENT1_GITHUB_REPOSITORY_OWNER}/symfony-backend:latest
-    container_name: symfony_worker_2
-    command: php bin/console messenger:consume async_worker_2 -vv
-    volumes:
-      - public_data:/var/www/public
-      - ./jwt:/var/www/config/jwt
-    working_dir: /var/www
-    env_file:
-      - .env
-    networks:
-      - symfony
-    restart: always
-    depends_on:
-      - redis
-      - db
-
-  worker-3:
-    image: ghcr.io/${CLIENT1_GITHUB_REPOSITORY_OWNER}/symfony-backend:latest
-    container_name: symfony_worker_3
-    command: php bin/console messenger:consume async_worker_3 -vv
-    volumes:
-      - public_data:/var/www/public
-      - ./jwt:/var/www/config/jwt
-    working_dir: /var/www
-    env_file:
-      - .env
-    networks:
-      - symfony
-    restart: always
-    depends_on:
-      - redis
-      - db
 
 volumes:
-  db_data:
-  redis_data:
-  public_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /home/${CLIENT1_SERVER_USER}/app/public
+  db_data_v2:
+  redis_data_v2:
 
 networks:
-  symfony:
+  symfony_v2:
     driver: bridge
+  web:
+    external: true
