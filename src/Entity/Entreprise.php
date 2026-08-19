@@ -92,6 +92,18 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $facebookPixelId = null;
 
+    #[ORM\Column(type: 'boolean', options: ['default' => true])]
+    private ?bool $isBoutiqueActive = true;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private ?bool $isBoussoleEsgActive = false;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private ?bool $isMemoireVivanteActive = false;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => true])]
+    private ?bool $isLandingPageActive = true;
+
 
     public function __construct()
     {
@@ -383,6 +395,54 @@ class Entreprise implements TranslatableInterface
     public function setFacebookPixelId(?string $facebookPixelId): static
     {
         $this->facebookPixelId = $facebookPixelId;
+
+        return $this;
+    }
+
+    public function isBoutiqueActive(): ?bool
+    {
+        return $this->isBoutiqueActive;
+    }
+
+    public function setIsBoutiqueActive(bool $isBoutiqueActive): static
+    {
+        $this->isBoutiqueActive = $isBoutiqueActive;
+
+        return $this;
+    }
+
+    public function isBoussoleEsgActive(): ?bool
+    {
+        return $this->isBoussoleEsgActive;
+    }
+
+    public function setIsBoussoleEsgActive(bool $isBoussoleEsgActive): static
+    {
+        $this->isBoussoleEsgActive = $isBoussoleEsgActive;
+
+        return $this;
+    }
+
+    public function isMemoireVivanteActive(): ?bool
+    {
+        return $this->isMemoireVivanteActive;
+    }
+
+    public function setIsMemoireVivanteActive(bool $isMemoireVivanteActive): static
+    {
+        $this->isMemoireVivanteActive = $isMemoireVivanteActive;
+
+        return $this;
+    }
+
+    public function isLandingPageActive(): ?bool
+    {
+        return $this->isLandingPageActive;
+    }
+
+    public function setIsLandingPageActive(bool $isLandingPageActive): static
+    {
+        $this->isLandingPageActive = $isLandingPageActive;
 
         return $this;
     }

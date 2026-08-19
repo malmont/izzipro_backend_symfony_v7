@@ -26,6 +26,10 @@ class EntrepriseDto
     public ?string $country = null;
     public ?string $province = null;
     public ?string $facebookPixelId = null;
+    public bool $isBoutiqueActive = true;
+    public bool $isLandingPageActive = true;
+    public bool $isBoussoleEsgActive = false;
+    public bool $isMemoireVivanteActive = false;
     /** @var SocialNetworkDto[] */
     public array $socialNetworks = [];
 
@@ -42,6 +46,10 @@ class EntrepriseDto
         $dto->ein = $entreprise->getEin();
         $dto->tvaIntracommunautaire = $entreprise->getTvaIntracommunautaire();
         $dto->facebookPixelId = $entreprise->getFacebookPixelId();
+        $dto->isBoutiqueActive = $entreprise->isBoutiqueActive() ?? true;
+        $dto->isLandingPageActive = $entreprise->isLandingPageActive() ?? true;
+        $dto->isBoussoleEsgActive = $entreprise->isBoussoleEsgActive() ?? false;
+        $dto->isMemoireVivanteActive = $entreprise->isMemoireVivanteActive() ?? false;
         
         $addressObj = $entreprise->getAddressEntreprise();
 

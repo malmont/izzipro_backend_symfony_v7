@@ -147,16 +147,18 @@ class ProductDetailedOutputDTO
             $color = $variant->getColor();
             $size = $variant->getSize();
 
-            $options = array_map(function (ProductOptionValue $optionValue) use ($locale) {
-                $parentOption = $optionValue->getProductOption();
-                return [
-                    'value_id'    => $optionValue->getId(),
-                    'value'       => $optionValue->getTranslation($locale)?->getValue() ?? $optionValue->getValue(),
-                    'option_name' => $parentOption ? ($parentOption->getTranslation($locale)?->getName() ?? $parentOption->getName()) : null,
-                    'option_id'   => $parentOption ? $parentOption->getId() : null,
-                    'option_code' => $parentOption ? $parentOption->getCode() : null,
-                ];
-            }, $variant->getOptionValues()->toArray());
+                $options = array_map(function (ProductOptionValue $optionValue) use ($locale) {
+                    $parentOption = $optionValue->getProductOption();
+                    return [
+                        'value_id'      => $optionValue->getId(),
+                        'value'         => $optionValue->getTranslation($locale)?->getValue() ?? $optionValue->getValue(),
+                        'option_name'   => $parentOption ? ($parentOption->getTranslation($locale)?->getName() ?? $parentOption->getName()) : null,
+                        'option_id'     => $parentOption ? $parentOption->getId() : null,
+                        'option_code'   => $parentOption ? $parentOption->getCode() : null,
+                        'image_preview' => $optionValue->getImagePreview(),
+                        'price_delta'   => $optionValue->getPriceDelta(),
+                    ];
+                }, $variant->getOptionValues()->toArray());
 
             return [
                 'id' => $variant->getId(),

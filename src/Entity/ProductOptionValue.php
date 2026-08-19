@@ -41,12 +41,23 @@ class ProductOptionValue implements TranslatableInterface
     orphanRemoval: true,
     fetch: 'EXTRA_LAZY'
     )]
-    private Collection $translations;
+    /**
+     * @var Collection<int, ProductCustomizationImage>
+     */
+    #[ORM\ManyToMany(targetEntity: ProductCustomizationImage::class, mappedBy: 'optionValues')]
+    private Collection $productCustomizationImages;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $imagePreview = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?float $priceDelta = null;
 
     public function __construct()
     {
         $this->productVariants = new ArrayCollection();
         $this->translations = new ArrayCollection();
+        $this->productCustomizationImages = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -190,5 +201,56 @@ class ProductOptionValue implements TranslatableInterface
             }
         }
         return null;
+    }
+
+    /**
+     * @return Collection<int, ProductCustomizationImage>
+     */
+    public function getProductCustomizationImages(): Collection
+    {
+        return $this->productCustomizationImages;
+    }
+
+    public function addProductCustomizationImage(ProductCustomizationImage $productCustomizationImage): static
+    {
+        if (!$this->productCustomizationImages->contains($productCustomizationImage)) {
+            $this->productCustomizationImages->add($productCustomizationImage);
+            $productCustomizationImage->addOptionValue($this);
+        }
+
+        return $this;
+    }
+
+    public function removeProductCustomizationImage(ProductCustomizationImage $productCustomizationImage): static
+    {
+        if ($this->productCustomizationImages->removeElement($productCustomizationImage)) {
+            $productCustomizationImage->removeOptionValue($this);
+        }
+
+        return $this;
+    }
+
+    public function getImagePreview(): ?string
+    {
+        return $this->imagePreview;
+    }
+
+    public function setImagePreview(?string $imagePreview): static
+    {
+        $this->imagePreview = $imagePreview;
+
+        return $this;
+    }
+
+    public function getPriceDelta(): ?float
+    {
+        return $this->priceDelta;
+    }
+
+    public function setPriceDelta(?float $priceDelta): static
+    {
+        $this->priceDelta = $priceDelta;
+
+        return $this;
     }
 }

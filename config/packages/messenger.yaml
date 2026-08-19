@@ -9,23 +9,16 @@ framework:
 
         # A. On définit nos "camions de livraison" (Transports)
         transports:
-            # On lui donne un nom, "async" est la convention (conservé en fallback)
             async:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
-                options:
-                    stream: 'gemsuite_setup'
                 retry_strategy:
                     max_retries: 3
                     delay: 1000
                     multiplier: 2
                     max_delay: 0
 
-            # Partitions pour équilibrer la charge par Tenant ID
             async_worker_1:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
-                options:
-                    stream: 'gemsuite_worker_1'
-                    delete_after_ack: false
                 retry_strategy:
                     max_retries: 3
                     delay: 1000
@@ -34,9 +27,6 @@ framework:
 
             async_worker_2:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
-                options:
-                    stream: 'gemsuite_worker_2'
-                    delete_after_ack: false
                 retry_strategy:
                     max_retries: 3
                     delay: 1000
@@ -45,9 +35,6 @@ framework:
 
             async_worker_3:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
-                options:
-                    stream: 'gemsuite_worker_3'
-                    delete_after_ack: false
                 retry_strategy:
                     max_retries: 3
                     delay: 1000

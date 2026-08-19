@@ -29,6 +29,21 @@ class EmailConfiguration implements TranslatableInterface
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $signature = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $smtpHost = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $smtpPort = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $smtpUser = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $smtpPassword = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $smtpEncryption = 'ssl';
+
     /**
      * @var Collection<int, EmailConfigurationTranslation>
      */
@@ -94,6 +109,66 @@ class EmailConfiguration implements TranslatableInterface
     public function setSignature(?string $signature): static
     {
         $this->signature = $signature;
+
+        return $this;
+    }
+
+    public function getSmtpHost(): ?string
+    {
+        return $this->smtpHost;
+    }
+
+    public function setSmtpHost(?string $smtpHost): static
+    {
+        $this->smtpHost = $smtpHost;
+
+        return $this;
+    }
+
+    public function getSmtpPort(): ?int
+    {
+        return $this->smtpPort;
+    }
+
+    public function setSmtpPort(?int $smtpPort): static
+    {
+        $this->smtpPort = $smtpPort;
+
+        return $this;
+    }
+
+    public function getSmtpUser(): ?string
+    {
+        return $this->smtpUser;
+    }
+
+    public function setSmtpUser(?string $smtpUser): static
+    {
+        $this->smtpUser = $smtpUser;
+
+        return $this;
+    }
+
+    public function getSmtpPassword(): ?string
+    {
+        return $this->smtpPassword;
+    }
+
+    public function setSmtpPassword(?string $smtpPassword): static
+    {
+        $this->smtpPassword = $smtpPassword;
+
+        return $this;
+    }
+
+    public function getSmtpEncryption(): ?string
+    {
+        return $this->smtpEncryption;
+    }
+
+    public function setSmtpEncryption(?string $smtpEncryption): static
+    {
+        $this->smtpEncryption = $smtpEncryption;
 
         return $this;
     }

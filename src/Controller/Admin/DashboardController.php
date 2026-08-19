@@ -65,6 +65,7 @@ use App\Entity\ProductType;
 use App\Entity\PresentationGroup;
 use App\Entity\BaniereStatiqueTranslation;
 use App\Entity\StripeConfig;
+use App\Entity\Currency;
 use App\Controller\Admin\StripeConfigCrudController;
 
 
@@ -105,6 +106,18 @@ use App\Controller\Admin\VehicleCrudController;
 
 
 use App\Services\TenantEntityManagerProvider;
+
+use App\ESG\Entity\DiagnosticQuestion;
+use App\ESG\Entity\CertificationReferential;
+use App\ESG\Entity\SubsidyProgram;
+use App\ESG\Entity\CertificationRecommendation;
+use App\ESG\Entity\OddMapping;
+
+use App\Controller\Admin\ESG\DiagnosticQuestionCrudController;
+use App\Controller\Admin\ESG\CertificationReferentialCrudController;
+use App\Controller\Admin\ESG\SubsidyProgramCrudController;
+use App\Controller\Admin\ESG\CertificationRecommendationCrudController;
+use App\Controller\Admin\ESG\OddMappingCrudController;
 
 class DashboardController extends AbstractDashboardController
 {
@@ -406,6 +419,7 @@ class DashboardController extends AbstractDashboardController
         
 
         yield MenuItem::section('Payment');
+        yield MenuItem::linkToCrud('Devises', 'fas fa-money-bill-wave', Currency::class);
         yield MenuItem::linkToCrud('Payments', 'fas fa-credit-card', Payments::class);
         yield MenuItem::linkToCrud('Payment Types', 'fas fa-credit-card', PaymentType::class);
         yield MenuItem::linkToCrud('Statuts de Paiement', 'fas fa-credit-card', StatusPayment::class);
@@ -443,5 +457,17 @@ class DashboardController extends AbstractDashboardController
 
         yield MenuItem::linkToCrud('Grilles Tarifaires (Packs)', 'fas fa-tags', RentalPack::class)
             ->setController(RentalPackCrudController::class);
+
+        yield MenuItem::section('Boussole ESG');
+        yield MenuItem::linkToCrud('Questions Diagnostic', 'fas fa-question-circle', DiagnosticQuestion::class)
+            ->setController(DiagnosticQuestionCrudController::class);
+        yield MenuItem::linkToCrud('Référentiels & Certifications', 'fas fa-award', CertificationReferential::class)
+            ->setController(CertificationReferentialCrudController::class);
+        yield MenuItem::linkToCrud('Subventions & Aides', 'fas fa-hand-holding-usd', SubsidyProgram::class)
+            ->setController(SubsidyProgramCrudController::class);
+        yield MenuItem::linkToCrud('Recommandations', 'fas fa-lightbulb', CertificationRecommendation::class)
+            ->setController(CertificationRecommendationCrudController::class);
+        yield MenuItem::linkToCrud('Objectifs ODD (UN SDG)', 'fas fa-globe', OddMapping::class)
+            ->setController(OddMappingCrudController::class);
     }
 }

@@ -50,6 +50,17 @@ class ProductVariant
     #[ORM\ManyToMany(targetEntity: ProductOptionValue::class, inversedBy: 'productVariants')]
     private Collection $optionValues;
 
+    /**
+     * @var Collection<int, ProductCustomizationImage>
+     */
+    #[ORM\OneToMany(
+        mappedBy: 'productVariant', 
+        targetEntity: ProductCustomizationImage::class, 
+        cascade: ['persist', 'remove'], 
+        orphanRemoval: true 
+    )]
+    private Collection $productCustomizationImages;
+
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $gemsuiteVariantId = null;
 
@@ -58,6 +69,7 @@ class ProductVariant
         $this->orderItems = new ArrayCollection();
         $this->inventoryMovements = new ArrayCollection();
         $this->optionValues = new ArrayCollection();
+        $this->productCustomizationImages = new ArrayCollection();
         $this->stockQuantity = 0;
     }
 
@@ -227,6 +239,35 @@ class ProductVariant
     public function removeOptionValue(ProductOptionValue $optionValue): static
     {
         $this->optionValues->removeElement($optionValue);
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, ProductCustomizationImage>
+     */
+    public function getProductCustomizationImages(): Collection
+    {
+        return $this->productCustomizationImages;
+    }
+
+    public function addProductCustomizationImage(ProductCustomizationImage $productCustomizationImage): static
+    {
+        if (!$this->productCustomizationImages->contains($productCustomizationImage)) {
+            $this->productCustomizationImages->add($productCustomizationImage);
+            $productCustomizationImage->setProductVariant($this);
+        }
+
+        return $this;
+    }
+
+    public function removeProductCustomizationImage(ProductCustomizationImage $productCustomizationImage): static
+    {
+        if ($this->productCustomizationImages->removeElement($productCustomizationImage)) {
+            if ($productCustomizationImage->getProductVariant() === $this) {
+                $productCustomizationImage->setProductVariant(null);
+            }
+        }
 
         return $this;
     }

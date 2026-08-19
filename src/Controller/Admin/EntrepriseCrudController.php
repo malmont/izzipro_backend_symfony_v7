@@ -10,7 +10,9 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\FormField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\EmailField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
@@ -62,6 +64,17 @@ class EntrepriseCrudController extends BaseTenantCrudController
             UrlField::new('website', 'Site web'),
             TextField::new('ein', 'SIRET'),
             TextField::new('tvaIntracommunautaire', 'TVA intracommunautaire'),
+            FormField::addPanel('Activation des Applications (Multi-Module)'),
+            BooleanField::new('isBoutiqueActive', 'Boutique / e-Commerce')
+                ->setHelp('Activer la boutique et le catalogue e-commerce pour ce tenant'),
+            BooleanField::new('isLandingPageActive', 'Landing Page')
+                ->setHelp('Activer le site vitrine / landing page'),
+            BooleanField::new('isBoussoleEsgActive', 'Boussole ESG')
+                ->setHelp('Activer le module de diagnostic et bilans ESG'),
+            BooleanField::new('isMemoireVivanteActive', 'Mémoire Vivante')
+                ->setHelp('Activer l\'application Mémoire Vivante'),
+
+            FormField::addPanel('Informations Générales'),
             TextField::new('facebookPixelId', 'Facebook Pixel ID')->hideOnIndex(),
             TextareaField::new('conditionOfUse', 'Conditions d\'utilisation'),
             TextareaField::new('LegalNotice', 'Mentions légales'),

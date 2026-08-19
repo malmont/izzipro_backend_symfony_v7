@@ -33,6 +33,16 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Entity'
                 prefix: 'App\Entity'
                 alias: App
+            AppESG:
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/ESG/Entity'
+                prefix: 'App\ESG\Entity'
+                alias: AppESG
+            AppMemoiresVivantes:
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/MemoiresVivantes/Entity'
+                prefix: 'App\MemoiresVivantes\Entity'
+                alias: AppMemoiresVivantes
 
 when@test:
     doctrine:

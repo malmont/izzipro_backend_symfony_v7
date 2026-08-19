@@ -12,7 +12,7 @@ security:
 
 
         api:
-            pattern:   ^/api(?!/(login|health|tenant/check|order/create-guest|stripe-config|stripe/create-intent|adresses/autocomplete|adresses/details|transporteurs|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement))
+            pattern:   ^/api(?!/(login|health|currencies|tenant/check|order/create-guest|stripe-config|stripe/create-intent|adresses/autocomplete|adresses/details|transporteurs|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement))
             stateless: true
             provider:  tenant_user_provider
             jwt: ~
@@ -45,6 +45,9 @@ security:
     # Easy way to control access for large sections of your site
     # Note: Only the *first* access control that matches will be used
     access_control:
+        # 🔹 Partage public des questionnaires Mémoires Vivantes (UUID fait office de token)
+        - { path: ^/api/memoires/, roles: PUBLIC_ACCESS }
+
         # 🔹 ROLE_USER_INTERNET peut lire (GET)
         - { path: ^/api/admin-settings, methods: [GET], roles: PUBLIC_ACCESS }
         # 🔹 ROLE_ADMIN peut modifier (POST, PUT, DELETE)
@@ -52,7 +55,11 @@ security:
 
         - { path: ^/admin, roles: ROLE_ADMIN }
         - { path: ^/(account|adress|checkout), roles: [ROLE_USER_INTERNET, ROLE_USER_POS,ROLE_ADMIN] }
-        - { path: ^/api/(login|health|register|login-web|token/refresh|password-reset/request|password-reset/confirm|password-reset/form|products/by-category|category|homeslider|products|entreprise|otp-verify|features|explore-cards|webhooks/gemsuite|bannieres|emplois|candidatures|marques|categories-marque|multiliens|recherches|service-offers|videos|contacts|components-config|landingpage-settings|embeds|baniere-statiques|presentations|landingpage|presentation-groups|tenant/check|newsletter/subscribe|booking|resend-verification|order/create-guest|stripe-config|stripe/create-intent|adresses/autocomplete|adresses/details|transporteurs|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement), roles: PUBLIC_ACCESS }
+        - { path: ^/api/boussole/auth/(register|login), roles: PUBLIC_ACCESS }
+        - { path: ^/api/boussole/referentials, roles: PUBLIC_ACCESS }
+        - { path: ^/api/boussole/documents, roles: ROLE_COMPANY }
+        - { path: ^/api/boussole, roles: [ROLE_COMPANY, ROLE_CONSULTANT, ROLE_USER, ROLE_ADMIN] }
+        - { path: ^/api/(login|health|currencies|register|login-web|token/refresh|password-reset/request|password-reset/confirm|password-reset/form|products/by-category|category|homeslider|products|entreprise|otp-verify|features|explore-cards|webhooks/gemsuite|bannieres|emplois|candidatures|marques|categories-marque|multiliens|recherches|service-offers|videos|contacts|components-config|landingpage-settings|embeds|baniere-statiques|presentations|landingpage|presentation-groups|tenant/check|newsletter/subscribe|booking|resend-verification|order/create-guest|stripe-config|stripe/create-intent|adresses/autocomplete|adresses/details|transporteurs|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement), roles: PUBLIC_ACCESS }
         - { path: ^/api/(collections|createcollections|commandes|fournisseurs|transporteurs|dashboard|caisse|statistiques|stock-evolution|stock-value|frais|payments/statistics|taxes/monthly|carrier/statistics), roles: ROLE_ADMIN }
         - { path: ^/api, roles: [ROLE_USER_INTERNET, ROLE_USER_POS,ROLE_ADMIN] }
 

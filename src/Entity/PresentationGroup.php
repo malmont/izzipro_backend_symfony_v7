@@ -19,6 +19,9 @@ class PresentationGroup implements TranslatableInterface
     #[ORM\Column(length: 255)]
     private ?string $titre = null;
 
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $texte = null;
+
     /**
      * @var Collection<int, Presentation>
      */
@@ -130,7 +133,18 @@ class PresentationGroup implements TranslatableInterface
     }
     public function getTranslatableFields(): array
     {
-        return ['titre'];
+        return ['titre', 'texte'];
+    }
+
+    public function getTexte(): ?string
+    {
+        return $this->texte;
+    }
+
+    public function setTexte(?string $texte): self
+    {
+        $this->texte = $texte;
+        return $this;
     }
 
     public function getTranslationEntityClass(): string

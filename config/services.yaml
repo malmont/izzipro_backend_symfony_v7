@@ -12,6 +12,9 @@ services:
         autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
         bind:
             $gemsuiteApiUrl: '%env(resolve:GEMSUITE_API_URL)%'
+            $openAiApiKey: '%env(default::OPENAI_API_KEY)%'
+            $anthropicApiKey: '%env(default::ANTHROPIC_API_KEY)%'
+            $projectDir: '%kernel.project_dir%'
 
     Doctrine\ORM\Configuration: '@doctrine.orm.default_configuration'
     Doctrine\Common\EventManager: '@doctrine.dbal.default_connection.event_manager'    
@@ -23,7 +26,11 @@ services:
         exclude:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
+            - '../src/ESG/Entity/'
+            - '../src/MemoiresVivantes/Entity/'
             - '../src/Kernel.php'
+            - '../src/ESG/Repository/'
+            - '../src/MemoiresVivantes/Repository/'
             - '../src/Repository/UserRepository.php'
             - '../src/Repository/AdressRepository.php'
             - '../src/Repository/AdminSettingsRepository.php'
@@ -86,6 +93,8 @@ services:
             - '../src/Repository/TeamRepository.php'
             - '../src/Repository/TeamTranslationRepository.php'
             - '../src/Repository/SocialNetworkRepository.php'
+            - '../src/Repository/CurrencyRepository.php'
+            - '../src/Repository/ProductCustomizationImageRepository.php'
             
 
             
