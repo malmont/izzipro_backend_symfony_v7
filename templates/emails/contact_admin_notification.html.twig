@@ -1,0 +1,41 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Nouveau message de contact{% endblock %}
+
+{% block body %}
+<h2>Nouveau message de contact</h2>
+<p>Vous avez reçu une nouvelle demande de contact via le site web.</p>
+
+<table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+    <tr>
+        <td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #eee; width: 120px;">Nom :</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ contact.name }}</td>
+    </tr>
+    <tr>
+        <td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #eee;">Email :</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;"><a href="mailto:{{ contact.email }}">{{ contact.email }}</a></td>
+    </tr>
+    {% if contact.phone %}
+    <tr>
+        <td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #eee;">Téléphone :</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ contact.phone }}</td>
+    </tr>
+    {% endif %}
+    {% if contact.subject %}
+    <tr>
+        <td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #eee;">Sujet :</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ contact.subject }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+        <td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #eee; vertical-align: top;">Message :</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee; white-space: pre-wrap;">{{ contact.content }}</td>
+    </tr>
+</table>
+
+{% if signature %}
+<div style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px;">
+    {{ signature|raw }}
+</div>
+{% endif %}
+{% endblock %}

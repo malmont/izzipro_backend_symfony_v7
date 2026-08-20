@@ -26,7 +26,8 @@ class ContactApiController extends AbstractController
         private UpdateContactUseCase $updateContactUseCase,
         private DeleteContactUseCase $deleteContactUseCase,
         private TenantCacheService $cache,
-        private GetContactByIdUseCase $getContactByIdUseCase
+        private GetContactByIdUseCase $getContactByIdUseCase,
+        private ?\App\Services\ContactService\ContactMailerService $contactMailerService = null
     ) {}
 
     #[Route('', name: 'api_contact_list', methods: ['GET'])]
@@ -60,11 +61,19 @@ class ContactApiController extends AbstractController
         return $this->json(new ContactOutputDto($contact));
     }
 
-
     #[Route('', name: 'api_contact_create', methods: ['POST'])]
-    public function create(#[MapRequestPayload] ContactInputDto $dto): JsonResponse
+    #[Route('/create', name: 'api_contact_create_alias', methods: ['POST'])]
+    public function create(Request $request, #[MapRequestPayload] ContactInputDto $dto): JsonResponse
     {
         $contact = $this->createContactUseCase->execute($dto);
+
+        if ($this->contactMailerService) {
+            $locale = $request->getLocale() ?: 'fr';
+            $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+            $this->contactMailerService->sendAdminNotification($contact, $locale, $domain);
+            $this->contactMailerService->sendCustomerConfirmation($contact, $locale, $domain);
+        }
+
         return $this->json(new ContactOutputDto($contact), Response::HTTP_CREATED);
     }
 

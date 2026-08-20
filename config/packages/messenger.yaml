@@ -2,12 +2,6 @@
 
 framework:
     messenger:
-        buses:
-            messenger.bus.default:
-                middleware:
-                    - 'App\Messenger\TenantRoutingMiddleware'
-
-        # A. On définit nos "camions de livraison" (Transports)
         transports:
             async:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
@@ -17,31 +11,7 @@ framework:
                     multiplier: 2
                     max_delay: 0
 
-            async_worker_1:
-                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
-                retry_strategy:
-                    max_retries: 3
-                    delay: 1000
-                    multiplier: 2
-                    max_delay: 0
-
-            async_worker_2:
-                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
-                retry_strategy:
-                    max_retries: 3
-                    delay: 1000
-                    multiplier: 2
-                    max_delay: 0
-
-            async_worker_3:
-                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
-                retry_strategy:
-                    max_retries: 3
-                    delay: 1000
-                    multiplier: 2
-                    max_delay: 0
-
-        # B. On définit le "centre de tri" (Routage)
         routing:
-            # Règle de fallback (les messages seront de toute façon interceptés par le middleware si getTenantId() existe)
-            'App\Message\TenantJobInterface': async_worker_1
+            'App\Message\TenantJobInterface': async
+            'App\MemoiresVivantes\Message\GenerateChapterMessage': async
+            'App\ESG\Message\GenerateEsgReportMessage': async

@@ -1,0 +1,25 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Confirmation de réception de votre message{% endblock %}
+
+{% block body %}
+<h2>Bonjour {{ contact.name }},</h2>
+<p>Nous avons bien reçu votre message et nous vous en remercions.</p>
+<p>Notre équipe traitera votre demande dans les plus brefs délais.</p>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #007bff; margin: 20px 0;">
+    <p style="margin-top: 0; font-weight: bold;">Récapitulatif de votre message :</p>
+    {% if contact.subject %}
+    <p><strong>Sujet :</strong> {{ contact.subject }}</p>
+    {% endif %}
+    <p style="white-space: pre-wrap; margin-bottom: 0;">{{ contact.content }}</p>
+</div>
+
+{% if signature %}
+<div style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px;">
+    {{ signature|raw }}
+</div>
+{% else %}
+<p>Cordialement,<br>L'équipe {{ fromName }}</p>
+{% endif %}
+{% endblock %}
