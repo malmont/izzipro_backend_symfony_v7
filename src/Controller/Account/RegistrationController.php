@@ -10,7 +10,6 @@ use App\Security\EmailVerifier;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
-use App\Services\GemsuiteImporterService\GemsuiteClientManager;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,10 +20,12 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Psr\Log\LoggerInterface;
-use App\Dto\TenantConfig;
+use Symfony\Component\Security\Http\Authentication\UserAuthenticatorInterface;
+use App\Security\LoginAuthenticator;
 use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\EmailConfigurationService\EmailLogoHelper;
+use Psr\Log\LoggerInterface;
+use App\Dto\TenantConfig;
 
 class RegistrationController extends AbstractController
 {
@@ -33,7 +34,6 @@ class RegistrationController extends AbstractController
     private TenantEntityManagerProvider $tenantEmProvider;
     private HttpClientInterface $client;
     private TenantConnectionManager $tenantManager;
-    private GemsuiteClientManager $gemsuiteClientManager;
     private EmailSenderService $emailSenderService;
     private EmailLogoHelper $emailLogoHelper;
 
@@ -44,7 +44,6 @@ class RegistrationController extends AbstractController
         HttpClientInterface $client,
         TenantConnectionManager $tenantManager,
         LoggerInterface $logger,
-        GemsuiteClientManager $gemsuiteClientManager,
         EmailSenderService $emailSenderService,
         EmailLogoHelper $emailLogoHelper
     ) {
@@ -52,7 +51,6 @@ class RegistrationController extends AbstractController
         $this->tenantEmProvider = $tenantEmProvider;
         $this->client = $client;
         $this->tenantManager = $tenantManager;
-        $this->gemsuiteClientManager = $gemsuiteClientManager;
         $this->logger = $logger;
         $this->emailSenderService = $emailSenderService;
         $this->emailLogoHelper = $emailLogoHelper;
@@ -149,10 +147,7 @@ class RegistrationController extends AbstractController
             }
         }
 
-        // 3. Création du User (Mode Autonome - GemSuite déconnecté)
-        $gemsuiteClient = null;
-
-        // On récupère l'EntityManager ICI
+        // 3. Création du User
         $em = $this->tenantEmProvider->getEntityManager();
 
         $user = new User();
@@ -161,10 +156,6 @@ class RegistrationController extends AbstractController
         $user->setLastname($lastName);
         $user->setUsername($username);
         $user->setPassword($passwordHasher->hashPassword($user, $password));
-
-        if ($gemsuiteClient) {
-            $user->setGemsuiteClient($gemsuiteClient);
-        }
 
         $platform = $decoded['platform'] ?? 'mobile';
         if ($platform === 'pos') {

@@ -8,7 +8,7 @@ class EmailLogoHelper
 {
     /**
      * Génère l'URL complète (absolue) du logo utilisé dans les emails,
-     * en tenant compte des logos distants (Gemsuite) ou uploads locaux.
+     * en tenant compte des URLs distantes ou uploads locaux.
      *
      * @param EmailConfiguration|null $emailConfig
      * @param string $baseUrl

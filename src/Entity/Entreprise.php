@@ -56,9 +56,6 @@ class Entreprise implements TranslatableInterface
     #[ORM\OneToOne(mappedBy: 'entreprise', targetEntity: AddressEntreprise::class, cascade: ['persist','remove'])]
     private ?AddressEntreprise $addressEntreprise = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $gemsuiteIdentifier = null;
-
     /**
      * @var Collection<int, EntrepriseTranslation>
      */
@@ -85,9 +82,6 @@ class Entreprise implements TranslatableInterface
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $faviconFilename = null;
-
-    #[ORM\Column(nullable: true)]
-    private ?int $gemsuitePaymentMethodId = null;
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $facebookPixelId = null;
@@ -287,17 +281,7 @@ class Entreprise implements TranslatableInterface
         return $this->name;
     }
 
-    public function getGemsuiteIdentifier(): ?string
-    {
-        return $this->gemsuiteIdentifier;
-    }
 
-    public function setGemsuiteIdentifier(?string $gemsuiteIdentifier): static
-    {
-        $this->gemsuiteIdentifier = $gemsuiteIdentifier;
-
-        return $this;
-    }
 
     /**
      * @return Collection<int, EntrepriseTranslation>
@@ -375,17 +359,7 @@ class Entreprise implements TranslatableInterface
         return $this;
     }
 
-    public function getGemsuitePaymentMethodId(): ?int
-    {
-        return $this->gemsuitePaymentMethodId;
-    }
 
-    public function setGemsuitePaymentMethodId(?int $gemsuitePaymentMethodId): static
-    {
-        $this->gemsuitePaymentMethodId = $gemsuitePaymentMethodId;
-
-        return $this;
-    }
 
     public function getFacebookPixelId(): ?string
     {

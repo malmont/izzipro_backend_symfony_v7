@@ -19,9 +19,6 @@ class Vehicle implements TranslatableInterface
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\Column]
-    private ?int $gemsuiteVehicleId = null;
-
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: true)]
     private ?Product $product = null;
@@ -79,18 +76,6 @@ class Vehicle implements TranslatableInterface
     public function getId(): ?int
     {
         return $this->id;
-    }
-
-    public function getGemsuiteVehicleId(): ?int
-    {
-        return $this->gemsuiteVehicleId;
-    }
-
-    public function setGemsuiteVehicleId(int $gemsuiteVehicleId): static
-    {
-        $this->gemsuiteVehicleId = $gemsuiteVehicleId;
-
-        return $this;
     }
 
     public function getProduct(): ?Product

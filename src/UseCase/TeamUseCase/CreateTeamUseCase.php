@@ -19,7 +19,6 @@ class CreateTeamUseCase
         $dto->role = $data['role'] ?? null;
         $dto->description = $data['description'] ?? null;
         $dto->image = $data['image'] ?? null;
-        $dto->gemsuiteTeamId = isset($data['gemsuiteTeamId']) ? (int)$data['gemsuiteTeamId'] : null;
 
         $team = $this->teamService->createTeam($dto);
 

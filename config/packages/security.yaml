@@ -22,15 +22,6 @@ security:
             pattern:   ^/(_(profiler|wdt)|css|images|js)/
             security:  false
 
-        gemsuite_api:
-
-            pattern: ^/api/webhook/gemsuite
-            
-            stateless: true
-            
-            custom_authenticators:
-                - App\Security\GemsuiteJwtAuthenticator
-
         main:
             pattern:                ^/             # prend tout le reste
             stateless:              false          # si vous utilisez des sessions
@@ -59,7 +50,7 @@ security:
         - { path: ^/api/boussole/referentials, roles: PUBLIC_ACCESS }
         - { path: ^/api/boussole/documents, roles: ROLE_COMPANY }
         - { path: ^/api/boussole, roles: [ROLE_COMPANY, ROLE_CONSULTANT, ROLE_USER, ROLE_ADMIN] }
-        - { path: ^/api/(login|health|currencies|customization|register|login-web|token/refresh|password-reset/request|password-reset/confirm|password-reset/form|products/by-category|category|homeslider|products|entreprise|otp-verify|features|explore-cards|webhooks/gemsuite|bannieres|emplois|candidatures|marques|categories-marque|multiliens|recherches|service-offers|videos|contacts|components-config|landingpage-settings|embeds|baniere-statiques|presentations|landingpage|presentation-groups|tenant/check|newsletter/subscribe|booking|resend-verification|order/create-guest|stripe-config|stripe/create-intent|adresses/autocomplete|adresses/details|transporteurs|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement), roles: PUBLIC_ACCESS }
+        - { path: ^/api/(login|health|currencies|customization|register|login-web|token/refresh|password-reset/request|password-reset/confirm|password-reset/form|products/by-category|category|homeslider|products|entreprise|otp-verify|features|explore-cards|bannieres|emplois|candidatures|marques|categories-marque|multiliens|recherches|service-offers|videos|contacts|components-config|landingpage-settings|embeds|baniere-statiques|presentations|landingpage|presentation-groups|tenant/check|newsletter/subscribe|booking|resend-verification|order/create-guest|stripe-config|stripe/create-intent|adresses/autocomplete|adresses/details|transporteurs|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement), roles: PUBLIC_ACCESS }
         - { path: ^/api/(collections|createcollections|commandes|fournisseurs|transporteurs|dashboard|caisse|statistiques|stock-evolution|stock-value|frais|payments/statistics|taxes/monthly|carrier/statistics), roles: ROLE_ADMIN }
         - { path: ^/api, roles: [ROLE_USER_INTERNET, ROLE_USER_POS,ROLE_ADMIN] }
 

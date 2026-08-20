@@ -134,7 +134,6 @@ class ProductCrudController extends BaseTenantCrudController
         yield BooleanField::new('isPos', 'Actif sur le Point de vente')->setColumns('col-md-3');
         
         yield FormField::addPanel('Données Externes');
-        yield NumberField::new('gemsuiteProductId', 'ID GEM-SUITE')->setColumns('col-md-6');
         yield AssociationField::new('commande', 'Commande Associée')
             ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn(CommandeRepository $repo) => $repo->createQueryBuilder('cmd')->orderBy('cmd.date', 'DESC')])
             ->hideOnIndex()

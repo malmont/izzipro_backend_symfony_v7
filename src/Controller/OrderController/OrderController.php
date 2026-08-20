@@ -21,9 +21,6 @@ use App\Entity\Order;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
-use App\Services\GemsuiteImporterService\GemsuiteSaleManager;
-use App\Services\GemsuiteImporterService\GemsuiteClientManager;
-use App\Services\GemsuiteImporterService\GemsuiteClientUpdater;
 use App\Services\TenantConnectionManager;
 use Psr\Log\LoggerInterface;
 use App\Services\OrderService\OrderMailerService;
@@ -37,13 +34,10 @@ class OrderController extends AbstractController
     private GetOrdersBySourceUseCase $getOrdersBySourceUseCase;
     private TenantEntityManagerProvider $emProvider;
     private TenantCacheService $cache;
-    private GemsuiteSaleManager $gemsuiteSaleManager;
     private LoggerInterface $logger;
     private OrderMailerService $orderMailerService;
     private StripeService $stripeService;
-    private GemsuiteClientManager $gemsuiteClientManager;
     private TenantConnectionManager $tenantManager;
-    private GemsuiteClientUpdater $gemsuiteClientUpdater;
 
     public function __construct(
         CreateOrderUseCase $createOrderUseCase,
@@ -52,13 +46,10 @@ class OrderController extends AbstractController
         GetOrdersByUserUseCase $getOrdersByUserUseCase,
         TenantEntityManagerProvider $emProvider,
         TenantCacheService $cache,
-        GemsuiteSaleManager $gemsuiteSaleManager,
         LoggerInterface $logger,
         OrderMailerService $orderMailerService,
         StripeService $stripeService,
-        GemsuiteClientManager $gemsuiteClientManager,
-        TenantConnectionManager $tenantManager,
-        GemsuiteClientUpdater $gemsuiteClientUpdater
+        TenantConnectionManager $tenantManager
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -66,13 +57,10 @@ class OrderController extends AbstractController
         $this->getOrdersByUserUseCase = $getOrdersByUserUseCase;
         $this->emProvider = $emProvider;
         $this->cache = $cache;
-        $this->gemsuiteSaleManager = $gemsuiteSaleManager;
         $this->logger = $logger;
         $this->orderMailerService = $orderMailerService;
         $this->stripeService = $stripeService;
-        $this->gemsuiteClientManager = $gemsuiteClientManager;
         $this->tenantManager = $tenantManager;
-        $this->gemsuiteClientUpdater = $gemsuiteClientUpdater;
     }
 
     #[Route('/api/order/create', name: 'order_create', methods: ['POST'])]
@@ -160,11 +148,8 @@ class OrderController extends AbstractController
         if ($result instanceof Order) {
             $tenantEm = $this->emProvider->getEntityManager();
 
-            // --- CORRECTIF : S'assurer que l'utilisateur connecté a un client GemSuite lié ---
-            // Si le client GemSuite n'a pas été créé à l'inscription (ex: timeout API GemSuite),
             // on le crée/récupère maintenant, avant de tenter la synchronisation de la vente.
-            // Mode Autonome : Liaisons GemSuite désactivées
-            // if ($user && !$user->getGemsuiteClient()) { ... }
+
 
             // Auto-update user profile if license info is missing
             if ($user) {
@@ -217,9 +202,6 @@ class OrderController extends AbstractController
                     $this->logger->error(sprintf("[createOrder] Échec de la capture du paiement Stripe pour PaymentIntent ID: %s. Commande ID: %d.", $paymentIntentId, $result->getId()));
                 }
             }
-
-            // Mode Autonome : Export de la vente vers GemSuite désactivé
-            // $this->gemsuiteSaleManager->createSale($result);
             try {
                 $locale = $request->query->get('locale', 'fr');
                 $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
@@ -290,11 +272,6 @@ class OrderController extends AbstractController
         $lastName = $lastName ?? 'User';
 
         $tenantCode = $this->tenantManager->getCurrentTenantCode();
-
-        // 1. Client local (Mode Autonome - GemSuite déconnecté)
-        $gemsuiteClient = null;
-        
-        // On récupère l'EM après le switch potentiel du GemsuiteClientManager
         $em = $this->emProvider->getEntityManager();
         $userRepo = $em->getRepository(User::class);
         $user = $userRepo->findOneBy(['email' => $email]);
@@ -316,18 +293,10 @@ class OrderController extends AbstractController
                 $user->setLicenseExpirationDate(new \DateTime($guestInfo['licenseExpirationDate']));
             }
 
-            if ($gemsuiteClient) {
-                $user->setGemsuiteClient($gemsuiteClient);
-            }
-
             $em->persist($user);
             $em->flush();
         } else {
             $userChanged = false;
-            if ($gemsuiteClient && !$user->getGemsuiteClient()) {
-                $user->setGemsuiteClient($gemsuiteClient);
-                $userChanged = true;
-            }
             if (isset($guestInfo['licenseNumber']) && $user->getLicenseNumber() !== $guestInfo['licenseNumber']) {
                 $user->setLicenseNumber($guestInfo['licenseNumber']);
                 $userChanged = true;
@@ -377,13 +346,6 @@ class OrderController extends AbstractController
         $user->setPrimaryAddress($shippingAddress);
         $em->persist($user);
         $em->flush();
-
-        // Synchronize the complete shipping address to GemSuite
-        try {
-            $this->gemsuiteClientUpdater->syncAddress($user, $shippingAddress);
-        } catch (\Exception $e) {
-            $this->logger->error("Failed to sync guest address to GemSuite: " . $e->getMessage());
-        }
 
         $carrierId = $data['carrierId'] ?? null;
 
@@ -469,7 +431,6 @@ class OrderController extends AbstractController
                 }
             }
 
-            $this->gemsuiteSaleManager->createSale($result);
             try {
                 $locale = $request->query->get('locale', 'fr');
                 $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
@@ -560,8 +521,6 @@ class OrderController extends AbstractController
         if ($result instanceof Order) {
             $tenantEm = $this->emProvider->getEntityManager();
 
-            // Mode Autonome : Liaisons GemSuite désactivées
-            // if ($user && !$user->getGemsuiteClient()) { ... }
 
             // Auto-update user profile
             if ($user) {
@@ -617,8 +576,6 @@ class OrderController extends AbstractController
                     $this->logger->error(sprintf("[createOrderWithMultiplePayments] Échec de la capture du paiement Stripe pour PaymentIntent ID: %s. Commande ID: %d.", $paymentIntentId, $result->getId()));
                 }
             }
-
-            $this->gemsuiteSaleManager->createSale($result);
 
             try {
                 $locale = $request->query->get('locale', 'fr');

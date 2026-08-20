@@ -12,6 +12,5 @@ framework:
                     max_delay: 0
 
         routing:
-            'App\Message\TenantJobInterface': async
             'App\MemoiresVivantes\Message\GenerateChapterMessage': async
             'App\ESG\Message\GenerateEsgReportMessage': async

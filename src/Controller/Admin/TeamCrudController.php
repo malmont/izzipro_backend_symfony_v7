@@ -44,8 +44,6 @@ class TeamCrudController extends BaseTenantCrudController
             ->setUploadedFileNamePattern('[slug]-[timestamp].[extension]')
             ->setRequired(false);
 
-        yield IntegerField::new('gemsuiteTeamId', 'ID Gemsuite (Optionnel)')->hideOnIndex();
-
         yield CollectionField::new('translations', 'Traductions')
             ->setEntryType(TeamTranslationType::class)
             ->setFormTypeOption('by_reference', false)

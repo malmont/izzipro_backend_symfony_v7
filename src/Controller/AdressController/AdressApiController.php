@@ -10,7 +10,6 @@ use App\UseCase\AdressUseCase\CreateAdressUseCase;
 use App\UseCase\AdressUseCase\EditAdressUseCase;
 use App\UseCase\AdressUseCase\DeleteAdressUseCase;
 use App\Services\AdressService\AddressVerificationService;
-use App\Services\GemsuiteImporterService\GemsuiteClientUpdater;
 use App\Services\TenantCacheService;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -30,7 +29,6 @@ class AdressApiController extends AbstractController
     private DeleteAdressUseCase $deleteAdressUseCase;
     private AddressVerificationService $verifier;
     private TenantCacheService $cache;
-    private GemsuiteClientUpdater $gemsuiteUpdater;
 
     public function __construct(
         GetUserAdressesUseCase $getUserAdressesUseCase,
@@ -38,8 +36,7 @@ class AdressApiController extends AbstractController
         EditAdressUseCase $editAdressUseCase,
         DeleteAdressUseCase $deleteAdressUseCase,
         AddressVerificationService $verifier,
-        TenantCacheService $cache,
-        GemsuiteClientUpdater $gemsuiteUpdater
+        TenantCacheService $cache
     ) {
         $this->getUserAdressesUseCase = $getUserAdressesUseCase;
         $this->createAdressUseCase = $createAdressUseCase;
@@ -47,7 +44,6 @@ class AdressApiController extends AbstractController
         $this->deleteAdressUseCase = $deleteAdressUseCase;
         $this->verifier = $verifier;
         $this->cache = $cache;
-        $this->gemsuiteUpdater = $gemsuiteUpdater;
     }
 
     /**
@@ -132,7 +128,6 @@ class AdressApiController extends AbstractController
         $adress = $this->createAdressUseCase->execute($dto, $user);
         if ($dto->isPrimary) {
             $user->setPrimaryAddress($adress);
-            // $this->gemsuiteUpdater->syncAddress($user, $adress);
         }
         $em->flush();
         return $this->json(['success' => 'Adresse créée avec succès'], Response::HTTP_CREATED);
@@ -191,7 +186,6 @@ class AdressApiController extends AbstractController
         $this->editAdressUseCase->execute($dto, $adress);
         if ($dto->isPrimary) {
             $user->setPrimaryAddress($adress);
-            // $this->gemsuiteUpdater->syncAddress($user, $adress);
         } elseif ($user->getPrimaryAddress() === $adress) {
             $user->setPrimaryAddress(null);
         }
@@ -215,8 +209,6 @@ class AdressApiController extends AbstractController
         $user->setPrimaryAddress($adress);
         $em->persist($user);
         $em->flush();
-
-        // $this->gemsuiteUpdater->syncAddress($user, $adress);
 
         return $this->json(['success' => 'Adresse principale mise à jour avec succès']);
     }

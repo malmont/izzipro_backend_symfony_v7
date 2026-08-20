@@ -38,7 +38,6 @@ class TeamService
         $team->setRole($dto->role);
         $team->setDescription($dto->description);
         $team->setImage($dto->image);
-        $team->setGemsuiteTeamId($dto->gemsuiteTeamId);
 
         $tenantEm->persist($team);
         
@@ -65,9 +64,6 @@ class TeamService
         }
         if ($dto->image !== null) {
             $team->setImage($dto->image);
-        }
-        if ($dto->gemsuiteTeamId !== null) {
-            $team->setGemsuiteTeamId($dto->gemsuiteTeamId);
         }
 
         // Re-generate translations to account for changes

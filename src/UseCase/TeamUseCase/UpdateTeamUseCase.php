@@ -21,14 +21,10 @@ class UpdateTeamUseCase
         }
 
         $dto = new TeamInputDto();
-        // Use array_key_exists to allow explicitly setting fields to null if needed
         $dto->name = array_key_exists('name', $data) ? $data['name'] : null;
         $dto->role = array_key_exists('role', $data) ? $data['role'] : null;
         $dto->description = array_key_exists('description', $data) ? $data['description'] : null;
         $dto->image = array_key_exists('image', $data) ? $data['image'] : null;
-        $dto->gemsuiteTeamId = array_key_exists('gemsuiteTeamId', $data)
-            ? ($data['gemsuiteTeamId'] !== null ? (int)$data['gemsuiteTeamId'] : null)
-            : null;
 
         $updatedTeam = $this->teamService->updateTeam($team, $dto);
 

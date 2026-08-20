@@ -61,9 +61,6 @@ class ProductVariant
     )]
     private Collection $productCustomizationImages;
 
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $gemsuiteVariantId = null;
-
     public function __construct()
     {
         $this->orderItems = new ArrayCollection();
@@ -268,18 +265,6 @@ class ProductVariant
                 $productCustomizationImage->setProductVariant(null);
             }
         }
-
-        return $this;
-    }
-
-    public function getGemsuiteVariantId(): ?string
-    {
-        return $this->gemsuiteVariantId;
-    }
-
-    public function setGemsuiteVariantId(?string $gemsuiteVariantId): static
-    {
-        $this->gemsuiteVariantId = $gemsuiteVariantId;
 
         return $this;
     }

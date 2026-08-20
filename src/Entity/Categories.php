@@ -30,11 +30,7 @@ class Categories implements TranslatableInterface
 
     #[ORM\ManyToMany(targetEntity: Product::class, mappedBy: 'category')]
     private Collection $products;
-
-    #[ORM\Column(unique: true, nullable: true)]
-    private ?int $gemsuiteCategoryId = null;
-
-    #[ORM\Column(nullable: true)]
+#[ORM\Column(nullable: true)]
     private ?int $externalShippingClassId = null;
 
     #[ORM\Column(options: ['default' => false])]
@@ -142,18 +138,6 @@ class Categories implements TranslatableInterface
     public function __toString()
     {
         return $this->name;
-    }
-
-    public function getGemsuiteCategoryId(): ?int
-    {
-        return $this->gemsuiteCategoryId;
-    }
-
-    public function setGemsuiteCategoryId(?int $gemsuiteCategoryId): static
-    {
-        $this->gemsuiteCategoryId = $gemsuiteCategoryId;
-
-        return $this;
     }
 
     public function getExternalShippingClassId(): ?int

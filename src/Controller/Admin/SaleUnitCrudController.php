@@ -21,8 +21,7 @@ class SaleUnitCrudController extends BaseTenantCrudController
 
     public function configureFields(string $pageName): iterable
     {
-        // On affiche l'ID car il correspond aux IDs Gemsuite (1 à 9)
-        yield IdField::new('id', 'ID Gemsuite');
+        yield IdField::new('id', 'ID');
         yield TextField::new('name', "Nom de l'unité (ex: Kilo, Litre)");
     }
 }

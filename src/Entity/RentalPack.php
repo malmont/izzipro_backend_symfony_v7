@@ -17,11 +17,7 @@ class RentalPack implements TranslatableInterface
 
     #[ORM\Column(length: 255)]
     private ?string $name = null;
-
-    #[ORM\Column(nullable: true)]
-    private ?int $gemsuiteProductId = null;
-
-    #[ORM\Column(nullable: true)]
+#[ORM\Column(nullable: true)]
     private ?float $hourRate = null;
 
     #[ORM\Column(nullable: true)]
@@ -67,18 +63,6 @@ class RentalPack implements TranslatableInterface
     public function setName(string $name): static
     {
         $this->name = $name;
-
-        return $this;
-    }
-
-    public function getGemsuiteProductId(): ?int
-    {
-        return $this->gemsuiteProductId;
-    }
-
-    public function setGemsuiteProductId(?int $gemsuiteProductId): static
-    {
-        $this->gemsuiteProductId = $gemsuiteProductId;
 
         return $this;
     }

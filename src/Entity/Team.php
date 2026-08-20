@@ -28,11 +28,7 @@ class Team implements TranslatableInterface
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $description = null;
-
-    #[ORM\Column(nullable: true)]
-    private ?int $gemsuiteTeamId = null;
-
-    /**
+/**
      * @var Collection<int, TeamTranslation>
      */
     #[ORM\OneToMany(
@@ -98,18 +94,6 @@ class Team implements TranslatableInterface
     public function setDescription(?string $description): static
     {
         $this->description = $description;
-
-        return $this;
-    }
-
-    public function getGemsuiteTeamId(): ?int
-    {
-        return $this->gemsuiteTeamId;
-    }
-
-    public function setGemsuiteTeamId(?int $gemsuiteTeamId): static
-    {
-        $this->gemsuiteTeamId = $gemsuiteTeamId;
 
         return $this;
     }

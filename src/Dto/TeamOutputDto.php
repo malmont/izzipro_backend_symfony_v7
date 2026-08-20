@@ -11,7 +11,6 @@ class TeamOutputDto
     public ?string $role;
     public ?string $description;
     public ?string $imageUrl;
-    public ?int $gemsuiteTeamId;
 
     public static function fromEntity(Team $team, string $host, string $locale): self
     {
@@ -22,7 +21,6 @@ class TeamOutputDto
         $dto->name = $team->getName();
         $dto->role = $translation?->getRole() ?? $team->getRole();
         $dto->description = $translation?->getDescription() ?? $team->getDescription();
-        $dto->gemsuiteTeamId = $team->getGemsuiteTeamId();
 
         $path = $team->getImage();
         if (str_starts_with((string)$path, 'http')) {

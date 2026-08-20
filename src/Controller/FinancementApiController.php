@@ -7,7 +7,6 @@ use App\Entity\Entreprise;
 use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantConnectionManager;
-use App\Services\GemsuiteImporterService\GemsuiteClientManager;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,8 +21,7 @@ class FinancementApiController extends AbstractController
         private EmailSenderService $emailSenderService,
         private TenantEntityManagerProvider $emProvider,
         private LoggerInterface $logger,
-        private TenantConnectionManager $tenantManager,
-        private GemsuiteClientManager $gemsuiteClientManager
+        private TenantConnectionManager $tenantManager
     ) {}
 
     #[Route('/api/financement/submit', name: 'api_financement_submit', methods: ['POST'])]

@@ -34,11 +34,7 @@ class Booking
     #[ORM\OneToOne(inversedBy: 'booking', targetEntity: OrderItems::class, cascade: ['persist', 'remove'])]
     #[ORM\JoinColumn(nullable: true)]
     private ?OrderItems $orderItem = null;
-
-    #[ORM\Column(nullable: true)]
-    private ?int $gemsuiteSaleId = null;
-
-    #[ORM\Column(options: ['default' => false])]
+#[ORM\Column(options: ['default' => false])]
     private bool $isFinalized = false;
 
     #[ORM\Column]
@@ -133,18 +129,6 @@ class Booking
     public function setRentalPackId(?int $rentalPackId): static
     {
         $this->rentalPackId = $rentalPackId;
-
-        return $this;
-    }
-
-    public function getGemsuiteSaleId(): ?int
-    {
-        return $this->gemsuiteSaleId;
-    }
-
-    public function setGemsuiteSaleId(?int $gemsuiteSaleId): static
-    {
-        $this->gemsuiteSaleId = $gemsuiteSaleId;
 
         return $this;
     }

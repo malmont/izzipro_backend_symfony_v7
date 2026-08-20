@@ -7,7 +7,6 @@ use App\Entity\Vehicle;
 class VehicleOutputDto
 {
     public int $id;
-    public int $gemsuiteVehicleId;
     public ?int $productId = null;
     public ?string $productName = null;
     public ?float $productPrice = null;
@@ -26,7 +25,6 @@ class VehicleOutputDto
     public function __construct(Vehicle $vehicle, string $locale = 'fr')
     {
         $this->id = $vehicle->getId();
-        $this->gemsuiteVehicleId = $vehicle->getGemsuiteVehicleId();
 
         $product = $vehicle->getProduct();
         if ($product) {

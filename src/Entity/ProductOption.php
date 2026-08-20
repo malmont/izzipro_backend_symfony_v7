@@ -40,9 +40,6 @@ class ProductOption implements TranslatableInterface
     )]
     private Collection $translations;
 
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $gemsuiteLabelId = null;
-
     public function __construct()
     {
         $this->productOptionValues = new ArrayCollection();
@@ -174,18 +171,6 @@ class ProductOption implements TranslatableInterface
             }
         }
         return null;
-    }
-
-    public function getGemsuiteLabelId(): ?string
-    {
-        return $this->gemsuiteLabelId;
-    }
-
-    public function setGemsuiteLabelId(?string $gemsuiteLabelId): static
-    {
-        $this->gemsuiteLabelId = $gemsuiteLabelId;
-
-        return $this;
     }
 
 }

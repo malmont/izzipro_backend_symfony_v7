@@ -1,21 +1,19 @@
 <?php
+
 namespace App\Services\AdressService;
 
 use App\Dto\AdressInputDTO;
 use App\Dto\AdressOutputDTO;
 use App\Entity\Adress;
 use App\Services\TenantEntityManagerProvider;
-use App\Services\GemsuiteImporterService\GemsuiteClientUpdater; 
+
 class AdressService
 {
     private TenantEntityManagerProvider $tenantEmProvider;
-    private GemsuiteClientUpdater $gemsuiteUpdater;
 
-    public function __construct(TenantEntityManagerProvider $tenantEmProvider, GemsuiteClientUpdater $gemsuiteUpdater)
+    public function __construct(TenantEntityManagerProvider $tenantEmProvider)
     {
-        
         $this->tenantEmProvider = $tenantEmProvider;
-        $this->gemsuiteUpdater = $gemsuiteUpdater;
     }
 
     private function getAdressRepository()
@@ -52,7 +50,6 @@ class AdressService
         }
 
         $entityManager->persist($adress);
-        $this->gemsuiteUpdater->syncAddress($user, $adress);
         $entityManager->flush();
         return $adress;
     }
@@ -73,10 +70,8 @@ class AdressService
         $user = $adress->getUserAdress();
         if ($inputDTO->isPrimary && $user) {
             $user->setPrimaryAddress($adress);
-            $this->gemsuiteUpdater->syncAddress($user, $adress);
         }
-        $entityManager = $this->tenantEmProvider->getEntityManager(); // Ajouté car il manquait aussi
-        $entityManager->flush();
+        $entityManager = $this->tenantEmProvider->getEntityManager();
         $entityManager->flush();
 
         return $adress;

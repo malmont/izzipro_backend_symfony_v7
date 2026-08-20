@@ -28,7 +28,6 @@ class RentalPackCrudController extends BaseTenantCrudController
     {
         yield IdField::new('id')->hideOnForm();
         yield TextField::new('name', 'Nom du Pack');
-        yield IntegerField::new('gemsuiteProductId', 'ID Produit Gemsuite');
         
         yield MoneyField::new('hourRate', 'Tarif Horaire ($)')->setCurrency('USD')->setStoredAsCents(true);
         yield MoneyField::new('halfDayRate', 'Tarif Demi-Journée ($)')->setCurrency('USD')->setStoredAsCents(true);

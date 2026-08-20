@@ -8,5 +8,4 @@ class TeamInputDto
     public ?string $role = null;
     public ?string $description = null;
     public ?string $image = null;
-    public ?int $gemsuiteTeamId = null;
 }

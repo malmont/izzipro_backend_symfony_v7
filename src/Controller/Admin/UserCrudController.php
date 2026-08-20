@@ -68,9 +68,6 @@ class UserCrudController extends BaseTenantCrudController
             TextField::new('plainPassword', 'Password')
                 ->setFormType(PasswordType::class)
                 ->onlyOnForms(),
-            AssociationField::new('gemsuiteClient', 'Fiche Client Gemsuite')
-                ->setFormTypeOptions(['em' => $tenantEm])
-                ->setRequired(false),
         ];
     }
 

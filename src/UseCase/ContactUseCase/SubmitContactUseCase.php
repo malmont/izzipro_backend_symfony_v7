@@ -7,7 +7,6 @@ use App\Entity\Entreprise;
 use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantConnectionManager;
-use App\Services\GemsuiteImporterService\GemsuiteClientManager;
 use Psr\Log\LoggerInterface;
 
 class SubmitContactUseCase
@@ -16,8 +15,7 @@ class SubmitContactUseCase
         private EmailSenderService $emailSenderService,
         private TenantEntityManagerProvider $emProvider,
         private LoggerInterface $logger,
-        private TenantConnectionManager $tenantManager,
-        private GemsuiteClientManager $gemsuiteClientManager
+        private TenantConnectionManager $tenantManager
     ) {}
 
     public function execute(ContactSubmitDto $dto, string $host, string $locale = 'fr'): void

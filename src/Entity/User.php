@@ -86,17 +86,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(mappedBy: 'userOtp', targetEntity: OtpCode::class)]
     private Collection $otpCodes;
 
-    #[ORM\Column(nullable: true)]
-    private ?int $gemsuiteClientId = null;
-
     #[ORM\OneToOne(targetEntity: Adress::class, inversedBy: 'userPrimaryAdress', cascade: ['persist', 'remove'])]
     #[ORM\JoinColumn(name: "primary_address_id", referencedColumnName: "id", onDelete: 'SET NULL')]
     private ?Adress $primaryAddress = null;
-
-    #[ORM\ManyToOne(inversedBy: 'users')]
-    #[ORM\JoinColumn(nullable: true)]
-    private ?GemsuiteClient $gemsuiteClient = null;
-
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $licenseNumber = null;
@@ -456,17 +448,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    public function getGemsuiteClientId(): ?int
-    {
-        return $this->gemsuiteClientId;
-    }
 
-    public function setGemsuiteClientId(?int $gemsuiteClientId): static
-    {
-        $this->gemsuiteClientId = $gemsuiteClientId;
-
-        return $this;
-    }
 
     public function getPrimaryAddress(): ?Adress
     {
@@ -487,17 +469,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
         return $this;
     }
-    public function getGemsuiteClient(): ?GemsuiteClient
-    {
-        return $this->gemsuiteClient;
-    }
 
-    public function setGemsuiteClient(?GemsuiteClient $gemsuiteClient): static
-    {
-        $this->gemsuiteClient = $gemsuiteClient;
-
-        return $this;
-    }
 
 
 

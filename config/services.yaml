@@ -11,7 +11,6 @@ services:
         autowire: true      # Automatically injects dependencies in your services.
         autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
         bind:
-            $gemsuiteApiUrl: '%env(resolve:GEMSUITE_API_URL)%'
             $openAiApiKey: '%env(default::OPENAI_API_KEY)%'
             $anthropicApiKey: '%env(default::ANTHROPIC_API_KEY)%'
             $projectDir: '%kernel.project_dir%'
@@ -157,12 +156,6 @@ services:
         bind:
             $projectDir: '%kernel.project_dir%'
 
-
-    App\Security\GemsuiteJwtAuthenticator:
-        arguments:
-            # Bind the constructor argument '$projectDir' to the container parameter '%kernel.project_dir%'
-            $projectDir: '%kernel.project_dir%'
-            
     App\Command\CleanMigrationHistoryCommand:
         bind:
             $projectDir: '%kernel.project_dir%'

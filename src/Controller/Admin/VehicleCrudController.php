@@ -19,7 +19,6 @@ class VehicleCrudController extends BaseTenantCrudController
     {
         return [
             IdField::new('id')->hideOnForm(),
-            IntegerField::new('gemsuiteVehicleId', 'ID Gemsuite'),
             AssociationField::new('product', 'Produit Associé'),
         ];
     }
