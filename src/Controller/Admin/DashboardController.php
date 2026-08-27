@@ -440,7 +440,8 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Categories', 'fas fa-list', Categories::class);
         yield MenuItem::linkToRoute('Gestion des Codes-Barres', 'fa fa-barcode', 'admin_barcode_management');
         yield MenuItem::linkToCrud('Types d\'options', 'fas fa-tag', ProductOption::class);
-        yield MenuItem::linkToCrud('Valeurs d\'options', 'fas fa-palette', ProductOptionValue::class)->setController(ProductOptionValueCrudController::class);
+        yield MenuItem::linkToCrud('Valeurs d\'options (Manches, Cols...)', 'fas fa-palette', ProductOptionValue::class)->setController(ProductOptionValueCrudController::class);
+        yield MenuItem::linkToCrud('Visuels Configurateur (Vêtements)', 'fas fa-tshirt', \App\Entity\ProductCustomizationImage::class)->setController(\App\Controller\Admin\ProductCustomizationImageCrudController::class);
         yield MenuItem::linkToCrud('Types de Produit', 'fas fa-box', ProductType::class);
         yield MenuItem::linkToCrud('Unités de Vente', 'fas fa-balance-scale', SaleUnit::class)
             ->setController(SaleUnitCrudController::class);
