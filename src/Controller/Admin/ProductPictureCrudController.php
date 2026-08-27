@@ -4,9 +4,8 @@ namespace App\Controller\Admin;
 
 use App\Entity\ProductPicture;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
-use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 
-class ProductPictureCrudController extends AbstractCrudController
+class ProductPictureCrudController extends BaseTenantCrudController
 {
     public static function getEntityFqcn(): string
     {
