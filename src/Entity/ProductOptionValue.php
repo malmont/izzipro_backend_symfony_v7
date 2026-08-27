@@ -35,12 +35,14 @@ class ProductOptionValue implements TranslatableInterface
      * @var Collection<int, ProductOptionValueTranslation>
      */
     #[ORM\OneToMany(
-    mappedBy: 'productOptionValue', 
-    targetEntity: ProductOptionValueTranslation::class, 
-    cascade: ['persist', 'remove'], 
-    orphanRemoval: true,
-    fetch: 'EXTRA_LAZY'
+        mappedBy: 'productOptionValue', 
+        targetEntity: ProductOptionValueTranslation::class, 
+        cascade: ['persist', 'remove'], 
+        orphanRemoval: true,
+        fetch: 'EXTRA_LAZY'
     )]
+    private Collection $translations;
+
     /**
      * @var Collection<int, ProductCustomizationImage>
      */
