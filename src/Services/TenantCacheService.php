@@ -15,7 +15,7 @@ class TenantCacheService
 
     private function getTenantPrefix(): string
     {
-        return ($this->tcp->getTenantCode() ?: 'master') . ':';
+        return ($this->tcp->getTenantCode() ?: 'master') . '.';
     }
 
     private function getTenantCode(): string
@@ -32,15 +32,15 @@ class TenantCacheService
         ?int $ttl = null,
         ?array $extraTags = null
     ): mixed {
-        $key = $this->getTenantPrefix() . $keySuffix;
+        $rawKey = $this->getTenantPrefix() . $keySuffix;
+        $key = preg_replace('/[{}()\/\\\\@:]/', '_', $rawKey);
 
         $tenantCode = $this->getTenantCode();
         $tags = [];
         if ($extraTags) {
-            $tags = array_map(fn($tag) => $tenantCode . $tag, $extraTags);
+            $tags = array_map(fn($tag) => preg_replace('/[{}()\/\\\\@:]/', '_', $tenantCode . '_' . $tag), $extraTags);
         }
-        $tags[] = $tenantCode;
-
+        $tags[] = preg_replace('/[{}()\/\\\\@:]/', '_', $tenantCode);
 
         return $this->cache->get($key, function (ItemInterface $item) use ($compute, $ttl, $tags) {
             if ($ttl !== null) {
@@ -53,7 +53,8 @@ class TenantCacheService
 
     public function delete(string $keySuffix): bool
     {
-        $key = $this->getTenantPrefix() . $keySuffix;
+        $rawKey = $this->getTenantPrefix() . $keySuffix;
+        $key = preg_replace('/[{}()\/\\\\@:]/', '_', $rawKey);
         return $this->cache->delete($key);
     }
 }

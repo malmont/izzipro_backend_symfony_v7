@@ -32,10 +32,25 @@ class TenantDoctrineSwitcherListener
 
         $host = $request->headers->get('X-Tenant-Host');
 
+        // Support du paramètre ?tenant= ou ?t= pour l'accès direct à EasyAdmin dans le navigateur
+        if (!$host) {
+            $tenantQuery = $request->query->get('tenant') ?? $request->query->get('t');
+            if ($tenantQuery) {
+                $host = $tenantQuery;
+                if ($request->hasSession()) {
+                    $request->getSession()->set('_active_admin_tenant', $tenantQuery);
+                }
+            }
+        }
+
+        // Si aucun header/paramètre, vérifier si un tenant est déjà sélectionné en session
+        if (!$host && $request->hasSession() && $request->getSession()->get('_active_admin_tenant')) {
+            $host = $request->getSession()->get('_active_admin_tenant');
+        }
+
         if (!$host) {
             $host = $request->getHost();
         }
-
 
         $tenantConfig = $this->tenantManager->findTenantConfigByHost($host);
 

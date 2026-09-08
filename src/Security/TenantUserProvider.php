@@ -4,6 +4,7 @@
 namespace App\Security;
 
 use App\Entity\User;
+use App\ESG\Entity\EsgUser;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
@@ -25,8 +26,9 @@ class TenantUserProvider implements UserProviderInterface
 
         $dbName = $em->getConnection()->getDatabase();
 
-        $user = $em->getRepository(User::class)
-                   ->findOneBy(['email' => $identifier]);
+        $user = $em->getRepository(User::class)->findOneBy(['email' => $identifier])
+             ?? $em->getRepository(User::class)->findOneBy(['username' => $identifier])
+             ?? $em->getRepository(EsgUser::class)->findOneBy(['email' => $identifier]);
 
         if (!$user) {
             $this->logger->warning(
@@ -48,6 +50,9 @@ class TenantUserProvider implements UserProviderInterface
 
     public function supportsClass(string $class): bool
     {
-        return $class === User::class || is_subclass_of($class, User::class);
+        return $class === User::class 
+            || is_subclass_of($class, User::class)
+            || $class === EsgUser::class
+            || is_subclass_of($class, EsgUser::class);
     }
 }

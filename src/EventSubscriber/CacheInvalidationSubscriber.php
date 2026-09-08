@@ -353,7 +353,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
     {
         $entity = $args->getEntity();
         $tenantCode = $this->tcp->getTenantCode() ?: 'master';
-        $prefix = $tenantCode . ':';
+        $prefix = $tenantCode . '.';
         $tagPrefix = $tenantCode;
 
         if ($entity instanceof BaniereStatique) {

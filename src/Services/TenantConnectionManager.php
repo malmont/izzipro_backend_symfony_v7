@@ -410,6 +410,10 @@ class TenantConnectionManager
                     $potentialCode = $parts[0];
                 }
 
+                if ($potentialCode) {
+                    $potentialCode = preg_replace('/-v2$/i', '', $potentialCode);
+                }
+
                 // Exclusion des mots clés système
                 if ($potentialCode && !in_array($potentialCode, ['api', 'admin', 'backend', 'www', 'localhost'])) {
                     try {

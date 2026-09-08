@@ -55,6 +55,26 @@ services:
       - app
     restart: always
 
+  messenger_worker:
+    image: app_v2-app:latest
+    container_name: symfony_messenger_worker_v2
+    restart: always
+    working_dir: /var/www
+    volumes:
+      - .:/var/www
+      - ./jwt:/var/www/config/jwt
+      - ./docker/php/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+    env_file:
+      - .env
+    networks:
+      - symfony_v2
+    depends_on:
+      - app
+      - db
+      - redis
+    command: ["php", "bin/console", "messenger:consume", "async", "--time-limit=3600", "--memory-limit=256M"]
+
+
 volumes:
   db_data_v2:
   redis_data_v2:

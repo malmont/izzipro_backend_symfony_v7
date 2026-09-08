@@ -89,6 +89,11 @@ class RedisAdminController extends AbstractController
             $this->addFlash('danger', 'Erreur : Impossible de vider le cache Redis.');
         }
 
+        $referer = $request->headers->get('referer');
+        if ($referer && str_contains($referer, '/admin')) {
+            return $this->redirect($referer);
+        }
+
         return $this->redirectToRoute('admin');
     }
 }

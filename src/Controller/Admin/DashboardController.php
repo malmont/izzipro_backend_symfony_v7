@@ -334,6 +334,9 @@ class DashboardController extends AbstractDashboardController
     {
         yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
         
+        yield MenuItem::section('Maintenance');
+        yield MenuItem::linkToRoute('Vider cache Redis', 'fas fa-trash-alt', 'admin_redis_flush');
+        
         yield MenuItem::section('UI');
         yield MenuItem::linkToCrud('Home Slider', 'fas fa-images', HomeSlider::class);
         yield MenuItem::linkToCrud('Admin Settings', 'fas fa-cogs', AdminSettings::class);

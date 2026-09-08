@@ -16,6 +16,10 @@ fi
 # ✅ Donner les permissions
 chown -R www-data:www-data var
 chmod -R 775 var
+mkdir -p public/uploads/memoires public/uploads/audio public/uploads/covers public/uploads/documents public/uploads/customization var/uploads
+mkdir -p public/assets/uploads/{slider,products,Carrier,customization,options,icons,email-logos,team,explore,categories} public/assets/images
+chown -R www-data:www-data public/uploads var/uploads public/assets/uploads public/assets/images public/bundles
+chmod -R 777 public/uploads var/uploads public/assets/uploads public/assets/images public/bundles
 
 # ✅ Exécuter les migrations
 php bin/console doctrine:migrations:migrate --no-interaction

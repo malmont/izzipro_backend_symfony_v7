@@ -1,3 +1,12 @@
 controllers:
     resource: ../src/Controller/
     type: attribute
+
+esg_controllers:
+    resource: ../src/ESG/Controller/
+    type: attribute
+
+memoires_vivantes_controllers:
+    resource: ../src/MemoiresVivantes/Controller/
+    type: attribute
+
