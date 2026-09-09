@@ -6,6 +6,7 @@ use App\MemoiresVivantes\Dto\ChapterInputDto;
 use App\MemoiresVivantes\Dto\ChapterOutputDto;
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\Chapter;
+use App\MemoiresVivantes\Entity\MemoireQuestion;
 use App\MemoiresVivantes\Message\GenerateChapterMessage;
 use App\MemoiresVivantes\Services\ChapterService;
 use App\MemoiresVivantes\UseCase\CreateChapterUseCase;
@@ -81,7 +82,17 @@ class ChapterController extends AbstractController
         if ($res !== null) return $res;
 
         $host = $request->getSchemeAndHttpHost();
-        return $this->json(new ChapterOutputDto($chapter, $host));
+
+        $questions = [];
+        if ($chapter->getTheme()) {
+            $questionEntities = $em->getRepository(MemoireQuestion::class)->findBy(
+                ['theme' => $chapter->getTheme(), 'isActive' => true],
+                ['displayOrder' => 'ASC']
+            );
+            $questions = array_map(fn(MemoireQuestion $q) => $q->toFrontArray(), $questionEntities);
+        }
+
+        return $this->json(new ChapterOutputDto($chapter, $host, $questions));
     }
 
     #[Route('/chapters/{id}', methods: ['PUT'])]

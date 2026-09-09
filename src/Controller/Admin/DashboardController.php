@@ -119,6 +119,13 @@ use App\Controller\Admin\ESG\SubsidyProgramCrudController;
 use App\Controller\Admin\ESG\CertificationRecommendationCrudController;
 use App\Controller\Admin\ESG\OddMappingCrudController;
 
+use App\MemoiresVivantes\Entity\MemoireQuestion;
+use App\MemoiresVivantes\Entity\Book as MemoireBook;
+use App\MemoiresVivantes\Entity\Chapter as MemoireChapter;
+use App\Controller\Admin\Memoires\MemoireQuestionCrudController;
+use App\Controller\Admin\Memoires\BookCrudController as MemoireBookCrudController;
+use App\Controller\Admin\Memoires\ChapterCrudController as MemoireChapterCrudController;
+
 class DashboardController extends AbstractDashboardController
 {
     public function __construct(
@@ -473,5 +480,13 @@ class DashboardController extends AbstractDashboardController
             ->setController(CertificationRecommendationCrudController::class);
         yield MenuItem::linkToCrud('Objectifs ODD (UN SDG)', 'fas fa-globe', OddMapping::class)
             ->setController(OddMappingCrudController::class);
+
+        yield MenuItem::section('Mémoires Vivantes');
+        yield MenuItem::linkToCrud('Questions du Questionnaire', 'fas fa-question-circle', MemoireQuestion::class)
+            ->setController(MemoireQuestionCrudController::class);
+        yield MenuItem::linkToCrud('Livres créés', 'fas fa-book-open', MemoireBook::class)
+            ->setController(MemoireBookCrudController::class);
+        yield MenuItem::linkToCrud('Chapitres', 'fas fa-bookmark', MemoireChapter::class)
+            ->setController(MemoireChapterCrudController::class);
     }
 }

@@ -17,13 +17,15 @@ class ChapterOutputDto
     public string $generationStatus;
     public ?string $generationError;
     public array $photos = [];
+    public array $questions = [];
 
-    public function __construct(Chapter $chapter, string $host)
+    public function __construct(Chapter $chapter, string $host, array $questions = [])
     {
         $this->id = (string) $chapter->getId();
         $this->bookId = (string) $chapter->getBook()->getId();
         $this->title = $chapter->getTitle();
         $this->theme = $chapter->getTheme();
+        $this->questions = $questions;
         $this->position = $chapter->getPosition();
         $rawAnswers = $chapter->getAnswers();
         $formattedAnswers = [];
