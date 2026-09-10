@@ -9,6 +9,7 @@
 /public/assets/uploads/
 /public/assets/images/
 /public/uploads/
+/public/esg/
 /var/
 /vendor/
 ###< symfony/framework-bundle ###
