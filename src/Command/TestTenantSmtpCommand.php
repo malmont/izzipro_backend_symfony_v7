@@ -14,6 +14,10 @@ use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
+use App\Entity\Reservation;
+use App\Services\ReservationService\ReservationMailerService;
+use Symfony\Component\Console\Input\InputOption;
+
 #[AsCommand(
     name: 'app:test-tenant-smtp',
     description: 'Teste l\'envoi d\'email pour un tenant (Utilise le MAILER_DSN du .env + le From de la BDD).',
@@ -24,7 +28,8 @@ class TestTenantSmtpCommand extends Command
         private TenantConnectionManager $tenantManager,
         private TenantEntityManagerProvider $emProvider,
         private \App\Services\EmailConfigurationService\TenantMailerFactory $mailerFactory,
-        private MailerInterface $defaultMailer
+        private MailerInterface $defaultMailer,
+        private ReservationMailerService $reservationMailerService
     ) {
         parent::__construct();
     }
@@ -32,7 +37,8 @@ class TestTenantSmtpCommand extends Command
     protected function configure(): void
     {
         $this->addArgument('tenantCode', InputArgument::REQUIRED, 'Le CODE du tenant (ex: lintendantprive)');
-        $this->addArgument('recipient', InputArgument::REQUIRED, 'L\'email qui recevra le test');
+        $this->addArgument('recipient', InputArgument::OPTIONAL, 'L\'email qui recevra le test');
+        $this->addOption('reservation-id', null, InputOption::VALUE_REQUIRED, 'ID de réservation pour tester sendStatusChangeEmail');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -71,6 +77,25 @@ class TestTenantSmtpCommand extends Command
             $output->writeln("🔌 Serveur SMTP utilisé : <comment>SMTP DÉDIÉ TENANT ({$config->getSmtpHost()}:{$config->getSmtpPort()})</comment>");
         } else {
             $output->writeln("🔌 Serveur SMTP utilisé : <comment>Global .env (MAILER_DSN)</comment>");
+        }
+
+        $reservationId = $input->getOption('reservation-id');
+        if ($reservationId) {
+            $output->writeln("<info>📅 Test d'envoi de mail de statut de réservation #$reservationId...</info>");
+            $reservation = $em->getRepository(Reservation::class)->find((int)$reservationId);
+            if (!$reservation) {
+                $output->writeln("<error>❌ Réservation #$reservationId introuvable dans la base du tenant.</error>");
+                return Command::FAILURE;
+            }
+
+            $this->reservationMailerService->sendStatusChangeEmail($reservation, 'confirmed');
+            $output->writeln("<info>✅ sendStatusChangeEmail terminé pour réservation #$reservationId (destinataire: {$reservation->getClientEmail()}) !</info>");
+            return Command::SUCCESS;
+        }
+
+        if (!$recipient) {
+            $output->writeln("<error>❌ L'argument recipient est requis si aucune réservation n'est spécifiée.</error>");
+            return Command::FAILURE;
         }
 
         // 3. Envoi via le Mailer adapté
