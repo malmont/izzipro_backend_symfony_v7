@@ -1,0 +1,91 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}
+    {% if status == 'confirmed' %}
+        Votre rendez-vous est confirmé — {{ reservation.serviceName }}
+    {% else %}
+        Mise à jour de votre réservation — {{ reservation.serviceName }}
+    {% endif %}
+{% endblock %}
+
+{% block body %}
+<h2>Bonjour {{ reservation.clientName }},</h2>
+
+{% if status == 'confirmed' %}
+    <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 16px; border-radius: 6px; margin: 20px 0;">
+        <p style="margin: 0; color: #065f46; font-size: 16px; font-weight: bold;">
+            ✨ Excellente nouvelle ! Votre rendez-vous est officiellement confirmé.
+        </p>
+    </div>
+    <p>Notre intendante a validé votre demande. Nous serons ravis de vous accompagner à la date et heure convenues.</p>
+{% else %}
+    <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; border-radius: 6px; margin: 20px 0;">
+        <p style="margin: 0; color: #991b1b; font-size: 16px; font-weight: bold;">
+            Information concernant votre demande de rendez-vous
+        </p>
+    </div>
+    <p>Nous vous informons que votre réservation a été annulée. Si vous souhaitez convenir d'un autre créneau ou pour toute question, n'hésitez pas à nous contacter.</p>
+{% endif %}
+
+<div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 25px 0;">
+    <h3 style="margin-top: 0; color: #1e293b; font-size: 16px;">Récapitulatif de votre rendez-vous :</h3>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; width: 170px;">Statut :</td>
+            <td style="padding: 8px 0;">
+                {% if status == 'confirmed' %}
+                    <span style="background-color: #d1fae5; color: #065f46; padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 13px;">Confirmé</span>
+                {% else %}
+                    <span style="background-color: #fee2e2; color: #991b1b; padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 13px;">Annulé</span>
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Prestation :</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">{{ reservation.serviceName }}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Date retenue :</td>
+            <td style="padding: 8px 0; color: #0f172a;">{{ reservation.reservationDate|date('d/m/Y') }}</td>
+        </tr>
+        {% if reservation.reservationSlot %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Créneau horaire :</td>
+            <td style="padding: 8px 0; color: #0f172a;">{{ reservation.reservationSlot }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Personnes / Logements :</td>
+            <td style="padding: 8px 0; color: #0f172a;">{{ reservation.numberOfGuests }}</td>
+        </tr>
+        {% if reservation.notes %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; vertical-align: top;">Notes / Précisions :</td>
+            <td style="padding: 8px 0; color: #0f172a; white-space: pre-wrap;">{{ reservation.notes }}</td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+
+{% if status == 'confirmed' and googleCalendarUrl is defined and googleCalendarUrl %}
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ googleCalendarUrl }}" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        📅 Ajouter à Google Agenda
+    </a>
+    <p style="font-size: 12px; color: #64748b; margin-top: 10px;">
+        <em>Un fichier d'invitation calendrier (<strong>rendez-vous.ics</strong>) est également joint à cet email.</em>
+    </p>
+</div>
+{% endif %}
+
+{% if signature %}
+<div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+    {{ signature|raw }}
+</div>
+{% else %}
+<p style="color: #475569; margin-top: 25px;">
+    Chaleureusement,<br>
+    <strong>L'équipe {{ fromName }}</strong>
+</p>
+{% endif %}
+{% endblock %}

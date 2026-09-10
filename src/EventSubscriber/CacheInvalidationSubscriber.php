@@ -81,8 +81,8 @@ class CacheInvalidationSubscriber implements EventSubscriber
         ],
         [
             'classes' => [ServiceOffer::class],
-            'delete' => [],
-            'invalidate_tags' => ['service_offers_all'],
+            'delete' => ['reservations_services_list'],
+            'invalidate_tags' => ['service_offers_all', 'reservations'],
         ],
         [
             'classes' => [Recherche::class],

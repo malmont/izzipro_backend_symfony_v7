@@ -1,0 +1,40 @@
+{# templates/admin/fields/reservation_quick_actions.html.twig #}
+{% set reservation = entity.instance %}
+{% set confirmUrl = ea_url()
+    .setController('App\\Controller\\Admin\\ReservationCrudController')
+    .setAction('confirmReservation')
+    .setEntityId(reservation.id)
+%}
+{% set cancelUrl = ea_url()
+    .setController('App\\Controller\\Admin\\ReservationCrudController')
+    .setAction('cancelReservation')
+    .setEntityId(reservation.id)
+%}
+
+<div style="display: flex; gap: 6px; align-items: center;">
+    {% if reservation.status != 'confirmed' %}
+        <a href="{{ confirmUrl }}" 
+           class="btn btn-sm btn-success text-white" 
+           style="background-color: #10b981; border-color: #10b981; color: #fff; padding: 4px 10px; font-weight: 600; font-size: 12px; border-radius: 4px; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;"
+           title="Confirmer la réservation et envoyer l'email au client">
+            <i class="fa fa-check"></i> Confirmer
+        </a>
+    {% else %}
+        <a href="{{ confirmUrl }}" 
+           class="btn btn-sm btn-outline-primary" 
+           style="padding: 4px 8px; font-size: 12px; border-radius: 4px; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;"
+           title="Renvoyer l'email de confirmation officiel au client">
+            <i class="fa fa-paper-plane"></i> Renvoyer email
+        </a>
+    {% endif %}
+
+    {% if reservation.status != 'cancelled' %}
+        <a href="{{ cancelUrl }}" 
+           class="btn btn-sm btn-outline-danger" 
+           style="padding: 4px 8px; font-size: 12px; border-radius: 4px; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;"
+           onclick="return confirm('Êtes-vous sûr de vouloir annuler cette réservation ? Un email d\'annulation sera envoyé au client.');"
+           title="Annuler la réservation et avertir le client">
+            <i class="fa fa-times"></i> Annuler
+        </a>
+    {% endif %}
+</div>

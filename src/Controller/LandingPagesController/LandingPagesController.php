@@ -130,6 +130,15 @@ class LandingPagesController extends AbstractController
                 "data_id_field" => "id",
                 "data_label_field" => "titre", 
                 "is_data_selectable" => true
+            ],
+            [
+                "type" => "Reservation",
+                "name" => "Module de Réservation",
+                "description" => "Module de prise de rendez-vous et réservation de prestations.",
+                "is_data_selectable" => true,
+                "api_data_endpoint" => "/api/reservations/services",
+                "data_id_field" => "id",
+                "data_label_field" => "label"
             ]
         ];
 

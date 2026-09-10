@@ -10,6 +10,7 @@ use App\Entity\Order;
 use App\Entity\Color;
 use App\Entity\Carrier;
 use App\Entity\Contact;
+use App\Entity\Reservation;
 use App\Entity\Product;
 use App\Entity\Categories;
 use App\Entity\HomeSlider;
@@ -398,10 +399,12 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('ImageCollection', 'fas fa-images ', CollectionPicture::class);
         yield MenuItem::linkToCrud('Type note de frais', 'fas fa-tags', TypeNoteDeFrais::class);
         
-        yield MenuItem::section('Mouvements User');
-        yield MenuItem::linkToCrud('Adresse user', 'fas fa-shipping-fast', Adress::class);
+        yield MenuItem::section('Réservations & Clients');
+        yield MenuItem::linkToCrud('Réservations de Prestations', 'fas fa-calendar-check', Reservation::class)
+            ->setController(ReservationCrudController::class);
         yield MenuItem::linkToCrud('Contact', 'fas fa-envelope', Contact::class);
         yield MenuItem::linkToCrud('Users', 'fas fa-user', User::class);
+        yield MenuItem::linkToCrud('Adresse user', 'fas fa-shipping-fast', Adress::class);
         yield MenuItem::linkToCrud('Email Configuration', 'fa fa-envelope', EmailConfiguration::class);
         yield MenuItem::linkToCrud('Newsletter', 'fa fa-envelope', NewsletterSubscriber::class);
 

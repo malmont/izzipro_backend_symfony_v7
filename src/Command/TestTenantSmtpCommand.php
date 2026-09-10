@@ -23,15 +23,15 @@ class TestTenantSmtpCommand extends Command
     public function __construct(
         private TenantConnectionManager $tenantManager,
         private TenantEntityManagerProvider $emProvider,
-        private MailerInterface $mailer // On injecte le vrai service Mailer de Symfony
+        private \App\Services\EmailConfigurationService\TenantMailerFactory $mailerFactory,
+        private MailerInterface $defaultMailer
     ) {
         parent::__construct();
     }
 
     protected function configure(): void
     {
-        // On demande le CODE du tenant (ex: testmessenger) car ta méthode findTenantByCode est maintenant ajoutée
-        $this->addArgument('tenantCode', InputArgument::REQUIRED, 'Le CODE du tenant (ex: testmessenger)');
+        $this->addArgument('tenantCode', InputArgument::REQUIRED, 'Le CODE du tenant (ex: lintendantprive)');
         $this->addArgument('recipient', InputArgument::REQUIRED, 'L\'email qui recevra le test');
     }
 
@@ -53,7 +53,7 @@ class TestTenantSmtpCommand extends Command
         $this->emProvider->switchTenant($tenant['dbname'], $tenant['code']);
         $em = $this->emProvider->getEntityManager();
 
-        // 2. Récupération de la config "From"
+        // 2. Récupération de la config
         $output->writeln("📂 Lecture de la table EmailConfiguration...");
         $config = $em->getRepository(EmailConfiguration::class)->findOneBy([]);
 
@@ -63,21 +63,27 @@ class TestTenantSmtpCommand extends Command
         }
 
         $fromEmail = $config->getFromEmail();
-        // On récupère une traduction par défaut pour le nom, ou on met une valeur fallback
         $fromName = $config->getFromName() ?: 'Test Command';
 
         $output->writeln("📧 Expéditeur prévu (BDD): <comment>$fromName <$fromEmail></comment>");
-        $output->writeln("🔌 Serveur SMTP utilisé : <comment>Celui défini dans le .env (MAILER_DSN)</comment>");
+        
+        if ($config->getSmtpHost() && $config->getSmtpUser() && $config->getSmtpPassword()) {
+            $output->writeln("🔌 Serveur SMTP utilisé : <comment>SMTP DÉDIÉ TENANT ({$config->getSmtpHost()}:{$config->getSmtpPort()})</comment>");
+        } else {
+            $output->writeln("🔌 Serveur SMTP utilisé : <comment>Global .env (MAILER_DSN)</comment>");
+        }
 
-        // 3. Envoi via le Mailer Symfony standard
+        // 3. Envoi via le Mailer adapté
         try {
+            $mailer = $this->mailerFactory->createMailer($config);
+
             $email = (new Email())
                 ->from(sprintf('%s <%s>', $fromName, $fromEmail))
                 ->to($recipient)
                 ->subject("Test SMTP Tenant: $tenantCode")
-                ->text("Ceci est un test.\nTenant: $tenantCode\nFrom: $fromEmail\nVia le MAILER_DSN du serveur.");
+                ->text("Ceci est un test.\nTenant: $tenantCode\nFrom: $fromEmail\nVia TenantMailerFactory.");
 
-            $this->mailer->send($email);
+            $mailer->send($email);
 
             $output->writeln("<info>✅ SUCCÈS ! L'email a été accepté par le serveur SMTP.</info>");
             return Command::SUCCESS;

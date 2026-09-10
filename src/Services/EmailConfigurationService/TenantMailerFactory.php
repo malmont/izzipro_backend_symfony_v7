@@ -19,14 +19,26 @@ class TenantMailerFactory
     {
         if ($config && $config->getSmtpHost() && $config->getSmtpUser() && $config->getSmtpPassword()) {
             try {
+                $port = (int) ($config->getSmtpPort() ?: 465);
+                $encryption = strtolower((string) ($config->getSmtpEncryption() ?: 'ssl'));
+                $scheme = ($port === 465 || $encryption === 'ssl') ? 'smtps' : 'smtp';
+
                 $dsn = sprintf(
-                    'smtp://%s:%s@%s:%d?encryption=%s',
+                    '%s://%s:%s@%s:%d',
+                    $scheme,
                     urlencode($config->getSmtpUser()),
                     urlencode($config->getSmtpPassword()),
                     $config->getSmtpHost(),
-                    $config->getSmtpPort() ?: 465,
-                    $config->getSmtpEncryption() ?: 'ssl'
+                    $port
                 );
+
+                $this->logger->info(sprintf(
+                    '[TenantMailerFactory] Création Mailer SMTP dédié tenant : %s via %s:%d (%s)',
+                    $config->getSmtpUser(),
+                    $config->getSmtpHost(),
+                    $port,
+                    $scheme
+                ));
 
                 $transport = Transport::fromDsn($dsn);
                 return new Mailer($transport);
@@ -35,6 +47,8 @@ class TenantMailerFactory
                     'exception' => $e
                 ]);
             }
+        } else {
+            $this->logger->warning('[TenantMailerFactory] EmailConfiguration incomplète pour SMTP dédié, repli sur defaultMailer.');
         }
 
         return $this->defaultMailer;

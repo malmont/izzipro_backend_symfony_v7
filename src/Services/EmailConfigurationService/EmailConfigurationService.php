@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\EmailConfigurationService; // Adaptez le namespace si besoin
+namespace App\Services\EmailConfigurationService;
 
 use App\Entity\EmailConfiguration;
 use App\Repository\EmailConfigurationRepository;
@@ -8,16 +8,23 @@ use App\Services\TenantEntityManagerProvider;
 
 class EmailConfigurationService
 {
-    private EmailConfigurationRepository $repository;
-
-    public function __construct(TenantEntityManagerProvider $emProvider)
+    public function __construct(private TenantEntityManagerProvider $emProvider)
     {
-        $em = $emProvider->getEntityManager();
-        $this->repository = $em->getRepository(EmailConfiguration::class);
     }
 
     public function findOneByLocale(string $locale): ?EmailConfiguration
     {
-        return $this->repository->findOneByLocale($locale);
+        $em = $this->emProvider->getEntityManager();
+        /** @var EmailConfigurationRepository $repo */
+        $repo = $em->getRepository(EmailConfiguration::class);
+        $config = $repo->findOneByLocale($locale);
+
+        return $config ?: $repo->findOneBy([]);
+    }
+
+    public function findDefault(): ?EmailConfiguration
+    {
+        $em = $this->emProvider->getEntityManager();
+        return $em->getRepository(EmailConfiguration::class)->findOneBy([]);
     }
 }

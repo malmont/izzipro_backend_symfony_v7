@@ -25,24 +25,25 @@ class ServiceOfferCrudController extends BaseTenantCrudController
     {
         return [
             IdField::new('id')->onlyOnIndex(),
-            TextField::new('titre', 'Titre de l\'offre'),
-            ImageField::new('logo', 'Logo')
+            TextField::new('titre', 'Titre de la prestation'),
+            TextField::new('titreCommentaire', 'Sous-titre / Catégorie'),
+            TextareaField::new('descriptions', 'Description détaillée')->hideOnIndex(),
+            ImageField::new('logo', 'Icône / Logo')
                 ->setBasePath('assets/uploads/email-logos/')
                 ->setUploadDir('public/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
-                ->setRequired(false),
-            ImageField::new('photoService', 'photoService')
+                ->setRequired(false)
+                ->hideOnIndex(),
+            ImageField::new('photoService', 'Photo de la prestation')
                 ->setBasePath('assets/uploads/email-logos/')
                 ->setUploadDir('public/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
-                ->setRequired(false),
+                ->setRequired(false)
+                ->hideOnIndex(),
             CollectionField::new('translations', 'Traductions')
                 ->setEntryType(ServiceOfferTranslationType::class)
                 ->setFormTypeOption('by_reference', false)
-                ->onlyOnForms(),    
-            
-            TextField::new('titreCommentaire', 'Titre du commentaire')->hideOnIndex(),
-            TextareaField::new('descriptions', 'Description')->hideOnIndex(),
+                ->onlyOnForms(),
         ];
     }
 }

@@ -39,6 +39,9 @@ security:
         # 🔹 Partage public des questionnaires Mémoires Vivantes (UUID fait office de token)
         - { path: ^/api/memoires/, roles: PUBLIC_ACCESS }
 
+        # 🔹 Réservations publiques (prise de rendez-vous et prestations)
+        - { path: ^/api/reservations, roles: PUBLIC_ACCESS }
+
         # 🔹 ROLE_USER_INTERNET peut lire (GET)
         - { path: ^/api/admin-settings, methods: [GET], roles: PUBLIC_ACCESS }
         # 🔹 ROLE_ADMIN peut modifier (POST, PUT, DELETE)

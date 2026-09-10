@@ -1,0 +1,59 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Confirmation de votre demande de réservation{% endblock %}
+
+{% block body %}
+<h2>Bonjour {{ reservation.clientName }},</h2>
+<p>Nous avons bien reçu votre demande de réservation et nous vous en remercions chaleureusement.</p>
+<p>Notre équipe va examiner votre demande et vous confirmer le rendez-vous dans les plus brefs délais.</p>
+
+<div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #2563eb; margin: 25px 0;">
+    <h3 style="margin-top: 0; color: #1e293b; font-size: 16px;">Détails de votre réservation :</h3>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; width: 160px;">Prestation :</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">{{ reservation.serviceName }}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Date souhaitée :</td>
+            <td style="padding: 8px 0; color: #0f172a;">{{ reservation.reservationDate|date('d/m/Y') }}</td>
+        </tr>
+        {% if reservation.reservationSlot %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Créneau horaire :</td>
+            <td style="padding: 8px 0; color: #0f172a;">{{ reservation.reservationSlot }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Personnes / Logements :</td>
+            <td style="padding: 8px 0; color: #0f172a;">{{ reservation.numberOfGuests }}</td>
+        </tr>
+        {% if reservation.notes %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; vertical-align: top;">Notes / Précisions :</td>
+            <td style="padding: 8px 0; color: #0f172a; white-space: pre-wrap;">{{ reservation.notes }}</td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ googleCalendarUrl }}" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        📅 Ajouter à Google Agenda
+    </a>
+    <p style="font-size: 12px; color: #64748b; margin-top: 10px;">
+        <em>Un fichier d'invitation calendrier (<strong>rendez-vous.ics</strong>) est également joint à cet email pour Outlook, Apple Mail et autres agendas.</em>
+    </p>
+</div>
+
+{% if signature %}
+<div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+    {{ signature|raw }}
+</div>
+{% else %}
+<p style="color: #475569; margin-top: 25px;">
+    Cordialement,<br>
+    <strong>L'équipe {{ fromName }}</strong>
+</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Nouvelle demande de réservation - {{ reservation.serviceName }}{% endblock %}
+
+{% block body %}
+<h2>Nouvelle demande de réservation reçue</h2>
+<p>Une nouvelle demande de réservation vient d'être enregistrée sur le site web.</p>
+
+<div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; margin: 20px 0;">
+    <h3 style="margin-top: 0; color: #0f172a; font-size: 16px;">Informations sur la réservation :</h3>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; width: 160px; border-bottom: 1px solid #e2e8f0;">Prestation :</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 600; border-bottom: 1px solid #e2e8f0;">{{ reservation.serviceName }}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; border-bottom: 1px solid #e2e8f0;">Date demandée :</td>
+            <td style="padding: 8px 0; color: #0f172a; border-bottom: 1px solid #e2e8f0;"><strong>{{ reservation.reservationDate|date('d/m/Y') }}</strong></td>
+        </tr>
+        {% if reservation.reservationSlot %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; border-bottom: 1px solid #e2e8f0;">Créneau :</td>
+            <td style="padding: 8px 0; color: #0f172a; border-bottom: 1px solid #e2e8f0;">{{ reservation.reservationSlot }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; border-bottom: 1px solid #e2e8f0;">Nombre personnes :</td>
+            <td style="padding: 8px 0; color: #0f172a; border-bottom: 1px solid #e2e8f0;">{{ reservation.numberOfGuests }}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; border-bottom: 1px solid #e2e8f0;">Client :</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 600; border-bottom: 1px solid #e2e8f0;">{{ reservation.clientName }}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; border-bottom: 1px solid #e2e8f0;">Email client :</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;"><a href="mailto:{{ reservation.clientEmail }}" style="color: #2563eb;">{{ reservation.clientEmail }}</a></td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; border-bottom: 1px solid #e2e8f0;">Téléphone client :</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;"><a href="tel:{{ reservation.clientPhone }}" style="color: #2563eb;">{{ reservation.clientPhone }}</a></td>
+        </tr>
+        {% if reservation.notes %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; vertical-align: top;">Notes client :</td>
+            <td style="padding: 8px 0; color: #0f172a; white-space: pre-wrap;">{{ reservation.notes }}</td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ googleCalendarUrl }}" target="_blank" style="display: inline-block; background-color: #059669; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        📅 Ajouter à Google Agenda
+    </a>
+    <p style="font-size: 12px; color: #64748b; margin-top: 10px;">
+        <em>Un fichier <strong>rendez-vous.ics</strong> est également joint pour l'ajouter directement à votre agenda de travail.</em>
+    </p>
+</div>
+
+{% if signature %}
+<div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+    {{ signature|raw }}
+</div>
+{% endif %}
+{% endblock %}
