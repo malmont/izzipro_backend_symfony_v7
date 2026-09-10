@@ -42,4 +42,19 @@ class ReservationInputDto
     public ?string $notes = null;
 
     public ?string $tenant_id = null;
+
+    #[Assert\Length(max: 36)]
+    public ?string $book_id = null;
+
+    #[Assert\Length(max: 36)]
+    public ?string $chapter_id = null;
+
+    #[Assert\PositiveOrZero(message: 'Le numéro d\'étape doit être supérieur ou égal à zéro.')]
+    public ?int $step_number = null;
+
+    #[Assert\Positive(message: 'Le nombre total d\'étapes doit être supérieur à zéro.')]
+    public ?int $total_steps = null;
+
+    #[Assert\Length(max: 255)]
+    public ?string $forfait_name = null;
 }

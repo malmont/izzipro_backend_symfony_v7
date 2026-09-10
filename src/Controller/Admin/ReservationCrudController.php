@@ -144,6 +144,9 @@ class ReservationCrudController extends BaseTenantCrudController
         yield EmailField::new('clientEmail', 'Email');
         yield TextField::new('clientPhone', 'Téléphone');
         yield TextField::new('serviceName', 'Prestation');
+        yield TextField::new('stepLabel', 'Séance / Étape')
+            ->onlyOnIndex()
+            ->formatValue(fn ($value, Reservation $entity) => $entity->getStepLabel() ?: '—');
         yield DateField::new('reservationDate', 'Date souhaitée');
         yield TextField::new('reservationSlot', 'Créneau horaire');
         yield IntegerField::new('numberOfGuests', 'Personnes / Logements');
@@ -158,6 +161,10 @@ class ReservationCrudController extends BaseTenantCrudController
                 'confirmed' => 'success',
                 'cancelled' => 'danger',
             ]);
+        yield TextField::new('forfaitName', 'Nom du Forfait')->hideOnIndex();
+        yield TextField::new('bookId', 'ID Livre')->hideOnIndex();
+        yield IntegerField::new('stepNumber', 'Étape N°')->hideOnIndex();
+        yield IntegerField::new('totalSteps', 'Total d\'étapes')->hideOnIndex();
         yield TextField::new('quickActions', 'Action rapide')
             ->onlyOnIndex()
             ->setTemplatePath('admin/fields/reservation_quick_actions.html.twig');

@@ -36,6 +36,11 @@ class ReservationService
         $reservation->setEntreprise($entreprise);
         $reservation->setStatus('pending');
         $reservation->setCreatedAt(new \DateTime());
+        $reservation->setBookId($dto->book_id);
+        $reservation->setChapterId($dto->chapter_id);
+        $reservation->setStepNumber($dto->step_number);
+        $reservation->setTotalSteps($dto->total_steps);
+        $reservation->setForfaitName($dto->forfait_name);
 
         $tenantEm->persist($reservation);
         $tenantEm->flush();
@@ -206,5 +211,14 @@ class ReservationService
     {
         $tenantEm = $this->emProvider->getEntityManager();
         return $tenantEm->getRepository(Reservation::class)->find($id);
+    }
+
+    public function getReservationsByBook(string $bookId): array
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        return $tenantEm->getRepository(Reservation::class)->findBy(
+            ['bookId' => $bookId],
+            ['stepNumber' => 'ASC', 'reservationDate' => 'ASC', 'createdAt' => 'ASC']
+        );
     }
 }

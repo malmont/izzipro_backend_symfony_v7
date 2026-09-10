@@ -49,6 +49,11 @@ class ReservationApiController extends AbstractController
             $dto->number_of_guests = isset($data['number_of_guests']) ? (int)$data['number_of_guests'] : 1;
             $dto->notes = isset($data['notes']) ? trim((string)$data['notes']) : null;
             $dto->tenant_id = isset($data['tenant_id']) ? trim((string)$data['tenant_id']) : null;
+            $dto->book_id = isset($data['book_id']) ? trim((string)$data['book_id']) : null;
+            $dto->chapter_id = isset($data['chapter_id']) ? trim((string)$data['chapter_id']) : null;
+            $dto->step_number = isset($data['step_number']) ? (int)$data['step_number'] : null;
+            $dto->total_steps = isset($data['total_steps']) ? (int)$data['total_steps'] : null;
+            $dto->forfait_name = isset($data['forfait_name']) ? trim((string)$data['forfait_name']) : null;
 
             $violations = $this->validator->validate($dto);
             if (count($violations) > 0) {

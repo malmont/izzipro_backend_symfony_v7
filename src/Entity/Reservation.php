@@ -63,6 +63,21 @@ class Reservation
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $createdAt = null;
 
+    #[ORM\Column(length: 36, nullable: true)]
+    private ?string $bookId = null;
+
+    #[ORM\Column(length: 36, nullable: true)]
+    private ?string $chapterId = null;
+
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    private ?int $stepNumber = null;
+
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    private ?int $totalSteps = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $forfaitName = null;
+
     public function __construct()
     {
         $this->createdAt = new \DateTime();
@@ -216,6 +231,72 @@ class Reservation
     {
         $this->createdAt = $createdAt;
         return $this;
+    }
+
+    public function getBookId(): ?string
+    {
+        return $this->bookId;
+    }
+
+    public function setBookId(?string $bookId): self
+    {
+        $this->bookId = $bookId;
+        return $this;
+    }
+
+    public function getChapterId(): ?string
+    {
+        return $this->chapterId;
+    }
+
+    public function setChapterId(?string $chapterId): self
+    {
+        $this->chapterId = $chapterId;
+        return $this;
+    }
+
+    public function getStepNumber(): ?int
+    {
+        return $this->stepNumber;
+    }
+
+    public function setStepNumber(?int $stepNumber): self
+    {
+        $this->stepNumber = $stepNumber;
+        return $this;
+    }
+
+    public function getTotalSteps(): ?int
+    {
+        return $this->totalSteps;
+    }
+
+    public function setTotalSteps(?int $totalSteps): self
+    {
+        $this->totalSteps = $totalSteps;
+        return $this;
+    }
+
+    public function getForfaitName(): ?string
+    {
+        return $this->forfaitName;
+    }
+
+    public function setForfaitName(?string $forfaitName): self
+    {
+        $this->forfaitName = $forfaitName;
+        return $this;
+    }
+
+    public function getStepLabel(): ?string
+    {
+        if ($this->stepNumber !== null && $this->totalSteps !== null) {
+            return sprintf('Séance %d/%d', $this->stepNumber, $this->totalSteps);
+        }
+        if ($this->stepNumber !== null) {
+            return sprintf('Séance %d', $this->stepNumber);
+        }
+        return null;
     }
 
     public function getQuickActions(): ?string

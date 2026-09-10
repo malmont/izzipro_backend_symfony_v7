@@ -18,6 +18,12 @@ class ReservationOutputDto
     public ?string $notes;
     public string $status;
     public ?string $created_at;
+    public ?string $book_id;
+    public ?string $chapter_id;
+    public ?int $step_number;
+    public ?int $total_steps;
+    public ?string $forfait_name;
+    public ?string $step_label;
 
     public function __construct(Reservation $reservation)
     {
@@ -33,5 +39,11 @@ class ReservationOutputDto
         $this->notes = $reservation->getNotes();
         $this->status = $reservation->getStatus();
         $this->created_at = $reservation->getCreatedAt()?->format(\DateTimeInterface::ATOM);
+        $this->book_id = $reservation->getBookId();
+        $this->chapter_id = $reservation->getChapterId();
+        $this->step_number = $reservation->getStepNumber();
+        $this->total_steps = $reservation->getTotalSteps();
+        $this->forfait_name = $reservation->getForfaitName();
+        $this->step_label = $reservation->getStepLabel();
     }
 }

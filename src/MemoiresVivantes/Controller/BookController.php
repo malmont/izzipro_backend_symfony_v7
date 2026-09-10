@@ -12,6 +12,8 @@ use App\MemoiresVivantes\UseCase\UpdateBookUseCase;
 use App\MemoiresVivantes\UseCase\DeleteBookUseCase;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Services\ReservationService\ReservationService;
+use App\Dto\ReservationOutputDto;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
@@ -26,7 +28,8 @@ class BookController extends AbstractController
         private readonly UpdateBookUseCase $updateBookUseCase,
         private readonly DeleteBookUseCase $deleteBookUseCase,
         private readonly BookService $bookService,
-        private readonly TenantEntityManagerProvider $emProvider
+        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly ReservationService $reservationService
     ) {}
 
     #[Route('', methods: ['GET'])]
@@ -52,6 +55,20 @@ class BookController extends AbstractController
 
         $host = $request->getSchemeAndHttpHost();
         return $this->json(new BookOutputDto($book, $host));
+    }
+
+    #[Route('/{id}/reservations', methods: ['GET'])]
+    public function getReservations(string $id, Request $request): JsonResponse
+    {
+        $em = $this->emProvider->getEntityManager();
+        $book = $em->getRepository(Book::class)->find(Uuid::fromString($id));
+        if (!$book) return $this->json(['error' => 'Book not found'], 404);
+
+        $res = $this->validateSignatureOrGrant('BOOK_VIEW', $book, $request);
+        if ($res !== null) return $res;
+
+        $reservations = $this->reservationService->getReservationsByBook($id);
+        return $this->json(array_map(fn($r) => new ReservationOutputDto($r), $reservations));
     }
 
     #[Route('', methods: ['POST'])]
