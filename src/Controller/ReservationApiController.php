@@ -21,7 +21,8 @@ class ReservationApiController extends AbstractController
         private CreateReservationUseCase $createReservationUseCase,
         private GetReservationServicesUseCase $getServicesUseCase,
         private TenantCacheService $cacheService,
-        private ValidatorInterface $validator
+        private ValidatorInterface $validator,
+        private \App\Services\ReservationService\ReservationService $reservationService
     ) {
     }
 
@@ -79,6 +80,11 @@ class ReservationApiController extends AbstractController
                 'data' => (array) new ReservationOutputDto($reservation)
             ], Response::HTTP_CREATED);
 
+        } catch (\DomainException $e) {
+            return $this->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], Response::HTTP_CONFLICT);
         } catch (\Throwable $e) {
             return $this->json([
                 'success' => false,
@@ -86,6 +92,51 @@ class ReservationApiController extends AbstractController
                 'error' => $e->getMessage()
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    #[Route('/booked-slots', name: 'api_reservations_booked_slots', methods: ['GET'])]
+    public function getBookedSlots(Request $request): JsonResponse
+    {
+        $date = $request->query->get('date');
+        $month = $request->query->get('month');
+
+        if ($date) {
+            try {
+                $dateTime = new \DateTime($date);
+                $slots = $this->reservationService->getBookedSlotsByDate($dateTime);
+                return $this->json([
+                    'success' => true,
+                    'date' => $dateTime->format('Y-m-d'),
+                    'booked_slots' => $slots
+                ]);
+            } catch (\Throwable $e) {
+                return $this->json([
+                    'success' => false,
+                    'message' => 'Format de date invalide. Utilisez YYYY-MM-DD.'
+                ], Response::HTTP_BAD_REQUEST);
+            }
+        }
+
+        if ($month) {
+            if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+                return $this->json([
+                    'success' => false,
+                    'message' => 'Format de mois invalide. Utilisez YYYY-MM.'
+                ], Response::HTTP_BAD_REQUEST);
+            }
+
+            $bookedSlots = $this->reservationService->getBookedSlotsByMonth($month);
+            return $this->json([
+                'success' => true,
+                'month' => $month,
+                'booked_slots_by_date' => $bookedSlots
+            ]);
+        }
+
+        return $this->json([
+            'success' => false,
+            'message' => 'Veuillez fournir le paramètre ?date=YYYY-MM-DD ou ?month=YYYY-MM'
+        ], Response::HTTP_BAD_REQUEST);
     }
 
     #[Route('/services', name: 'api_reservations_services', methods: ['GET'])]

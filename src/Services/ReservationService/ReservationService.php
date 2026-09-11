@@ -21,11 +21,21 @@ class ReservationService
         $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
 
         $cleanTenantId = $dto->tenant_id ?: explode('.', $host)[0];
+        $resDate = new \DateTime($dto->reservation_date);
+
+        // Vérification anti-doublon sur le créneau pour ce tenant
+        if ($dto->reservation_slot && $this->isSlotBooked($resDate, $dto->reservation_slot)) {
+            throw new \DomainException(sprintf(
+                'Le créneau "%s" du %s est déjà réservé. Veuillez choisir un autre horaire.',
+                $dto->reservation_slot,
+                $resDate->format('d/m/Y')
+            ));
+        }
 
         $reservation = new Reservation();
         $reservation->setServiceId($dto->service_id);
         $reservation->setServiceName($dto->service_name);
-        $reservation->setReservationDate(new \DateTime($dto->reservation_date));
+        $reservation->setReservationDate($resDate);
         $reservation->setReservationSlot($dto->reservation_slot);
         $reservation->setClientName($dto->client_name);
         $reservation->setClientEmail($dto->client_email);
@@ -220,5 +230,72 @@ class ReservationService
             ['bookId' => $bookId],
             ['stepNumber' => 'ASC', 'reservationDate' => 'ASC', 'createdAt' => 'ASC']
         );
+    }
+
+    public function isSlotBooked(\DateTimeInterface $date, string $slot): bool
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $count = (int) $tenantEm->getRepository(Reservation::class)->createQueryBuilder('r')
+            ->select('COUNT(r.id)')
+            ->where('r.reservationDate = :date')
+            ->andWhere('r.reservationSlot = :slot')
+            ->andWhere('r.status != :cancelled')
+            ->setParameter('date', $date->format('Y-m-d'))
+            ->setParameter('slot', $slot)
+            ->setParameter('cancelled', 'cancelled')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return $count > 0;
+    }
+
+    public function getBookedSlotsByDate(\DateTimeInterface $date): array
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $reservations = $tenantEm->getRepository(Reservation::class)->createQueryBuilder('r')
+            ->select('r.reservationSlot')
+            ->where('r.reservationDate = :date')
+            ->andWhere('r.status != :cancelled')
+            ->andWhere('r.reservationSlot IS NOT NULL')
+            ->setParameter('date', $date->format('Y-m-d'))
+            ->setParameter('cancelled', 'cancelled')
+            ->getQuery()
+            ->getScalarResult();
+
+        return array_values(array_unique(array_filter(array_column($reservations, 'reservationSlot'))));
+    }
+
+    public function getBookedSlotsByMonth(string $yearMonth): array
+    {
+        $startDate = new \DateTime($yearMonth . '-01 00:00:00');
+        $endDate = (clone $startDate)->modify('last day of this month')->setTime(23, 59, 59);
+
+        $tenantEm = $this->emProvider->getEntityManager();
+        $reservations = $tenantEm->getRepository(Reservation::class)->createQueryBuilder('r')
+            ->select('r.reservationDate, r.reservationSlot')
+            ->where('r.reservationDate BETWEEN :start AND :end')
+            ->andWhere('r.status != :cancelled')
+            ->andWhere('r.reservationSlot IS NOT NULL')
+            ->setParameter('start', $startDate->format('Y-m-d'))
+            ->setParameter('end', $endDate->format('Y-m-d'))
+            ->setParameter('cancelled', 'cancelled')
+            ->getQuery()
+            ->getResult();
+
+        $result = [];
+        foreach ($reservations as $row) {
+            $dateStr = $row['reservationDate'] instanceof \DateTimeInterface
+                ? $row['reservationDate']->format('Y-m-d')
+                : (string)$row['reservationDate'];
+            $slot = $row['reservationSlot'];
+            if (!isset($result[$dateStr])) {
+                $result[$dateStr] = [];
+            }
+            if (!in_array($slot, $result[$dateStr], true)) {
+                $result[$dateStr][] = $slot;
+            }
+        }
+
+        return $result;
     }
 }
