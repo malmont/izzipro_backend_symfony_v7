@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ book.title }} - Intérieur</title>
+    <style>
+        @page {
+            /* Format A4 (210 x 297 mm) + Fond perdu de 3.175 mm (0.125") sur les 4 côtés */
+            size: 216.41mm 303.28mm;
+            margin: 22mm 24mm 22mm 24mm;
+        }
+
+        body {
+            font-family: 'Georgia', 'DejaVu Serif', serif;
+            font-size: 11pt;
+            line-height: 1.65;
+            color: #2c2c2c;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* En-tête et pied de page */
+        .page-header {
+            position: fixed;
+            top: -12mm;
+            left: 0;
+            right: 0;
+            height: 8mm;
+            font-size: 8.5pt;
+            color: #888888;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            border-bottom: 0.5pt solid #e0e0e0;
+            display: block;
+            text-align: right;
+        }
+
+        .page-footer {
+            position: fixed;
+            bottom: -12mm;
+            left: 0;
+            right: 0;
+            height: 8mm;
+            font-size: 9pt;
+            color: #777777;
+            text-align: center;
+        }
+
+        /* Page de faux-titre */
+        .half-title-page {
+            page-break-before: always;
+            page-break-after: always;
+            text-align: center;
+            padding-top: 80mm;
+        }
+
+        .half-title {
+            font-size: 20pt;
+            font-weight: normal;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #333333;
+        }
+
+        /* Page de grand titre */
+        .title-page {
+            page-break-before: always;
+            page-break-after: always;
+            text-align: center;
+            padding-top: 60mm;
+        }
+
+        .main-title {
+            font-size: 32pt;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: #1a1a1a;
+            margin-bottom: 5mm;
+            line-height: 1.2;
+        }
+
+        .subtitle {
+            font-size: 14pt;
+            font-style: italic;
+            color: #666666;
+            margin-bottom: 40mm;
+            font-weight: normal;
+        }
+
+        .author-name {
+            font-size: 16pt;
+            letter-spacing: 1px;
+            color: #222222;
+            margin-bottom: 30mm;
+        }
+
+        .collection-name {
+            font-size: 10pt;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: #b59449;
+            font-weight: bold;
+        }
+
+        /* Page de sommaire */
+        .toc-page {
+            page-break-before: always;
+            page-break-after: always;
+            padding-top: 25mm;
+        }
+
+        .toc-title {
+            font-size: 20pt;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #1a1a1a;
+            border-bottom: 1pt solid #b59449;
+            padding-bottom: 4mm;
+            margin-bottom: 12mm;
+            text-align: center;
+        }
+
+        .toc-item {
+            margin-bottom: 6mm;
+            font-size: 12pt;
+            display: table;
+            width: 100%;
+        }
+
+        .toc-item-title {
+            display: table-cell;
+            color: #333333;
+        }
+
+        .toc-item-dots {
+            display: table-cell;
+            border-bottom: 1pt dotted #aaaaaa;
+            width: 30%;
+        }
+
+        /* Chapitres */
+        .chapter-container {
+            page-break-before: always;
+            padding-top: 20mm;
+        }
+
+        .chapter-header {
+            text-align: center;
+            margin-bottom: 15mm;
+            border-bottom: 0.5pt solid #dddddd;
+            padding-bottom: 8mm;
+        }
+
+        .chapter-theme {
+            font-size: 9pt;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: #b59449;
+            margin-bottom: 4mm;
+            font-weight: bold;
+        }
+
+        .chapter-number {
+            font-size: 11pt;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #888888;
+            margin-bottom: 2mm;
+        }
+
+        .chapter-title {
+            font-size: 24pt;
+            color: #111111;
+            margin: 0;
+            font-weight: normal;
+            line-height: 1.25;
+        }
+
+        /* Corps du récit */
+        .story-content {
+            text-align: justify;
+            text-justify: inter-word;
+            margin-bottom: 10mm;
+        }
+
+        .story-paragraph {
+            margin-bottom: 5mm;
+            text-indent: 6mm;
+        }
+
+        .story-paragraph:first-of-type {
+            text-indent: 0;
+        }
+
+        /* Lettrine sur le premier paragraphe */
+        .first-letter {
+            float: left;
+            font-size: 42pt;
+            line-height: 35pt;
+            padding-top: 2pt;
+            padding-right: 4pt;
+            padding-bottom: 0;
+            color: #b59449;
+            font-weight: bold;
+        }
+
+        /* Photos de chapitres */
+        .photo-block {
+            page-break-inside: avoid;
+            margin: 10mm 0;
+            text-align: center;
+        }
+
+        .chapter-photo {
+            max-width: 85%;
+            max-height: 140mm;
+            border-radius: 2px;
+            box-shadow: 0 1mm 3mm rgba(0,0,0,0.15);
+            border: 1pt solid #eaeaea;
+        }
+
+        .photo-caption {
+            font-size: 9pt;
+            font-style: italic;
+            color: #666666;
+            margin-top: 2.5mm;
+            text-align: center;
+        }
+
+        /* Page de fin / colophon */
+        .colophon-page {
+            page-break-before: always;
+            text-align: center;
+            padding-top: 100mm;
+            font-size: 9pt;
+            color: #888888;
+            line-height: 1.8;
+        }
+
+        .colophon-logo {
+            max-width: 35mm;
+            margin-bottom: 8mm;
+        }
+    </style>
+</head>
+<body>
+
+    {# 1. Faux-titre #}
+    <div class="half-title-page">
+        <div class="half-title">{{ book.title }}</div>
+    </div>
+
+    {# 2. Grand Titre #}
+    <div class="title-page">
+        <div class="main-title">{{ book.title }}</div>
+        {% if book.subtitle %}
+            <div class="subtitle">{{ book.subtitle }}</div>
+        {% endif %}
+        
+        <div class="author-name">
+            {% if book.person1FirstName %}
+                {{ book.person1FirstName }}
+                {% if book.person2FirstName %} &amp; {{ book.person2FirstName }}{% endif %}
+            {% else %}
+                {{ book.user ? (book.user.firstname ~ ' ' ~ book.user.lastname) : '' }}
+            {% endif %}
+        </div>
+
+        <div class="collection-name">MÉMOIRE VIVANTE</div>
+    </div>
+
+    {# 3. Sommaire #}
+    <div class="toc-page">
+        <div class="toc-title">Sommaire</div>
+        {% for chapter in book.chapters %}
+            <div class="toc-item">
+                <span class="toc-item-title">
+                    <strong>Chapitre {{ loop.index }}</strong> — {{ chapter.title }}
+                </span>
+            </div>
+        {% endfor %}
+    </div>
+
+    {# 4. Contenu des Chapitres #}
+    {% for chapter in book.chapters %}
+        <div class="chapter-container">
+            <div class="chapter-header">
+                {% if chapter.theme %}
+                    <div class="chapter-theme">{{ chapter.theme }}</div>
+                {% endif %}
+                <div class="chapter-number">Chapitre {{ loop.index }}</div>
+                <h2 class="chapter-title">{{ chapter.title }}</h2>
+            </div>
+
+            <div class="story-content">
+                {% set text = chapter.contentFinal ?: (chapter.contentGenerated ?: '') %}
+                {% if text %}
+                    {% set paragraphs = text|split("\n\n") %}
+                    {% for p in paragraphs %}
+                        {% set pTrim = p|trim %}
+                        {% if pTrim %}
+                            <p class="story-paragraph">
+                                {% if loop.first and pTrim|length > 1 %}
+                                    <span class="first-letter">{{ pTrim|slice(0, 1) }}</span>{{ pTrim|slice(1) }}
+                                {% else %}
+                                    {{ pTrim|nl2br }}
+                                {% endif %}
+                            </p>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            {# Photos du chapitre #}
+            {% if chapter.photos is not empty %}
+                {% for photo in chapter.photos %}
+                    {% if photo.filePath %}
+                        <div class="photo-block">
+                            <img src="{{ project_dir }}/public/uploads/memoires/{{ photo.filePath }}" class="chapter-photo" alt="Photo">
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        </div>
+    {% endfor %}
+
+    {# 5. Page finale Colophon #}
+    <div class="colophon-page">
+        <div>Cet ouvrage a été créé et mis en page avec le programme</div>
+        <div style="font-weight: bold; font-size: 11pt; color: #111; margin: 2mm 0;">MÉMOIRE VIVANTE</div>
+        <div>Impression &amp; Reliure de prestige à la demande</div>
+        <div style="margin-top: 4mm;">&copy; {{ 'now'|date('Y') }} Tous droits réservés.</div>
+    </div>
+
+</body>
+</html>

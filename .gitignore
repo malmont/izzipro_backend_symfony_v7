@@ -36,3 +36,5 @@
 secrets.env
 *.sql
 migrate_all.sh
+*.af
+interieur_lulu.pdf

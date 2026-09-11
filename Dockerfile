@@ -14,7 +14,11 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     zip \
     libicu-dev \
- && docker-php-ext-install pdo pdo_pgsql zip intl opcache \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+ && docker-php-ext-configure gd --with-freetype --with-jpeg \
+ && docker-php-ext-install pdo pdo_pgsql zip intl opcache gd \
  && pecl update-channels \
  && pecl install redis-6.0.2 \
  && docker-php-ext-enable redis \

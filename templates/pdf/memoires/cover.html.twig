@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ book.title }} - Couverture</title>
+    <style>
+        @page {
+            /* Largeur totale = 2x210mm + Tranche + 2x19.05mm (rembordage) + 2x3.175mm (fond perdu) */
+            /* Hauteur totale = 297mm + 2x19.05mm (rembordage) + 2x3.175mm (fond perdu) = 341.45mm */
+            size: {{ cover_width_pt }}pt {{ cover_height_pt }}pt;
+            margin: 0;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            width: {{ cover_width_pt }}pt;
+            height: {{ cover_height_pt }}pt;
+            background-color: #ffffff;
+            font-family: 'Georgia', 'DejaVu Serif', serif;
+            overflow: hidden;
+        }
+
+        .cover-table {
+            width: 100%;
+            height: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        /* 4ème de couverture (gauche) */
+        .back-cover {
+            width: {{ back_cover_width_pt }}pt;
+            height: 100%;
+            vertical-align: middle;
+            text-align: center;
+            padding: 40mm 25mm;
+            background-color: #fbfbfb;
+            position: relative;
+        }
+
+        .back-quote {
+            font-size: 15pt;
+            font-style: italic;
+            line-height: 1.7;
+            color: #333333;
+            max-width: 80%;
+            margin: 0 auto;
+        }
+
+        .back-logo-container {
+            position: absolute;
+            bottom: 35mm;
+            left: 0;
+            right: 0;
+            text-align: center;
+        }
+
+        .back-logo-text {
+            font-size: 11pt;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #b59449;
+            font-weight: bold;
+        }
+
+        /* Tranche centrale (Spine) */
+        .spine-cell {
+            width: {{ spine_width_pt }}pt;
+            height: 100%;
+            background-color: #b59449;
+            color: #ffffff;
+            vertical-align: middle;
+            text-align: center;
+            padding: 0;
+            position: relative;
+        }
+
+        .spine-text {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            white-space: nowrap;
+            font-size: 9pt;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #ffffff;
+            display: inline-block;
+        }
+
+        /* 1ère de couverture (droite) */
+        .front-cover {
+            width: {{ front_cover_width_pt }}pt;
+            height: 100%;
+            vertical-align: top;
+            padding: 35mm 25mm 25mm 25mm;
+            background-color: #ffffff;
+            position: relative;
+        }
+
+        {% if cover_image_exists %}
+        .front-cover-bg {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 60%;
+            height: 100%;
+            background-image: url('{{ cover_image_path }}');
+            background-size: cover;
+            background-position: center right;
+            z-index: 1;
+        }
+        {% endif %}
+
+        .front-content {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            height: 100%;
+        }
+
+        .front-title {
+            font-size: 50pt;
+            font-weight: bold;
+            color: #1a1a1a;
+            line-height: 0.95;
+            margin-bottom: 8mm;
+            letter-spacing: -1px;
+        }
+
+        .front-subtitle {
+            font-size: 13pt;
+            color: #b59449;
+            font-weight: 500;
+            line-height: 1.4;
+            max-width: 65%;
+            margin-bottom: 40mm;
+        }
+
+        .front-author {
+            font-size: 20pt;
+            font-style: italic;
+            color: #222222;
+            margin-bottom: 4mm;
+        }
+
+        .front-brand {
+            font-size: 11pt;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: #b59449;
+            font-weight: bold;
+        }
+
+        .front-footer {
+            position: absolute;
+            bottom: 30mm;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <table class="cover-table">
+        <tr>
+            {# 1. 4ème de couverture #}
+            <td class="back-cover">
+                <div class="back-quote">
+                    {% if book.subtitle %}
+                        &laquo;&nbsp;{{ book.subtitle }}&nbsp;&raquo;
+                    {% else %}
+                        &laquo;&nbsp;Chaque vie est une histoire qui mérite d'être racontée et transmise aux générations futures.&nbsp;&raquo;
+                    {% endif %}
+                </div>
+
+                <div class="back-logo-container">
+                    <div class="back-logo-text">MÉMOIRE VIVANTE</div>
+                </div>
+            </td>
+
+            {# 2. Tranche centrale #}
+            <td class="spine-cell">
+                <div class="spine-text">
+                    {{ book.title }}
+                    {% if book.person1FirstName %}
+                        &nbsp;&bull;&nbsp;{{ book.person1FirstName }}
+                    {% endif %}
+                </div>
+            </td>
+
+            {# 3. 1ère de couverture #}
+            <td class="front-cover">
+                {% if cover_image_exists %}
+                    <div class="front-cover-bg"></div>
+                {% endif %}
+
+                <div class="front-content">
+                    <div class="front-title">
+                        {{ book.title }}
+                    </div>
+
+                    {% if book.subtitle %}
+                        <div class="front-subtitle">
+                            {{ book.subtitle }}
+                        </div>
+                    {% endif %}
+
+                    <div class="front-footer">
+                        <div class="front-author">
+                            {% if book.person1FirstName %}
+                                {{ book.person1FirstName }}
+                                {% if book.person2FirstName %} &amp; {{ book.person2FirstName }}{% endif %}
+                            {% else %}
+                                {{ book.user ? (book.user.firstname ~ ' ' ~ book.user.lastname) : '' }}
+                            {% endif %}
+                        </div>
+                        <div class="front-brand">
+                            MÉMOIRE VIVANTE
+                        </div>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>
