@@ -22,7 +22,8 @@ class ReservationApiController extends AbstractController
         private GetReservationServicesUseCase $getServicesUseCase,
         private TenantCacheService $cacheService,
         private ValidatorInterface $validator,
-        private \App\Services\ReservationService\ReservationService $reservationService
+        private \App\Services\ReservationService\ReservationService $reservationService,
+        private \App\Services\ReservationService\ReservationMailerService $mailerService
     ) {
     }
 
@@ -137,6 +138,49 @@ class ReservationApiController extends AbstractController
             'success' => false,
             'message' => 'Veuillez fournir le paramètre ?date=YYYY-MM-DD ou ?month=YYYY-MM'
         ], Response::HTTP_BAD_REQUEST);
+    }
+
+    #[Route('/{id}/confirm', name: 'api_reservations_confirm', methods: ['POST'])]
+    public function confirm(int $id, Request $request): JsonResponse
+    {
+        try {
+            $reservation = $this->reservationService->confirmReservation($id);
+
+            if (!$reservation) {
+                return $this->json([
+                    'success' => false,
+                    'message' => 'Réservation introuvable pour l\'identifiant fourni.'
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            // Déclencher l'envoi de notification email de confirmation (non-bloquant)
+            try {
+                $host = $request->headers->get('X-Tenant-Host') ?: $request->getHost();
+                $locale = $request->getLocale() ?: 'fr';
+                $this->mailerService->sendStatusChangeEmail($reservation, 'confirmed', $locale, $host);
+            } catch (\Throwable $e) {
+                // Log l'erreur d'email sans impacter le succès de la confirmation
+            }
+
+            return $this->json([
+                'success' => true,
+                'message' => 'La réservation a été confirmée avec succès.',
+                'reservation' => [
+                    'id' => $reservation->getId(),
+                    'status' => $reservation->getStatus(),
+                    'reservation_date' => $reservation->getReservationDate()?->format('Y-m-d'),
+                    'reservation_slot' => $reservation->getReservationSlot(),
+                    'client_name' => $reservation->getClientName(),
+                    'client_email' => $reservation->getClientEmail(),
+                ]
+            ], Response::HTTP_OK);
+
+        } catch (\Throwable $e) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Une erreur est survenue lors de la confirmation de la réservation.'
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     #[Route('/services', name: 'api_reservations_services', methods: ['GET'])]

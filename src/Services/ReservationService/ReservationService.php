@@ -223,6 +223,20 @@ class ReservationService
         return $tenantEm->getRepository(Reservation::class)->find($id);
     }
 
+    public function confirmReservation(int $id): ?Reservation
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $reservation = $tenantEm->getRepository(Reservation::class)->find($id);
+        if (!$reservation) {
+            return null;
+        }
+
+        $reservation->setStatus('confirmed');
+        $tenantEm->flush();
+
+        return $reservation;
+    }
+
     public function getReservationsByBook(string $bookId): array
     {
         $tenantEm = $this->emProvider->getEntityManager();
