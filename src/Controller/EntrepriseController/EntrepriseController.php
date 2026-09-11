@@ -4,6 +4,7 @@ namespace App\Controller\EntrepriseController;
 
 use App\UseCase\EntrepriseUsecase\CreateEntrepriseUseCase;
 use App\UseCase\EntrepriseUsecase\GetEntrepriseUseCase;
+use App\UseCase\EntrepriseUsecase\UpdateEntrepriseUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -15,15 +16,18 @@ class EntrepriseController extends AbstractController
 {
     private CreateEntrepriseUseCase $createEntrepriseUseCase;
     private GetEntrepriseUseCase $getEntrepriseUseCase;
+    private UpdateEntrepriseUseCase $updateEntrepriseUseCase;
     private TenantCacheService $cache;
 
     public function __construct(
         CreateEntrepriseUseCase $createEntrepriseUseCase,
         GetEntrepriseUseCase $getEntrepriseUseCase,
+        UpdateEntrepriseUseCase $updateEntrepriseUseCase,
         TenantCacheService $cache
     ) {
         $this->createEntrepriseUseCase = $createEntrepriseUseCase;
         $this->getEntrepriseUseCase = $getEntrepriseUseCase;
+        $this->updateEntrepriseUseCase = $updateEntrepriseUseCase;
         $this->cache = $cache;
     }
 
@@ -54,6 +58,25 @@ class EntrepriseController extends AbstractController
         if (!$entrepriseDto) {
             return $this->json(['error' => 'Entreprise not found'], JsonResponse::HTTP_NOT_FOUND);
         }
+
+        return $this->json($entrepriseDto);
+    }
+
+    #[Route('/api/entreprise/{id}', name: 'api_entreprise_update', methods: ['PUT'])]
+    public function updateEntreprise(int $id, Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true) ?? [];
+        $host = $request->getSchemeAndHttpHost();
+        $locale = $request->get('locale', 'fr');
+
+        $entrepriseDto = $this->updateEntrepriseUseCase->execute($id, $data, $host, $locale);
+        if (!$entrepriseDto) {
+            return $this->json(['error' => 'Entreprise not found'], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        // Invalidation du cache de l'entreprise
+        $this->cache->delete("entreprise_{$id}_{$locale}");
+        $this->cache->invalidateTags(['entreprise', 'entreprise_' . $id]);
 
         return $this->json($entrepriseDto);
     }

@@ -98,6 +98,27 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->onlyOnIndex(),
 
 
+            FormField::addPanel('Référencement & SEO'),
+            TextField::new('metaTitle', 'Meta Title')
+                ->setHelp('Titre pour les moteurs de recherche (60-70 caractères)')
+                ->hideOnIndex(),
+            TextareaField::new('metaDescription', 'Meta Description')
+                ->setHelp('Description affichée dans Google (150-160 caractères)')
+                ->hideOnIndex(),
+            TextField::new('seoKeywords', 'Mots-clés SEO')
+                ->setHelp('Mots-clés séparés par des virgules (ex: conciergerie, intendance, montreal)')
+                ->hideOnIndex(),
+            ImageField::new('ogImage', 'Image Open Graph (og:image)')
+                ->setBasePath('assets/uploads/email-logos/')
+                ->setUploadDir('public/assets/uploads/email-logos/')
+                ->setUploadedFileNamePattern('[randomhash].[extension]')
+                ->setRequired(false)
+                ->setHelp('Image affichée lors du partage sur les réseaux sociaux (1200x630px recommandé)')
+                ->hideOnIndex(),
+            TextField::new('googleSiteVerification', 'Google Site Verification')
+                ->setHelp('Code de vérification Google Search Console')
+                ->hideOnIndex(),
+
             CollectionField::new('translations', 'Contenus Traduits')
                 ->setEntryType(EntrepriseTranslationType::class)
                 ->setFormTypeOption('by_reference', false)

@@ -30,6 +30,11 @@ class EntrepriseDto
     public bool $isLandingPageActive = true;
     public bool $isBoussoleEsgActive = false;
     public bool $isMemoireVivanteActive = false;
+    public ?string $metaTitle = null;
+    public ?string $metaDescription = null;
+    public ?string $seoKeywords = null;
+    public ?string $ogImage = null;
+    public ?string $googleSiteVerification = null;
     /** @var SocialNetworkDto[] */
     public array $socialNetworks = [];
 
@@ -84,6 +89,20 @@ class EntrepriseDto
             $dto->faviconUrl = $faviconPath;
         } else if ($faviconPath) {
             $dto->faviconUrl = rtrim($host, '/') . '/assets/uploads/email-logos/' . $faviconPath;
+        }
+
+        $dto->metaTitle = $entreprise->getMetaTitle();
+        $dto->metaDescription = $entreprise->getMetaDescription();
+        $dto->seoKeywords = $entreprise->getSeoKeywords();
+        $dto->googleSiteVerification = $entreprise->getGoogleSiteVerification();
+
+        $ogImagePath = $entreprise->getOgImage();
+        if (str_starts_with((string)$ogImagePath, 'http')) {
+            $dto->ogImage = $ogImagePath;
+        } else if ($ogImagePath) {
+            $dto->ogImage = rtrim($host, '/') . '/assets/uploads/email-logos/' . $ogImagePath;
+        } else {
+            $dto->ogImage = null;
         }
 
         $dto->conditionOfUse = $translation?->getConditionOfUse() ?? $entreprise->getConditionOfUse();

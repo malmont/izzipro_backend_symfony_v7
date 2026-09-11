@@ -98,6 +98,20 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(type: 'boolean', options: ['default' => true])]
     private ?bool $isLandingPageActive = true;
 
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $metaTitle = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $metaDescription = null;
+
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $seoKeywords = null;
+
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $ogImage = null;
+
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $googleSiteVerification = null;
 
     public function __construct()
     {
@@ -447,6 +461,66 @@ class Entreprise implements TranslatableInterface
                 $socialNetwork->setEntreprise(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getMetaTitle(): ?string
+    {
+        return $this->metaTitle;
+    }
+
+    public function setMetaTitle(?string $metaTitle): static
+    {
+        $this->metaTitle = $metaTitle;
+
+        return $this;
+    }
+
+    public function getMetaDescription(): ?string
+    {
+        return $this->metaDescription;
+    }
+
+    public function setMetaDescription(?string $metaDescription): static
+    {
+        $this->metaDescription = $metaDescription;
+
+        return $this;
+    }
+
+    public function getSeoKeywords(): ?string
+    {
+        return $this->seoKeywords;
+    }
+
+    public function setSeoKeywords(?string $seoKeywords): static
+    {
+        $this->seoKeywords = $seoKeywords;
+
+        return $this;
+    }
+
+    public function getOgImage(): ?string
+    {
+        return $this->ogImage;
+    }
+
+    public function setOgImage(?string $ogImage): static
+    {
+        $this->ogImage = $ogImage;
+
+        return $this;
+    }
+
+    public function getGoogleSiteVerification(): ?string
+    {
+        return $this->googleSiteVerification;
+    }
+
+    public function setGoogleSiteVerification(?string $googleSiteVerification): static
+    {
+        $this->googleSiteVerification = $googleSiteVerification;
 
         return $this;
     }

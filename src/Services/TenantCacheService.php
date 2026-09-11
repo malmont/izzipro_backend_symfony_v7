@@ -57,4 +57,16 @@ class TenantCacheService
         $key = preg_replace('/[{}()\/\\\\@:]/', '_', $rawKey);
         return $this->cache->delete($key);
     }
+
+    /**
+     * Invalide les caches associés à des tags donnés pour le tenant actuel.
+     *
+     * @param string[] $extraTags
+     */
+    public function invalidateTags(array $extraTags): bool
+    {
+        $tenantCode = $this->getTenantCode();
+        $tags = array_map(fn($tag) => preg_replace('/[{}()\/\\\\@:]/', '_', $tenantCode . '_' . $tag), $extraTags);
+        return $this->cache->invalidateTags($tags);
+    }
 }
