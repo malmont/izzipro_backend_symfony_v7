@@ -164,7 +164,7 @@ class ReservationApiController extends AbstractController
 
             return $this->json([
                 'success' => true,
-                'message' => 'La réservation a été confirmée avec succès.',
+                'message' => 'La réservation a été confirmée avec succès. En cas d\'empêchement, le client peut répondre à l\'email de confirmation ou nous appeler directement.',
                 'reservation' => [
                     'id' => $reservation->getId(),
                     'status' => $reservation->getStatus(),
