@@ -17,7 +17,7 @@ use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\Cache\ItemInterface;
 
-#[Route('/api/videos')]
+#[Route(path: ['/api/videos', '/videos'])]
 class VideoApiController extends AbstractController
 {
     public function __construct(
@@ -34,7 +34,7 @@ class VideoApiController extends AbstractController
     {
         $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'videos_all_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/videos';
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 
         $dtos = $this->cache->get(
             $cacheKey,
@@ -54,7 +54,7 @@ class VideoApiController extends AbstractController
     {
         $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'video_' . $id . '_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/videos';
+        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
 
         $dto = $this->cache->get(
             $cacheKey,

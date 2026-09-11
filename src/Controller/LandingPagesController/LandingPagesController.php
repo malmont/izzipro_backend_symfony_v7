@@ -96,7 +96,7 @@ class LandingPagesController extends AbstractController
                 "type" => "Video",
                 "name" => "Lecteur Vidéo",
                 "description" => "Intègre une vidéo spécifique.",
-                "api_data_endpoint" => "/videos",
+                "api_data_endpoint" => "/api/videos",
                 "data_id_field" => "id",
                 "data_label_field" => "titre", 
                 "is_data_selectable" => true
