@@ -20,10 +20,14 @@ class EstimateBookPrintUseCase
     public function execute(
         Book $book,
         array $shippingAddress,
-        string $shippingLevel = 'EXPEDITED',
+        ?string $shippingLevel = null,
         int $quantity = 1
     ): array {
-        if (empty($shippingAddress['street1']) || empty($shippingAddress['city']) || empty($shippingAddress['country_code'])) {
+        // Normalisation complète et conforme de l'adresse selon le pays de destination
+        $normalizedAddress = LuluPrintService::normalizeAddress($shippingAddress);
+        $countryCode = $normalizedAddress['country_code'];
+
+        if (empty($normalizedAddress['street1']) || empty($normalizedAddress['city']) || empty($normalizedAddress['country_code'])) {
             throw new BadRequestHttpException('L\'adresse de livraison doit contenir au minimum la rue, la ville et le pays (code ISO 2 lettres).');
         }
 
@@ -44,36 +48,56 @@ class EstimateBookPrintUseCase
             $pageCount++;
         }
 
-        // 2. Calcul du coût pour le niveau de livraison demandé (Défaut FedEx EXPEDITED)
-        $shippingLevel = strtoupper($shippingLevel ?: 'EXPEDITED');
+        // 2. Détermination du mode de livraison par défaut adapté au pays
+        $defaultLevel = match ($countryCode) {
+            'CA' => 'PRIORITY_MAIL', // Au Canada, PRIORITY_MAIL avec suivi est idéal (EXPEDITED n'existe pas chez Lulu pour CA)
+            'US' => 'GROUND',
+            default => 'PRIORITY_MAIL',
+        };
+
+        $requestedLevel = !empty($shippingLevel) ? $shippingLevel : $defaultLevel;
+        $effectiveShippingLevel = LuluPrintService::sanitizeShippingLevel($requestedLevel, $countryCode);
+
         $estimate = $this->luluPrintService->calculatePrintCost(
             $book,
-            $shippingAddress,
-            $shippingLevel,
+            $normalizedAddress,
+            $effectiveShippingLevel,
             $quantity,
             $pageCount
         );
 
-        // 3. Calcul comparatif des options FedEx & standard
+        // 3. Calcul comparatif des options de livraison réelles et supportées par Lulu selon le pays
         $shippingOptions = [];
-        $levelLabels = [
-            'EXPEDITED' => 'FedEx Express / Accéléré (2-3 jours ouvrables)',
-            'GROUND' => 'FedEx Ground (3-5 jours ouvrables)',
-            'EXPRESS' => 'FedEx Express Prioritaire (1-2 jours ouvrables)',
-            'MAIL' => 'Standard Postal',
-        ];
+        $supportedLevels = match ($countryCode) {
+            'CA' => [
+                'MAIL' => ['label' => 'Postes Canada Standard (5-9 jours ouvrables)', 'carrier' => 'Postes Canada'],
+                'PRIORITY_MAIL' => ['label' => 'Postes Canada Prioritaire avec suivi (2-4 jours ouvrables)', 'carrier' => 'Postes Canada'],
+                'EXPRESS' => ['label' => 'FedEx Express (1-2 jours ouvrables)', 'carrier' => 'FedEx Express'],
+            ],
+            'US' => [
+                'MAIL' => ['label' => 'USPS Media Mail (5-8 jours)', 'carrier' => 'USPS'],
+                'GROUND' => ['label' => 'FedEx Ground (3-5 jours)', 'carrier' => 'FedEx Ground'],
+                'EXPEDITED' => ['label' => 'FedEx Expedited (2-3 jours)', 'carrier' => 'FedEx'],
+                'EXPRESS' => ['label' => 'FedEx Priority Overnight (1-2 jours)', 'carrier' => 'FedEx Priority'],
+            ],
+            default => [
+                'MAIL' => ['label' => 'Courrier International Standard (7-14 jours)', 'carrier' => 'Poste Internationale'],
+                'PRIORITY_MAIL' => ['label' => 'Courrier Prioritaire Suivi (4-7 jours)', 'carrier' => 'Poste Prioritaire'],
+                'EXPRESS' => ['label' => 'Express International (2-3 jours)', 'carrier' => 'DHL / FedEx'],
+            ],
+        };
 
-        foreach ($levelLabels as $level => $label) {
+        foreach ($supportedLevels as $lvl => $info) {
             $optEstimate = $this->luluPrintService->calculatePrintCost(
                 $book,
-                $shippingAddress,
-                $level,
+                $normalizedAddress,
+                $lvl,
                 $quantity,
                 $pageCount
             );
-            $shippingOptions[$level] = [
-                'label' => $label,
-                'carrier' => str_starts_with($level, 'MAIL') ? 'Postes Canada' : 'FedEx Canada',
+            $shippingOptions[$lvl] = [
+                'label' => $info['label'],
+                'carrier' => $info['carrier'],
                 'shipping_cost' => $optEstimate['shipping_cost'],
                 'total_cost' => $optEstimate['total_cost'],
                 'currency' => $optEstimate['currency'],
@@ -85,7 +109,7 @@ class EstimateBookPrintUseCase
             'book_title' => $book->getTitle(),
             'page_count' => $pageCount,
             'quantity' => $quantity,
-            'selected_shipping_level' => strtoupper($shippingLevel),
+            'selected_shipping_level' => $effectiveShippingLevel,
             'print_cost' => $estimate['print_cost'],
             'shipping_cost' => $estimate['shipping_cost'],
             'tax_cost' => $estimate['tax_cost'],
@@ -93,6 +117,7 @@ class EstimateBookPrintUseCase
             'currency' => $estimate['currency'],
             'is_simulated' => $estimate['is_simulated'],
             'shipping_options' => $shippingOptions,
+            'shipping_address' => $normalizedAddress,
         ];
     }
 }

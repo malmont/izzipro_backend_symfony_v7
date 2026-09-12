@@ -187,6 +187,40 @@ class ChapterController extends AbstractController
         return $this->json(new ChapterOutputDto($chapter, $host));
     }
 
+    #[Route('/chapters/{id}/photos/layout', methods: ['POST'])]
+    #[Route('/chapters/{chapterId}/photos/layout', methods: ['POST'])]
+    public function updatePhotosLayout(?string $id = null, ?string $chapterId = null, Request $request = null): JsonResponse
+    {
+        $targetId = $id ?: $chapterId;
+        $em = $this->emProvider->getEntityManager();
+        try {
+            $chapter = $em->getRepository(Chapter::class)->find(Uuid::fromString($targetId));
+        } catch (\Throwable) {
+            return $this->json(['error' => 'Invalid chapter UUID'], 400);
+        }
+
+        if (!$chapter) return $this->json(['error' => 'Chapter not found'], 404);
+
+        $res = $this->validateSignatureOrGrant('CHAPTER_EDIT', $chapter, $request);
+        if ($res !== null) return $res;
+
+        $data = json_decode($request->getContent(), true) ?: [];
+        $photoPages = $data['photo_pages'] ?? $data['pages'] ?? [];
+
+        $chapter->setPhotoLayout($photoPages);
+        $em->flush();
+
+        return $this->json([
+            'status' => 'Photo layout updated',
+            'chapter_id' => $chapter->getId()->toRfc4122(),
+            'photo_pages' => $photoPages,
+            'photoPages' => $photoPages,
+            'photo_layout' => $photoPages,
+            'photoLayout' => $photoPages,
+            'chapter' => new ChapterOutputDto($chapter, $request->getSchemeAndHttpHost()),
+        ]);
+    }
+
     #[Route('/chapters/{id}/reset', methods: ['POST'])]
     public function reset(string $id): JsonResponse
     {

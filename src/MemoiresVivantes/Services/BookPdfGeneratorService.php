@@ -3,6 +3,8 @@
 namespace App\MemoiresVivantes\Services;
 
 use App\MemoiresVivantes\Entity\Book;
+use App\MemoiresVivantes\Entity\Chapter;
+use App\MemoiresVivantes\Entity\ChapterPhoto;
 use App\Services\TenantEntityManagerProvider;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -26,8 +28,8 @@ class BookPdfGeneratorService
      */
     public function calculateSpineWidthPt(int $pageCount): float
     {
-        // Formule standard papier 80-100g : (pages * 0.055mm) + 3.5mm charnière/carton
-        $spineMm = ($pageCount * 0.055) + 3.5;
+        // Formule standard reliure rigide casewrap (Lulu) : page_count * 0.057 mm + 1.5 mm
+        $spineMm = ($pageCount * 0.057) + 1.5;
         // Minimum de sécurité pour livre rigide : 6.5 mm
         $spineMm = max(6.5, $spineMm);
         return ($spineMm * 72) / 25.4;
@@ -61,12 +63,157 @@ class BookPdfGeneratorService
     }
 
     /**
+     * Nettoie le texte en décodant les entités HTML (ex: &#39; -> ', &amp; -> &).
+     */
+    public function cleanText(?string $text): string
+    {
+        if ($text === null) {
+            return '';
+        }
+        $decoded = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return html_entity_decode($decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+
+    /**
+     * Détermine le nom de l'auteur à afficher (en évitant le nom Admin User).
+     */
+    public function resolveAuthorName(Book $book, ?string $customAuthorName = null): string
+    {
+        $authorName = $customAuthorName;
+        if (empty($authorName)) {
+            if ($book->getPerson1FirstName()) {
+                $authorName = $book->getPerson1FirstName();
+                if ($book->getPerson2FirstName()) {
+                    $authorName .= ' & ' . $book->getPerson2FirstName();
+                }
+            } elseif ($book->getUser()) {
+                $name = trim($book->getUser()->getFirstname() . ' ' . $book->getUser()->getLastname());
+                $authorName = ($name !== 'Admin User' && !empty($name)) ? $name : 'Danielle Almont';
+            } else {
+                $authorName = 'Danielle Almont';
+            }
+        }
+        return $this->cleanText($authorName);
+    }
+
+    /**
+     * Structure les photos d'un chapitre en pages selon le gabarit choisi ou calculé automatiquement.
+     *
+     * @return array<int, array{layout: string, photos: array<int, mixed>}>
+     */
+    public function resolveChapterPhotoPages(Chapter $chapter): array
+    {
+        $allPhotos = [];
+        foreach ($chapter->getPhotos() as $p) {
+            if ($p->getFilePath()) {
+                $allPhotos[$p->getId()->toRfc4122()] = $p;
+            }
+        }
+
+        if (empty($allPhotos)) {
+            return [];
+        }
+
+        $layoutConfig = $chapter->getPhotoLayout();
+        $pages = [];
+
+        // 1. Si une mise en page personnalisée a été configurée par le frontend
+        if (!empty($layoutConfig) && is_array($layoutConfig)) {
+            $photoPages = $layoutConfig['photo_pages'] ?? $layoutConfig['pages'] ?? $layoutConfig;
+            if (is_array($photoPages)) {
+                foreach ($photoPages as $pageData) {
+                    $layout = $pageData['layout'] ?? 'grid_4';
+                    $photoIds = $pageData['photo_ids'] ?? [];
+                    $pagePhotos = [];
+
+                    foreach ($photoIds as $pid) {
+                        $pidStr = (string)$pid;
+                        if (isset($allPhotos[$pidStr])) {
+                            $pagePhotos[] = $allPhotos[$pidStr];
+                        } else {
+                            foreach ($allPhotos as $key => $ph) {
+                                if ($key === $pidStr || str_contains($ph->getFilePath(), $pidStr)) {
+                                    $pagePhotos[] = $ph;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!empty($pagePhotos)) {
+                        $pages[] = [
+                            'layout' => $layout,
+                            'photos' => $pagePhotos,
+                        ];
+                    }
+                }
+            }
+        }
+
+        // 2. Si aucune mise en page n'est configurée, regroupement automatique de prestige
+        if (empty($pages)) {
+            $photosList = array_values($allPhotos);
+            $count = count($photosList);
+
+            if ($count === 1) {
+                $pages[] = [
+                    'layout' => 'single',
+                    'photos' => [$photosList[0]],
+                ];
+            } elseif ($count === 2) {
+                $isPortrait = ($photosList[0]->getOrientation() === 'portrait' && $photosList[1]->getOrientation() === 'portrait');
+                $pages[] = [
+                    'layout' => $isPortrait ? 'duo_v' : 'duo_h',
+                    'photos' => $photosList,
+                ];
+            } elseif ($count <= 4) {
+                $pages[] = [
+                    'layout' => 'grid_4',
+                    'photos' => $photosList,
+                ];
+            } else {
+                $chunks = array_chunk($photosList, 4);
+                foreach ($chunks as $chunk) {
+                    $chunkCount = count($chunk);
+                    $layout = $chunkCount === 1 ? 'single' : ($chunkCount === 2 ? 'duo_v' : 'grid_4');
+                    $pages[] = [
+                        'layout' => $layout,
+                        'photos' => $chunk,
+                    ];
+                }
+            }
+        }
+
+        return $pages;
+    }
+
+    /**
      * Rendu HTML de l'intérieur.
      */
-    public function renderInteriorHtml(Book $book): string
+    public function renderInteriorHtml(Book $book, ?string $customAuthorName = null): string
     {
+        $chaptersData = [];
+        foreach ($book->getChapters() as $chapter) {
+            $title = $this->cleanText($chapter->getTitle());
+            $theme = $this->cleanText($chapter->getTheme());
+            $rawContent = $chapter->getContentFinal() ?: ($chapter->getContentGenerated() ?: '');
+            $cleanContent = $this->cleanText($rawContent);
+
+            $chaptersData[] = [
+                'chapter' => $chapter,
+                'clean_title' => $title,
+                'clean_theme' => $theme,
+                'clean_content' => $cleanContent,
+                'photo_pages' => $this->resolveChapterPhotoPages($chapter),
+            ];
+        }
+
         return $this->twig->render('pdf/memoires/interior.html.twig', [
             'book' => $book,
+            'clean_title' => $this->cleanText($book->getTitle()),
+            'clean_subtitle' => $this->cleanText($book->getSubtitle()),
+            'author_name' => $this->resolveAuthorName($book, $customAuthorName),
+            'chapters_data' => $chaptersData,
             'project_dir' => $this->projectDir,
         ]);
     }
@@ -74,7 +221,7 @@ class BookPdfGeneratorService
     /**
      * Rendu HTML de la couverture dépliée.
      */
-    public function renderCoverHtml(Book $book, int $pageCount = 64): string
+    public function renderCoverHtml(Book $book, int $pageCount = 64, string $coverStyle = 'biographic_split', ?string $customAuthorName = null, ?string $bgColor = null): string
     {
         $dimensions = $this->calculateCoverDimensions($pageCount);
         $coverImagePath = null;
@@ -84,10 +231,19 @@ class BookPdfGeneratorService
             $coverImageExists = file_exists($coverImagePath);
         }
 
+        $authorName = $this->resolveAuthorName($book, $customAuthorName);
+        $cleanTitle = $this->cleanText($book->getTitle());
+        $cleanSubtitle = $this->cleanText($book->getSubtitle());
+
         return $this->twig->render('pdf/memoires/cover.html.twig', array_merge($dimensions, [
             'book' => $book,
+            'clean_title' => $cleanTitle,
+            'clean_subtitle' => $cleanSubtitle,
             'cover_image_path' => $coverImagePath,
             'cover_image_exists' => $coverImageExists,
+            'cover_style' => $coverStyle,
+            'author_name' => $authorName,
+            'bg_color' => $bgColor,
             'project_dir' => $this->projectDir,
         ]));
     }
@@ -95,9 +251,9 @@ class BookPdfGeneratorService
     /**
      * Génère et retourne le binaire PDF de l'intérieur.
      */
-    public function generateInteriorBinary(Book $book): string
+    public function generateInteriorBinary(Book $book, ?string $customAuthorName = null): string
     {
-        $html = $this->renderInteriorHtml($book);
+        $html = $this->renderInteriorHtml($book, $customAuthorName);
 
         $options = new Options();
         $options->set('isRemoteEnabled', true);
@@ -118,9 +274,9 @@ class BookPdfGeneratorService
     /**
      * Génère et retourne le binaire PDF de la couverture dépliée.
      */
-    public function generateCoverBinary(Book $book, int $pageCount = 64): string
+    public function generateCoverBinary(Book $book, int $pageCount = 64, string $coverStyle = 'biographic_split', ?string $authorName = null, ?string $bgColor = null): string
     {
-        $html = $this->renderCoverHtml($book, $pageCount);
+        $html = $this->renderCoverHtml($book, $pageCount, $coverStyle, $authorName, $bgColor);
         $dims = $this->calculateCoverDimensions($pageCount);
 
         $options = new Options();
@@ -132,7 +288,7 @@ class BookPdfGeneratorService
 
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml($html, 'UTF-8');
-        $dompdf->setPaper([0, 0, $dims['cover_width_pt'], $dims['cover_height_pt']], 'landscape');
+        $dompdf->setPaper([0, 0, $dims['cover_width_pt'], $dims['cover_height_pt']]);
         $dompdf->render();
 
         return $dompdf->output();
@@ -143,7 +299,7 @@ class BookPdfGeneratorService
      *
      * @return array{interior_path: string, cover_path: string, page_count: int}
      */
-    public function generateAndSaveBookPdfs(Book $book): array
+    public function generateAndSaveBookPdfs(Book $book, string $coverStyle = 'biographic_split', ?string $authorName = null, ?string $bgColor = null): array
     {
         $bookDir = $this->projectDir . '/public/uploads/memoires/books/' . $book->getId()->toRfc4122();
         if (!is_dir($bookDir)) {
@@ -151,7 +307,7 @@ class BookPdfGeneratorService
         }
 
         // 1. Génération de l'intérieur
-        $interiorBinary = $this->generateInteriorBinary($book);
+        $interiorBinary = $this->generateInteriorBinary($book, $authorName);
         $interiorPath = $bookDir . '/interior.pdf';
         file_put_contents($interiorPath, $interiorBinary);
 
@@ -164,7 +320,7 @@ class BookPdfGeneratorService
         $pageCount = max(24, $pageCount);
 
         // 3. Génération de la couverture avec la tranche adaptée au nombre de pages
-        $coverBinary = $this->generateCoverBinary($book, $pageCount);
+        $coverBinary = $this->generateCoverBinary($book, $pageCount, $coverStyle, $authorName, $bgColor);
         $coverPath = $bookDir . '/cover.pdf';
         file_put_contents($coverPath, $coverBinary);
 

@@ -27,52 +27,75 @@ class CreateBookPrintOrderUseCase
         array $shippingData,
         string $publicBaseUrl
     ): BookPrintOrder {
-        if (empty($shippingData['recipient_name']) || empty($shippingData['street1']) || empty($shippingData['city']) || empty($shippingData['postal_code']) || empty($shippingData['country_code'])) {
+        // Normalisation complète et conforme de l'adresse de livraison
+        $normalizedAddress = LuluPrintService::normalizeAddress($shippingData);
+        $countryCode = $normalizedAddress['country_code'];
+
+        $recipientName = $normalizedAddress['name'];
+        if (($recipientName === 'Destinataire' || empty($recipientName)) && method_exists($user, 'getUserIdentifier')) {
+            $recipientName = $user->getUserIdentifier();
+            $normalizedAddress['name'] = $recipientName;
+        }
+
+        if (empty($normalizedAddress['street1']) || empty($normalizedAddress['city']) || empty($normalizedAddress['postal_code']) || empty($normalizedAddress['country_code'])) {
             throw new BadRequestHttpException('Coordonnées de livraison incomplètes (nom, rue, ville, code postal, pays requis).');
         }
 
         $em = $this->emProvider->getEntityManager();
 
-        // 1. Génération des PDFs finaux conformes Lulu
-        $pdfResult = $this->pdfGeneratorService->generateAndSaveBookPdfs($book);
-        $interiorPublicUrl = rtrim($publicBaseUrl, '/') . '/' . ltrim($pdfResult['interior_path'], '/');
-        $coverPublicUrl = rtrim($publicBaseUrl, '/') . '/' . ltrim($pdfResult['cover_path'], '/');
+        // 1. Détermination ou Génération des PDFs finaux conformes Lulu
+        $coverStyle = (string)($shippingData['cover_style'] ?? 'biographic_split');
+        $bgColor = !empty($shippingData['bg_color']) ? trim((string)$shippingData['bg_color']) : null;
+        if ($bgColor && !str_starts_with($bgColor, '#') && ctype_xdigit($bgColor)) {
+            $bgColor = '#' . $bgColor;
+        }
+        $customCoverPdfUrl = !empty($shippingData['custom_cover_pdf_url']) ? trim((string)$shippingData['custom_cover_pdf_url']) : null;
+        $customInteriorPdfUrl = !empty($shippingData['custom_interior_pdf_url']) ? trim((string)$shippingData['custom_interior_pdf_url']) : null;
 
-        // 2. Calcul du tarif exact
+        if ($customCoverPdfUrl && $customInteriorPdfUrl) {
+            $interiorPublicUrl = $customInteriorPdfUrl;
+            $coverPublicUrl = $customCoverPdfUrl;
+            $pageCount = 64;
+        } else {
+            $pdfResult = $this->pdfGeneratorService->generateAndSaveBookPdfs($book, $coverStyle, $recipientName, $bgColor);
+            $interiorPublicUrl = $customInteriorPdfUrl ?: (rtrim($publicBaseUrl, '/') . '/' . ltrim($pdfResult['interior_path'], '/'));
+            $coverPublicUrl = $customCoverPdfUrl ?: (rtrim($publicBaseUrl, '/') . '/' . ltrim($pdfResult['cover_path'], '/'));
+            $pageCount = $pdfResult['page_count'];
+        }
+
+        // 2. Détermination et validation du mode de transport
         $quantity = max(1, (int)($shippingData['quantity'] ?? 1));
-        $shippingLevel = strtoupper($shippingData['shipping_level'] ?? 'MAIL');
+        $rawLevel = !empty($shippingData['shipping_level']) ? (string)$shippingData['shipping_level'] : ($countryCode === 'CA' ? 'PRIORITY_MAIL' : 'MAIL');
+        $effectiveShippingLevel = LuluPrintService::sanitizeShippingLevel($rawLevel, $countryCode);
 
         $costData = $this->luluPrintService->calculatePrintCost(
             $book,
-            [
-                'name' => $shippingData['recipient_name'],
-                'street1' => $shippingData['street1'],
-                'street2' => $shippingData['street2'] ?? '',
-                'city' => $shippingData['city'],
-                'state_code' => $shippingData['state'] ?? '',
-                'postcode' => $shippingData['postal_code'],
-                'country_code' => $shippingData['country_code'],
-                'phone_number' => $shippingData['phone_number'] ?? null,
-            ],
-            $shippingLevel,
+            $normalizedAddress,
+            $effectiveShippingLevel,
             $quantity,
-            $pdfResult['page_count']
+            $pageCount
         );
 
-        // 3. Création et persistance de l'entité BookPrintOrder
+        // 3. Création et persistance de l'entité BookPrintOrder avec données normalisées
         $order = new BookPrintOrder();
         $order->setBook($book);
         $order->setUser($user);
-        $order->setRecipientName($shippingData['recipient_name']);
-        $order->setStreet1($shippingData['street1']);
-        $order->setStreet2($shippingData['street2'] ?? null);
-        $order->setCity($shippingData['city']);
-        $order->setState($shippingData['state'] ?? null);
-        $order->setPostalCode($shippingData['postal_code']);
-        $order->setCountryCode($shippingData['country_code']);
-        $order->setPhoneNumber($shippingData['phone_number'] ?? null);
-        $order->setEmail($shippingData['email'] ?? $user->getEmail());
-        $order->setShippingLevel($shippingLevel);
+        $order->setCoverStyle($coverStyle);
+        $order->setBgColor($bgColor);
+        $order->setCustomCoverPdfUrl($customCoverPdfUrl);
+        $order->setCustomInteriorPdfUrl($customInteriorPdfUrl);
+        $order->setCoverPdfUrl($coverPublicUrl);
+        $order->setInteriorPdfUrl($interiorPublicUrl);
+        $order->setRecipientName($recipientName);
+        $order->setStreet1($normalizedAddress['street1']);
+        $order->setStreet2(!empty($normalizedAddress['street2']) ? $normalizedAddress['street2'] : null);
+        $order->setCity($normalizedAddress['city']);
+        $order->setState(!empty($normalizedAddress['state_code']) ? $normalizedAddress['state_code'] : null);
+        $order->setPostalCode($normalizedAddress['postal_code']);
+        $order->setCountryCode($normalizedAddress['country_code']);
+        $order->setPhoneNumber(!empty($normalizedAddress['phone_number']) ? $normalizedAddress['phone_number'] : null);
+        $order->setEmail(!empty($shippingData['email']) ? (string)$shippingData['email'] : (!empty($shippingData['contact_email']) ? (string)$shippingData['contact_email'] : $user->getEmail()));
+        $order->setShippingLevel($effectiveShippingLevel);
         $order->setQuantity($quantity);
         $order->setPrintCost($costData['print_cost']);
         $order->setShippingCost($costData['shipping_cost']);

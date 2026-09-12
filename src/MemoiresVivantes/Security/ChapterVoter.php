@@ -26,6 +26,10 @@ class ChapterVoter extends Voter
             return false;
         }
 
+        if (in_array('ROLE_ADMIN', $user->getRoles(), true) || in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true)) {
+            return true;
+        }
+
         /** @var Chapter $chapter */
         $chapter = $subject;
         $book = $chapter->getBook();

@@ -129,6 +129,22 @@ class BookPrintOrder
     #[Groups(['book_print:read'])]
     private ?string $coverPdfUrl = null;
 
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['book_print:read', 'book_print:write'])]
+    private ?string $coverStyle = 'biographic_split';
+
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['book_print:read', 'book_print:write'])]
+    private ?string $bgColor = null;
+
+    #[ORM\Column(length: 500, nullable: true)]
+    #[Groups(['book_print:read', 'book_print:write'])]
+    private ?string $customCoverPdfUrl = null;
+
+    #[ORM\Column(length: 500, nullable: true)]
+    #[Groups(['book_print:read', 'book_print:write'])]
+    private ?string $customInteriorPdfUrl = null;
+
     #[ORM\Column(type: Types::JSON, nullable: true)]
     private ?array $luluRawResponse = null;
 
@@ -488,6 +504,50 @@ class BookPrintOrder
     public function setShippedAt(?\DateTimeInterface $shippedAt): static
     {
         $this->shippedAt = $shippedAt;
+        return $this;
+    }
+
+    public function getCoverStyle(): ?string
+    {
+        return $this->coverStyle;
+    }
+
+    public function setCoverStyle(?string $coverStyle): static
+    {
+        $this->coverStyle = $coverStyle;
+        return $this;
+    }
+
+    public function getBgColor(): ?string
+    {
+        return $this->bgColor;
+    }
+
+    public function setBgColor(?string $bgColor): static
+    {
+        $this->bgColor = $bgColor;
+        return $this;
+    }
+
+    public function getCustomCoverPdfUrl(): ?string
+    {
+        return $this->customCoverPdfUrl;
+    }
+
+    public function setCustomCoverPdfUrl(?string $customCoverPdfUrl): static
+    {
+        $this->customCoverPdfUrl = $customCoverPdfUrl;
+        return $this;
+    }
+
+    public function getCustomInteriorPdfUrl(): ?string
+    {
+        return $this->customInteriorPdfUrl;
+    }
+
+    public function setCustomInteriorPdfUrl(?string $customInteriorPdfUrl): static
+    {
+        $this->customInteriorPdfUrl = $customInteriorPdfUrl;
         return $this;
     }
 }

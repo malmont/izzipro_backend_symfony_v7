@@ -18,6 +18,10 @@ class ChapterOutputDto
     public ?string $generationError;
     public array $photos = [];
     public array $questions = [];
+    public ?array $photoLayout = null;
+    public ?array $photo_layout = null;
+    public ?array $photoPages = null;
+    public ?array $photo_pages = null;
 
     public function __construct(Chapter $chapter, string $host, array $questions = [])
     {
@@ -85,6 +89,11 @@ class ChapterOutputDto
         $this->contentFinal = $chapter->getContentFinal();
         $this->generationStatus = $chapter->getGenerationStatus();
         $this->generationError = $chapter->getGenerationError();
+        $layout = $chapter->getPhotoLayout();
+        $this->photoLayout = $layout;
+        $this->photo_layout = $layout;
+        $this->photoPages = $layout;
+        $this->photo_pages = $layout;
 
         foreach ($chapter->getPhotos() as $photo) {
             $this->photos[] = [

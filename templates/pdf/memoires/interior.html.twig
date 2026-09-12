@@ -47,9 +47,9 @@
             text-align: center;
         }
 
-        /* Page de faux-titre */
+        /* Page de faux-titre : première page du livre, pas de break-before pour éviter une page 1 blanche */
         .half-title-page {
-            page-break-before: always;
+            page-break-before: avoid;
             page-break-after: always;
             text-align: center;
             padding-top: 80mm;
@@ -65,7 +65,7 @@
 
         /* Page de grand titre */
         .title-page {
-            page-break-before: always;
+            page-break-before: avoid;
             page-break-after: always;
             text-align: center;
             padding-top: 60mm;
@@ -105,7 +105,7 @@
 
         /* Page de sommaire */
         .toc-page {
-            page-break-before: always;
+            page-break-before: avoid;
             page-break-after: always;
             padding-top: 25mm;
         }
@@ -139,10 +139,14 @@
             width: 30%;
         }
 
-        /* Chapitres */
+        /* Chapitres : saut de page avant chaque chapitre SAUF le premier qui suit directement le sommaire */
         .chapter-container {
             page-break-before: always;
             padding-top: 20mm;
+        }
+
+        .chapter-container.first-chapter {
+            page-break-before: avoid !important;
         }
 
         .chapter-header {
@@ -205,27 +209,97 @@
             font-weight: bold;
         }
 
-        /* Photos de chapitres */
-        .photo-block {
+        /* ====================================================
+           Planches Photos Dédiées (Albums de Prestige)
+        ==================================================== */
+        .photo-album-page {
+            page-break-before: always;
             page-break-inside: avoid;
-            margin: 10mm 0;
+            padding-top: 5mm;
             text-align: center;
         }
 
-        .chapter-photo {
-            max-width: 85%;
-            max-height: 140mm;
+        .photo-frame {
+            background-color: #fdfdfd;
+            border: 0.5pt solid #e0e0e0;
+            padding: 2.5mm;
             border-radius: 2px;
-            box-shadow: 0 1mm 3mm rgba(0,0,0,0.15);
-            border: 1pt solid #eaeaea;
+            box-shadow: 0 1mm 2.5mm rgba(0,0,0,0.06);
+            display: inline-block;
+            box-sizing: border-box;
+            max-width: 100%;
         }
 
-        .photo-caption {
-            font-size: 9pt;
-            font-style: italic;
-            color: #666666;
-            margin-top: 2.5mm;
+        /* Gabarit 1 : Mosaïque 2x2 (grid_4) */
+        .layout-grid-table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            border: none;
+            margin: 0 auto;
+        }
+
+        .layout-grid-cell {
+            width: 50%;
+            padding: 2.5mm 3mm;
+            vertical-align: middle;
             text-align: center;
+        }
+
+        .photo-img-grid {
+            max-width: 100%;
+            max-height: 98mm;
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* Gabarit 2 : Deux photos côte à côte (duo_v) */
+        .layout-duo-v-table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            border: none;
+            margin: 15mm auto;
+        }
+
+        .layout-duo-v-cell {
+            width: 50%;
+            padding: 0 3.5mm;
+            vertical-align: middle;
+            text-align: center;
+        }
+
+        .photo-img-duo-v {
+            max-width: 100%;
+            max-height: 145mm;
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* Gabarit 3 : Deux photos empilées horizontalement (duo_h) */
+        .layout-duo-h-block {
+            margin: 5mm auto 8mm auto;
+            text-align: center;
+        }
+
+        .photo-img-duo-h {
+            max-width: 95%;
+            max-height: 105mm;
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* Gabarit 4 : Grande photo pleine page (single) */
+        .layout-single-block {
+            padding-top: 15mm;
+            text-align: center;
+        }
+
+        .photo-img-single {
+            max-width: 90%;
+            max-height: 185mm;
+            display: block;
+            margin: 0 auto;
         }
 
         /* Page de fin / colophon */
@@ -248,23 +322,18 @@
 
     {# 1. Faux-titre #}
     <div class="half-title-page">
-        <div class="half-title">{{ book.title }}</div>
+        <div class="half-title">{{ clean_title|default(book.title) }}</div>
     </div>
 
     {# 2. Grand Titre #}
     <div class="title-page">
-        <div class="main-title">{{ book.title }}</div>
-        {% if book.subtitle %}
-            <div class="subtitle">{{ book.subtitle }}</div>
+        <div class="main-title">{{ clean_title|default(book.title) }}</div>
+        {% if clean_subtitle or book.subtitle %}
+            <div class="subtitle">{{ clean_subtitle|default(book.subtitle) }}</div>
         {% endif %}
         
         <div class="author-name">
-            {% if book.person1FirstName %}
-                {{ book.person1FirstName }}
-                {% if book.person2FirstName %} &amp; {{ book.person2FirstName }}{% endif %}
-            {% else %}
-                {{ book.user ? (book.user.firstname ~ ' ' ~ book.user.lastname) : '' }}
-            {% endif %}
+            {{ author_name|default('Danielle Almont') }}
         </div>
 
         <div class="collection-name">MÉMOIRE VIVANTE</div>
@@ -282,47 +351,107 @@
         {% endfor %}
     </div>
 
-    {# 4. Contenu des Chapitres #}
-    {% for chapter in book.chapters %}
-        <div class="chapter-container">
+    {# 4. Contenu des Chapitres & Planches Photos Dédiées #}
+    {% set chapters_list = chapters_data|default([]) %}
+    {% for item in chapters_list %}
+        {% set chapter = item.chapter %}
+        <div class="chapter-container{% if loop.first %} first-chapter{% endif %}" style="{% if loop.first %}page-break-before: avoid !important;{% endif %}">
             <div class="chapter-header">
-                {% if chapter.theme %}
-                    <div class="chapter-theme">{{ chapter.theme }}</div>
+                {% if item.clean_theme %}
+                    <div class="chapter-theme">{{ item.clean_theme|raw }}</div>
                 {% endif %}
                 <div class="chapter-number">Chapitre {{ loop.index }}</div>
-                <h2 class="chapter-title">{{ chapter.title }}</h2>
+                <h2 class="chapter-title">{{ item.clean_title|raw }}</h2>
             </div>
 
             <div class="story-content">
-                {% set text = chapter.contentFinal ?: (chapter.contentGenerated ?: '') %}
-                {% if text %}
-                    {% set paragraphs = text|split("\n\n") %}
+                {% if item.clean_content %}
+                    {% set paragraphs = item.clean_content|split("\n\n") %}
                     {% for p in paragraphs %}
                         {% set pTrim = p|trim %}
                         {% if pTrim %}
                             <p class="story-paragraph">
                                 {% if loop.first and pTrim|length > 1 %}
-                                    <span class="first-letter">{{ pTrim|slice(0, 1) }}</span>{{ pTrim|slice(1) }}
+                                    <span class="first-letter">{{ pTrim|slice(0, 1)|raw }}</span>{{ pTrim|slice(1)|raw }}
                                 {% else %}
-                                    {{ pTrim|nl2br }}
+                                    {{ pTrim|nl2br|raw }}
                                 {% endif %}
                             </p>
                         {% endif %}
                     {% endfor %}
                 {% endif %}
             </div>
+        </div>
 
-            {# Photos du chapitre #}
-            {% if chapter.photos is not empty %}
-                {% for photo in chapter.photos %}
-                    {% if photo.filePath %}
-                        <div class="photo-block">
-                            <img src="{{ project_dir }}/public/uploads/memoires/{{ photo.filePath }}" class="chapter-photo" alt="Photo">
+        {# Planches Photos Dédiées du Chapitre (Gabarits grid_4, duo_v, duo_h, single) #}
+        {% if item.photo_pages is defined and item.photo_pages is not empty %}
+            {% for ppage in item.photo_pages %}
+                <div class="photo-album-page">
+                    {% if ppage.layout == 'grid_4' %}
+                        {# Gabarit 1 : Mosaïque 2x2 (Conforme au livre physique) #}
+                        <table class="layout-grid-table">
+                            {% for row in ppage.photos|batch(2) %}
+                                <tr>
+                                    {% for photo in row %}
+                                        <td class="layout-grid-cell">
+                                            {% if photo.filePath is defined and photo.filePath %}
+                                                <div class="photo-frame">
+                                                    <img src="{{ project_dir }}/public/uploads/memoires/{{ photo.filePath }}" class="photo-img-grid" alt="Photo">
+                                                </div>
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                    {% if row|length == 1 %}
+                                        <td class="layout-grid-cell"></td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </table>
+
+                    {% elseif ppage.layout == 'duo_v' %}
+                        {# Gabarit 2 : Deux photos côte à côte (Portrait) #}
+                        <table class="layout-duo-v-table">
+                            <tr>
+                                {% for photo in ppage.photos %}
+                                    <td class="layout-duo-v-cell">
+                                        {% if photo.filePath is defined and photo.filePath %}
+                                            <div class="photo-frame">
+                                                <img src="{{ project_dir }}/public/uploads/memoires/{{ photo.filePath }}" class="photo-img-duo-v" alt="Photo">
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                                {% if ppage.photos|length == 1 %}
+                                    <td class="layout-duo-v-cell"></td>
+                                {% endif %}
+                            </tr>
+                        </table>
+
+                    {% elseif ppage.layout == 'duo_h' %}
+                        {# Gabarit 3 : Deux photos empilées horizontalement (Paysage) #}
+                        <div class="layout-duo-h-block">
+                            {% for photo in ppage.photos %}
+                                {% if photo.filePath is defined and photo.filePath %}
+                                    <div class="photo-frame" style="margin-bottom: 5mm;">
+                                        <img src="{{ project_dir }}/public/uploads/memoires/{{ photo.filePath }}" class="photo-img-duo-h" alt="Photo">
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
+                    {% else %}
+                        {# Gabarit 4 : Grande photo pleine page (single) #}
+                        <div class="layout-single-block">
+                            {% if ppage.photos[0] is defined and ppage.photos[0].filePath %}
+                                <div class="photo-frame">
+                                    <img src="{{ project_dir }}/public/uploads/memoires/{{ ppage.photos[0].filePath }}" class="photo-img-single" alt="Photo">
+                                </div>
+                            {% endif %}
                         </div>
                     {% endif %}
-                {% endfor %}
-            {% endif %}
-        </div>
+                </div>
+            {% endfor %}
+        {% endif %}
     {% endfor %}
 
     {# 5. Page finale Colophon #}

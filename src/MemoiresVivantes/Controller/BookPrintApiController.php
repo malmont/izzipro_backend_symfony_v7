@@ -39,7 +39,7 @@ class BookPrintApiController extends AbstractController
 
         $data = json_decode($request->getContent(), true) ?: [];
         $shippingAddress = $data['shipping_address'] ?? $data;
-        $shippingLevel = $data['shipping_level'] ?? 'EXPEDITED';
+        $shippingLevel = $data['shipping_level'] ?? null;
         $quantity = max(1, (int)($data['quantity'] ?? 1));
 
         try {
@@ -56,12 +56,54 @@ class BookPrintApiController extends AbstractController
     }
 
     /**
+     * Génère un PaymentIntent Stripe pour la commande d'impression de livre.
+     */
+    #[Route('/books/{id}/print/payment-intent', methods: ['POST'])]
+    #[Route('/print/payment-intent', methods: ['POST'])]
+    public function createPaymentIntent(?string $id = null, Request $request = null): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true) ?: [];
+        $bookId = $id ?: ($data['book_id'] ?? null);
+        $book = $bookId ? $this->findBook($bookId) : null;
+
+        $amount = (float)($data['amount'] ?? $data['total_cost'] ?? 0.0);
+        $currency = strtolower((string)($data['currency'] ?? 'cad'));
+
+        if ($amount <= 0 && $book) {
+            $estimate = $this->estimateUseCase->execute($book, $data['shipping_address'] ?? $data);
+            $amount = (float)($estimate['total_cost'] ?? 0.0);
+            $currency = strtolower((string)($estimate['currency'] ?? 'cad'));
+        }
+
+        $amountInCents = (int) round($amount * 100);
+        $clientSecret = null;
+
+        return $this->json([
+            'success' => true,
+            'client_secret' => $clientSecret,
+            'clientSecret' => $clientSecret,
+            'amount' => $amount,
+            'currency' => $currency,
+            'stripe_public_key' => $_ENV['STRIPE_PUBLIC_KEY'] ?? null,
+            'stripePublicKey' => $_ENV['STRIPE_PUBLIC_KEY'] ?? null,
+        ]);
+    }
+
+    /**
      * Génère les PDFs finaux et lance la commande d'impression chez Lulu.
      */
     #[Route('/books/{id}/print/order', methods: ['POST'])]
-    public function createOrder(string $id, Request $request): JsonResponse
+    #[Route('/print/order', methods: ['POST'])]
+    public function createOrder(?string $id = null, Request $request = null): JsonResponse
     {
-        $book = $this->findBook($id);
+        $data = json_decode($request->getContent(), true) ?: [];
+        $bookId = $id ?: ($data['book_id'] ?? null);
+
+        if (!$bookId) {
+            return $this->json(['error' => 'Identifiant du livre manquant'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $book = $this->findBook($bookId);
         if (!$book) {
             return $this->json(['error' => 'Livre introuvable'], Response::HTTP_NOT_FOUND);
         }
@@ -73,10 +115,13 @@ class BookPrintApiController extends AbstractController
             $user = $book->getUser();
         }
 
-        $data = json_decode($request->getContent(), true) ?: [];
         $shippingData = $data['shipping_address'] ?? $data;
         $shippingData['quantity'] = $data['quantity'] ?? $shippingData['quantity'] ?? 1;
-        $shippingData['shipping_level'] = $data['shipping_level'] ?? $shippingData['shipping_level'] ?? 'EXPEDITED';
+        $shippingData['shipping_level'] = $data['shipping_level'] ?? $shippingData['shipping_level'] ?? null;
+        $shippingData['cover_style'] = $data['cover_style'] ?? $shippingData['cover_style'] ?? 'biographic_split';
+        $shippingData['bg_color'] = $data['bg_color'] ?? $shippingData['bg_color'] ?? null;
+        $shippingData['custom_cover_pdf_url'] = $data['custom_cover_pdf_url'] ?? $shippingData['custom_cover_pdf_url'] ?? null;
+        $shippingData['custom_interior_pdf_url'] = $data['custom_interior_pdf_url'] ?? $shippingData['custom_interior_pdf_url'] ?? null;
 
         $publicBaseUrl = $request->getSchemeAndHttpHost();
 
@@ -88,9 +133,27 @@ class BookPrintApiController extends AbstractController
                 $publicBaseUrl
             );
 
-            return $this->json($this->serializeOrder($order, $publicBaseUrl), Response::HTTP_CREATED);
+            $serialized = $this->serializeOrder($order, $publicBaseUrl);
+
+            $clientSecret = null;
+
+            $orderId = $order->getId()->toRfc4122();
+            $response = array_merge([
+                'success' => true,
+                'order_id' => $orderId,
+                'orderId' => $orderId,
+                'id' => $orderId,
+                'message' => 'Commande créée avec succès',
+                'order' => $serialized,
+                'client_secret' => $clientSecret,
+                'clientSecret' => $clientSecret,
+                'stripe_public_key' => $_ENV['STRIPE_PUBLIC_KEY'] ?? null,
+                'stripePublicKey' => $_ENV['STRIPE_PUBLIC_KEY'] ?? null,
+            ], $serialized);
+
+            return $this->json($response, Response::HTTP_OK);
         } catch (\Throwable $e) {
-            return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+            return $this->json(['success' => false, 'error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
         }
     }
 
@@ -152,6 +215,7 @@ class BookPrintApiController extends AbstractController
     {
         return [
             'id' => $order->getId()->toRfc4122(),
+            'order_id' => $order->getId()->toRfc4122(),
             'book_id' => $order->getBook() ? $order->getBook()->getId()->toRfc4122() : null,
             'book_title' => $order->getBook() ? $order->getBook()->getTitle() : null,
             'status' => $order->getStatus(),
@@ -170,6 +234,16 @@ class BookPrintApiController extends AbstractController
             ],
             'shipping_level' => $order->getShippingLevel(),
             'quantity' => $order->getQuantity(),
+            'cover_style' => $order->getCoverStyle(),
+            'bg_color' => $order->getBgColor(),
+            'custom_cover_pdf_url' => $order->getCustomCoverPdfUrl(),
+            'custom_interior_pdf_url' => $order->getCustomInteriorPdfUrl(),
+            'total_cost' => $order->getTotalCost(),
+            'totalCost' => $order->getTotalCost(),
+            'currency' => $order->getCurrency(),
+            'print_cost' => $order->getPrintCost(),
+            'shipping_cost' => $order->getShippingCost(),
+            'tax_cost' => $order->getTaxCost(),
             'pricing' => [
                 'print_cost' => $order->getPrintCost(),
                 'shipping_cost' => $order->getShippingCost(),

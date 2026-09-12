@@ -22,10 +22,13 @@ class AddressAutocompleteController extends AbstractController
     #[Route('/autocomplete', methods: ['GET'])]
     public function suggest(Request $request): JsonResponse
     {
-        $dto = new AddressSuggestionInputDto($request->query->all());
-        $results = $this->suggestUseCase->execute($dto);
-
-        return $this->json($results);
+        try {
+            $dto = new AddressSuggestionInputDto($request->query->all());
+            $results = $this->suggestUseCase->execute($dto);
+            return $this->json($results);
+        } catch (\Throwable $e) {
+            return $this->json([]);
+        }
     }
 
     #[Route('/details', methods: ['GET'])]

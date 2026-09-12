@@ -144,6 +144,158 @@ class LuluPrintService
      *   details?: array
      * }
      */
+    /**
+     * Normalise l'adresse de livraison aux standards postaux requis par Lulu.
+     *
+     * @param array $raw
+     * @return array{
+     *     name: string,
+     *     street1: string,
+     *     street2: string,
+     *     city: string,
+     *     state_code: string,
+     *     country_code: string,
+     *     postcode: string,
+     *     postal_code: string,
+     *     phone_number: string,
+     *     contact_email: string
+     * }
+     */
+    public static function normalizeAddress(array $raw): array
+    {
+        $street1 = trim((string)($raw['street1'] ?? $raw['street'] ?? $raw['address'] ?? $raw['address1'] ?? $raw['line1'] ?? ''));
+        $street2 = trim((string)($raw['street2'] ?? $raw['apt'] ?? $raw['suite'] ?? $raw['apartment'] ?? ''));
+        $city = trim((string)($raw['city'] ?? $raw['locality'] ?? $raw['town'] ?? ''));
+
+        $rawCountry = strtoupper(trim((string)($raw['country_code'] ?? $raw['country'] ?? 'CA')));
+        $countryMap = [
+            'CANADA' => 'CA',
+            'CAN' => 'CA',
+            'ÉTATS-UNIS' => 'US',
+            'ETATS-UNIS' => 'US',
+            'UNITED STATES' => 'US',
+            'USA' => 'US',
+            'FRANCE' => 'FR',
+            'FRA' => 'FR',
+            'ROYAUME-UNI' => 'GB',
+            'UNITED KINGDOM' => 'GB',
+            'UK' => 'GB',
+            'BELGIQUE' => 'BE',
+            'BELGIUM' => 'BE',
+            'SUISSE' => 'CH',
+            'SWITZERLAND' => 'CH',
+        ];
+        $countryCode = $countryMap[$rawCountry] ?? (strlen($rawCountry) === 2 ? $rawCountry : 'CA');
+
+        $state = trim((string)($raw['state_code'] ?? $raw['state'] ?? $raw['province'] ?? ''));
+        if (preg_match('/\(([A-Z]{2})\)/i', $state, $matches)) {
+            $state = strtoupper($matches[1]);
+        } elseif (strlen($state) > 2 && preg_match('/\b([A-Z]{2})\b/i', $state, $matches)) {
+            $state = strtoupper($matches[1]);
+        }
+
+        $postcode = trim((string)($raw['postal_code'] ?? $raw['postcode'] ?? $raw['zip'] ?? ''));
+        $name = trim((string)($raw['recipient_name'] ?? $raw['name'] ?? 'Destinataire'));
+        $phone = trim((string)($raw['phone_number'] ?? $raw['phone'] ?? '+15140000000'));
+        $email = trim((string)($raw['contact_email'] ?? $raw['email'] ?? ''));
+
+        // 1. Normalisation code postal canadien : format postal A1A 1A1 (espace obligatoire chez Postes Canada et Lulu)
+        if ($countryCode === 'CA') {
+            $cleanPost = strtoupper(str_replace([' ', '-'], '', $postcode));
+            if (preg_match('/^([A-Z]\d[A-Z])(\d[A-Z]\d)$/', $cleanPost, $m)) {
+                $postcode = $m[1] . ' ' . $m[2];
+            }
+        } elseif (in_array($countryCode, ['FR', 'BE', 'MC'])) {
+            $postcode = preg_replace('/[^\d]/', '', $postcode);
+        }
+
+        // 2. Extraction automatique de l'appartement / suite si street2 est vide
+        if (empty($street2)) {
+            if (preg_match('/^(.*?),\s*(.*)$/', $street1, $m)) {
+                $street1 = trim($m[1]);
+                $street2 = trim($m[2]);
+            } elseif (preg_match('/^(.*?[a-zà-ÿ0-9])\s+(?:(?:apt|app|appartement|suite|bureau|unit|chambre|porte|#)\s*([a-z0-9-]+))$/i', $street1, $m)) {
+                $street1 = trim($m[1]);
+                $street2 = 'Apt ' . trim($m[2]);
+            } elseif (preg_match('/^(.*?[a-zà-ÿ])\s+([A-Z]\d{2,4}|\d{1,4}[A-Z])$/i', $street1, $m)) {
+                // Correspond à "4000 avenue de la pépinière C307" -> street1: 4000 avenue de la pépinière, street2: C307
+                $street1 = trim($m[1]);
+                $street2 = trim($m[2]);
+            }
+        }
+
+        return [
+            'name' => $name,
+            'street1' => $street1,
+            'street2' => $street2,
+            'city' => $city,
+            'state_code' => $state,
+            'country_code' => $countryCode,
+            'postcode' => $postcode,
+            'postal_code' => $postcode,
+            'phone_number' => $phone,
+            'contact_email' => $email,
+        ];
+    }
+
+    /**
+     * Valide et adapte le mode de livraison aux niveaux réels acceptés par Lulu selon le pays.
+     */
+    public static function sanitizeShippingLevel(string $level, string $countryCode): string
+    {
+        $level = strtoupper(trim($level));
+        $countryCode = strtoupper(trim($countryCode));
+
+        if ($countryCode === 'CA') {
+            return match ($level) {
+                'EXPEDITED' => 'PRIORITY_MAIL', // Lulu rejette EXPEDITED au Canada, PRIORITY_MAIL ou EXPRESS requis
+                'GROUND' => 'MAIL',
+                'EXPRESS' => 'EXPRESS',
+                'PRIORITY_MAIL' => 'PRIORITY_MAIL',
+                'MAIL' => 'MAIL',
+                default => 'MAIL',
+            };
+        }
+
+        if (in_array($countryCode, ['FR', 'BE', 'CH', 'LU', 'MC', 'DE', 'GB', 'ES', 'IT'])) {
+            return match ($level) {
+                'EXPEDITED', 'GROUND' => 'PRIORITY_MAIL',
+                'EXPRESS' => 'EXPRESS',
+                'PRIORITY_MAIL' => 'PRIORITY_MAIL',
+                'MAIL' => 'MAIL',
+                default => 'MAIL',
+            };
+        }
+
+        // US & international
+        return match ($level) {
+            'MAIL' => 'MAIL',
+            'PRIORITY_MAIL' => 'PRIORITY_MAIL',
+            'GROUND' => 'GROUND',
+            'EXPEDITED' => 'EXPEDITED',
+            'EXPRESS' => 'EXPRESS',
+            default => 'MAIL',
+        };
+    }
+
+    /**
+     * Calcule le coût d'impression et d'expédition via l'API Lulu (/print-job-cost-calculations/).
+     *
+     * @param Book $book
+     * @param array $shippingAddress
+     * @param string $shippingLevel
+     * @param int $quantity
+     * @param int $pageCount
+     * @return array{
+     *   print_cost: string,
+     *   shipping_cost: string,
+     *   tax_cost: string,
+     *   total_cost: string,
+     *   currency: string,
+     *   is_simulated: bool,
+     *   details?: array
+     * }
+     */
     public function calculatePrintCost(
         Book $book,
         array $shippingAddress,
@@ -151,11 +303,15 @@ class LuluPrintService
         int $quantity = 1,
         int $pageCount = 64
     ): array {
+        $normalizedAddress = self::normalizeAddress($shippingAddress);
+        $countryCode = $normalizedAddress['country_code'];
+        $effectiveShippingLevel = self::sanitizeShippingLevel($shippingLevel, $countryCode);
+
         $token = $this->getAccessToken();
 
         // Si l'API Lulu n'est pas configurée ou inaccessible, renvoyer une simulation tarifaire réaliste
         if (!$token) {
-            return $this->getSimulatedCostEstimate($shippingAddress, $shippingLevel, $quantity, $pageCount);
+            return $this->getSimulatedCostEstimate($normalizedAddress, $effectiveShippingLevel, $quantity, $pageCount);
         }
 
         try {
@@ -168,16 +324,16 @@ class LuluPrintService
                     ]
                 ],
                 'shipping_address' => [
-                    'name' => $shippingAddress['name'] ?? 'Destinataire',
-                    'street1' => $shippingAddress['street1'],
-                    'street2' => $shippingAddress['street2'] ?? '',
-                    'city' => $shippingAddress['city'],
-                    'state_code' => $shippingAddress['state_code'] ?? '',
-                    'postcode' => $shippingAddress['postcode'] ?? $shippingAddress['postal_code'] ?? '',
-                    'country_code' => strtoupper($shippingAddress['country_code'] ?? 'CA'),
-                    'phone_number' => $shippingAddress['phone_number'] ?? '+15140000000',
+                    'name' => $normalizedAddress['name'],
+                    'street1' => $normalizedAddress['street1'],
+                    'street2' => $normalizedAddress['street2'],
+                    'city' => $normalizedAddress['city'],
+                    'state_code' => $normalizedAddress['state_code'],
+                    'postcode' => $normalizedAddress['postcode'],
+                    'country_code' => $normalizedAddress['country_code'],
+                    'phone_number' => $normalizedAddress['phone_number'],
                 ],
-                'shipping_option' => strtoupper($shippingLevel),
+                'shipping_option' => $effectiveShippingLevel,
             ];
 
             $response = $this->httpClient->request('POST', rtrim($this->luluApiUrl, '/') . '/print-job-cost-calculations/', [
@@ -207,8 +363,17 @@ class LuluPrintService
                 'details' => $data,
             ];
         } catch (\Throwable $e) {
-            $this->logger->error('LuluPrintService cost calculation error: ' . $e->getMessage(), ['exception' => $e]);
-            return $this->getSimulatedCostEstimate($shippingAddress, $shippingLevel, $quantity, $pageCount);
+            $responseBody = null;
+            if ($e instanceof \Symfony\Contracts\HttpClient\Exception\HttpExceptionInterface) {
+                try {
+                    $responseBody = $e->getResponse()->getContent(false);
+                } catch (\Throwable) {}
+            }
+            $this->logger->error('LuluPrintService cost calculation error: ' . $e->getMessage(), [
+                'exception' => $e,
+                'response_body' => $responseBody,
+            ]);
+            return $this->getSimulatedCostEstimate($normalizedAddress, $effectiveShippingLevel, $quantity, $pageCount);
         }
     }
 
@@ -249,10 +414,13 @@ class LuluPrintService
 
         try {
             $book = $order->getBook();
+            $countryCode = strtoupper($order->getCountryCode() ?: 'CA');
+            $shippingLevel = self::sanitizeShippingLevel($order->getShippingLevel() ?: 'MAIL', $countryCode);
+
             $payload = [
                 'contact_email' => $this->luluContactEmail,
                 'external_id' => $order->getId()->toRfc4122(),
-                'shipping_level' => $order->getShippingLevel(),
+                'shipping_level' => $shippingLevel,
                 'shipping_address' => [
                     'name' => $order->getRecipientName(),
                     'street1' => $order->getStreet1(),
@@ -260,8 +428,8 @@ class LuluPrintService
                     'city' => $order->getCity(),
                     'state_code' => $order->getState() ?: '',
                     'postcode' => $order->getPostalCode(),
-                    'country_code' => $order->getCountryCode(),
-                    'phone_number' => $order->getPhoneNumber() ?: '+33100000000',
+                    'country_code' => $countryCode,
+                    'phone_number' => $order->getPhoneNumber() ?: '+15140000000',
                 ],
                 'line_items' => [
                     [
@@ -308,16 +476,25 @@ class LuluPrintService
                 'data' => $data,
             ];
         } catch (\Throwable $e) {
-            $this->logger->error('LuluPrintService createPrintJob error: ' . $e->getMessage(), ['exception' => $e]);
+            $responseBody = null;
+            if ($e instanceof \Symfony\Contracts\HttpClient\Exception\HttpExceptionInterface) {
+                try {
+                    $responseBody = $e->getResponse()->getContent(false);
+                } catch (\Throwable) {}
+            }
+            $this->logger->error('LuluPrintService createPrintJob error: ' . $e->getMessage(), [
+                'exception' => $e,
+                'response_body' => $responseBody,
+            ]);
             $order->setStatus('error');
-            $order->setErrorMessage($e->getMessage());
+            $order->setErrorMessage($e->getMessage() . ($responseBody ? ' - ' . $responseBody : ''));
 
             $em = $this->emProvider->getEntityManager();
             $em->flush();
 
             return [
                 'success' => false,
-                'error' => $e->getMessage(),
+                'error' => $e->getMessage() . ($responseBody ? ' - ' . $responseBody : ''),
             ];
         }
     }

@@ -25,31 +25,38 @@
             overflow: hidden;
         }
 
-        .cover-table {
-            width: 100%;
-            height: 100%;
-            border-collapse: collapse;
-            table-layout: fixed;
+        .cover-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: {{ cover_width_pt }}pt;
+            height: {{ cover_height_pt }}pt;
+            overflow: hidden;
         }
 
-        /* 4ème de couverture (gauche) */
+        /* ----------------------------------------------------
+           4ème de couverture (gauche)
+        ---------------------------------------------------- */
         .back-cover {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: {{ back_cover_width_pt }}pt;
-            height: 100%;
-            vertical-align: middle;
+            height: {{ cover_height_pt }}pt;
             text-align: center;
-            padding: 40mm 25mm;
+            padding: 60mm 30mm 30mm 30mm;
             background-color: #fbfbfb;
-            position: relative;
+            box-sizing: border-box;
+            border-right: 0.5pt solid #eaeaea;
         }
 
         .back-quote {
             font-size: 15pt;
             font-style: italic;
-            line-height: 1.7;
+            line-height: 1.8;
             color: #333333;
-            max-width: 80%;
-            margin: 0 auto;
+            max-width: 85%;
+            margin: 50mm auto 0 auto;
         }
 
         .back-logo-container {
@@ -62,169 +69,545 @@
 
         .back-logo-text {
             font-size: 11pt;
-            letter-spacing: 3px;
+            letter-spacing: 4px;
             text-transform: uppercase;
             color: #b59449;
             font-weight: bold;
         }
 
-        /* Tranche centrale (Spine) */
+        /* ----------------------------------------------------
+           Tranche centrale (Spine)
+        ---------------------------------------------------- */
         .spine-cell {
+            position: absolute;
+            top: 0;
+            left: {{ back_cover_width_pt }}pt;
             width: {{ spine_width_pt }}pt;
-            height: 100%;
+            height: {{ cover_height_pt }}pt;
             background-color: #b59449;
             color: #ffffff;
-            vertical-align: middle;
             text-align: center;
-            padding: 0;
-            position: relative;
+            overflow: hidden;
         }
 
         .spine-text {
-            writing-mode: vertical-rl;
-            transform: rotate(180deg);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(90deg);
             white-space: nowrap;
-            font-size: 9pt;
+            font-size: 10pt;
             letter-spacing: 3px;
             text-transform: uppercase;
             color: #ffffff;
-            display: inline-block;
         }
 
-        /* 1ère de couverture (droite) */
+        /* ----------------------------------------------------
+           1ère de couverture (droite) - Base
+        ---------------------------------------------------- */
         .front-cover {
-            width: {{ front_cover_width_pt }}pt;
-            height: 100%;
-            vertical-align: top;
-            padding: 35mm 25mm 25mm 25mm;
-            background-color: #ffffff;
-            position: relative;
-        }
-
-        {% if cover_image_exists %}
-        .front-cover-bg {
             position: absolute;
             top: 0;
-            right: 0;
-            width: 60%;
+            left: {{ back_cover_width_pt + spine_width_pt }}pt;
+            width: {{ front_cover_width_pt }}pt;
+            height: {{ cover_height_pt }}pt;
+            background-color: #ffffff;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        /* ====================================================
+           STYLE 1 : BIOGRAPHIC_SPLIT (Modèle Danielle Almont)
+        ==================================================== */
+        .style-biographic-photo {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 52%;
             height: 100%;
             background-image: url('{{ cover_image_path }}');
             background-size: cover;
-            background-position: center right;
-            z-index: 1;
+            background-position: center top;
         }
-        {% endif %}
 
-        .front-content {
-            position: relative;
-            z-index: 2;
-            width: 100%;
+        .style-biographic-panel {
+            position: absolute;
+            top: 0;
+            left: 52%;
+            width: 48%;
             height: 100%;
+            background-color: #ffffff;
+            padding: 35mm 16mm 30mm 16mm;
+            box-sizing: border-box;
         }
 
-        .front-title {
-            font-size: 50pt;
+        .style-biographic-title {
+            font-size: 42pt;
             font-weight: bold;
-            color: #1a1a1a;
+            color: #2b3a42;
             line-height: 0.95;
-            margin-bottom: 8mm;
-            letter-spacing: -1px;
+            letter-spacing: -0.5px;
+            margin-bottom: 25mm;
+            word-wrap: break-word;
         }
 
-        .front-subtitle {
+        .style-biographic-title-top {
+            display: block;
+            font-size: 52pt;
+            color: #1f2d34;
+        }
+
+        .style-biographic-title-bottom {
+            display: block;
+            font-size: 38pt;
+            color: #3b4d57;
+            margin-top: -3mm;
+        }
+
+        .style-biographic-subtitle {
             font-size: 13pt;
             color: #b59449;
             font-weight: 500;
-            line-height: 1.4;
-            max-width: 65%;
+            line-height: 1.5;
             margin-bottom: 40mm;
+            max-width: 90%;
         }
 
-        .front-author {
+        .style-biographic-footer {
+            position: absolute;
+            bottom: 35mm;
+            left: 16mm;
+            right: 16mm;
+        }
+
+        .style-biographic-author {
             font-size: 20pt;
             font-style: italic;
-            color: #222222;
+            color: #1a1a1a;
             margin-bottom: 4mm;
         }
 
-        .front-brand {
-            font-size: 11pt;
+        .style-biographic-brand {
+            font-size: 10pt;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: #b59449;
+            font-weight: bold;
+        }
+
+        /* ====================================================
+           STYLE 2 : FULL_PHOTO (Pleine Page)
+        ==================================================== */
+        .style-full-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('{{ cover_image_path }}');
+            background-size: cover;
+            background-position: center center;
+        }
+
+        .style-full-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.05) 35%, rgba(0,0,0,0.15) 70%, rgba(0,0,0,0.75) 100%);
+            padding: 40mm 30mm 30mm 30mm;
+            box-sizing: border-box;
+            color: #ffffff;
+        }
+
+        .style-full-title {
+            font-size: 44pt;
+            font-weight: bold;
+            color: #ffffff;
+            line-height: 1.05;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+            margin-bottom: 8mm;
+        }
+
+        .style-full-subtitle {
+            font-size: 14pt;
+            color: #f3e5ab;
+            font-weight: 500;
+            line-height: 1.4;
+            max-width: 80%;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+
+        .style-full-footer {
+            position: absolute;
+            bottom: 35mm;
+            left: 30mm;
+            right: 30mm;
+        }
+
+        .style-full-author {
+            font-size: 22pt;
+            font-style: italic;
+            color: #ffffff;
+            margin-bottom: 4mm;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+        }
+
+        .style-full-brand {
+            font-size: 10pt;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: #f3e5ab;
+            font-weight: bold;
+        }
+
+        /* ====================================================
+           STYLE 3 : GALLERY_FRAME (Édition d'Art)
+        ==================================================== */
+        .style-gallery-container {
+            width: 100%;
+            height: 100%;
+            background-color: #faf8f3;
+            padding: 35mm 25mm 25mm 25mm;
+            box-sizing: border-box;
+            text-align: center;
+            position: relative;
+        }
+
+        .style-gallery-title {
+            font-size: 36pt;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-bottom: 4mm;
+            letter-spacing: 1px;
+        }
+
+        .style-gallery-subtitle {
+            font-size: 12pt;
+            color: #b59449;
+            font-style: italic;
+            margin-bottom: 15mm;
+        }
+
+        .style-gallery-frame {
+            width: 70%;
+            height: 48%;
+            margin: 0 auto;
+            border: 3pt solid #b59449;
+            padding: 6pt;
+            background-color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+
+        .style-gallery-img {
+            width: 100%;
+            height: 100%;
+            background-image: url('{{ cover_image_path }}');
+            background-size: cover;
+            background-position: center center;
+        }
+
+        .style-gallery-footer {
+            position: absolute;
+            bottom: 30mm;
+            left: 0;
+            right: 0;
+            text-align: center;
+        }
+
+        .style-gallery-author {
+            font-size: 18pt;
+            font-style: italic;
+            color: #222222;
+            margin-bottom: 3mm;
+        }
+
+        .style-gallery-brand {
+            font-size: 9pt;
             text-transform: uppercase;
             letter-spacing: 4px;
             color: #b59449;
             font-weight: bold;
         }
 
-        .front-footer {
+        /* ====================================================
+           STYLE 4 : MODERN_BANNER (Bandeau Moderne)
+        ==================================================== */
+        .style-banner-container {
+            width: 100%;
+            height: 100%;
+            background-color: #ffffff;
+            position: relative;
+        }
+
+        .style-banner-top {
             position: absolute;
-            bottom: 30mm;
+            top: 0;
             left: 0;
+            right: 0;
+            height: 25%;
+            padding: 35mm 25mm 0 25mm;
+        }
+
+        .style-banner-title {
+            font-size: 38pt;
+            font-weight: bold;
+            color: #111111;
+            margin-bottom: 3mm;
+        }
+
+        .style-banner-subtitle {
+            font-size: 12pt;
+            color: #b59449;
+            font-weight: 500;
+        }
+
+        .style-banner-img {
+            position: absolute;
+            top: 25%;
+            left: 0;
+            width: 100%;
+            height: 52%;
+            background-image: url('{{ cover_image_path }}');
+            background-size: cover;
+            background-position: center center;
+        }
+
+        .style-banner-bottom {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 23%;
+            padding: 15mm 25mm 25mm 25mm;
+        }
+
+        .style-banner-author {
+            font-size: 20pt;
+            font-style: italic;
+            color: #1a1a1a;
+            margin-bottom: 4mm;
+        }
+
+        .style-banner-brand {
+            font-size: 10pt;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: #b59449;
+            font-weight: bold;
+        }
+
+        /* ====================================================
+           STYLE 5 : CLASSIC_TEXT (Classique Typographique)
+        ==================================================== */
+        .style-classic-container {
+            width: 100%;
+            height: 100%;
+            background-color: #1b2838;
+            padding: 35mm 25mm;
+            box-sizing: border-box;
+            position: relative;
+            text-align: center;
+        }
+
+        .style-classic-border {
+            position: absolute;
+            top: 25mm;
+            left: 20mm;
+            right: 20mm;
+            bottom: 25mm;
+            border: 2pt solid #c5a059;
+            padding: 4pt;
+        }
+
+        .style-classic-border-inner {
+            width: 100%;
+            height: 100%;
+            border: 0.75pt solid #c5a059;
+            padding: 40mm 20mm;
+            box-sizing: border-box;
+        }
+
+        .style-classic-ornament {
+            font-size: 18pt;
+            color: #c5a059;
+            margin-bottom: 25mm;
+        }
+
+        .style-classic-title {
+            font-size: 42pt;
+            font-weight: bold;
+            color: #f7f1e3;
+            letter-spacing: 2px;
+            line-height: 1.1;
+            margin-bottom: 8mm;
+            text-transform: uppercase;
+        }
+
+        .style-classic-subtitle {
+            font-size: 14pt;
+            font-style: italic;
+            color: #c5a059;
+            line-height: 1.5;
+            max-width: 80%;
+            margin: 0 auto 30mm auto;
+        }
+
+        .style-classic-author {
+            font-size: 22pt;
+            color: #ffffff;
+            letter-spacing: 1px;
+            margin-bottom: 6mm;
+        }
+
+        .style-classic-brand {
+            font-size: 10pt;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: #c5a059;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
 
-    <table class="cover-table">
-        <tr>
-            {# 1. 4ème de couverture #}
-            <td class="back-cover">
-                <div class="back-quote">
-                    {% if book.subtitle %}
-                        &laquo;&nbsp;{{ book.subtitle }}&nbsp;&raquo;
-                    {% else %}
-                        &laquo;&nbsp;Chaque vie est une histoire qui mérite d'être racontée et transmise aux générations futures.&nbsp;&raquo;
-                    {% endif %}
-                </div>
-
-                <div class="back-logo-container">
-                    <div class="back-logo-text">MÉMOIRE VIVANTE</div>
-                </div>
-            </td>
-
-            {# 2. Tranche centrale #}
-            <td class="spine-cell">
-                <div class="spine-text">
-                    {{ book.title }}
-                    {% if book.person1FirstName %}
-                        &nbsp;&bull;&nbsp;{{ book.person1FirstName }}
-                    {% endif %}
-                </div>
-            </td>
-
-            {# 3. 1ère de couverture #}
-            <td class="front-cover">
-                {% if cover_image_exists %}
-                    <div class="front-cover-bg"></div>
+    <div class="cover-container">
+        {# ----------------------------------------------------
+           1. 4ème de couverture (gauche)
+        ---------------------------------------------------- #}
+        {% set classic_bg = bg_color|default('#1b2838') %}
+        <div class="back-cover" style="{% if cover_style == 'classic_text' %}background-color: {{ classic_bg }}; border-right: none; color: #f7f1e3;{% elseif bg_color %}background-color: {{ bg_color }};{% endif %}">
+            <div class="back-quote" style="{% if cover_style == 'classic_text' %}color: #f7f1e3;{% endif %}">
+                {% if clean_subtitle or book.subtitle %}
+                    &laquo;&nbsp;{{ clean_subtitle|default(book.subtitle) }}&nbsp;&raquo;
+                {% else %}
+                    &laquo;&nbsp;Chaque vie est une histoire qui mérite d'être racontée et transmise aux générations futures.&nbsp;&raquo;
                 {% endif %}
+            </div>
 
-                <div class="front-content">
-                    <div class="front-title">
-                        {{ book.title }}
+            <div class="back-logo-container">
+                <div class="back-logo-text">MÉMOIRE VIVANTE</div>
+            </div>
+        </div>
+
+        {# ----------------------------------------------------
+           2. Tranche centrale (Spine)
+        ---------------------------------------------------- #}
+        <div class="spine-cell" style="{% if cover_style == 'classic_text' %}background-color: {{ classic_bg }}; border-left: 0.5pt solid #c5a059; border-right: 0.5pt solid #c5a059;{% elseif bg_color %}background-color: {{ bg_color }};{% endif %}">
+            <div class="spine-text">
+                {{ clean_title|default(book.title) }}
+                {% if author_name %}
+                    &nbsp;&bull;&nbsp;{{ author_name }}
+                {% endif %}
+            </div>
+        </div>
+
+        {# ----------------------------------------------------
+           3. 1ère de couverture (droite) selon le style choisi
+        ---------------------------------------------------- #}
+        <div class="front-cover">
+            {% if cover_style == 'full_photo' and cover_image_exists %}
+                {# OPTION 2 : PLEINE PAGE #}
+                <div class="style-full-bg"></div>
+                <div class="style-full-overlay">
+                    <div class="style-full-title">{{ clean_title|default(book.title) }}</div>
+                    {% if clean_subtitle or book.subtitle %}
+                        <div class="style-full-subtitle">{{ clean_subtitle|default(book.subtitle) }}</div>
+                    {% endif %}
+                    <div class="style-full-footer">
+                        <div class="style-full-author">{{ author_name }}</div>
+                        <div class="style-full-brand">MÉMOIRE VIVANTE</div>
+                    </div>
+                </div>
+
+            {% elseif cover_style == 'gallery_frame' and cover_image_exists %}
+                {# OPTION 3 : CADRE GALERIE #}
+                <div class="style-gallery-container">
+                    <div class="style-gallery-title">{{ clean_title|default(book.title) }}</div>
+                    {% if clean_subtitle or book.subtitle %}
+                        <div class="style-gallery-subtitle">{{ clean_subtitle|default(book.subtitle) }}</div>
+                    {% endif %}
+                    <div class="style-gallery-frame">
+                        <div class="style-gallery-img"></div>
+                    </div>
+                    <div class="style-gallery-footer">
+                        <div class="style-gallery-author">{{ author_name }}</div>
+                        <div class="style-gallery-brand">MÉMOIRE VIVANTE</div>
+                    </div>
+                </div>
+
+            {% elseif cover_style == 'modern_banner' and cover_image_exists %}
+                {# OPTION 4 : BANDEAU MODERNE #}
+                <div class="style-banner-container">
+                    <div class="style-banner-top">
+                        <div class="style-banner-title">{{ clean_title|default(book.title) }}</div>
+                        {% if clean_subtitle or book.subtitle %}
+                            <div class="style-banner-subtitle">{{ clean_subtitle|default(book.subtitle) }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="style-banner-img"></div>
+                    <div class="style-banner-bottom">
+                        <div class="style-banner-author">{{ author_name }}</div>
+                        <div class="style-banner-brand">MÉMOIRE VIVANTE</div>
+                    </div>
+                </div>
+
+            {% elseif cover_style == 'classic_text' or not cover_image_exists %}
+                {# OPTION 5 : CLASSIQUE TYPOGRAPHIQUE (OU SI AUCUNE PHOTO N'EST FOURNIE) #}
+                <div class="style-classic-container" style="background-color: {{ classic_bg }};">
+                    <div class="style-classic-border">
+                        <div class="style-classic-border-inner">
+                            <div class="style-classic-ornament">&#10022;&nbsp;&#10022;&nbsp;&#10022;</div>
+                            <div class="style-classic-title">{{ clean_title|default(book.title) }}</div>
+                            {% if clean_subtitle or book.subtitle %}
+                                <div class="style-classic-subtitle">{{ clean_subtitle|default(book.subtitle) }}</div>
+                            {% endif %}
+                            <div style="margin-top: 40mm;">
+                                <div class="style-classic-author">{{ author_name }}</div>
+                                <div class="style-classic-brand">MÉMOIRE VIVANTE</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            {% else %}
+                {# OPTION 1 : SIGNATURE BIOGRAPHIQUE (DÉFAUT / MODÈLE DANIELLE ALMONT) #}
+                <div class="style-biographic-photo"></div>
+                <div class="style-biographic-panel">
+                    <div class="style-biographic-title">
+                        {% set title_text = clean_title|default(book.title) %}
+                        {% set words = title_text|split(' ') %}
+                        {% if title_text|lower == 'empreinte' or title_text|lower == 'empreintes' %}
+                            <span class="style-biographic-title-top">Em</span>
+                            <span class="style-biographic-title-bottom">{{ title_text|slice(2) }}</span>
+                        {% elseif words|length > 1 %}
+                            <span class="style-biographic-title-top">{{ words[0] }}</span>
+                            <span class="style-biographic-title-bottom">{{ words|slice(1)|join(' ') }}</span>
+                        {% else %}
+                            {{ title_text }}
+                        {% endif %}
                     </div>
 
-                    {% if book.subtitle %}
-                        <div class="front-subtitle">
-                            {{ book.subtitle }}
+                    {% if clean_subtitle or book.subtitle %}
+                        <div class="style-biographic-subtitle">
+                            {{ clean_subtitle|default(book.subtitle) }}
                         </div>
                     {% endif %}
 
-                    <div class="front-footer">
-                        <div class="front-author">
-                            {% if book.person1FirstName %}
-                                {{ book.person1FirstName }}
-                                {% if book.person2FirstName %} &amp; {{ book.person2FirstName }}{% endif %}
-                            {% else %}
-                                {{ book.user ? (book.user.firstname ~ ' ' ~ book.user.lastname) : '' }}
-                            {% endif %}
+                    <div class="style-biographic-footer">
+                        <div class="style-biographic-author">
+                            {{ author_name }}
                         </div>
-                        <div class="front-brand">
+                        <div class="style-biographic-brand">
                             MÉMOIRE VIVANTE
                         </div>
                     </div>
                 </div>
-            </td>
-        </tr>
-    </table>
+
+            {% endif %}
+        </div>
+    </div>
 
 </body>
 </html>

@@ -26,6 +26,10 @@ class BookVoter extends Voter
             return false;
         }
 
+        if (in_array('ROLE_ADMIN', $user->getRoles(), true) || in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true)) {
+            return true;
+        }
+
         /** @var Book $book */
         $book = $subject;
 

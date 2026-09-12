@@ -5,6 +5,7 @@ namespace App\MemoiresVivantes\Controller;
 use App\MemoiresVivantes\Dto\BookInputDto;
 use App\MemoiresVivantes\Dto\BookOutputDto;
 use App\MemoiresVivantes\Entity\Book;
+use App\MemoiresVivantes\Entity\BookPrintOrder;
 use App\MemoiresVivantes\Services\BookService;
 use App\MemoiresVivantes\UseCase\CreateBookUseCase;
 use App\MemoiresVivantes\UseCase\GetBooksByUserUseCase;
@@ -40,7 +41,16 @@ class BookController extends AbstractController
 
         $books = $this->getBooksByUserUseCase->execute($user);
         $host = $request->getSchemeAndHttpHost();
-        return $this->json(array_map(fn($b) => new BookOutputDto($b, $host), $books));
+        $em = $this->emProvider->getEntityManager();
+        $orderRepo = $em->getRepository(BookPrintOrder::class);
+
+        $dtos = array_map(function($b) use ($host, $orderRepo) {
+            $latest = $orderRepo->findOneBy(['book' => $b], ['createdAt' => 'DESC']);
+            $count = $latest ? $orderRepo->count(['book' => $b]) : 0;
+            return new BookOutputDto($b, $host, $latest, $count);
+        }, $books);
+
+        return $this->json($dtos);
     }
 
     #[Route('/{id}', methods: ['GET'])]
@@ -53,8 +63,14 @@ class BookController extends AbstractController
         $res = $this->validateSignatureOrGrant('BOOK_VIEW', $book, $request);
         if ($res !== null) return $res;
 
+        $latestOrder = $em->getRepository(BookPrintOrder::class)->findOneBy(
+            ['book' => $book],
+            ['createdAt' => 'DESC']
+        );
+        $ordersCount = $latestOrder ? $em->getRepository(BookPrintOrder::class)->count(['book' => $book]) : 0;
+
         $host = $request->getSchemeAndHttpHost();
-        return $this->json(new BookOutputDto($book, $host));
+        return $this->json(new BookOutputDto($book, $host, $latestOrder, $ordersCount));
     }
 
     #[Route('/{id}/reservations', methods: ['GET'])]

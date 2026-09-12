@@ -49,7 +49,8 @@ class AdressApiController extends AbstractController
     /**
      * Récupérer les adresses de l'utilisateur
      */
-    #[Route('/', name: 'get_user_adresses', methods: ['GET'])]
+    #[Route('', name: 'get_user_adresses', methods: ['GET'])]
+    #[Route('/', name: 'get_user_adresses_slash', methods: ['GET'])]
     public function getUserAdresses(): JsonResponse
     {
         /** @var User $user */

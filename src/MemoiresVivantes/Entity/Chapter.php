@@ -65,6 +65,9 @@ class Chapter
     #[ORM\OrderBy(['sortOrder' => 'ASC'])]
     private Collection $photos;
 
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    private ?array $photoLayout = null;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -251,6 +254,17 @@ class Chapter
     public function setContributorAnswers(?array $contributorAnswers): self
     {
         $this->contributorAnswers = $contributorAnswers;
+        return $this;
+    }
+
+    public function getPhotoLayout(): ?array
+    {
+        return $this->photoLayout;
+    }
+
+    public function setPhotoLayout(?array $photoLayout): self
+    {
+        $this->photoLayout = $photoLayout;
         return $this;
     }
 }
