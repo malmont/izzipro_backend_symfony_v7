@@ -126,6 +126,8 @@ use App\MemoiresVivantes\Entity\Chapter as MemoireChapter;
 use App\Controller\Admin\Memoires\MemoireQuestionCrudController;
 use App\Controller\Admin\Memoires\BookCrudController as MemoireBookCrudController;
 use App\Controller\Admin\Memoires\ChapterCrudController as MemoireChapterCrudController;
+use App\MemoiresVivantes\Entity\BookPrintOrder;
+use App\Controller\Admin\Memoires\BookPrintOrderCrudController;
 
 class DashboardController extends AbstractDashboardController
 {
@@ -491,5 +493,7 @@ class DashboardController extends AbstractDashboardController
             ->setController(MemoireBookCrudController::class);
         yield MenuItem::linkToCrud('Chapitres', 'fas fa-bookmark', MemoireChapter::class)
             ->setController(MemoireChapterCrudController::class);
+        yield MenuItem::linkToCrud('Commandes d\'impression', 'fas fa-print', BookPrintOrder::class)
+            ->setController(BookPrintOrderCrudController::class);
     }
 }
