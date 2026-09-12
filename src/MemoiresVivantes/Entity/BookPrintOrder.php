@@ -69,7 +69,7 @@ class BookPrintOrder
 
     #[ORM\Column(length: 2)]
     #[Groups(['book_print:read', 'book_print:write'])]
-    private string $countryCode = 'FR';
+    private string $countryCode = 'CA';
 
     #[ORM\Column(length: 50, nullable: true)]
     #[Groups(['book_print:read', 'book_print:write'])]
@@ -82,7 +82,7 @@ class BookPrintOrder
     // --- Tarifs et Expédition ---
     #[ORM\Column(length: 50)]
     #[Groups(['book_print:read', 'book_print:write'])]
-    private string $shippingLevel = 'MAIL'; // MAIL, PRIORITY_MAIL, GROUND, EXPEDITED, EXPRESS
+    private string $shippingLevel = 'EXPEDITED'; // EXPEDITED (FedEx Express/2-3j), GROUND (FedEx Ground), EXPRESS, MAIL
 
     #[ORM\Column(type: Types::INTEGER)]
     #[Groups(['book_print:read', 'book_print:write'])]
@@ -106,7 +106,7 @@ class BookPrintOrder
 
     #[ORM\Column(length: 3)]
     #[Groups(['book_print:read'])]
-    private string $currency = 'EUR';
+    private string $currency = 'CAD';
 
     // --- Suivi Transporteur & PDFs ---
     #[ORM\Column(length: 100, nullable: true)]

@@ -20,7 +20,7 @@ class EstimateBookPrintUseCase
     public function execute(
         Book $book,
         array $shippingAddress,
-        string $shippingLevel = 'MAIL',
+        string $shippingLevel = 'EXPEDITED',
         int $quantity = 1
     ): array {
         if (empty($shippingAddress['street1']) || empty($shippingAddress['city']) || empty($shippingAddress['country_code'])) {
@@ -44,7 +44,8 @@ class EstimateBookPrintUseCase
             $pageCount++;
         }
 
-        // 2. Calcul du coût pour le niveau de livraison demandé
+        // 2. Calcul du coût pour le niveau de livraison demandé (Défaut FedEx EXPEDITED)
+        $shippingLevel = strtoupper($shippingLevel ?: 'EXPEDITED');
         $estimate = $this->luluPrintService->calculatePrintCost(
             $book,
             $shippingAddress,
@@ -53,10 +54,16 @@ class EstimateBookPrintUseCase
             $pageCount
         );
 
-        // 3. Calcul comparatif des différentes options de livraison
+        // 3. Calcul comparatif des options FedEx & standard
         $shippingOptions = [];
-        $levels = ['MAIL', 'PRIORITY_MAIL', 'EXPRESS'];
-        foreach ($levels as $level) {
+        $levelLabels = [
+            'EXPEDITED' => 'FedEx Express / Accéléré (2-3 jours ouvrables)',
+            'GROUND' => 'FedEx Ground (3-5 jours ouvrables)',
+            'EXPRESS' => 'FedEx Express Prioritaire (1-2 jours ouvrables)',
+            'MAIL' => 'Standard Postal',
+        ];
+
+        foreach ($levelLabels as $level => $label) {
             $optEstimate = $this->luluPrintService->calculatePrintCost(
                 $book,
                 $shippingAddress,
@@ -65,6 +72,8 @@ class EstimateBookPrintUseCase
                 $pageCount
             );
             $shippingOptions[$level] = [
+                'label' => $label,
+                'carrier' => str_starts_with($level, 'MAIL') ? 'Postes Canada' : 'FedEx Canada',
                 'shipping_cost' => $optEstimate['shipping_cost'],
                 'total_cost' => $optEstimate['total_cost'],
                 'currency' => $optEstimate['currency'],

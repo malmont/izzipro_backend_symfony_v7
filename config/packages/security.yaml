@@ -36,6 +36,9 @@ security:
     # Easy way to control access for large sections of your site
     # Note: Only the *first* access control that matches will be used
     access_control:
+        # 🔹 Webhooks externes (Lulu Print API, etc.)
+        - { path: ^/api/webhooks/, roles: PUBLIC_ACCESS }
+
         # 🔹 Partage public des questionnaires Mémoires Vivantes (UUID fait office de token)
         - { path: ^/api/memoires/, roles: PUBLIC_ACCESS }
 

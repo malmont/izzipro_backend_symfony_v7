@@ -17,12 +17,12 @@ class LuluPrintService
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly HttpClientInterface $httpClient,
         private readonly LoggerInterface $logger,
-        private readonly string $luluClientKey,
-        private readonly string $luluClientSecret,
-        private readonly string $luluApiUrl,
-        private readonly string $luluAuthUrl,
-        private readonly string $luluContactEmail,
-        private readonly string $luluDefaultPodPackageId
+        private readonly ?string $luluClientKey = null,
+        private readonly ?string $luluClientSecret = null,
+        private readonly ?string $luluApiUrl = 'https://api.sandbox.lulu.com',
+        private readonly ?string $luluAuthUrl = 'https://api.sandbox.lulu.com/auth/realms/glasstree/protocol/openid-connect/token',
+        private readonly ?string $luluContactEmail = 'contact@memoiresvivantes.com',
+        private readonly ?string $luluDefaultPodPackageId = '0827X1169.FC.STD.CW.080CW444.MXX'
     ) {}
 
     /**
@@ -174,8 +174,8 @@ class LuluPrintService
                     'city' => $shippingAddress['city'],
                     'state_code' => $shippingAddress['state_code'] ?? '',
                     'postcode' => $shippingAddress['postcode'] ?? $shippingAddress['postal_code'] ?? '',
-                    'country_code' => strtoupper($shippingAddress['country_code'] ?? 'FR'),
-                    'phone_number' => $shippingAddress['phone_number'] ?? '+33100000000',
+                    'country_code' => strtoupper($shippingAddress['country_code'] ?? 'CA'),
+                    'phone_number' => $shippingAddress['phone_number'] ?? '+15140000000',
                 ],
                 'shipping_option' => strtoupper($shippingLevel),
             ];
@@ -195,7 +195,7 @@ class LuluPrintService
             $shippingCost = $data['shipping_cost']['total_cost_excl_tax'] ?? '0.00';
             $taxCost = $data['total_tax'] ?? '0.00';
             $totalCost = $data['total_cost_incl_tax'] ?? '0.00';
-            $currency = $data['currency'] ?? 'EUR';
+            $currency = $data['currency'] ?? 'CAD';
 
             return [
                 'print_cost' => number_format((float)$printCost, 2, '.', ''),
@@ -424,27 +424,28 @@ class LuluPrintService
         int $quantity,
         int $pageCount
     ): array {
-        // Base hardcover casewrap A4 : ~18.50 EUR + 0.05 EUR par page au-delà de 32
-        $unitPrint = 18.50 + max(0, $pageCount - 32) * 0.05;
+        // Base hardcover casewrap A4 : ~27.50 CAD + 0.08 CAD par page au-delà de 32
+        $unitPrint = 27.50 + max(0, $pageCount - 32) * 0.08;
         $printCost = $unitPrint * $quantity;
 
-        // Tarifs moyens de livraison
+        // Tarifs moyens d'expédition au Canada / International (en CAD)
         $shippingRates = [
-            'MAIL' => 5.50,
-            'PRIORITY_MAIL' => 9.20,
-            'GROUND' => 8.50,
-            'EXPEDITED' => 14.00,
-            'EXPRESS' => 22.50,
+            'MAIL' => 8.50,
+            'PRIORITY_MAIL' => 14.50,
+            'GROUND' => 12.00,
+            'EXPEDITED' => 18.00,
+            'EXPRESS' => 28.00,
         ];
-        $baseShipping = $shippingRates[strtoupper($shippingLevel)] ?? 5.50;
-        $shippingCost = $baseShipping + max(0, $quantity - 1) * 2.00;
+        $baseShipping = $shippingRates[strtoupper($shippingLevel)] ?? 8.50;
+        $shippingCost = $baseShipping + max(0, $quantity - 1) * 3.00;
 
-        $country = strtoupper($shippingAddress['country_code'] ?? 'FR');
-        $taxRate = in_array($country, ['FR', 'BE', 'MC']) ? 0.055 : (in_array($country, ['CA', 'US']) ? 0.05 : 0.20);
+        $country = strtoupper($shippingAddress['country_code'] ?? 'CA');
+        // Taxes canadiennes (TPS 5% + TVQ si QC) ou internationales
+        $taxRate = ($country === 'CA') ? 0.05 : (in_array($country, ['FR', 'BE', 'MC']) ? 0.055 : 0.00);
         $taxCost = ($printCost + $shippingCost) * $taxRate;
         $totalCost = $printCost + $shippingCost + $taxCost;
 
-        $currency = in_array($country, ['US']) ? 'USD' : (in_array($country, ['CA']) ? 'CAD' : 'EUR');
+        $currency = in_array($country, ['US']) ? 'USD' : (in_array($country, ['FR', 'BE', 'DE']) ? 'EUR' : 'CAD');
 
         return [
             'print_cost' => number_format($printCost, 2, '.', ''),
