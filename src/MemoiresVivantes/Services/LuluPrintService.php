@@ -268,14 +268,12 @@ class LuluPrintService
                         'external_id' => $book ? $book->getId()->toRfc4122() : 'item-1',
                         'title' => $book ? $book->getTitle() : 'Mémoires Vivantes',
                         'quantity' => $order->getQuantity(),
-                        'printable_normalization' => [
-                            'pod_package_id' => $this->luluDefaultPodPackageId,
-                            'interior' => [
-                                'source_url' => $interiorPublicUrl,
-                            ],
-                            'cover' => [
-                                'source_url' => $coverPublicUrl,
-                            ],
+                        'pod_package_id' => $this->luluDefaultPodPackageId,
+                        'interior' => [
+                            'source_url' => $interiorPublicUrl,
+                        ],
+                        'cover' => [
+                            'source_url' => $coverPublicUrl,
                         ],
                     ]
                 ],
@@ -379,6 +377,7 @@ class LuluPrintService
                 $order->setStatus('created');
                 break;
             case 'ACCEPTED':
+            case 'PRODUCTION_READY':
             case 'IN_PRODUCTION':
                 $order->setStatus('in_production');
                 break;
