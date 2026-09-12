@@ -14,6 +14,12 @@ services:
             $openAiApiKey: '%env(default::OPENAI_API_KEY)%'
             $anthropicApiKey: '%env(default::ANTHROPIC_API_KEY)%'
             $projectDir: '%kernel.project_dir%'
+            $luluClientKey: '%env(default::LULU_CLIENT_KEY)%'
+            $luluClientSecret: '%env(default::LULU_CLIENT_SECRET)%'
+            $luluApiUrl: '%env(default::LULU_API_URL)%'
+            $luluAuthUrl: '%env(default::LULU_AUTH_URL)%'
+            $luluContactEmail: '%env(default::LULU_CONTACT_EMAIL)%'
+            $luluDefaultPodPackageId: '%env(default::LULU_DEFAULT_POD_PACKAGE_ID)%'
 
     Doctrine\ORM\Configuration: '@doctrine.orm.default_configuration'
     Doctrine\Common\EventManager: '@doctrine.dbal.default_connection.event_manager'    
