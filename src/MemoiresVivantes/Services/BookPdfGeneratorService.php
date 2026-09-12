@@ -103,6 +103,7 @@ class BookPdfGeneratorService
         $options->set('isRemoteEnabled', true);
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isFontSubsettingEnabled', true);
+        $options->set('defaultFont', 'DejaVu Serif');
         $options->set('chroot', $this->projectDir);
 
         $dompdf = new Dompdf($options);
@@ -126,6 +127,7 @@ class BookPdfGeneratorService
         $options->set('isRemoteEnabled', true);
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isFontSubsettingEnabled', true);
+        $options->set('defaultFont', 'DejaVu Serif');
         $options->set('chroot', $this->projectDir);
 
         $dompdf = new Dompdf($options);
