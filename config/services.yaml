@@ -181,7 +181,7 @@ services:
     App\Controller\TenantSetupController\TenantSetupController:
         bind:
             $frontendBaseDomain: '%env(FRONTEND_BASE_DOMAIN)%'
-            $tenantCreationSecretKey: '%env(TENANT_CREATION_SECRET_KEY)%'
+            $tenantCreationSecretKey: '%env(default::TENANT_CREATION_SECRET_KEY)%'
 
 
     App\Services\GoogleTranslateService\GoogleTranslateService:
@@ -190,11 +190,15 @@ services:
 
     App\Services\StripeService\StripeService:
         arguments:
-            $stripeSecretKey: '%env(STRIPE_SECRET_KEY)%' 
+            $stripeSecretKey: '%env(default::STRIPE_SECRET_KEY)%' 
 
     App\Services\StripePaymentService\StripePaymentService:
         arguments:
-            $stripeSecretKey: '%env(STRIPE_SECRET_KEY)%'       
+            $stripeSecretKey: '%env(default::STRIPE_SECRET_KEY)%'       
+
+    App\MemoiresVivantes\Services\BookPaymentService:
+        arguments:
+            $stripeSecretKey: '%env(default::STRIPE_SECRET_KEY)%'       
 
     App\Services\ShippingService\EasyPostService:
         arguments:

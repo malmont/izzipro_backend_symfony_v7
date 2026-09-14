@@ -12,7 +12,7 @@ security:
 
 
         api:
-            pattern:   ^/api(?!/(login|health|currencies|tenant/check|order/create-guest|stripe-config|stripe/create-intent|adresses/autocomplete|adresses/details|transporteurs|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement))
+            pattern:   ^/api(?!/(login|health|currencies|tenant/check|order/create-guest|stripe-config|stripe/create-intent|stripe/webhook|webhooks|adresses/autocomplete|adresses/details|transporteurs|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement))
             stateless: true
             provider:  tenant_user_provider
             jwt: ~
@@ -36,6 +36,10 @@ security:
     # Easy way to control access for large sections of your site
     # Note: Only the *first* access control that matches will be used
     access_control:
+        # 🔹 Webhooks Stripe
+        - { path: ^/api/stripe/webhook, roles: PUBLIC_ACCESS }
+        - { path: ^/stripe/webhook, roles: PUBLIC_ACCESS }
+
         # 🔹 Webhooks externes (Lulu Print API, etc.)
         - { path: ^/api/webhooks/, roles: PUBLIC_ACCESS }
 

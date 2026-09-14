@@ -14,9 +14,12 @@ class GetChapterUseCase
 
     public function execute(string $id): ?Chapter
     {
-        $em = $this->emProvider->getEntityManager();
-        $repository = $em->getRepository(Chapter::class);
-
-        return $repository->find(Uuid::fromString($id));
+        try {
+            $uuid = Uuid::fromString($id);
+            $em = $this->emProvider->getEntityManager();
+            return $em->getRepository(Chapter::class)->find($uuid);
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 }

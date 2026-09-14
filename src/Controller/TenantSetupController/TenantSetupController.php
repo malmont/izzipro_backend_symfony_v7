@@ -17,7 +17,7 @@ class TenantSetupController extends AbstractController
 {
     public function __construct(
         private string $frontendBaseDomain,
-        private string $tenantCreationSecretKey
+        private string $tenantCreationSecretKey = ''
     ) {}
 
     #[Route('/setup/new-store', name: 'app_tenant_setup')]
@@ -28,31 +28,33 @@ class TenantSetupController extends AbstractController
     ): Response {
         
         $host = $request->getHost();
-        $subdomain = null;
-
         $cleanHost = explode(':', $host)[0];
 
-        // Cas Localhost
-        if ($cleanHost === 'localhost' || $cleanHost === '127.0.0.1') {
-            $subdomain = 'localtest'; 
-        } 
-        else {
-            $parts = explode('.', $cleanHost);
-            
-            if (count($parts) >= 3) {
-                if ($parts[0] !== 'www') {
+        // 1. Récupération prioritaire depuis les paramètres d'URL (?subdomain=... ou ?code=...)
+        $subdomain = $request->query->get('subdomain') ?? $request->query->get('code');
+
+        // 2. Si non présent en GET, extraction depuis le sous-domaine de l'hôte
+        if (!$subdomain) {
+            if ($cleanHost === 'localhost' || $cleanHost === '127.0.0.1') {
+                $subdomain = 'localtest'; 
+            } else {
+                $parts = explode('.', $cleanHost);
+                
+                if (count($parts) >= 3) {
+                    if ($parts[0] !== 'www') {
+                        $subdomain = $parts[0];
+                    } elseif (isset($parts[1])) {
+                        $subdomain = $parts[1];
+                    }
+                } elseif (count($parts) === 2 && $parts[1] === 'localhost') {
                     $subdomain = $parts[0];
-                } elseif (isset($parts[1])) {
-                    $subdomain = $parts[1];
                 }
-            } elseif (count($parts) === 2 && $parts[1] === 'localhost') {
-                $subdomain = $parts[0];
             }
         }
 
         // Si extraction échouée ou sous-domaine réservé
         if (!$subdomain || in_array($subdomain, ['www', 'api', 'admin', 'mail', 'backend'])) {
-            $this->addFlash('danger', 'Accès invalide. Veuillez utiliser une URL de type : nomboutique.votre-domaine.com/setup/new-store');
+            $this->addFlash('danger', 'Accès invalide. Veuillez spécifier un sous-domaine valide (ex: /setup/new-store?subdomain=moncommerce ou boutique.domaine.com/setup/new-store)');
             return $this->redirectToRoute('app_home'); 
         }
 

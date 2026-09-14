@@ -12,13 +12,13 @@ use Stripe\Stripe;
 use Stripe\Exception\ApiErrorException;
 use Stripe\StripeClient;
 use Stripe\PaymentIntent;
+use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 
 class StripeService
 {
     private string $stripeSecretKey;
     private TenantEntityManagerProvider $emProvider;
-    private \Doctrine\ORM\EntityManagerInterface $em;
     private TenantConnectionManager $connectionManager;
     private LoggerInterface $logger;
     private \App\Services\EntityRetrieverService $entityRetrieverService;
@@ -37,7 +37,6 @@ class StripeService
     ) {
         $this->stripeSecretKey = $stripeSecretKey;
         $this->emProvider = $emProvider;
-        $this->em = $emProvider->getEntityManager();
         $this->connectionManager = $connectionManager;
         $this->logger = $logger;
         $this->entityRetrieverService = $entityRetrieverService;
@@ -45,10 +44,15 @@ class StripeService
         $this->rentalPriceCalculator = $rentalPriceCalculator;
     }
 
+    private function getEm(): EntityManagerInterface
+    {
+        return $this->emProvider->getEntityManager();
+    }
+
     public function createOnboardingLink(string $refreshUrl, string $returnUrl): string
     {
         Stripe::setApiKey($this->stripeSecretKey);
-        $stripeConfigRepo = $this->em->getRepository(StripeConfig::class);
+        $stripeConfigRepo = $this->getEm()->getRepository(StripeConfig::class);
         $stripeConfig = $stripeConfigRepo->findOneBy([]);
 
         if (!$stripeConfig) {
@@ -60,8 +64,8 @@ class StripeService
             $stripeConfig = new StripeConfig();
             $stripeConfig->setAccountId($account->id);
             $stripeConfig->setIsActive(false);
-            $this->em->persist($stripeConfig);
-            $this->em->flush();
+            $this->getEm()->persist($stripeConfig);
+            $this->getEm()->flush();
         }
 
         $accountLink = AccountLink::create([
@@ -75,7 +79,7 @@ class StripeService
     }
     public function finalizeConnection(): bool
     {
-        $stripeConfigRepo = $this->em->getRepository(StripeConfig::class);
+        $stripeConfigRepo = $this->getEm()->getRepository(StripeConfig::class);
         $stripeConfig = $stripeConfigRepo->findOneBy([]);
 
         if (!$stripeConfig || !$stripeConfig->getAccountId()) {
@@ -85,9 +89,9 @@ class StripeService
         try {
             $stripe = new StripeClient($this->stripeSecretKey);
             $account = $stripe->accounts->retrieve($stripeConfig->getAccountId(), []);
-            if ($account->charges_enabled) {
+            if ($account->charges_enabled || $account->details_submitted) {
                 $stripeConfig->setIsActive(true);
-                $this->em->flush();
+                $this->getEm()->flush();
                 return true;
             }
         } catch (ApiErrorException $e) {
@@ -229,7 +233,7 @@ class StripeService
 
     public function getStripeConfigForCurrentTenant(): ?StripeConfig
     {
-        $stripeConfigRepo = $this->em->getRepository(StripeConfig::class);
+        $stripeConfigRepo = $this->getEm()->getRepository(StripeConfig::class);
         return $stripeConfigRepo->findOneBy([]);
     }
 
@@ -238,8 +242,8 @@ class StripeService
         $stripeConfig = $this->getStripeConfigForCurrentTenant();
 
         if ($stripeConfig) {
-            $this->em->remove($stripeConfig);
-            $this->em->flush();
+            $this->getEm()->remove($stripeConfig);
+            $this->getEm()->flush();
             return true;
         }
 

@@ -69,6 +69,30 @@ class Book
     #[ORM\Column(length: 20)]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
     private ?string $status = 'draft'; // draft, generating, ready, paid
+
+    #[ORM\Column(length: 20)]
+    #[Groups(['book:read', 'chapter:read'])]
+    private string $paymentStatus = 'unpaid'; // unpaid, pending, paid
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['book:read', 'chapter:read'])]
+    private ?string $paymentLinkUrl = null;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    #[Groups(['book:read', 'chapter:read'])]
+    private ?\DateTimeImmutable $paidAt = null;
+
+    #[ORM\Column(type: Types::FLOAT, nullable: true)]
+    #[Groups(['book:read', 'chapter:read'])]
+    private ?float $paymentAmount = null;
+
+    #[ORM\Column(length: 10, nullable: true)]
+    #[Groups(['book:read', 'chapter:read'])]
+    private ?string $paymentCurrency = 'eur';
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['book:read', 'chapter:read'])]
+    private ?string $stripeSessionId = null;
  
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['book:read', 'chapter:read'])]
@@ -299,6 +323,72 @@ class Book
                 $contributor->setBook(null);
             }
         }
+        return $this;
+    }
+
+    public function getPaymentStatus(): string
+    {
+        return $this->paymentStatus;
+    }
+
+    public function setPaymentStatus(string $paymentStatus): static
+    {
+        $this->paymentStatus = $paymentStatus;
+        return $this;
+    }
+
+    public function getPaymentLinkUrl(): ?string
+    {
+        return $this->paymentLinkUrl;
+    }
+
+    public function setPaymentLinkUrl(?string $paymentLinkUrl): static
+    {
+        $this->paymentLinkUrl = $paymentLinkUrl;
+        return $this;
+    }
+
+    public function getPaidAt(): ?\DateTimeImmutable
+    {
+        return $this->paidAt;
+    }
+
+    public function setPaidAt(?\DateTimeImmutable $paidAt): static
+    {
+        $this->paidAt = $paidAt;
+        return $this;
+    }
+
+    public function getPaymentAmount(): ?float
+    {
+        return $this->paymentAmount;
+    }
+
+    public function setPaymentAmount(?float $paymentAmount): static
+    {
+        $this->paymentAmount = $paymentAmount;
+        return $this;
+    }
+
+    public function getPaymentCurrency(): ?string
+    {
+        return $this->paymentCurrency;
+    }
+
+    public function setPaymentCurrency(?string $paymentCurrency): static
+    {
+        $this->paymentCurrency = $paymentCurrency;
+        return $this;
+    }
+
+    public function getStripeSessionId(): ?string
+    {
+        return $this->stripeSessionId;
+    }
+
+    public function setStripeSessionId(?string $stripeSessionId): static
+    {
+        $this->stripeSessionId = $stripeSessionId;
         return $this;
     }
 }

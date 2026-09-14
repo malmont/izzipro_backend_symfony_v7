@@ -8,13 +8,15 @@ use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\Chapter;
 use App\MemoiresVivantes\Entity\MemoireQuestion;
 use App\MemoiresVivantes\Message\GenerateChapterMessage;
-use App\MemoiresVivantes\Services\ChapterService;
+use App\MemoiresVivantes\UseCase\AddChapterPhotoUseCase;
 use App\MemoiresVivantes\UseCase\CreateChapterUseCase;
-use App\MemoiresVivantes\UseCase\UpdateChapterUseCase;
 use App\MemoiresVivantes\UseCase\DeleteChapterUseCase;
+use App\MemoiresVivantes\UseCase\GetChapterUseCase;
+use App\MemoiresVivantes\UseCase\GetChaptersByBookUseCase;
+use App\MemoiresVivantes\UseCase\ImproveAnswerUseCase;
+use App\MemoiresVivantes\UseCase\TranscribeAudioUseCase;
+use App\MemoiresVivantes\UseCase\UpdateChapterUseCase;
 use App\Services\TenantEntityManagerProvider;
-use App\Services\OpenAiService;
-use App\Services\AnthropicService;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -26,6 +28,20 @@ use Symfony\Component\Uid\Uuid;
 #[Route('/api/memoires')]
 class ChapterController extends AbstractController
 {
+    public function __construct(
+        private readonly CreateChapterUseCase $createChapterUseCase,
+        private readonly UpdateChapterUseCase $updateChapterUseCase,
+        private readonly DeleteChapterUseCase $deleteChapterUseCase,
+        private readonly GetChapterUseCase $getChapterUseCase,
+        private readonly GetChaptersByBookUseCase $getChaptersByBookUseCase,
+        private readonly AddChapterPhotoUseCase $addChapterPhotoUseCase,
+        private readonly TranscribeAudioUseCase $transcribeAudioUseCase,
+        private readonly ImproveAnswerUseCase $improveAnswerUseCase,
+        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly MessageBusInterface $messageBus,
+        private readonly \Psr\Log\LoggerInterface $logger
+    ) {}
+
     #[Route('/books/{id}/chapters', methods: ['GET'])]
     public function listByBook(string $id, Request $request): JsonResponse
     {
@@ -35,22 +51,10 @@ class ChapterController extends AbstractController
 
         $this->denyAccessUnlessGranted('BOOK_VIEW', $book);
 
-        $chapters = $book->getChapters();
+        $chapters = $this->getChaptersByBookUseCase->execute($book);
         $host = $request->getSchemeAndHttpHost();
-        return $this->json(array_map(fn($c) => new ChapterOutputDto($c, $host), $chapters->toArray()));
+        return $this->json(array_map(fn($c) => new ChapterOutputDto($c, $host), $chapters));
     }
-
-    public function __construct(
-        private readonly CreateChapterUseCase $createChapterUseCase,
-        private readonly UpdateChapterUseCase $updateChapterUseCase,
-        private readonly DeleteChapterUseCase $deleteChapterUseCase,
-        private readonly ChapterService $chapterService,
-        private readonly TenantEntityManagerProvider $emProvider,
-        private readonly MessageBusInterface $messageBus,
-        private readonly \Psr\Log\LoggerInterface $logger,
-        private readonly OpenAiService $openAiService,
-        private readonly AnthropicService $anthropicService
-    ) {}
 
 
     #[Route('/books/{id}/chapters', methods: ['POST'])]
@@ -74,9 +78,10 @@ class ChapterController extends AbstractController
     #[Route('/chapters/{id}', methods: ['GET'])]
     public function get(string $id, Request $request): JsonResponse
     {
-        $em = $this->emProvider->getEntityManager();
-        $chapter = $em->getRepository(Chapter::class)->find(Uuid::fromString($id));
+        $chapter = $this->getChapterUseCase->execute($id);
         if (!$chapter) return $this->json(['error' => 'Chapter not found'], 404);
+
+        $em = $this->emProvider->getEntityManager();
 
         $res = $this->validateSignatureOrGrant('CHAPTER_VIEW', $chapter, $request);
         if ($res !== null) return $res;
@@ -181,7 +186,7 @@ class ChapterController extends AbstractController
             ?? ($request->files->count() > 0 ? $request->files->getIterator()->current() : null);
         if (!$file) return $this->json(['error' => 'No file uploaded — expected field: photo, file, or image'], 400);
 
-        $this->chapterService->addPhoto($chapter, $file, $request->request->all());
+        $this->addChapterPhotoUseCase->execute($chapter, $file, $request->request->all());
         
         $host = $request->getSchemeAndHttpHost();
         return $this->json(new ChapterOutputDto($chapter, $host));
@@ -293,7 +298,7 @@ class ChapterController extends AbstractController
 
         try {
             // Call Whisper API for transcription
-            $transcribedText = $this->openAiService->transcribe($absoluteFilePath);
+            $transcribedText = $this->transcribeAudioUseCase->execute($absoluteFilePath);
 
             // Update database JSON
             $answers = $chapter->getAnswers();
@@ -426,7 +431,7 @@ class ChapterController extends AbstractController
         }
 
         try {
-            $improvedText = $this->anthropicService->improveAnswer($question, $answer);
+            $improvedText = $this->improveAnswerUseCase->execute($question, $answer);
             return $this->json([
                 'improvedText' => $improvedText,
             ]);
@@ -456,8 +461,14 @@ class ChapterController extends AbstractController
         $dataToSign = "chapterId=" . $chapterId . "&expires=" . $expires;
         $signature = hash_hmac('sha256', $dataToSign, $secret);
 
+        $frontendHost = rtrim(
+            $_ENV['MEMOIRES_FRONTEND_URL'] ?? ('https://memoiresvivantes.' . ($_ENV['FRONTEND_BASE_DOMAIN'] ?? 'arkanoa-media.com')),
+            '/'
+        );
+
         $shareUrl = sprintf(
-            'https://memoiresvivantes.arkanoa-media.com/memoires/shared/books/%s/chapters/%s?expires=%d&signature=%s&chapterId=%s',
+            '%s/memoires/shared/books/%s/chapters/%s?expires=%d&signature=%s&chapterId=%s',
+            $frontendHost,
             $bookId,
             $chapterId,
             $expires,

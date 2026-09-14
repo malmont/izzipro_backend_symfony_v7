@@ -11,9 +11,10 @@ use App\MemoiresVivantes\UseCase\CreateBookUseCase;
 use App\MemoiresVivantes\UseCase\GetBooksByUserUseCase;
 use App\MemoiresVivantes\UseCase\UpdateBookUseCase;
 use App\MemoiresVivantes\UseCase\DeleteBookUseCase;
+use App\MemoiresVivantes\UseCase\Payment\SyncBookPaymentStatusUseCase;
+use App\MemoiresVivantes\UseCase\Reservation\GetBookReservationsUseCase;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use App\Services\ReservationService\ReservationService;
 use App\Dto\ReservationOutputDto;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -30,7 +31,8 @@ class BookController extends AbstractController
         private readonly DeleteBookUseCase $deleteBookUseCase,
         private readonly BookService $bookService,
         private readonly TenantEntityManagerProvider $emProvider,
-        private readonly ReservationService $reservationService
+        private readonly GetBookReservationsUseCase $getBookReservationsUseCase,
+        private readonly SyncBookPaymentStatusUseCase $syncBookPaymentStatusUseCase
     ) {}
 
     #[Route('', methods: ['GET'])]
@@ -60,6 +62,11 @@ class BookController extends AbstractController
         $book = $em->getRepository(Book::class)->find(Uuid::fromString($id));
         if (!$book) return $this->json(['error' => 'Book not found'], 404);
 
+        // Si le statut de paiement est en attente, tentative de synchronisation en direct avec Stripe
+        if ($book->getPaymentStatus() === 'pending') {
+            $this->syncBookPaymentStatusUseCase->execute($book);
+        }
+
         $res = $this->validateSignatureOrGrant('BOOK_VIEW', $book, $request);
         if ($res !== null) return $res;
 
@@ -83,7 +90,7 @@ class BookController extends AbstractController
         $res = $this->validateSignatureOrGrant('BOOK_VIEW', $book, $request);
         if ($res !== null) return $res;
 
-        $reservations = $this->reservationService->getReservationsByBook($id);
+        $reservations = $this->getBookReservationsUseCase->execute($id);
         return $this->json(array_map(fn($r) => new ReservationOutputDto($r), $reservations));
     }
 

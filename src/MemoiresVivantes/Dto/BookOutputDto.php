@@ -28,6 +28,16 @@ class BookOutputDto
     public bool $has_print_order = false;
     public int $printOrdersCount = 0;
     public int $print_orders_count = 0;
+    public string $paymentStatus;
+    public string $payment_status;
+    public ?string $paymentLinkUrl = null;
+    public ?string $payment_link_url = null;
+    public ?string $paidAt = null;
+    public ?string $paid_at = null;
+    public ?float $paymentAmount = null;
+    public ?float $payment_amount = null;
+    public ?string $paymentCurrency = 'eur';
+    public ?string $payment_currency = 'eur';
 
     public function __construct(Book $book, string $host, ?\App\MemoiresVivantes\Entity\BookPrintOrder $latestOrder = null, int $ordersCount = 0)
     {
@@ -37,6 +47,16 @@ class BookOutputDto
         $this->birthplace = $book->getBirthplace();
         $this->format = $book->getFormat();
         $this->status = $book->getStatus();
+        $this->paymentStatus = $book->getPaymentStatus();
+        $this->payment_status = $book->getPaymentStatus();
+        $this->paymentLinkUrl = $book->getPaymentLinkUrl();
+        $this->payment_link_url = $book->getPaymentLinkUrl();
+        $this->paidAt = $book->getPaidAt()?->format(\DateTimeInterface::ATOM);
+        $this->paid_at = $book->getPaidAt()?->format(\DateTimeInterface::ATOM);
+        $this->paymentAmount = $book->getPaymentAmount();
+        $this->payment_amount = $book->getPaymentAmount();
+        $this->paymentCurrency = $book->getPaymentCurrency();
+        $this->payment_currency = $book->getPaymentCurrency();
         $this->coverPhotoPath = $book->getCoverPhotoPath() ? $host . '/uploads/memoires/' . $book->getCoverPhotoPath() : null;
         $this->createdAt = $book->getCreatedAt()->format(\DateTimeInterface::ATOM);
         $this->updatedAt = $book->getUpdatedAt()->format(\DateTimeInterface::ATOM);

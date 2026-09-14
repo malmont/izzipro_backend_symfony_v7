@@ -104,13 +104,11 @@ class TenantController extends AbstractController
                 }
             } else {
                 if ($currentSubdomain && $currentSubdomain !== 'www') {
-                    $targetDomain = $currentSubdomain . '.' . $this->backendBaseDomain;
+                    $absoluteSetupUrl = $protocol . $this->backendBaseDomain . '/setup/new-store?subdomain=' . urlencode($currentSubdomain);
                 } else {
-                    $targetDomain = $this->backendBaseDomain;
+                    $absoluteSetupUrl = $protocol . $this->backendBaseDomain . '/setup/new-store';
                 }
             }
-
-            $absoluteSetupUrl = $protocol . $targetDomain . '/setup/new-store';
 
             return new JsonResponse([
                 'exists' => false,

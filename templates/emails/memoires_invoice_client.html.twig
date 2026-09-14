@@ -1,0 +1,135 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Facture acquittée — Livre « {{ book.title }} »{% endblock %}
+
+{% block body %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; background-color: #f1f5f9; padding: 30px 0;">
+    <tr>
+        <td align="center">
+            <table width="620" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);">
+                
+                <!-- HEADER AVEC LOGO -->
+                <tr>
+                    <td style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 35px 30px; text-align: center;">
+                        {% if logoCid is defined and logoCid %}
+                            <img src="cid:{{ logoCid }}" alt="{{ fromName }}" style="max-height: 55px; max-width: 240px; margin-bottom: 12px; display: inline-block; border: 0;">
+                        {% elseif logoUrl is defined and logoUrl %}
+                            <img src="{{ logoUrl }}" alt="{{ fromName }}" style="max-height: 55px; max-width: 240px; margin-bottom: 12px; display: inline-block; border: 0;">
+                        {% else %}
+                            <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700;">{{ fromName }}</h1>
+                        {% endif %}
+                        <p style="color: #94a3b8; margin: 6px 0 0 0; font-size: 13px; letter-spacing: 0.5px;">FACTURE ACQUITTÉE & CONFIRMATION DE COMMANDE</p>
+                    </td>
+                </tr>
+
+                <!-- BANDEAU STATUT PAYÉ -->
+                <tr>
+                    <td style="background-color: #ecfdf5; border-bottom: 1px solid #a7f3d0; padding: 14px 30px; text-align: center;">
+                        <span style="display: inline-block; background-color: #059669; color: #ffffff; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 4px 12px; border-radius: 9999px; margin-right: 8px;">✓ ACQUITTÉE</span>
+                        <span style="color: #065f46; font-size: 13px; font-weight: 600;">Règlement effectué avec succès via carte bancaire sécurisée</span>
+                    </td>
+                </tr>
+
+                <!-- CONTENU PRINCIPAL -->
+                <tr>
+                    <td style="padding: 35px 30px;">
+                        
+                        <!-- EN-TÊTE FACTURE & COORDONNÉES -->
+                        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 30px;">
+                            <tr>
+                                <td width="55%" valign="top">
+                                    <div style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Émetteur</div>
+                                    <div style="font-size: 15px; font-weight: 700; color: #0f172a;">{{ fromName }}</div>
+                                    <div style="font-size: 13px; color: #475569; margin-top: 4px;">{{ fromEmail }}</div>
+                                    {% if companyAddress is defined and companyAddress %}
+                                        <div style="font-size: 13px; color: #64748b;">{{ companyAddress }}</div>
+                                    {% endif %}
+                                </td>
+                                <td width="45%" valign="top" align="right">
+                                    <div style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Facturé à</div>
+                                    <div style="font-size: 14px; font-weight: 700; color: #0f172a;">{{ customerName ?: 'Client Mémoires Vivantes' }}</div>
+                                    <div style="font-size: 13px; color: #475569; margin-top: 2px;">{{ customerEmail }}</div>
+                                    <div style="font-size: 12px; color: #94a3b8; margin-top: 8px;">
+                                        <strong>Réf :</strong> <span style="font-family: monospace;">{{ invoiceNumber }}</span><br>
+                                        <strong>Date :</strong> {{ paidAt|date('d/m/Y H:i') }}
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- TABLEAU DES ARTICLES -->
+                        <table width="100%" border="0" cellspacing="0" cellpadding="10" style="border-collapse: collapse; margin-bottom: 25px;">
+                            <thead>
+                                <tr style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; border-bottom: 2px solid #cbd5e1;">
+                                    <th align="left" style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; padding: 12px 10px;">Désignation</th>
+                                    <th align="center" style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; width: 60px; padding: 12px 10px;">Qté</th>
+                                    <th align="right" style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; width: 110px; padding: 12px 10px;">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 14px 10px;">
+                                        <div style="font-size: 15px; font-weight: 700; color: #0f172a;">
+                                            Livre personnalisé « {{ book.title|raw }} »
+                                        </div>
+                                        {% if book.subtitle %}
+                                            <div style="font-size: 13px; color: #64748b; font-style: italic; margin-top: 2px;">
+                                                {{ book.subtitle|raw }}
+                                            </div>
+                                        {% endif %}
+                                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                                            • Format : <strong style="text-transform: uppercase;">{{ book.format }}</strong> &nbsp;|&nbsp; Reliure rigide & Impression haute définition
+                                        </div>
+                                    </td>
+                                    <td align="center" style="font-size: 14px; color: #334155; font-weight: 600; padding: 14px 10px;">
+                                        1
+                                    </td>
+                                    <td align="right" style="font-size: 15px; font-weight: 700; color: #0f172a; padding: 14px 10px;">
+                                        {{ amountPaid|number_format(2, ',', ' ') }} {{ currency }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <!-- TOTAL -->
+                        <table width="100%" border="0" cellspacing="0" cellpadding="4" style="margin-bottom: 30px;">
+                            <tr>
+                                <td width="60%"></td>
+                                <td width="20%" align="right" style="font-size: 13px; color: #64748b;">Sous-total :</td>
+                                <td width="20%" align="right" style="font-size: 13px; font-weight: 600; color: #0f172a;">{{ amountPaid|number_format(2, ',', ' ') }} {{ currency }}</td>
+                            </tr>
+                            <tr>
+                                <td width="60%"></td>
+                                <td width="20%" align="right" style="font-size: 15px; font-weight: 700; color: #0f172a; border-top: 2px solid #0f172a; padding-top: 8px;">Total payé :</td>
+                                <td width="20%" align="right" style="font-size: 18px; font-weight: 800; color: #059669; border-top: 2px solid #0f172a; padding-top: 8px;">{{ amountPaid|number_format(2, ',', ' ') }} {{ currency }}</td>
+                            </tr>
+                        </table>
+
+                        <!-- ENCADRÉ PROCHAINES ÉTAPES -->
+                        <div style="background-color: #f8fafc; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 16px 20px; margin-bottom: 15px;">
+                            <div style="font-size: 14px; font-weight: 700; color: #1e3a8a; margin-bottom: 4px;">
+                                📦 Que se passe-t-il maintenant ?
+                            </div>
+                            <div style="font-size: 13px; color: #334155; line-height: 1.5;">
+                                Votre livre personnalisé est d'ores et déjà transmis à notre atelier. Il sera imprimé, relié et inspecté avec le plus grand soin avant son expédition à votre adresse.
+                            </div>
+                        </div>
+
+                    </td>
+                </tr>
+
+                <!-- FOOTER -->
+                <tr>
+                    <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 30px; text-align: center; font-size: 12px; color: #64748b;">
+                        <div>{{ fromName }} — Vos récits méritent un écrin exceptionnel.</div>
+                        <div style="margin-top: 4px; color: #94a3b8;">
+                            Pour toute question concernant votre commande, écrivez-nous à <a href="mailto:{{ fromEmail }}" style="color: #2563eb; text-decoration: none;">{{ fromEmail }}</a>.
+                        </div>
+                    </td>
+                </tr>
+
+            </table>
+        </td>
+    </tr>
+</table>
+{% endblock %}

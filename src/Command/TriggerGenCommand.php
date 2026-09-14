@@ -47,7 +47,10 @@ class TriggerGenCommand extends Command
         $chapter->setContentFinal(null);
         $em->flush();
 
-        $this->messageBus->dispatch(new GenerateChapterMessage((string)$chapter->getId(), 1, 'memoiresvivantes.arkanoa-media.com', 'intime et chaleureux'));
+        $frontendHost = parse_url($_ENV['MEMOIRES_FRONTEND_URL'] ?? '', PHP_URL_HOST)
+            ?: ('memoiresvivantes.' . ($_ENV['FRONTEND_BASE_DOMAIN'] ?? 'arkanoa-media.com'));
+
+        $this->messageBus->dispatch(new GenerateChapterMessage((string)$chapter->getId(), 1, $frontendHost, 'intime et chaleureux'));
 
         $output->writeln("Regeneration triggered successfully via MessageBus!");
         return Command::SUCCESS;
