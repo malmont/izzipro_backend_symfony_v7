@@ -3,6 +3,7 @@
 
 namespace App\Services\StripeService;
 
+use App\Entity\AddressEntreprise;
 use App\Entity\StripeConfig;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantConnectionManager;
@@ -49,31 +50,157 @@ class StripeService
         return $this->emProvider->getEntityManager();
     }
 
+    /**
+     * Résout le code pays ISO (2 lettres majuscules) depuis l'adresse d'entreprise du tenant.
+     * Par défaut : 'US'.
+     */
+    public function resolveTenantCountryCode(): string
+    {
+        try {
+            $addressRepo = $this->getEm()->getRepository(AddressEntreprise::class);
+            $address = $addressRepo->findOneBy([]);
+            if ($address && $address->getCountry()) {
+                $rawCountry = trim($address->getCountry());
+                $normalized = mb_strtoupper($rawCountry, 'UTF-8');
+
+                $countryMap = [
+                    'CANADA' => 'CA',
+                    'FRANCE' => 'FR',
+                    'ÉTATS-UNIS' => 'US',
+                    'ETATS-UNIS' => 'US',
+                    'UNITED STATES' => 'US',
+                    'USA' => 'US',
+                    'BELGIQUE' => 'BE',
+                    'BELGIUM' => 'BE',
+                    'SUISSE' => 'CH',
+                    'SWITZERLAND' => 'CH',
+                    'ROYAUME-UNI' => 'GB',
+                    'UNITED KINGDOM' => 'GB',
+                    'UK' => 'GB',
+                    'ESPAGNE' => 'ES',
+                    'SPAIN' => 'ES',
+                    'ALLEMAGNE' => 'DE',
+                    'GERMANY' => 'DE',
+                    'ITALIE' => 'IT',
+                    'ITALY' => 'IT',
+                ];
+
+                if (isset($countryMap[$normalized])) {
+                    return $countryMap[$normalized];
+                }
+
+                if (strlen($normalized) === 2 && ctype_alpha($normalized)) {
+                    return $normalized;
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning("Erreur lors de la résolution du pays du tenant pour Stripe: " . $e->getMessage());
+        }
+
+        return 'US';
+    }
+
     public function createOnboardingLink(string $refreshUrl, string $returnUrl): string
     {
         Stripe::setApiKey($this->stripeSecretKey);
         $stripeConfigRepo = $this->getEm()->getRepository(StripeConfig::class);
         $stripeConfig = $stripeConfigRepo->findOneBy([]);
 
-        if (!$stripeConfig) {
-            $account = Account::create([
-                'type' => 'express',
-                'requested_capabilities' => ['card_payments', 'transfers'],
-            ]);
+        $countryCode = $this->resolveTenantCountryCode();
+        $isLiveKey = str_starts_with($this->stripeSecretKey, 'rk_live_') || str_starts_with($this->stripeSecretKey, 'sk_live_');
 
-            $stripeConfig = new StripeConfig();
+        $needNewAccount = false;
+        if (!$stripeConfig || !$stripeConfig->getAccountId()) {
+            $needNewAccount = true;
+        } else {
+            // Vérifier si le compte existant est valide et correspond au bon mode (test vs live) et au bon pays
+            try {
+                $account = Account::retrieve($stripeConfig->getAccountId());
+                if ($account->livemode !== $isLiveKey) {
+                    $this->logger->info(sprintf(
+                        "Compte Stripe %s : discordance de mode (compte livemode=%s, clé livemode=%s). Nouveau compte requis.",
+                        $stripeConfig->getAccountId(),
+                        $account->livemode ? 'true' : 'false',
+                        $isLiveKey ? 'true' : 'false'
+                    ));
+                    $needNewAccount = true;
+                } elseif (strtoupper($account->country ?? '') !== $countryCode) {
+                    $this->logger->info(sprintf(
+                        "Compte Stripe %s : discordance de pays (compte country=%s, pays requis=%s). Nouveau compte requis.",
+                        $stripeConfig->getAccountId(),
+                        $account->country ?? 'inconnu',
+                        $countryCode
+                    ));
+                    $needNewAccount = true;
+                }
+            } catch (ApiErrorException $e) {
+                $this->logger->warning("Erreur lors de la récupération du compte Stripe {$stripeConfig->getAccountId()}: " . $e->getMessage());
+                $needNewAccount = true;
+            }
+        }
+
+        if ($needNewAccount) {
+            $accountParams = [
+                'type' => 'express',
+                'country' => $countryCode,
+                'requested_capabilities' => ['card_payments', 'transfers'],
+            ];
+
+            // Pré-remplir l'email si disponible dans l'adresse entreprise
+            try {
+                $address = $this->getEm()->getRepository(AddressEntreprise::class)->findOneBy([]);
+                if ($address && $address->getEmail()) {
+                    $accountParams['email'] = $address->getEmail();
+                }
+            } catch (\Throwable) {
+                // Ignore
+            }
+
+            $account = Account::create($accountParams);
+
+            if (!$stripeConfig) {
+                $stripeConfig = new StripeConfig();
+                $this->getEm()->persist($stripeConfig);
+            }
             $stripeConfig->setAccountId($account->id);
             $stripeConfig->setIsActive(false);
-            $this->getEm()->persist($stripeConfig);
             $this->getEm()->flush();
         }
 
-        $accountLink = AccountLink::create([
-            'account' => $stripeConfig->getAccountId(),
-            'refresh_url' => $refreshUrl,
-            'return_url' => $returnUrl,
-            'type' => 'account_onboarding',
-        ]);
+        try {
+            $accountLink = AccountLink::create([
+                'account' => $stripeConfig->getAccountId(),
+                'refresh_url' => $refreshUrl,
+                'return_url' => $returnUrl,
+                'type' => 'account_onboarding',
+            ]);
+        } catch (ApiErrorException $e) {
+            // Si une erreur liée au mode (test/live) ou à un compte invalide survient, recréer un compte propre
+            if (str_contains(strtolower($e->getMessage()), 'test mode') ||
+                str_contains(strtolower($e->getMessage()), 'live mode') ||
+                str_contains(strtolower($e->getMessage()), 'no such account')) {
+
+                $this->logger->warning("AccountLink a échoué ({$e->getMessage()}), re-création d'un compte propre pour {$countryCode}.");
+                $accountParams = [
+                    'type' => 'express',
+                    'country' => $countryCode,
+                    'requested_capabilities' => ['card_payments', 'transfers'],
+                ];
+                $account = Account::create($accountParams);
+                $stripeConfig->setAccountId($account->id);
+                $stripeConfig->setIsActive(false);
+                $this->getEm()->flush();
+
+                $accountLink = AccountLink::create([
+                    'account' => $stripeConfig->getAccountId(),
+                    'refresh_url' => $refreshUrl,
+                    'return_url' => $returnUrl,
+                    'type' => 'account_onboarding',
+                ]);
+            } else {
+                throw $e;
+            }
+        }
 
         return $accountLink->url;
     }

@@ -24,7 +24,7 @@ class StripeConfigCrudController extends BaseTenantCrudController
             ->setEntityLabelInSingular('Configuration Stripe')
             ->setEntityLabelInPlural('Configuration Stripe')
             ->setPageTitle(Crud::PAGE_INDEX, 'Passerelle de Paiement Stripe')
-            ->setHelp(Crud::PAGE_INDEX, 'Connectez ou gérez votre compte Stripe Connect pour encaisser les paiements par carte bancaire de vos clients.');
+            ->setHelp(Crud::PAGE_INDEX, 'Connectez ou gérez votre compte Stripe Connect pour encaisser les paiements par carte bancaire de vos clients.<br><br>💡 <strong>Important pour votre compte bancaire :</strong> Le pays et l\'adresse de votre compte Stripe sont automatiquement configurés à partir du menu <strong>Adresses Entreprises</strong>. Si vous êtes établi au <strong>Canada</strong> ou en <strong>France</strong>, assurez-vous d\'avoir renseigné votre adresse d\'entreprise avant de cliquer sur Connecter. Sans adresse configurée, le compte sera initialisé par défaut aux <strong>États-Unis</strong>.');
     }
 
     public function configureActions(Actions $actions): Actions
