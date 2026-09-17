@@ -8,6 +8,7 @@ use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantConnectionManager;
 use App\MemoiresVivantes\Entity\Chapter;
 use App\MemoiresVivantes\Services\HommageAggregationService;
+use App\MemoiresVivantes\Services\FamilleAggregationService;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Psr\Log\LoggerInterface;
@@ -21,6 +22,7 @@ class GenerateChapterHandler
         private readonly TenantConnectionManager $tenantManager,
         private readonly AnthropicService $anthropicService,
         private readonly HommageAggregationService $hommageAggregationService,
+        private readonly FamilleAggregationService $familleAggregationService,
         private readonly MessageBusInterface $messageBus,
         private readonly LoggerInterface $logger
     ) {}
@@ -73,7 +75,12 @@ class GenerateChapterHandler
                 } elseif ($bookType === 'couple') {
                     $text = $this->anthropicService->generatePart1Couple($chapter, $tone);
                 } elseif ($bookType === 'famille') {
-                    $text = $this->anthropicService->generatePart1Famille($chapter, $tone);
+                    $theme = $chapter->getTheme();
+                    $aggregatedContext = null;
+                    if ($theme === 'histoire_parents' || $theme === 'histoire_aine') {
+                        $aggregatedContext = $this->familleAggregationService->aggregateForSynthesis($chapter);
+                    }
+                    $text = $this->anthropicService->generatePart1Famille($chapter, $tone, $aggregatedContext);
                 } else {
                     $text = $this->anthropicService->generatePart1($chapter, $tone);
                 }
@@ -102,7 +109,12 @@ class GenerateChapterHandler
                 } elseif ($bookType === 'couple') {
                     $text = $this->anthropicService->generatePart2Couple($chapter, $tone);
                 } elseif ($bookType === 'famille') {
-                    $text = $this->anthropicService->generatePart2Famille($chapter, $tone);
+                    $theme = $chapter->getTheme();
+                    $aggregatedContext = null;
+                    if ($theme === 'histoire_parents' || $theme === 'histoire_aine') {
+                        $aggregatedContext = $this->familleAggregationService->aggregateForSynthesis($chapter);
+                    }
+                    $text = $this->anthropicService->generatePart2Famille($chapter, $tone, $aggregatedContext);
                 } else {
                     $text = $this->anthropicService->generatePart2($chapter, $tone);
                 }

@@ -10,8 +10,18 @@ class MemoiresThemes
     ];
 
     public const THEMES_FAMILLE = [
-        'histoire_aine', 'regards_croises', 
-        'regards_petits_enfants', 'epilogue_collectif'
+        'histoire_parents',
+        'regards_croises', 
+        'regards_petits_enfants',
+        'rituels_et_valeurs',
+        'epilogue_collectif'
+    ];
+
+    public const THEMES_FAMILLE_LEGACY = [
+        'histoire_aine',
+        'regards_croises', 
+        'regards_petits_enfants',
+        'epilogue_collectif'
     ];
 
     public const THEMES_HOMMAGE = [

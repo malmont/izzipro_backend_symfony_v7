@@ -50,8 +50,11 @@ class MemoireQuestionCrudController extends BaseTenantCrudController
                 'Construire ensemble (Couple)' => 'construire_ensemble',
                 'Ce que nous avons appris (Couple)' => 'ce_que_nous_avons_appris',
                 'Message final (Couple)' => 'message_final',
-                'Regards croisés (Famille)' => 'regards_croises',
+                'Histoire des parents (Famille)' => 'histoire_parents',
+                'Histoire de l\'aîné (Famille - Ancien)' => 'histoire_aine',
+                'Regards croisés / Paroles d\'enfants (Famille)' => 'regards_croises',
                 'Regards petits-enfants (Famille)' => 'regards_petits_enfants',
+                'Rituels et valeurs (Famille)' => 'rituels_et_valeurs',
                 'Épilogue collectif (Famille)' => 'epilogue_collectif',
                 'Portrait croisé (Hommage)' => 'portrait_croise',
                 'Les voix (Hommage)' => 'les_voix',
@@ -59,8 +62,9 @@ class MemoireQuestionCrudController extends BaseTenantCrudController
                 'Ce qu\'il/elle nous laisse (Hommage)' => 'ce_quil_nous_laisse',
                 'Ce qu\'on aurait voulu dire (Hommage)' => 'ce_quon_aurait_voulu_dire',
             ]))
-            ->add(ChoiceFilter::new('role', 'Rôle (Hommage)')->setChoices([
+            ->add(ChoiceFilter::new('role', 'Rôle (Famille / Hommage)')->setChoices([
                 'Tous / Transversal' => '',
+                'Parent (Père / Mère)' => 'parent',
                 'Enfant' => 'enfant',
                 'Petit-enfant' => 'petit_enfant',
                 'Conjoint' => 'conjoint',
@@ -95,8 +99,11 @@ class MemoireQuestionCrudController extends BaseTenantCrudController
                 'Construire ensemble (Couple)' => 'construire_ensemble',
                 'Ce que nous avons appris (Couple)' => 'ce_que_nous_avons_appris',
                 'Message final (Couple)' => 'message_final',
-                'Regards croisés (Famille)' => 'regards_croises',
+                'Histoire des parents (Famille)' => 'histoire_parents',
+                'Histoire de l\'aîné (Famille - Ancien)' => 'histoire_aine',
+                'Regards croisés / Paroles d\'enfants (Famille)' => 'regards_croises',
                 'Regards petits-enfants (Famille)' => 'regards_petits_enfants',
+                'Rituels et valeurs (Famille)' => 'rituels_et_valeurs',
                 'Épilogue collectif (Famille)' => 'epilogue_collectif',
                 'Portrait croisé (Hommage)' => 'portrait_croise',
                 'Les voix (Hommage)' => 'les_voix',
@@ -105,9 +112,10 @@ class MemoireQuestionCrudController extends BaseTenantCrudController
                 'Ce qu\'on aurait voulu dire (Hommage)' => 'ce_quon_aurait_voulu_dire',
             ]);
 
-        yield ChoiceField::new('role', 'Rôle du contributeur (Hommage)')
+        yield ChoiceField::new('role', 'Rôle du contributeur (Famille / Hommage)')
             ->setChoices([
                 'Tous / Transversal' => null,
+                'Parent (Père / Mère)' => 'parent',
                 'Enfant' => 'enfant',
                 'Petit-enfant' => 'petit_enfant',
                 'Conjoint' => 'conjoint',
@@ -116,7 +124,7 @@ class MemoireQuestionCrudController extends BaseTenantCrudController
                 'Collègue' => 'collegue',
                 'Proche' => 'proche',
             ])
-            ->setHelp('Applicable particulièrement aux questions spécifiques du chapitre « Les voix ». Laisser vide si la question est commune.')
+            ->setHelp('Applicable particulièrement aux questions spécifiques (Édition Hommage ou Famille). Laisser vide si la question est commune.')
             ->setRequired(false);
 
         yield IntegerField::new('displayOrder', 'Index (Ordre)');

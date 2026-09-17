@@ -201,112 +201,179 @@ class AnthropicService
         return $this->callAnthropic($prompt, 32000);
     }
 
-    public function generatePart1Famille(Chapter $chapter, string $tone = 'intime et chaleureux'): string
+    public function generatePart1Famille(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null): string
     {
+        $book = $chapter->getBook();
         $theme = $chapter->getTheme();
-        if ($theme === 'histoire_aine') {
-            return $this->generatePart1($chapter, $tone);
-        }
-
         $themeTitle = $chapter->getTitle();
-        if ($theme === 'regards_croises' || $theme === 'regards_petits_enfants') {
-            $contributorAnswers = $chapter->getContributorAnswers() ?? [];
-            $formattedTestimonies = "";
-            foreach ($contributorAnswers as $contrib) {
-                $name = $contrib['contributorName'] ?? $contrib['firstName'] ?? 'Un proche';
-                $role = $contrib['role'] ?? 'proche';
-                $answers = $contrib['answers'] ?? [];
-                $contribAnswersFormatted = $this->formatAnswers($answers);
-                
-                $formattedTestimonies .= "=== Témoignage de {$name} ({$role}) ===\n{$contribAnswersFormatted}\n\n";
+        $parent1 = $book->getPerson1FirstName() ?: 'notre père';
+        $parent2 = $book->getPerson2FirstName() ?: 'notre mère';
+        $parentsLabel = ($book->getPerson1FirstName() && $book->getPerson2FirstName())
+            ? "{$parent1} et {$parent2}"
+            : ($book->getPerson1FirstName() ?: $book->getTitle());
+
+        // Chapitre 1 : Histoire des parents & Nos racines (Synthèse 3e personne)
+        if ($theme === 'histoire_parents' || $theme === 'histoire_aine') {
+            $contextText = $aggregatedContext['formattedContext'] ?? '';
+            if (empty(trim($contextText))) {
+                $contextText = $this->formatAnswers($chapter->getAnswers());
+                if (empty(trim($contextText)) && !empty($chapter->getContributorAnswers())) {
+                    $contextText = $this->formatContributorTestimonies($chapter->getContributorAnswers());
+                }
             }
 
-            $prompt = "Tu es un écrivain biographe de talent, spécialisé dans les récits de famille. Voici les témoignages des différents membres de la famille concernant la personne célébrée pour le chapitre \"{$themeTitle}\" :\n\n" .
-                      "{$formattedTestimonies}\n" .
-                      "CONSIGNES PARTIE 1/2 :\n" .
-                      "- Rédige le témoignage de CHAQUE contributeur séparément sous son propre sous-titre poétique (ex: ===Témoignage de [Prénom]===)\n" .
-                      "- Écris à la première personne du singulier (je) du point de vue de chaque contributeur\n" .
-                      "- Ne mélange jamais les témoignages entre eux, garde-les bien distincts\n" .
-                      "- Développe en profondeur les anecdotes et émotions transmises par chaque personne\n" .
-                      "- Le volume dépend de la richesse des réponses fournies — ne pas répéter pour atteindre un quota\n" .
-                      "- Si les réponses sont courtes, concentre-toi sur le ressenti, l'affection et les émotions pour développer le récit sans inventer de nouveaux faits non mentionnés. C'est particulièrement vrai pour les témoignages des petits-enfants qui sont très courts par design : ne boucle jamais sur le même souvenir ou la même idée pour remplir l'espace.\n" .
-                      "- Minimum 3 paragraphes par témoignage/contributeur\n" .
-                      "- N'ÉCRIS JAMAIS deux fois la même scène ou la même idée\n" .
-                      "- Style chaleureux, vivant et littéraire, {$tone}\n" .
-                      "- PAS de titre général — commence directement par le premier témoignage\n" .
-                      "- Chaque paragraphe séparé par une ligne vide\n" .
-                      "- Termine TOUJOURS chaque paragraphe par un point complet\n" .
-                      "- Une 2e partie suivra — pas besoin de conclure";
-        } else {
-            $answersFormatted = $this->formatAnswers($chapter->getAnswers());
+            $prompt = "Tu es un écrivain biographe de premier ordre, spécialisé dans les sagas familiales et les mémoires de famille.\n" .
+                      "Tu rédiges le premier chapitre \"{$themeTitle}\" consacré à l'histoire des parents et aux racines du foyer de {$parentsLabel}.\n\n" .
+                      "Voici les témoignages et souvenirs recueillis auprès de la famille :\n\n" .
+                      "{$contextText}\n\n" .
+                      "CONSIGNES ÉDITORIALES PARTIE 1/2 :\n" .
+                      "- Registre de SYNTHÈSE à la 3ème personne (il/elle ou {$parent1} et {$parent2}).\n" .
+                      "- Retrace le début de cette histoire d'amour et la fondation de leur famille : les origines de chacun, leur jeunesse, les récits de leur rencontre (tels que racontés par eux-mêmes ou transmis avec affection par leurs enfants), leurs premiers temps ensemble et l'installation de leur premier chez-soi.\n" .
+                      "- RÈGLE D'OR : Si les enfants rapportent des détails ou versions légèrement différentes de la rencontre, ne tranche JAMAIS : tisse les récits comme la légende chaleureuse de la famille (« Pour l'un, c'était... tandis que pour l'autre, demeure le souvenir de... »).\n" .
+                      "- Volume proportionnel aux souvenirs réels fournis — ne boucle jamais sur la même idée.\n" .
+                      "- Sous-titres poétiques toutes les 4 à 6 paragraphes sous la forme : ===Titre poétique===\n" .
+                      "- Style littéraire, émouvant, chaleureux et respectueux, {$tone}.\n" .
+                      "- PAS de titre général — commence directement par le premier paragraphe du récit.\n" .
+                      "- Chaque paragraphe séparé par une ligne vide et terminé par un point complet.\n" .
+                      "- Une 2e partie suivra — pas besoin de conclure pour l'instant.";
 
-            $prompt = "Tu es un écrivain biographe de talent. Rédige l'épilogue collectif de la famille pour le chapitre \"{$themeTitle}\".\n\n" .
-                      "Voici leurs réponses :\n{$answersFormatted}\n\n" .
-                      "CONSIGNES PARTIE 1/2 :\n" .
-                      "- Rédige une lettre ou un message collectif court, extrêmement chaleureux et émotionnel au nom de toute la famille\n" .
-                      "- Le volume dépend de la richesse des réponses fournies — ne pas répéter pour atteindre un quota\n" .
-                      "- Si les réponses sont courtes, concentre-toi sur le message d'amour, la gratitude et les émotions collectives sans inventer de nouveaux faits non mentionnés\n" .
-                      "- Minimum 3 paragraphes\n" .
-                      "- N'ÉCRIS JAMAIS deux fois la même scène ou la même idée\n" .
-                      "- Style chaleureux, vivant et poétique, {$tone}\n" .
-                      "- PAS de titre — commence directement par le texte\n" .
-                      "- Termine par un point complet\n" .
-                      "- Une 2e partie suivra — pas besoin de conclure";
+            return $this->callAnthropic($prompt, 32000);
         }
+
+        // Chapitre 2 & 3 : Regards croisés (Paroles d'enfants) et Petits-enfants (100% Verbatim)
+        if ($theme === 'regards_croises' || $theme === 'regards_petits_enfants') {
+            $contributorAnswers = $chapter->getContributorAnswers() ?? [];
+            $formattedTestimonies = $this->formatContributorTestimonies($contributorAnswers);
+            if (empty(trim($formattedTestimonies))) {
+                $formattedTestimonies = $this->formatAnswers($chapter->getAnswers());
+            }
+
+            $isGrandchildren = ($theme === 'regards_petits_enfants');
+            $roleLabel = $isGrandchildren ? "les petits-enfants" : "les enfants";
+
+            $prompt = "Tu es un écrivain biographe de talent, spécialisé dans les récits de famille. Tu rédiges le recueil de témoignages \"{$themeTitle}\" réunissant les souvenirs de {$roleLabel} envers {$parentsLabel} :\n\n" .
+                      "{$formattedTestimonies}\n\n" .
+                      "CONSIGNES ÉDITORIALES PARTIE 1/2 :\n" .
+                      "- Registre 100% VERBATIM à la 1ère personne du singulier (je) pour chaque contributeur.\n" .
+                      "- Chaque participant a son propre espace bien distinct sous son sous-titre poétique et nominatif (ex: === Témoignage de [Prénom] ([Rôle]) ===).\n" .
+                      "- Ne mélange JAMAIS les témoignages entre eux : garde la singularité, l'âge et la sensibilité de chacun.\n" .
+                      "- Développe en profondeur les anecdotes concrètes, les souvenirs d'enfance et les émotions partagées.\n" .
+                      ($isGrandchildren
+                          ? "- Pour les petits-enfants, les souvenirs sont souvent courts et tendres : ne boucle jamais sur la même idée pour allonger artificiellement le texte. Privilégie la fraîcheur et la vérité du cœur.\n"
+                          : "- Développe les souvenirs avec le père et avec la mère, l'ambiance du foyer et les valeurs transmises.\n") .
+                      "- Style chaleureux, vivant et littéraire, {$tone}.\n" .
+                      "- PAS de titre général — commence directement par le premier témoignage.\n" .
+                      "- Une 2e partie suivra — pas besoin de conclure.";
+
+            return $this->callAnthropic($prompt, 32000);
+        }
+
+        // Chapitre 4 : Rituels et valeurs (Hybride / Mixte)
+        if ($theme === 'rituels_et_valeurs') {
+            $contributorAnswers = $chapter->getContributorAnswers() ?? [];
+            $formattedTestimonies = $this->formatContributorTestimonies($contributorAnswers);
+            if (empty(trim($formattedTestimonies))) {
+                $formattedTestimonies = $this->formatAnswers($chapter->getAnswers());
+            }
+
+            $prompt = "Tu es un écrivain biographe de grand talent. Tu rédiges le chapitre \"{$themeTitle}\" célébrant les traditions, rituels et valeurs qui font l'âme de cette famille :\n\n" .
+                      "{$formattedTestimonies}\n\n" .
+                      "CONSIGNES ÉDITORIALES PARTIE 1/2 :\n" .
+                      "- Registre HYBRIDE mêlant fragments de témoignages directs des membres de la famille et récit narratif chaleureux.\n" .
+                      "- Fais revivre les grands rituels du foyer : les repas du dimanche, les recettes fétiches, les vacances inoubliables, les répliques cultes et expressions de la maison, ainsi que les valeurs fondamentales transmises par les parents.\n" .
+                      "- Insère des sous-titres poétiques tous les 4 à 5 paragraphes (ex: === Autour de la table ===, === Les vacances qui nous unissent ===, === Ce qui nous a été transmis ===).\n" .
+                      "- Style vivant, plein de saveur, réconfortant et joyeux, {$tone}.\n" .
+                      "- Une 2e partie suivra.";
+
+            return $this->callAnthropic($prompt, 32000);
+        }
+
+        // Chapitre 5 : Épilogue collectif / Lettre d'amour
+        $contributorAnswers = $chapter->getContributorAnswers() ?? [];
+        $formattedTestimonies = $this->formatContributorTestimonies($contributorAnswers);
+        if (empty(trim($formattedTestimonies))) {
+            $formattedTestimonies = $this->formatAnswers($chapter->getAnswers());
+        }
+
+        $prompt = "Tu es un écrivain biographe de talent. Tu rédiges l'épilogue intime et vibrant \"{$themeTitle}\" adressé à {$parentsLabel} au nom de toute la famille :\n\n" .
+                  "{$formattedTestimonies}\n\n" .
+                  "CONSIGNES ÉDITORIALES PARTIE 1/2 :\n" .
+                  "- Rédige une lettre collective ou des messages successifs de chaque enfant/proche sous forme de déclaration d'amour, de gratitude et de fierté envers les parents.\n" .
+                  "- Style profondément émouvant, chaleureux et noble, célébrant le bonheur d'avoir grandi auprès d'eux et formulant des vœux pour la pérennité du clan familial.\n" .
+                  "- Une 2e partie suivra.";
 
         return $this->callAnthropic($prompt, 32000);
     }
 
-    public function generatePart2Famille(Chapter $chapter, string $tone = 'intime et chaleureux'): string
+    public function generatePart2Famille(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null): string
     {
+        $book = $chapter->getBook();
         $theme = $chapter->getTheme();
-        if ($theme === 'histoire_aine') {
-            return $this->generatePart2($chapter, $tone);
-        }
-
         $themeTitle = $chapter->getTitle();
+        $parent1 = $book->getPerson1FirstName() ?: 'notre père';
+        $parent2 = $book->getPerson2FirstName() ?: 'notre mère';
+        $parentsLabel = ($book->getPerson1FirstName() && $book->getPerson2FirstName())
+            ? "{$parent1} et {$parent2}"
+            : ($book->getPerson1FirstName() ?: $book->getTitle());
+
         $contentPart1 = $chapter->getContentPart1() ?? '';
         $lastParagraphs = $this->extractLastParagraphs($contentPart1, 3);
 
+        // Chapitre 1 : Histoire des parents
+        if ($theme === 'histoire_parents' || $theme === 'histoire_aine') {
+            $contextText = $aggregatedContext['formattedContext'] ?? '';
+            if (empty(trim($contextText))) {
+                $contextText = $this->formatAnswers($chapter->getAnswers());
+            }
+
+            $prompt = "Tu es un écrivain biographe d'exception. Continue la rédaction du récit \"{$themeTitle}\" sur l'histoire de {$parentsLabel} :\n\n" .
+                      "{$contextText}\n\n" .
+                      "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
+                      "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUNE période déjà abordée.\n\n" .
+                      "CONSIGNES PARTIE 2/2 :\n" .
+                      "- Poursuis la fondation du foyer et la vie avec les enfants, les étapes marquantes traversées ensemble, et le regard admiratif porté sur leur histoire.\n" .
+                      "- Conclus par un magnifique paragraphe d'hommage à l'amour et au foyer qu'ils ont su bâtir.\n" .
+                      "- Termine par un point complet.";
+
+            return $this->callAnthropic($prompt, 32000);
+        }
+
+        // Chapitres 2 & 3 : Regards croisés & Petits-enfants
         if ($theme === 'regards_croises' || $theme === 'regards_petits_enfants') {
             $contributorAnswers = $chapter->getContributorAnswers() ?? [];
-            $formattedTestimonies = "";
-            foreach ($contributorAnswers as $contrib) {
-                $name = $contrib['contributorName'] ?? $contrib['firstName'] ?? 'Un proche';
-                $role = $contrib['role'] ?? 'proche';
-                $answers = $contrib['answers'] ?? [];
-                $contribAnswersFormatted = $this->formatAnswers($answers);
-                
-                $formattedTestimonies .= "=== Témoignage de {$name} ({$role}) ===\n{$contribAnswersFormatted}\n\n";
+            $formattedTestimonies = $this->formatContributorTestimonies($contributorAnswers);
+            if (empty(trim($formattedTestimonies))) {
+                $formattedTestimonies = $this->formatAnswers($chapter->getAnswers());
             }
 
             $prompt = "Tu es un écrivain biographe de talent, spécialisé dans les récits de famille. Continue la rédaction des témoignages pour le chapitre \"{$themeTitle}\" :\n\n" .
                       "{$formattedTestimonies}\n\n" .
                       "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
-                      "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUNE scène déjà traitée. Si le matériel est épuisé, conclus élégamment en quelques paragraphes.\n\n" .
+                      "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUN témoignage déjà traité.\n\n" .
                       "CONSIGNES PARTIE 2/2 :\n" .
-                      "- Continue uniquement s'il reste des éléments non traités ou s'il y a du matériel nouveau\n" .
-                      "- Si toutes les réponses ont déjà été traitées en partie 1, rédiges uniquement un ou deux beaux paragraphes de conclusion générale chaleureuse pour l'ensemble du chapitre et arrête-toi (ne crée aucun nouveau sous-titre ===...===)\n" .
-                      "- Ne jamais reformuler ce qui a déjà été dit\n" .
-                      "- Qualité et authenticité avant quantité : reste fidèle aux souvenirs et émotions des contributeurs sans inventer de nouveaux éléments de vie non fournis\n" .
-                      "- Même style (si tu continues un témoignage entamé en partie 1, réutilise le même sous-titre === Témoignage de [Prénom] ===)\n" .
-                      "- Si aucun nouveau témoignage n'est nécessaire, ne crée aucun sous-titre et finis directement par la conclusion générale.";
-        } else {
-            $answersFormatted = $this->formatAnswers($chapter->getAnswers());
+                      "- Continue uniquement s'il reste des témoignages de contributeurs non traités en partie 1.\n" .
+                      "- Si toutes les personnes ont déjà été traitées, rédige uniquement un beau paragraphe de conclusion générale chaleureuse pour clore le chapitre (sans nouveau sous-titre).\n" .
+                      "- Même style, termine par un point complet.";
 
-            $prompt = "Tu es un écrivain biographe de talent. Continue la rédaction de l'épilogue collectif de la famille pour le chapitre \"{$themeTitle}\" :\n\n" .
-                      "Voici leurs réponses :\n{$answersFormatted}\n\n" .
-                      "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
-                      "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUNE scène déjà traitée. Si le matériel est épuisé, conclus élégamment en quelques paragraphes.\n\n" .
-                      "CONSIGNES PARTIE 2/2 :\n" .
-                      "- Continue uniquement s'il y a du matériel nouveau, sinon conclus avec un beau paragraphe final\n" .
-                      "- Ne jamais reformuler ce qui a déjà été dit\n" .
-                      "- Qualité et authenticité avant quantité : reste fidèle aux émotions exprimées par la famille\n" .
-                      "- Termine par un beau paragraphe de conclusion avec un point";
+            return $this->callAnthropic($prompt, 32000);
         }
 
-        return $this->callAnthropic($prompt, 32000);
-    }
+        // Chapitres 4 & 5 : Rituels / Épilogue
+        $answersFormatted = $this->formatContributorTestimonies($chapter->getContributorAnswers() ?? []);
+        if (empty(trim($answersFormatted))) {
+            $answersFormatted = $this->formatAnswers($chapter->getAnswers());
+        }
+
+        $prompt = "Tu es un écrivain biographe de talent. Continue la rédaction pour le chapitre \"{$themeTitle}\" :\n\n" .
+                  "{$answersFormatted}\n\n" .
+                  "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
+                  "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUNE scène déjà traitée.\n\n" .
+                  "CONSIGNES PARTIE 2/2 :\n" .
+                  "- Continue uniquement s'il reste du matériel nouveau, puis termine par une émouvante conclusion au nom de toute la famille.\n" .
+                  "- Termine par un beau paragraphe de conclusion avec un point complet.";
+
+            return $this->callAnthropic($prompt, 32000);
+        }
 
     public function generatePart1Hommage(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null): string
     {

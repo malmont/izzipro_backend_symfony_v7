@@ -18,6 +18,7 @@ use App\MemoiresVivantes\UseCase\ImproveAnswerUseCase;
 use App\MemoiresVivantes\UseCase\TranscribeAudioUseCase;
 use App\MemoiresVivantes\UseCase\UpdateChapterUseCase;
 use App\MemoiresVivantes\Services\HommageAggregationService;
+use App\MemoiresVivantes\Services\FamilleAggregationService;
 use App\Services\TenantEntityManagerProvider;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -40,6 +41,7 @@ class ChapterController extends AbstractController
         private readonly TranscribeAudioUseCase $transcribeAudioUseCase,
         private readonly ImproveAnswerUseCase $improveAnswerUseCase,
         private readonly HommageAggregationService $hommageAggregationService,
+        private readonly FamilleAggregationService $familleAggregationService,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly MessageBusInterface $messageBus,
         private readonly \Psr\Log\LoggerInterface $logger
@@ -254,6 +256,19 @@ class ChapterController extends AbstractController
                 if (!$check['canGenerate']) {
                     return $this->json([
                         'error' => $check['reason'] ?? 'Les témoignages préalables sont requis pour ce chapitre de synthèse.'
+                    ], 422);
+                }
+            }
+        }
+
+        // Guardrail pour Famille : vérifier les prérequis de synthèse pour l'histoire des parents
+        if ($chapter->getBook() && $chapter->getBook()->getType() === 'famille') {
+            $theme = $chapter->getTheme();
+            if ($theme === 'histoire_parents' || $theme === 'histoire_aine') {
+                $check = $this->familleAggregationService->checkCanGenerateSynthesis($chapter);
+                if (!$check['canGenerate']) {
+                    return $this->json([
+                        'error' => $check['reason'] ?? 'Les témoignages des proches ou des parents sont requis avant de pouvoir générer ce chapitre.'
                     ], 422);
                 }
             }
