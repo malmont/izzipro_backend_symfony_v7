@@ -72,10 +72,6 @@ class SeedMemoiresQuestionsCommand extends Command
 
             $existing = $repo->findOneBy($criteria);
 
-            if ($existing && !$force) {
-                continue;
-            }
-
             $q = $existing ?? new MemoireQuestion();
             $q->setBookType($item['bookType']);
             $q->setTheme($item['theme']);
@@ -521,12 +517,22 @@ class SeedMemoiresQuestionsCommand extends Command
             // LIVRES DE FAMILLE V2 (SAGA FAMILIALE)
             // ==========================================
 
+            // Chapitre 1 — « L'Histoire des parents & Nos racines » (histoire_parents) - TRANSVERSAL
+            [
+                'bookType' => 'famille',
+                'theme' => 'histoire_parents',
+                'role' => null,
+                'displayOrder' => 0,
+                'questionText' => "Racontez les origines et les racines qui ont vu naître cette histoire de famille",
+                'tip' => "D'où vient la famille, les villages ou villes d'origine, l'esprit de l'époque."
+            ],
+
             // Chapitre 1 — « L'Histoire des parents & Nos racines » (histoire_parents) - PARENT
             [
                 'bookType' => 'famille',
                 'theme' => 'histoire_parents',
                 'role' => 'parent',
-                'displayOrder' => 0,
+                'displayOrder' => 1,
                 'questionText' => "Où et comment vous êtes-vous rencontrés ?",
                 'tip' => "Racontez le lieu, la saison, votre première impression et ce qui a fait battre votre cœur."
             ],
@@ -534,7 +540,7 @@ class SeedMemoiresQuestionsCommand extends Command
                 'bookType' => 'famille',
                 'theme' => 'histoire_parents',
                 'role' => 'parent',
-                'displayOrder' => 1,
+                'displayOrder' => 2,
                 'questionText' => "Racontez vos premiers temps ensemble et l'installation de votre foyer",
                 'tip' => "Le premier appartement ou la première maison, les petits débuts, les habitudes à deux."
             ],
@@ -542,7 +548,7 @@ class SeedMemoiresQuestionsCommand extends Command
                 'bookType' => 'famille',
                 'theme' => 'histoire_parents',
                 'role' => 'parent',
-                'displayOrder' => 2,
+                'displayOrder' => 3,
                 'questionText' => "Comment s'est passée la décision de fonder une famille et l'arrivée de vos enfants ?",
                 'tip' => "Les joies, l'émotion de devenir parents, ce qui a changé dans votre vie."
             ],
@@ -550,7 +556,7 @@ class SeedMemoiresQuestionsCommand extends Command
                 'bookType' => 'famille',
                 'theme' => 'histoire_parents',
                 'role' => 'parent',
-                'displayOrder' => 3,
+                'displayOrder' => 4,
                 'questionText' => "Quel a été l'un des plus beaux défis ou l'une des plus belles aventures traversés ensemble ?",
                 'tip' => "Un projet marquant, un voyage, une épreuve surmontée main dans la main."
             ],
@@ -558,7 +564,7 @@ class SeedMemoiresQuestionsCommand extends Command
                 'bookType' => 'famille',
                 'theme' => 'histoire_parents',
                 'role' => 'parent',
-                'displayOrder' => 4,
+                'displayOrder' => 5,
                 'questionText' => "Quel regard portez-vous aujourd'hui sur votre histoire d'amour et le chemin parcouru à deux ?",
                 'tip' => "La fierté de voir grandir la famille, ce qui fait la force de votre complicité."
             ],
@@ -568,7 +574,7 @@ class SeedMemoiresQuestionsCommand extends Command
                 'bookType' => 'famille',
                 'theme' => 'histoire_parents',
                 'role' => 'enfant',
-                'displayOrder' => 0,
+                'displayOrder' => 1,
                 'questionText' => "Que vous ont-ils raconté sur leur rencontre et leurs débuts ensemble ?",
                 'tip' => "La version de cette histoire que vous avez toujours entendue raconter à la maison."
             ],
@@ -576,7 +582,7 @@ class SeedMemoiresQuestionsCommand extends Command
                 'bookType' => 'famille',
                 'theme' => 'histoire_parents',
                 'role' => 'enfant',
-                'displayOrder' => 1,
+                'displayOrder' => 2,
                 'questionText' => "Qu'avez-vous appris ou deviné sur leur jeunesse avant votre naissance ?",
                 'tip' => "Leurs passions d'alors, leurs débuts professionnels, leur mode de vie."
             ],
@@ -584,7 +590,7 @@ class SeedMemoiresQuestionsCommand extends Command
                 'bookType' => 'famille',
                 'theme' => 'histoire_parents',
                 'role' => 'enfant',
-                'displayOrder' => 2,
+                'displayOrder' => 3,
                 'questionText' => "Comment décririez-vous leur complicité et leur vie à deux au quotidien quand vous étiez enfant ?",
                 'tip' => "La manière dont ils se complétaient, leurs regards, leurs fous rires ou leurs petits rituels à deux."
             ],
@@ -592,7 +598,7 @@ class SeedMemoiresQuestionsCommand extends Command
                 'bookType' => 'famille',
                 'theme' => 'histoire_parents',
                 'role' => 'enfant',
-                'displayOrder' => 3,
+                'displayOrder' => 4,
                 'questionText' => "Une anecdote marquante ou touchante sur votre père et votre mère ensemble",
                 'tip' => "Un voyage en famille, une surprise, un moment où leur amour était évident pour tous."
             ],
@@ -600,19 +606,9 @@ class SeedMemoiresQuestionsCommand extends Command
                 'bookType' => 'famille',
                 'theme' => 'histoire_parents',
                 'role' => 'enfant',
-                'displayOrder' => 4,
+                'displayOrder' => 5,
                 'questionText' => "Ce qui, selon vous, a fait la force de leur union et de votre foyer à travers les années",
                 'tip' => "Leur solidité, leur respect mutuel, leur façon d'élever les enfants ensemble."
-            ],
-
-            // Chapitre 1 — (histoire_parents) - TRANSVERSAL
-            [
-                'bookType' => 'famille',
-                'theme' => 'histoire_parents',
-                'role' => null,
-                'displayOrder' => 0,
-                'questionText' => "Racontez les origines et les racines qui ont vu naître cette histoire de famille",
-                'tip' => "D'où vient la famille, les villages ou villes d'origine, l'esprit de l'époque."
             ],
 
             // Compatibilité ascendante : histoire_aine (pointe vers les questions d'histoire des parents)
@@ -623,6 +619,24 @@ class SeedMemoiresQuestionsCommand extends Command
                 'displayOrder' => 0,
                 'questionText' => "Racontez l'histoire et les origines des parents à la tête de la famille",
                 'tip' => null
+            ],
+
+            // Chapitre 2 — « Paroles d'enfants » (regards_croises) - PARENT
+            [
+                'bookType' => 'famille',
+                'theme' => 'regards_croises',
+                'role' => 'parent',
+                'displayOrder' => 0,
+                'questionText' => "Quel regard portez-vous sur l'enfance de vos enfants et ce foyer que vous avez bâti ensemble ?",
+                'tip' => "L'atmosphère de la maison, les défis surmontés, la joie de voir grandir votre famille."
+            ],
+            [
+                'bookType' => 'famille',
+                'theme' => 'regards_croises',
+                'role' => 'parent',
+                'displayOrder' => 1,
+                'questionText' => "Quelle est votre plus grande fierté en les voyant aujourd'hui adultes ?",
+                'tip' => "Leurs accomplissements, leurs valeurs, la complicité qui vous unit aujourd'hui."
             ],
 
             // Chapitre 2 — « Paroles d'enfants » (regards_croises) - ENFANT
@@ -761,22 +775,50 @@ class SeedMemoiresQuestionsCommand extends Command
                 'tip' => "La solidarité, le travail, la franchise, la bienveillance, la générosité..."
             ],
 
+            // Chapitre 5 — « Lettre d'amour & Gratitude » (epilogue_collectif) - PARENT
+            [
+                'bookType' => 'famille',
+                'theme' => 'epilogue_collectif',
+                'role' => 'parent',
+                'displayOrder' => 0,
+                'questionText' => "Quel message d'amour et de bienveillance souhaitez-vous laisser à vos enfants et petits-enfants ?",
+                'tip' => "Vos souhaits et bénédictions pour leur avenir, ce que vous portez dans votre cœur pour eux."
+            ],
+            // Chapitre 5 — « Lettre d'amour & Gratitude » (epilogue_collectif) - ENFANT
+            [
+                'bookType' => 'famille',
+                'theme' => 'epilogue_collectif',
+                'role' => 'enfant',
+                'displayOrder' => 0,
+                'questionText' => "Quel message d'amour, de reconnaissance ou de tendresse souhaitez-vous adresser à vos parents / grands-parents ?",
+                'tip' => "Un mot du cœur, un remerciement sincère pour tout ce qu'ils vous ont apporté."
+            ],
+            // Chapitre 5 — « Lettre d'amour & Gratitude » (epilogue_collectif) - PETIT-ENFANT
+            [
+                'bookType' => 'famille',
+                'theme' => 'epilogue_collectif',
+                'role' => 'petit_enfant',
+                'displayOrder' => 0,
+                'questionText' => "Quel message d'amour, de reconnaissance ou de tendresse souhaitez-vous adresser à vos parents / grands-parents ?",
+                'tip' => "Un mot doux, un dessin ou un vœu plein de tendresse pour papy et mamie."
+            ],
+            // Chapitre 5 — « Lettre d'amour & Gratitude » (epilogue_collectif) - PROCHE
+            [
+                'bookType' => 'famille',
+                'theme' => 'epilogue_collectif',
+                'role' => 'proche',
+                'displayOrder' => 0,
+                'questionText' => "Quel message d'amour, de reconnaissance ou de tendresse souhaitez-vous adresser à vos parents / grands-parents ?",
+                'tip' => "Vos mots chaleureux d'amitié, de tendresse et de gratitude."
+            ],
             // Chapitre 5 — « Lettre d'amour & Gratitude » (epilogue_collectif) - TRANSVERSAL
             [
                 'bookType' => 'famille',
                 'theme' => 'epilogue_collectif',
                 'role' => null,
-                'displayOrder' => 0,
-                'questionText' => "Ce que vous souhaitez leur dire aujourd'hui : vos mots d'amour, de gratitude et d'admiration",
-                'tip' => "Un hommage collectif vibrant de tendresse et de reconnaissance."
-            ],
-            [
-                'bookType' => 'famille',
-                'theme' => 'epilogue_collectif',
-                'role' => null,
                 'displayOrder' => 1,
-                'questionText' => "Le vœu ou la promesse que cette famille formule pour les années et générations futures",
-                'tip' => "Ce que vous souhaitez préserver et faire perdurer dans la descendance."
+                'questionText' => "Quelles valeurs ou sagesses familiales souhaitez-vous transmettre et voir perdurer dans les générations futures ?",
+                'tip' => "Ce que cette famille souhaite préserver et transmettre aux générations futures."
             ],
 
             // ==========================================

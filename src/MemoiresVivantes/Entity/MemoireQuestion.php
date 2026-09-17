@@ -158,7 +158,7 @@ class MemoireQuestion
             'index' => $this->displayOrder,
             'question' => $this->questionText,
             'tip' => $this->tip,
-            'role' => $this->role,
+            'role' => $this->role ?? 'transversal',
         ];
     }
 }

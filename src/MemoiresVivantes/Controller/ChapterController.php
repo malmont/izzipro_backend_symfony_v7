@@ -94,15 +94,17 @@ class ChapterController extends AbstractController
         $host = $request->getSchemeAndHttpHost();
 
         $validatedContributorId = $request->attributes->get('validatedContributorId');
+        $contributorIdParam = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
+        $targetContribId = $validatedContributorId ?: $contributorIdParam;
         $currentContributor = null;
-        $role = null;
+        $role = $request->query->get('role');
 
-        if ($validatedContributorId) {
+        if ($targetContribId) {
             try {
                 $contribRepo = $em->getRepository(Contributor::class);
-                $contrib = $contribRepo->find(Uuid::fromString($validatedContributorId));
+                $contrib = $contribRepo->find(Uuid::fromString($targetContribId));
                 if ($contrib) {
-                    $role = $contrib->getRole();
+                    $role = $role ?: $contrib->getRole();
                     $currentContributor = [
                         'id' => (string) $contrib->getId(),
                         'firstName' => $contrib->getFirstName(),

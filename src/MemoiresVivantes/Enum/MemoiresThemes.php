@@ -103,7 +103,12 @@ class MemoiresThemes
     ];
 
     public const QUESTIONS_EPILOGUE_COLLECTIF = [
-        "Message collectif de la famille à la personne célébrée",
-        "Ce que cette famille souhaite transmettre aux générations futures"
+        "Quel message d'amour, de reconnaissance ou de tendresse souhaitez-vous adresser à vos parents / grands-parents ?",
+        "Quelles valeurs ou sagesses familiales souhaitez-vous transmettre et voir perdurer dans les générations futures ?"
+    ];
+
+    public const QUESTIONS_EPILOGUE_COLLECTIF_PARENT = [
+        "Quel message d'amour et de bienveillance souhaitez-vous laisser à vos enfants et petits-enfants ?",
+        "Quelles valeurs ou sagesses familiales souhaitez-vous transmettre et voir perdurer dans les générations futures ?"
     ];
 }
