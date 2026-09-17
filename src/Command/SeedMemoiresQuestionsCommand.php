@@ -61,11 +61,16 @@ class SeedMemoiresQuestionsCommand extends Command
         $inserted = 0;
 
         foreach ($questionsData as $item) {
-            // Avoid duplicate if not forcing
-            $existing = $repo->findOneBy([
+            $criteria = [
+                'bookType' => $item['bookType'],
                 'theme' => $item['theme'],
                 'displayOrder' => $item['displayOrder']
-            ]);
+            ];
+            if (array_key_exists('role', $item)) {
+                $criteria['role'] = $item['role'];
+            }
+
+            $existing = $repo->findOneBy($criteria);
 
             if ($existing && !$force) {
                 continue;
@@ -77,6 +82,7 @@ class SeedMemoiresQuestionsCommand extends Command
             $q->setQuestionText($item['questionText']);
             $q->setTip($item['tip'] ?? null);
             $q->setDisplayOrder($item['displayOrder']);
+            $q->setRole($item['role'] ?? null);
             $q->setIsActive(true);
 
             $em->persist($q);
@@ -599,6 +605,381 @@ class SeedMemoiresQuestionsCommand extends Command
                 'displayOrder' => 1,
                 'questionText' => "Ce que cette famille souhaite transmettre aux générations futures",
                 'tip' => null
+            ],
+
+            // ==========================================
+            // LIVRES HOMMAGE
+            // ==========================================
+            // Chapitre 2 — « Les voix » (les_voix) - ENFANT
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'enfant',
+                'displayOrder' => 0,
+                'questionText' => "Quel est votre tout premier souvenir avec lui/elle ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'enfant',
+                'displayOrder' => 1,
+                'questionText' => "Décrivez-le/la physiquement — sa voix, sa démarche, ses mains, sa façon d'entrer dans une pièce",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'enfant',
+                'displayOrder' => 2,
+                'questionText' => "Quelle phrase répétait-il/elle tout le temps ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'enfant',
+                'displayOrder' => 3,
+                'questionText' => "Racontez un moment précis où vous avez compris qui il/elle était vraiment",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'enfant',
+                'displayOrder' => 4,
+                'questionText' => "Qu'est-ce qu'il/elle vous a transmis sans le vouloir ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'enfant',
+                'displayOrder' => 5,
+                'questionText' => "Y a-t-il quelque chose que vous n'avez jamais eu le temps de lui dire ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'enfant',
+                'displayOrder' => 6,
+                'questionText' => "Qu'est-ce qui vous manque le plus, concrètement, au quotidien ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'enfant',
+                'displayOrder' => 7,
+                'questionText' => "Que voulez-vous que ses petits-enfants sachent de lui/elle ?",
+                'tip' => null
+            ],
+
+            // Chapitre 2 — « Les voix » (les_voix) - PETIT-ENFANT
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'petit_enfant',
+                'displayOrder' => 0,
+                'questionText' => "Ton souvenir préféré avec lui/elle",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'petit_enfant',
+                'displayOrder' => 1,
+                'questionText' => "Comment il/elle t'appelait ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'petit_enfant',
+                'displayOrder' => 2,
+                'questionText' => "Qu'est-ce que vous faisiez ensemble ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'petit_enfant',
+                'displayOrder' => 3,
+                'questionText' => "Qu'est-ce qu'il/elle t'a appris ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'petit_enfant',
+                'displayOrder' => 4,
+                'questionText' => "Que voudrais-tu lui dire aujourd'hui ?",
+                'tip' => null
+            ],
+
+            // Chapitre 2 — « Les voix » (les_voix) - CONJOINT SURVIVANT
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'conjoint',
+                'displayOrder' => 0,
+                'questionText' => "Comment vous êtes-vous rencontrés ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'conjoint',
+                'displayOrder' => 1,
+                'questionText' => "Qu'est-ce qui vous a fait rester, toutes ces années ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'conjoint',
+                'displayOrder' => 2,
+                'questionText' => "Quel était votre rituel à vous deux ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'conjoint',
+                'displayOrder' => 3,
+                'questionText' => "Quelle épreuve avez-vous traversée ensemble ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'conjoint',
+                'displayOrder' => 4,
+                'questionText' => "Qu'est-ce que personne ne sait de lui/elle ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'conjoint',
+                'displayOrder' => 5,
+                'questionText' => "Que lui diriez-vous ce soir ?",
+                'tip' => null
+            ],
+
+            // Chapitre 2 — « Les voix » (les_voix) - FRÈRE / SŒUR
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'frere_soeur',
+                'displayOrder' => 0,
+                'questionText' => "Comment l'avez-vous connu(e) et quel est votre premier souvenir ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'frere_soeur',
+                'displayOrder' => 1,
+                'questionText' => "Quel souvenir vous revient en premier de votre jeunesse partagée ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'frere_soeur',
+                'displayOrder' => 2,
+                'questionText' => "Qu'est-ce qui le/la rendait différent(e) des autres ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'frere_soeur',
+                'displayOrder' => 3,
+                'questionText' => "Une anecdote que sa famille ne connaît peut-être pas",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'frere_soeur',
+                'displayOrder' => 4,
+                'questionText' => "Que voulez-vous que ses enfants sachent de lui/elle ?",
+                'tip' => null
+            ],
+
+            // Chapitre 2 — « Les voix » (les_voix) - AMI
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'ami',
+                'displayOrder' => 0,
+                'questionText' => "Comment l'avez-vous connu(e) ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'ami',
+                'displayOrder' => 1,
+                'questionText' => "Quel souvenir vous revient en premier ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'ami',
+                'displayOrder' => 2,
+                'questionText' => "Qu'est-ce qui le/la rendait différent(e) des autres ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'ami',
+                'displayOrder' => 3,
+                'questionText' => "Une anecdote que sa famille ne connaît peut-être pas",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'ami',
+                'displayOrder' => 4,
+                'questionText' => "Que voulez-vous que ses proches sachent de lui/elle ?",
+                'tip' => null
+            ],
+
+            // Chapitre 2 — « Les voix » (les_voix) - COLLÈGUE
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'collegue',
+                'displayOrder' => 0,
+                'questionText' => "Dans quel contexte professionnel l'avez-vous rencontré(e) ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'collegue',
+                'displayOrder' => 1,
+                'questionText' => "Quelle était sa manière de travailler et sa présence au quotidien ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'collegue',
+                'displayOrder' => 2,
+                'questionText' => "Qu'est-ce qui le/la rendait inspirant(e) ou unique aux yeux de ses pairs ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'collegue',
+                'displayOrder' => 3,
+                'questionText' => "Un moment fort ou un projet marquant partagé ensemble",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'collegue',
+                'displayOrder' => 4,
+                'questionText' => "Que voulez-vous que sa famille sache de sa vie professionnelle ?",
+                'tip' => null
+            ],
+
+            // Chapitre 2 — « Les voix » (les_voix) - RÔLE GÉNÉRIQUE PROCHE
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'proche',
+                'displayOrder' => 0,
+                'questionText' => "Comment l'avez-vous connu(e) ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'proche',
+                'displayOrder' => 1,
+                'questionText' => "Quel souvenir vous revient en premier ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'proche',
+                'displayOrder' => 2,
+                'questionText' => "Qu'est-ce qui le/la rendait différent(e) des autres ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'proche',
+                'displayOrder' => 3,
+                'questionText' => "Une anecdote ou un souvenir que sa famille ne connaît peut-être pas",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => 'proche',
+                'displayOrder' => 4,
+                'questionText' => "Que voulez-vous que ses proches sachent de lui/elle ?",
+                'tip' => null
+            ],
+
+            // QUESTION TRANSVERSALE PHOTO (posée à chaque contributeur sans exception, role: null)
+            [
+                'bookType' => 'hommage',
+                'theme' => 'les_voix',
+                'role' => null,
+                'displayOrder' => 99,
+                'questionText' => "Quelle photo de lui/elle ressemble le plus à l'idée que vous en avez ?",
+                'tip' => "Téléversez cette photo ou décrivez-la en quelques mots."
+            ],
+
+            // Chapitre 4 — « Ce qu'il/elle nous a laissé » (ce_quil_nous_laisse)
+            [
+                'bookType' => 'hommage',
+                'theme' => 'ce_quil_nous_laisse',
+                'role' => null,
+                'displayOrder' => 0,
+                'questionText' => "Quelles sont les expressions ou phrases qu'il/elle répétait tout le temps et qui vous reviennent encore ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'ce_quil_nous_laisse',
+                'role' => null,
+                'displayOrder' => 1,
+                'questionText' => "Quels gestes, habitudes ou valeurs concrètes continuez-vous de faire vivre au quotidien ?",
+                'tip' => null
+            ],
+            [
+                'bookType' => 'hommage',
+                'theme' => 'ce_quil_nous_laisse',
+                'role' => null,
+                'displayOrder' => 2,
+                'questionText' => "Qu'est-ce qu'il/elle a laissé de plus précieux à ceux qui restent ?",
+                'tip' => null
+            ],
+
+            // Épilogue — « Ce qu'on aurait voulu dire » (ce_quon_aurait_voulu_dire)
+            [
+                'bookType' => 'hommage',
+                'theme' => 'ce_quon_aurait_voulu_dire',
+                'role' => null,
+                'displayOrder' => 0,
+                'questionText' => "Ce que vous auriez voulu lui dire une dernière fois, ou ce que vous lui dites aujourd'hui dans votre cœur",
+                'tip' => "Une phrase ou un court paragraphe adressé directement à lui/elle."
             ],
         ];
     }

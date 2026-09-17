@@ -28,6 +28,9 @@ class CreateBookUseCase
         $book->setPerson1Birthplace($dto->person1Birthplace);
         $book->setPerson2FirstName($dto->person2FirstName);
         $book->setPerson2Birthplace($dto->person2Birthplace);
+        if ($dto->birthYear !== null) $book->setBirthYear($dto->birthYear);
+        if ($dto->deathYear !== null) $book->setDeathYear($dto->deathYear);
+        if ($dto->epigraph !== null) $book->setEpigraph($dto->epigraph);
 
         $em->persist($book);
         $em->flush();

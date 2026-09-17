@@ -21,10 +21,16 @@ class Contributor
     private ?string $firstName = null;
 
     #[ORM\Column(length: 50)]
-    private ?string $role = null; // enfant, petit_enfant
+    private ?string $role = null; // enfant, petit_enfant, conjoint, frere_soeur, ami, collegue, proche
 
     #[ORM\Column]
     private ?int $sortOrder = 0;
+
+    #[ORM\Column(type: 'boolean')]
+    private bool $isApproved = false;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $approvedAt = null;
 
     #[ORM\Column]
     private ?\DateTimeImmutable $createdAt = null;
@@ -33,6 +39,7 @@ class Contributor
     {
         $this->id = Uuid::v4();
         $this->createdAt = new \DateTimeImmutable();
+        $this->isApproved = false;
     }
 
     public function getId(): ?Uuid
@@ -81,6 +88,28 @@ class Contributor
     public function setSortOrder(int $sortOrder): self
     {
         $this->sortOrder = $sortOrder;
+        return $this;
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->isApproved;
+    }
+
+    public function setIsApproved(bool $isApproved): self
+    {
+        $this->isApproved = $isApproved;
+        return $this;
+    }
+
+    public function getApprovedAt(): ?\DateTimeImmutable
+    {
+        return $this->approvedAt;
+    }
+
+    public function setApprovedAt(?\DateTimeImmutable $approvedAt): self
+    {
+        $this->approvedAt = $approvedAt;
         return $this;
     }
 

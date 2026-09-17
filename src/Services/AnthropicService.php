@@ -308,6 +308,248 @@ class AnthropicService
         return $this->callAnthropic($prompt, 32000);
     }
 
+    public function generatePart1Hommage(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null): string
+    {
+        $book = $chapter->getBook();
+        $theme = $chapter->getTheme();
+        $themeTitle = $chapter->getTitle();
+        $deceasedName = $book->getPerson1FirstName() ?: $book->getTitle();
+        $birthYear = $book->getBirthYear();
+        $deathYear = $book->getDeathYear();
+        $datesInfo = ($birthYear || $deathYear) ? "({$birthYear} - {$deathYear})" : "";
+        $epigraph = $book->getEpigraph() ? "Phrase d'exergue choisie par la famille : « {$book->getEpigraph()} »\n" : "";
+
+        // Chapitres de SYNTHÈSE (3e personne) : portrait_croise (Ch 1) & une_vie (Ch 3)
+        if ($theme === 'portrait_croise' || $theme === 'une_vie') {
+            $contextText = $aggregatedContext['formattedContext'] ?? '';
+            if (empty(trim($contextText))) {
+                $contextText = $this->formatAnswers($chapter->getAnswers());
+            }
+
+            if ($theme === 'portrait_croise') {
+                $prompt = "Tu es un écrivain biographe d'exception, spécialisé dans les livres d'hommage et récits de mémoire familiale.\n" .
+                          "Tu rédiges le premier chapitre \"{$themeTitle}\" dédié à {$deceasedName} {$datesInfo}.\n" .
+                          ($epigraph ? "{$epigraph}\n" : "\n") .
+                          "Voici l'ensemble des témoignages recueillis auprès de ses proches :\n\n" .
+                          "{$contextText}\n\n" .
+                          "CONSIGNES ÉDITORIALES IMPÉRATIVES (PARTIE 1/2) :\n" .
+                          "- Registre de SYNTHÈSE TRANSVERSALE à la 3ème personne (il/elle ou {$deceasedName}).\n" .
+                          "- Rédige un portrait d'ensemble polyphonique, sensible et vivant de {$deceasedName}.\n" .
+                          "- Tisse avec finesse et bienveillance les regards croisés de ses proches (conjoint, enfants, petits-enfants, amis, collègues).\n" .
+                          "- Mets en valeur les convergences (ce qui fait l'unanimité : tempérament, voix, rire, manies attachantes, générosité) tout en accueillant les nuances selon les époques et le lien propre à chacun.\n" .
+                          "- RÈGLE D'OR : Ne tranche JAMAIS entre des mémoires divergentes ou contradictoires (ex: deux enfants se souvenant différemment d'un même été). Tisse délicatement les versions (« Pour l'un, c'était l'été des cabanes... tandis que pour l'autre, demeure le souvenir du silence des sous-bois... »).\n" .
+                          "- Respecte la vérité des relations complexes : ne pas édulcorer ou aseptiser artificiellement les liens parfois difficiles, mais leur conférer une tonalité digne, respectueuse et réparatrice.\n" .
+                          "- Le volume doit être strictement proportionnel à la richesse du matériau fourni : ne tourne jamais en rond, ne boucle pas sur la même idée ou le même adjectif pour remplir de l'espace.\n" .
+                          "- Insère des sous-titres poétiques tous les 4 à 6 paragraphes sous la forme : ===Titre poétique===\n" .
+                          "- Style littéraire, noble, sensible et chaleureux, sans pathos excessif ni emphase larmoyante, {$tone}.\n" .
+                          "- PAS de titre général du chapitre — commence directement par le premier paragraphe du récit.\n" .
+                          "- Chaque paragraphe séparé par une ligne vide et terminé par un point complet.\n" .
+                          "- Une 2e partie suivra — pas besoin de conclure pour l'instant.";
+            } else {
+                // 'une_vie'
+                $prompt = "Tu es un écrivain biographe d'exception, spécialisé dans les récits de vie et mémoires d'hommage.\n" .
+                          "Tu rédiges le grand récit biographique \"{$themeTitle}\" retraçant l'existence de {$deceasedName} {$datesInfo}.\n" .
+                          ($epigraph ? "{$epigraph}\n" : "\n") .
+                          "Voici l'ensemble des repères et souvenirs biographiques transmis par ses proches :\n\n" .
+                          "{$contextText}\n\n" .
+                          "CONSIGNES ÉDITORIALES IMPÉRATIVES (PARTIE 1/2) :\n" .
+                          "- Registre de SYNTHÈSE CHRONOLOGIQUE à la 3ème personne (il/elle ou {$deceasedName}).\n" .
+                          "- Reconstitue la trajectoire de sa vie comme un roman vrai et sensible, fondé rigoureusement sur les faits transmis par les proches.\n" .
+                          "- Traite dans cette première partie les origines, la jeunesse, l'entrée dans l'âge adulte, les racines familiales et les premières grandes étapes de sa vie.\n" .
+                          "- N'invente pas d'événements majeurs non mentionnés : si une période a moins de souvenirs, concentre-toi sur l'atmosphère et les anecdotes réelles transmises sans délayer.\n" .
+                          "- Tisse les mémoires des proches sans trancher en cas de divergences de perception.\n" .
+                          "- Insère des sous-titres poétiques marquant les époques sous la forme : ===Titre poétique===\n" .
+                          "- Style biographique de haute tenue littéraire, chaleureux et respectueux, {$tone}.\n" .
+                          "- PAS de titre général du chapitre — commence directement par le premier paragraphe.\n" .
+                          "- Chaque paragraphe séparé par une ligne vide et terminé par un point complet.\n" .
+                          "- Une 2e partie suivra pour couvrir les décennies suivantes jusqu'à l'apaisement.";
+            }
+
+            return $this->callAnthropic($prompt, 32000);
+        }
+
+        // Chapitres VERBATIM ou HYBRIDES : les_voix (Ch 2), ce_quil_nous_laisse (Ch 4), ce_quon_aurait_voulu_dire (Ch 5)
+        $contributorAnswers = $chapter->getContributorAnswers() ?? [];
+
+        if ($theme === 'les_voix') {
+            $formattedTestimonies = $this->formatContributorTestimonies($contributorAnswers);
+
+            $prompt = "Tu es un écrivain biographe de grand talent. Tu rédiges le recueil de témoignages \"{$themeTitle}\" consacré à {$deceasedName} {$datesInfo}.\n\n" .
+                      "Voici les témoignages des différents proches :\n\n" .
+                      "{$formattedTestimonies}\n\n" .
+                      "CONSIGNES ÉDITORIALES IMPÉRATIVES (PARTIE 1/2) :\n" .
+                      "- Registre 100% VERBATIM à la 1ère personne du singulier (je) pour chaque contributeur.\n" .
+                      "- Rédige le témoignage de CHAQUE contributeur séparément sous son sous-titre nominatif : === Témoignage de [Prénom] ([Rôle]) ===\n" .
+                      "- Ne mélange JAMAIS les témoignages entre eux : préserve la voix, le lien et la sensibilité propre à chaque proche.\n" .
+                      "- Développe en profondeur les anecdotes concrètes et les émotions partagées.\n" .
+                      "- Volume proportionnel à la richesse des réponses fournies : ne tourne jamais en rond, ne boucle pas sur le même souvenir.\n" .
+                      "- Pour les petits-enfants ou réponses plus courtes, privilégie l'émotion pure, la tendresse d'un geste ou d'un regard plutôt que de broder artificiellement.\n" .
+                      "- Style vivant, intime et chaleureux, {$tone}.\n" .
+                      "- PAS de titre général — commence directement par le premier témoignage.\n" .
+                      "- Termine chaque paragraphe par un point complet.\n" .
+                      "- Une 2e partie suivra — pas besoin de conclure.";
+
+            return $this->callAnthropic($prompt, 32000);
+        }
+
+        if ($theme === 'ce_quon_aurait_voulu_dire') {
+            $formattedTestimonies = $this->formatContributorTestimonies($contributorAnswers);
+
+            $prompt = "Tu es un écrivain biographe de grand talent. Tu rédiges l'épilogue intime \"{$themeTitle}\" dédié à {$deceasedName} {$datesInfo}.\n\n" .
+                      "Voici les messages et confidences confiés par les proches :\n\n" .
+                      "{$formattedTestimonies}\n\n" .
+                      "CONSIGNES ÉDITORIALES IMPÉRATIVES (PARTIE 1/2) :\n" .
+                      "- Registre de MESSAGES DIRECTS adressés à {$deceasedName} (tutoiement ou vouvoiement selon la relation).\n" .
+                      "- Présente le mot de chaque proche avec son sous-titre : === Pour toi, {$deceasedName} — De [Prénom] ([Rôle]) ===\n" .
+                      "- Rédige des messages vibrants, sincères, émouvants et pudiques : ce qu'on n'a pas eu le temps de lui dire, la gratitude éternelle, une promesse, un souvenir indélébile.\n" .
+                      "- Ne délaie pas : privilégie l'intensité, la sincérité et la justesse de chaque message.\n" .
+                      "- Style littéraire, poétique, apaisé et profondément touchant, {$tone}.\n" .
+                      "- PAS de titre général — commence directement par le premier message.\n" .
+                      "- Une 2e partie suivra.";
+
+            return $this->callAnthropic($prompt, 32000);
+        }
+
+        // 'ce_quil_nous_laisse' (héritage vivant, transmissions, gestes, expressions, valeurs)
+        $formattedTestimonies = $this->formatContributorTestimonies($contributorAnswers);
+        if (empty(trim($formattedTestimonies))) {
+            $formattedTestimonies = $this->formatAnswers($chapter->getAnswers());
+        }
+
+        $prompt = "Tu es un écrivain biographe de grand talent. Tu rédiges le chapitre \"{$themeTitle}\" sur l'héritage vivant et les transmissions de {$deceasedName} {$datesInfo}.\n\n" .
+                  "Voici les souvenirs et éléments transmis par les proches :\n\n" .
+                  "{$formattedTestimonies}\n\n" .
+                  "CONSIGNES ÉDITORIALES IMPÉRATIVES (PARTIE 1/2) :\n" .
+                  "- Registre HYBRIDE mêlant fragments de témoignages directs et tissu narratif délicat.\n" .
+                  "- Mets en lumière ce que {$deceasedName} a légué aux siens : ses expressions fétiches, ses habitudes et petits rituels, les gestes transmis, les passions partagées, ses valeurs fondamentales, des objets symboliques.\n" .
+                  "- Célèbre ce qui continue de vivre à travers les proches, avec bienveillance et tendresse.\n" .
+                  "- Insère des sous-titres poétiques tous les 4-5 paragraphes (ex: === Les mots qui demeurent ===, === Les gestes partagés ===...).\n" .
+                  "- Style chaleureux, vivant, lumineux et réconfortant, {$tone}.\n" .
+                  "- PAS de titre général — commence directement par le texte.\n" .
+                  "- Une 2e partie suivra.";
+
+        return $this->callAnthropic($prompt, 32000);
+    }
+
+    public function generatePart2Hommage(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null): string
+    {
+        $book = $chapter->getBook();
+        $theme = $chapter->getTheme();
+        $themeTitle = $chapter->getTitle();
+        $deceasedName = $book->getPerson1FirstName() ?: $book->getTitle();
+        $birthYear = $book->getBirthYear();
+        $deathYear = $book->getDeathYear();
+        $datesInfo = ($birthYear || $deathYear) ? "({$birthYear} - {$deathYear})" : "";
+        $contentPart1 = $chapter->getContentPart1() ?? '';
+        $lastParagraphs = $this->extractLastParagraphs($contentPart1, 3);
+
+        // Chapitres de SYNTHÈSE (3e personne) : portrait_croise & une_vie
+        if ($theme === 'portrait_croise' || $theme === 'une_vie') {
+            $contextText = $aggregatedContext['formattedContext'] ?? '';
+            if (empty(trim($contextText))) {
+                $contextText = $this->formatAnswers($chapter->getAnswers());
+            }
+
+            if ($theme === 'portrait_croise') {
+                $prompt = "Tu es un écrivain biographe d'exception. Tu continues la rédaction du chapitre de synthèse \"{$themeTitle}\" consacré à {$deceasedName} {$datesInfo}.\n\n" .
+                          "Voici l'ensemble des témoignages recueillis :\n\n" .
+                          "{$contextText}\n\n" .
+                          "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
+                          "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUNE idée déjà abordée.\n\n" .
+                          "CONSIGNES PARTIE 2/2 :\n" .
+                          "- Continue UNIQUEMENT si tu as du matériel ou des facettes de sa personnalité non encore explorées.\n" .
+                          "- Reste fidèle au registre de SYNTHÈSE à la 3ème personne, tissant les regards sans jamais trancher en cas de divergences.\n" .
+                          "- Respecte la justesse des relations sans emphase excessive.\n" .
+                          "- Même style, mêmes sous-titres poétiques ===Titre poétique=== si nécessaire.\n" .
+                          "- Rédige une conclusion poignante, apaisée et digne pour clore ce portrait d'ensemble.\n" .
+                          "- Termine par un point complet.";
+            } else {
+                // 'une_vie'
+                $prompt = "Tu es un écrivain biographe d'exception. Tu poursuis le grand récit biographique \"{$themeTitle}\" de la vie de {$deceasedName} {$datesInfo}.\n\n" .
+                          "Voici l'ensemble des repères et souvenirs biographiques :\n\n" .
+                          "{$contextText}\n\n" .
+                          "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
+                          "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUNE période déjà traitée.\n\n" .
+                          "CONSIGNES PARTIE 2/2 :\n" .
+                          "- Poursuis la chronologie : la maturité, les accomplissements, les liens familiaux consolidés, les passions de la seconde partie de vie, jusqu'aux dernières années dans la dignité et la paix.\n" .
+                          "- Reste strictement fidèle aux souvenirs transmis par les siens sans rien inventer d'artificiel.\n" .
+                          "- Termine par un magnifique passage d'hommage et de transmission concluant son parcours terrestre.\n" .
+                          "- Même style romanesque et sensible, sous-titres poétiques ===Titre poétique===.\n" .
+                          "- Termine par un point complet.";
+            }
+
+            return $this->callAnthropic($prompt, 32000);
+        }
+
+        // Chapitres VERBATIM ou HYBRIDES : les_voix, ce_quon_aurait_voulu_dire, ce_quil_nous_laisse
+        $contributorAnswers = $chapter->getContributorAnswers() ?? [];
+
+        if ($theme === 'les_voix') {
+            $formattedTestimonies = $this->formatContributorTestimonies($contributorAnswers);
+
+            $prompt = "Tu es un écrivain biographe de grand talent. Continue la rédaction des témoignages pour le recueil \"{$themeTitle}\" en hommage à {$deceasedName} {$datesInfo} :\n\n" .
+                      "{$formattedTestimonies}\n\n" .
+                      "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
+                      "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUN témoignage déjà traité.\n\n" .
+                      "CONSIGNES PARTIE 2/2 :\n" .
+                      "- Continue UNIQUEMENT s'il reste des témoignages de contributeurs non traités en partie 1.\n" .
+                      "- Si tous les proches ont déjà été traités, rédige UNIQUEMENT un ou deux beaux paragraphes de conclusion chorale pleine de reconnaissance et arrête-toi (ne crée aucun sous-titre de témoignage supplémentaire).\n" .
+                      "- Reste à la 1ère personne (je) pour les nouveaux témoignages sous === Témoignage de [Prénom] ([Rôle]) ===.\n" .
+                      "- Termine par un point complet.";
+
+            return $this->callAnthropic($prompt, 32000);
+        }
+
+        if ($theme === 'ce_quon_aurait_voulu_dire') {
+            $formattedTestimonies = $this->formatContributorTestimonies($contributorAnswers);
+
+            $prompt = "Tu es un écrivain biographe de grand talent. Continue la rédaction de l'épilogue intime \"{$themeTitle}\" dédié à {$deceasedName} {$datesInfo} :\n\n" .
+                      "{$formattedTestimonies}\n\n" .
+                      "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
+                      "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète aucun message déjà rédigé.\n\n" .
+                      "CONSIGNES PARTIE 2/2 :\n" .
+                      "- Rédige les messages des proches qui n'ont pas encore été traités en partie 1.\n" .
+                      "- Si tous les messages ont été traités, rédige une phrase finale ou un court paragraphe d'adieu apaisé et termine.\n" .
+                      "- Maintiens l'adresse directe avec le sous-titre : === Pour toi, {$deceasedName} — De [Prénom] ([Rôle]) ===\n" .
+                      "- Termine par un point complet.";
+
+            return $this->callAnthropic($prompt, 32000);
+        }
+
+        // 'ce_quil_nous_laisse'
+        $formattedTestimonies = $this->formatContributorTestimonies($contributorAnswers);
+        if (empty(trim($formattedTestimonies))) {
+            $formattedTestimonies = $this->formatAnswers($chapter->getAnswers());
+        }
+
+        $prompt = "Tu es un écrivain biographe de premier ordre. Continue la rédaction du chapitre d'héritage \"{$themeTitle}\" pour {$deceasedName} {$datesInfo} :\n\n" .
+                  "{$formattedTestimonies}\n\n" .
+                  "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
+                  "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète aucune transmission déjà rédigée.\n\n" .
+                  "CONSIGNES PARTIE 2/2 :\n" .
+                  "- Continue uniquement s'il reste des dimensions d'héritage (objets, leçons, expressions, rituels) non traitées.\n" .
+                  "- Conclus par un magnifique passage sur la pérennité de sa mémoire au sein des générations futures.\n" .
+                  "- Style chaleureux, digne et vivant, {$tone}.\n" .
+                  "- Termine par un point complet.";
+
+        return $this->callAnthropic($prompt, 32000);
+    }
+
+    private function formatContributorTestimonies(array $contributorAnswers): string
+    {
+        $formatted = "";
+        foreach ($contributorAnswers as $contrib) {
+            $name = $contrib['contributorName'] ?? $contrib['firstName'] ?? 'Un proche';
+            $role = $contrib['role'] ?? 'proche';
+            $answers = $contrib['answers'] ?? [];
+            $contribAnswersFormatted = $this->formatAnswers($answers);
+            if (trim($contribAnswersFormatted) === '') continue;
+
+            $formatted .= "=== Témoignage de {$name} ({$role}) ===\n{$contribAnswersFormatted}\n\n";
+        }
+        return trim($formatted);
+    }
+
     public function checkAndComplete(string $text, bool $isLastPart): string
     {
         $trimmed = trim($text);

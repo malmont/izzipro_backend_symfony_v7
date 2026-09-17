@@ -44,7 +44,7 @@ class Book
  
     #[ORM\Column(length: 50)]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
-    private string $type = 'individuel'; // individuel, couple, famille
+    private string $type = 'individuel'; // individuel, couple, famille, hommage
  
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
@@ -61,6 +61,18 @@ class Book
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
     private ?string $person2Birthplace = null;
+
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['book:read', 'book:write', 'chapter:read'])]
+    private ?string $birthYear = null;
+
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['book:read', 'book:write', 'chapter:read'])]
+    private ?string $deathYear = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['book:read', 'book:write', 'chapter:read'])]
+    private ?string $epigraph = null;
  
     #[ORM\Column(length: 20)]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
@@ -226,6 +238,39 @@ class Book
     public function setPerson2Birthplace(?string $person2Birthplace): static
     {
         $this->person2Birthplace = $person2Birthplace;
+        return $this;
+    }
+
+    public function getBirthYear(): ?string
+    {
+        return $this->birthYear;
+    }
+
+    public function setBirthYear(?string $birthYear): static
+    {
+        $this->birthYear = $birthYear;
+        return $this;
+    }
+
+    public function getDeathYear(): ?string
+    {
+        return $this->deathYear;
+    }
+
+    public function setDeathYear(?string $deathYear): static
+    {
+        $this->deathYear = $deathYear;
+        return $this;
+    }
+
+    public function getEpigraph(): ?string
+    {
+        return $this->epigraph;
+    }
+
+    public function setEpigraph(?string $epigraph): static
+    {
+        $this->epigraph = $epigraph;
         return $this;
     }
  

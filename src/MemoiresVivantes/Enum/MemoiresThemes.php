@@ -14,6 +14,14 @@ class MemoiresThemes
         'regards_petits_enfants', 'epilogue_collectif'
     ];
 
+    public const THEMES_HOMMAGE = [
+        'portrait_croise',
+        'les_voix',
+        'une_vie',
+        'ce_quil_nous_laisse',
+        'ce_quon_aurait_voulu_dire'
+    ];
+
     public const QUESTIONS_AVANT_NOUS = [
         "Où et quand êtes-vous né(e) ?",
         "Décrivez votre famille d'origine",

@@ -7,6 +7,7 @@ use App\Services\AnthropicService;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantConnectionManager;
 use App\MemoiresVivantes\Entity\Chapter;
+use App\MemoiresVivantes\Services\HommageAggregationService;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Psr\Log\LoggerInterface;
@@ -19,6 +20,7 @@ class GenerateChapterHandler
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly TenantConnectionManager $tenantManager,
         private readonly AnthropicService $anthropicService,
+        private readonly HommageAggregationService $hommageAggregationService,
         private readonly MessageBusInterface $messageBus,
         private readonly LoggerInterface $logger
     ) {}
@@ -61,7 +63,14 @@ class GenerateChapterHandler
                 $tone = isset($message->tone) ? $message->tone : 'intime et chaleureux';
 
                 $bookType = $chapter->getBook()->getType();
-                if ($bookType === 'couple') {
+                if ($bookType === 'hommage') {
+                    $theme = $chapter->getTheme();
+                    $aggregatedContext = null;
+                    if ($theme === 'portrait_croise' || $theme === 'une_vie') {
+                        $aggregatedContext = $this->hommageAggregationService->aggregateForSynthesis($chapter);
+                    }
+                    $text = $this->anthropicService->generatePart1Hommage($chapter, $tone, $aggregatedContext);
+                } elseif ($bookType === 'couple') {
                     $text = $this->anthropicService->generatePart1Couple($chapter, $tone);
                 } elseif ($bookType === 'famille') {
                     $text = $this->anthropicService->generatePart1Famille($chapter, $tone);
@@ -83,7 +92,14 @@ class GenerateChapterHandler
                 $tone = isset($message->tone) ? $message->tone : 'intime et chaleureux';
 
                 $bookType = $chapter->getBook()->getType();
-                if ($bookType === 'couple') {
+                if ($bookType === 'hommage') {
+                    $theme = $chapter->getTheme();
+                    $aggregatedContext = null;
+                    if ($theme === 'portrait_croise' || $theme === 'une_vie') {
+                        $aggregatedContext = $this->hommageAggregationService->aggregateForSynthesis($chapter);
+                    }
+                    $text = $this->anthropicService->generatePart2Hommage($chapter, $tone, $aggregatedContext);
+                } elseif ($bookType === 'couple') {
                     $text = $this->anthropicService->generatePart2Couple($chapter, $tone);
                 } elseif ($bookType === 'famille') {
                     $text = $this->anthropicService->generatePart2Famille($chapter, $tone);

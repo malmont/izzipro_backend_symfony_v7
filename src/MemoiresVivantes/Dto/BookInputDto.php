@@ -13,6 +13,9 @@ class BookInputDto
     public ?string $person1Birthplace = null;
     public ?string $person2FirstName = null;
     public ?string $person2Birthplace = null;
+    public ?string $birthYear = null;
+    public ?string $deathYear = null;
+    public ?string $epigraph = null;
 
     public function __construct(array $data)
     {
@@ -21,10 +24,13 @@ class BookInputDto
         $this->birthplace = $data['birthplace'] ?? null;
         $this->format = $data['format'] ?? null;
         $typeInput = $data['type'] ?? null;
-        $this->type = ($typeInput !== null && in_array($typeInput, ['individuel', 'couple', 'famille'], true)) ? $typeInput : null;
+        $this->type = ($typeInput !== null && in_array($typeInput, ['individuel', 'couple', 'famille', 'hommage'], true)) ? $typeInput : null;
         $this->person1FirstName = $data['person1FirstName'] ?? null;
         $this->person1Birthplace = $data['person1Birthplace'] ?? null;
         $this->person2FirstName = $data['person2FirstName'] ?? null;
         $this->person2Birthplace = $data['person2Birthplace'] ?? null;
+        $this->birthYear = isset($data['birthYear']) ? (string)$data['birthYear'] : ($data['birth_year'] ?? null);
+        $this->deathYear = isset($data['deathYear']) ? (string)$data['deathYear'] : ($data['death_year'] ?? null);
+        $this->epigraph = $data['epigraph'] ?? null;
     }
 }

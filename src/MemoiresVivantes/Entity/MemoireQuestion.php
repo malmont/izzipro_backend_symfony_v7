@@ -10,6 +10,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'mv_question')]
 #[ORM\Index(columns: ['theme', 'display_order'], name: 'idx_mv_question_theme_order')]
 #[ORM\Index(columns: ['book_type'], name: 'idx_mv_question_book_type')]
+#[ORM\Index(columns: ['role'], name: 'idx_mv_question_role')]
 class MemoireQuestion
 {
     #[ORM\Id]
@@ -18,10 +19,13 @@ class MemoireQuestion
     private ?int $id = null;
 
     #[ORM\Column(name: 'book_type', length: 50)]
-    private string $bookType = 'individuel'; // individuel, couple, famille
+    private string $bookType = 'individuel'; // individuel, couple, famille, hommage
 
     #[ORM\Column(length: 100)]
     private string $theme; // enfance, adulte, sagesse, avant_nous_1, la_rencontre, etc.
+
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $role = null; // enfant, petit_enfant, conjoint, proche, etc. (null = tous rôles)
 
     #[ORM\Column(type: Types::TEXT)]
     private string $questionText;
@@ -133,6 +137,17 @@ class MemoireQuestion
         return $this;
     }
 
+    public function getRole(): ?string
+    {
+        return $this->role;
+    }
+
+    public function setRole(?string $role): self
+    {
+        $this->role = $role;
+        return $this;
+    }
+
     /**
      * Format exportable pour le frontend Next.js
      */
@@ -143,6 +158,7 @@ class MemoireQuestion
             'index' => $this->displayOrder,
             'question' => $this->questionText,
             'tip' => $this->tip,
+            'role' => $this->role,
         ];
     }
 }

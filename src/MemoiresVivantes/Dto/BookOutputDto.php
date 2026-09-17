@@ -20,6 +20,11 @@ class BookOutputDto
     public ?string $person1Birthplace;
     public ?string $person2FirstName;
     public ?string $person2Birthplace;
+    public ?string $birthYear = null;
+    public ?string $birth_year = null;
+    public ?string $deathYear = null;
+    public ?string $death_year = null;
+    public ?string $epigraph = null;
     public array $contributors = [];
     public array $chapters = [];
     public ?array $latestPrintOrder = null;
@@ -65,6 +70,11 @@ class BookOutputDto
         $this->person1Birthplace = $book->getPerson1Birthplace();
         $this->person2FirstName = $book->getPerson2FirstName();
         $this->person2Birthplace = $book->getPerson2Birthplace();
+        $this->birthYear = $book->getBirthYear();
+        $this->birth_year = $book->getBirthYear();
+        $this->deathYear = $book->getDeathYear();
+        $this->death_year = $book->getDeathYear();
+        $this->epigraph = $book->getEpigraph();
 
         foreach ($book->getContributors() as $contributor) {
             $this->contributors[] = [
@@ -72,6 +82,10 @@ class BookOutputDto
                 'firstName' => $contributor->getFirstName(),
                 'role' => $contributor->getRole(),
                 'sortOrder' => $contributor->getSortOrder(),
+                'isApproved' => $contributor->isApproved(),
+                'is_approved' => $contributor->isApproved(),
+                'approvedAt' => $contributor->getApprovedAt()?->format(\DateTimeInterface::ATOM),
+                'approved_at' => $contributor->getApprovedAt()?->format(\DateTimeInterface::ATOM),
                 'createdAt' => $contributor->getCreatedAt()->format(\DateTimeInterface::ATOM)
             ];
         }

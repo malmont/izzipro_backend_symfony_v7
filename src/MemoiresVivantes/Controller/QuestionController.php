@@ -24,16 +24,26 @@ class QuestionController extends AbstractController
 
         $theme = $request->query->get('theme');
         $bookType = $request->query->get('bookType');
+        $role = $request->query->get('role');
 
-        $criteria = ['isActive' => true];
+        $qb = $repo->createQueryBuilder('q')
+            ->where('q.isActive = true');
+
         if ($theme) {
-            $criteria['theme'] = $theme;
+            $qb->andWhere('q.theme = :theme')
+               ->setParameter('theme', $theme);
         }
         if ($bookType) {
-            $criteria['bookType'] = $bookType;
+            $qb->andWhere('q.bookType = :bookType')
+               ->setParameter('bookType', $bookType);
+        }
+        if ($role) {
+            $qb->andWhere('(q.role IS NULL OR q.role = :role)')
+               ->setParameter('role', $role);
         }
 
-        $questions = $repo->findBy($criteria, ['displayOrder' => 'ASC']);
+        $qb->orderBy('q.displayOrder', 'ASC');
+        $questions = $qb->getQuery()->getResult();
 
         $result = array_map(fn(MemoireQuestion $q) => $q->toFrontArray(), $questions);
 

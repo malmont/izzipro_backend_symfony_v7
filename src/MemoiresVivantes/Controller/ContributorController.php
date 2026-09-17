@@ -48,6 +48,8 @@ class ContributorController extends AbstractController
             'firstName' => $contributor->getFirstName(),
             'role' => $contributor->getRole(),
             'sortOrder' => $contributor->getSortOrder(),
+            'isApproved' => $contributor->isApproved(),
+            'approvedAt' => $contributor->getApprovedAt()?->format(\DateTimeInterface::ATOM),
             'createdAt' => $contributor->getCreatedAt()->format(\DateTimeInterface::ATOM)
         ], 201);
     }
@@ -73,6 +75,12 @@ class ContributorController extends AbstractController
         if (isset($data['sortOrder'])) {
             $contributor->setSortOrder((int)$data['sortOrder']);
         }
+        if (isset($data['isApproved'])) {
+            $contributor->setIsApproved((bool)$data['isApproved']);
+            if ((bool)$data['isApproved'] && !$contributor->getApprovedAt()) {
+                $contributor->setApprovedAt(new \DateTimeImmutable());
+            }
+        }
 
         $em->flush();
 
@@ -81,7 +89,64 @@ class ContributorController extends AbstractController
             'firstName' => $contributor->getFirstName(),
             'role' => $contributor->getRole(),
             'sortOrder' => $contributor->getSortOrder(),
+            'isApproved' => $contributor->isApproved(),
+            'approvedAt' => $contributor->getApprovedAt()?->format(\DateTimeInterface::ATOM),
             'createdAt' => $contributor->getCreatedAt()->format(\DateTimeInterface::ATOM)
+        ]);
+    }
+
+    #[Route('/contributors/{id}/approve', methods: ['POST'])]
+    public function approve(string $id, Request $request): JsonResponse
+    {
+        $em = $this->emProvider->getEntityManager();
+        try {
+            $contributor = $em->getRepository(Contributor::class)->find(Uuid::fromString($id));
+        } catch (\Throwable) {
+            return $this->json(['error' => 'Invalid contributor UUID'], 400);
+        }
+
+        if (!$contributor) {
+            return $this->json(['error' => 'Contributor not found'], 404);
+        }
+
+        // Autorisation : propriétaire authentifié ou lien signé
+        $isAuthorized = false;
+        if ($this->getUser() && $this->isGranted('BOOK_EDIT', $contributor->getBook())) {
+            $isAuthorized = true;
+        } else {
+            $expires = $request->query->get('expires') ?? $request->request->get('expires');
+            $signature = $request->query->get('signature') ?? $request->request->get('signature');
+            if ($expires && $signature && time() <= (int)$expires) {
+                $secret = $this->getParameter('kernel.secret');
+                $expectedContrib = hash_hmac('sha256', "contributorId=" . $id . "&expires=" . $expires, $secret);
+                if (hash_equals($expectedContrib, $signature)) {
+                    $isAuthorized = true;
+                } else {
+                    $chapterId = $request->query->get('chapterId') ?? $request->request->get('chapterId');
+                    if ($chapterId) {
+                        $expectedFull = hash_hmac('sha256', "chapterId=" . $chapterId . "&contributorId=" . $id . "&expires=" . $expires, $secret);
+                        if (hash_equals($expectedFull, $signature)) {
+                            $isAuthorized = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!$isAuthorized) {
+            return $this->json(['error' => 'Unauthorized or invalid/expired signature'], 403);
+        }
+
+        $contributor->setIsApproved(true);
+        $contributor->setApprovedAt(new \DateTimeImmutable());
+        $em->flush();
+
+        return $this->json([
+            'status' => 'approved',
+            'id' => (string)$contributor->getId(),
+            'firstName' => $contributor->getFirstName(),
+            'isApproved' => true,
+            'approvedAt' => $contributor->getApprovedAt()->format(\DateTimeInterface::ATOM),
         ]);
     }
 

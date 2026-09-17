@@ -6,6 +6,7 @@ use App\MemoiresVivantes\Dto\ChapterInputDto;
 use App\MemoiresVivantes\Dto\ChapterOutputDto;
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\Chapter;
+use App\MemoiresVivantes\Entity\Contributor;
 use App\MemoiresVivantes\Entity\MemoireQuestion;
 use App\MemoiresVivantes\Message\GenerateChapterMessage;
 use App\MemoiresVivantes\UseCase\AddChapterPhotoUseCase;
@@ -16,6 +17,7 @@ use App\MemoiresVivantes\UseCase\GetChaptersByBookUseCase;
 use App\MemoiresVivantes\UseCase\ImproveAnswerUseCase;
 use App\MemoiresVivantes\UseCase\TranscribeAudioUseCase;
 use App\MemoiresVivantes\UseCase\UpdateChapterUseCase;
+use App\MemoiresVivantes\Services\HommageAggregationService;
 use App\Services\TenantEntityManagerProvider;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -37,6 +39,7 @@ class ChapterController extends AbstractController
         private readonly AddChapterPhotoUseCase $addChapterPhotoUseCase,
         private readonly TranscribeAudioUseCase $transcribeAudioUseCase,
         private readonly ImproveAnswerUseCase $improveAnswerUseCase,
+        private readonly HommageAggregationService $hommageAggregationService,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly MessageBusInterface $messageBus,
         private readonly \Psr\Log\LoggerInterface $logger
@@ -88,16 +91,52 @@ class ChapterController extends AbstractController
 
         $host = $request->getSchemeAndHttpHost();
 
+        $validatedContributorId = $request->attributes->get('validatedContributorId');
+        $currentContributor = null;
+        $role = null;
+
+        if ($validatedContributorId) {
+            try {
+                $contribRepo = $em->getRepository(Contributor::class);
+                $contrib = $contribRepo->find(Uuid::fromString($validatedContributorId));
+                if ($contrib) {
+                    $role = $contrib->getRole();
+                    $currentContributor = [
+                        'id' => (string) $contrib->getId(),
+                        'firstName' => $contrib->getFirstName(),
+                        'role' => $contrib->getRole(),
+                        'isApproved' => $contrib->isApproved(),
+                        'approvedAt' => $contrib->getApprovedAt()?->format(\DateTimeInterface::ATOM),
+                    ];
+                }
+            } catch (\Throwable) {
+                // Ignore parsing non-uuid
+            }
+        }
+
         $questions = [];
         if ($chapter->getTheme()) {
-            $questionEntities = $em->getRepository(MemoireQuestion::class)->findBy(
-                ['theme' => $chapter->getTheme(), 'isActive' => true],
-                ['displayOrder' => 'ASC']
-            );
+            $qb = $em->getRepository(MemoireQuestion::class)->createQueryBuilder('q')
+                ->where('q.theme = :theme')
+                ->andWhere('q.isActive = true')
+                ->setParameter('theme', $chapter->getTheme());
+
+            if ($chapter->getBook() && $chapter->getBook()->getType()) {
+                $qb->andWhere('q.bookType = :bookType')
+                   ->setParameter('bookType', $chapter->getBook()->getType());
+            }
+
+            if ($role !== null) {
+                $qb->andWhere('(q.role IS NULL OR q.role = :role)')
+                   ->setParameter('role', $role);
+            }
+
+            $qb->orderBy('q.displayOrder', 'ASC');
+            $questionEntities = $qb->getQuery()->getResult();
             $questions = array_map(fn(MemoireQuestion $q) => $q->toFrontArray(), $questionEntities);
         }
 
-        return $this->json(new ChapterOutputDto($chapter, $host, $questions));
+        return $this->json(new ChapterOutputDto($chapter, $host, $questions, $validatedContributorId, $currentContributor));
     }
 
     #[Route('/chapters/{id}', methods: ['PUT'])]
@@ -110,8 +149,56 @@ class ChapterController extends AbstractController
         $res = $this->validateSignatureOrGrant('CHAPTER_EDIT', $chapter, $request);
         if ($res !== null) return $res;
 
+        $validatedContributorId = $request->attributes->get('validatedContributorId');
         $data = json_decode($request->getContent(), true) ?? [];
         error_log("RAW UPDATE BODY: " . $request->getContent());
+
+        // Si la requête provient d'un lien contributeur individuel, restreindre la modification à ce contributeur
+        if ($validatedContributorId && isset($data['contributorAnswers']) && is_array($data['contributorAnswers'])) {
+            $existingAll = $chapter->getContributorAnswers() ?? [];
+            $filteredSubmitted = [];
+
+            $targetContrib = null;
+            try {
+                $targetContrib = $em->getRepository(Contributor::class)->find(Uuid::fromString($validatedContributorId));
+            } catch (\Throwable) {}
+            $targetFirstName = $targetContrib ? strtolower($targetContrib->getFirstName()) : null;
+
+            foreach ($data['contributorAnswers'] as $submitted) {
+                if (!is_array($submitted)) continue;
+                $sId = $submitted['id'] ?? null;
+                $sName = strtolower($submitted['contributorName'] ?? $submitted['firstName'] ?? '');
+                if (($sId && (string)$sId === (string)$validatedContributorId) ||
+                    ($targetFirstName && $sName === $targetFirstName)) {
+                    // Injecter l'ID officiel pour garantir la cohérence
+                    $submitted['id'] = (string)$validatedContributorId;
+                    if ($targetContrib) {
+                        $submitted['firstName'] = $targetContrib->getFirstName();
+                        $submitted['contributorName'] = $targetContrib->getFirstName();
+                        $submitted['role'] = $targetContrib->getRole();
+                    }
+                    $filteredSubmitted[] = $submitted;
+                }
+            }
+
+            // Fusionner pour préserver les réponses des autres participants sans les écraser
+            $merged = [];
+            foreach ($existingAll as $ext) {
+                if (!is_array($ext)) continue;
+                $extId = $ext['id'] ?? null;
+                $extName = strtolower($ext['contributorName'] ?? $ext['firstName'] ?? '');
+                if (($extId && (string)$extId === (string)$validatedContributorId) ||
+                    ($targetFirstName && $extName === $targetFirstName)) {
+                    continue;
+                }
+                $merged[] = $ext;
+            }
+            foreach ($filteredSubmitted as $sub) {
+                $merged[] = $sub;
+            }
+            $data['contributorAnswers'] = $merged;
+        }
+
         $tenantHost = $request->headers->get('X-Tenant-Host') ?? $request->getHost();
         $chapter = $this->updateChapterUseCase->execute($chapter, $data, false, $tenantHost);
         
@@ -158,6 +245,19 @@ class ChapterController extends AbstractController
         if (!$chapter) return $this->json(['error' => 'Chapter not found'], 404);
 
         $this->denyAccessUnlessGranted('CHAPTER_EDIT', $chapter);
+
+        // Guardrail pour Hommage : vérifier les prérequis de synthèse transversale
+        if ($chapter->getBook() && $chapter->getBook()->getType() === 'hommage') {
+            $theme = $chapter->getTheme();
+            if ($theme === 'portrait_croise' || $theme === 'une_vie') {
+                $check = $this->hommageAggregationService->checkCanGenerateSynthesis($chapter);
+                if (!$check['canGenerate']) {
+                    return $this->json([
+                        'error' => $check['reason'] ?? 'Les témoignages préalables sont requis pour ce chapitre de synthèse.'
+                    ], 422);
+                }
+            }
+        }
 
         $data = json_decode($request->getContent(), true) ?? $request->request->all();
         $tone = $data['tone'] ?? 'intime et chaleureux';
@@ -337,10 +437,31 @@ class ChapterController extends AbstractController
                 $chapter->setAnswers($answers);
             }
 
-            // 2. Check in contributor answers (Famille) if not updated yet
+            // 2. Check in contributor answers (Famille / Hommage) if not updated yet
             if (!$updated && is_array($contributorAnswers)) {
+                $validatedContributorId = $request->attributes->get('validatedContributorId');
+                if ($validatedContributorId) {
+                    foreach ($contributorAnswers as &$contrib) {
+                        $cId = $contrib['id'] ?? null;
+                        if ($cId && (string)$cId === (string)$validatedContributorId) {
+                            preg_match('/\d+/', (string)$questionIndex, $matches);
+                            $targetIndex = $matches[0] ?? (string)$questionIndex;
+                            if (isset($contrib['answers']) && is_array($contrib['answers'])) {
+                                foreach ($contrib['answers'] as &$ans) {
+                                    if (isset($ans['index']) && (string)$ans['index'] === (string)$targetIndex) {
+                                        $ans['audioUrl'] = '/uploads/audio/' . $newFilename;
+                                        $ans['answer'] = $transcribedText;
+                                        $updated = true;
+                                        break 2;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Try format contribIndex_questionIndex (e.g. 0_0)
-                if (preg_match('/^(\d+)_(\d+)$/', $questionIndex, $matches)) {
+                if (!$updated && preg_match('/^(\d+)_(\d+)$/', $questionIndex, $matches)) {
                     $contribIdx = (int)$matches[1];
                     $questionIdx = (int)$matches[2];
                     if (isset($contributorAnswers[$contribIdx])) {
@@ -458,27 +579,95 @@ class ChapterController extends AbstractController
         $chapterId = (string)$chapter->getId();
         $bookId = (string)$chapter->getBook()->getId();
 
-        $dataToSign = "chapterId=" . $chapterId . "&expires=" . $expires;
-        $signature = hash_hmac('sha256', $dataToSign, $secret);
+        $frontendHost = rtrim(
+            $_ENV['MEMOIRES_FRONTEND_URL'] ?? ('https://memoiresvivantes.' . ($_ENV['FRONTEND_BASE_DOMAIN'] ?? 'arkanoa-media.com')),
+            '/'
+        );
+
+        $contributorId = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
+        if ($contributorId) {
+            $dataToSign = "chapterId=" . $chapterId . "&contributorId=" . $contributorId . "&expires=" . $expires;
+            $signature = hash_hmac('sha256', $dataToSign, $secret);
+            $shareUrl = sprintf(
+                '%s/memoires/shared/books/%s/chapters/%s?contributorId=%s&expires=%d&signature=%s&chapterId=%s',
+                $frontendHost,
+                $bookId,
+                $chapterId,
+                $contributorId,
+                $expires,
+                $signature,
+                $chapterId
+            );
+        } else {
+            $dataToSign = "chapterId=" . $chapterId . "&expires=" . $expires;
+            $signature = hash_hmac('sha256', $dataToSign, $secret);
+            $shareUrl = sprintf(
+                '%s/memoires/shared/books/%s/chapters/%s?expires=%d&signature=%s&chapterId=%s',
+                $frontendHost,
+                $bookId,
+                $chapterId,
+                $expires,
+                $signature,
+                $chapterId
+            );
+        }
+
+        return $this->json([
+            'url' => $shareUrl
+        ]);
+    }
+
+    #[Route('/chapters/{id}/contributor-links', methods: ['GET'])]
+    public function getContributorLinks(string $id, Request $request): JsonResponse
+    {
+        $em = $this->emProvider->getEntityManager();
+        $chapter = $em->getRepository(Chapter::class)->find(Uuid::fromString($id));
+        if (!$chapter) return $this->json(['error' => 'Chapter not found'], 404);
+
+        $this->denyAccessUnlessGranted('CHAPTER_EDIT', $chapter);
+
+        $duration = $request->query->getInt('duration', 604800);
+        $expires = time() + $duration;
+
+        $secret = $this->getParameter('kernel.secret');
+        $chapterId = (string)$chapter->getId();
+        $bookId = (string)$chapter->getBook()->getId();
 
         $frontendHost = rtrim(
             $_ENV['MEMOIRES_FRONTEND_URL'] ?? ('https://memoiresvivantes.' . ($_ENV['FRONTEND_BASE_DOMAIN'] ?? 'arkanoa-media.com')),
             '/'
         );
 
-        $shareUrl = sprintf(
-            '%s/memoires/shared/books/%s/chapters/%s?expires=%d&signature=%s&chapterId=%s',
-            $frontendHost,
-            $bookId,
-            $chapterId,
-            $expires,
-            $signature,
-            $chapterId
-        );
+        $contributors = $chapter->getBook()->getContributors();
+        $links = [];
 
-        return $this->json([
-            'url' => $shareUrl
-        ]);
+        foreach ($contributors as $contrib) {
+            $contribId = (string)$contrib->getId();
+            $dataToSign = "chapterId=" . $chapterId . "&contributorId=" . $contribId . "&expires=" . $expires;
+            $signature = hash_hmac('sha256', $dataToSign, $secret);
+
+            $shareUrl = sprintf(
+                '%s/memoires/shared/books/%s/chapters/%s?contributorId=%s&expires=%d&signature=%s&chapterId=%s',
+                $frontendHost,
+                $bookId,
+                $chapterId,
+                $contribId,
+                $expires,
+                $signature,
+                $chapterId
+            );
+
+            $links[] = [
+                'contributorId' => $contribId,
+                'firstName' => $contrib->getFirstName(),
+                'role' => $contrib->getRole(),
+                'isApproved' => $contrib->isApproved(),
+                'approvedAt' => $contrib->getApprovedAt()?->format(\DateTimeInterface::ATOM),
+                'shareUrl' => $shareUrl,
+            ];
+        }
+
+        return $this->json($links);
     }
 
     private function validateSignatureOrGrant(string $attribute, Chapter $chapter, Request $request): ?JsonResponse
@@ -486,6 +675,7 @@ class ChapterController extends AbstractController
         $expires = $request->query->get('expires');
         $signature = $request->query->get('signature');
         $chapterId = $request->query->get('chapterId') ?? $request->query->get('chapter_id');
+        $contributorId = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
 
         if ($expires === null || $signature === null || $chapterId === null) {
             if ($request->request->has('expires')) {
@@ -499,6 +689,13 @@ class ChapterController extends AbstractController
             } elseif ($request->request->has('chapter_id')) {
                 $chapterId = $request->request->get('chapter_id');
             }
+            if ($contributorId === null) {
+                if ($request->request->has('contributorId')) {
+                    $contributorId = $request->request->get('contributorId');
+                } elseif ($request->request->has('contributor_id')) {
+                    $contributorId = $request->request->get('contributor_id');
+                }
+            }
         }
 
         if ($expires === null || $signature === null || $chapterId === null) {
@@ -509,6 +706,7 @@ class ChapterController extends AbstractController
                     $expires = $expires ?? $data['expires'] ?? null;
                     $signature = $signature ?? $data['signature'] ?? null;
                     $chapterId = $chapterId ?? $data['chapterId'] ?? $data['chapter_id'] ?? null;
+                    $contributorId = $contributorId ?? $data['contributorId'] ?? $data['contributor_id'] ?? null;
                 }
             }
         }
@@ -517,6 +715,7 @@ class ChapterController extends AbstractController
             $expires = $request->headers->get('X-Expires');
             $signature = $request->headers->get('X-Signature');
             $chapterId = $chapterId ?? $request->headers->get('X-Chapter-Id');
+            $contributorId = $contributorId ?? $request->headers->get('X-Contributor-Id');
         }
 
         if ($expires === null || $signature === null || $chapterId === null) {
@@ -528,6 +727,7 @@ class ChapterController extends AbstractController
                     $expires = $expires ?? $params['expires'] ?? null;
                     $signature = $signature ?? $params['signature'] ?? null;
                     $chapterId = $chapterId ?? $params['chapterId'] ?? $params['chapter_id'] ?? null;
+                    $contributorId = $contributorId ?? $params['contributorId'] ?? $params['contributor_id'] ?? null;
                 }
             }
         }
@@ -536,11 +736,28 @@ class ChapterController extends AbstractController
         if ($expires !== null && $signature !== null && $chapterId !== null) {
             if (time() <= (int)$expires) {
                 $secret = $this->getParameter('kernel.secret');
-                $dataToSign = "chapterId=" . $chapterId . "&expires=" . $expires;
-                $expectedSignature = hash_hmac('sha256', $dataToSign, $secret);
 
-                if (hash_equals($expectedSignature, $signature) && (string)$chapter->getId() === $chapterId) {
-                    $hasValidSignature = true;
+                // 1. Signature spécifique au contributeur
+                if ($contributorId !== null) {
+                    $dataToSignWithContrib = "chapterId=" . $chapterId . "&contributorId=" . $contributorId . "&expires=" . $expires;
+                    $expectedWithContrib = hash_hmac('sha256', $dataToSignWithContrib, $secret);
+                    if (hash_equals($expectedWithContrib, $signature) && (string)$chapter->getId() === $chapterId) {
+                        $hasValidSignature = true;
+                        $request->attributes->set('validatedContributorId', $contributorId);
+                    }
+                }
+
+                // 2. Signature classique globale (rétrocompatibilité pour solo, couple, famille)
+                if (!$hasValidSignature) {
+                    $dataToSign = "chapterId=" . $chapterId . "&expires=" . $expires;
+                    $expectedSignature = hash_hmac('sha256', $dataToSign, $secret);
+
+                    if (hash_equals($expectedSignature, $signature) && (string)$chapter->getId() === $chapterId) {
+                        $hasValidSignature = true;
+                        if ($contributorId !== null) {
+                            $request->attributes->set('validatedContributorId', $contributorId);
+                        }
+                    }
                 }
             }
         }
@@ -554,7 +771,7 @@ class ChapterController extends AbstractController
             try {
                 $this->denyAccessUnlessGranted($attribute, $chapter);
                 return null;
-            } catch (\Symfony\Component\Security\Core\Exception\AccessDeniedException $e) {
+            } catch (\Symfony\Component\Security\Core\Exception\AccessDeniedException) {
                 // proceed to return JsonResponse below
             }
         }

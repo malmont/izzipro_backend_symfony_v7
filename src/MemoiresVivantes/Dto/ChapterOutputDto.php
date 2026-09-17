@@ -22,14 +22,25 @@ class ChapterOutputDto
     public ?array $photo_layout = null;
     public ?array $photoPages = null;
     public ?array $photo_pages = null;
+    public ?array $currentContributor = null;
+    public ?string $currentContributorId = null;
+    public ?string $current_contributor_id = null;
 
-    public function __construct(Chapter $chapter, string $host, array $questions = [])
-    {
+    public function __construct(
+        Chapter $chapter,
+        string $host,
+        array $questions = [],
+        ?string $filterContributorId = null,
+        ?array $currentContributor = null
+    ) {
         $this->id = (string) $chapter->getId();
         $this->bookId = (string) $chapter->getBook()->getId();
         $this->title = $chapter->getTitle();
         $this->theme = $chapter->getTheme();
         $this->questions = $questions;
+        $this->currentContributor = $currentContributor;
+        $this->currentContributorId = $filterContributorId;
+        $this->current_contributor_id = $filterContributorId;
         $this->position = $chapter->getPosition();
         $rawAnswers = $chapter->getAnswers();
         $formattedAnswers = [];
@@ -57,7 +68,22 @@ class ChapterOutputDto
         if (is_array($rawContribAnswers)) {
             $formattedContribAnswers = [];
             foreach ($rawContribAnswers as $contrib) {
-                if (is_array($contrib) && isset($contrib['answers']) && is_array($contrib['answers'])) {
+                if (!is_array($contrib)) continue;
+
+                // Filtrage confidentiel si un ID de contributeur est spécifié
+                if ($filterContributorId !== null) {
+                    $contribId = $contrib['id'] ?? null;
+                    $contribName = $contrib['contributorName'] ?? $contrib['firstName'] ?? null;
+                    $targetName = $currentContributor['firstName'] ?? null;
+                    $matchesId = ($contribId !== null && (string)$contribId === (string)$filterContributorId);
+                    $matchesName = ($targetName !== null && $contribName !== null && strcasecmp($contribName, $targetName) === 0);
+
+                    if (!$matchesId && !$matchesName) {
+                        continue; // Ne pas divulguer les réponses des autres contributeurs
+                    }
+                }
+
+                if (isset($contrib['answers']) && is_array($contrib['answers'])) {
                     $formattedContribsAnswers = [];
                     foreach ($contrib['answers'] as $ans) {
                         if (is_array($ans)) {
