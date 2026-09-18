@@ -16,6 +16,8 @@ class BookInputDto
     public ?string $birthYear = null;
     public ?string $deathYear = null;
     public ?string $epigraph = null;
+    public ?bool $parentsDeceased = null;
+    public ?bool $parentsNotParticipating = null;
 
     public function __construct(array $data)
     {
@@ -32,5 +34,9 @@ class BookInputDto
         $this->birthYear = isset($data['birthYear']) ? (string)$data['birthYear'] : ($data['birth_year'] ?? null);
         $this->deathYear = isset($data['deathYear']) ? (string)$data['deathYear'] : ($data['death_year'] ?? null);
         $this->epigraph = $data['epigraph'] ?? null;
+
+        $deceased = $data['parentsDeceased'] ?? $data['parents_deceased'] ?? $data['parentsNotParticipating'] ?? $data['parents_not_participating'] ?? null;
+        $this->parentsDeceased = $deceased !== null ? (bool)$deceased : null;
+        $this->parentsNotParticipating = $this->parentsDeceased;
     }
 }

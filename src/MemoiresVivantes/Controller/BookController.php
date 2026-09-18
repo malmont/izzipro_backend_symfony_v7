@@ -6,6 +6,8 @@ use App\MemoiresVivantes\Dto\BookInputDto;
 use App\MemoiresVivantes\Dto\BookOutputDto;
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\BookPrintOrder;
+use App\MemoiresVivantes\Entity\Contributor;
+use App\MemoiresVivantes\Entity\MemoireQuestion;
 use App\MemoiresVivantes\Services\BookService;
 use App\MemoiresVivantes\UseCase\CreateBookUseCase;
 use App\MemoiresVivantes\UseCase\GetBooksByUserUseCase;
@@ -70,14 +72,67 @@ class BookController extends AbstractController
         $res = $this->validateSignatureOrGrant('BOOK_VIEW', $book, $request);
         if ($res !== null) return $res;
 
+        $validatedContributorId = $request->attributes->get('validatedContributorId');
+        $contributorIdParam = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
+        $targetContribId = $validatedContributorId ?: $contributorIdParam;
+        $currentContributor = null;
+        $role = $request->query->get('role');
+
+        if ($targetContribId) {
+            try {
+                $contribRepo = $em->getRepository(Contributor::class);
+                $contrib = $contribRepo->find(Uuid::fromString($targetContribId));
+                if ($contrib) {
+                    $role = $role ?: $contrib->getRole();
+                    $currentContributor = [
+                        'id' => (string) $contrib->getId(),
+                        'firstName' => $contrib->getFirstName(),
+                        'role' => $contrib->getRole(),
+                        'isApproved' => $contrib->isApproved(),
+                        'approvedAt' => $contrib->getApprovedAt()?->format(\DateTimeInterface::ATOM),
+                    ];
+                }
+            } catch (\Throwable) {}
+        }
+
+        if ($role === null && $book->getType() === 'famille') {
+            $role = ($book->isParentsDeceased() || $book->isParentsNotParticipating()) ? 'enfant' : 'parent';
+        }
+
         $latestOrder = $em->getRepository(BookPrintOrder::class)->findOneBy(
             ['book' => $book],
             ['createdAt' => 'DESC']
         );
         $ordersCount = $latestOrder ? $em->getRepository(BookPrintOrder::class)->count(['book' => $book]) : 0;
 
+        $questionsByTheme = [];
+        if ($book->getType()) {
+            $qb = $em->getRepository(MemoireQuestion::class)->createQueryBuilder('q')
+                ->where('q.isActive = true')
+                ->andWhere('q.bookType = :bookType')
+                ->setParameter('bookType', $book->getType());
+
+            if ($role !== null) {
+                $qb->andWhere('(q.role IS NULL OR q.role = :role)')
+                   ->setParameter('role', $role);
+            }
+
+            $qb->orderBy('q.displayOrder', 'ASC');
+            foreach ($qb->getQuery()->getResult() as $q) {
+                $questionsByTheme[$q->getTheme()][] = $q->toFrontArray();
+            }
+        }
+
         $host = $request->getSchemeAndHttpHost();
-        return $this->json(new BookOutputDto($book, $host, $latestOrder, $ordersCount));
+        return $this->json(new BookOutputDto(
+            $book,
+            $host,
+            $latestOrder,
+            $ordersCount,
+            $questionsByTheme,
+            $targetContribId,
+            $currentContributor
+        ));
     }
 
     #[Route('/{id}/reservations', methods: ['GET'])]
@@ -176,6 +231,7 @@ class BookController extends AbstractController
         $expires = $request->query->get('expires');
         $signature = $request->query->get('signature');
         $chapterId = $request->query->get('chapterId') ?? $request->query->get('chapter_id');
+        $contributorId = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
 
         if ($expires === null || $signature === null || $chapterId === null) {
             if ($request->request->has('expires')) {
@@ -189,6 +245,13 @@ class BookController extends AbstractController
             } elseif ($request->request->has('chapter_id')) {
                 $chapterId = $request->request->get('chapter_id');
             }
+            if ($contributorId === null) {
+                if ($request->request->has('contributorId')) {
+                    $contributorId = $request->request->get('contributorId');
+                } elseif ($request->request->has('contributor_id')) {
+                    $contributorId = $request->request->get('contributor_id');
+                }
+            }
         }
 
         if ($expires === null || $signature === null || $chapterId === null) {
@@ -199,6 +262,7 @@ class BookController extends AbstractController
                     $expires = $expires ?? $data['expires'] ?? null;
                     $signature = $signature ?? $data['signature'] ?? null;
                     $chapterId = $chapterId ?? $data['chapterId'] ?? $data['chapter_id'] ?? null;
+                    $contributorId = $contributorId ?? $data['contributorId'] ?? $data['contributor_id'] ?? null;
                 }
             }
         }
@@ -207,6 +271,7 @@ class BookController extends AbstractController
             $expires = $request->headers->get('X-Expires');
             $signature = $request->headers->get('X-Signature');
             $chapterId = $chapterId ?? $request->headers->get('X-Chapter-Id');
+            $contributorId = $contributorId ?? $request->headers->get('X-Contributor-Id');
         }
 
         if ($expires === null || $signature === null || $chapterId === null) {
@@ -218,6 +283,7 @@ class BookController extends AbstractController
                     $expires = $expires ?? $params['expires'] ?? null;
                     $signature = $signature ?? $params['signature'] ?? null;
                     $chapterId = $chapterId ?? $params['chapterId'] ?? $params['chapter_id'] ?? null;
+                    $contributorId = $contributorId ?? $params['contributorId'] ?? $params['contributor_id'] ?? null;
                 }
             }
         }
@@ -226,14 +292,35 @@ class BookController extends AbstractController
         if ($expires !== null && $signature !== null && $chapterId !== null) {
             if (time() <= (int)$expires) {
                 $secret = $this->getParameter('kernel.secret');
-                $dataToSign = "chapterId=" . $chapterId . "&expires=" . $expires;
-                $expectedSignature = hash_hmac('sha256', $dataToSign, $secret);
 
-                if (hash_equals($expectedSignature, $signature)) {
-                    $em = $this->emProvider->getEntityManager();
-                    $chapter = $em->getRepository(\App\MemoiresVivantes\Entity\Chapter::class)->find(Uuid::fromString($chapterId));
-                    if ($chapter && (string)$chapter->getBook()->getId() === (string)$book->getId()) {
-                        $hasValidSignature = true;
+                // 1. Signature spécifique au contributeur
+                if ($contributorId !== null) {
+                    $dataToSignWithContrib = "chapterId=" . $chapterId . "&contributorId=" . $contributorId . "&expires=" . $expires;
+                    $expectedWithContrib = hash_hmac('sha256', $dataToSignWithContrib, $secret);
+                    if (hash_equals($expectedWithContrib, $signature)) {
+                        $em = $this->emProvider->getEntityManager();
+                        $chapter = $em->getRepository(\App\MemoiresVivantes\Entity\Chapter::class)->find(Uuid::fromString($chapterId));
+                        if ($chapter && (string)$chapter->getBook()->getId() === (string)$book->getId()) {
+                            $hasValidSignature = true;
+                            $request->attributes->set('validatedContributorId', $contributorId);
+                        }
+                    }
+                }
+
+                // 2. Signature classique globale
+                if (!$hasValidSignature) {
+                    $dataToSign = "chapterId=" . $chapterId . "&expires=" . $expires;
+                    $expectedSignature = hash_hmac('sha256', $dataToSign, $secret);
+
+                    if (hash_equals($expectedSignature, $signature)) {
+                        $em = $this->emProvider->getEntityManager();
+                        $chapter = $em->getRepository(\App\MemoiresVivantes\Entity\Chapter::class)->find(Uuid::fromString($chapterId));
+                        if ($chapter && (string)$chapter->getBook()->getId() === (string)$book->getId()) {
+                            $hasValidSignature = true;
+                            if ($contributorId !== null) {
+                                $request->attributes->set('validatedContributorId', $contributorId);
+                            }
+                        }
                     }
                 }
             }

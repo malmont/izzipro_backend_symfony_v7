@@ -39,8 +39,9 @@ class SeedMemoiresQuestionsCommand extends Command
         $tenant = $input->getOption('tenant');
         $force = $input->getOption('force');
 
-        $tenantConfig = $this->tenantManager->findTenantConfigByHost($tenant);
-        if ($tenantConfig) {
+        if ($tenant === 'app_v2_db' || $tenant === 'default') {
+            $this->emProvider->switchTenant('app_v2_db', 'app_v2_db');
+        } elseif ($tenantConfig) {
             $this->tenantManager->switchToTenant($tenantConfig);
         } else {
             $dbName = str_starts_with($tenant, 'db_') ? $tenant : 'db_' . $tenant;

@@ -212,6 +212,9 @@ class AnthropicService
             ? "{$parent1} et {$parent2}"
             : ($book->getPerson1FirstName() ?: $book->getTitle());
 
+        $isParentsDeceased = ($book && ($book->isParentsDeceased() || $book->isParentsNotParticipating()))
+            || (empty($chapter->getAnswers()) && !empty($chapter->getContributorAnswers()));
+
         // Chapitre 1 : Histoire des parents & Nos racines (Synthèse 3e personne)
         if ($theme === 'histoire_parents' || $theme === 'histoire_aine') {
             $contextText = $aggregatedContext['formattedContext'] ?? '';
@@ -222,13 +225,22 @@ class AnthropicService
                 }
             }
 
+            $editorialDirectives = $isParentsDeceased
+                ? "- ANGLE NARRATIF D'HOMMAGE ET TRANSMISSION (PARENTS DÉCÉDÉS OU NON-PARTICIPANTS) :\n" .
+                  "  * Ce chapitre est un hommage filial rédigé à partir des récits, anecdotes et souvenirs transmis à leurs enfants et descendants.\n" .
+                  "  * Registre de SYNTHÈSE STRICTEMENT À LA 3ÈME PERSONNE (« il/elle » ou « {$parent1} et {$parent2} »).\n" .
+                  "  * RÈGLE FORMELLE : Ne JAMAIS rédiger à la 1ère personne du couple (« Nous nous sommes rencontrés... »).\n" .
+                  "  * Adopte des formules élégantes de mémoire familiale et de transmission (« Dans les souvenirs transmis au foyer... », « Leurs enfants se rappellent avec émotion de... », « Selon la mémoire familiale... »).\n" .
+                  "  * Retrace la jeunesse de chacun, la légende de leur rencontre telle que transmise avec amour au sein de la famille, et l'installation de leur premier chez-soi.\n"
+                : "- Registre de SYNTHÈSE à la 3ème personne (il/elle ou {$parent1} et {$parent2}).\n" .
+                  "- Retrace le début de cette histoire d'amour et la fondation de leur famille : les origines de chacun, leur jeunesse, les récits de leur rencontre (tels que racontés par eux-mêmes ou transmis avec affection par leurs enfants), leurs premiers temps ensemble et l'installation de leur premier chez-soi.\n";
+
             $prompt = "Tu es un écrivain biographe de premier ordre, spécialisé dans les sagas familiales et les mémoires de famille.\n" .
                       "Tu rédiges le premier chapitre \"{$themeTitle}\" consacré à l'histoire des parents et aux racines du foyer de {$parentsLabel}.\n\n" .
                       "Voici les témoignages et souvenirs recueillis auprès de la famille :\n\n" .
                       "{$contextText}\n\n" .
                       "CONSIGNES ÉDITORIALES PARTIE 1/2 :\n" .
-                      "- Registre de SYNTHÈSE à la 3ème personne (il/elle ou {$parent1} et {$parent2}).\n" .
-                      "- Retrace le début de cette histoire d'amour et la fondation de leur famille : les origines de chacun, leur jeunesse, les récits de leur rencontre (tels que racontés par eux-mêmes ou transmis avec affection par leurs enfants), leurs premiers temps ensemble et l'installation de leur premier chez-soi.\n" .
+                      $editorialDirectives .
                       "- RÈGLE D'OR : Si les enfants rapportent des détails ou versions légèrement différentes de la rencontre, ne tranche JAMAIS : tisse les récits comme la légende chaleureuse de la famille (« Pour l'un, c'était... tandis que pour l'autre, demeure le souvenir de... »).\n" .
                       "- Volume proportionnel aux souvenirs réels fournis — ne boucle jamais sur la même idée.\n" .
                       "- Sous-titres poétiques toutes les 4 à 6 paragraphes sous la forme : ===Titre poétique===\n" .
@@ -295,10 +307,14 @@ class AnthropicService
             $formattedTestimonies = $this->formatAnswers($chapter->getAnswers());
         }
 
+        $epilogueDirectives = $isParentsDeceased
+            ? "- Rédige une lettre collective ou des hommages successifs au nom des enfants et petits-enfants, célébrant la mémoire de {$parentsLabel}, leur reconnaissance infinie pour leur amour et leur exemple, et affirmant la fidélité de la famille à leurs valeurs.\n"
+            : "- Rédige une lettre collective ou des messages successifs de chaque enfant/proche sous forme de déclaration d'amour, de gratitude et de fierté envers les parents.\n";
+
         $prompt = "Tu es un écrivain biographe de talent. Tu rédiges l'épilogue intime et vibrant \"{$themeTitle}\" adressé à {$parentsLabel} au nom de toute la famille :\n\n" .
                   "{$formattedTestimonies}\n\n" .
                   "CONSIGNES ÉDITORIALES PARTIE 1/2 :\n" .
-                  "- Rédige une lettre collective ou des messages successifs de chaque enfant/proche sous forme de déclaration d'amour, de gratitude et de fierté envers les parents.\n" .
+                  $epilogueDirectives .
                   "- Style profondément émouvant, chaleureux et noble, célébrant le bonheur d'avoir grandi auprès d'eux et formulant des vœux pour la pérennité du clan familial.\n" .
                   "- Une 2e partie suivra.";
 
@@ -316,6 +332,9 @@ class AnthropicService
             ? "{$parent1} et {$parent2}"
             : ($book->getPerson1FirstName() ?: $book->getTitle());
 
+        $isParentsDeceased = ($book && ($book->isParentsDeceased() || $book->isParentsNotParticipating()))
+            || (empty($chapter->getAnswers()) && !empty($chapter->getContributorAnswers()));
+
         $contentPart1 = $chapter->getContentPart1() ?? '';
         $lastParagraphs = $this->extractLastParagraphs($contentPart1, 3);
 
@@ -326,13 +345,19 @@ class AnthropicService
                 $contextText = $this->formatAnswers($chapter->getAnswers());
             }
 
+            $part2Directives = $isParentsDeceased
+                ? "- ANGLE NARRATIF D'HOMMAGE ET TRANSMISSION :\n" .
+                  "  * Poursuis l'histoire de la famille, l'arrivée des enfants, les traditions et valeurs de la maison, et les souvenirs marquants de leur vie de famille.\n" .
+                  "  * Conclus par un vibrant et magnifique hommage à la mémoire de {$parentsLabel}, à la force de leur union et à l'héritage d'amour indestructible qu'ils ont légué à leurs descendants.\n"
+                : "- Poursuis la fondation du foyer et la vie avec les enfants, les étapes marquantes traversées ensemble, et le regard admiratif porté sur leur histoire.\n" .
+                  "- Conclus par un magnifique paragraphe d'hommage à l'amour et au foyer qu'ils ont su bâtir.\n";
+
             $prompt = "Tu es un écrivain biographe d'exception. Continue la rédaction du récit \"{$themeTitle}\" sur l'histoire de {$parentsLabel} :\n\n" .
                       "{$contextText}\n\n" .
                       "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
                       "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUNE période déjà abordée.\n\n" .
                       "CONSIGNES PARTIE 2/2 :\n" .
-                      "- Poursuis la fondation du foyer et la vie avec les enfants, les étapes marquantes traversées ensemble, et le regard admiratif porté sur leur histoire.\n" .
-                      "- Conclus par un magnifique paragraphe d'hommage à l'amour et au foyer qu'ils ont su bâtir.\n" .
+                      $part2Directives .
                       "- Termine par un point complet.";
 
             return $this->callAnthropic($prompt, 32000);

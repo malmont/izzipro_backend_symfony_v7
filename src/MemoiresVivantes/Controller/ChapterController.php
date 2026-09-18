@@ -54,11 +54,60 @@ class ChapterController extends AbstractController
         $book = $em->getRepository(Book::class)->find(Uuid::fromString($id));
         if (!$book) return $this->json(['error' => 'Book not found'], 404);
 
-        $this->denyAccessUnlessGranted('BOOK_VIEW', $book);
+        $res = $this->validateBookSignatureOrGrant('BOOK_VIEW', $book, $request);
+        if ($res !== null) return $res;
+
+        $validatedContributorId = $request->attributes->get('validatedContributorId');
+        $contributorIdParam = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
+        $targetContribId = $validatedContributorId ?: $contributorIdParam;
+        $currentContributor = null;
+        $role = $request->query->get('role');
+
+        if ($targetContribId) {
+            try {
+                $contribRepo = $em->getRepository(Contributor::class);
+                $contrib = $contribRepo->find(Uuid::fromString($targetContribId));
+                if ($contrib) {
+                    $role = $role ?: $contrib->getRole();
+                    $currentContributor = [
+                        'id' => (string) $contrib->getId(),
+                        'firstName' => $contrib->getFirstName(),
+                        'role' => $contrib->getRole(),
+                        'isApproved' => $contrib->isApproved(),
+                        'approvedAt' => $contrib->getApprovedAt()?->format(\DateTimeInterface::ATOM),
+                    ];
+                }
+            } catch (\Throwable) {}
+        }
+
+        if ($role === null && $book->getType() === 'famille') {
+            $role = ($book->isParentsDeceased() || $book->isParentsNotParticipating()) ? 'enfant' : 'parent';
+        }
+
+        $questionsByTheme = [];
+        if ($book->getType()) {
+            $qb = $em->getRepository(MemoireQuestion::class)->createQueryBuilder('q')
+                ->where('q.isActive = true')
+                ->andWhere('q.bookType = :bookType')
+                ->setParameter('bookType', $book->getType());
+
+            if ($role !== null) {
+                $qb->andWhere('(q.role IS NULL OR q.role = :role)')
+                   ->setParameter('role', $role);
+            }
+
+            $qb->orderBy('q.displayOrder', 'ASC');
+            foreach ($qb->getQuery()->getResult() as $q) {
+                $questionsByTheme[$q->getTheme()][] = $q->toFrontArray();
+            }
+        }
 
         $chapters = $this->getChaptersByBookUseCase->execute($book);
         $host = $request->getSchemeAndHttpHost();
-        return $this->json(array_map(fn($c) => new ChapterOutputDto($c, $host), $chapters));
+        return $this->json(array_map(function($c) use ($host, $questionsByTheme, $targetContribId, $currentContributor) {
+            $themeQuestions = $questionsByTheme[$c->getTheme()] ?? [];
+            return new ChapterOutputDto($c, $host, $themeQuestions, $targetContribId, $currentContributor);
+        }, $chapters));
     }
 
 
@@ -116,6 +165,10 @@ class ChapterController extends AbstractController
             } catch (\Throwable) {
                 // Ignore parsing non-uuid
             }
+        }
+
+        if ($role === null && $chapter->getBook() && $chapter->getBook()->getType() === 'famille') {
+            $role = ($chapter->getBook()->isParentsDeceased() || $chapter->getBook()->isParentsNotParticipating()) ? 'enfant' : 'parent';
         }
 
         $questions = [];
@@ -205,9 +258,57 @@ class ChapterController extends AbstractController
 
         $tenantHost = $request->headers->get('X-Tenant-Host') ?? $request->getHost();
         $chapter = $this->updateChapterUseCase->execute($chapter, $data, false, $tenantHost);
-        
+
         $host = $request->getSchemeAndHttpHost();
-        return $this->json(new ChapterOutputDto($chapter, $host));
+
+        $targetContribId = $validatedContributorId ?: ($request->query->get('contributorId') ?? $request->query->get('contributor_id'));
+        $currentContributor = null;
+        $role = $request->query->get('role');
+
+        if ($targetContribId) {
+            try {
+                $contribRepo = $em->getRepository(Contributor::class);
+                $contrib = $contribRepo->find(Uuid::fromString($targetContribId));
+                if ($contrib) {
+                    $role = $role ?: $contrib->getRole();
+                    $currentContributor = [
+                        'id' => (string) $contrib->getId(),
+                        'firstName' => $contrib->getFirstName(),
+                        'role' => $contrib->getRole(),
+                        'isApproved' => $contrib->isApproved(),
+                        'approvedAt' => $contrib->getApprovedAt()?->format(\DateTimeInterface::ATOM),
+                    ];
+                }
+            } catch (\Throwable) {}
+        }
+
+        if ($role === null && $chapter->getBook() && $chapter->getBook()->getType() === 'famille') {
+            $role = ($chapter->getBook()->isParentsDeceased() || $chapter->getBook()->isParentsNotParticipating()) ? 'enfant' : 'parent';
+        }
+
+        $questions = [];
+        if ($chapter->getTheme()) {
+            $qb = $em->getRepository(MemoireQuestion::class)->createQueryBuilder('q')
+                ->where('q.theme = :theme')
+                ->andWhere('q.isActive = true')
+                ->setParameter('theme', $chapter->getTheme());
+
+            if ($chapter->getBook() && $chapter->getBook()->getType()) {
+                $qb->andWhere('q.bookType = :bookType')
+                   ->setParameter('bookType', $chapter->getBook()->getType());
+            }
+
+            if ($role !== null) {
+                $qb->andWhere('(q.role IS NULL OR q.role = :role)')
+                   ->setParameter('role', $role);
+            }
+
+            $qb->orderBy('q.displayOrder', 'ASC');
+            $questionEntities = $qb->getQuery()->getResult();
+            $questions = array_map(fn(MemoireQuestion $q) => $q->toFrontArray(), $questionEntities);
+        }
+
+        return $this->json(new ChapterOutputDto($chapter, $host, $questions, $validatedContributorId, $currentContributor));
     }
 
     #[Route('/chapters/{id}', methods: ['DELETE'])]
@@ -558,20 +659,180 @@ class ChapterController extends AbstractController
         $chapter = $em->getRepository(Chapter::class)->find(Uuid::fromString($id));
         if (!$chapter) return $this->json(['error' => 'Chapter not found'], 404);
 
-        $this->denyAccessUnlessGranted('CHAPTER_EDIT', $chapter);
+        $res = $this->validateSignatureOrGrant('CHAPTER_EDIT', $chapter, $request);
+        if ($res !== null) return $res;
+
+        $user = $this->getUser();
+        $validatedContributorId = $request->attributes->get('validatedContributorId');
+        $contributorIdParam = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
+        $targetContribId = $validatedContributorId ?: $contributorIdParam;
+        $isGuest = ($user === null);
 
         $data = json_decode($request->getContent(), true) ?? [];
-        $question = $data['question'] ?? '';
-        $answer = $data['answer'] ?? '';
+        $question = trim((string)($data['question'] ?? ''));
+        $answer = trim((string)($data['answer'] ?? ''));
+        $index = isset($data['index']) && is_numeric($data['index']) ? (int)$data['index'] : null;
 
         if (empty($question) || empty($answer)) {
             return $this->json(['error' => 'Missing question or answer parameter'], 400);
         }
 
+        // Tenter de retrouver l'index de la question si non fourni
+        if ($index === null && $question !== '' && $chapter->getTheme()) {
+            try {
+                $qb = $em->getRepository(MemoireQuestion::class)->createQueryBuilder('q')
+                    ->where('q.theme = :theme')
+                    ->andWhere('q.isActive = true')
+                    ->setParameter('theme', $chapter->getTheme());
+                if ($chapter->getBook() && $chapter->getBook()->getType()) {
+                    $qb->andWhere('q.bookType = :bookType')
+                       ->setParameter('bookType', $chapter->getBook()->getType());
+                }
+                $qb->orderBy('q.displayOrder', 'ASC');
+                $qList = $qb->getQuery()->getResult();
+                foreach ($qList as $idx => $qEnt) {
+                    if (trim($qEnt->getQuestion()) === $question) {
+                        $index = $idx;
+                        break;
+                    }
+                }
+            } catch (\Throwable) {}
+        }
+
+        $questionKey = ($index !== null) ? 'idx_' . $index : 'q_' . substr(md5($question), 0, 12);
+
+        $contributorAnswers = $chapter->getContributorAnswers() ?? [];
+        $targetContribEntry = null;
+        $targetContribIdx = null;
+
+        if (is_array($contributorAnswers) && $targetContribId) {
+            foreach ($contributorAnswers as $idx => $cEntry) {
+                if (!is_array($cEntry)) continue;
+                $cId = $cEntry['id'] ?? null;
+                if ($cId && (string)$cId === (string)$targetContribId) {
+                    $targetContribEntry = $cEntry;
+                    $targetContribIdx = $idx;
+                    break;
+                }
+            }
+        }
+
+        // En mode invité (lien contributeur) : vérifier la limite de 1 amélioration par question
+        if ($isGuest && $targetContribEntry !== null) {
+            $improvedIndices = $targetContribEntry['improvedQuestionIndices'] ?? [];
+            $improvedKeys = $targetContribEntry['improvedQuestionKeys'] ?? [];
+            $alreadyImproved = false;
+
+            if ($index !== null && in_array($index, $improvedIndices, true)) {
+                $alreadyImproved = true;
+            } elseif (in_array($questionKey, $improvedKeys, true)) {
+                $alreadyImproved = true;
+            } else {
+                if (isset($targetContribEntry['answers']) && is_array($targetContribEntry['answers'])) {
+                    foreach ($targetContribEntry['answers'] as $ans) {
+                        if (!is_array($ans)) continue;
+                        $match = false;
+                        if ($index !== null && isset($ans['index']) && (int)$ans['index'] === $index) {
+                            $match = true;
+                        } elseif (isset($ans['question']) && trim($ans['question']) === $question) {
+                            $match = true;
+                        }
+                        if ($match) {
+                            $imp = trim($ans['improvedAnswer'] ?? $ans['improved_answer'] ?? '');
+                            if ($imp !== '') {
+                                $alreadyImproved = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if ($alreadyImproved) {
+                return $this->json([
+                    'error' => "Cette réponse a déjà été améliorée par l'IA (limitée à une seule fois par question en mode invité).",
+                    'alreadyImproved' => true,
+                    'canImprove' => false,
+                ], 403);
+            }
+        }
+
         try {
             $improvedText = $this->improveAnswerUseCase->execute($question, $answer);
+
+            if ($isGuest && $targetContribId) {
+                if ($targetContribEntry === null) {
+                    $contribRepo = $em->getRepository(Contributor::class);
+                    $contribEntity = null;
+                    try {
+                        $contribEntity = $contribRepo->find(Uuid::fromString($targetContribId));
+                    } catch (\Throwable) {}
+
+                    $targetContribEntry = [
+                        'id' => (string)$targetContribId,
+                        'contributorName' => $contribEntity ? $contribEntity->getFirstName() : '',
+                        'firstName' => $contribEntity ? $contribEntity->getFirstName() : '',
+                        'role' => $contribEntity ? $contribEntity->getRole() : 'proche',
+                        'improvedQuestionIndices' => [],
+                        'improvedQuestionKeys' => [],
+                        'answers' => [],
+                    ];
+                    $targetContribIdx = count($contributorAnswers);
+                }
+
+                if (!isset($targetContribEntry['improvedQuestionIndices']) || !is_array($targetContribEntry['improvedQuestionIndices'])) {
+                    $targetContribEntry['improvedQuestionIndices'] = [];
+                }
+                if (!isset($targetContribEntry['improvedQuestionKeys']) || !is_array($targetContribEntry['improvedQuestionKeys'])) {
+                    $targetContribEntry['improvedQuestionKeys'] = [];
+                }
+
+                if ($index !== null && !in_array($index, $targetContribEntry['improvedQuestionIndices'], true)) {
+                    $targetContribEntry['improvedQuestionIndices'][] = $index;
+                }
+                if (!in_array($questionKey, $targetContribEntry['improvedQuestionKeys'], true)) {
+                    $targetContribEntry['improvedQuestionKeys'][] = $questionKey;
+                }
+
+                // Enregistrer immédiatement la réponse améliorée pour le contributeur
+                $ansFound = false;
+                if (!isset($targetContribEntry['answers']) || !is_array($targetContribEntry['answers'])) {
+                    $targetContribEntry['answers'] = [];
+                }
+                foreach ($targetContribEntry['answers'] as &$ans) {
+                    if (!is_array($ans)) continue;
+                    if (($index !== null && isset($ans['index']) && (int)$ans['index'] === $index) ||
+                        (isset($ans['question']) && trim($ans['question']) === $question)) {
+                        $ans['improvedAnswer'] = $improvedText;
+                        $ans['useImproved'] = true;
+                        if (!empty($answer)) {
+                            $ans['answer'] = $answer;
+                        }
+                        $ansFound = true;
+                        break;
+                    }
+                }
+                unset($ans);
+
+                if (!$ansFound) {
+                    $targetContribEntry['answers'][] = [
+                        'index' => $index ?? count($targetContribEntry['answers']),
+                        'question' => $question,
+                        'answer' => $answer,
+                        'improvedAnswer' => $improvedText,
+                        'useImproved' => true,
+                    ];
+                }
+
+                $contributorAnswers[$targetContribIdx] = $targetContribEntry;
+                $chapter->setContributorAnswers($contributorAnswers);
+                $em->flush();
+            }
+
             return $this->json([
                 'improvedText' => $improvedText,
+                'alreadyImproved' => false,
+                'canImprove' => false,
             ]);
         } catch (\Exception $e) {
             $this->logger->error("ChapterController improveAnswer exception: " . $e->getMessage());
@@ -691,7 +952,7 @@ class ChapterController extends AbstractController
     {
         $expires = $request->query->get('expires');
         $signature = $request->query->get('signature');
-        $chapterId = $request->query->get('chapterId') ?? $request->query->get('chapter_id');
+        $chapterId = $request->query->get('chapterId') ?? $request->query->get('chapter_id') ?? (string)$chapter->getId();
         $contributorId = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
 
         if ($expires === null || $signature === null || $chapterId === null) {
@@ -791,6 +1052,128 @@ class ChapterController extends AbstractController
             } catch (\Symfony\Component\Security\Core\Exception\AccessDeniedException) {
                 // proceed to return JsonResponse below
             }
+        }
+
+        if ($expires !== null && $signature !== null && $chapterId !== null) {
+            if (time() > (int)$expires) {
+                return $this->json(['error' => 'This sharing link has expired.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
+            }
+            return $this->json(['error' => 'Invalid signature or resource mismatch.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
+        }
+
+        return $this->json(['error' => 'Access denied. Missing or invalid signature.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
+    }
+
+    private function validateBookSignatureOrGrant(string $attribute, Book $book, Request $request): ?JsonResponse
+    {
+        $expires = $request->query->get('expires');
+        $signature = $request->query->get('signature');
+        $chapterId = $request->query->get('chapterId') ?? $request->query->get('chapter_id');
+        $contributorId = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
+
+        if ($expires === null || $signature === null || $chapterId === null) {
+            if ($request->request->has('expires')) {
+                $expires = $request->request->get('expires');
+            }
+            if ($request->request->has('signature')) {
+                $signature = $request->request->get('signature');
+            }
+            if ($request->request->has('chapterId')) {
+                $chapterId = $request->request->get('chapterId');
+            } elseif ($request->request->has('chapter_id')) {
+                $chapterId = $request->request->get('chapter_id');
+            }
+            if ($contributorId === null) {
+                if ($request->request->has('contributorId')) {
+                    $contributorId = $request->request->get('contributorId');
+                } elseif ($request->request->has('contributor_id')) {
+                    $contributorId = $request->request->get('contributor_id');
+                }
+            }
+        }
+
+        if ($expires === null || $signature === null || $chapterId === null) {
+            $content = $request->getContent();
+            if ($content) {
+                $data = json_decode($content, true);
+                if (is_array($data)) {
+                    $expires = $expires ?? $data['expires'] ?? null;
+                    $signature = $signature ?? $data['signature'] ?? null;
+                    $chapterId = $chapterId ?? $data['chapterId'] ?? $data['chapter_id'] ?? null;
+                    $contributorId = $contributorId ?? $data['contributorId'] ?? $data['contributor_id'] ?? null;
+                }
+            }
+        }
+
+        if ($expires === null || $signature === null || $chapterId === null) {
+            $expires = $request->headers->get('X-Expires');
+            $signature = $request->headers->get('X-Signature');
+            $chapterId = $chapterId ?? $request->headers->get('X-Chapter-Id');
+            $contributorId = $contributorId ?? $request->headers->get('X-Contributor-Id');
+        }
+
+        if ($expires === null || $signature === null || $chapterId === null) {
+            $referer = $request->headers->get('Referer');
+            if ($referer) {
+                $query = parse_url($referer, PHP_URL_QUERY);
+                if ($query) {
+                    parse_str($query, $params);
+                    $expires = $expires ?? $params['expires'] ?? null;
+                    $signature = $signature ?? $params['signature'] ?? null;
+                    $chapterId = $chapterId ?? $params['chapterId'] ?? $params['chapter_id'] ?? null;
+                    $contributorId = $contributorId ?? $params['contributorId'] ?? $params['contributor_id'] ?? null;
+                }
+            }
+        }
+
+        $hasValidSignature = false;
+        if ($expires !== null && $signature !== null && $chapterId !== null) {
+            if (time() <= (int)$expires) {
+                $secret = $this->getParameter('kernel.secret');
+
+                // 1. Signature spécifique au contributeur
+                if ($contributorId !== null) {
+                    $dataToSignWithContrib = "chapterId=" . $chapterId . "&contributorId=" . $contributorId . "&expires=" . $expires;
+                    $expectedWithContrib = hash_hmac('sha256', $dataToSignWithContrib, $secret);
+                    if (hash_equals($expectedWithContrib, $signature)) {
+                        $em = $this->emProvider->getEntityManager();
+                        $chapter = $em->getRepository(Chapter::class)->find(Uuid::fromString($chapterId));
+                        if ($chapter && (string)$chapter->getBook()->getId() === (string)$book->getId()) {
+                            $hasValidSignature = true;
+                            $request->attributes->set('validatedContributorId', $contributorId);
+                        }
+                    }
+                }
+
+                // 2. Signature classique globale
+                if (!$hasValidSignature) {
+                    $dataToSign = "chapterId=" . $chapterId . "&expires=" . $expires;
+                    $expectedSignature = hash_hmac('sha256', $dataToSign, $secret);
+
+                    if (hash_equals($expectedSignature, $signature)) {
+                        $em = $this->emProvider->getEntityManager();
+                        $chapter = $em->getRepository(Chapter::class)->find(Uuid::fromString($chapterId));
+                        if ($chapter && (string)$chapter->getBook()->getId() === (string)$book->getId()) {
+                            $hasValidSignature = true;
+                            if ($contributorId !== null) {
+                                $request->attributes->set('validatedContributorId', $contributorId);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($hasValidSignature) {
+            return null;
+        }
+
+        $user = $this->getUser();
+        if ($user !== null) {
+            try {
+                $this->denyAccessUnlessGranted($attribute, $book);
+                return null;
+            } catch (\Symfony\Component\Security\Core\Exception\AccessDeniedException) {}
         }
 
         if ($expires !== null && $signature !== null && $chapterId !== null) {

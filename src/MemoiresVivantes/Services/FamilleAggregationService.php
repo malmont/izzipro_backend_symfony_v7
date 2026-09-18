@@ -56,9 +56,12 @@ class FamilleAggregationService
         }
 
         if (!$hasTestimonies) {
+            $isParentsDeceased = $book->isParentsDeceased() || $book->isParentsNotParticipating();
             return [
                 'canGenerate' => false,
-                'reason' => 'Les témoignages des proches ou des parents doivent être saisis avant de pouvoir générer le chapitre sur l\'histoire des parents.'
+                'reason' => $isParentsDeceased
+                    ? 'Au moins un témoignage de descendant ou de proche doit être saisi avant de pouvoir générer ce chapitre.'
+                    : 'Les témoignages des proches ou des parents doivent être saisis avant de pouvoir générer le chapitre sur l\'histoire des parents.'
             ];
         }
 
@@ -156,8 +159,12 @@ class FamilleAggregationService
             }
         }
 
+        $isParentsDeceased = $book->isParentsDeceased() || $book->isParentsNotParticipating();
         $formattedText = "=== INFORMATIONS SUR LA FAMILLE ET LES PARENTS ===\n";
         $formattedText .= "Parents célébrés : {$parent1Name} et {$parent2Name}\n";
+        if ($isParentsDeceased) {
+            $formattedText .= "Statut : Parents décédés ou absents (Hommage initié par leurs enfants et descendants)\n";
+        }
         if ($parentsInfo['birthplace']) $formattedText .= "Lieu / Foyer d'origine : {$parentsInfo['birthplace']}\n";
         $formattedText .= "\n=== SOUVENIRS ET TÉMOIGNAGES RECUEILLIS AU SEIN DE LA FAMILLE ===\n\n";
 

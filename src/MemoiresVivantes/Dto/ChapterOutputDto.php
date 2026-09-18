@@ -25,6 +25,10 @@ class ChapterOutputDto
     public ?array $currentContributor = null;
     public ?string $currentContributorId = null;
     public ?string $current_contributor_id = null;
+    public bool $parentsDeceased = false;
+    public bool $parents_deceased = false;
+    public bool $parentsNotParticipating = false;
+    public bool $parents_not_participating = false;
 
     public function __construct(
         Chapter $chapter,
@@ -35,6 +39,13 @@ class ChapterOutputDto
     ) {
         $this->id = (string) $chapter->getId();
         $this->bookId = (string) $chapter->getBook()->getId();
+        $book = $chapter->getBook();
+        if ($book) {
+            $this->parentsDeceased = $book->isParentsDeceased();
+            $this->parents_deceased = $book->isParentsDeceased();
+            $this->parentsNotParticipating = $book->isParentsNotParticipating();
+            $this->parents_not_participating = $book->isParentsNotParticipating();
+        }
         $this->title = $chapter->getTitle();
         $this->theme = $chapter->getTheme();
         $this->questions = $questions;
@@ -62,6 +73,40 @@ class ChapterOutputDto
             }
             $formattedAnswers[] = $ans;
         }
+        $allowedQuestionTexts = !empty($questions) ? array_column($questions, 'question') : [];
+
+        if (!empty($questions)) {
+            $existingAnswersByText = [];
+            foreach ($formattedAnswers as $ans) {
+                if (isset($ans['question'])) {
+                    $existingAnswersByText[$ans['question']] = $ans;
+                }
+            }
+            
+            $synchronizedAnswers = [];
+            foreach ($questions as $q) {
+                $qText = $q['question'] ?? '';
+                if (isset($existingAnswersByText[$qText])) {
+                    $ans = $existingAnswersByText[$qText];
+                    $ans['index'] = $q['index'] ?? $ans['index'] ?? 0;
+                    $ans['role'] = $q['role'] ?? 'transversal';
+                    $synchronizedAnswers[] = $ans;
+                } else {
+                    $synchronizedAnswers[] = [
+                        'index' => $q['index'] ?? 0,
+                        'question' => $qText,
+                        'role' => $q['role'] ?? 'transversal',
+                        'answer' => '',
+                        'improvedAnswer' => '',
+                        'useImproved' => false,
+                        'audioUrl' => '',
+                        'skipped' => false,
+                    ];
+                }
+            }
+            $formattedAnswers = $synchronizedAnswers;
+        }
+
         $this->answers = $formattedAnswers;
 
         $rawContribAnswers = $chapter->getContributorAnswers();
@@ -85,12 +130,23 @@ class ChapterOutputDto
 
                 if (isset($contrib['answers']) && is_array($contrib['answers'])) {
                     $formattedContribsAnswers = [];
+                    $improvedIndices = $contrib['improvedQuestionIndices'] ?? [];
                     foreach ($contrib['answers'] as $ans) {
                         if (is_array($ans)) {
+                            if (!empty($allowedQuestionTexts) && isset($ans['question']) && !in_array($ans['question'], $allowedQuestionTexts, true)) {
+                                continue;
+                            }
                             if (isset($ans['improved_answer']) && !isset($ans['improvedAnswer'])) {
                                 $ans['improvedAnswer'] = $ans['improved_answer'];
                             }
                             
+                            $isImp = (!empty($ans['improvedAnswer']) ||
+                                (isset($ans['index']) && in_array($ans['index'], $improvedIndices, true)));
+                            $ans['alreadyImproved'] = $isImp;
+                            $ans['canImprove'] = !$isImp;
+                            $ans['already_improved'] = $isImp;
+                            $ans['can_improve'] = !$isImp;
+
                             if (isset($ans['audioUrl']) && $ans['audioUrl'] !== null && $ans['audioUrl'] !== '') {
                                 $ans['audioUrl'] = $this->formatAudioUrl($ans['audioUrl'], $host);
                             }
@@ -105,6 +161,8 @@ class ChapterOutputDto
                     }
                     $contrib['answers'] = $formattedContribsAnswers;
                 }
+                $contrib['improvedQuestionIndices'] = $contrib['improvedQuestionIndices'] ?? [];
+                $contrib['improved_question_indices'] = $contrib['improvedQuestionIndices'];
                 $formattedContribAnswers[] = $contrib;
             }
             $this->contributorAnswers = $formattedContribAnswers;

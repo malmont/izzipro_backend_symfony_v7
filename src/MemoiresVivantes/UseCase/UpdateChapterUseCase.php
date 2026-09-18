@@ -84,6 +84,12 @@ class UpdateChapterUseCase
                         $key = $newContrib['id'] ?? $newContrib['contributorName'] ?? $newContrib['firstName'] ?? null;
                         if ($key !== null && isset($existingMap[(string)$key])) {
                             $extContrib = $existingMap[(string)$key];
+
+                            foreach (['improvedQuestionIndices', 'improvedQuestionKeys', 'improvedCount'] as $trackKey) {
+                                if (isset($extContrib[$trackKey]) && !isset($newContrib[$trackKey])) {
+                                    $newContrib[$trackKey] = $extContrib[$trackKey];
+                                }
+                            }
                             
                             if (isset($newContrib['answers']) && is_array($newContrib['answers']) &&
                                 isset($extContrib['answers']) && is_array($extContrib['answers'])) {

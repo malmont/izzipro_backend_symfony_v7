@@ -25,6 +25,10 @@ class BookOutputDto
     public ?string $deathYear = null;
     public ?string $death_year = null;
     public ?string $epigraph = null;
+    public bool $parentsDeceased = false;
+    public bool $parents_deceased = false;
+    public bool $parentsNotParticipating = false;
+    public bool $parents_not_participating = false;
     public array $contributors = [];
     public array $chapters = [];
     public ?array $latestPrintOrder = null;
@@ -44,8 +48,15 @@ class BookOutputDto
     public ?string $paymentCurrency = 'eur';
     public ?string $payment_currency = 'eur';
 
-    public function __construct(Book $book, string $host, ?\App\MemoiresVivantes\Entity\BookPrintOrder $latestOrder = null, int $ordersCount = 0)
-    {
+    public function __construct(
+        Book $book,
+        string $host,
+        ?\App\MemoiresVivantes\Entity\BookPrintOrder $latestOrder = null,
+        int $ordersCount = 0,
+        array $questionsByTheme = [],
+        ?string $filterContributorId = null,
+        ?array $currentContributor = null
+    ) {
         $this->id = (string) $book->getId();
         $this->title = $book->getTitle();
         $this->subtitle = $book->getSubtitle();
@@ -75,6 +86,10 @@ class BookOutputDto
         $this->deathYear = $book->getDeathYear();
         $this->death_year = $book->getDeathYear();
         $this->epigraph = $book->getEpigraph();
+        $this->parentsDeceased = $book->isParentsDeceased();
+        $this->parents_deceased = $book->isParentsDeceased();
+        $this->parentsNotParticipating = $book->isParentsNotParticipating();
+        $this->parents_not_participating = $book->isParentsNotParticipating();
 
         foreach ($book->getContributors() as $contributor) {
             $this->contributors[] = [
@@ -91,7 +106,8 @@ class BookOutputDto
         }
 
         foreach ($book->getChapters() as $chapter) {
-            $this->chapters[] = new ChapterOutputDto($chapter, $host);
+            $themeQuestions = $questionsByTheme[$chapter->getTheme()] ?? [];
+            $this->chapters[] = new ChapterOutputDto($chapter, $host, $themeQuestions, $filterContributorId, $currentContributor);
         }
 
         if ($latestOrder) {

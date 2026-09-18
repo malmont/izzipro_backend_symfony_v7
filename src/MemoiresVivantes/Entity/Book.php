@@ -73,6 +73,10 @@ class Book
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
     private ?string $epigraph = null;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    #[Groups(['book:read', 'book:write', 'chapter:read'])]
+    private bool $parentsDeceased = false;
  
     #[ORM\Column(length: 20)]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
@@ -271,6 +275,28 @@ class Book
     public function setEpigraph(?string $epigraph): static
     {
         $this->epigraph = $epigraph;
+        return $this;
+    }
+
+    public function isParentsDeceased(): bool
+    {
+        return $this->parentsDeceased;
+    }
+
+    public function setParentsDeceased(bool $parentsDeceased): static
+    {
+        $this->parentsDeceased = $parentsDeceased;
+        return $this;
+    }
+
+    public function isParentsNotParticipating(): bool
+    {
+        return $this->parentsDeceased;
+    }
+
+    public function setParentsNotParticipating(bool $parentsNotParticipating): static
+    {
+        $this->parentsDeceased = $parentsNotParticipating;
         return $this;
     }
  

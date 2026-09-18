@@ -31,6 +31,7 @@ class CreateBookUseCase
         if ($dto->birthYear !== null) $book->setBirthYear($dto->birthYear);
         if ($dto->deathYear !== null) $book->setDeathYear($dto->deathYear);
         if ($dto->epigraph !== null) $book->setEpigraph($dto->epigraph);
+        if ($dto->parentsDeceased !== null) $book->setParentsDeceased($dto->parentsDeceased);
 
         $em->persist($book);
         $em->flush();
