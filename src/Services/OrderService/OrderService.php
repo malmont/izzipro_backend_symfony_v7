@@ -34,9 +34,15 @@ class OrderService
         return $orderRepository->findWithDetailsBySource($orderSourceId, $date);
     }
 
-    public function getOrdersByUser(int $userId)
+    public function getOrdersByUser(int $userId): array
     {
         $orderRepository = $this->getOrderRepository();
         return $orderRepository->findWithDetailsByUser($userId);
+    }
+
+    public function getOrderDetailsForUser(int $orderId, int $userId): ?Order
+    {
+        $orderRepository = $this->getOrderRepository();
+        return $orderRepository->findWithDetailsByIdAndUser($orderId, $userId);
     }
 }

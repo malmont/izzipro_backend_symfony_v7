@@ -2,40 +2,28 @@
 
 namespace App\Controller\CategoriesControlleur;
 
-use App\Entity\Categories;
 use App\Dto\ProductOutputCategoryDto;
 use App\UseCase\CategoriesUseCase\GetProductsByCategoryUseCase;
 use App\UseCase\CategoriesUseCase\CountProductsByCategoryUseCase;
+use App\UseCase\CategoriesUseCase\GetCategoriesUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use App\Services\MediaUrlResolver;
-use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 use App\Dto\CategoryOutputDTO;
 
 class CategoryController extends AbstractController
 {
-    private GetProductsByCategoryUseCase $getProductsByCategoryUseCase;
-    private CountProductsByCategoryUseCase $countProductsByCategoryUseCase;
-    private TenantEntityManagerProvider $emProvider;
-    private TenantCacheService $cache;
-    private ?MediaUrlResolver $mediaUrlResolver;
-
     public function __construct(
-        GetProductsByCategoryUseCase $getProductsByCategoryUseCase,
-        CountProductsByCategoryUseCase $countProductsByCategoryUseCase,
-        TenantEntityManagerProvider $emProvider,
-        TenantCacheService $cache,
-        ?MediaUrlResolver $mediaUrlResolver = null
+        private readonly GetProductsByCategoryUseCase $getProductsByCategoryUseCase,
+        private readonly CountProductsByCategoryUseCase $countProductsByCategoryUseCase,
+        private readonly GetCategoriesUseCase $getCategoriesUseCase,
+        private readonly TenantCacheService $cache,
+        private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {
-        $this->getProductsByCategoryUseCase = $getProductsByCategoryUseCase;
-        $this->countProductsByCategoryUseCase = $countProductsByCategoryUseCase;
-        $this->emProvider = $emProvider;
-        $this->cache = $cache;
-        $this->mediaUrlResolver = $mediaUrlResolver;
     }
 
     #[Route('/api/products/by-category', name: 'get_products_by_category', methods: ['GET'], priority: 10)]
@@ -124,8 +112,7 @@ class CategoryController extends AbstractController
                 $item->expiresAfter(3600);
                 $item->tag(['categories_all', 'locale_' . $locale]);
 
-                $em = $this->emProvider->getEntityManager();
-                $categories = $em->getRepository(Categories::class)->findAll();
+                $categories = $this->getCategoriesUseCase->execute($locale);
                 return array_map(
                     fn($category) => (new CategoryOutputDTO($category, $host, $locale))->toArray(),
                     $categories

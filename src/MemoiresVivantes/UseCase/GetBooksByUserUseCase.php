@@ -15,8 +15,9 @@ class GetBooksByUserUseCase
     public function execute(User $user): array
     {
         $em = $this->emProvider->getEntityManager();
+        /** @var \App\MemoiresVivantes\Repository\BookRepository $repository */
         $repository = $em->getRepository(Book::class);
 
-        return $repository->findBy(['user' => $user], ['createdAt' => 'DESC']);
+        return $repository->findWithChaptersAndPhotosByUser($user);
     }
 }

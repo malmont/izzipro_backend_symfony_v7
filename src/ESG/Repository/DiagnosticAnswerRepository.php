@@ -20,6 +20,20 @@ class DiagnosticAnswerRepository extends EntityRepository
         return $this->findBy(['session' => $session]);
     }
 
+    /**
+     * @return DiagnosticAnswer[]
+     */
+    public function findBySessionWithQuestion(DiagnosticSession $session): array
+    {
+        return $this->createQueryBuilder('a')
+            ->leftJoin('a.question', 'q')
+            ->addSelect('q')
+            ->where('a.session = :session')
+            ->setParameter('session', $session)
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findBySessionAndQuestion(DiagnosticSession $session, DiagnosticQuestion $question): ?DiagnosticAnswer
     {
         return $this->findOneBy([

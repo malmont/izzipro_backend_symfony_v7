@@ -19,8 +19,9 @@ class GetSessionUseCase
 
     public function execute(string $uuid): SessionDetailOutputDTO
     {
-        $em = $this->emProvider->getEntityManager();
-        $session = $em->getRepository(DiagnosticSession::class)->findByUuid($uuid);
+        /** @var \App\ESG\Repository\DiagnosticSessionRepository $repo */
+        $repo = $em->getRepository(DiagnosticSession::class);
+        $session = $repo->findWithDetails($uuid);
 
         if (!$session) {
             throw new NotFoundHttpException('Session de diagnostic introuvable.');

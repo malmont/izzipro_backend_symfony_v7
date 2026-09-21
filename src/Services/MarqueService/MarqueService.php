@@ -19,7 +19,9 @@ class MarqueService
     public function getAllMarques(): array
     {
         $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Marque::class)->findAll();
+        /** @var \App\Repository\MarqueRepository $repo */
+        $repo = $tenantEm->getRepository(Marque::class);
+        return $repo->findAllWithCategories();
     }
 
     public function findMarque(int $id): ?Marque

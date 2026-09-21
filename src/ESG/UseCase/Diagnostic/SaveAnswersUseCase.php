@@ -44,6 +44,24 @@ class SaveAnswersUseCase
         $answerRepo = $em->getRepository(DiagnosticAnswer::class);
         $questionRepo = $em->getRepository(DiagnosticQuestion::class);
 
+        // 1. Précharger toutes les questions nécessaires en 1 seule requête
+        $questionIds = array_filter(array_column($dto->answers, 'questionId'));
+        $questions = !empty($questionIds) 
+            ? $questionRepo->findBy(['id' => $questionIds, 'isActive' => true]) 
+            : [];
+        $questionsById = [];
+        foreach ($questions as $q) {
+            $questionsById[$q->getId()] = $q;
+        }
+
+        // 2. Précharger toutes les réponses existantes de la session en 1 seule requête
+        /** @var DiagnosticAnswer[] $existingAnswers */
+        $existingAnswers = $answerRepo->findBySessionWithQuestion($session);
+        $answersByQuestionId = [];
+        foreach ($existingAnswers as $existingAnswer) {
+            $answersByQuestionId[$existingAnswer->getQuestion()->getId()] = $existingAnswer;
+        }
+
         $savedCount = 0;
 
         foreach ($dto->answers as $ansData) {
@@ -54,19 +72,19 @@ class SaveAnswersUseCase
                 continue;
             }
 
-            $question = $questionRepo->find($questionId);
-            if (!$question || !$question->isActive()) {
+            if (!isset($questionsById[$questionId])) {
                 throw new NotFoundHttpException(sprintf('Question active introuvable pour l\'ID : %s', $questionId));
             }
+            $question = $questionsById[$questionId];
 
-            // Find existing answer
-            $answer = $answerRepo->findBySessionAndQuestion($session, $question);
+            $answer = $answersByQuestionId[$questionId] ?? null;
 
             if (!$answer) {
                 $answer = new DiagnosticAnswer();
                 $answer->setSession($session);
                 $answer->setQuestion($question);
                 $em->persist($answer);
+                $answersByQuestionId[$questionId] = $answer;
             }
 
             $answer->setAnswerValue($value);

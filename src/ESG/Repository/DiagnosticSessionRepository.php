@@ -23,6 +23,26 @@ class DiagnosticSessionRepository extends EntityRepository
         }
     }
 
+    public function findWithDetails(string $uuid): ?DiagnosticSession
+    {
+        try {
+            $uuidObj = Uuid::fromString($uuid);
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+
+        return $this->createQueryBuilder('s')
+            ->leftJoin('s.answers', 'a')->addSelect('a')
+            ->leftJoin('a.question', 'q')->addSelect('q')
+            ->leftJoin('s.recommendations', 'r')->addSelect('r')
+            ->leftJoin('r.referential', 'ref')->addSelect('ref')
+            ->leftJoin('r.subsidyPrograms', 'sub')->addSelect('sub')
+            ->where('s.uuid = :uuid')
+            ->setParameter('uuid', $uuidObj)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
     /**
      * @return DiagnosticSession[]
      */

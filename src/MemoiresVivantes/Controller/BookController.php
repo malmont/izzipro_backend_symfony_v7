@@ -54,11 +54,33 @@ class BookController extends AbstractController
         $books = $this->getBooksByUserUseCase->execute($user);
         $host = $this->resolveHost($request);
         $em = $this->emProvider->getEntityManager();
-        $orderRepo = $em->getRepository(BookPrintOrder::class);
 
-        $dtos = array_map(function($b) use ($host, $orderRepo) {
-            $latest = $orderRepo->findOneBy(['book' => $b], ['createdAt' => 'DESC']);
-            $count = $latest ? $orderRepo->count(['book' => $b]) : 0;
+        $latestOrdersByBookId = [];
+        $ordersCountByBookId = [];
+
+        if (!empty($books)) {
+            // Précharger toutes les commandes pour ces livres en 1 seule requête
+            /** @var BookPrintOrder[] $orders */
+            $orders = $em->getRepository(BookPrintOrder::class)->createQueryBuilder('o')
+                ->where('o.book IN (:books)')
+                ->setParameter('books', $books)
+                ->orderBy('o.createdAt', 'DESC')
+                ->getQuery()
+                ->getResult();
+
+            foreach ($orders as $order) {
+                $bookId = (string) $order->getBook()->getId();
+                if (!isset($latestOrdersByBookId[$bookId])) {
+                    $latestOrdersByBookId[$bookId] = $order;
+                }
+                $ordersCountByBookId[$bookId] = ($ordersCountByBookId[$bookId] ?? 0) + 1;
+            }
+        }
+
+        $dtos = array_map(function($b) use ($host, $latestOrdersByBookId, $ordersCountByBookId) {
+            $bId = (string) $b->getId();
+            $latest = $latestOrdersByBookId[$bId] ?? null;
+            $count = $ordersCountByBookId[$bId] ?? 0;
             return new BookOutputDto($b, $host, $latest, $count);
         }, $books);
 

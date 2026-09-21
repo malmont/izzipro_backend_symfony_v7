@@ -80,18 +80,27 @@ class CartServices
         $quantity_cart = 0;
         $subTotal = 0;
         
-        foreach ($cart as $id => $quantity) {
-            $product = $repoProduct->find($id);
-            if ($product) {
-                $fullCart["products"][] = [
-                    "quantity" => $quantity,
-                    "product" => $product
-                ];
-                $quantity_cart += $quantity;
-                $subTotal += $quantity * $product->getPrice() / 100;
-            } else {
-                // Si le produit n'existe plus en base, on le retire du panier
-                $this->deleteFromCart($id);
+        $productIds = array_keys($cart);
+        if (!empty($productIds)) {
+            $products = $repoProduct->findBy(['id' => $productIds]);
+            $productsById = [];
+            foreach ($products as $product) {
+                $productsById[$product->getId()] = $product;
+            }
+
+            foreach ($cart as $id => $quantity) {
+                if (isset($productsById[$id])) {
+                    $product = $productsById[$id];
+                    $fullCart["products"][] = [
+                        "quantity" => $quantity,
+                        "product" => $product
+                    ];
+                    $quantity_cart += $quantity;
+                    $subTotal += $quantity * $product->getPrice() / 100;
+                } else {
+                    // Si le produit n'existe plus en base, on le retire du panier
+                    $this->deleteFromCart($id);
+                }
             }
         }
 

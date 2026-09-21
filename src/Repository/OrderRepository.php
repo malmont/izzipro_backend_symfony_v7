@@ -130,8 +130,20 @@ class OrderRepository extends EntityRepository
         return $this->createDetailsQueryBuilder()
             ->andWhere('o.userId = :userId')
             ->setParameter('userId', $userId)
+            ->orderBy('o.orderDate', 'DESC')
             ->getQuery()
             ->getResult();
+    }
+
+    public function findWithDetailsByIdAndUser(int $id, int $userId): ?Order
+    {
+        return $this->createDetailsQueryBuilder()
+            ->andWhere('o.id = :id')
+            ->andWhere('o.userId = :userId')
+            ->setParameter('id', $id)
+            ->setParameter('userId', $userId)
+            ->getQuery()
+            ->getOneOrNullResult();
     }
 
     public function findWithDetailsBySource(int $orderSourceId, ?DateTime $since = null): array

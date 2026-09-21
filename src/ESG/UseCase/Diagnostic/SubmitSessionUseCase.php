@@ -54,9 +54,11 @@ class SubmitSessionUseCase
         /** @var DiagnosticQuestion[] $questions */
         $questions = $em->getRepository(DiagnosticQuestion::class)->findAllActiveOrdered();
 
-        // 3. Load existing answers
+        // 3. Load existing answers with questions eagerly fetched
+        /** @var \App\ESG\Repository\DiagnosticAnswerRepository $answerRepo */
+        $answerRepo = $em->getRepository(DiagnosticAnswer::class);
         /** @var DiagnosticAnswer[] $answers */
-        $answers = $em->getRepository(DiagnosticAnswer::class)->findBySession($session);
+        $answers = $answerRepo->findBySessionWithQuestion($session);
 
         // 4. Verify all active questions have been answered
         $answersMap = [];
