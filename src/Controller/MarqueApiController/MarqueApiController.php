@@ -3,6 +3,7 @@ namespace App\Controller\MarqueApiController;
 
 use App\Dto\MarqueInputDto;
 use App\Dto\MarqueOutputDto;
+use App\Services\MediaUrlResolver;
 use App\Services\TenantCacheService;
 use App\UseCase\MarqueUseCase\GetAllMarquesUseCase;
 use App\UseCase\MarqueUseCase\CreateMarqueUseCase;
@@ -24,7 +25,8 @@ class MarqueApiController extends AbstractController
         private CreateMarqueUseCase $createMarqueUseCase,
         private UpdateMarqueUseCase $updateMarqueUseCase,
         private DeleteMarqueUseCase $deleteMarqueUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
     #[Route('', name: 'api_marque_list', methods: ['GET'])]
@@ -32,7 +34,8 @@ class MarqueApiController extends AbstractController
     {
         $cacheKey = 'marques_all';
         $cacheTags = ['marques'];
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
+        $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
 
         $marquesDto = $this->cache->get(
             $cacheKey,
@@ -51,7 +54,8 @@ class MarqueApiController extends AbstractController
     public function create(#[MapRequestPayload] MarqueInputDto $dto, Request $request): JsonResponse
     {
         $marque = $this->createMarqueUseCase->execute($dto);
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
+        $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
         return $this->json(new MarqueOutputDto($marque, $baseImageUrl), Response::HTTP_CREATED);
     }
 
@@ -59,8 +63,9 @@ class MarqueApiController extends AbstractController
     public function update(int $id, #[MapRequestPayload] MarqueInputDto $dto, Request $request): JsonResponse
     {
         $marque = $this->updateMarqueUseCase->execute($id, $dto);
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
-        return $this->json(new MarqueOutputDto($marque));
+        $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
+        return $this->json(new MarqueOutputDto($marque, $baseImageUrl));
     }
 
     #[Route('/{id}', name: 'api_marque_delete', methods: ['DELETE'])]

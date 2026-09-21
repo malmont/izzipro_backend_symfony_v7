@@ -7,8 +7,10 @@
 /config/secrets/prod/prod.decrypt.private.php
 /public/bundles/
 /public/assets/uploads/
+/public/assets/uploads_OLD_INACTIF/
 /public/assets/images/
 /public/uploads/
+/public/uploads_OLD_INACTIF/
 /public/esg/
 /var/
 /vendor/

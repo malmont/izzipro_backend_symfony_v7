@@ -29,14 +29,14 @@ class ServiceOfferCrudController extends BaseTenantCrudController
             TextField::new('titreCommentaire', 'Sous-titre / Catégorie'),
             TextareaField::new('descriptions', 'Description détaillée')->hideOnIndex(),
             ImageField::new('logo', 'Icône / Logo')
-                ->setBasePath('assets/uploads/email-logos/')
-                ->setUploadDir('public/assets/uploads/email-logos/')
+                ->setBasePath('/bucket-simulator/assets/uploads/email-logos/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false)
                 ->hideOnIndex(),
             ImageField::new('photoService', 'Photo de la prestation')
-                ->setBasePath('assets/uploads/email-logos/')
-                ->setUploadDir('public/assets/uploads/email-logos/')
+                ->setBasePath('/bucket-simulator/assets/uploads/email-logos/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false)
                 ->hideOnIndex(),

@@ -10,8 +10,8 @@ class DocumentStorageService
 
     public function __construct(string $projectDir)
     {
-        // Stockage dans var/uploads/esg/
-        $this->uploadBaseDir = rtrim($projectDir, '/') . '/var/uploads/esg/';
+        // Stockage privé sécurisé dans var/storage/esg/documents/
+        $this->uploadBaseDir = rtrim($projectDir, '/') . '/var/storage/esg/documents/';
     }
 
     public function store(UploadedFile $file, int $companyId, string $code): array

@@ -26,7 +26,8 @@ class VideoApiController extends AbstractController
         private UpdateVideoUseCase $updateVideoUseCase,
         private DeleteVideoUseCase $deleteVideoUseCase,
         private TenantCacheService $cache,
-        private GetVideoByIdUseCase $getVideoByIdUseCase
+        private GetVideoByIdUseCase $getVideoByIdUseCase,
+        private ?\App\Services\MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
     #[Route('', name: 'api_video_list', methods: ['GET'])]
@@ -34,7 +35,9 @@ class VideoApiController extends AbstractController
     {
         $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'videos_all_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
+        $baseImageUrl = $this->mediaUrlResolver 
+            ? $this->mediaUrlResolver->getSliderBaseUrl($request->getSchemeAndHttpHost()) 
+            : ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
 
         $dtos = $this->cache->get(
             $cacheKey,
@@ -54,7 +57,9 @@ class VideoApiController extends AbstractController
     {
         $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'video_' . $id . '_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
+        $baseImageUrl = $this->mediaUrlResolver 
+            ? $this->mediaUrlResolver->getSliderBaseUrl($request->getSchemeAndHttpHost()) 
+            : ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
 
         $dto = $this->cache->get(
             $cacheKey,

@@ -13,12 +13,14 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 class DownloadDocumentUseCase
 {
     private string $uploadBaseDir;
+    private string $legacyBaseDir;
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         string $projectDir
     ) {
-        $this->uploadBaseDir = rtrim($projectDir, '/') . '/var/uploads/esg/';
+        $this->uploadBaseDir = rtrim($projectDir, '/') . '/var/storage/esg/documents/';
+        $this->legacyBaseDir = rtrim($projectDir, '/') . '/var/uploads/esg/';
     }
 
     public function execute(EsgUser $user, int $id): BinaryFileResponse
@@ -49,15 +51,22 @@ class DownloadDocumentUseCase
         }
 
         $fullPath = $this->uploadBaseDir . $filePath;
-
         if (!file_exists($fullPath)) {
-            throw new NotFoundHttpException('Fichier physique introuvable sur le serveur.');
+            $legacyFullPath = $this->legacyBaseDir . $filePath;
+            if (file_exists($legacyFullPath)) {
+                $fullPath = $legacyFullPath;
+            } else {
+                throw new NotFoundHttpException('Fichier physique introuvable sur le serveur.');
+            }
         }
 
         // Path traversal protection
-        $realBase = realpath($this->uploadBaseDir);
+        $realBase = realpath($this->uploadBaseDir) ?: '';
+        $realLegacyBase = realpath($this->legacyBaseDir) ?: '';
         $realPath = realpath($fullPath);
-        if (!$realBase || !$realPath || !str_starts_with($realPath, $realBase)) {
+        $isValidBase = ($realBase && str_starts_with($realPath, $realBase)) ||
+                       ($realLegacyBase && str_starts_with($realPath, $realLegacyBase));
+        if (!$realPath || !$isValidBase) {
             throw new AccessDeniedHttpException('Accès interdit.');
         }
 

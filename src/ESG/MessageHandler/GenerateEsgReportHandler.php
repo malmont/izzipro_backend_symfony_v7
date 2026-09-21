@@ -80,8 +80,8 @@ class GenerateEsgReportHandler
             $dompdf->render();
             $pdfOutput = $dompdf->output();
 
-            // 7. Save PDF file
-            $pdfDir = $this->projectDir . '/public/esg/reports';
+            // 7. Save PDF file in private storage
+            $pdfDir = $this->projectDir . '/var/storage/esg/reports';
             if (!is_dir($pdfDir)) {
                 mkdir($pdfDir, 0777, true);
             }
@@ -90,7 +90,7 @@ class GenerateEsgReportHandler
 
             // 8. Update Report details
             $report->setStatus(ReportStatusEnum::READY);
-            $report->setFilePath('/esg/reports/' . $sessionUuid . '.pdf');
+            $report->setFilePath('reports/' . $sessionUuid . '.pdf');
             $report->setFileSize(strlen($pdfOutput));
             $report->setGeneratedAt(new \DateTimeImmutable());
             $em->flush();

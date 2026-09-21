@@ -20,6 +20,7 @@ services:
             $luluAuthUrl: '%env(default::LULU_AUTH_URL)%'
             $luluContactEmail: '%env(default::LULU_CONTACT_EMAIL)%'
             $luluDefaultPodPackageId: '%env(default::LULU_DEFAULT_POD_PACKAGE_ID)%'
+            $storagePublicUrl: '%env(default::STORAGE_PUBLIC_URL)%'
 
     Doctrine\ORM\Configuration: '@doctrine.orm.default_configuration'
     Doctrine\Common\EventManager: '@doctrine.dbal.default_connection.event_manager'    

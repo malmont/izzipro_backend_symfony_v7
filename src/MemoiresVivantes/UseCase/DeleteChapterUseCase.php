@@ -16,7 +16,7 @@ class DeleteChapterUseCase
     {
         $em = $this->emProvider->getEntityManager();
         
-        $uploadDir = $this->projectDir . '/public/uploads/memoires/';
+        $uploadDir = $this->projectDir . '/var/storage/public_bucket/uploads/memoires/';
         
         foreach ($chapter->getPhotos() as $photo) {
             $file = $uploadDir . $photo->getFilePath();

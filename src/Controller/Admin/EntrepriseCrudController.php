@@ -49,13 +49,13 @@ class EntrepriseCrudController extends BaseTenantCrudController
             // --- Champs non traduits ---
             TextField::new('name', 'Nom de l\'entreprise'),
             ImageField::new('logo', 'Logo')
-                ->setBasePath('assets/uploads/email-logos/')
-                ->setUploadDir('public/assets/uploads/email-logos/')
+                ->setBasePath('/bucket-simulator/assets/uploads/email-logos/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
             ImageField::new('faviconFilename', 'Favicon')
-                ->setBasePath('assets/uploads/email-logos/')
-                ->setUploadDir('public/assets/uploads/email-logos/')
+                ->setBasePath('/bucket-simulator/assets/uploads/email-logos/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),        
             TextField::new('adress', 'Adresse'),
@@ -109,8 +109,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->setHelp('Mots-clés séparés par des virgules (ex: conciergerie, intendance, montreal)')
                 ->hideOnIndex(),
             ImageField::new('ogImage', 'Image Open Graph (og:image)')
-                ->setBasePath('assets/uploads/email-logos/')
-                ->setUploadDir('public/assets/uploads/email-logos/')
+                ->setBasePath('/bucket-simulator/assets/uploads/email-logos/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false)
                 ->setHelp('Image affichée lors du partage sur les réseaux sociaux (1200x630px recommandé)')

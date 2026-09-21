@@ -1,6 +1,7 @@
 <?php
 namespace App\Controller\ExploreCardController;
 
+use App\Services\MediaUrlResolver;
 use App\UseCase\ExploreCardUseCase\GetExploreCardUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -15,12 +16,14 @@ class ExploreCardController extends AbstractController
     public function __invoke(
         GetExploreCardUseCase $useCase,
         Request $request,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        ?MediaUrlResolver $mediaUrlResolver = null
     ): JsonResponse {
         $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'explore_cards_all_' . $locale;
         $tags = ['explore_cards_all'];
-        $host = $request->getSchemeAndHttpHost();
+        $host = $mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
+            ?? $request->getSchemeAndHttpHost();
 
         $dtos = $cache->get(
             $cacheKey, 

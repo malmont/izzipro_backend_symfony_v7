@@ -57,7 +57,7 @@ class FraisDePortCrudController extends BaseTenantCrudController
                 ]),
 
             ImageField::new('transporteur.logo', 'Logo du Transporteur')
-                ->setBasePath('/assets/uploads/Carrier/')
+                ->setBasePath('/bucket-simulator/assets/uploads/Carrier/')
                 ->onlyOnIndex(),
         ];
     }

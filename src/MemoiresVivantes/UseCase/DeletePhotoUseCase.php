@@ -16,7 +16,7 @@ class DeletePhotoUseCase
     {
         $em = $this->emProvider->getEntityManager();
         
-        $file = $this->projectDir . '/public/uploads/memoires/' . $photo->getFilePath();
+        $file = $this->projectDir . '/var/storage/public_bucket/uploads/memoires/' . $photo->getFilePath();
         if (file_exists($file)) {
             unlink($file);
         }

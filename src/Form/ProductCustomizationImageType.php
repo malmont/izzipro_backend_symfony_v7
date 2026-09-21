@@ -53,7 +53,7 @@ class ProductCustomizationImageType extends AbstractType
             $hasImage = $imageEntity && $imageEntity->getImagePath();
 
             if ($hasImage) {
-                $webPath = '/assets/uploads/products/' . $imageEntity->getImagePath();
+                $webPath = '/bucket-simulator/assets/uploads/products/' . $imageEntity->getImagePath();
                 $previewHtml = sprintf('<div style="margin-bottom: 5px;"><img src="%s" style="max-height: 80px; border-radius: 4px;" /></div>', $webPath);
                 $helpMessage = $previewHtml . '<span class="text-success">Image actuelle conservée.</span>';
             }
@@ -84,7 +84,7 @@ class ProductCustomizationImageType extends AbstractType
 
                 try {
                     $imageFile->move(
-                        'assets/uploads/products', 
+                        'var/storage/public_bucket/assets/uploads/products', 
                         $newFilename
                     );
                 } catch (\Exception $e) {

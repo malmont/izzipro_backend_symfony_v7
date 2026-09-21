@@ -14,6 +14,7 @@ use App\MemoiresVivantes\UseCase\GetBooksByUserUseCase;
 use App\MemoiresVivantes\UseCase\UpdateBookUseCase;
 use App\MemoiresVivantes\UseCase\DeleteBookUseCase;
 use App\MemoiresVivantes\UseCase\Payment\SyncBookPaymentStatusUseCase;
+use App\Services\MediaUrlResolver;
 use App\MemoiresVivantes\UseCase\Reservation\GetBookReservationsUseCase;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -34,8 +35,15 @@ class BookController extends AbstractController
         private readonly BookService $bookService,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly GetBookReservationsUseCase $getBookReservationsUseCase,
-        private readonly SyncBookPaymentStatusUseCase $syncBookPaymentStatusUseCase
+        private readonly SyncBookPaymentStatusUseCase $syncBookPaymentStatusUseCase,
+        private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
+
+    private function resolveHost(Request $request): string
+    {
+        return $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
+            ?? $request->getSchemeAndHttpHost();
+    }
 
     #[Route('', methods: ['GET'])]
     public function list(Request $request): JsonResponse
@@ -44,7 +52,7 @@ class BookController extends AbstractController
         if (!$user) return $this->json(['error' => 'Unauthorized'], 401);
 
         $books = $this->getBooksByUserUseCase->execute($user);
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         $em = $this->emProvider->getEntityManager();
         $orderRepo = $em->getRepository(BookPrintOrder::class);
 
@@ -76,14 +84,15 @@ class BookController extends AbstractController
         $contributorIdParam = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
         $targetContribId = $validatedContributorId ?: $contributorIdParam;
         $currentContributor = null;
-        $role = $request->query->get('role');
+        $requestedRole = $request->query->get('role');
+        $contributorRole = null;
 
         if ($targetContribId) {
             try {
                 $contribRepo = $em->getRepository(Contributor::class);
                 $contrib = $contribRepo->find(Uuid::fromString($targetContribId));
                 if ($contrib) {
-                    $role = $role ?: $contrib->getRole();
+                    $contributorRole = $contrib->getRole();
                     $currentContributor = [
                         'id' => (string) $contrib->getId(),
                         'firstName' => $contrib->getFirstName(),
@@ -95,9 +104,12 @@ class BookController extends AbstractController
             } catch (\Throwable) {}
         }
 
-        if ($role === null && $book->getType() === 'famille') {
-            $role = ($book->isParentsDeceased() || $book->isParentsNotParticipating()) ? 'enfant' : 'parent';
+        $defaultRole = null;
+        if ($book->getType() === 'famille') {
+            $defaultRole = ($book->isParentsDeceased() || $book->isParentsNotParticipating()) ? 'enfant' : 'parent';
         }
+
+        $filterRole = $requestedRole ?? $contributorRole ?? $defaultRole;
 
         $latestOrder = $em->getRepository(BookPrintOrder::class)->findOneBy(
             ['book' => $book],
@@ -112,9 +124,9 @@ class BookController extends AbstractController
                 ->andWhere('q.bookType = :bookType')
                 ->setParameter('bookType', $book->getType());
 
-            if ($role !== null) {
+            if ($filterRole !== null) {
                 $qb->andWhere('(q.role IS NULL OR q.role = :role)')
-                   ->setParameter('role', $role);
+                   ->setParameter('role', $filterRole);
             }
 
             $qb->orderBy('q.displayOrder', 'ASC');
@@ -123,7 +135,7 @@ class BookController extends AbstractController
             }
         }
 
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         return $this->json(new BookOutputDto(
             $book,
             $host,
@@ -158,7 +170,7 @@ class BookController extends AbstractController
         $data = json_decode($request->getContent(), true) ?? [];
         $book = $this->createBookUseCase->execute($user, new BookInputDto($data));
         
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         return $this->json(new BookOutputDto($book, $host), 201);
     }
 
@@ -174,7 +186,7 @@ class BookController extends AbstractController
         $data = json_decode($request->getContent(), true) ?? [];
         $book = $this->updateBookUseCase->execute($book, new BookInputDto($data));
         
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         return $this->json(new BookOutputDto($book, $host));
     }
 
@@ -207,7 +219,7 @@ class BookController extends AbstractController
 
         $this->bookService->updateCover($book, $file);
         
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         return $this->json(new BookOutputDto($book, $host));
     }
 
@@ -222,7 +234,7 @@ class BookController extends AbstractController
 
         $this->bookService->removeCover($book);
         
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         return $this->json(new BookOutputDto($book, $host));
     }
 

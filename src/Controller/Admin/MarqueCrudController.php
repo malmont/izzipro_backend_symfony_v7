@@ -26,8 +26,8 @@ class MarqueCrudController extends BaseTenantCrudController
             IdField::new('id')->onlyOnIndex(),
             TextField::new('titre', 'Titre de la marque'),
             ImageField::new('logosMarques', 'Logo')
-                ->setBasePath('assets/uploads/email-logos/')
-                ->setUploadDir('public/assets/uploads/email-logos/')
+                ->setBasePath('/bucket-simulator/assets/uploads/email-logos/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
             AssociationField::new('categories', 'Catégories')

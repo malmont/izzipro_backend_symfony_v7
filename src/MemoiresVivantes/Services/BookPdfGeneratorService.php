@@ -227,7 +227,7 @@ class BookPdfGeneratorService
         $coverImagePath = null;
         $coverImageExists = false;
         if ($book->getCoverPhotoPath()) {
-            $coverImagePath = $this->projectDir . '/public/uploads/memoires/' . $book->getCoverPhotoPath();
+            $coverImagePath = $this->projectDir . '/var/storage/public_bucket/uploads/memoires/' . $book->getCoverPhotoPath();
             $coverImageExists = file_exists($coverImagePath);
         }
 
@@ -301,7 +301,7 @@ class BookPdfGeneratorService
      */
     public function generateAndSaveBookPdfs(Book $book, string $coverStyle = 'biographic_split', ?string $authorName = null, ?string $bgColor = null): array
     {
-        $bookDir = $this->projectDir . '/public/uploads/memoires/books/' . $book->getId()->toRfc4122();
+        $bookDir = $this->projectDir . '/var/storage/public_bucket/uploads/memoires/books/' . $book->getId()->toRfc4122();
         if (!is_dir($bookDir)) {
             mkdir($bookDir, 0775, true);
         }

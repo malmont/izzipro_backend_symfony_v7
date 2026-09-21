@@ -106,8 +106,8 @@ class ProductCrudController extends BaseTenantCrudController
         
         yield FormField::addPanel('Média');
         yield ImageField::new('image', 'Image Principale')
-            ->setBasePath('assets/uploads/products/')
-            ->setUploadDir('public/assets/uploads/products/')
+            ->setBasePath('/bucket-simulator/assets/uploads/products/')
+            ->setUploadDir('var/storage/public_bucket/assets/uploads/products/')
             ->setUploadedFileNamePattern('[randomhash].[extension]')
             ->setRequired(false)
             ->setColumns('col-md-12');

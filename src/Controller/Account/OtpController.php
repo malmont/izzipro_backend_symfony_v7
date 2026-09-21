@@ -20,12 +20,18 @@ class OtpController extends AbstractController
     private TenantEntityManagerProvider $tenantEmProvider;
     private UrlGeneratorInterface $urlGenerator;
     private $session;
+    private ?\App\Services\MediaUrlResolver $mediaUrlResolver;
 
-    public function __construct(TenantEntityManagerProvider $tenantEmProvider, RequestStack $requestStack, UrlGeneratorInterface $urlGenerator)
-    {
+    public function __construct(
+        TenantEntityManagerProvider $tenantEmProvider, 
+        RequestStack $requestStack, 
+        UrlGeneratorInterface $urlGenerator,
+        ?\App\Services\MediaUrlResolver $mediaUrlResolver = null
+    ) {
         $this->tenantEmProvider = $tenantEmProvider;
         $this->session = $requestStack->getSession();
         $this->urlGenerator = $urlGenerator;
+        $this->mediaUrlResolver = $mediaUrlResolver;
     }
     
     #[Route('/account/otp', name: 'account_otp')]
@@ -76,8 +82,10 @@ class OtpController extends AbstractController
             ->getRepository(Entreprise::class)
             ->findOneBy([]);
 
-        // Construire le domaine pour le logo, par exemple : https://backend-strapi.online/assets/uploads/email-logos/
-        $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+        // Construire le domaine pour le logo (CDN si configuré ou hôte local)
+        $domain = ($this->mediaUrlResolver 
+            ? $this->mediaUrlResolver->getEmailLogosBaseUrl($request->getSchemeAndHttpHost()) 
+            : $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos') . '/';
         
         return $this->render('account/otp_verify.html.twig', [
             'error' => $error,

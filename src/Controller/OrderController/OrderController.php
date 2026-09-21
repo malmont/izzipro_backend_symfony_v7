@@ -25,6 +25,7 @@ use App\Services\TenantConnectionManager;
 use Psr\Log\LoggerInterface;
 use App\Services\OrderService\OrderMailerService;
 use App\Services\StripeService\StripeService;
+use App\Services\MediaUrlResolver;
 
 class OrderController extends AbstractController
 {
@@ -38,6 +39,7 @@ class OrderController extends AbstractController
     private OrderMailerService $orderMailerService;
     private StripeService $stripeService;
     private TenantConnectionManager $tenantManager;
+    private MediaUrlResolver $mediaUrlResolver;
 
     public function __construct(
         CreateOrderUseCase $createOrderUseCase,
@@ -49,7 +51,8 @@ class OrderController extends AbstractController
         LoggerInterface $logger,
         OrderMailerService $orderMailerService,
         StripeService $stripeService,
-        TenantConnectionManager $tenantManager
+        TenantConnectionManager $tenantManager,
+        MediaUrlResolver $mediaUrlResolver
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -61,6 +64,7 @@ class OrderController extends AbstractController
         $this->orderMailerService = $orderMailerService;
         $this->stripeService = $stripeService;
         $this->tenantManager = $tenantManager;
+        $this->mediaUrlResolver = $mediaUrlResolver;
     }
 
     #[Route('/api/order/create', name: 'order_create', methods: ['POST'])]
@@ -204,7 +208,7 @@ class OrderController extends AbstractController
             }
             try {
                 $locale = $request->query->get('locale', 'fr');
-                $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+                $domain = $this->mediaUrlResolver->getEmailLogosBaseUrl($request->getSchemeAndHttpHost()) . '/';
                 $this->orderMailerService->sendOrderConfirmation($result, $locale, $domain);
                 $this->orderMailerService->sendShippingNotification($result, $locale, $domain);
             } catch (\Exception $e) {
@@ -433,7 +437,7 @@ class OrderController extends AbstractController
 
             try {
                 $locale = $request->query->get('locale', 'fr');
-                $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+                $domain = $this->mediaUrlResolver->getEmailLogosBaseUrl($request->getSchemeAndHttpHost()) . '/';
                 $this->orderMailerService->sendOrderConfirmation($result, $locale, $domain);
                 $this->orderMailerService->sendShippingNotification($result, $locale, $domain);
             } catch (\Exception $e) {
@@ -579,7 +583,7 @@ class OrderController extends AbstractController
 
             try {
                 $locale = $request->query->get('locale', 'fr');
-                $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+                $domain = $this->mediaUrlResolver->getEmailLogosBaseUrl($request->getSchemeAndHttpHost()) . '/';
                 $this->orderMailerService->sendOrderConfirmation($result, $locale, $domain);
                 $this->orderMailerService->sendShippingNotification($result, $locale, $domain);
             } catch (\Exception $e) {
@@ -629,7 +633,7 @@ class OrderController extends AbstractController
             return $this->json(['error' => 'orderSource parameter is required'], JsonResponse::HTTP_BAD_REQUEST);
         }
         $days = $request->query->get('days');
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost());
         $cacheKey = 'orders_source_' . $orderSourceId . ($days ? '_days_' . (int)$days : '');
 
         $orderDTOs = $this->cache->get(
@@ -654,7 +658,7 @@ class OrderController extends AbstractController
             return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost());
         $locale = $request->getLocale();
         $cacheKeySuffix = 'orders_user_' . $user->getId() . '_' . $locale;
         $tags = ['orders_user', 'orders_user_' . $user->getId()];

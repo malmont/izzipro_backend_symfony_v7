@@ -37,8 +37,8 @@ class VideoCrudController extends BaseTenantCrudController
         yield IdField::new('id')->onlyOnIndex();
         yield TextField::new('titre', 'Titre de la vidéo');
         yield ImageField::new('imageDeFond', 'Miniature / Image de couverture')
-            ->setBasePath('assets/uploads/slider/')
-            ->setUploadDir('public/assets/uploads/slider/')
+            ->setBasePath('/bucket-simulator/assets/uploads/slider/')
+            ->setUploadDir('var/storage/public_bucket/assets/uploads/slider/')
             ->setUploadedFileNamePattern('[randomhash].[extension]')
             ->setRequired(false);
 
@@ -91,7 +91,7 @@ class VideoCrudController extends BaseTenantCrudController
 
         if ($uploadedFile instanceof UploadedFile && $uploadedFile->isValid()) {
             $projectDir = $this->getParameter('kernel.project_dir');
-            $uploadDir = $projectDir . '/public/assets/uploads/videos';
+            $uploadDir = $projectDir . '/var/storage/public_bucket/assets/uploads/videos';
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
             }

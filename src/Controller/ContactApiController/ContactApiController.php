@@ -27,7 +27,8 @@ class ContactApiController extends AbstractController
         private DeleteContactUseCase $deleteContactUseCase,
         private TenantCacheService $cache,
         private GetContactByIdUseCase $getContactByIdUseCase,
-        private ?\App\Services\ContactService\ContactMailerService $contactMailerService = null
+        private ?\App\Services\ContactService\ContactMailerService $contactMailerService = null,
+        private ?\App\Services\MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
     #[Route('', name: 'api_contact_list', methods: ['GET'])]
@@ -69,7 +70,9 @@ class ContactApiController extends AbstractController
 
         if ($this->contactMailerService) {
             $locale = $request->getLocale() ?: 'fr';
-            $domain = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos/';
+            $domain = ($this->mediaUrlResolver 
+                ? $this->mediaUrlResolver->getEmailLogosBaseUrl($request->getSchemeAndHttpHost()) 
+                : $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos') . '/';
             $this->contactMailerService->sendAdminNotification($contact, $locale, $domain);
             $this->contactMailerService->sendCustomerConfirmation($contact, $locale, $domain);
         }

@@ -54,9 +54,24 @@ class ReportController extends AbstractController
             throw new NotFoundHttpException('Rapport non généré ou indisponible.');
         }
 
-        $pdfPath = $this->projectDir . '/public' . $report->getFilePath();
+        $filePath = $report->getFilePath();
+        if (str_starts_with($filePath, '/esg/reports/')) {
+            $fileName = substr($filePath, 13);
+        } elseif (str_starts_with($filePath, 'reports/')) {
+            $fileName = substr($filePath, 8);
+        } else {
+            $fileName = basename($filePath);
+        }
+
+        $pdfPath = $this->projectDir . '/var/storage/esg/reports/' . $fileName;
         if (!file_exists($pdfPath)) {
-            throw new NotFoundHttpException('Le fichier PDF est introuvable sur le serveur.');
+            // Fallback checking legacy public path just in case
+            $legacyPath = $this->projectDir . '/public' . $report->getFilePath();
+            if (file_exists($legacyPath)) {
+                $pdfPath = $legacyPath;
+            } else {
+                throw new NotFoundHttpException('Le fichier PDF est introuvable sur le serveur.');
+            }
         }
 
         // Increment download count

@@ -7,6 +7,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use App\UseCase\GetAllHomeSliderUseCase\GetAllHomeSliderUseCase;
+use App\Services\MediaUrlResolver;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -14,13 +15,15 @@ class HomeSliderController extends AbstractController
 {
     public function __construct(
         private GetAllHomeSliderUseCase $getAllHomeSliderUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
     #[Route('/api/homeslider', name: 'get_home_slider', methods: ['GET'])]
     public function getHomeSlider(Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
+            ?? $request->getSchemeAndHttpHost();
         $locale = $request->query->get('locale', 'fr');
         
         $cacheKey = 'homeslider_all_' . $locale;

@@ -39,8 +39,8 @@ class TeamCrudController extends BaseTenantCrudController
         yield TextareaField::new('description', 'Description (Défaut)')->hideOnIndex();
         
         yield ImageField::new('image', 'Image de profil')
-            ->setBasePath('/assets/uploads/team/')
-            ->setUploadDir('public/assets/uploads/team')
+            ->setBasePath('/bucket-simulator/assets/uploads/team/')
+            ->setUploadDir('var/storage/public_bucket/assets/uploads/team')
             ->setUploadedFileNamePattern('[slug]-[timestamp].[extension]')
             ->setRequired(false);
 

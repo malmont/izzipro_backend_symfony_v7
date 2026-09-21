@@ -19,6 +19,7 @@ use App\MemoiresVivantes\UseCase\TranscribeAudioUseCase;
 use App\MemoiresVivantes\UseCase\UpdateChapterUseCase;
 use App\MemoiresVivantes\Services\HommageAggregationService;
 use App\MemoiresVivantes\Services\FamilleAggregationService;
+use App\Services\MediaUrlResolver;
 use App\Services\TenantEntityManagerProvider;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -44,8 +45,15 @@ class ChapterController extends AbstractController
         private readonly FamilleAggregationService $familleAggregationService,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly MessageBusInterface $messageBus,
-        private readonly \Psr\Log\LoggerInterface $logger
+        private readonly \Psr\Log\LoggerInterface $logger,
+        private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
+
+    private function resolveHost(Request $request): string
+    {
+        return $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
+            ?? $request->getSchemeAndHttpHost();
+    }
 
     #[Route('/books/{id}/chapters', methods: ['GET'])]
     public function listByBook(string $id, Request $request): JsonResponse
@@ -103,7 +111,7 @@ class ChapterController extends AbstractController
         }
 
         $chapters = $this->getChaptersByBookUseCase->execute($book);
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         return $this->json(array_map(function($c) use ($host, $questionsByTheme, $targetContribId, $currentContributor) {
             $themeQuestions = $questionsByTheme[$c->getTheme()] ?? [];
             return new ChapterOutputDto($c, $host, $themeQuestions, $targetContribId, $currentContributor);
@@ -125,7 +133,7 @@ class ChapterController extends AbstractController
         $tenantHost = $request->headers->get('X-Tenant-Host') ?? $request->getHost();
         $chapter = $this->createChapterUseCase->execute($book, new ChapterInputDto($data), $tenantHost);
         
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         return $this->json(new ChapterOutputDto($chapter, $host), 201);
     }
 
@@ -140,7 +148,7 @@ class ChapterController extends AbstractController
         $res = $this->validateSignatureOrGrant('CHAPTER_VIEW', $chapter, $request);
         if ($res !== null) return $res;
 
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
 
         $validatedContributorId = $request->attributes->get('validatedContributorId');
         $contributorIdParam = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
@@ -259,7 +267,7 @@ class ChapterController extends AbstractController
         $tenantHost = $request->headers->get('X-Tenant-Host') ?? $request->getHost();
         $chapter = $this->updateChapterUseCase->execute($chapter, $data, false, $tenantHost);
 
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
 
         $targetContribId = $validatedContributorId ?: ($request->query->get('contributorId') ?? $request->query->get('contributor_id'));
         $currentContributor = null;
@@ -406,7 +414,7 @@ class ChapterController extends AbstractController
 
         $this->addChapterPhotoUseCase->execute($chapter, $file, $request->request->all());
         
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         return $this->json(new ChapterOutputDto($chapter, $host));
     }
 
@@ -433,6 +441,7 @@ class ChapterController extends AbstractController
         $chapter->setPhotoLayout($photoPages);
         $em->flush();
 
+        $resolvedHost = $request ? $this->resolveHost($request) : '';
         return $this->json([
             'status' => 'Photo layout updated',
             'chapter_id' => $chapter->getId()->toRfc4122(),
@@ -440,7 +449,7 @@ class ChapterController extends AbstractController
             'photoPages' => $photoPages,
             'photo_layout' => $photoPages,
             'photoLayout' => $photoPages,
-            'chapter' => new ChapterOutputDto($chapter, $request->getSchemeAndHttpHost()),
+            'chapter' => new ChapterOutputDto($chapter, $resolvedHost),
         ]);
     }
 
@@ -503,7 +512,7 @@ class ChapterController extends AbstractController
 
         // Ensure upload directory exists
         $projectDir = $this->getParameter('kernel.project_dir');
-        $uploadDir = $projectDir . '/public/uploads/audio/';
+        $uploadDir = $projectDir . '/var/storage/public_bucket/uploads/audio/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0775, true);
         }
@@ -631,7 +640,7 @@ class ChapterController extends AbstractController
                 $this->logger->warning("ChapterController audio upload: questionIndex '{$questionIndex}' not found in chapter answers or contributor answers.");
             }
 
-            $host = $request->getSchemeAndHttpHost();
+            $host = $this->resolveHost($request);
             $absoluteAudioUrl = rtrim($host, '/') . '/uploads/audio/' . $newFilename;
 
             $responseData = [

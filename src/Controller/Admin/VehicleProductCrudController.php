@@ -41,7 +41,7 @@ class VehicleProductCrudController extends BaseTenantCrudController
         if ($pageName === Crud::PAGE_INDEX) {
             return [
                 IdField::new('id'),
-                ImageField::new('image', 'Image')->setBasePath('/assets/uploads/products/'),
+                ImageField::new('image', 'Image')->setBasePath('/bucket-simulator/assets/uploads/products/'),
                 TextField::new('name', 'Nom du Véhicule'),
                 TextField::new('brand', 'Marque'),
                 TextField::new('model', 'Modèle'),
@@ -136,8 +136,8 @@ class VehicleProductCrudController extends BaseTenantCrudController
                 ]),
 
             ImageField::new('image', 'Image Principale')
-                ->setBasePath('/assets/uploads/products/')
-                ->setUploadDir('public/assets/uploads/products/')
+                ->setBasePath('/bucket-simulator/assets/uploads/products/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/products/')
                 ->setUploadedFileNamePattern('[slug]-[timestamp].[extension]')
                 ->setRequired(false),
 

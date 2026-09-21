@@ -1,6 +1,7 @@
 <?php
 namespace App\Controller\BaniereStatiqueApiController;
 
+use App\Services\MediaUrlResolver;
 use App\Services\TenantCacheService;
 use App\UseCase\BaniereStatiqueUseCase\GetAllBaniereStatiquesUseCase;
 use App\UseCase\BaniereStatiqueUseCase\GetBaniereStatiqueByIdUseCase;
@@ -17,7 +18,8 @@ class BaniereStatiqueApiController extends AbstractController
     public function __construct(
         private GetAllBaniereStatiquesUseCase $getAllUseCase,
         private GetBaniereStatiqueByIdUseCase $getByIdUseCase,
-        private TenantCacheService $cache 
+        private TenantCacheService $cache,
+        private ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
     #[Route('', name: 'api_baniere_statique_list', methods: ['GET'])]
@@ -25,7 +27,8 @@ class BaniereStatiqueApiController extends AbstractController
     {
         $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'bannieres_statiques_all_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
+        $baseImageUrl = $this->mediaUrlResolver?->getSliderBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
 
         $dtos = $this->cache->get(
             $cacheKey,
@@ -45,7 +48,8 @@ class BaniereStatiqueApiController extends AbstractController
     {
         $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'baniere_statique_' . $id . '_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
+        $baseImageUrl = $this->mediaUrlResolver?->getSliderBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
 
         $dto = $this->cache->get(
             $cacheKey,

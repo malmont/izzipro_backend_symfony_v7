@@ -3,9 +3,17 @@
 namespace App\Services\EmailConfigurationService;
 
 use App\Entity\EmailConfiguration;
+use App\Services\MediaUrlResolver;
 
 class EmailLogoHelper
 {
+    private ?MediaUrlResolver $mediaUrlResolver;
+
+    public function __construct(?MediaUrlResolver $mediaUrlResolver = null)
+    {
+        $this->mediaUrlResolver = $mediaUrlResolver;
+    }
+
     /**
      * Génère l'URL complète (absolue) du logo utilisé dans les emails,
      * en tenant compte des URLs distantes ou uploads locaux.
@@ -27,8 +35,9 @@ class EmailLogoHelper
             return $logoPath;
         }
 
-        // Sinon on construit l'URL pour un fichier local mis bout à bout avec l'adresse du serveur
-        $cleanedHost = rtrim($baseUrl, '/');
+        // Sinon on construit l'URL pour un fichier local ou CDN
+        $host = $this->mediaUrlResolver ? $this->mediaUrlResolver->getPublicHost($baseUrl) : $baseUrl;
+        $cleanedHost = rtrim($host, '/');
         return $cleanedHost . '/assets/uploads/email-logos/' . $logoPath;
     }
 }

@@ -20,17 +20,20 @@ class FraisDePortController extends AbstractController
     private CreateFraisDePortUseCase $createFraisDePortUseCase;
     private DeleteFraisDePortUseCase $deleteFraisDePortUseCase;
     private TenantCacheService $cache;
+    private ?\App\Services\MediaUrlResolver $mediaUrlResolver;
 
     public function __construct(
         GetFraisDePortByCommandeUseCase $getFraisDePortByCommandeUseCase,
         CreateFraisDePortUseCase $createFraisDePortUseCase,
         DeleteFraisDePortUseCase $deleteFraisDePortUseCase,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        ?\App\Services\MediaUrlResolver $mediaUrlResolver = null
     ) {
         $this->getFraisDePortByCommandeUseCase = $getFraisDePortByCommandeUseCase;
         $this->createFraisDePortUseCase = $createFraisDePortUseCase;
         $this->deleteFraisDePortUseCase = $deleteFraisDePortUseCase;
         $this->cache = $cache;
+        $this->mediaUrlResolver = $mediaUrlResolver;
     }
 
     #[Route('/api/commandes/{id}/frais-de-port', name: 'create_frais_de_port', methods: ['POST'])]
@@ -57,7 +60,9 @@ class FraisDePortController extends AbstractController
     #[Route('/api/commandes/{id}/frais-de-port', name: 'get_frais_de_port', methods: ['GET'])]
     public function getFraisDePort(Commande $commande, Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->mediaUrlResolver 
+            ? $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost()) 
+            : $request->getSchemeAndHttpHost();
         $cacheKey = 'frais_de_port_commande_' . $commande->getId();
 
         $fraisDePort = $this->cache->get(

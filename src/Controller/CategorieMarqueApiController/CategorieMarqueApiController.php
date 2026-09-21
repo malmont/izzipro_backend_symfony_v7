@@ -27,7 +27,8 @@ class CategorieMarqueApiController extends AbstractController
         private GetMarquesByCategorieUseCase $getMarquesByCategorieUseCase,
         private UpdateCategorieMarqueUseCase $updateCategorieMarqueUseCase,
         private DeleteCategorieMarqueUseCase $deleteCategorieMarqueUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private ?\App\Services\MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
    #[Route('', name: 'api_categorie_marque_list', methods: ['GET'])]
@@ -35,7 +36,9 @@ class CategorieMarqueApiController extends AbstractController
     {
         $locale = $request->get('locale', 'fr');
         $cacheKey = 'categories_marque_all_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost(); 
+        $baseImageUrl = $this->mediaUrlResolver 
+            ? $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost()) 
+            : $request->getSchemeAndHttpHost(); 
 
         $categoriesDto = $this->cache->get(
             $cacheKey,
@@ -54,7 +57,9 @@ class CategorieMarqueApiController extends AbstractController
     {
         $locale = $request->get('locale', 'fr');
         $cacheKey = 'categorie_marque_' . $id . '_marques_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos'; 
+        $baseImageUrl = $this->mediaUrlResolver 
+            ? $this->mediaUrlResolver->getEmailLogosBaseUrl($request->getSchemeAndHttpHost()) 
+            : ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos'); 
         $marquesDto = $this->cache->get(
             $cacheKey,
             function(ItemInterface $item) use ($id, $locale, $baseImageUrl) {

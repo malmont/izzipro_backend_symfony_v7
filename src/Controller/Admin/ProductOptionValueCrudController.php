@@ -35,8 +35,8 @@ class ProductOptionValueCrudController extends BaseTenantCrudController
             TextField::new('code', 'Code technique / Référence (ex: LONG_SLEEVE, V_NECK)')->setColumns('col-md-6'),
             NumberField::new('priceDelta', 'Supplément prix (€ / $)')->setNumDecimals(2)->setColumns('col-md-6'),
             ImageField::new('imagePreview', 'Icône / Visuel d\'aperçu')
-                ->setBasePath('assets/uploads/options/')
-                ->setUploadDir('public/assets/uploads/options/')
+                ->setBasePath('/bucket-simulator/assets/uploads/options/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/options/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false)
                 ->setColumns('col-md-12'),

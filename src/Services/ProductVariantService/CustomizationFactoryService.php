@@ -9,19 +9,23 @@ use App\Dto\CustomizationGroupDto;
 use App\Dto\CustomizationValueDto;
 use App\Dto\CustomizationCombinationDto;
 use App\Services\TenantEntityManagerProvider; 
+use App\Services\MediaUrlResolver;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 class CustomizationFactoryService
 {
-   private TenantEntityManagerProvider $emProvider;
+    private TenantEntityManagerProvider $emProvider;
     private RequestStack $requestStack;
+    private MediaUrlResolver $mediaUrlResolver;
 
     public function __construct(
         TenantEntityManagerProvider $emProvider,
-        RequestStack $requestStack
+        RequestStack $requestStack,
+        MediaUrlResolver $mediaUrlResolver
     ) {
         $this->emProvider = $emProvider;
         $this->requestStack = $requestStack;
+        $this->mediaUrlResolver = $mediaUrlResolver;
     }
 
     public function createConfigForVariant(ProductVariant $variant): VariantConfigResponseDto
@@ -30,7 +34,8 @@ class CustomizationFactoryService
         $basePrice = $product->getPrice(); 
 
         $request = $this->requestStack->getCurrentRequest();
-        $host = $request ? $request->getSchemeAndHttpHost() : '';
+        $rawHost = $request ? $request->getSchemeAndHttpHost() : '';
+        $host = $this->mediaUrlResolver->getPublicHost($rawHost);
 
         $uniqueOptions = [];
         $uniqueValues = [];

@@ -26,8 +26,8 @@ class PresentationCrudController extends BaseTenantCrudController
             TextField::new('titre'),
             TextEditorField::new('texte')->hideOnIndex(),
             ImageField::new('image', 'Image')
-                 ->setBasePath('assets/uploads/slider/')
-                ->setUploadDir('public/assets/uploads/slider/')
+                 ->setBasePath('/bucket-simulator/assets/uploads/slider/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/slider/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
             CollectionField::new('translations', 'Traductions')

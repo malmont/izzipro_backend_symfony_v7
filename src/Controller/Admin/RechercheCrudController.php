@@ -33,8 +33,8 @@ class RechercheCrudController extends BaseTenantCrudController
                 ->setFormTypeOption('by_reference', false)
                 ->onlyOnForms(),
             ImageField::new('imageDeFond', 'Image de fond')
-                ->setBasePath('assets/uploads/slider/')
-                ->setUploadDir('public/assets/uploads/slider/')
+                ->setBasePath('/bucket-simulator/assets/uploads/slider/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/slider/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
         ];

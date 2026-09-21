@@ -3,11 +3,13 @@ namespace App\Controller\ServiceOfferApiController;
 
 use App\Dto\ServiceOfferInputDto;
 use App\Dto\ServiceOfferOutputDto;
+use App\Services\MediaUrlResolver;
 use App\Services\TenantCacheService;
-use App\UseCase\ServiceOfferUseCase\GetAllServiceOffersUseCase;
 use App\UseCase\ServiceOfferUseCase\CreateServiceOfferUseCase;
-use App\UseCase\ServiceOfferUseCase\UpdateServiceOfferUseCase;
 use App\UseCase\ServiceOfferUseCase\DeleteServiceOfferUseCase;
+use App\UseCase\ServiceOfferUseCase\GetAllServiceOffersUseCase;
+use App\UseCase\ServiceOfferUseCase\GetServiceOfferByIdUseCase;
+use App\UseCase\ServiceOfferUseCase\UpdateServiceOfferUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -15,7 +17,6 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Contracts\Cache\ItemInterface;
-use App\UseCase\ServiceOfferUseCase\GetServiceOfferByIdUseCase;
 
 #[Route('/api/service-offers')]
 class ServiceOfferApiController extends AbstractController
@@ -26,7 +27,8 @@ class ServiceOfferApiController extends AbstractController
         private UpdateServiceOfferUseCase $updateServiceOfferUseCase,
         private DeleteServiceOfferUseCase $deleteServiceOfferUseCase,
         private TenantCacheService $cache,
-        private GetServiceOfferByIdUseCase $getServiceOfferByIdUseCase
+        private GetServiceOfferByIdUseCase $getServiceOfferByIdUseCase,
+        private ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
    #[Route('', name: 'api_service_offer_list', methods: ['GET'])]
@@ -34,7 +36,8 @@ class ServiceOfferApiController extends AbstractController
     {
         $locale = $request->getLocale();
         $cacheKey = 'service_offers_all_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
+        $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
 
         $dtos = $this->cache->get(
             $cacheKey,
@@ -54,7 +57,8 @@ class ServiceOfferApiController extends AbstractController
     {
         $locale = $request->getLocale();
         $cacheKey = 'service_offer_' . $id . '_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
+        $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
 
         $dto = $this->cache->get(
             $cacheKey,
@@ -76,7 +80,8 @@ class ServiceOfferApiController extends AbstractController
     public function create(#[MapRequestPayload] ServiceOfferInputDto $dto, Request $request): JsonResponse
     {
         $serviceOffer = $this->createServiceOfferUseCase->execute($dto);
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
+        $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
         return $this->json(new ServiceOfferOutputDto($serviceOffer, $baseImageUrl), Response::HTTP_CREATED);
     }
 
@@ -84,8 +89,9 @@ class ServiceOfferApiController extends AbstractController
     public function update(int $id, #[MapRequestPayload] ServiceOfferInputDto $dto, Request $request): JsonResponse
     {
         $serviceOffer = $this->updateServiceOfferUseCase->execute($id, $dto);
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/email-logos';
-        return $this->json(new ServiceOfferOutputDto($serviceOffer));
+        $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
+        return $this->json(new ServiceOfferOutputDto($serviceOffer, $baseImageUrl));
     }
 
     #[Route('/{id}', name: 'api_service_offer_delete', methods: ['DELETE'])]

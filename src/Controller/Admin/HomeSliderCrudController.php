@@ -34,8 +34,8 @@ class HomeSliderCrudController extends BaseTenantCrudController
                 ->setEntryType(HomeSliderTranslationType::class)
                 ->setFormTypeOption('by_reference', false)
                 ->onlyOnForms(),
-            ImageField::new('image')->setBasePath('assets/uploads/slider/')
-                                    ->setUploadDir('public/assets/uploads/slider/')
+            ImageField::new('image')->setBasePath('/bucket-simulator/assets/uploads/slider/')
+                                    ->setUploadDir('var/storage/public_bucket/assets/uploads/slider/')
                                     ->setUploadedFileNamePattern('[randomhash].[extension]')
                                     ->setRequired(false),
             BooleanField::new('isDiplayed', 'Display'),                        

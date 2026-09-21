@@ -18,7 +18,7 @@ class ChapterService
     {
         $em = $this->emProvider->getEntityManager();
         
-        $uploadDir = $this->projectDir . '/public/uploads/memoires/';
+        $uploadDir = $this->projectDir . '/var/storage/public_bucket/uploads/memoires/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0775, true);
         }

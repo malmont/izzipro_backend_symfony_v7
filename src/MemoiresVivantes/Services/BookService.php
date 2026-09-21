@@ -17,7 +17,7 @@ class BookService
     {
         $em = $this->emProvider->getEntityManager();
         
-        $uploadDir = $this->projectDir . '/public/uploads/memoires/';
+        $uploadDir = $this->projectDir . '/var/storage/public_bucket/uploads/memoires/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0775, true);
         }
@@ -42,7 +42,7 @@ class BookService
     {
         $em = $this->emProvider->getEntityManager();
         if ($book->getCoverPhotoPath()) {
-            $file = $this->projectDir . '/public/uploads/memoires/' . $book->getCoverPhotoPath();
+            $file = $this->projectDir . '/var/storage/public_bucket/uploads/memoires/' . $book->getCoverPhotoPath();
             if (file_exists($file)) {
                 unlink($file);
             }

@@ -11,7 +11,8 @@ class EstimateBookPrintUseCase
 {
     public function __construct(
         private readonly LuluPrintService $luluPrintService,
-        private readonly BookPdfGeneratorService $pdfGeneratorService
+        private readonly BookPdfGeneratorService $pdfGeneratorService,
+        private readonly string $projectDir
     ) {}
 
     /**
@@ -32,7 +33,7 @@ class EstimateBookPrintUseCase
         }
 
         // 1. Calcul du nombre de pages estimé ou réel
-        $bookDir = '/public/uploads/memoires/books/' . $book->getId()->toRfc4122();
+        $bookDir = $this->projectDir . '/var/storage/public_bucket/uploads/memoires/books/' . $book->getId()->toRfc4122();
         $interiorPdf = $bookDir . '/interior.pdf';
         
         $pageCount = 64;

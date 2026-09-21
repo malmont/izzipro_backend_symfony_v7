@@ -1,6 +1,7 @@
 <?php
 namespace App\Controller\FeatureController;
 
+use App\Services\MediaUrlResolver;
 use App\UseCase\FeatureUseCase\GetFeaturesUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -15,12 +16,14 @@ class FeatureController extends AbstractController
     public function __invoke(
         GetFeaturesUseCase $useCase,
         Request $request,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        ?MediaUrlResolver $mediaUrlResolver = null
     ): JsonResponse {
         // On force la lecture depuis les paramètres de la requête
         $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'features_all_' . $locale;
-        $host = $request->getSchemeAndHttpHost();
+        $host = $mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
+            ?? $request->getSchemeAndHttpHost();
 
         $dtos = $cache->get(
             $cacheKey,

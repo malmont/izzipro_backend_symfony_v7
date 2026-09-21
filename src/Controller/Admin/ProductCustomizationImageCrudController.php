@@ -30,8 +30,8 @@ class ProductCustomizationImageCrudController extends BaseTenantCrudController
         return [
             IdField::new('id')->hideOnForm(),
             ImageField::new('imagePath', 'Rendu Visuel Configuré')
-                ->setBasePath('assets/uploads/customization/')
-                ->setUploadDir('public/assets/uploads/customization/')
+                ->setBasePath('/bucket-simulator/assets/uploads/customization/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/customization/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(true)
                 ->setColumns('col-md-12'),

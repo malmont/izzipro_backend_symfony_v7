@@ -7,6 +7,7 @@ use App\UseCase\TeamUseCase\GetTeamUseCase;
 use App\UseCase\TeamUseCase\GetTeamListUseCase;
 use App\UseCase\TeamUseCase\UpdateTeamUseCase;
 use App\UseCase\TeamUseCase\DeleteTeamUseCase;
+use App\Services\MediaUrlResolver;
 use App\Services\TenantCacheService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,15 +23,22 @@ class TeamController extends AbstractController
         private GetTeamListUseCase $getTeamListUseCase,
         private UpdateTeamUseCase $updateTeamUseCase,
         private DeleteTeamUseCase $deleteTeamUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private ?MediaUrlResolver $mediaUrlResolver = null
     ) {
+    }
+
+    private function resolveHost(Request $request): string
+    {
+        return $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
+            ?? $request->getSchemeAndHttpHost();
     }
 
     #[Route('/api/team', name: 'api_team_create', methods: ['POST'])]
     public function create(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true) ?? [];
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         $locale = $request->get('locale', 'fr');
 
         $teamDto = $this->createTeamUseCase->execute($data, $host, $locale);
@@ -41,7 +49,7 @@ class TeamController extends AbstractController
     #[Route('/api/team', name: 'api_team_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         $locale = $request->get('locale', 'fr');
 
         $cacheKey = "teams_list_{$locale}";
@@ -62,7 +70,7 @@ class TeamController extends AbstractController
     #[Route('/api/team/{id}', name: 'api_team_get', methods: ['GET'])]
     public function getTeam(int $id, Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         $locale = $request->get('locale', 'fr');
 
         $cacheKey = "team_{$id}_{$locale}";
@@ -84,7 +92,7 @@ class TeamController extends AbstractController
     public function update(int $id, Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true) ?? [];
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         $locale = $request->get('locale', 'fr');
 
         $teamDto = $this->updateTeamUseCase->execute($id, $data, $host, $locale);

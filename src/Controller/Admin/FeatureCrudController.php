@@ -23,8 +23,8 @@ class FeatureCrudController extends BaseTenantCrudController
             ->setFormTypeOption('by_reference', false)
             ->onlyOnForms();
         yield ImageField::new('iconPath', 'Icône')
-            ->setBasePath('assets/uploads/icons')
-            ->setUploadDir('public/assets/uploads/icons')
+            ->setBasePath('/bucket-simulator/assets/uploads/icons/')
+            ->setUploadDir('var/storage/public_bucket/assets/uploads/icons')
             ->setUploadedFileNamePattern('[slug]-[timestamp].[extension]')
             ->setRequired(false);
     }

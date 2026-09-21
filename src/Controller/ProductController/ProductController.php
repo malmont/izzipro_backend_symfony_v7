@@ -17,6 +17,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Services\MediaUrlResolver;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -33,6 +34,7 @@ class ProductController extends AbstractController
     private TenantCacheService $cache;
     private GetProductByIdUseCase $getProductByIdUseCase; 
     private GetProductBySlugUseCase $getProductBySlugUseCase;
+    private ?MediaUrlResolver $mediaUrlResolver;
 
     public function __construct(
         GetProductsByCommandeUseCase $getProductsByCommandeUseCase,
@@ -44,7 +46,8 @@ class ProductController extends AbstractController
         GetProductsByOfferUseCase $getProductsByOfferUseCase,
         TenantCacheService $cache,
         GetProductByIdUseCase $getProductByIdUseCase,
-        GetProductBySlugUseCase $getProductBySlugUseCase
+        GetProductBySlugUseCase $getProductBySlugUseCase,
+        ?MediaUrlResolver $mediaUrlResolver = null
     ) {
         $this->getProductsByCommandeUseCase = $getProductsByCommandeUseCase;
         $this->createProductByCommandeUseCase = $createProductByCommandeUseCase;
@@ -56,12 +59,19 @@ class ProductController extends AbstractController
         $this->cache = $cache;
         $this->getProductByIdUseCase = $getProductByIdUseCase;
         $this->getProductBySlugUseCase = $getProductBySlugUseCase;
+        $this->mediaUrlResolver = $mediaUrlResolver;
+    }
+
+    private function resolveHost(Request $request): string
+    {
+        return $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
+            ?? $request->getSchemeAndHttpHost();
     }
 
     #[Route('/api/commandes/{id}/products', name: 'get_products_by_commande', methods: ['GET'])]
     public function getProductsByCommande(Commande $commande, Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         $cacheKey = 'products_by_commande_' . $commande->getId();
 
         $products = $this->cache->get(
@@ -86,7 +96,7 @@ class ProductController extends AbstractController
             $uploadDir = $this->getParameter('kernel.project_dir') . '/public/assets/uploads/products/';
             $product = $this->createProductByCommandeUseCase->execute($commande, $request, $uploadDir);
 
-            $host = $request->getSchemeAndHttpHost();
+            $host = $this->resolveHost($request);
             $productDTO = new ProductOutputDTO($product, $host);
 
             return $this->json($productDTO, JsonResponse::HTTP_CREATED);
@@ -109,7 +119,7 @@ class ProductController extends AbstractController
     #[Route('/api/products', name: 'get_all_products', methods: ['GET'])]
     public function getAllProducts(Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         $locale = $request->query->get('locale', 'fr'); 
         $cacheKey = 'all_products_' . $locale;
 
@@ -136,7 +146,7 @@ class ProductController extends AbstractController
     )]
     public function getProductsByOffer(string $offer, Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         $locale = $request->query->get('locale', 'fr'); 
         $cacheKey = 'products_by_offer_' . $offer . '_' . $locale;
 
@@ -157,7 +167,7 @@ class ProductController extends AbstractController
    #[Route('/api/landingpage', name: 'get_landing_page_products', methods: ['GET'])]
     public function getLandingPageProducts(Request $request): JsonResponse
     {
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->resolveHost($request);
         $locale = $request->query->get('locale', 'fr');
         $products = $this->getLandingPageProductsUseCase->execute($host, $locale); 
 
@@ -168,7 +178,7 @@ class ProductController extends AbstractController
     public function getProductById(int $id, Request $request): JsonResponse
     {
         try {
-            $host = $request->getSchemeAndHttpHost();
+            $host = $this->resolveHost($request);
             $locale = $request->query->get('locale', 'fr');
             $product = $this->getProductByIdUseCase->execute($id, $host, $locale); 
             return $this->json($product, JsonResponse::HTTP_OK);
@@ -181,7 +191,7 @@ class ProductController extends AbstractController
     public function getProductBySlug(string $slug, Request $request): JsonResponse
     {
         try {
-            $host = $request->getSchemeAndHttpHost();
+            $host = $this->resolveHost($request);
             $locale = $request->query->get('locale', 'fr');
             $product = $this->getProductBySlugUseCase->execute($slug, $host, $locale); 
             return $this->json($product, JsonResponse::HTTP_OK);

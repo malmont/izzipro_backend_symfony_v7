@@ -160,8 +160,10 @@ class BookPaymentService
                     $logoPathOnDisk = $localPath;
                     $logoCid = 'email_logo';
                 }
-                $backendDomain = $_ENV['BACKEND_BASE_DOMAIN'] ?? 'backend-strapi.online';
-                $logoUrl = 'https://' . $backendDomain . '/assets/uploads/email-logos/' . ltrim($logoFileName, '/');
+                $publicBase = !empty($_ENV['STORAGE_PUBLIC_URL'])
+                    ? rtrim($_ENV['STORAGE_PUBLIC_URL'], '/')
+                    : ('https://' . ($_ENV['BACKEND_BASE_DOMAIN'] ?? 'backend-strapi.online'));
+                $logoUrl = $publicBase . '/assets/uploads/email-logos/' . ltrim($logoFileName, '/');
             }
         }
 
@@ -387,8 +389,10 @@ class BookPaymentService
                     $logoPathOnDisk = $localPath;
                     $logoCid = 'invoice_logo';
                 }
-                $backendDomain = $_ENV['BACKEND_BASE_DOMAIN'] ?? 'backend-strapi.online';
-                $logoUrl = 'https://' . $backendDomain . '/assets/uploads/email-logos/' . ltrim($logoFileName, '/');
+                $publicBase = !empty($_ENV['STORAGE_PUBLIC_URL'])
+                    ? rtrim($_ENV['STORAGE_PUBLIC_URL'], '/')
+                    : ('https://' . ($_ENV['BACKEND_BASE_DOMAIN'] ?? 'backend-strapi.online'));
+                $logoUrl = $publicBase . '/assets/uploads/email-logos/' . ltrim($logoFileName, '/');
             }
         }
 

@@ -54,8 +54,8 @@ class EmailConfigurationCrudController extends BaseTenantCrudController
             IdField::new('id')->hideOnForm(),
             TextField::new('fromEmail', 'Email d\'envoi'),
             ImageField::new('logo', 'Logo')
-                ->setBasePath('assets/uploads/email-logos/')
-                ->setUploadDir('public/assets/uploads/email-logos/')
+                ->setBasePath('/bucket-simulator/assets/uploads/email-logos/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/email-logos/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
             CollectionField::new('translations', 'Traductions')

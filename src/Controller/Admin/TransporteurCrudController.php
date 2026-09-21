@@ -22,8 +22,8 @@ class TransporteurCrudController extends BaseTenantCrudController
             IdField::new('id')->hideOnForm(),
             TextField::new('name', 'Nom'),
             TextField::new('contact', 'Contact'),
-            ImageField::new('logo')->setBasePath('assets/uploads/Carrier/')
-                ->setUploadDir('public/assets/uploads/Carrier/')
+            ImageField::new('logo')->setBasePath('/bucket-simulator/assets/uploads/Carrier/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/Carrier/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
  

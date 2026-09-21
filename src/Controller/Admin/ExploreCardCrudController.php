@@ -50,8 +50,8 @@ class ExploreCardCrudController extends BaseTenantCrudController
             ->onlyOnForms();
 
         yield ImageField::new('imagePath', 'Image de la carte')
-            ->setBasePath('/assets/uploads/explore/')
-            ->setUploadDir('public/assets/uploads/explore')
+            ->setBasePath('/bucket-simulator/assets/uploads/explore/')
+            ->setUploadDir('var/storage/public_bucket/assets/uploads/explore')
             ->setUploadedFileNamePattern('[slug]-[timestamp].[extension]')
             ->setRequired(false)
             ->onlyOnForms();

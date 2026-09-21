@@ -16,7 +16,7 @@ class DeleteBookUseCase
     {
         $em = $this->emProvider->getEntityManager();
         
-        $uploadDir = $this->projectDir . '/public/uploads/memoires/';
+        $uploadDir = $this->projectDir . '/var/storage/public_bucket/uploads/memoires/';
         
         // Supprimer la cover
         if ($book->getCoverPhotoPath()) {

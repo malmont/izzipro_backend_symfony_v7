@@ -25,8 +25,8 @@ class CarrierCrudController extends BaseTenantCrudController
             TextField::new('description'),
             TextField::new('carrierAccountId', 'ID Compte Transporteur'),
             MoneyField::new('price', 'Prix')->setCurrency('USD'),
-            ImageField::new('photo')->setBasePath('assets/uploads/Carrier/')
-                ->setUploadDir('public/assets/uploads/Carrier/')
+            ImageField::new('photo')->setBasePath('/bucket-simulator/assets/uploads/Carrier/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/Carrier/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
             CollectionField::new('translations', 'Traductions')

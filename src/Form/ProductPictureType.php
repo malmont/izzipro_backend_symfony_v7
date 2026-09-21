@@ -15,7 +15,7 @@ class ProductPictureType extends AbstractType
         $builder
             ->add('imageUrl', FileUploadType::class, [
                 'label' => 'Image',
-                'upload_dir' => 'public/assets/uploads/products/',
+                'upload_dir' => 'var/storage/public_bucket/assets/uploads/products/',
                 'allow_delete' => true,
                 'attr' => ['accept' => 'image/*'],
             ]);

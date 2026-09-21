@@ -36,7 +36,22 @@ class ExploreCardDto
             $image = null;
         }
         $dto->imageUrl    = $image;
-        $dto->videoUrl    = $entity->getVideoPath();
+        
+        $videoPath = $entity->getVideoPath();
+        if (str_starts_with((string)$videoPath, 'http')) {
+            $video = $videoPath;
+        } else if ($videoPath) {
+            $cleanedHost = rtrim($host, '/');
+            $cleanVideoPath = ltrim($videoPath, '/');
+            if (str_starts_with($cleanVideoPath, 'assets/')) {
+                $video = $cleanedHost . '/' . $cleanVideoPath;
+            } else {
+                $video = $cleanedHost . '/assets/uploads/explore/' . $cleanVideoPath;
+            }
+        } else {
+            $video = null;
+        }
+        $dto->videoUrl    = $video;
 
         $dto->standardTitle  = $translation?->getStandardTitle() ?? $entity->getStandardTitle();
         $dto->differentTitle = $translation?->getDifferentTitle() ?? $entity->getDifferentTitle();

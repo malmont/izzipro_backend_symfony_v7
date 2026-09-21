@@ -10,6 +10,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Services\MediaUrlResolver;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -21,17 +22,20 @@ class CategoryController extends AbstractController
     private CountProductsByCategoryUseCase $countProductsByCategoryUseCase;
     private TenantEntityManagerProvider $emProvider;
     private TenantCacheService $cache;
+    private ?MediaUrlResolver $mediaUrlResolver;
 
     public function __construct(
         GetProductsByCategoryUseCase $getProductsByCategoryUseCase,
         CountProductsByCategoryUseCase $countProductsByCategoryUseCase,
         TenantEntityManagerProvider $emProvider,
-        TenantCacheService $cache
+        TenantCacheService $cache,
+        ?MediaUrlResolver $mediaUrlResolver = null
     ) {
         $this->getProductsByCategoryUseCase = $getProductsByCategoryUseCase;
         $this->countProductsByCategoryUseCase = $countProductsByCategoryUseCase;
         $this->emProvider = $emProvider;
         $this->cache = $cache;
+        $this->mediaUrlResolver = $mediaUrlResolver;
     }
 
     #[Route('/api/products/by-category', name: 'get_products_by_category', methods: ['GET'], priority: 10)]
@@ -65,7 +69,8 @@ class CategoryController extends AbstractController
             'isPos'      => $isPos,
             'locale'     => $locale,
         ]));
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
+            ?? $request->getSchemeAndHttpHost();
         $cacheData = $this->cache->get(
             $cacheKey,
             function (ItemInterface $item) use ($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos, $host, $locale) {
@@ -110,7 +115,8 @@ class CategoryController extends AbstractController
     {
         $locale = $request->get('locale', 'fr');
         $cacheKey = 'categories_all_' . $locale;
-        $host = $request->getSchemeAndHttpHost();
+        $host = $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
+            ?? $request->getSchemeAndHttpHost();
 
         $categoriesArray = $this->cache->get(
             $cacheKey,

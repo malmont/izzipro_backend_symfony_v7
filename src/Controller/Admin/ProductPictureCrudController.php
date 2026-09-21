@@ -16,8 +16,8 @@ class ProductPictureCrudController extends BaseTenantCrudController
     {
         return [
             ImageField::new('imageUrl', 'Image')
-                ->setBasePath('assets/uploads/products/')
-                ->setUploadDir('public/assets/uploads/products/')
+                ->setBasePath('/bucket-simulator/assets/uploads/products/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/products/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(true),
         ];

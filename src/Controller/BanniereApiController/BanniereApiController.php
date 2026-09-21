@@ -10,6 +10,7 @@ use App\UseCase\BanniereUseCase\CreateBanniereUseCase;
 use App\UseCase\BanniereUseCase\UpdateBanniereUseCase;
 use App\UseCase\BanniereUseCase\DeleteBanniereUseCase;
 use App\UseCase\BanniereUseCase\GetBanniereByIdUseCase;
+use App\Services\MediaUrlResolver;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -27,7 +28,8 @@ class BanniereApiController extends AbstractController
         private UpdateBanniereUseCase $updateBanniereUseCase,
         private DeleteBanniereUseCase $deleteBanniereUseCase,
         private TenantCacheService $cache,
-        private GetBanniereByIdUseCase $getBanniereByIdUseCase
+        private GetBanniereByIdUseCase $getBanniereByIdUseCase,
+        private ?MediaUrlResolver $mediaUrlResolver = null
     ) {
     }
 
@@ -36,7 +38,8 @@ class BanniereApiController extends AbstractController
     {
         $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'bannieres_all_' . $locale; 
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
+        $baseImageUrl = $this->mediaUrlResolver?->getSliderBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
 
         $dtos = $this->cache->get(
             $cacheKey,
@@ -55,7 +58,8 @@ class BanniereApiController extends AbstractController
     {
         $locale = $request->query->get('locale', 'fr');
         $cacheKey = 'banniere_' . $id . '_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
+        $baseImageUrl = $this->mediaUrlResolver?->getSliderBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
 
         $dto = $this->cache->get(
             $cacheKey,
@@ -77,7 +81,8 @@ class BanniereApiController extends AbstractController
     public function create(#[MapRequestPayload] BanniereInputDto $dto, Request $request): JsonResponse
     {
         $banniere = $this->createBanniereUseCase->execute($dto);
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets//uploads/slider';
+        $baseImageUrl = $this->mediaUrlResolver?->getSliderBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
         $outputDto = new BanniereOutputDto($banniere, $baseImageUrl);
 
         return $this->json($outputDto, Response::HTTP_CREATED);
@@ -87,7 +92,8 @@ class BanniereApiController extends AbstractController
     public function update(int $id, #[MapRequestPayload] BanniereInputDto $dto, Request $request): JsonResponse
     {
         $banniere = $this->updateBanniereUseCase->execute($id, $dto);
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets//uploads/slider';
+        $baseImageUrl = $this->mediaUrlResolver?->getSliderBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
         $outputDto = new BanniereOutputDto($banniere, $baseImageUrl);
 
         return $this->json($outputDto, Response::HTTP_OK);

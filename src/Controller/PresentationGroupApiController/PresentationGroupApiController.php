@@ -8,6 +8,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Services\MediaUrlResolver;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -17,7 +18,8 @@ class PresentationGroupApiController extends AbstractController
     public function __construct(
         private GetAllPresentationGroupsUseCase $getAllUseCase,
         private GetPresentationGroupByIdUseCase $getByIdUseCase,
-        private TenantCacheService $cache
+        private TenantCacheService $cache,
+        private ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
     #[Route('', name: 'api_presentation_group_list', methods: ['GET'])]
@@ -25,7 +27,8 @@ class PresentationGroupApiController extends AbstractController
     {
         $locale = $request->query->get('locale', 'fr'); 
         $cacheKey = 'presentation_groups_all_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
+        $baseImageUrl = $this->mediaUrlResolver?->getSliderBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
 
         $dtos = $this->cache->get(
             $cacheKey,
@@ -45,7 +48,8 @@ class PresentationGroupApiController extends AbstractController
         {
         $locale = $request->query->get('locale', 'fr'); 
         $cacheKey = 'presentation_group_' . $id . '_' . $locale;
-        $baseImageUrl = $request->getSchemeAndHttpHost() . '/assets/uploads/slider';
+        $baseImageUrl = $this->mediaUrlResolver?->getSliderBaseUrl($request->getSchemeAndHttpHost())
+            ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
 
         $dto = $this->cache->get(
             $cacheKey,

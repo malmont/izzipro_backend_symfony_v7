@@ -23,8 +23,8 @@ class CategoriesCrudController extends BaseTenantCrudController
         return [
             IdField::new('id')->hideOnForm(),
             TextEditorField::new('description'),
-            ImageField::new('image')->setBasePath('assets/uploads/categories/')
-                ->setUploadDir('public/assets/uploads/categories/')
+            ImageField::new('image')->setBasePath('/bucket-simulator/assets/uploads/categories/')
+                ->setUploadDir('var/storage/public_bucket/assets/uploads/categories/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),
             CollectionField::new('translations', 'Traductions')
