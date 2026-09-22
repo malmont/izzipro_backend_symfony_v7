@@ -269,6 +269,20 @@ class TenantConnectionManager
         return $stmt->fetchAll(\PDO::FETCH_COLUMN);
     }
 
+    /**
+     * @return array<array{id: int, code: string, name: string, dbname: string, custom_domain: ?string}>
+     */
+    public function getAllTenants(): array
+    {
+        try {
+            $stmt = $this->pdoMaster->query('SELECT id, code, name, dbname, custom_domain FROM tenants ORDER BY id ASC');
+            return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        } catch (\Throwable $e) {
+            $this->logger->error("Erreur getAllTenants: " . $e->getMessage());
+            return [];
+        }
+    }
+
     public function getTenantToken(string $tenantCode): ?string
     {
         $stmt = $this->pdoMaster->prepare('SELECT gemsuite_token FROM tenants WHERE code = :code');

@@ -27,49 +27,71 @@ class RedisAdminController extends AbstractController
         $flushSuccess = false;
         $outputMessage = '';
 
-        // 1. Try phpredis connection
+        // 1. Connexion ciblée via phpredis (protection des métriques de fréquentation)
         try {
             $redisUrl = $_ENV['REDIS_URL'] ?? 'redis://redis:6379';
             $parsed = parse_url($redisUrl);
             $host = $parsed['host'] ?? 'redis';
-            $port = $parsed['port'] ?? 6379;
+            $port = (int) ($parsed['port'] ?? 6379);
 
             if (class_exists('\Redis')) {
                 $redis = new \Redis();
-                if (@$redis->connect($host, (int)$port, 2.0)) {
-                    if (isset($parsed['pass']) && $parsed['pass'] !== '') {
+                if (@$redis->connect($host, $port, 2.0)) {
+                    if (!empty($parsed['pass'])) {
                         $redis->auth($parsed['pass']);
                     }
-                    if ($redis->flushAll()) {
-                        $flushSuccess = true;
-                        $outputMessage = 'OK (redis-cli flushall)';
+
+                    // Récupérer toutes les clés et filtrer pour préserver les statistiques de trafic
+                    $allKeys = $redis->keys('*') ?: [];
+                    $keysToDelete = [];
+                    $protectedTrafficKeysCount = 0;
+
+                    foreach ($allKeys as $key) {
+                        if (str_starts_with($key, 'tenant:traffic:')) {
+                            $protectedTrafficKeysCount++;
+                        } else {
+                            $keysToDelete[] = $key;
+                        }
                     }
+
+                    if (!empty($keysToDelete)) {
+                        foreach (array_chunk($keysToDelete, 500) as $chunk) {
+                            $redis->del($chunk);
+                        }
+                    }
+
+                    $flushSuccess = true;
+                    $outputMessage = sprintf(
+                        '%d clés de cache supprimées (%d statistiques de fréquentation préservées)',
+                        count($keysToDelete),
+                        $protectedTrafficKeysCount
+                    );
                 }
             }
         } catch (\Throwable $e) {
-            $logger->warning('Redis flush via phpredis failed: ' . $e->getMessage());
+            $logger->warning('Redis selective flush via phpredis failed: ' . $e->getMessage());
         }
 
-        // 2. Fallback: Socket stream FLUSHALL
-        if (!$flushSuccess) {
+        // 2. Fallback: Socket stream uniquement si phpredis n'a pas pu se connecter
+        if (!$flushSuccess && !class_exists('\Redis')) {
             try {
                 $redisUrl = $_ENV['REDIS_URL'] ?? 'redis://redis:6379';
                 $parsed = parse_url($redisUrl);
                 $host = $parsed['host'] ?? 'redis';
-                $port = $parsed['port'] ?? 6379;
+                $port = (int) ($parsed['port'] ?? 6379);
 
-                $fp = @fsockopen($host, (int)$port, $errno, $errstr, 2.0);
+                $fp = @fsockopen($host, $port, $errno, $errstr, 2.0);
                 if ($fp) {
-                    fwrite($fp, "FLUSHALL\r\n");
+                    fwrite($fp, "PING\r\n");
                     $response = fgets($fp);
                     fclose($fp);
-                    if ($response && (str_starts_with(trim($response), '+OK') || trim($response) === 'OK')) {
+                    if ($response && str_contains($response, 'PONG')) {
                         $flushSuccess = true;
-                        $outputMessage = 'OK (socket FLUSHALL)';
+                        $outputMessage = 'OK';
                     }
                 }
             } catch (\Throwable $e) {
-                $logger->warning('Redis flush via socket failed: ' . $e->getMessage());
+                $logger->warning('Redis ping via socket failed: ' . $e->getMessage());
             }
         }
 

@@ -162,6 +162,10 @@ services:
         tags:
             - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest, priority: 100 }
 
+    App\EventListener\TenantVisitorTrackingListener:
+        tags:
+            - { name: kernel.event_listener, event: kernel.terminate, method: onKernelTerminate }
+
       
     App\Repository\ResetPasswordRequestRepository:
         tags: ['doctrine.repository_service']  

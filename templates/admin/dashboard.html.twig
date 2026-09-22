@@ -174,6 +174,256 @@
         </div>
     </div>
 
+    {# ------------------ CURRENT TENANT VISITOR & TRAFFIC ANALYTICS ------------------ #}
+    <div class="row mb-3 mt-2">
+        <div class="col-12 d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+                <h5 class="font-weight-bold text-dark mb-1">
+                    <i class="fas fa-chart-line text-primary mr-2"></i>Fréquentation & Visiteurs : <span class="text-primary">{{ tenantReport.tenant_name }}</span>
+                </h5>
+                <p class="text-muted small mb-0">
+                    Statistiques de fréquentation en temps réel et pages les plus visitées sur <strong>{{ tenantReport.domain }}</strong>
+                </p>
+            </div>
+            <div class="d-flex align-items-center mt-2 mt-sm-0">
+                <span class="badge bg-white text-dark shadow-sm border px-3 py-2 rounded-pill mr-2">
+                    <span class="live-dot mr-1"></span> Suivi Temps Réel (Redis)
+                </span>
+                <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 shadow-sm" type="button" data-toggle="collapse" data-target="#allTenantsCollapse" aria-expanded="false" aria-controls="allTenantsCollapse">
+                    <i class="fas fa-network-wired mr-1"></i> Comparer tous les sites
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4 KPI Cards for the Current Tenant -->
+    <div class="row mb-4">
+        <!-- Live Online Visitors on Current Site -->
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm rounded-lg h-100 p-3 bg-white" style="border-left: 4px solid #28a745 !important;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            <span class="live-dot mr-1"></span> En Direct sur Votre Site
+                        </div>
+                        <div class="h3 mb-0 font-weight-bold text-gray-800">{{ tenantReport.online|default(0) }}</div>
+                        <span class="small text-muted">Connecté(s) (dernières 15 min)</span>
+                    </div>
+                    <div class="icon-circle p-3 rounded-circle" style="background-color: rgba(40, 167, 69, 0.1); color: #28a745;">
+                        <i class="fas fa-user-clock fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Unique Visitors Today on Current Site -->
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm rounded-lg h-100 p-3 bg-white" style="border-left: 4px solid #4e73df !important;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Visiteurs Uniques Aujourd'hui</div>
+                        <div class="h3 mb-0 font-weight-bold text-gray-800">{{ tenantReport.today_unique|default(0) }}</div>
+                        <span class="small text-muted">IPs anonymisées sur 24h</span>
+                    </div>
+                    <div class="icon-circle text-primary p-3 rounded-circle" style="background-color: rgba(78, 115, 223, 0.1);">
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Unique Visitors This Month on Current Site -->
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm rounded-lg h-100 p-3 bg-white" style="border-left: 4px solid #6f42c1 !important;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-xs font-weight-bold text-uppercase mb-1" style="color: #6f42c1;">Visiteurs ce Mois</div>
+                        <div class="h3 mb-0 font-weight-bold text-gray-800">{{ tenantReport.month_unique|default(0) }}</div>
+                        <span class="small text-muted">Cumul mensuel dédupliqué</span>
+                    </div>
+                    <div class="icon-circle p-3 rounded-circle" style="background-color: rgba(111, 66, 193, 0.1); color: #6f42c1;">
+                        <i class="fas fa-calendar-check fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Pages / Requests Viewed on Current Site -->
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm rounded-lg h-100 p-3 bg-white" style="border-left: 4px solid #fd7e14 !important;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1" style="color: #fd7e14 !important;">Pages Vues / Requêtes</div>
+                        <div class="h3 mb-0 font-weight-bold text-gray-800">{{ tenantReport.today_views|default(0) }}</div>
+                        <span class="small text-muted">{{ tenantReport.total_views|default(0) }} vues au total</span>
+                    </div>
+                    <div class="icon-circle p-3 rounded-circle" style="background-color: rgba(253, 126, 20, 0.1); color: #fd7e14;">
+                        <i class="fas fa-eye fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Row: Top Visited Pages (Left) & 7-Day Trend Chart (Right) -->
+    <div class="row mb-4">
+        <!-- Top Pages Table for Current Tenant -->
+        <div class="col-xl-7 mb-4 mb-xl-0">
+            <div class="card border-0 shadow-sm rounded-lg h-100 bg-white">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-fire mr-2 text-danger"></i>Pages les Plus Visitées de votre Site
+                    </h6>
+                    <span class="badge bg-light text-muted font-weight-normal">Top URLs consultées</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table align-items-center table-flush mb-0 table-hover">
+                            <thead class="thead-light" style="background-color: #f8f9fc;">
+                                <tr>
+                                    <th class="border-0 font-weight-bold text-dark">Rang & Page du Site</th>
+                                    <th class="border-0 font-weight-bold text-dark text-center">Consultations</th>
+                                    <th class="border-0 font-weight-bold text-dark" style="min-width: 130px;">Part d'Audience</th>
+                                    <th class="border-0 font-weight-bold text-dark text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if tenantReport.top_pages|default([])|length > 0 %}
+                                    {% for idx, page in tenantReport.top_pages %}
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <span class="badge {% if idx == 0 %}badge-primary{% elseif idx == 1 %}badge-info{% else %}badge-light text-muted border{% endif %} rounded-circle mr-2" style="width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px;">
+                                                        {{ idx + 1 }}
+                                                    </span>
+                                                    <div>
+                                                        {% if page.path == '/' %}
+                                                            <span class="font-weight-bold text-dark" style="font-size: 13px;">
+                                                                Page d'accueil (Landing Page)
+                                                            </span>
+                                                            <span class="badge bg-light text-muted ml-1" style="font-size: 10px;">/</span>
+                                                        {% elseif page.path == '/services' %}
+                                                            <span class="font-weight-bold text-dark" style="font-size: 13px;">
+                                                                Nos Services
+                                                            </span>
+                                                            <span class="badge bg-light text-muted ml-1" style="font-size: 10px;">/services</span>
+                                                        {% elseif page.path == '/tarifs' %}
+                                                            <span class="font-weight-bold text-dark" style="font-size: 13px;">
+                                                                Tarifs & Formules
+                                                            </span>
+                                                            <span class="badge bg-light text-muted ml-1" style="font-size: 10px;">/tarifs</span>
+                                                        {% elseif page.path == '/contact' %}
+                                                            <span class="font-weight-bold text-dark" style="font-size: 13px;">
+                                                                Contact & Devis
+                                                            </span>
+                                                            <span class="badge bg-light text-muted ml-1" style="font-size: 10px;">/contact</span>
+                                                        {% else %}
+                                                            <span class="font-weight-bold text-dark font-family-monospace" style="font-size: 13px;">
+                                                                {{ page.path }}
+                                                            </span>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge rounded-pill bg-light text-dark font-weight-bold px-3 py-1" style="font-size: 12px;">
+                                                    <i class="fas fa-eye text-primary mr-1"></i>{{ page.views }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <span class="mr-2 text-xs font-weight-bold">{{ page.percentage }}%</span>
+                                                    <div class="progress flex-grow-1" style="height: 6px; border-radius: 4px;">
+                                                        <div class="progress-bar {% if idx == 0 %}bg-primary{% elseif idx == 1 %}bg-info{% else %}bg-secondary{% endif %}" role="progressbar" style="width: {{ page.percentage }}%;" aria-valuenow="{{ page.percentage }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <a href="https://{{ tenantReport.domain }}{{ page.path }}" target="_blank" class="btn btn-sm btn-light rounded-circle shadow-sm" title="Ouvrir la page dans un nouvel onglet">
+                                                    <i class="fas fa-external-link-alt text-primary" style="font-size: 11px;"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="4" class="text-center py-4 text-muted">
+                                            <i class="fas fa-chart-line fa-2x mb-2 text-muted d-block"></i>
+                                            En attente des premières visites sur votre site (les URLs visitées s'afficheront ici automatiquement).
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7-Day Visitor Trend Chart for Current Tenant -->
+        <div class="col-xl-5">
+            <div class="card border-0 shadow-sm rounded-lg h-100 bg-white">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-area mr-2"></i>Évolution des Visiteurs (7 Derniers Jours)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div id="tenantVisitsHistoryChart" style="min-height: 260px;"></div>
+                    <div class="small text-muted text-center mt-2">
+                        <i class="fas fa-info-circle mr-1"></i>Nombre de visiteurs uniques quotidiens sur <strong>{{ tenantReport.tenant_name }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Collapsible Multi-Tenant Comparison (Optional Network View) -->
+    <div class="collapse mb-4" id="allTenantsCollapse">
+        <div class="card border-0 shadow-sm rounded-lg bg-white p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="m-0 font-weight-bold text-secondary">
+                    <i class="fas fa-sitemap mr-2"></i>Vue Réseau Multi-Sites (Tous les Tenants)
+                </h6>
+                <span class="badge bg-light text-muted">{{ trafficMetrics.tenants_details|default([])|length }} sites configurés</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-items-center table-flush mb-0 table-hover">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Site / Tenant</th>
+                            <th>Domaine</th>
+                            <th class="text-center">En Direct</th>
+                            <th class="text-center">Aujourd'hui</th>
+                            <th class="text-center">Ce Mois</th>
+                            <th>Page N°1</th>
+                            <th>Part Globale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in trafficMetrics.tenants_details|default([]) %}
+                            <tr {% if t.code == currentTenantCode %}class="table-primary font-weight-bold"{% endif %}>
+                                <td>{{ t.name }} <span class="badge bg-light text-muted">{{ t.code }}</span></td>
+                                <td><a href="https://{{ t.domain }}" target="_blank" class="text-muted small"><i class="fas fa-external-link-alt mr-1"></i>{{ t.domain }}</a></td>
+                                <td class="text-center">
+                                    {% if t.online > 0 %}
+                                        <span class="badge bg-success text-white px-2 py-1"><span class="live-dot mr-1"></span>{{ t.online }}</span>
+                                    {% else %}
+                                        <span class="text-muted">&mdash;</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">{{ t.today_unique }}</td>
+                                <td class="text-center">{{ t.month_unique }}</td>
+                                <td><code>{{ t.top_page }}</code></td>
+                                <td>{{ t.traffic_percentage }}%</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     {# ------------------ MAIN CHART & PERIOD SWITCHER ------------------ #}
     <div class="row mb-4">
         <div class="col-12">
@@ -415,6 +665,75 @@
         };
         var carrierChart = new ApexCharts(document.querySelector("#carrierDonutChart"), carrierOptions);
         carrierChart.render();
+
+        // --- CURRENT TENANT 7-DAY VISITS HISTORY CHART ---
+        var historyLabels = {{ tenantReport.labels_7days|raw }};
+        var historyValues = {{ tenantReport.values_7days|raw }};
+
+        var historyOptions = {
+            series: [{
+                name: 'Visiteurs Uniques',
+                data: historyValues
+            }],
+            chart: {
+                type: 'area',
+                height: 260,
+                toolbar: { show: false },
+                zoom: { enabled: false }
+            },
+            colors: ['#4e73df'],
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shadeIntensity: 1,
+                    opacityFrom: 0.45,
+                    opacityTo: 0.05,
+                    stops: [20, 100]
+                }
+            },
+            dataLabels: { enabled: false },
+            stroke: { curve: 'smooth', width: 3 },
+            xaxis: {
+                categories: historyLabels,
+                labels: { style: { colors: '#858796' } },
+                axisBorder: { show: false }
+            },
+            yaxis: {
+                min: 0,
+                forceNiceScale: true,
+                labels: {
+                    formatter: function(val) { return Math.round(val); },
+                    style: { colors: '#858796' }
+                }
+            },
+            tooltip: {
+                y: {
+                    formatter: function(val) { return val + " visiteur(s)"; }
+                }
+            },
+            grid: { borderColor: '#e3e6f0' }
+        };
+        var historyChart = new ApexCharts(document.querySelector("#tenantVisitsHistoryChart"), historyOptions);
+        historyChart.render();
     });
 </script>
+<style>
+    @keyframes pulseLive {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(40, 167, 69, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+    }
+    .live-dot {
+        width: 8px;
+        height: 8px;
+        background-color: #28a745;
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulseLive 2s infinite;
+        vertical-align: middle;
+    }
+    .bg-success-soft {
+        background-color: rgba(40, 167, 69, 0.12) !important;
+    }
+</style>
 {% endblock %}

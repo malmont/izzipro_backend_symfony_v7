@@ -102,6 +102,7 @@ use App\Entity\Vehicle;
 use App\Controller\Admin\RentalPackCrudController;
 use App\Controller\Admin\SaleUnitCrudController;
 use App\Controller\Admin\VehicleCrudController;
+use App\Controller\Admin\ProductVariantCrudController;
 
 
 
@@ -129,10 +130,17 @@ use App\Controller\Admin\Memoires\ChapterCrudController as MemoireChapterCrudCon
 use App\MemoiresVivantes\Entity\BookPrintOrder;
 use App\Controller\Admin\Memoires\BookPrintOrderCrudController;
 
+use App\Services\TenantConnectionManager;
+use App\Services\TenantVisitorTrackingService;
+use Symfony\Component\HttpFoundation\RequestStack;
+
 class DashboardController extends AbstractDashboardController
 {
     public function __construct(
-        private TenantEntityManagerProvider $emProvider
+        private TenantEntityManagerProvider $emProvider,
+        private TenantConnectionManager $tenantConnectionManager,
+        private TenantVisitorTrackingService $visitorTrackingService,
+        private RequestStack $requestStack
     ) {}
 
     #[Route('/admin', name: 'admin')]
@@ -285,7 +293,58 @@ class DashboardController extends AbstractDashboardController
             // fallback
         }
 
+        // 8. Détection du Tenant Actif & Statistiques de Fréquentation ciblées
+        $request = $this->requestStack->getCurrentRequest();
+        $currentTenantCode = $this->tenantConnectionManager->getCurrentTenantCode();
+
+        if (!$currentTenantCode && $request) {
+            $host = $request->headers->get('X-Tenant-Host') ?: $request->getHost();
+            $tenantConfig = $this->tenantConnectionManager->findTenantConfigByHost($host);
+            if ($tenantConfig) {
+                $currentTenantCode = $tenantConfig->getCode();
+            }
+        }
+
+        if (!$currentTenantCode && $request) {
+            $cleanHost = explode(':', $request->getHost())[0];
+            $parts = explode('.', $cleanHost);
+            if (!empty($parts[0]) && !in_array($parts[0], ['api', 'admin', 'backend', 'localhost', 'www'], true)) {
+                $currentTenantCode = preg_replace('/-v2$/i', '', $parts[0]);
+            }
+        }
+
+        $currentTenantCode = $currentTenantCode ?: 'lintendantprive';
+
+        $tenants = [];
+        try {
+            $tenants = $this->tenantConnectionManager->getAllTenants();
+        } catch (\Throwable $e) {}
+
+        $currentTenantData = null;
+        foreach ($tenants as $t) {
+            if ($t['code'] === $currentTenantCode) {
+                $currentTenantData = $t;
+                break;
+            }
+        }
+
+        $tenantName = $currentTenantData['name'] ?? ucfirst($currentTenantCode);
+        $tenantDomain = $currentTenantData['custom_domain'] ?? ($request ? $request->getHost() : "{$currentTenantCode}.com");
+
+        // Rapport analytique dédié au tenant courant
+        $tenantReport = $this->visitorTrackingService->getTenantDetailedReport(
+            $currentTenantCode,
+            $tenantName,
+            $tenantDomain
+        );
+
+        // Métriques globales de tous les tenants
+        $trafficMetrics = $this->visitorTrackingService->getGlobalTrafficMetrics($tenants);
+
         return $this->render('admin/dashboard.html.twig', [
+            'tenantReport' => $tenantReport,
+            'currentTenantCode' => $currentTenantCode,
+            'trafficMetrics' => $trafficMetrics,
             'totalSales' => $totalSales,
             'salesThisMonth' => $salesThisMonth,
             'salesDiffPercent' => $salesDiffPercent,
@@ -449,6 +508,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Catalogue & Véhicules');
         yield MenuItem::linkToCrud('Véhicules & Bateaux (Vente)', 'fas fa-ship', VehicleProduct::class)->setController(VehicleProductCrudController::class);
         yield MenuItem::linkToCrud('Produits & Accessoires', 'fas fa-shopping-cart', Product::class);
+        yield MenuItem::linkToCrud('Variants de Produits', 'fas fa-boxes', ProductVariant::class)->setController(ProductVariantCrudController::class);
         yield MenuItem::linkToCrud('Colors', 'fas fa-palette', Color::class);
         yield MenuItem::linkToCrud('Styles', 'fas fa-brush', Style::class);
         yield MenuItem::linkToCrud('Sizes', 'fas fa-ruler', Size::class);
