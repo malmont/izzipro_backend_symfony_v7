@@ -18,6 +18,17 @@ class RecommendationEngine
     ) {
     }
 
+    /** Après toutes les certifications à obtenir (priorités 1 à 5). */
+    public const PRIORITY_ALREADY_HELD = 6;
+
+    public static function alreadyHeldNarrative(CertificationReferential $cert): string
+    {
+        return sprintf(
+            'Vous détenez déjà %s. Pensez à préparer son renouvellement et à la valoriser auprès de vos clients et partenaires.',
+            $cert->getName()
+        );
+    }
+
     /**
      * @param array<string, float> $domainScores
      * @return CertificationRecommendation[]
@@ -42,7 +53,11 @@ class RecommendationEngine
             $scoreSoc = $domainScores[DomainEnum::SOCIAL->value] ?? 0.0;
             $scoreCli = $domainScores[DomainEnum::CLIMATE->value] ?? 0.0;
 
-            $isEligible = $scoreEnv >= $cert->getThresholdEnvironment()
+            // Une certification déjà détenue n'est pas « à obtenir » : ni éligible, ni subventionnée
+            $alreadyHeld = $session->getCompany()?->holdsCertification($cert->getCode()) ?? false;
+
+            $isEligible = !$alreadyHeld
+                && $scoreEnv >= $cert->getThresholdEnvironment()
                 && $scoreGov >= $cert->getThresholdGovernance()
                 && $scoreSoc >= $cert->getThresholdSocial()
                 && $scoreCli >= $cert->getThresholdClimate()
@@ -54,7 +69,7 @@ class RecommendationEngine
 
             // 3. Retrieve eligible SubsidyPrograms
             /** @var SubsidyProgram[] $programs */
-            $programs = $em->getRepository(SubsidyProgram::class)
+            $programs = $alreadyHeld ? [] : $em->getRepository(SubsidyProgram::class)
                 ->findByCertificationAndTerritory($cert, $territory);
 
             // 4. Calculate simulation via SubsidyCalculator
@@ -81,7 +96,9 @@ class RecommendationEngine
 
             // Assign priority:
             // 1-2 for eligible, 3-4 for close, 5 for out of reach
-            if ($isEligible) {
+            if ($alreadyHeld) {
+                $priority = self::PRIORITY_ALREADY_HELD;
+            } elseif ($isEligible) {
                 // If net cost is under 5000 CAD, higher priority (1), else (2)
                 $priority = ($simulation['netCost'] < 5000) ? 1 : 2;
             } else {
@@ -119,7 +136,9 @@ class RecommendationEngine
                 ],
             ];
             $ecartGlobal = $globalScore - $cert->getThresholdGlobal();
-            $narrative = $this->generateImpactNarrative($cert, $globalScore, $ecartGlobal, $detailsDomaines, $isEligible);
+            $narrative = $alreadyHeld
+                ? self::alreadyHeldNarrative($cert)
+                : $this->generateImpactNarrative($cert, $globalScore, $ecartGlobal, $detailsDomaines, $isEligible);
             $reco->setImpactNarrative($narrative);
 
             $recommendations[] = $reco;
@@ -140,6 +159,10 @@ class RecommendationEngine
     {
         $session = $reco->getSession();
         $cert = $reco->getReferential();
+
+        if ($reco->isAlreadyHeld()) {
+            return self::alreadyHeldNarrative($cert);
+        }
 
         $scoreEnv = $session->getScoreEnvironment() ?? 0.0;
         $scoreGov = $session->getScoreGovernance() ?? 0.0;
@@ -191,32 +214,52 @@ class RecommendationEngine
             );
         }
 
-        // Trouver le domaine le plus faible (écart négatif le plus grand)
-        $domaineLePlusFaible = null;
-        $ecartMin = 0;
-        foreach ($detailsDomaines as $domain => $detail) {
-            if ($detail['ecart'] < $ecartMin) {
-                $ecartMin = $detail['ecart'];
-                $domaineLePlusFaible = $domain;
-            }
-        }
-
         // Labels lisibles
         $domaineLabels = [
             'environment'      => 'Environnement',
             'governance'       => 'Gouvernance',
             'social'           => 'Social & Communautés',
-            'climate_activator'=> 'Climate Activator',
+            'climate_activator'=> 'Action Climatique',
         ];
 
-        if ($ecartGlobal >= -15) {
-            // Proche — message encourageant avec levier principal
-            $label = $domaineLePlusFaible
-                ? $domaineLabels[$domaineLePlusFaible] ?? $domaineLePlusFaible
-                : 'de vos domaines clés';
+        // Domaines sous leur seuil, du plus grand écart au plus petit
+        $domainesBloquants = array_filter($detailsDomaines, fn (array $d) => $d['ecart'] < 0);
+        uasort($domainesBloquants, fn (array $a, array $b) => $a['ecart'] <=> $b['ecart']);
+
+        // $ecartGlobal = score − seuil : positif ou nul, le seuil global est atteint
+        if ($ecartGlobal >= 0) {
+            if (empty($domainesBloquants)) {
+                return sprintf('Vous atteignez le seuil global requis pour %s.', $cert->getName());
+            }
+
+            $obstacles = [];
+            foreach ($domainesBloquants as $domain => $detail) {
+                $obstacles[] = sprintf(
+                    '%s (%s %% pour un seuil de %s %%, soit %s points manquants)',
+                    $domaineLabels[$domain] ?? $domain,
+                    $this->formatPoints($detail['score']),
+                    $this->formatPoints($detail['seuil']),
+                    $this->formatPoints(abs($detail['ecart']))
+                );
+            }
+
             return sprintf(
-                'Vous êtes à %.0f points du seuil %s. Votre levier principal est le domaine %s — concentrez vos efforts documentaires sur ce volet pour franchir le seuil.',
-                abs($ecartGlobal),
+                'Vous dépassez de %s points le seuil global requis pour %s. Ce qui bloque encore votre éligibilité : %s %s. Concentrez vos efforts documentaires sur ce volet.',
+                $this->formatPoints($ecartGlobal),
+                $cert->getName(),
+                count($obstacles) > 1 ? 'les domaines' : 'le domaine',
+                implode(' et ', $obstacles)
+            );
+        }
+
+        if ($ecartGlobal >= -15) {
+            // Proche — levier principal : le domaine le plus bas par rapport à son seuil
+            $ecarts = array_map(fn (array $d) => $d['ecart'], $detailsDomaines);
+            $levier = array_search(min($ecarts), $ecarts, true);
+            $label = $domaineLabels[$levier] ?? $levier;
+            return sprintf(
+                'Il vous manque %s points pour atteindre le seuil global requis pour %s. Votre levier principal est le domaine %s — concentrez vos efforts documentaires sur ce volet pour franchir le seuil.',
+                $this->formatPoints(abs($ecartGlobal)),
                 $cert->getName(),
                 $label
             );
@@ -235,5 +278,11 @@ class RecommendationEngine
             '%s représente un objectif à long terme. Concentrez-vous d\'abord sur les certifications pour lesquelles vous êtes déjà proche des seuils.',
             $cert->getName()
         );
+    }
+
+    /** 37.5 → « 37,5 », 40.0 → « 40 » */
+    private function formatPoints(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 2, ',', ''), '0'), ',') ?: '0';
     }
 }

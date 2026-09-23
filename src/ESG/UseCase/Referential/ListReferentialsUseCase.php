@@ -4,6 +4,7 @@ namespace App\ESG\UseCase\Referential;
 
 use App\ESG\DTO\Output\ReferentialOutputDTO;
 use App\ESG\Entity\CertificationReferential;
+use App\ESG\Entity\EsgCompany;
 use App\Services\TenantEntityManagerProvider;
 
 class ListReferentialsUseCase
@@ -16,13 +17,13 @@ class ListReferentialsUseCase
     /**
      * @return ReferentialOutputDTO[]
      */
-    public function execute(): array
+    public function execute(?EsgCompany $company = null): array
     {
         $em = $this->emProvider->getEntityManager();
         $referentials = $em->getRepository(CertificationReferential::class)->findAllActive();
 
         return array_map(
-            fn(CertificationReferential $ref) => new ReferentialOutputDTO($ref),
+            fn(CertificationReferential $ref) => new ReferentialOutputDTO($ref, $company),
             $referentials
         );
     }

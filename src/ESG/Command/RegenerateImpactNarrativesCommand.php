@@ -31,7 +31,8 @@ class RegenerateImpactNarrativesCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('tenant', null, InputOption::VALUE_OPTIONAL, 'Nom de la base tenant à traiter', 'db_boussoleesg');
+            ->addOption('tenant', null, InputOption::VALUE_OPTIONAL, 'Nom de la base tenant à traiter', 'db_boussoleesg')
+            ->addOption('all', null, InputOption::VALUE_NONE, 'Régénérer tous les récits, pas seulement ceux à null');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -59,9 +60,9 @@ class RegenerateImpactNarrativesCommand extends Command
             $em = $this->emProvider->getEntityManager();
 
             // Trouver toutes les CertificationRecommendation avec impactNarrative = null
-            $recommendations = $em->getRepository(CertificationRecommendation::class)->findBy([
-                'impactNarrative' => null
-            ]);
+            $recommendations = $em->getRepository(CertificationRecommendation::class)->findBy(
+                $input->getOption('all') ? [] : ['impactNarrative' => null]
+            );
 
             if (empty($recommendations)) {
                 $io->success('Aucune recommandation avec un impactNarrative null n\'a été trouvée.');

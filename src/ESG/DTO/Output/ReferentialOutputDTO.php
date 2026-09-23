@@ -3,6 +3,7 @@
 namespace App\ESG\DTO\Output;
 
 use App\ESG\Entity\CertificationReferential;
+use App\ESG\Entity\EsgCompany;
 
 class ReferentialOutputDTO
 {
@@ -23,8 +24,9 @@ class ReferentialOutputDTO
     public ?string $description;
     public ?string $marketImpact;
     public array $territory;
+    public bool $alreadyHeld;
 
-    public function __construct(CertificationReferential $ref)
+    public function __construct(CertificationReferential $ref, ?EsgCompany $company = null)
     {
         $this->code = $ref->getCode() ?? '';
         $this->name = $ref->getName() ?? '';
@@ -43,5 +45,6 @@ class ReferentialOutputDTO
         $this->description = $ref->getDescription();
         $this->marketImpact = $ref->getMarketImpact();
         $this->territory = $ref->getTerritory();
+        $this->alreadyHeld = $company?->holdsCertification($this->code) ?? false;
     }
 }

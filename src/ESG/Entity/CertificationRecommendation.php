@@ -172,6 +172,15 @@ class CertificationRecommendation
         return $this;
     }
 
+    public function isAlreadyHeld(): bool
+    {
+        $company = $this->session?->getCompany();
+
+        return $company !== null
+            && $this->referential !== null
+            && $company->holdsCertification($this->referential->getCode());
+    }
+
     public function getSession(): ?DiagnosticSession
     {
         return $this->session;

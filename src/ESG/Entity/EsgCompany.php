@@ -215,6 +215,24 @@ class EsgCompany
         return $this;
     }
 
+    /**
+     * Le profil stocke des codes comme « BCORP », le référentiel « b_corp » :
+     * comparaison sans casse ni séparateurs.
+     */
+    public function holdsCertification(string $referentialCode): bool
+    {
+        $normalize = static fn (string $code): string => preg_replace('/[^A-Z0-9]/', '', strtoupper($code));
+        $target = $normalize($referentialCode);
+
+        foreach ($this->existingCertifications as $held) {
+            if (is_string($held) && $normalize($held) === $target) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function getUploadedDocumentCodes(): array
     {
         return $this->uploadedDocumentCodes;
