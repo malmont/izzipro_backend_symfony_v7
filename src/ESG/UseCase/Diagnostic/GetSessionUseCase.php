@@ -19,6 +19,7 @@ class GetSessionUseCase
 
     public function execute(string $uuid): SessionDetailOutputDTO
     {
+        $em = $this->emProvider->getEntityManager();
         /** @var \App\ESG\Repository\DiagnosticSessionRepository $repo */
         $repo = $em->getRepository(DiagnosticSession::class);
         $session = $repo->findWithDetails($uuid);

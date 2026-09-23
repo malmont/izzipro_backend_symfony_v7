@@ -13,6 +13,8 @@ use App\ESG\UseCase\Diagnostic\GetHistoriqueUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
@@ -78,8 +80,10 @@ class SessionController extends AbstractController
         try {
             $output = $useCase->execute($uuid);
             return $this->json($output, Response::HTTP_OK);
-        } catch (\Exception $e) {
+        } catch (NotFoundHttpException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+        } catch (AccessDeniedHttpException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_FORBIDDEN);
         }
     }
 
@@ -130,8 +134,10 @@ class SessionController extends AbstractController
         try {
             $output = $useCase->execute($uuid);
             return $this->json($output->recommendations, Response::HTTP_OK);
-        } catch (\Exception $e) {
+        } catch (NotFoundHttpException $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_NOT_FOUND);
+        } catch (AccessDeniedHttpException $e) {
+            return $this->json(['error' => $e->getMessage()], Response::HTTP_FORBIDDEN);
         }
     }
 }

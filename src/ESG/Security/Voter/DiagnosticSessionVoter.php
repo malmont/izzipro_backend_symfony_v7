@@ -30,6 +30,14 @@ class DiagnosticSessionVoter extends Voter
         /** @var DiagnosticSession $session */
         $session = $subject;
 
+        // Same rule as ListSessionsUseCase: sessions of the user's own company,
+        // whatever the role, so every listed session is readable.
+        $userCompany = $user->getCompany();
+        $sessionCompany = $session->getCompany();
+        if ($userCompany && $sessionCompany && $userCompany->getId() === $sessionCompany->getId()) {
+            return true;
+        }
+
         // ROLE_ADMIN has full access
         if (in_array('ROLE_ADMIN', $user->getRoles(), true)) {
             return true;
@@ -41,16 +49,6 @@ class DiagnosticSessionVoter extends Voter
                 return $user->getAssignedCompanies()->contains($session->getCompany());
             }
             return true; // Default access if no relation defined
-        }
-
-        // ROLE_COMPANY access check
-        if (in_array('ROLE_COMPANY', $user->getRoles(), true)) {
-            $userCompany = $user->getCompany();
-            $sessionCompany = $session->getCompany();
-
-            if ($userCompany && $sessionCompany && $userCompany->getId() === $sessionCompany->getId()) {
-                return true;
-            }
         }
 
         return false;
