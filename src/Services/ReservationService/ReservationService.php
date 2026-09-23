@@ -23,15 +23,46 @@ class ReservationService
         $cleanTenantId = $dto->tenant_id ?: explode('.', $host)[0];
         $resDate = new \DateTime($dto->reservation_date);
 
-        // Vérification anti-doublon sur le créneau pour ce tenant
-        if ($dto->reservation_slot && $this->isSlotBooked($resDate, $dto->reservation_slot)) {
-            throw new \DomainException(sprintf(
-                'Le créneau "%s" du %s est déjà réservé. Veuillez choisir un autre horaire.',
-                $dto->reservation_slot,
-                $resDate->format('d/m/Y')
-            ));
+        $connection = $tenantEm->getConnection();
+        $connection->beginTransaction();
+
+        try {
+            // Verrou transactionnel sur (date, créneau) : sérialise les requêtes concurrentes
+            // pour empêcher deux réservations simultanées de passer la vérification anti-doublon.
+            // Libéré automatiquement au commit/rollback.
+            if ($dto->reservation_slot) {
+                $connection->executeStatement(
+                    'SELECT pg_advisory_xact_lock(hashtext(:key))',
+                    ['key' => 'reservation:' . $resDate->format('Y-m-d') . ':' . $dto->reservation_slot]
+                );
+
+                // Vérification anti-doublon sur le créneau pour ce tenant
+                if ($this->isSlotBooked($resDate, $dto->reservation_slot)) {
+                    throw new \DomainException(sprintf(
+                        'Le créneau "%s" du %s est déjà réservé. Veuillez choisir un autre horaire.',
+                        $dto->reservation_slot,
+                        $resDate->format('d/m/Y')
+                    ));
+                }
+            }
+
+            $reservation = $this->buildReservation($dto, $resDate, $cleanTenantId, $entreprise);
+
+            $tenantEm->persist($reservation);
+            $tenantEm->flush();
+            $connection->commit();
+        } catch (\Throwable $e) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+            throw $e;
         }
 
+        return $reservation;
+    }
+
+    private function buildReservation(ReservationInputDto $dto, \DateTime $resDate, string $cleanTenantId, ?Entreprise $entreprise): Reservation
+    {
         $reservation = new Reservation();
         $reservation->setServiceId($dto->service_id);
         $reservation->setServiceName($dto->service_name);
@@ -51,9 +82,6 @@ class ReservationService
         $reservation->setStepNumber($dto->step_number);
         $reservation->setTotalSteps($dto->total_steps);
         $reservation->setForfaitName($dto->forfait_name);
-
-        $tenantEm->persist($reservation);
-        $tenantEm->flush();
 
         return $reservation;
     }
