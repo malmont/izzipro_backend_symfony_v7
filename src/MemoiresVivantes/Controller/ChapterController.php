@@ -19,6 +19,7 @@ use App\MemoiresVivantes\UseCase\TranscribeAudioUseCase;
 use App\MemoiresVivantes\UseCase\UpdateChapterUseCase;
 use App\MemoiresVivantes\Services\HommageAggregationService;
 use App\MemoiresVivantes\Services\FamilleAggregationService;
+use App\Services\AnthropicService;
 use App\Services\MediaUrlResolver;
 use App\Services\TenantEntityManagerProvider;
 
@@ -387,14 +388,21 @@ class ChapterController extends AbstractController
 
         $data = json_decode($request->getContent(), true) ?? $request->request->all();
         $tone = $data['tone'] ?? 'intime et chaleureux';
+        $model = isset($data['model']) && is_string($data['model']) && trim($data['model']) !== '' ? trim($data['model']) : null;
 
         $chapter->setGenerationStatus('pending');
         $em->flush();
 
         $tenantHost = $request->headers->get('X-Tenant-Host') ?? $request->getHost();
-        $this->messageBus->dispatch(new GenerateChapterMessage((string) $chapter->getId(), 1, $tenantHost, $tone));
+        $this->messageBus->dispatch(new GenerateChapterMessage((string) $chapter->getId(), 1, $tenantHost, $tone, $model));
 
         return $this->json(['status' => 'Generation started']);
+    }
+
+    #[Route('/ai-models', methods: ['GET'])]
+    public function getAiModels(AnthropicService $anthropicService): JsonResponse
+    {
+        return $this->json($anthropicService->getAvailableModels());
     }
 
     #[Route('/chapters/{id}/photos', methods: ['POST'])]
@@ -681,6 +689,7 @@ class ChapterController extends AbstractController
         $question = trim((string)($data['question'] ?? ''));
         $answer = trim((string)($data['answer'] ?? ''));
         $index = isset($data['index']) && is_numeric($data['index']) ? (int)$data['index'] : null;
+        $model = isset($data['model']) && is_string($data['model']) && trim($data['model']) !== '' ? trim($data['model']) : null;
 
         if (empty($question) || empty($answer)) {
             return $this->json(['error' => 'Missing question or answer parameter'], 400);
@@ -767,7 +776,7 @@ class ChapterController extends AbstractController
         }
 
         try {
-            $improvedText = $this->improveAnswerUseCase->execute($question, $answer);
+            $improvedText = $this->improveAnswerUseCase->execute($question, $answer, $model);
 
             if ($isGuest && $targetContribId) {
                 if ($targetContribEntry === null) {

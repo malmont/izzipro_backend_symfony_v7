@@ -17,8 +17,8 @@ class ImproveAnswerUseCase
      * @param string $answer
      * @return string Texte enrichi et amélioré
      */
-    public function execute(string $question, string $answer): string
+    public function execute(string $question, string $answer, ?string $model = null): string
     {
-        return $this->anthropicService->improveAnswer($question, $answer);
+        return $this->anthropicService->improveAnswer($question, $answer, $model);
     }
 }

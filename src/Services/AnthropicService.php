@@ -8,7 +8,52 @@ use Psr\Log\LoggerInterface;
 
 class AnthropicService
 {
-    private const MODEL = 'claude-sonnet-4-6';
+    public const DEFAULT_MODEL = 'claude-sonnet-5';
+    public const DEFAULT_FAST_MODEL = 'claude-haiku-4-5-20251001';
+
+    public const SUPPORTED_MODELS = [
+        'claude-fable-5-1' => [
+            'id' => 'claude-fable-5-1',
+            'name' => 'Claude Fable 5.1',
+            'badge' => 'Littéraire & Poétique',
+            'description' => 'Optimisé pour la narration, la biographie et le récit sensible. Idéal pour sublimer les souvenirs.',
+            'category' => 'creative',
+            'isDefault' => false,
+        ],
+        'claude-sonnet-5' => [
+            'id' => 'claude-sonnet-5',
+            'name' => 'Claude Sonnet 5',
+            'badge' => 'Recommandé',
+            'description' => 'Le modèle de référence nouvelle génération. Équilibre parfait entre fidélité historique et style littéraire.',
+            'category' => 'standard',
+            'isDefault' => true,
+        ],
+        'claude-sonnet-4-6' => [
+            'id' => 'claude-sonnet-4-6',
+            'name' => 'Claude Sonnet 4.6',
+            'badge' => 'Éprouvé',
+            'description' => 'Version stable et robuste pour une génération fidèle et constante.',
+            'category' => 'standard',
+            'isDefault' => false,
+        ],
+        'claude-haiku-4-5-20251001' => [
+            'id' => 'claude-haiku-4-5-20251001',
+            'name' => 'Claude Haiku 4.5',
+            'badge' => 'Rapide & Économique',
+            'description' => 'Ultra-rapide et économique. Parfait pour les retouches rapides de réponses.',
+            'category' => 'fast',
+            'isDefault' => false,
+        ],
+        'claude-opus-5-5' => [
+            'id' => 'claude-opus-5-5',
+            'name' => 'Claude Opus 5.5',
+            'badge' => 'Puissance Maximale',
+            'description' => 'Le modèle le plus avancé d\'Anthropic pour les sagas denses et les réflexions profondes.',
+            'category' => 'advanced',
+            'isDefault' => false,
+        ],
+    ];
+
     private const API_URL = 'https://api.anthropic.com/v1/messages';
 
     public function __construct(
@@ -17,7 +62,36 @@ class AnthropicService
         private readonly LoggerInterface $logger
     ) {}
 
-    public function generatePart1(Chapter $chapter, string $tone = 'intime et chaleureux'): string
+    public function getAvailableModels(): array
+    {
+        return array_values(self::SUPPORTED_MODELS);
+    }
+
+    public function resolveModel(?string $model): string
+    {
+        if ($model !== null && $model !== '') {
+            $trimmed = trim($model);
+            if (isset(self::SUPPORTED_MODELS[$trimmed])) {
+                return $trimmed;
+            }
+            // Alias rapide pour Haiku
+            if ($trimmed === 'claude-haiku-4-5' || $trimmed === 'haiku') {
+                return self::DEFAULT_FAST_MODEL;
+            }
+            if ($trimmed === 'claude-sonnet-5' || $trimmed === 'sonnet') {
+                return 'claude-sonnet-5';
+            }
+            if ($trimmed === 'claude-fable-5-1' || $trimmed === 'fable') {
+                return 'claude-fable-5-1';
+            }
+            if ($trimmed === 'claude-opus-5-5' || $trimmed === 'opus') {
+                return 'claude-opus-5-5';
+            }
+        }
+        return self::DEFAULT_MODEL;
+    }
+
+    public function generatePart1(Chapter $chapter, string $tone = 'intime et chaleureux', ?string $model = null): string
     {
         $book = $chapter->getBook();
         $prenom = $book->getUser()->getFirstname();
@@ -42,10 +116,10 @@ class AnthropicService
                   "- Arrête-toi à la fin d'un paragraphe — jamais au milieu\n" .
                   "- Une 2e partie suivra — pas besoin de conclure";
 
-        return $this->callAnthropic($prompt, 32000);
+        return $this->callAnthropic($prompt, 32000, null, $model);
     }
 
-    public function generatePart2(Chapter $chapter, string $tone = 'intime et chaleureux'): string
+    public function generatePart2(Chapter $chapter, string $tone = 'intime et chaleureux', ?string $model = null): string
     {
         $book = $chapter->getBook();
         $prenom = $book->getUser()->getFirstname();
@@ -69,10 +143,10 @@ class AnthropicService
                   "- Même style, mêmes sous-titres ===...===\n" .
                   "- Termine par un beau paragraphe de conclusion avec un point";
 
-        return $this->callAnthropic($prompt, 32000);
+        return $this->callAnthropic($prompt, 32000, null, $model);
     }
 
-    public function generatePart1Couple(Chapter $chapter, string $tone = 'intime et chaleureux'): string
+    public function generatePart1Couple(Chapter $chapter, string $tone = 'intime et chaleureux', ?string $model = null): string
     {
         $book = $chapter->getBook();
         $prenom1 = $book->getPerson1FirstName() ?? ($book->getUser() ? $book->getUser()->getFirstname() : 'la première personne');
@@ -138,10 +212,10 @@ class AnthropicService
                       "- Une 2e partie suivra — pas besoin de conclure";
         }
 
-        return $this->callAnthropic($prompt, 32000);
+        return $this->callAnthropic($prompt, 32000, null, $model);
     }
 
-    public function generatePart2Couple(Chapter $chapter, string $tone = 'intime et chaleureux'): string
+    public function generatePart2Couple(Chapter $chapter, string $tone = 'intime et chaleureux', ?string $model = null): string
     {
         $book = $chapter->getBook();
         $prenom1 = $book->getPerson1FirstName() ?? ($book->getUser() ? $book->getUser()->getFirstname() : 'la première personne');
@@ -198,10 +272,10 @@ class AnthropicService
                       "- Termine par un beau paragraphe de conclusion avec un point";
         }
 
-        return $this->callAnthropic($prompt, 32000);
+        return $this->callAnthropic($prompt, 32000, null, $model);
     }
 
-    public function generatePart1Famille(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null): string
+    public function generatePart1Famille(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null, ?string $model = null): string
     {
         $book = $chapter->getBook();
         $theme = $chapter->getTheme();
@@ -318,10 +392,10 @@ class AnthropicService
                   "- Style profondément émouvant, chaleureux et noble, célébrant le bonheur d'avoir grandi auprès d'eux et formulant des vœux pour la pérennité du clan familial.\n" .
                   "- Une 2e partie suivra.";
 
-        return $this->callAnthropic($prompt, 32000);
+        return $this->callAnthropic($prompt, 32000, null, $model);
     }
 
-    public function generatePart2Famille(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null): string
+    public function generatePart2Famille(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null, ?string $model = null): string
     {
         $book = $chapter->getBook();
         $theme = $chapter->getTheme();
@@ -360,7 +434,7 @@ class AnthropicService
                       $part2Directives .
                       "- Termine par un point complet.";
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
         // Chapitres 2 & 3 : Regards croisés & Petits-enfants
@@ -380,7 +454,7 @@ class AnthropicService
                       "- Si toutes les personnes ont déjà été traitées, rédige uniquement un beau paragraphe de conclusion générale chaleureuse pour clore le chapitre (sans nouveau sous-titre).\n" .
                       "- Même style, termine par un point complet.";
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
         // Chapitres 4 & 5 : Rituels / Épilogue
@@ -397,10 +471,10 @@ class AnthropicService
                   "- Continue uniquement s'il reste du matériel nouveau, puis termine par une émouvante conclusion au nom de toute la famille.\n" .
                   "- Termine par un beau paragraphe de conclusion avec un point complet.";
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
-    public function generatePart1Hommage(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null): string
+    public function generatePart1Hommage(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null, ?string $model = null): string
     {
         $book = $chapter->getBook();
         $theme = $chapter->getTheme();
@@ -457,7 +531,7 @@ class AnthropicService
                           "- Une 2e partie suivra pour couvrir les décennies suivantes jusqu'à l'apaisement.";
             }
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
         // Chapitres VERBATIM ou HYBRIDES : les_voix (Ch 2), ce_quil_nous_laisse (Ch 4), ce_quon_aurait_voulu_dire (Ch 5)
@@ -481,7 +555,7 @@ class AnthropicService
                       "- Termine chaque paragraphe par un point complet.\n" .
                       "- Une 2e partie suivra — pas besoin de conclure.";
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
         if ($theme === 'ce_quon_aurait_voulu_dire') {
@@ -499,7 +573,7 @@ class AnthropicService
                       "- PAS de titre général — commence directement par le premier message.\n" .
                       "- Une 2e partie suivra.";
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
         // 'ce_quil_nous_laisse' (héritage vivant, transmissions, gestes, expressions, valeurs)
@@ -520,10 +594,10 @@ class AnthropicService
                   "- PAS de titre général — commence directement par le texte.\n" .
                   "- Une 2e partie suivra.";
 
-        return $this->callAnthropic($prompt, 32000);
+        return $this->callAnthropic($prompt, 32000, null, $model);
     }
 
-    public function generatePart2Hommage(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null): string
+    public function generatePart2Hommage(Chapter $chapter, string $tone = 'intime et chaleureux', ?array $aggregatedContext = null, ?string $model = null): string
     {
         $book = $chapter->getBook();
         $theme = $chapter->getTheme();
@@ -570,7 +644,7 @@ class AnthropicService
                           "- Termine par un point complet.";
             }
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
         // Chapitres VERBATIM ou HYBRIDES : les_voix, ce_quon_aurait_voulu_dire, ce_quil_nous_laisse
@@ -589,7 +663,7 @@ class AnthropicService
                       "- Reste à la 1ère personne (je) pour les nouveaux témoignages sous === Témoignage de [Prénom] ([Rôle]) ===.\n" .
                       "- Termine par un point complet.";
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
         if ($theme === 'ce_quon_aurait_voulu_dire') {
@@ -605,7 +679,7 @@ class AnthropicService
                       "- Maintiens l'adresse directe avec le sous-titre : === Pour toi, {$deceasedName} — De [Prénom] ([Rôle]) ===\n" .
                       "- Termine par un point complet.";
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
         // 'ce_quil_nous_laisse'
@@ -624,7 +698,7 @@ class AnthropicService
                   "- Style chaleureux, digne et vivant, {$tone}.\n" .
                   "- Termine par un point complet.";
 
-        return $this->callAnthropic($prompt, 32000);
+        return $this->callAnthropic($prompt, 32000, null, $model);
     }
 
     private function formatContributorTestimonies(array $contributorAnswers): string
@@ -642,7 +716,7 @@ class AnthropicService
         return trim($formatted);
     }
 
-    public function checkAndComplete(string $text, bool $isLastPart): string
+    public function checkAndComplete(string $text, bool $isLastPart, ?string $model = null): string
     {
         $trimmed = trim($text);
         if (empty($trimmed)) {
@@ -655,7 +729,7 @@ class AnthropicService
                       "Continue et termine uniquement la phrase en cours (ou le paragraphe en cours) pour qu'il se termine par un point. " .
                       "Ne réécris pas le texte précédent, donne juste la suite manquante.";
             
-            $suite = $this->callAnthropic($prompt, 300);
+            $suite = $this->callAnthropic($prompt, 300, null, $model);
             return $text . $suite;
         }
 
@@ -672,24 +746,25 @@ class AnthropicService
         return implode("\n\n", $last);
     }
 
-    public function improveAnswer(string $question, string $answer): string
+    public function improveAnswer(string $question, string $answer, ?string $model = null): string
     {
         $systemPrompt = "Agis en tant que biographe chaleureux et poétique. Prends la réponse brute de l'utilisateur à la question posée, corrige les fautes d'orthographe, restructure les phrases de manière fluide et vivante tout en conservant scrupuleusement la vérité historique et les faits originaux de l'utilisateur. Retourne uniquement la version améliorée à la première personne (Je).";
         
         $prompt = "Question : " . $question . "\nRéponse brute de l'utilisateur : " . $answer;
 
-        return $this->callAnthropic($prompt, 2000, $systemPrompt);
+        return $this->callAnthropic($prompt, 2000, $systemPrompt, $model ?? self::DEFAULT_FAST_MODEL);
     }
 
-    private function callAnthropic(string $prompt, int $maxTokens = 32000, ?string $system = null): string
+    private function callAnthropic(string $prompt, int $maxTokens = 32000, ?string $system = null, ?string $model = null): string
     {
         $apiKey = trim($this->anthropicApiKey, " \t\n\r\0\x0B\"");
+        $selectedModel = $this->resolveModel($model);
         
         try {
-            $this->logger->info("Anthropic Request", ['model' => self::MODEL, 'max_tokens' => $maxTokens]);
+            $this->logger->info("Anthropic Request", ['model' => $selectedModel, 'max_tokens' => $maxTokens]);
 
             $jsonPayload = [
-                'model' => self::MODEL,
+                'model' => $selectedModel,
                 'max_tokens' => $maxTokens,
                 'messages' => [
                     ['role' => 'user', 'content' => $prompt]

@@ -58,6 +58,8 @@ class GenerateChapterHandler
         $this->logger->info("GenerateChapterHandler: Chapter {$message->chapterId} raw answers: " . json_encode($answers));
 
         try {
+            $model = $message->model ?? null;
+
             if ($message->part === 1) {
                 $chapter->setGenerationStatus('generating_part1');
                 $em->flush();
@@ -71,27 +73,27 @@ class GenerateChapterHandler
                     if ($theme === 'portrait_croise' || $theme === 'une_vie') {
                         $aggregatedContext = $this->hommageAggregationService->aggregateForSynthesis($chapter);
                     }
-                    $text = $this->anthropicService->generatePart1Hommage($chapter, $tone, $aggregatedContext);
+                    $text = $this->anthropicService->generatePart1Hommage($chapter, $tone, $aggregatedContext, $model);
                 } elseif ($bookType === 'couple') {
-                    $text = $this->anthropicService->generatePart1Couple($chapter, $tone);
+                    $text = $this->anthropicService->generatePart1Couple($chapter, $tone, $model);
                 } elseif ($bookType === 'famille') {
                     $theme = $chapter->getTheme();
                     $aggregatedContext = null;
                     if ($theme === 'histoire_parents' || $theme === 'histoire_aine') {
                         $aggregatedContext = $this->familleAggregationService->aggregateForSynthesis($chapter);
                     }
-                    $text = $this->anthropicService->generatePart1Famille($chapter, $tone, $aggregatedContext);
+                    $text = $this->anthropicService->generatePart1Famille($chapter, $tone, $aggregatedContext, $model);
                 } else {
-                    $text = $this->anthropicService->generatePart1($chapter, $tone);
+                    $text = $this->anthropicService->generatePart1($chapter, $tone, $model);
                 }
                 
-                $text = $this->anthropicService->checkAndComplete($text, false);
+                $text = $this->anthropicService->checkAndComplete($text, false, $model);
 
                 $chapter->setContentPart1($text);
                 $chapter->setGenerationStatus('part1_done');
                 $em->flush();
 
-                $this->messageBus->dispatch(new GenerateChapterMessage($message->chapterId, 2, $message->tenantHost, $tone));
+                $this->messageBus->dispatch(new GenerateChapterMessage($message->chapterId, 2, $message->tenantHost, $tone, $model));
             } elseif ($message->part === 2) {
                 $chapter->setGenerationStatus('generating_part2');
                 $em->flush();
@@ -105,21 +107,21 @@ class GenerateChapterHandler
                     if ($theme === 'portrait_croise' || $theme === 'une_vie') {
                         $aggregatedContext = $this->hommageAggregationService->aggregateForSynthesis($chapter);
                     }
-                    $text = $this->anthropicService->generatePart2Hommage($chapter, $tone, $aggregatedContext);
+                    $text = $this->anthropicService->generatePart2Hommage($chapter, $tone, $aggregatedContext, $model);
                 } elseif ($bookType === 'couple') {
-                    $text = $this->anthropicService->generatePart2Couple($chapter, $tone);
+                    $text = $this->anthropicService->generatePart2Couple($chapter, $tone, $model);
                 } elseif ($bookType === 'famille') {
                     $theme = $chapter->getTheme();
                     $aggregatedContext = null;
                     if ($theme === 'histoire_parents' || $theme === 'histoire_aine') {
                         $aggregatedContext = $this->familleAggregationService->aggregateForSynthesis($chapter);
                     }
-                    $text = $this->anthropicService->generatePart2Famille($chapter, $tone, $aggregatedContext);
+                    $text = $this->anthropicService->generatePart2Famille($chapter, $tone, $aggregatedContext, $model);
                 } else {
-                    $text = $this->anthropicService->generatePart2($chapter, $tone);
+                    $text = $this->anthropicService->generatePart2($chapter, $tone, $model);
                 }
 
-                $text = $this->anthropicService->checkAndComplete($text, true);
+                $text = $this->anthropicService->checkAndComplete($text, true, $model);
 
                 $chapter->setContentPart2($text);
                 $fullContent = $chapter->getContentPart1() . "\n\n" . $text;
