@@ -4,6 +4,7 @@ namespace App\ESG\UseCase\Diagnostic;
 
 use App\ESG\DTO\Output\SessionOutputDTO;
 use App\ESG\Entity\CertificationReferential;
+use App\ESG\Entity\DiagnosticAnswer;
 use App\ESG\Entity\DiagnosticSession;
 use App\ESG\Entity\EsgUser;
 use App\ESG\Enum\SessionStatusEnum;
@@ -46,6 +47,27 @@ class CreateSessionUseCase
         $session->setReferentialVersion($version);
 
         $em->persist($session);
+
+        // 4. Pré-remplir avec les réponses du dernier diagnostic terminé : pour une
+        //    modification, le front n'envoie que les réponses changées.
+        $lastCompleted = $sessionRepo->findOneBy(
+            ['company' => $company, 'status' => SessionStatusEnum::COMPLETED],
+            ['completedAt' => 'DESC']
+        );
+        if ($lastCompleted) {
+            $previousAnswers = $em->getRepository(DiagnosticAnswer::class)->findBySessionWithQuestion($lastCompleted);
+            foreach ($previousAnswers as $previous) {
+                if (!$previous->getQuestion()->isActive()) {
+                    continue;
+                }
+                $answer = new DiagnosticAnswer();
+                $session->addAnswer($answer);
+                $answer->setQuestion($previous->getQuestion());
+                $answer->setAnswerValue($previous->getAnswerValue());
+                $em->persist($answer);
+            }
+        }
+
         $em->flush();
 
         return new SessionOutputDTO($session);
