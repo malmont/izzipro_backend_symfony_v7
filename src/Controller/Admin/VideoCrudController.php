@@ -6,6 +6,7 @@ use App\Entity\Video;
 use App\Controller\Admin\BaseTenantCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
 use Symfony\Component\Form\Extension\Core\Type\FileType;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -36,6 +37,19 @@ class VideoCrudController extends BaseTenantCrudController
     {
         yield IdField::new('id')->onlyOnIndex();
         yield TextField::new('titre', 'Titre de la vidéo');
+
+        yield TextEditorField::new('description', 'Description / Texte (CTA)')
+            ->hideOnIndex()
+            ->setHelp('Texte multiligne ou liste à puces HTML affichés avec la vidéo.');
+
+        yield TextField::new('texteBouton', 'Texte du bouton (CTA)')
+            ->setRequired(false)
+            ->setHelp('Ex: "Raconter mon histoire", "Réserver ma rencontre"');
+
+        yield TextField::new('lienBouton', 'Lien du bouton (CTA)')
+            ->setRequired(false)
+            ->setHelp('Ex: "#contact", "tel:+14383363251", "/landingpage/reservez"');
+
         yield ImageField::new('imageDeFond', 'Miniature / Image de couverture')
             ->setBasePath('/bucket-simulator/assets/uploads/slider/')
             ->setUploadDir('var/storage/public_bucket/assets/uploads/slider/')

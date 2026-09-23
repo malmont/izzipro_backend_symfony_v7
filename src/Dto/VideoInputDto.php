@@ -13,4 +13,13 @@ class VideoInputDto
     public ?string $lienVideo = null;
 
     public ?string $imageDeFond = null;
+
+    public ?string $description = null;
+    public ?string $texte = null;
+
+    public ?string $texteBouton = null;
+    public ?string $buttonText = null;
+
+    public ?string $lienBouton = null;
+    public ?string $buttonUrl = null;
 }

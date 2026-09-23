@@ -8,6 +8,12 @@ class VideoOutputDto
     public int $id;
     public ?string $titre;
     public ?string $title;
+    public ?string $description;
+    public ?string $texte;
+    public ?string $texteBouton;
+    public ?string $buttonText;
+    public ?string $lienBouton;
+    public ?string $buttonUrl;
     public ?string $lienVideo;
     public ?string $lien_video;
     public ?string $url;
@@ -22,6 +28,15 @@ class VideoOutputDto
         $this->id = (int) $video->getId();
         $this->titre = $translation?->getTitre() ?? $video->getTitre();
         $this->title = $this->titre;
+
+        $this->description = $translation?->getDescription() ?? $video->getDescription();
+        $this->texte = $this->description;
+
+        $this->texteBouton = $translation?->getTexteBouton() ?? $video->getTexteBouton();
+        $this->buttonText = $this->texteBouton;
+
+        $this->lienBouton = $translation?->getLienBouton() ?? $video->getLienBouton();
+        $this->buttonUrl = $this->lienBouton;
         $rawLien = $video->getLienVideo();
         if ($rawLien && str_starts_with($rawLien, '/')) {
             $parsedHost = parse_url($baseImageUrl, PHP_URL_HOST);

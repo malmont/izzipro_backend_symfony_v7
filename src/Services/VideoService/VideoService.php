@@ -27,11 +27,19 @@ class VideoService
     {
         return $this->repository->findByIdAndLocale($id, $locale);
     }
+
+    public function findVideo(int $id): ?Video
+    {
+        return $this->repository->find($id);
+    }
     
     public function createVideo(VideoInputDto $dto): Video
     {
         $video = new Video();
         $video->setTitre($dto->titre);
+        $video->setDescription($dto->description ?? $dto->texte);
+        $video->setTexteBouton($dto->texteBouton ?? $dto->buttonText);
+        $video->setLienBouton($dto->lienBouton ?? $dto->buttonUrl);
         $video->setLienVideo($dto->lienVideo);
         $video->setImageDeFond($dto->imageDeFond);
 
@@ -44,6 +52,19 @@ class VideoService
     public function updateVideo(Video $video, VideoInputDto $dto): Video
     {
         $video->setTitre($dto->titre ?? $video->getTitre());
+
+        if ($dto->description !== null || $dto->texte !== null) {
+            $video->setDescription($dto->description ?? $dto->texte);
+        }
+
+        if ($dto->texteBouton !== null || $dto->buttonText !== null) {
+            $video->setTexteBouton($dto->texteBouton ?? $dto->buttonText);
+        }
+
+        if ($dto->lienBouton !== null || $dto->buttonUrl !== null) {
+            $video->setLienBouton($dto->lienBouton ?? $dto->buttonUrl);
+        }
+
         $video->setLienVideo($dto->lienVideo ?? $video->getLienVideo());
         $video->setImageDeFond($dto->imageDeFond ?? $video->getImageDeFond());
 
