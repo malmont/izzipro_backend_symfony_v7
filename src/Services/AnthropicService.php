@@ -792,7 +792,15 @@ class AnthropicService
             }
 
             $data = $response->toArray();
-            return $data['content'][0]['text'] ?? '';
+            $fullText = '';
+            if (!empty($data['content']) && is_array($data['content'])) {
+                foreach ($data['content'] as $block) {
+                    if (($block['type'] ?? '') === 'text' && !empty($block['text'])) {
+                        $fullText .= $block['text'];
+                    }
+                }
+            }
+            return $fullText;
 
         } catch (\Exception $e) {
             $this->logger->error("Anthropic Exception: " . $e->getMessage());
