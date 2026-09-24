@@ -43,6 +43,9 @@ security:
         # 🔹 Webhooks externes (Lulu Print API, etc.)
         - { path: ^/api/webhooks/, roles: PUBLIC_ACCESS }
 
+        # 🔹 Administration Mémoires Vivantes (Gestion des utilisateurs, etc.)
+        - { path: ^/api/memoires/admin/, roles: ROLE_ADMIN }
+
         # 🔹 Partage public des questionnaires Mémoires Vivantes (UUID fait office de token)
         - { path: ^/api/memoires/, roles: PUBLIC_ACCESS }
 

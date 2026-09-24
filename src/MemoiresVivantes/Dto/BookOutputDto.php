@@ -47,6 +47,7 @@ class BookOutputDto
     public ?float $payment_amount = null;
     public ?string $paymentCurrency = 'eur';
     public ?string $payment_currency = 'eur';
+    public ?array $author = null;
 
     public function __construct(
         Book $book,
@@ -58,6 +59,15 @@ class BookOutputDto
         ?array $currentContributor = null
     ) {
         $this->id = (string) $book->getId();
+        if ($book->getUser()) {
+            $this->author = [
+                'id' => $book->getUser()->getId(),
+                'firstName' => $book->getUser()->getFirstname(),
+                'lastName' => $book->getUser()->getLastname(),
+                'fullName' => trim($book->getUser()->getFirstname() . ' ' . $book->getUser()->getLastname()),
+                'email' => $book->getUser()->getEmail(),
+            ];
+        }
         $this->title = $book->getTitle();
         $this->subtitle = $book->getSubtitle();
         $this->birthplace = $book->getBirthplace();

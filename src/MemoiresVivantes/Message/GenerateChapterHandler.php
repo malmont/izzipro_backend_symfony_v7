@@ -135,6 +135,8 @@ class GenerateChapterHandler
             $chapter->setGenerationStatus('failed');
             $chapter->setGenerationError($e->getMessage());
             $em->flush();
+        } finally {
+            $em->clear();
         }
     }
 }

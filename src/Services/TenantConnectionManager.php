@@ -33,6 +33,10 @@ class TenantConnectionManager
     // Ajout de la propriété Cache
     private TagAwareCacheInterface $cache;
 
+    private string           $pdoDsn;
+    private string           $pdoUser;
+    private string           $pdoPass;
+
     public function __construct(
         string $masterDatabaseUrl,
         string $defaultTenantUrl,
@@ -62,10 +66,10 @@ class TenantConnectionManager
         $user   = rawurldecode($parts['user'] ?? '');
         $pass   = rawurldecode($parts['pass'] ?? '');
 
-        $pdoDsn = sprintf('%s:host=%s;port=%d;dbname=%s', $scheme, $host, $port, $db);
-        $this->pdoMaster = new PDO($pdoDsn, $user, $pass, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        ]);
+        $this->pdoDsn = sprintf('%s:host=%s;port=%d;dbname=%s', $scheme, $host, $port, $db);
+        $this->pdoUser = $user;
+        $this->pdoPass = $pass;
+        $this->initPdoMaster();
 
         $this->tenantParams = $connection->getParams();
         $this->masterParams = [
@@ -78,8 +82,20 @@ class TenantConnectionManager
         ];
     }
 
+    private function initPdoMaster(): void
+    {
+        $this->pdoMaster = new PDO($this->pdoDsn, $this->pdoUser, $this->pdoPass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        ]);
+    }
+
     public function getPdoMaster(): PDO
     {
+        try {
+            $this->pdoMaster->query('SELECT 1');
+        } catch (\Throwable) {
+            $this->initPdoMaster();
+        }
         return $this->pdoMaster;
     }
 

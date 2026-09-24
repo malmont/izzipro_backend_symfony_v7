@@ -51,9 +51,21 @@ class BookController extends AbstractController
         $user = $this->getUser();
         if (!$user) return $this->json(['error' => 'Unauthorized'], 401);
 
-        $books = $this->getBooksByUserUseCase->execute($user);
-        $host = $this->resolveHost($request);
         $em = $this->emProvider->getEntityManager();
+        /** @var \App\MemoiresVivantes\Repository\BookRepository $bookRepo */
+        $bookRepo = $em->getRepository(Book::class);
+
+        $isAdmin = in_array('ROLE_ADMIN', $user->getRoles(), true) || in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true);
+        $scope = $request->query->get('scope', $isAdmin ? 'all' : 'my');
+        $targetUserId = $request->query->get('userId') ? (int) $request->query->get('userId') : null;
+
+        if ($isAdmin && $scope === 'all') {
+            $books = $bookRepo->findAllWithChaptersAndPhotos($targetUserId);
+        } else {
+            $books = $this->getBooksByUserUseCase->execute($user);
+        }
+
+        $host = $this->resolveHost($request);
 
         $latestOrdersByBookId = [];
         $ordersCountByBookId = [];

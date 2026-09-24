@@ -32,7 +32,14 @@ class TenantConnectionProvider
     {
         $currentParams = $this->defaultConnection->getParams();
         if (($currentParams['dbname'] ?? null) === $tenantDbName && $this->tenantCode === $tenantCode) {
-            return;
+            try {
+                if ($this->defaultConnection->isConnected()) {
+                    $this->defaultConnection->executeQuery('SELECT 1');
+                    return;
+                }
+            } catch (\Throwable) {
+                // Connexion tombée ou fermée par la base de données distante, on force la reconnexion
+            }
         }
 
         if ($this->defaultConnection->isConnected()) {
