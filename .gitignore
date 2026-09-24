@@ -40,3 +40,4 @@ secrets.env
 migrate_all.sh
 *.af
 interieur_lulu.pdf
+/scripts/
