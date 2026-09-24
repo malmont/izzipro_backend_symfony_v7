@@ -23,8 +23,61 @@ class ReservationApiController extends AbstractController
         private TenantCacheService $cacheService,
         private ValidatorInterface $validator,
         private \App\Services\ReservationService\ReservationService $reservationService,
-        private \App\Services\ReservationService\ReservationMailerService $mailerService
+        private \App\Services\ReservationService\ReservationMailerService $mailerService,
+        private \App\Services\TenantEntityManagerProvider $emProvider
     ) {
+    }
+
+    #[Route('', name: 'api_reservations_list', methods: ['GET'])]
+    public function list(Request $request): JsonResponse
+    {
+        $user = $this->getUser();
+        if (!$user) {
+            return $this->json(['error' => 'Non authentifié.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $roles = method_exists($user, 'getRoles') ? $user->getRoles() : [];
+        $isAdmin = in_array('ROLE_ADMIN', $roles, true) || in_array('ROLE_SUPER_ADMIN', $roles, true);
+
+        $filters = [];
+
+        // Cloisonnement RBAC :
+        // - ROLE_USER (Biographe standard) : Ne voit STRICTEMENT que ses propres réservations
+        // - ROLE_ADMIN : Voit tout par défaut (scope=all), ou ses propres entretiens (scope=my), ou filtre par collaborateur
+        if (!$isAdmin) {
+            $filters['biographerId'] = $user->getId();
+        } else {
+            $scope = $request->query->get('scope', 'all');
+            if ($scope === 'my') {
+                $filters['biographerId'] = $user->getId();
+            } elseif ($request->query->get('biographer_id')) {
+                $filters['biographerId'] = (int) $request->query->get('biographer_id');
+            }
+        }
+
+        $start = $request->query->get('start') ?: $request->query->get('from');
+        if ($start) {
+            $filters['startDate'] = $start;
+        }
+
+        $end = $request->query->get('end') ?: $request->query->get('to');
+        if ($end) {
+            $filters['endDate'] = $end;
+        }
+
+        $status = $request->query->get('status');
+        if ($status) {
+            $filters['status'] = $status;
+        }
+
+        $bookId = $request->query->get('book_id');
+        if ($bookId) {
+            $filters['bookId'] = $bookId;
+        }
+
+        $reservations = $this->reservationService->getReservations($filters);
+
+        return $this->json(array_map(fn($r) => new ReservationOutputDto($r), $reservations));
     }
 
     #[Route('', name: 'api_reservations_create', methods: ['POST'])]
@@ -56,6 +109,7 @@ class ReservationApiController extends AbstractController
             $dto->step_number = isset($data['step_number']) ? (int)$data['step_number'] : null;
             $dto->total_steps = isset($data['total_steps']) ? (int)$data['total_steps'] : null;
             $dto->forfait_name = isset($data['forfait_name']) ? trim((string)$data['forfait_name']) : null;
+            $dto->biographer_id = isset($data['biographer_id']) ? (int)$data['biographer_id'] : null;
 
             $violations = $this->validator->validate($dto);
             if (count($violations) > 0) {
@@ -73,7 +127,10 @@ class ReservationApiController extends AbstractController
             $host = $request->headers->get('X-Tenant-Host') ?: $request->getHost();
             $locale = $request->getLocale() ?: 'fr';
 
-            $reservation = $this->createReservationUseCase->execute($dto, $host, $locale);
+            $user = $this->getUser();
+            $currentUser = ($user instanceof \App\Entity\User) ? $user : null;
+
+            $reservation = $this->createReservationUseCase->execute($dto, $host, $locale, $currentUser);
 
             return $this->json([
                 'success' => true,
@@ -101,13 +158,43 @@ class ReservationApiController extends AbstractController
         $date = $request->query->get('date');
         $month = $request->query->get('month');
 
+        // Résolution du biographe :
+        // 1. Paramètre explicite ?biographer_id=X
+        // 2. Déduction depuis ?book_id=UUID
+        // 3. Si utilisateur connecté et non-admin, défaut sur son propre ID
+        $biographerId = null;
+        if ($request->query->get('biographer_id')) {
+            $biographerId = (int) $request->query->get('biographer_id');
+        } elseif ($request->query->get('book_id')) {
+            try {
+                $tenantEm = $this->emProvider->getEntityManager();
+                $book = $tenantEm->getRepository(\App\MemoiresVivantes\Entity\Book::class)->find(
+                    \Symfony\Component\Uid\Uuid::fromString($request->query->get('book_id'))
+                );
+                if ($book && $book->getUser()) {
+                    $biographerId = $book->getUser()->getId();
+                }
+            } catch (\Throwable $e) {
+                // Ignore format error and proceed
+            }
+        } else {
+            $user = $this->getUser();
+            if ($user instanceof \App\Entity\User) {
+                $roles = $user->getRoles();
+                if (!in_array('ROLE_ADMIN', $roles, true) && !in_array('ROLE_SUPER_ADMIN', $roles, true)) {
+                    $biographerId = $user->getId();
+                }
+            }
+        }
+
         if ($date) {
             try {
                 $dateTime = new \DateTime($date);
-                $slots = $this->reservationService->getBookedSlotsByDate($dateTime);
+                $slots = $this->reservationService->getBookedSlotsByDate($dateTime, $biographerId);
                 return $this->json([
                     'success' => true,
                     'date' => $dateTime->format('Y-m-d'),
+                    'biographer_id' => $biographerId,
                     'booked_slots' => $slots
                 ]);
             } catch (\Throwable $e) {
@@ -126,10 +213,11 @@ class ReservationApiController extends AbstractController
                 ], Response::HTTP_BAD_REQUEST);
             }
 
-            $bookedSlots = $this->reservationService->getBookedSlotsByMonth($month);
+            $bookedSlots = $this->reservationService->getBookedSlotsByMonth($month, $biographerId);
             return $this->json([
                 'success' => true,
                 'month' => $month,
+                'biographer_id' => $biographerId,
                 'booked_slots_by_date' => $bookedSlots
             ]);
         }

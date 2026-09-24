@@ -57,4 +57,6 @@ class ReservationInputDto
 
     #[Assert\Length(max: 255)]
     public ?string $forfait_name = null;
+
+    public ?int $biographer_id = null;
 }

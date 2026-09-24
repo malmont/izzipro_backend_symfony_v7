@@ -20,6 +20,10 @@ class Reservation
     #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
     private ?Entreprise $entreprise = null;
 
+    #[ORM\ManyToOne(targetEntity: User::class)]
+    #[ORM\JoinColumn(name: 'biographer_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+    private ?User $biographer = null;
+
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $tenantId = null;
 
@@ -297,6 +301,17 @@ class Reservation
             return sprintf('Séance %d', $this->stepNumber);
         }
         return null;
+    }
+
+    public function getBiographer(): ?User
+    {
+        return $this->biographer;
+    }
+
+    public function setBiographer(?User $biographer): self
+    {
+        $this->biographer = $biographer;
+        return $this;
     }
 
     public function getQuickActions(): ?string

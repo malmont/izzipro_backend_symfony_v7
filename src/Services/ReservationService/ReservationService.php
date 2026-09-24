@@ -6,7 +6,10 @@ use App\Dto\ReservationInputDto;
 use App\Entity\Entreprise;
 use App\Entity\Reservation;
 use App\Entity\ServiceOffer;
+use App\Entity\User;
+use App\MemoiresVivantes\Entity\Book;
 use App\Services\TenantEntityManagerProvider;
+use Symfony\Component\Uid\Uuid;
 
 class ReservationService
 {
@@ -15,7 +18,7 @@ class ReservationService
     ) {
     }
 
-    public function createReservation(ReservationInputDto $dto, string $host): Reservation
+    public function createReservation(ReservationInputDto $dto, string $host, ?User $currentUser = null): Reservation
     {
         $tenantEm = $this->emProvider->getEntityManager();
         $entreprise = $tenantEm->getRepository(Entreprise::class)->findOneBy([]);
@@ -23,21 +26,45 @@ class ReservationService
         $cleanTenantId = $dto->tenant_id ?: explode('.', $host)[0];
         $resDate = new \DateTime($dto->reservation_date);
 
+        // Résolution du biographe :
+        // 1. Paramètre explicite biographer_id
+        // 2. Déduction automatique depuis le livre (book_id)
+        // 3. Fallback sur l'utilisateur connecté s'il est biographe
+        $biographer = null;
+        if ($dto->biographer_id) {
+            $biographer = $tenantEm->getRepository(User::class)->find($dto->biographer_id);
+        } elseif ($dto->book_id) {
+            try {
+                $book = $tenantEm->getRepository(Book::class)->find(Uuid::fromString($dto->book_id));
+                if ($book && $book->getUser()) {
+                    $biographer = $book->getUser();
+                }
+            } catch (\Throwable $e) {
+                // Si l'UUID n'est pas valide ou livre introuvable, on continue sans biographe lié
+            }
+        } elseif ($currentUser) {
+            $biographer = $currentUser;
+        }
+
         $connection = $tenantEm->getConnection();
         $connection->beginTransaction();
 
         try {
-            // Verrou transactionnel sur (date, créneau) : sérialise les requêtes concurrentes
-            // pour empêcher deux réservations simultanées de passer la vérification anti-doublon.
-            // Libéré automatiquement au commit/rollback.
+            // Verrou transactionnel ciblé :
+            // Si un biographe est défini, on verrouille pour ce biographe précis.
+            // Cela permet à deux biographes distincts de réserver le même créneau en parallèle !
             if ($dto->reservation_slot) {
+                $lockKey = $biographer
+                    ? 'reservation:' . $biographer->getId() . ':' . $resDate->format('Y-m-d') . ':' . $dto->reservation_slot
+                    : 'reservation:' . $resDate->format('Y-m-d') . ':' . $dto->reservation_slot;
+
                 $connection->executeStatement(
                     'SELECT pg_advisory_xact_lock(hashtext(:key))',
-                    ['key' => 'reservation:' . $resDate->format('Y-m-d') . ':' . $dto->reservation_slot]
+                    ['key' => $lockKey]
                 );
 
-                // Vérification anti-doublon sur le créneau pour ce tenant
-                if ($this->isSlotBooked($resDate, $dto->reservation_slot)) {
+                // Vérification anti-doublon ciblée sur le biographe
+                if ($this->isSlotBooked($resDate, $dto->reservation_slot, $biographer?->getId())) {
                     throw new \DomainException(sprintf(
                         'Le créneau "%s" du %s est déjà réservé. Veuillez choisir un autre horaire.',
                         $dto->reservation_slot,
@@ -46,7 +73,7 @@ class ReservationService
                 }
             }
 
-            $reservation = $this->buildReservation($dto, $resDate, $cleanTenantId, $entreprise);
+            $reservation = $this->buildReservation($dto, $resDate, $cleanTenantId, $entreprise, $biographer);
 
             $tenantEm->persist($reservation);
             $tenantEm->flush();
@@ -61,7 +88,13 @@ class ReservationService
         return $reservation;
     }
 
-    private function buildReservation(ReservationInputDto $dto, \DateTime $resDate, string $cleanTenantId, ?Entreprise $entreprise): Reservation
+    private function buildReservation(
+        ReservationInputDto $dto,
+        \DateTime $resDate,
+        string $cleanTenantId,
+        ?Entreprise $entreprise,
+        ?User $biographer = null
+    ): Reservation
     {
         $reservation = new Reservation();
         $reservation->setServiceId($dto->service_id);
@@ -82,6 +115,7 @@ class ReservationService
         $reservation->setStepNumber($dto->step_number);
         $reservation->setTotalSteps($dto->total_steps);
         $reservation->setForfaitName($dto->forfait_name);
+        $reservation->setBiographer($biographer);
 
         return $reservation;
     }
@@ -274,55 +308,68 @@ class ReservationService
         );
     }
 
-    public function isSlotBooked(\DateTimeInterface $date, string $slot): bool
+    public function isSlotBooked(\DateTimeInterface $date, string $slot, ?int $biographerId = null): bool
     {
         $tenantEm = $this->emProvider->getEntityManager();
-        $count = (int) $tenantEm->getRepository(Reservation::class)->createQueryBuilder('r')
+        $qb = $tenantEm->getRepository(Reservation::class)->createQueryBuilder('r')
             ->select('COUNT(r.id)')
             ->where('r.reservationDate = :date')
             ->andWhere('r.reservationSlot = :slot')
             ->andWhere('r.status != :cancelled')
             ->setParameter('date', $date->format('Y-m-d'))
             ->setParameter('slot', $slot)
-            ->setParameter('cancelled', 'cancelled')
-            ->getQuery()
-            ->getSingleScalarResult();
+            ->setParameter('cancelled', 'cancelled');
 
-        return $count > 0;
+        if ($biographerId !== null) {
+            $qb->andWhere('r.biographer = :biographerId')
+               ->setParameter('biographerId', $biographerId);
+        }
+
+        return ((int) $qb->getQuery()->getSingleScalarResult()) > 0;
     }
 
-    public function getBookedSlotsByDate(\DateTimeInterface $date): array
+    public function getBookedSlotsByDate(\DateTimeInterface $date, ?int $biographerId = null): array
     {
         $tenantEm = $this->emProvider->getEntityManager();
-        $reservations = $tenantEm->getRepository(Reservation::class)->createQueryBuilder('r')
+        $qb = $tenantEm->getRepository(Reservation::class)->createQueryBuilder('r')
             ->select('r.reservationSlot')
             ->where('r.reservationDate = :date')
             ->andWhere('r.status != :cancelled')
             ->andWhere('r.reservationSlot IS NOT NULL')
             ->setParameter('date', $date->format('Y-m-d'))
-            ->setParameter('cancelled', 'cancelled')
-            ->getQuery()
-            ->getScalarResult();
+            ->setParameter('cancelled', 'cancelled');
+
+        if ($biographerId !== null) {
+            $qb->andWhere('r.biographer = :biographerId')
+               ->setParameter('biographerId', $biographerId);
+        }
+
+        $reservations = $qb->getQuery()->getScalarResult();
 
         return array_values(array_unique(array_filter(array_column($reservations, 'reservationSlot'))));
     }
 
-    public function getBookedSlotsByMonth(string $yearMonth): array
+    public function getBookedSlotsByMonth(string $yearMonth, ?int $biographerId = null): array
     {
         $startDate = new \DateTime($yearMonth . '-01 00:00:00');
         $endDate = (clone $startDate)->modify('last day of this month')->setTime(23, 59, 59);
 
         $tenantEm = $this->emProvider->getEntityManager();
-        $reservations = $tenantEm->getRepository(Reservation::class)->createQueryBuilder('r')
+        $qb = $tenantEm->getRepository(Reservation::class)->createQueryBuilder('r')
             ->select('r.reservationDate, r.reservationSlot')
             ->where('r.reservationDate BETWEEN :start AND :end')
             ->andWhere('r.status != :cancelled')
             ->andWhere('r.reservationSlot IS NOT NULL')
             ->setParameter('start', $startDate->format('Y-m-d'))
             ->setParameter('end', $endDate->format('Y-m-d'))
-            ->setParameter('cancelled', 'cancelled')
-            ->getQuery()
-            ->getResult();
+            ->setParameter('cancelled', 'cancelled');
+
+        if ($biographerId !== null) {
+            $qb->andWhere('r.biographer = :biographerId')
+               ->setParameter('biographerId', $biographerId);
+        }
+
+        $reservations = $qb->getQuery()->getResult();
 
         $result = [];
         foreach ($reservations as $row) {
@@ -339,5 +386,51 @@ class ReservationService
         }
 
         return $result;
+    }
+
+    /**
+     * Recherche avancée de réservations avec filtres (biographe, dates, statut, livre)
+     */
+    public function getReservations(array $filters = []): array
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $qb = $tenantEm->getRepository(Reservation::class)->createQueryBuilder('r');
+
+        if (!empty($filters['biographerId'])) {
+            $qb->andWhere('r.biographer = :biographerId')
+               ->setParameter('biographerId', (int)$filters['biographerId']);
+        }
+
+        if (!empty($filters['startDate'])) {
+            $start = $filters['startDate'] instanceof \DateTimeInterface
+                ? $filters['startDate']->format('Y-m-d')
+                : (new \DateTime((string)$filters['startDate']))->format('Y-m-d');
+            $qb->andWhere('r.reservationDate >= :startDate')
+               ->setParameter('startDate', $start);
+        }
+
+        if (!empty($filters['endDate'])) {
+            $end = $filters['endDate'] instanceof \DateTimeInterface
+                ? $filters['endDate']->format('Y-m-d')
+                : (new \DateTime((string)$filters['endDate']))->format('Y-m-d');
+            $qb->andWhere('r.reservationDate <= :endDate')
+               ->setParameter('endDate', $end);
+        }
+
+        if (!empty($filters['status'])) {
+            $qb->andWhere('r.status = :status')
+               ->setParameter('status', $filters['status']);
+        }
+
+        if (!empty($filters['bookId'])) {
+            $qb->andWhere('r.bookId = :bookId')
+               ->setParameter('bookId', $filters['bookId']);
+        }
+
+        $qb->orderBy('r.reservationDate', 'ASC')
+           ->addOrderBy('r.reservationSlot', 'ASC')
+           ->addOrderBy('r.createdAt', 'DESC');
+
+        return $qb->getQuery()->getResult();
     }
 }

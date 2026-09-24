@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\Reservation;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
@@ -149,6 +150,7 @@ class ReservationCrudController extends BaseTenantCrudController
             ->formatValue(fn ($value, Reservation $entity) => $entity->getStepLabel() ?: '—');
         yield DateField::new('reservationDate', 'Date souhaitée');
         yield TextField::new('reservationSlot', 'Créneau horaire');
+        yield AssociationField::new('biographer', 'Biographe');
         yield IntegerField::new('numberOfGuests', 'Personnes / Logements');
         yield ChoiceField::new('status', 'Statut')
             ->setChoices([

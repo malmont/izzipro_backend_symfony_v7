@@ -24,6 +24,9 @@ class ReservationOutputDto
     public ?int $total_steps;
     public ?string $forfait_name;
     public ?string $step_label;
+    public ?int $biographer_id;
+    public ?string $biographer_name;
+    public ?string $biographer_email;
 
     public function __construct(Reservation $reservation)
     {
@@ -45,5 +48,10 @@ class ReservationOutputDto
         $this->total_steps = $reservation->getTotalSteps();
         $this->forfait_name = $reservation->getForfaitName();
         $this->step_label = $reservation->getStepLabel();
+
+        $biographer = $reservation->getBiographer();
+        $this->biographer_id = $biographer?->getId();
+        $this->biographer_name = $biographer ? (trim(($biographer->getFirstname() ?? '') . ' ' . ($biographer->getLastname() ?? '')) ?: $biographer->getUsername()) : null;
+        $this->biographer_email = $biographer?->getEmail();
     }
 }
