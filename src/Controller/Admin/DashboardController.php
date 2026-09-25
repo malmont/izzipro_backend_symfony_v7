@@ -377,16 +377,23 @@ class DashboardController extends AbstractDashboardController
     public function configureDashboard(): Dashboard
     {
         return Dashboard::new()
-            ->setTitle('<img src="/assets/Logo-Principal_GEM-PORTAL.png" style="max-height: 40px !important; max-width: 180px !important; width: auto !important; height: auto !important; object-fit: contain;">');
+            ->setTitle('<img src="/assets/logo-arkanoa-media.png" alt="Arkanoa Media" style="max-height: 65px !important; max-width: 230px !important; width: auto !important; height: auto !important; object-fit: contain;">');
     }
 
     public function configureAssets(): Assets
     {
         return parent::configureAssets()
             ->addHtmlContentToHead('<style>
+                .sidebar-brand, .main-header .navbar-brand {
+                    height: auto !important;
+                    min-height: 70px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    padding: 8px 12px !important;
+                }
                 .sidebar-brand img, .logo-custom img, .navbar-brand img, .main-header .logo img, [class*="logo"] img, .logo img {
-                    max-height: 40px !important;
-                    max-width: 180px !important;
+                    max-height: 65px !important;
+                    max-width: 230px !important;
                     width: auto !important;
                     height: auto !important;
                     object-fit: contain !important;
