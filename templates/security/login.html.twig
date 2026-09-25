@@ -1,60 +1,87 @@
-{% extends 'base.html.twig' %}
-
-{% block title %}Connexion - GEM-WORK{% endblock %}
-
-{# Ajout d'un block pour les styles spécifiques à cette page #}
-{% block stylesheets %}
-    {{ parent() }} {# Conserve les styles de base.html.twig si nécessaire #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion · Arkanoa Media</title>
+    <link rel="icon" type="image/png" href="{{ asset('assets/arkanoa-favicon.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=Outfit:wght@300;400;500;600;700&display=swap">
     <link rel="stylesheet" href="{{ asset('assets/css/login.css') }}">
-{% endblock %}
-
-{% block body %}
+</head>
+<body>
 <div class="login-page-wrapper">
+    <div class="login-bg" aria-hidden="true">
+        <span class="login-glow login-glow--blue"></span>
+        <span class="login-glow login-glow--magenta"></span>
+        <svg class="login-facets" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+            <path d="M-40 780 L420 60 L560 60" />
+            <path d="M1480 120 L980 900" />
+            <path d="M760 900 L1100 380 L1480 380" />
+            <path d="M0 300 L300 300 L520 -20" />
+        </svg>
+    </div>
 
     <div class="login-container">
         <div class="login-logo">
-            {# Utilisation de la fonction asset() pour le chemin du logo #}
-            <img src="{{ asset('assets/logo-arkanoa-media.png') }}"
-               alt="Arkanoa Media">
+            <img src="{{ asset('assets/logo-arkanoa-media.png') }}" alt="Arkanoa Media">
         </div>
 
-        {# Affichage des erreurs de connexion, s'il y en a #}
+        <div class="login-eyebrow">Studio Digital · Espace Authentification</div>
+
         {% if error %}
-            <div class="alert alert-danger">{{ error.messageKey|trans(error.messageData, 'security') }}</div>
+            <div class="alert alert-danger" role="alert">
+                {{ error.messageKey|trans(error.messageData, 'security') }}
+            </div>
         {% endif %}
 
-        <form method="post">
+        <form method="post" autocomplete="on">
             <div class="form-group">
-                {# MODIFIÉ : de "_username" à "email" pour correspondre à l'ancienne logique #}
-                <input type="text" name="email" value="{{ last_username }}" class="form-control" placeholder="Code d'utilisateur ou Courriel" required autofocus>
+                <label for="inputEmail">Identifiant ou Courriel</label>
+                <div class="input-with-icon">
+                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    <input type="text" id="inputEmail" name="email" value="{{ last_username }}" class="form-control" placeholder="nom@exemple.com" required autofocus autocomplete="username">
+                </div>
             </div>
 
             <div class="form-group">
-                {# MODIFIÉ : de "_password" à "password" pour correspondre à l'ancienne logique #}
-                <input type="password" name="password" class="form-control" placeholder="Mot de passe" required>
+                <div class="form-label-row">
+                    <label for="inputPassword">Mot de passe</label>
+                </div>
+                <div class="input-with-icon">
+                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    <input type="password" id="inputPassword" name="password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+                </div>
             </div>
-            
+
             <div class="form-group">
-                 <select class="form-control">
-                    <option selected>Français</option>
+                <label for="selectLang">Langue</label>
+                <select id="selectLang" class="form-control">
+                    <option selected>Français (Canada)</option>
                     <option>English</option>
                 </select>
             </div>
 
-            {# Jeton CSRF pour la sécurité #}
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
 
-            <div class="form-group">
-                <button class="btn-connexion" type="submit">CONNEXION</button>
+            <div class="form-group" style="margin-top: 26px;">
+                <button class="btn-connexion" type="submit">
+                    <span>CONNEXION</span>
+                    <svg viewBox="0 0 20 20" aria-hidden="true" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h11M11 5l5 5-5 5"/></svg>
+                </button>
             </div>
         </form>
-        
-        <div class="login-links">
-            <a href="#" class="btn-secondary-link">MOT DE PASSE OUBLIÉ</a>
-            <a href="#" class="btn-secondary-link">POLITIQUE DE PROTECTION DES RENSEIGNEMENTS</a>
-            <a href="#" class="btn-secondary-link">TERMES ET CONDITIONS</a>
-        </div>
 
+        <div class="login-links">
+            <a href="https://arkanoa-media.com" target="_blank" rel="noopener" class="btn-secondary-link">Visiter le site Arkanoa Media</a>
+            <a href="mailto:contact@arkanoa-media.com" class="btn-secondary-link">Support & Assistance technique</a>
+        </div>
+    </div>
+
+    <div class="login-footer-credits">
+        © {{ "now"|date("Y") }} Arkanoa Media LLC. Tous droits réservés.
     </div>
 </div>
-{% endblock %}
+</body>
+</html>

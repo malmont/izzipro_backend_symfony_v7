@@ -1,0 +1,486 @@
+/* =========================================================
+   ARKANOA MEDIA — Thème EasyAdmin Backoffice
+   Palette : Cristal Bleu, Magenta, Nuit Cosmique & Plaque Acier
+   ========================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Couleurs signature Arkanoa */
+  --ark-blue:        #1B5FE6;
+  --ark-blue-bright: #2F8BFF;
+  --ark-cyan:        #33C3FF;
+  --ark-violet:      #7B3FF0;
+  --ark-magenta:     #E0158A;
+  --ark-magenta-ink: #B80F70;
+
+  /* Plaque argentée & acier */
+  --ark-silver:      #EEF1F7;
+  --ark-silver-2:    #E3E8F2;
+  --ark-plate-top:   #FFFFFF;
+  --ark-plate-bot:   #EAEEF6;
+  --ark-steel:       #9DB3DA;
+  --ark-steel-dark:  #5F7DB5;
+
+  /* Nuit cosmique */
+  --ark-night:       #070B1E;
+  --ark-night-2:     #0E1533;
+  --ark-night-3:     #17214A;
+
+  /* Typographie & Dégradés */
+  --font-display:    "Michroma", "Eurostile", sans-serif;
+  --font-body:       "Outfit", "Helvetica Neue", sans-serif;
+  --crystal:         linear-gradient(115deg, #1B5FE6 0%, #2F8BFF 30%, #7B3FF0 58%, #E0158A 100%);
+  --crystal-hover:   linear-gradient(115deg, #2F8BFF 0%, #33C3FF 35%, #9A6BFF 65%, #FF4FB0 100%);
+  --ease:            cubic-bezier(.2, .7, .2, 1);
+  --shadow-plate:    inset 0 1px 0 #fff, inset 0 -3px 8px rgba(70, 100, 165, 0.10), 0 1px 2px rgba(20, 35, 80, 0.06), 0 18px 40px -18px rgba(20, 40, 100, 0.22);
+}
+
+/* =========================================================
+   BASE ET TYPOGRAPHIE
+   ========================================================= */
+body, .content-wrapper, .main-sidebar, .sidebar {
+  font-family: var(--font-body) !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .content-header-title h1, .sidebar-brand {
+  font-family: var(--font-display) !important;
+  letter-spacing: -0.01em;
+}
+
+/* =========================================================
+   BARRE LATÉRALE (SIDEBAR) — STYLE NUIT COSMIQUE
+   ========================================================= */
+.sidebar-wrapper,
+aside.main-sidebar,
+.main-sidebar,
+.sidebar,
+aside.sidebar {
+  background: linear-gradient(180deg, var(--ark-night) 0%, var(--ark-night-2) 60%, var(--ark-night-3) 100%) !important;
+  border-right: 1px solid rgba(157, 179, 218, 0.18) !important;
+  box-shadow: 4px 0 25px rgba(7, 11, 30, 0.35) !important;
+}
+
+/* Conteneur du Logo */
+.sidebar-brand,
+.main-header,
+.main-header .navbar,
+#header-logo,
+.sidebar-brand-wrapper {
+  height: auto !important;
+  min-height: 80px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 14px 16px !important;
+  background: rgba(7, 11, 30, 0.6) !important;
+  border-bottom: 1px solid rgba(157, 179, 218, 0.16) !important;
+  position: relative;
+}
+
+#header-logo::after,
+.sidebar-brand::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 20%;
+  right: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--ark-cyan), var(--ark-magenta), transparent);
+}
+
+.sidebar-brand img,
+.logo-custom img,
+#header-logo a.logo img,
+#responsive-header-logo img,
+.navbar-brand img,
+.main-header .logo img,
+[class*="logo"] img {
+  max-height: 60px !important;
+  max-width: 230px !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  filter: drop-shadow(0 2px 10px rgba(47, 139, 255, 0.35));
+  transition: transform 0.3s var(--ease), filter 0.3s;
+}
+
+.sidebar-brand:hover img,
+#header-logo a.logo:hover img {
+  transform: scale(1.03);
+  filter: drop-shadow(0 4px 16px rgba(51, 195, 255, 0.6));
+}
+
+/* Titres de sections (Menu Headers) */
+.sidebar-menu .menu-header,
+.sidebar-menu .header,
+.sidebar-menu li.header,
+ul.menu li.menu-header,
+.menu-header-contents {
+  font-family: var(--font-display) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.22em !important;
+  text-transform: uppercase !important;
+  color: var(--ark-cyan) !important;
+  padding: 18px 20px 8px !important;
+  opacity: 0.9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-menu .menu-header::before,
+.sidebar-menu .header::before,
+ul.menu li.menu-header::before,
+.menu-header-contents::before {
+  content: "";
+  width: 14px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--crystal);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Éléments du menu */
+.sidebar-menu li a,
+.sidebar .nav-link,
+.menu-item a,
+ul.menu li.menu-item a.menu-item-contents {
+  color: var(--ark-on-dark-2, #A9B5D6) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  padding: 10px 16px !important;
+  margin: 3px 10px !important;
+  border-radius: 10px !important;
+  transition: all 0.25s var(--ease) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  text-decoration: none !important;
+}
+
+.sidebar-menu li a:hover,
+.sidebar .nav-link:hover,
+.menu-item a:hover,
+ul.menu li.menu-item a.menu-item-contents:hover {
+  color: #FFFFFF !important;
+  background: rgba(47, 139, 255, 0.12) !important;
+  transform: translateX(4px);
+  box-shadow: inset 0 0 0 1px rgba(51, 195, 255, 0.25);
+}
+
+.sidebar-menu li a i,
+.sidebar-menu li a svg,
+.sidebar .nav-link i,
+.menu-item a i,
+ul.menu li.menu-item .menu-icon {
+  color: var(--ark-cyan) !important;
+  font-size: 15px !important;
+  transition: transform 0.25s var(--ease), color 0.25s;
+}
+
+.sidebar-menu li a:hover i,
+.sidebar .nav-link:hover i,
+ul.menu li.menu-item a.menu-item-contents:hover .menu-icon {
+  color: #FFFFFF !important;
+  transform: scale(1.15);
+}
+
+/* Élément actif du menu */
+.sidebar-menu li.active > a,
+.sidebar .nav-link.active,
+.menu-item.active > a,
+ul.menu li.menu-item.active > a.menu-item-contents,
+ul.menu li.menu-item.expanded > a.menu-item-contents {
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  background: linear-gradient(115deg, rgba(27, 95, 230, 0.5) 0%, rgba(123, 63, 240, 0.38) 55%, rgba(224, 21, 138, 0.32) 100%) !important;
+  border-left: 3.5px solid var(--ark-cyan) !important;
+  box-shadow: 0 4px 18px -4px rgba(47, 139, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+
+.sidebar-menu li.active > a i,
+.sidebar .nav-link.active i,
+ul.menu li.menu-item.active > a.menu-item-contents .menu-icon {
+  color: #FFFFFF !important;
+  filter: drop-shadow(0 0 6px var(--ark-cyan));
+}
+
+/* Submenu */
+ul.menu .submenu {
+  background: rgba(7, 11, 30, 0.45) !important;
+  border-radius: 8px;
+  margin: 4px 10px 8px 24px !important;
+  padding: 4px 0 !important;
+  border-left: 1px dashed rgba(157, 179, 218, 0.25);
+}
+
+ul.menu .submenu li.menu-item a.menu-item-contents {
+  margin: 2px 6px !important;
+  padding: 7px 12px !important;
+  font-size: 13.5px !important;
+}
+
+/* =========================================================
+   EN-TÊTE SUPÉRIEURE (HEADER / TOPBAR & RESPONSIVE HEADER)
+   ========================================================= */
+header.main-header,
+.content-top,
+.main-header,
+.responsive-header {
+  background: rgba(7, 11, 30, 0.94) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  backdrop-filter: blur(14px) !important;
+  border-bottom: 1px solid rgba(157, 179, 218, 0.18) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+}
+
+.responsive-header {
+  padding: 10px 18px !important;
+}
+
+#navigation-toggler {
+  color: #E9EEFB !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(157, 179, 218, 0.25) !important;
+}
+
+.user-menu .dropdown-toggle,
+.main-header .nav-link,
+.dropdown-settings-button,
+.user-details {
+  color: #E9EEFB !important;
+  font-weight: 500;
+}
+
+.user-avatar {
+  border-radius: 50%;
+  border: 1.5px solid var(--ark-cyan);
+}
+
+/* =========================================================
+   ZONE DE CONTENU PRINCIPALE (CARDS, TABLES, PANELS)
+   ========================================================= */
+.content-wrapper,
+body.easyadmin {
+  background: linear-gradient(180deg, #F3F6FC 0%, #E9EEF7 100%) !important;
+}
+
+.content-header {
+  padding: 24px 32px 16px !important;
+}
+
+.content-header-title h1,
+.content-header h1 {
+  font-size: 24px !important;
+  font-weight: 600 !important;
+  color: var(--ark-night) !important;
+}
+
+/* Cards et Conteneurs de données façon "Plaque Argentée" */
+.content-body .card,
+.datagrid .card,
+.form-card,
+.box,
+.content-panel,
+.container-fluid .card {
+  background: linear-gradient(180deg, var(--ark-plate-top) 0%, var(--ark-plate-bot) 100%) !important;
+  border: 1.5px solid var(--ark-steel) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--shadow-plate) !important;
+  overflow: hidden;
+  margin-bottom: 24px;
+  transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease) !important;
+}
+
+.container-fluid .card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-plate), 0 14px 28px -10px rgba(27, 95, 230, 0.25) !important;
+  border-color: var(--ark-steel-dark) !important;
+}
+
+.icon-circle {
+  width: 52px;
+  height: 52px;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 14px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 16px -6px rgba(27, 95, 230, 0.4) !important;
+}
+
+.card-header,
+.box-header {
+  background: linear-gradient(180deg, #FFFFFF, var(--ark-silver)) !important;
+  border-bottom: 1.5px solid var(--ark-steel) !important;
+  padding: 16px 22px !important;
+  font-weight: 600;
+}
+
+/* Tables de données */
+table.table,
+.datagrid table {
+  background: transparent !important;
+  margin-bottom: 0 !important;
+}
+
+table.table thead th {
+  background: linear-gradient(180deg, #FFFFFF, var(--ark-silver-2)) !important;
+  color: var(--ark-night) !important;
+  font-family: var(--font-display) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  border-bottom: 1.5px solid var(--ark-steel) !important;
+  padding: 14px 16px !important;
+}
+
+table.table tbody tr {
+  transition: background-color 0.2s;
+}
+
+table.table tbody tr:hover {
+  background-color: rgba(47, 139, 255, 0.05) !important;
+}
+
+table.table tbody td {
+  padding: 13px 16px !important;
+  vertical-align: middle !important;
+  border-color: rgba(157, 179, 218, 0.25) !important;
+  font-size: 14.5px;
+}
+
+/* =========================================================
+   BOUTONS & ACTIONS (INSPIRÉS DES BOUTONS CRISTAL)
+   ========================================================= */
+.btn-primary,
+.action-new,
+.action-save,
+.btn-success,
+button[type="submit"].btn-primary,
+a.btn-primary {
+  background: var(--crystal) !important;
+  background-size: 160% 100% !important;
+  background-position: 0% 50% !important;
+  border: none !important;
+  color: #FFFFFF !important;
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  border-radius: 999px !important;
+  padding: 8px 22px !important;
+  box-shadow: 0 6px 18px -4px rgba(123, 63, 240, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+  transition: all 0.3s var(--ease) !important;
+}
+
+.btn-primary:hover,
+.action-new:hover,
+.action-save:hover,
+.btn-success:hover {
+  background-position: 100% 50% !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 10px 24px -6px rgba(224, 21, 138, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+  color: #FFFFFF !important;
+}
+
+.btn-secondary,
+.btn-default,
+.action-cancel {
+  background: linear-gradient(180deg, #FFFFFF, var(--ark-silver-2)) !important;
+  border: 1.5px solid var(--ark-steel) !important;
+  color: var(--ark-ink, #0E1530) !important;
+  border-radius: 999px !important;
+  padding: 7px 20px !important;
+  font-weight: 500 !important;
+  box-shadow: var(--shadow-plate) !important;
+  transition: all 0.25s var(--ease) !important;
+}
+
+.btn-secondary:hover,
+.btn-default:hover {
+  border-color: var(--ark-steel-dark) !important;
+  transform: translateY(-1px) !important;
+  color: var(--ark-blue) !important;
+}
+
+.btn-danger,
+.action-delete {
+  background: linear-gradient(135deg, #FF4560, #C2185B) !important;
+  border: none !important;
+  border-radius: 999px !important;
+  box-shadow: 0 4px 14px -3px rgba(194, 24, 91, 0.5) !important;
+  color: #fff !important;
+}
+
+/* =========================================================
+   FORMULAIRES & INPUTS
+   ========================================================= */
+.form-control,
+.form-select,
+select,
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+  border: 1.5px solid var(--ark-steel) !important;
+  border-radius: 10px !important;
+  padding: 10px 14px !important;
+  background: #FFFFFF !important;
+  font-size: 14.5px !important;
+  transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+
+.form-control:focus,
+.form-select:focus,
+input:focus {
+  border-color: var(--ark-blue) !important;
+  box-shadow: 0 0 0 4px rgba(47, 139, 255, 0.18) !important;
+  outline: none !important;
+}
+
+/* =========================================================
+   BADGES & PILLS
+   ========================================================= */
+.badge {
+  border-radius: 999px !important;
+  padding: 5px 12px !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  letter-spacing: 0.03em !important;
+}
+
+.badge-primary,
+.badge-success {
+  background: linear-gradient(120deg, var(--ark-blue), var(--ark-violet)) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(27, 95, 230, 0.3) !important;
+}
+
+.badge-info {
+  background: linear-gradient(120deg, var(--ark-cyan), var(--ark-blue)) !important;
+  color: #fff !important;
+}
+
+.badge-warning {
+  background: linear-gradient(120deg, #FF9800, #F4511E) !important;
+  color: #fff !important;
+}
+
+/* =========================================================
+   PAGINATION
+   ========================================================= */
+.pagination .page-item .page-link {
+  border-radius: 8px !important;
+  margin: 0 3px !important;
+  border: 1.5px solid var(--ark-steel) !important;
+  color: var(--ark-blue) !important;
+  font-weight: 600;
+}
+
+.pagination .page-item.active .page-link {
+  background: var(--crystal) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(123, 63, 240, 0.4) !important;
+}

@@ -1,135 +1,321 @@
-/* public/assets/css/setup.css */
+/* =========================================================
+   ARKANOA MEDIA — Formulaire de Configuration Tenant
+   Palette : Cristal Bleu, Magenta, Nuit Cosmique & Plaque Acier
+   ========================================================= */
 
-/* --- Wrapper principal (inspiré de .login-page-wrapper) --- */
+@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --blue:        #1B5FE6;
+  --blue-bright: #2F8BFF;
+  --cyan:        #33C3FF;
+  --violet:      #7B3FF0;
+  --magenta:     #E0158A;
+  --magenta-ink: #B80F70;
+
+  --silver:      #EEF1F7;
+  --silver-2:    #E3E8F2;
+  --plate-top:   #FFFFFF;
+  --plate-bot:   #EAEEF6;
+  --steel:       #9DB3DA;
+  --steel-dark:  #5F7DB5;
+
+  --night:       #070B1E;
+  --night-2:     #0E1533;
+  --night-3:     #17214A;
+
+  --ink:         #0E1530;
+  --ink-2:       #3E4A6B;
+  --on-dark:     #E9EEFB;
+  --on-dark-2:   #A9B5D6;
+
+  --crystal: linear-gradient(115deg, var(--blue) 0%, var(--blue-bright) 30%, var(--violet) 58%, var(--magenta) 100%);
+  --font-display: "Michroma", "Eurostile", sans-serif;
+  --font-body: "Outfit", "Helvetica Neue", sans-serif;
+
+  --radius: 22px;
+  --radius-sm: 14px;
+  --shadow-plate:
+    inset 0 1px 0 #fff,
+    inset 0 -3px 8px rgba(70, 100, 165, 0.10),
+    0 1px 2px rgba(20, 35, 80, 0.06),
+    0 18px 40px -18px rgba(20, 40, 100, 0.22);
+  --ease: cubic-bezier(.2, .7, .2, 1);
+}
+
+/* Base */
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--night);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Wrapper avec fond cosmique */
 .setup-page-wrapper {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start; /* Aligné en haut pour les formulaires longs */
-    min-height: 100vh;
-    width: 100%;
-    /* Utilisation de votre image de fond exacte */
-    background-image: url('https://app.gem-car.com/image_file/logicielactif/images/info/201408111638565823_team-work-large.jpg');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed; /* L'image reste fixe lors du scroll */
-    padding: 4rem 1rem;
-    box-sizing: border-box;
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 60px 20px 80px;
+  box-sizing: border-box;
+  background:
+    radial-gradient(120% 80% at 80% 10%, var(--night-3) 0%, transparent 60%),
+    linear-gradient(180deg, var(--night) 0%, var(--night-2) 100%);
+  overflow-x: hidden;
 }
 
-/* --- Conteneur du formulaire (inspiré de .login-container) --- */
+/* Halos d'ambiance */
+.setup-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.setup-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(110px);
+  opacity: .45;
+  animation: setupDrift 14s ease-in-out infinite alternate;
+}
+.setup-glow--blue {
+  width: 580px;
+  height: 580px;
+  right: 5%;
+  top: 5%;
+  background: var(--blue);
+}
+.setup-glow--magenta {
+  width: 500px;
+  height: 500px;
+  left: 5%;
+  top: 40%;
+  background: var(--magenta);
+  animation-delay: -6s;
+  opacity: .35;
+}
+
+/* Conteneur principal (Plaque Argentée) */
 .setup-container {
-    background-color: #ffffff;
-    padding: 40px 50px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 800px; /* Plus large pour ce formulaire */
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 840px;
+  padding: 48px 52px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--plate-top) 0%, var(--plate-bot) 100%);
+  border: 1.5px solid var(--steel);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -3px 8px rgba(70, 100, 165, 0.12),
+    0 24px 50px -15px rgba(7, 11, 30, 0.7),
+    0 0 40px rgba(47, 139, 255, 0.15);
+  box-sizing: border-box;
+  animation: setupFadeIn 0.8s var(--ease) forwards;
 }
 
-/* --- Logo --- */
+/* Logo */
 .setup-logo {
-    text-align: center;
-    margin-bottom: 20px;
+  text-align: center;
+  margin-bottom: 24px;
 }
 
 .setup-logo img {
-    max-width: 250px;
-    height: auto;
+  max-width: 260px;
+  max-height: 72px;
+  height: auto;
+  margin: 0 auto;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 10px rgba(47, 139, 255, 0.25));
 }
 
-/* --- Titres --- */
+/* Badge En-tête */
+.setup-eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  color: var(--blue);
+  margin-bottom: 14px;
+}
+.setup-eyebrow::before,
+.setup-eyebrow::after {
+  content: "";
+  width: 22px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--crystal);
+}
+
+/* Titre */
 .setup-container h1 {
-    text-align: center;
-    font-size: 2rem;
-    font-weight: 700;
-    color: #333;
-    margin-bottom: 2.5rem;
+  font-family: var(--font-display);
+  text-align: center;
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 32px;
+}
+
+/* Sections du formulaire */
+.form-section {
+  background: #FFFFFF;
+  border: 1.5px solid var(--silver-2);
+  border-radius: var(--radius-sm);
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(20, 35, 80, 0.04);
 }
 
 .form-section h2 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #343a40;
-    border-bottom: 1px solid #e0e0e0;
-    padding-bottom: 0.75rem;
-    margin-top: 2rem;
-    margin-bottom: 1.5rem;
-}
-.form-section:first-of-type h2 {
-    margin-top: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--blue);
+  margin: 0 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1.5px solid var(--silver-2);
 }
 
-/* --- Styles pour les champs de formulaire (inspiré de .form-control) --- */
+.form-section h2::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+  background: var(--crystal);
+}
+
+/* Lignes et champs */
 .form-row {
-    margin-bottom: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  margin-bottom: 16px;
+}
+.form-row:last-child {
+  margin-bottom: 0;
 }
 
 .form-row label {
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-    font-size: 0.9rem;
-    display: block;
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
 }
 
-/* Style unifié pour les inputs */
+/* Inputs élégants */
 .form-row input[type="text"],
 .form-row input[type="email"],
-.form-row input[type="password"] {
-    width: 100%;
-    padding: 8px 12px; /* Un peu plus de hauteur que 28px pour la lisibilité */
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    font-size: 0.9rem;
-    box-sizing: border-box;
-    transition: border-color 0.2s, box-shadow 0.2s;
+.form-row input[type="password"],
+.form-row select {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--ink);
+  background: #FFFFFF;
+  border: 1.5px solid var(--steel);
+  border-radius: 10px;
+  box-sizing: border-box;
+  transition: border-color .25s var(--ease), box-shadow .25s var(--ease);
+  outline: none;
 }
 
-.form-row input:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+.form-row input:focus,
+.form-row select:focus {
+  border-color: var(--blue-bright);
+  box-shadow: 0 0 0 4px rgba(47, 139, 255, 0.2);
 }
 
-/* Style pour les champs de type 'file' */
-.form-row input[type="file"] {
-    font-size: 0.9rem;
-}
-
-/* --- Bouton de soumission (inspiré de .btn-connexion) --- */
+/* Bouton Cristal de Validation */
 .btn-submit {
-    width: 100%;
-    padding: 12px 15px; /* Plus grand pour un appel à l'action principal */
-    background-color: #007bff;
-    border: none;
-    color: white;
-    font-size: 1.1rem;
-    font-weight: bold;
-    border-radius: 4px;
-    cursor: pointer;
-    text-transform: uppercase;
-    transition: background-color 0.2s;
-    margin-top: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 28px;
+  margin-top: 16px;
+  border: 0;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #FFFFFF;
+  background: var(--crystal);
+  background-size: 160% 100%;
+  background-position: 0% 50%;
+  box-shadow: 0 10px 28px -10px rgba(123, 63, 240, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: transform .3s var(--ease), box-shadow .3s var(--ease), background-position .4s var(--ease);
 }
 
 .btn-submit:hover {
-    background-color: #0056b3;
+  background-position: 100% 50%;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px -10px rgba(224, 21, 138, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
-/* --- Messages Flash (inspiré de .alert.alert-danger) --- */
+/* Alertes */
 .alert {
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-    border-radius: 4px;
-    text-align: center;
-    border: 1px solid transparent;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  border-radius: 12px;
+  font-size: 14.5px;
+  font-weight: 500;
+  border: 1.5px solid transparent;
 }
 .alert-success {
-    background-color: #d4edda;
-    color: #155724;
-    border-color: #c3e6cb;
+  background-color: #E8F8F0;
+  color: #0F7A4A;
+  border-color: rgba(15, 122, 74, 0.3);
 }
 .alert-danger {
-    background-color: #f8d7da;
-    color: #721c24;
-    border-color: #f5c6cb;
+  background-color: #FFF0F5;
+  color: var(--magenta-ink);
+  border-color: rgba(224, 21, 138, 0.4);
+}
+
+/* Animations */
+@keyframes setupFadeIn {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes setupDrift {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-40px, 30px) scale(1.1); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .setup-container {
+    padding: 32px 22px;
+  }
+  .form-section {
+    padding: 18px 16px;
+  }
 }

@@ -1,141 +1,380 @@
-/* Style pour la page entière avec l'image de fond */
-body, html {
-    height: 100%;
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background-color: #f0f2f5; 
+/* =========================================================
+   ARKANOA MEDIA — Page & Formulaire de Connexion
+   Palette : Cristal Bleu, Magenta, Nuit Cosmique & Plaque Acier
+   ========================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --blue:        #1B5FE6;
+  --blue-bright: #2F8BFF;
+  --cyan:        #33C3FF;
+  --violet:      #7B3FF0;
+  --magenta:     #E0158A;
+  --magenta-ink: #B80F70;
+
+  --silver:      #EEF1F7;
+  --silver-2:    #E3E8F2;
+  --plate-top:   #FFFFFF;
+  --plate-bot:   #EAEEF6;
+  --steel:       #9DB3DA;
+  --steel-dark:  #5F7DB5;
+
+  --night:       #070B1E;
+  --night-2:     #0E1533;
+  --night-3:     #17214A;
+
+  --ink:         #0E1530;
+  --ink-2:       #3E4A6B;
+  --on-dark:     #E9EEFB;
+  --on-dark-2:   #A9B5D6;
+
+  --crystal: linear-gradient(115deg, var(--blue) 0%, var(--blue-bright) 30%, var(--violet) 58%, var(--magenta) 100%);
+  --font-display: "Michroma", "Eurostile", sans-serif;
+  --font-body: "Outfit", "Helvetica Neue", sans-serif;
+
+  --radius: 22px;
+  --radius-sm: 14px;
+  --shadow-plate:
+    inset 0 1px 0 #fff,
+    inset 0 -3px 8px rgba(70, 100, 165, 0.10),
+    0 1px 2px rgba(20, 35, 80, 0.06),
+    0 18px 40px -18px rgba(20, 40, 100, 0.22);
+  --ease: cubic-bezier(.2, .7, .2, 1);
 }
 
+/* Base de la page */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--on-dark);
+  background: var(--night);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Wrapper avec fond cosmique */
 .login-page-wrapper {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    width: 100vw;
-    background-image: url('https://app.gem-car.com/image_file/logicielactif/images/info/201408111638565823_team-work-large.jpg');
-    background-size: cover;
-    background-position: center;
+  position: relative;
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30px 20px;
+  box-sizing: border-box;
+  background:
+    radial-gradient(120% 80% at 80% 10%, var(--night-3) 0%, transparent 60%),
+    linear-gradient(180deg, var(--night) 0%, var(--night-2) 100%);
+  overflow: hidden;
 }
 
-/* Conteneur principal du formulaire */
+/* Halos lumineux d'arrière-plan */
+.login-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.login-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: .5;
+  animation: loginDrift 14s ease-in-out infinite alternate;
+}
+.login-glow--blue {
+  width: 520px;
+  height: 520px;
+  right: 10%;
+  top: 10%;
+  background: var(--blue);
+}
+.login-glow--magenta {
+  width: 440px;
+  height: 440px;
+  left: 5%;
+  bottom: 10%;
+  background: var(--magenta);
+  animation-delay: -6s;
+  opacity: .38;
+}
+
+/* Facettes géométriques SVG d'arrière-plan */
+.login-facets {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.login-facets path {
+  fill: none;
+  stroke: rgba(157, 179, 218, .12);
+  stroke-width: 1;
+}
+
+/* Carte de connexion (Plaque Argentée Futuriste) */
 .login-container {
-    background-color: #ffffff;
-    padding: 40px 30px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 570px;
-    text-align: center;
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 460px;
+  padding: 42px 36px 36px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--plate-top) 0%, var(--plate-bot) 100%);
+  border: 1.5px solid var(--steel);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 -3px 8px rgba(70, 100, 165, 0.12),
+    0 24px 50px -15px rgba(7, 11, 30, 0.7),
+    0 0 40px rgba(47, 139, 255, 0.15);
+  box-sizing: border-box;
+  animation: cardFadeIn 0.8s var(--ease) forwards;
 }
 
 /* Logo */
+.login-logo {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
 .login-logo img {
-    max-width: 300px;
-    margin-bottom: 25px;
+  max-width: 250px;
+  max-height: 70px;
+  height: auto;
+  margin: 0 auto;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(47, 139, 255, 0.25));
 }
 
-/* Espacement des groupes de formulaire */
+/* Badge En-tête */
+.login-eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  color: var(--blue);
+  margin-bottom: 22px;
+}
+.login-eyebrow::before,
+.login-eyebrow::after {
+  content: "";
+  width: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--crystal);
+}
+
+/* Groupes de formulaire */
 .form-group {
-    margin-bottom: 6px;
+  margin-bottom: 20px;
+  text-align: left;
 }
 
-/* Style des champs de saisie et du select */
+.form-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+
+.forgot-link {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--blue);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.forgot-link:hover {
+  color: var(--magenta-ink);
+  text-decoration: underline;
+}
+
+/* Inputs élégants */
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-icon {
+  position: absolute;
+  left: 14px;
+  width: 18px;
+  height: 18px;
+  color: var(--steel-dark);
+  pointer-events: none;
+  transition: color 0.25s var(--ease);
+}
+
+.input-with-icon .form-control {
+  padding-left: 44px;
+}
+
+.input-with-icon:focus-within .input-icon {
+  color: var(--blue-bright);
+}
+
 .form-control {
-    width: 100%;
-    height: 28px;
-    padding: 5px 12px; 
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    box-sizing: border-box; /* Important pour que le padding n'ajoute pas à la largeur */
-    -webkit-appearance: none; /* Enlève les styles par défaut sur iOS */
-    -moz-appearance: none;
-    appearance: none;
+  width: 100%;
+  min-height: 50px;
+  padding: 11px 16px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--ink);
+  background: #FFFFFF;
+  border: 1.5px solid var(--steel);
+  border-radius: 12px;
+  box-sizing: border-box;
+  transition: border-color .25s var(--ease), box-shadow .25s var(--ease), transform 0.2s;
+  outline: none;
+}
+
+.form-control::placeholder {
+  color: #8C9BBF;
+  font-size: 14.5px;
 }
 
 .form-control:focus {
-  height: 28px; 
-  padding: 5px 12px; 
-  box-shadow: none; 
-  border-color: #ced4da; 
-  outline: none; 
+  border-color: var(--blue-bright);
+  box-shadow: 0 0 0 4px rgba(47, 139, 255, 0.22);
+  transform: translateY(-1px);
 }
 
-/* Cas spécifique pour le select pour ajouter une flèche */
+/* Select de langue personnalisé */
 select.form-control {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right .75rem center;
-    background-size: 16px 12px;
-    
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%233E4A6B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 8l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+  padding-right: 40px;
+  cursor: pointer;
+  color: var(--ink-2);
+  font-weight: 500;
 }
 
-
+/* Bouton Cristal de Connexion */
 .btn-connexion {
-    width: 100%;
-    height: 28px; 
-    padding: 0 15px; 
-    background-color: #007bff;
-    border: none;
-    color: white;
-    font-size: 1rem;
-    font-weight: bold;
-    border-radius: 4px;
-    cursor: pointer;
-    text-transform: uppercase;
-    transition: background-color 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 50px;
+  padding: 0 24px;
+  margin-top: 10px;
+  border: 0;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #FFFFFF;
+  background: var(--crystal);
+  background-size: 160% 100%;
+  background-position: 0% 50%;
+  box-shadow: 0 10px 25px -8px rgba(123, 63, 240, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: transform .3s var(--ease), box-shadow .3s var(--ease), background-position .4s var(--ease);
 }
 
 .btn-connexion:hover {
-    background-color: #0056b3;
+  background-position: 100% 50%;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -8px rgba(224, 21, 138, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
+.btn-connexion:active {
+  transform: translateY(1px);
+}
+
+/* Alertes d'erreur */
+.alert-danger {
+  background: #FFF0F5;
+  border: 1.5px solid rgba(224, 21, 138, 0.4);
+  color: var(--magenta-ink);
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  text-align: left;
+  box-shadow: 0 4px 12px rgba(224, 21, 138, 0.08);
+}
+
+/* Liens du bas */
 .login-links {
-    margin-top: 10px;
-    display: flex;
-    flex-direction: column; 
-    gap: 10px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--silver-2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
 }
 
 .btn-secondary-link {
-    width: 100%;
-    height: 28px;
-    padding: 0 15px; 
-    margin-bottom: 0px;
-    background-color: #ffffff;
-    border: 1px solid #dcdcdc;
-    color: #6c757d;
-    font-size: 0.8rem;
-    font-weight: 600;
-    border-radius: 4px;
-    cursor: pointer;
-    text-decoration: none;
-    text-transform: uppercase;
-    transition: background-color 0.2s, border-color 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: color 0.25s var(--ease);
 }
 
 .btn-secondary-link:hover {
-    background-color: #f8f9fa;
-    border-color: #c8c8c8;
+  color: var(--blue);
 }
 
-.btn-secondary-link:last-child {
-    margin-bottom: 0;
+/* Footer Copyright sous la boîte */
+.login-footer-credits {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--on-dark-2);
+  opacity: 0.8;
 }
 
-/* Style pour le message d'erreur */
-.alert.alert-danger {
-    background-color: #f8d7da;
-    color: #721c24;
-    border-color: #f5c6cb;
-    padding: 10px;
-    border-radius: 4px;
-    margin-bottom: 15px;
-    text-align: left;
+/* Animations */
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(22px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes loginDrift {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-30px, 25px) scale(1.1); }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 30px 22px;
+    border-radius: 18px;
+  }
+  .login-logo img {
+    max-width: 210px;
+  }
 }

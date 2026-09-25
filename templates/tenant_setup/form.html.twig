@@ -1,22 +1,30 @@
-{# templates/tenant_setup/form.html.twig #}
-{% extends 'base.html.twig' %}
-
-{% block title %}Finaliser la création de votre site{% endblock %}
-
-{% block stylesheets %}
-    {{ parent() }}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Boutique · Arkanoa Media</title>
+    <link rel="icon" type="image/png" href="{{ asset('assets/arkanoa-favicon.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=Outfit:wght@300;400;500;600;700&display=swap">
     <link rel="stylesheet" href="{{ asset('assets/css/setup.css') }}">
-{% endblock %}
-
-{% block body %}
+</head>
+<body>
 <div class="setup-page-wrapper">
-    <div class="setup-container">
+    <div class="setup-bg" aria-hidden="true">
+        <span class="setup-glow setup-glow--blue"></span>
+        <span class="setup-glow setup-glow--magenta"></span>
+    </div>
 
+    <div class="setup-container">
         <div class="setup-logo">
-            <img src="{{ asset('assets/Logo-Principal_GEM-PORTAL.png') }}" alt="GEM-PORTAL Logo">
+            <img src="{{ asset('assets/logo-arkanoa-media.png') }}" alt="Arkanoa Media Logo">
         </div>
 
-        <h1>Finaliser la Création de Votre Site</h1>
+        <div class="setup-eyebrow">Studio Digital · Déploiement Cloud</div>
+
+        <h1>Finaliser la Création de Votre Boutique</h1>
 
         {% for label, messages in app.flashes %}
             {% for message in messages %}
@@ -99,4 +107,5 @@
         {{ form_end(form) }}
     </div>
 </div>
-{% endblock %}
+</body>
+</html>
