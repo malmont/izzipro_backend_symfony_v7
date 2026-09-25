@@ -111,14 +111,16 @@ class TenantConnectionManager
         bool $isInternal = false,
         ?string $customDomain = null
     ): void {
-        if (!preg_match('/^[a-z0-9_]+$/i', $code) || !preg_match('/^[a-z0-9_]+$/i', $dbname)) {
-            throw new \InvalidArgumentException("Code ou dbname invalide : seuls [a-z0-9_] sont autorisés");
+        if (!preg_match('/^[a-z0-9_-]+$/i', $code) || !preg_match('/^[a-z0-9_-]+$/i', $dbname)) {
+            throw new \InvalidArgumentException("Code ou dbname invalide : seuls [a-z0-9_-] sont autorisés");
         }
 
         try {
             $templateDbName = 'gmasuite';
-            $this->logger->info(sprintf('Tentative de terminaison des connexions pour la base template "%s"', $templateDbName));
+            $this->logger->info(sprintf('Tentative d\'isolation et de terminaison des connexions pour la base template "%s"', $templateDbName));
             try {
+                // Bloquer temporairement les nouvelles connexions sur la base template pour éviter les conflits concurrents
+                $this->pdoMaster->exec(sprintf('ALTER DATABASE "%s" WITH allow_connections = false', $templateDbName));
                 $stmt = $this->pdoMaster->prepare(
                     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :datname AND pid <> pg_backend_pid()"
                 );
@@ -127,11 +129,19 @@ class TenantConnectionManager
                 $this->logger->warning('Impossible de terminer les connexions existantes: ' . $termEx->getMessage());
             }
 
-            // Création physique
-            $this->pdoMaster->exec(
-                sprintf('CREATE DATABASE "%s" WITH TEMPLATE gmasuite', $dbname)
-            );
-
+            try {
+                // Création physique du tenant par clonage du template
+                $this->pdoMaster->exec(
+                    sprintf('CREATE DATABASE "%s" WITH TEMPLATE "%s"', $dbname, $templateDbName)
+                );
+            } finally {
+                // Rétablir immédiatement les connexions sur la base template
+                try {
+                    $this->pdoMaster->exec(sprintf('ALTER DATABASE "%s" WITH allow_connections = true', $templateDbName));
+                } catch (\Throwable $allowEx) {
+                    $this->logger->warning('Impossible de rétablir les connexions sur gmasuite: ' . $allowEx->getMessage());
+                }
+            }
 
             $this->fixSequences($dbname);
 
@@ -447,8 +457,12 @@ class TenantConnectionManager
                 // Exclusion des mots clés système
                 if ($potentialCode && !in_array($potentialCode, ['api', 'admin', 'backend', 'www', 'localhost'])) {
                     try {
-                        $stmt = $pdo->prepare('SELECT code, name, dbname FROM tenants WHERE code = :code LIMIT 1');
-                        $stmt->execute(['code' => $potentialCode]);
+                        $altCode = str_contains($potentialCode, '-')
+                            ? str_replace('-', '_', $potentialCode)
+                            : str_replace('_', '-', $potentialCode);
+
+                        $stmt = $pdo->prepare('SELECT code, name, dbname FROM tenants WHERE code = :code OR code = :altCode LIMIT 1');
+                        $stmt->execute(['code' => $potentialCode, 'altCode' => $altCode]);
                         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
                         if ($row) {

@@ -31,9 +31,14 @@ class TenantSetupController extends AbstractController
         $cleanHost = explode(':', $host)[0];
 
         // 1. Récupération prioritaire depuis les paramètres d'URL (?subdomain=... ou ?code=...)
-        $subdomain = $request->query->get('subdomain') ?? $request->query->get('code');
+        // ou depuis les données POST si déjà soumis
+        $postData = $request->request->all('tenant_setup');
+        $subdomain = $request->query->get('subdomain') 
+            ?? $request->query->get('code') 
+            ?? ($postData['subdomain'] ?? null) 
+            ?? ($postData['code'] ?? null);
 
-        // 2. Si non présent en GET, extraction depuis le sous-domaine de l'hôte
+        // 2. Si non présent en GET/POST, extraction depuis le sous-domaine de l'hôte
         if (!$subdomain) {
             if ($cleanHost === 'localhost' || $cleanHost === '127.0.0.1') {
                 $subdomain = 'localtest'; 
@@ -81,10 +86,14 @@ class TenantSetupController extends AbstractController
         
         $form->handleRequest($request);
 
-        if ($form->isSubmitted() && $form->isValid()) {
+        if ($form->isSubmitted()) {
+            if (!$form->isValid()) {
+                $this->addFlash('danger', 'Le formulaire contient des erreurs. Veuillez vérifier les informations saisies.');
+                return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
+            }
             
             // A. Validation de la clé secrète de création
-            if ($dto->secretKey !== $this->tenantCreationSecretKey) {
+            if (trim($dto->secretKey ?? '') !== trim($this->tenantCreationSecretKey)) {
                 $this->addFlash('danger', 'La clé de sécurité de création est invalide.');
                 return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
@@ -111,7 +120,7 @@ class TenantSetupController extends AbstractController
 
             } catch (\Throwable $e) {
                 $this->addFlash('danger', 'Erreur lors de la création de la boutique : ' . $e->getMessage());
-                return $this->redirectToRoute('app_tenant_setup');
+                return $this->render('tenant_setup/form.html.twig', [ 'form' => $form->createView() ]);
             }
 
             // D. Alimentation des données entreprise dans la base tenant
@@ -178,11 +187,20 @@ class TenantSetupController extends AbstractController
     {
         $pdoMaster = $tenantManager->getPdoMaster();
         $dbname = 'db_' . $identifier;
+        $altIdentifier = str_contains($identifier, '-')
+            ? str_replace('-', '_', $identifier)
+            : str_replace('_', '-', $identifier);
+        $altDbname = 'db_' . $altIdentifier;
         
-        $sql = 'SELECT 1 FROM tenants WHERE code = :identifier OR dbname = :dbname OR custom_domain = :identifier';
+        $sql = 'SELECT 1 FROM tenants WHERE code = :identifier OR code = :altIdentifier OR dbname = :dbname OR dbname = :altDbname OR custom_domain = :identifier';
         
         $stmt = $pdoMaster->prepare($sql);
-        $stmt->execute(['identifier' => $identifier, 'dbname' => $dbname]);
+        $stmt->execute([
+            'identifier' => $identifier,
+            'altIdentifier' => $altIdentifier,
+            'dbname' => $dbname,
+            'altDbname' => $altDbname,
+        ]);
         
         return $stmt->fetch() === false; 
     }

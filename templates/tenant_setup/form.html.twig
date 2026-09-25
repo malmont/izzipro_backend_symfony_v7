@@ -26,6 +26,22 @@
             {% endfor %}
         {% endfor %}
 
+        {% if not form.vars.valid %}
+            <div class="alert alert-danger">
+                <strong>Attention :</strong>
+                <ul style="margin: 8px 0 0 16px; padding: 0;">
+                    {% for error in form.vars.errors %}
+                        <li>{{ error.message }}</li>
+                    {% endfor %}
+                    {% for child in form.children %}
+                        {% for error in child.vars.errors %}
+                            <li><strong>{{ child.vars.label|default(child.vars.name) }} :</strong> {{ error.message }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
         {{ form_start(form) }}
         
             <div class="form-section">

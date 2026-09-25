@@ -7,12 +7,12 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 class TenantSetupDTO
 {
-    #[Assert\NotBlank]
-    #[Assert\Regex('/^[a-z0-9_]+$/i', message: "L'identifiant ne doit contenir que des lettres, chiffres ou underscores.")]
+    #[Assert\NotBlank(message: "L'identifiant est obligatoire.")]
+    #[Assert\Regex('/^[a-z0-9_-]+$/i', message: "L'identifiant ne doit contenir que des lettres, chiffres, tirets ou underscores.")]
     public ?string $code = null;
 
-    #[Assert\NotBlank]
-    #[Assert\Regex('/^[a-z0-9-]+$/i', message: "Le sous-domaine ne doit contenir que des lettres, chiffres ou tirets.")]
+    #[Assert\NotBlank(message: "Le sous-domaine est obligatoire.")]
+    #[Assert\Regex('/^[a-z0-9_-]+$/i', message: "Le sous-domaine ne doit contenir que des lettres, chiffres, tirets ou underscores.")]
     public ?string $subdomain = null;
 
     #[Assert\NotBlank(message: "La clé de création est obligatoire.")]
