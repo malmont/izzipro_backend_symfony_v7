@@ -75,10 +75,11 @@ class BookTypeNormalizer
     public function toAdminArray(BookType $type): array
     {
         $questionsByTheme = [];
+        $answeredBooks = $this->adminService->answeredBooksByQuestion($type);
         $questions = $this->emProvider->getEntityManager()->getRepository(MemoireQuestion::class)
             ->findBy(['bookType' => $type->getCode()], ['displayOrder' => 'ASC', 'id' => 'ASC']);
         foreach ($questions as $q) {
-            $questionsByTheme[$q->getTheme()][] = $this->questionToArray($q);
+            $questionsByTheme[$q->getTheme()][] = $this->questionToArray($q, $answeredBooks[$q->getTheme()][$q->getQuestionText()] ?? 0);
         }
 
         return [
@@ -130,7 +131,10 @@ class BookTypeNormalizer
         return $roles;
     }
 
-    public function questionToArray(MemoireQuestion $q): array
+    /**
+     * @param int $answeredBooks livres ayant répondu : > 0 signifie qu'une suppression archivera la question
+     */
+    public function questionToArray(MemoireQuestion $q, int $answeredBooks = 0): array
     {
         return [
             'id' => $q->getId(),
@@ -139,6 +143,7 @@ class BookTypeNormalizer
             'tip' => $q->getTip(),
             'displayOrder' => $q->getDisplayOrder(),
             'isActive' => $q->isActive(),
+            'usage' => ['answeredBooks' => $answeredBooks],
         ];
     }
 }

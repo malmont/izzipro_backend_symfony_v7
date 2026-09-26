@@ -568,6 +568,33 @@ class BookTypeAdminService
         return false;
     }
 
+    /**
+     * Nombre de livres ayant une réponse non vide à chaque question du type, en une seule requête.
+     * Même critère que isQuestionAnswered() : une question comptée ici sera archivée, et non supprimée.
+     *
+     * @return array<string, array<string, int>> [thème][texte de la question] => nombre de livres
+     */
+    public function answeredBooksByQuestion(BookType $type): array
+    {
+        $rows = $this->em()->getConnection()->fetchAllAssociative(
+            'SELECT c.book_id, c.theme, c.answers, c.contributor_answers FROM mv_chapter c JOIN mv_book b ON b.id = c.book_id WHERE b.type = :type',
+            ['type' => $type->getCode()]
+        );
+
+        $books = [];
+        foreach ($rows as $row) {
+            $texts = ChapterQuestionProvider::answeredQuestionTextsFromData(
+                json_decode($row['answers'] ?? '[]', true),
+                $row['contributor_answers'] !== null ? json_decode($row['contributor_answers'], true) : null
+            );
+            foreach ($texts as $text) {
+                $books[$row['theme']][$text][$row['book_id']] = true;
+            }
+        }
+
+        return array_map(fn (array $byText) => array_map('count', $byText), $books);
+    }
+
     public function typeOfQuestion(MemoireQuestion $question): BookType
     {
         $type = $this->em()->getRepository(BookType::class)->findOneBy(['code' => $question->getBookType()]);
