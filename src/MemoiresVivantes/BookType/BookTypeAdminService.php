@@ -19,10 +19,10 @@ use Doctrine\ORM\EntityManagerInterface;
 class BookTypeAdminService
 {
     /**
-     * Le moteur de génération générique (consignes en base) arrive à l'étape suivante.
-     * D'ici là, un type sur consignes "base" ne peut pas être activé pour les clients.
+     * Moteur de génération générique (DatabasePromptEngine) disponible : un type sur consignes "base"
+     * peut être activé, et un type historique peut basculer sur ses consignes en base.
      */
-    public const GENERIC_ENGINE_AVAILABLE = false;
+    public const GENERIC_ENGINE_AVAILABLE = true;
 
     private const CODE_PATTERN = '/^[a-z][a-z0-9_]*$/';
 

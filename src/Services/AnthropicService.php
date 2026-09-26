@@ -701,7 +701,7 @@ class AnthropicService
         return $this->callAnthropic($prompt, 32000, null, $model);
     }
 
-    private function formatContributorTestimonies(array $contributorAnswers): string
+    public function formatContributorTestimonies(array $contributorAnswers): string
     {
         $formatted = "";
         foreach ($contributorAnswers as $contrib) {
@@ -736,7 +736,7 @@ class AnthropicService
         return $text;
     }
 
-    private function extractLastParagraphs(string $text, int $count): string
+    public function extractLastParagraphs(string $text, int $count): string
     {
         $paragraphs = array_filter(array_map('trim', explode("\n\n", str_replace("\r", "", $text))));
         if (empty($paragraphs)) {
@@ -753,6 +753,14 @@ class AnthropicService
         $prompt = "Question : " . $question . "\nRéponse brute de l'utilisateur : " . $answer;
 
         return $this->callAnthropic($prompt, 2000, $systemPrompt, $model ?? self::DEFAULT_FAST_MODEL);
+    }
+
+    /**
+     * Appel direct avec un prompt déjà assemblé (moteur des types de livre sur consignes en base, assistant de consignes).
+     */
+    public function complete(string $prompt, int $maxTokens = 32000, ?string $system = null, ?string $model = null): string
+    {
+        return $this->callAnthropic($prompt, $maxTokens, $system, $model);
     }
 
     private function callAnthropic(string $prompt, int $maxTokens = 32000, ?string $system = null, ?string $model = null): string
@@ -808,7 +816,7 @@ class AnthropicService
         }
     }
 
-    private function formatAnswers(array $answers): string
+    public function formatAnswers(array $answers): string
     {
         $formatted = "";
         foreach ($answers as $answer) {

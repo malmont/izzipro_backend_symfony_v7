@@ -5,6 +5,8 @@ namespace App\MemoiresVivantes\Controller\Admin;
 use App\MemoiresVivantes\BookType\BookTypeAdminException;
 use App\MemoiresVivantes\BookType\BookTypeAdminService;
 use App\MemoiresVivantes\BookType\BookTypeNormalizer;
+use App\MemoiresVivantes\BookType\BookTypePromptAssistant;
+use App\MemoiresVivantes\BookType\DatabasePromptEngine;
 use App\MemoiresVivantes\Entity\BookType;
 use App\MemoiresVivantes\Entity\BookTypeChapter;
 use App\MemoiresVivantes\Entity\BookTypeRole;
@@ -27,7 +29,8 @@ class BookTypeAdminController extends AbstractController
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly BookTypeAdminService $service,
-        private readonly BookTypeNormalizer $normalizer
+        private readonly BookTypeNormalizer $normalizer,
+        private readonly BookTypePromptAssistant $assistant
     ) {}
 
     // ---------------------------------------------------------------- Types
@@ -240,6 +243,80 @@ class BookTypeAdminController extends AbstractController
         }
 
         return $this->json(['result' => $result, 'bookType' => $this->normalizer->toAdminArray($type)]);
+    }
+
+    // ---------------------------------------------------------------- Consignes IA
+
+    /** Variables utilisables dans les consignes, pour l'aide à la saisie */
+    #[Route('/book-types/prompt-variables', methods: ['GET'])]
+    public function promptVariables(): JsonResponse
+    {
+        return $this->json(array_map(
+            fn ($name, $description) => ['name' => $name, 'description' => $description],
+            array_keys(DatabasePromptEngine::VARIABLES),
+            DatabasePromptEngine::VARIABLES
+        ));
+    }
+
+    /**
+     * Propose une consigne générale améliorée par l'IA ({ "suggestion": ... }), sans l'enregistrer.
+     * Corps : { "promptRaw"?: string (défaut : consigne brute enregistrée), "model"?: string }
+     */
+    #[Route('/book-types/{id}/prompt/optimize', methods: ['POST'])]
+    public function optimizeTypePrompt(int $id, Request $request): JsonResponse
+    {
+        $type = $this->find(BookType::class, $id);
+        if (!$type) {
+            return $this->notFound('Book type');
+        }
+        $data = $this->payload($request);
+
+        try {
+            $suggestion = $this->assistant->optimize($type, null, (string) ($data['promptRaw'] ?? $type->getPromptRaw() ?? ''), $data['model'] ?? null);
+        } catch (BookTypeAdminException $e) {
+            return $this->json(['error' => $e->getMessage()], $e->getStatusCode());
+        }
+
+        return $this->json(['suggestion' => $suggestion]);
+    }
+
+    /** Idem pour la consigne propre à un chapitre */
+    #[Route('/book-type-chapters/{id}/prompt/optimize', methods: ['POST'])]
+    public function optimizeChapterPrompt(int $id, Request $request): JsonResponse
+    {
+        $chapter = $this->find(BookTypeChapter::class, $id);
+        if (!$chapter) {
+            return $this->notFound('Chapter');
+        }
+        $data = $this->payload($request);
+
+        try {
+            $suggestion = $this->assistant->optimize($chapter->getBookType(), $chapter, (string) ($data['promptRaw'] ?? $chapter->getPromptRaw() ?? ''), $data['model'] ?? null);
+        } catch (BookTypeAdminException $e) {
+            return $this->json(['error' => $e->getMessage()], $e->getStatusCode());
+        }
+
+        return $this->json(['suggestion' => $suggestion]);
+    }
+
+    /**
+     * Teste les consignes en base du type sur un livre fictif : renvoie le prompt assemblé et un extrait généré.
+     * Corps : { "chapterCode": string, "answers"?: [{question, answer}], "tone"?, "model"?, "subjectsAbsent"?: bool, "dryRun"?: bool }
+     * dryRun : renvoie seulement le prompt assemblé, sans appel à l'IA.
+     */
+    #[Route('/book-types/{id}/test', methods: ['POST'])]
+    public function testType(int $id, Request $request): JsonResponse
+    {
+        $type = $this->find(BookType::class, $id);
+        if (!$type) {
+            return $this->notFound('Book type');
+        }
+
+        try {
+            return $this->json($this->assistant->test($type, $this->payload($request)));
+        } catch (BookTypeAdminException $e) {
+            return $this->json(['error' => $e->getMessage()], $e->getStatusCode());
+        }
     }
 
     // ---------------------------------------------------------------- Outils

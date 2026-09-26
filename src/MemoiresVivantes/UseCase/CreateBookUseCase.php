@@ -2,6 +2,7 @@
 
 namespace App\MemoiresVivantes\UseCase;
 
+use App\MemoiresVivantes\BookType\BookTypeResolver;
 use App\MemoiresVivantes\Dto\BookInputDto;
 use App\MemoiresVivantes\Entity\Book;
 use App\Entity\User;
@@ -10,7 +11,8 @@ use App\Services\TenantEntityManagerProvider;
 class CreateBookUseCase
 {
     public function __construct(
-        private readonly TenantEntityManagerProvider $emProvider
+        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly BookTypeResolver $bookTypeResolver
     ) {}
 
     public function execute(User $user, BookInputDto $dto): Book
@@ -23,7 +25,7 @@ class CreateBookUseCase
         $book->setSubtitle($dto->subtitle);
         $book->setBirthplace($dto->birthplace);
         $book->setFormat($dto->format ?? 'livre_s');
-        $book->setType($dto->type ?? 'individuel');
+        $book->setType($dto->type !== null && $this->bookTypeResolver->isSelectable($dto->type) ? $dto->type : 'individuel');
         $book->setPerson1FirstName($dto->person1FirstName);
         $book->setPerson1Birthplace($dto->person1Birthplace);
         $book->setPerson2FirstName($dto->person2FirstName);

@@ -9,6 +9,7 @@ use App\MemoiresVivantes\Entity\BookPrintOrder;
 use App\MemoiresVivantes\Entity\Contributor;
 use App\MemoiresVivantes\Services\BookService;
 use App\MemoiresVivantes\Services\ChapterQuestionProvider;
+use App\MemoiresVivantes\BookType\BookTypeResolver;
 use App\MemoiresVivantes\UseCase\CreateBookUseCase;
 use App\MemoiresVivantes\UseCase\GetBooksByUserUseCase;
 use App\MemoiresVivantes\UseCase\UpdateBookUseCase;
@@ -34,6 +35,7 @@ class BookController extends AbstractController
         private readonly DeleteBookUseCase $deleteBookUseCase,
         private readonly BookService $bookService,
         private readonly ChapterQuestionProvider $questionProvider,
+        private readonly BookTypeResolver $bookTypeResolver,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly GetBookReservationsUseCase $getBookReservationsUseCase,
         private readonly SyncBookPaymentStatusUseCase $syncBookPaymentStatusUseCase,
@@ -139,10 +141,7 @@ class BookController extends AbstractController
             } catch (\Throwable) {}
         }
 
-        $defaultRole = null;
-        if ($book->getType() === 'famille') {
-            $defaultRole = ($book->isParentsDeceased() || $book->isParentsNotParticipating()) ? 'enfant' : 'parent';
-        }
+        $defaultRole = $this->bookTypeResolver->defaultRole($book);
 
         $filterRole = $requestedRole ?? $contributorRole ?? $defaultRole;
 

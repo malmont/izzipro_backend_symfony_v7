@@ -2,6 +2,8 @@
 
 namespace App\MemoiresVivantes\Message;
 
+use App\MemoiresVivantes\BookType\BookTypeResolver;
+use App\MemoiresVivantes\BookType\DatabasePromptEngine;
 use App\MemoiresVivantes\Message\GenerateChapterMessage;
 use App\Services\AnthropicService;
 use App\Services\TenantEntityManagerProvider;
@@ -23,6 +25,8 @@ class GenerateChapterHandler
         private readonly AnthropicService $anthropicService,
         private readonly HommageAggregationService $hommageAggregationService,
         private readonly FamilleAggregationService $familleAggregationService,
+        private readonly BookTypeResolver $bookTypeResolver,
+        private readonly DatabasePromptEngine $promptEngine,
         private readonly MessageBusInterface $messageBus,
         private readonly LoggerInterface $logger
     ) {}
@@ -67,7 +71,10 @@ class GenerateChapterHandler
                 $tone = isset($message->tone) ? $message->tone : 'intime et chaleureux';
 
                 $bookType = $chapter->getBook()->getType();
-                if ($bookType === 'hommage') {
+                $databaseType = $this->bookTypeResolver->findDatabasePromptType($chapter->getBook());
+                if ($databaseType !== null) {
+                    $text = $this->promptEngine->generate($chapter, $databaseType, 1, $tone, $model);
+                } elseif ($bookType === 'hommage') {
                     $theme = $chapter->getTheme();
                     $aggregatedContext = null;
                     if ($theme === 'portrait_croise' || $theme === 'une_vie') {
@@ -101,7 +108,10 @@ class GenerateChapterHandler
                 $tone = isset($message->tone) ? $message->tone : 'intime et chaleureux';
 
                 $bookType = $chapter->getBook()->getType();
-                if ($bookType === 'hommage') {
+                $databaseType = $this->bookTypeResolver->findDatabasePromptType($chapter->getBook());
+                if ($databaseType !== null) {
+                    $text = $this->promptEngine->generate($chapter, $databaseType, 2, $tone, $model);
+                } elseif ($bookType === 'hommage') {
                     $theme = $chapter->getTheme();
                     $aggregatedContext = null;
                     if ($theme === 'portrait_croise' || $theme === 'une_vie') {

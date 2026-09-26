@@ -26,7 +26,8 @@ class BookInputDto
         $this->birthplace = $data['birthplace'] ?? null;
         $this->format = $data['format'] ?? null;
         $typeInput = $data['type'] ?? null;
-        $this->type = ($typeInput !== null && in_array($typeInput, ['individuel', 'couple', 'famille', 'hommage'], true)) ? $typeInput : null;
+        // Code bien formé uniquement : l'existence du type (historique ou actif en base) est vérifiée par les use cases
+        $this->type = (is_string($typeInput) && preg_match('/^[a-z][a-z0-9_]{0,49}$/', $typeInput)) ? $typeInput : null;
         $this->person1FirstName = $data['person1FirstName'] ?? null;
         $this->person1Birthplace = $data['person1Birthplace'] ?? null;
         $this->person2FirstName = $data['person2FirstName'] ?? null;

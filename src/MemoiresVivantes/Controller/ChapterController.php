@@ -20,6 +20,8 @@ use App\MemoiresVivantes\UseCase\UpdateChapterUseCase;
 use App\MemoiresVivantes\Services\HommageAggregationService;
 use App\MemoiresVivantes\Services\FamilleAggregationService;
 use App\MemoiresVivantes\Services\ChapterQuestionProvider;
+use App\MemoiresVivantes\BookType\BookTypeResolver;
+use App\MemoiresVivantes\BookType\DatabasePromptEngine;
 use App\Services\AnthropicService;
 use App\Services\MediaUrlResolver;
 use App\Services\TenantEntityManagerProvider;
@@ -46,6 +48,8 @@ class ChapterController extends AbstractController
         private readonly HommageAggregationService $hommageAggregationService,
         private readonly FamilleAggregationService $familleAggregationService,
         private readonly ChapterQuestionProvider $questionProvider,
+        private readonly BookTypeResolver $bookTypeResolver,
+        private readonly DatabasePromptEngine $promptEngine,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly MessageBusInterface $messageBus,
         private readonly \Psr\Log\LoggerInterface $logger,
@@ -91,8 +95,8 @@ class ChapterController extends AbstractController
             } catch (\Throwable) {}
         }
 
-        if ($role === null && $book->getType() === 'famille') {
-            $role = ($book->isParentsDeceased() || $book->isParentsNotParticipating()) ? 'enfant' : 'parent';
+        if ($role === null) {
+            $role = $this->bookTypeResolver->defaultRole($book);
         }
 
         $questionsByTheme = $this->questionProvider->forBook($book, $role);
@@ -162,8 +166,8 @@ class ChapterController extends AbstractController
             }
         }
 
-        if ($role === null && $chapter->getBook() && $chapter->getBook()->getType() === 'famille') {
-            $role = ($chapter->getBook()->isParentsDeceased() || $chapter->getBook()->isParentsNotParticipating()) ? 'enfant' : 'parent';
+        if ($role === null) {
+            $role = $this->bookTypeResolver->defaultRole($chapter->getBook());
         }
 
         $questions = $this->questionProvider->forChapter($chapter, $role);
@@ -257,8 +261,8 @@ class ChapterController extends AbstractController
             } catch (\Throwable) {}
         }
 
-        if ($role === null && $chapter->getBook() && $chapter->getBook()->getType() === 'famille') {
-            $role = ($chapter->getBook()->isParentsDeceased() || $chapter->getBook()->isParentsNotParticipating()) ? 'enfant' : 'parent';
+        if ($role === null) {
+            $role = $this->bookTypeResolver->defaultRole($chapter->getBook());
         }
 
         $questions = $this->questionProvider->forChapter($chapter, $role);
@@ -329,6 +333,15 @@ class ChapterController extends AbstractController
                         'error' => $check['reason'] ?? 'Les témoignages des proches ou des parents sont requis avant de pouvoir générer ce chapitre.'
                     ], 422);
                 }
+            }
+        }
+
+        // Garde générique : chapitres de synthèse des types sur consignes en base
+        $databaseType = $this->bookTypeResolver->findDatabasePromptType($chapter->getBook());
+        if ($databaseType !== null) {
+            $check = $this->promptEngine->checkCanGenerate($chapter, $databaseType);
+            if (!$check['canGenerate']) {
+                return $this->json(['error' => $check['reason']], 422);
             }
         }
 
