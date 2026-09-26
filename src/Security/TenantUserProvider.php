@@ -26,9 +26,15 @@ class TenantUserProvider implements UserProviderInterface
 
         $dbName = $em->getConnection()->getDatabase();
 
-        $user = $em->getRepository(User::class)->findOneBy(['email' => $identifier])
-             ?? $em->getRepository(User::class)->findOneBy(['username' => $identifier])
-             ?? $em->getRepository(EsgUser::class)->findOneBy(['email' => $identifier]);
+        if (str_starts_with($identifier, EsgUser::IDENTIFIER_PREFIX)) {
+            // Jeton d'un compte ESG : uniquement parmi les comptes ESG, jamais parmi les utilisateurs classiques
+            $user = $em->getRepository(EsgUser::class)->findOneBy(['email' => substr($identifier, strlen(EsgUser::IDENTIFIER_PREFIX))]);
+        } else {
+            // Utilisateurs classiques ; repli ESG pour les jetons émis avant le préfixe (e-mail seul)
+            $user = $em->getRepository(User::class)->findOneBy(['email' => $identifier])
+                 ?? $em->getRepository(User::class)->findOneBy(['username' => $identifier])
+                 ?? $em->getRepository(EsgUser::class)->findOneBy(['email' => $identifier]);
+        }
 
         if (!$user) {
             $this->logger->warning(

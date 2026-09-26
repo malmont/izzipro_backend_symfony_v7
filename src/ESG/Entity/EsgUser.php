@@ -73,9 +73,16 @@ class EsgUser implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
+    /** Préfixe des identifiants de comptes ESG dans les jetons (voir TenantUserProvider) */
+    public const IDENTIFIER_PREFIX = 'esg:';
+
+    /**
+     * Identifiant distinct de celui des utilisateurs classiques (App\Entity\User) : sans préfixe, un compte ESG
+     * créé avec l'e-mail d'un admin était résolu comme cet admin à la lecture du jeton (élévation de privilèges).
+     */
     public function getUserIdentifier(): string
     {
-        return (string) $this->email;
+        return self::IDENTIFIER_PREFIX . $this->email;
     }
 
     /**
@@ -83,7 +90,8 @@ class EsgUser implements UserInterface, PasswordAuthenticatedUserInterface
      */
     public function getUsername(): string
     {
-        return (string) $this->email;
+        // Lu par Lexik JWT pour le claim "username" du jeton : doit porter le même identifiant préfixé
+        return $this->getUserIdentifier();
     }
 
     public function getRoles(): array

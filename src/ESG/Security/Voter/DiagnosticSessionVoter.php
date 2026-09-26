@@ -48,7 +48,7 @@ class DiagnosticSessionVoter extends Voter
             if (method_exists($user, 'getAssignedCompanies')) {
                 return $user->getAssignedCompanies()->contains($session->getCompany());
             }
-            return true; // Default access if no relation defined
+            return false; // Pas de relation consultant ↔ entreprises : refus par défaut (était un accès à toutes les entreprises)
         }
 
         return false;

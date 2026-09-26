@@ -28,7 +28,9 @@ class RegisterUseCase
         $em = $this->emProvider->getEntityManager();
 
         // 1. Check if email already exists
-        $existingUser = $em->getRepository(EsgUser::class)->findOneBy(['email' => $dto->email]);
+        // Défense en profondeur : un e-mail déjà utilisé par un utilisateur classique (admin compris) est refusé
+        $existingUser = $em->getRepository(EsgUser::class)->findOneBy(['email' => $dto->email])
+            ?? $em->getRepository(\App\Entity\User::class)->findOneBy(['email' => $dto->email]);
         if ($existingUser) {
             throw new ConflictHttpException('Un utilisateur avec cette adresse email existe déjà.');
         }
