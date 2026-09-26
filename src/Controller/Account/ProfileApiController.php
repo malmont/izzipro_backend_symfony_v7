@@ -26,6 +26,7 @@ class ProfileApiController extends BaseTenantApiController
             'firstName' => $user->getFirstname(),
             'lastName' => $user->getLastname(),
             'username' => $user->getUsername(),
+            'roles' => $user->getRoles(), // permet au front d'afficher les outils d'administration (ex. éditeur des landing pages)
             'licenseNumber' => $user->getLicenseNumber(),
             'licenseExpirationDate' => $user->getLicenseExpirationDate()?->format('Y-m-d'),
             'phone' => $user->getPrimaryAddress()?->getPhone(), // Attempt to get phone from primary address if user thinks it's there
