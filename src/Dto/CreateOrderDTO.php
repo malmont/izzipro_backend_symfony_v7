@@ -224,4 +224,18 @@ class CreateOrderDTO implements ICreateOrderDTO
             'stripeRiskLevel' => $this->stripeRiskLevel,
         ];
     }
+
+    /** Montant (centimes) réellement autorisé chez Stripe, renseigné après vérification du PaymentIntent */
+    private ?int $verifiedPaymentAmount = null;
+
+    public function setVerifiedPaymentAmount(?int $amount): self
+    {
+        $this->verifiedPaymentAmount = $amount;
+        return $this;
+    }
+
+    public function getVerifiedPaymentAmount(): ?int
+    {
+        return $this->verifiedPaymentAmount;
+    }
 }

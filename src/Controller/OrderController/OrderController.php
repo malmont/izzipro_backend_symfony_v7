@@ -18,6 +18,7 @@ use App\Entity\User;
 use App\Entity\Adress;
 use App\Entity\Carrier;
 use App\Entity\Order;
+use App\Entity\Payments;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
 use Symfony\Contracts\Cache\ItemInterface;
@@ -40,6 +41,12 @@ class OrderController extends AbstractController
     private StripeService $stripeService;
     private TenantConnectionManager $tenantManager;
     private MediaUrlResolver $mediaUrlResolver;
+
+    // Identifiants des tables order_source / payment_method et type de commande (1 = vente, 2 = retour)
+    private const ORDER_SOURCE_ECOMMERCE = 1;
+    private const ORDER_SOURCE_MOBILE_APP = 3;
+    private const PAYMENT_METHOD_ONLINE = 2; // valeur historique envoyée par le tunnel web (paiement Stripe)
+    private const TYPE_ORDER_SALE = 1;
 
     public function __construct(
         CreateOrderUseCase $createOrderUseCase,
@@ -102,11 +109,28 @@ class OrderController extends AbstractController
         $paymentData = $data['payment'] ?? [];
         $paymentIntentId = $data['paymentIntentId'] ?? $paymentData['stripePaymentId'] ?? null;
 
+        // Client en ligne (ni caisse ni admin) : vente web ou appli, paiement Stripe vérifié obligatoire.
+        // Avant, déclarer un autre moyen de paiement que Stripe suffisait à sauter la vérification.
+        $isStaff = $this->isGranted('ROLE_USER_POS') || $this->isGranted('ROLE_ADMIN');
+        if (!$isStaff) {
+            if (!$paymentIntentId) {
+                return $this->json(['error' => 'Un paiement en ligne est requis pour cette commande.'], JsonResponse::HTTP_PAYMENT_REQUIRED);
+            }
+            $data['typeOrder'] = self::TYPE_ORDER_SALE;
+            if (!in_array((int) $data['orderSource'], [self::ORDER_SOURCE_ECOMMERCE, self::ORDER_SOURCE_MOBILE_APP], true)) {
+                $data['orderSource'] = self::ORDER_SOURCE_ECOMMERCE;
+            }
+        }
+
         // --- SÉCURISATION : Vérification obligatoire du paiement Stripe ---
-        if ($paymentIntentId && ($data['paymentMethod'] ?? 2) == 2) {
+        $paymentIntent = null;
+        if ($paymentIntentId && (!$isStaff || ($data['paymentMethod'] ?? 2) == 2)) {
             $paymentIntent = $this->stripeService->verifyPaymentIntent($paymentIntentId);
             if (!$paymentIntent) {
                 return $this->json(['error' => 'Payment verification failed or payment not completed'], JsonResponse::HTTP_PAYMENT_REQUIRED);
+            }
+            if ($this->isPaymentIntentAlreadyUsed($paymentIntent->id)) {
+                return $this->json(['error' => 'Ce paiement est déjà associé à une commande.'], JsonResponse::HTTP_CONFLICT);
             }
 
             // On écrase les données du front par les données certifiées de Stripe
@@ -283,6 +307,8 @@ class OrderController extends AbstractController
         $em = $this->emProvider->getEntityManager();
         $userRepo = $em->getRepository(User::class);
         $user = $userRepo->findOneBy(['email' => $email]);
+        // Requête non authentifiée : un compte existant reçoit la commande mais son profil n'est jamais modifié
+        $isNewGuestUser = !$user;
 
         if (!$user) {
             $user = new User();
@@ -303,29 +329,15 @@ class OrderController extends AbstractController
 
             $em->persist($user);
             $em->flush();
-        } else {
-            $userChanged = false;
-            if (isset($guestInfo['licenseNumber']) && $user->getLicenseNumber() !== $guestInfo['licenseNumber']) {
-                $user->setLicenseNumber($guestInfo['licenseNumber']);
-                $userChanged = true;
-            }
-            if (isset($guestInfo['licenseExpirationDate']) && $guestInfo['licenseExpirationDate']) {
-                $expDate = new \DateTime($guestInfo['licenseExpirationDate']);
-                if (!$user->getLicenseExpirationDate() || $user->getLicenseExpirationDate()->format('Y-m-d') !== $expDate->format('Y-m-d')) {
-                    $user->setLicenseExpirationDate($expDate);
-                    $userChanged = true;
-                }
-            }
-            if ($userChanged) {
-                $em->persist($user);
-                $em->flush();
-            }
         }
 
         // Verify Stripe Payment and extract details
         $paymentIntent = $this->stripeService->verifyPaymentIntent($data['paymentIntentId']);
         if (!$paymentIntent) {
             return $this->json(['error' => 'Payment verification failed or payment not completed'], JsonResponse::HTTP_PAYMENT_REQUIRED);
+        }
+        if ($this->isPaymentIntentAlreadyUsed($paymentIntent->id)) {
+            return $this->json(['error' => 'Ce paiement est déjà associé à une commande.'], JsonResponse::HTTP_CONFLICT);
         }
 
         $charge = $paymentIntent->charges->data[0] ?? null;
@@ -350,10 +362,12 @@ class OrderController extends AbstractController
         $em->persist($billingAddress);
         $em->flush();
 
-        // Associate shippingAddress to user profile as primaryAddress
-        $user->setPrimaryAddress($shippingAddress);
-        $em->persist($user);
-        $em->flush();
+        // Associate shippingAddress to user profile as primaryAddress (nouveau compte invité uniquement)
+        if ($isNewGuestUser) {
+            $user->setPrimaryAddress($shippingAddress);
+            $em->persist($user);
+            $em->flush();
+        }
 
         $carrierId = $data['carrierId'] ?? null;
 
@@ -361,13 +375,15 @@ class OrderController extends AbstractController
             return $this->json(['error' => 'Frais de livraison invalides'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
+        // Commande en ligne d'un invité : source, moyen de paiement et type imposés par le serveur
+        // (le navigateur pouvait déclarer une commande de caisse ou de retour)
         $dto = new CreateOrderDTO(
             $user->getId(),
-            $data['orderSource'] ?? 1,
-            $data['paymentMethod'] ?? 2, // Stripe
+            self::ORDER_SOURCE_ECOMMERCE,
+            self::PAYMENT_METHOD_ONLINE,
             $shippingAddress->getId(),
             $carrierId,
-            $data['typeOrder'] ?? null,
+            self::TYPE_ORDER_SALE,
             $data['items'],
             $data['priceShipping'] ?? null,
             $paymentData['squarePaymentId'] ?? null,
@@ -386,12 +402,18 @@ class OrderController extends AbstractController
             $data['guestInfo']['licenseNumber'] ?? null,
             $data['guestInfo']['licenseExpirationDate'] ?? null
         );
+        $dto->setVerifiedPaymentAmount((int) $paymentIntent->amount);
 
         $result = $this->createOrderUseCase->execute($dto, $user);
 
+        if (!$result instanceof Order) {
+            // Commande refusée (montant, stock...) : l'autorisation est annulée, le client n'est pas débité
+            $this->stripeService->cancelPaymentIntent($paymentIntent->id);
+        }
+
         if ($result instanceof Order) {
-            // Auto-update user profile (for the newly created or existing user from guest info)
-            if ($user) {
+            // Auto-update user profile (nouveau compte invité uniquement)
+            if ($user && $isNewGuestUser) {
                 $hasChanged = false;
                 if (!$user->getLicenseNumber() && isset($data['guestInfo']['licenseNumber'])) {
                     $user->setLicenseNumber($data['guestInfo']['licenseNumber']);
@@ -533,7 +555,13 @@ class OrderController extends AbstractController
             $data['licenseNumber'] ?? null,
             $data['licenseExpirationDate'] ?? null
         );
+        if ($paymentIntent !== null) {
+            $dto->setVerifiedPaymentAmount((int) $paymentIntent->amount);
+        }
         $result = $this->createOrderUseCase->execute($dto);
+        if (!$result instanceof Order && $paymentIntent !== null) {
+            $this->stripeService->cancelPaymentIntent($paymentIntent->id);
+        }
         if ($result instanceof Order) {
             $tenantEm = $this->emProvider->getEntityManager();
 
@@ -698,5 +726,12 @@ class OrderController extends AbstractController
 
         $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);
         return $this->json($orderData);
+    }
+
+    /** Un PaymentIntent ne peut valider qu'une seule commande */
+    private function isPaymentIntentAlreadyUsed(string $paymentIntentId): bool
+    {
+        return $this->emProvider->getEntityManager()->getRepository(Payments::class)
+            ->count(['stripePaymentId' => $paymentIntentId]) > 0;
     }
 }

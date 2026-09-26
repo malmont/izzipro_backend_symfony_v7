@@ -405,6 +405,33 @@ class StripeService
         }
     }
 
+    /**
+     * Annule un paiement autorisé mais non capturé (capture_method manual) : l'autorisation est libérée,
+     * le client n'est pas débité. Utilisé quand la commande est refusée après le paiement.
+     */
+    public function cancelPaymentIntent(string $paymentIntentId): void
+    {
+        try {
+            Stripe::setApiKey($this->stripeSecretKey);
+
+            $stripeOptions = [];
+            $tenantCode = $this->connectionManager->getCurrentTenantCode();
+            if (!$this->connectionManager->isTenantInternal($tenantCode)) {
+                $stripeConfig = $this->getStripeConfigForCurrentTenant();
+                if ($stripeConfig && $stripeConfig->isActive()) {
+                    $stripeOptions['stripe_account'] = $stripeConfig->getAccountId();
+                }
+            }
+
+            $paymentIntent = $this->retrieveStripePaymentIntent($paymentIntentId, $stripeOptions);
+            if ($paymentIntent->status === 'requires_capture') {
+                $paymentIntent->cancel([], $stripeOptions);
+            }
+        } catch (ApiErrorException $e) {
+            $this->logger->error("Erreur annulation Stripe PaymentIntent $paymentIntentId: " . $e->getMessage());
+        }
+    }
+
     public function capturePaymentIntent(string $paymentIntentId): ?PaymentIntent
     {
         try {

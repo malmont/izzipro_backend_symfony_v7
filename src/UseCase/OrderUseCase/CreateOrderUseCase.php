@@ -90,6 +90,17 @@ class CreateOrderUseCase
                 throw new \Exception('Tax calculation failed');
             }
             $totalAmount = $this->calculateTotalAmountUseCase->execute($subtotal, $totalTax);
+
+            // Paiement Stripe vérifié : le montant autorisé doit correspondre au total calculé par le serveur
+            // (sinon un petit paiement pouvait valider une grosse commande). Tolérance : 1 centime d'arrondi.
+            if ($orderDTO instanceof CreateOrderDTO && $orderDTO->getVerifiedPaymentAmount() !== null
+                && abs((int) round($totalAmount) - $orderDTO->getVerifiedPaymentAmount()) > 1) {
+                throw new \Exception(sprintf(
+                    'Le montant payé (%.2f) ne correspond pas au total de la commande (%.2f).',
+                    $orderDTO->getVerifiedPaymentAmount() / 100,
+                    round($totalAmount) / 100
+                ));
+            }
             $paymentTypeId = $typeOrderId === 1 ? 2 : 1;
 
             if ($orderDTO instanceof CreateOrderMultiPaymentDTO) {
