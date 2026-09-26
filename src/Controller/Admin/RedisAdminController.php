@@ -11,17 +11,24 @@ use Psr\Log\LoggerInterface;
 
 class RedisAdminController extends AbstractController
 {
+    /** Flux Redis Messenger (normalement en base Redis 1, protégés ici au cas où ils se trouveraient en base 0) */
+    private const MESSENGER_KEYS = ['messages', 'messages_failed'];
+
     #[Route('/admin/redis/flush', name: 'admin_redis_flush', methods: ['GET', 'POST'])]
     public function flushRedis(Request $request, LoggerInterface $logger, ?CacheInterface $cache = null): Response
     {
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
-        if ($request->isMethod('POST')) {
-            $submittedToken = $request->request->get('_token');
-            if (!$this->isCsrfTokenValid('admin_redis_flush', $submittedToken)) {
-                $this->addFlash('danger', 'Jeton CSRF invalide. Action annulée.');
-                return $this->redirectToRoute('admin');
-            }
+        // Un simple lien (GET, ex. le menu) ne vide plus Redis : uniquement le bouton du tableau de bord (POST + confirmation + CSRF)
+        if (!$request->isMethod('POST')) {
+            $this->addFlash('info', 'Pour vider le cache Redis, utilisez le bouton « Flush Redis » du tableau de bord (une confirmation vous sera demandée).');
+            return $this->redirectToRoute('admin');
+        }
+
+        $submittedToken = $request->request->get('_token');
+        if (!$this->isCsrfTokenValid('admin_redis_flush', $submittedToken)) {
+            $this->addFlash('danger', 'Jeton CSRF invalide. Action annulée.');
+            return $this->redirectToRoute('admin');
         }
 
         $flushSuccess = false;
@@ -49,6 +56,9 @@ class RedisAdminController extends AbstractController
                     foreach ($allKeys as $key) {
                         if (str_starts_with($key, 'tenant:traffic:')) {
                             $protectedTrafficKeysCount++;
+                        } elseif (in_array($key, self::MESSENGER_KEYS, true)) {
+                            // File de messages (générations en attente) : ne jamais la supprimer
+                            continue;
                         } else {
                             $keysToDelete[] = $key;
                         }

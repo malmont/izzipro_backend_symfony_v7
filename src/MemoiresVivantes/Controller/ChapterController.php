@@ -294,11 +294,42 @@ class ChapterController extends AbstractController
 
         $this->denyAccessUnlessGranted('CHAPTER_VIEW', $chapter);
 
+        $this->failStaleGeneration($chapter);
+
         return $this->json([
             'status'  => $chapter->getGenerationStatus(),
             'content' => $chapter->getGenerationStatus() === 'completed' ? $chapter->getContentFinal() : null,
             'error'   => $chapter->getGenerationError(),
         ]);
+    }
+
+    /**
+     * Minutes sans progression au-delà desquelles une génération est considérée comme perdue
+     * (message effacé de la file, worker arrêté en pleine génération...). Seuils larges : avec un seul
+     * worker, un chapitre peut attendre son tour derrière ceux d'un livre entier.
+     */
+    private const STALE_GENERATION_MINUTES = [
+        'pending' => 60,
+        'part1_done' => 60,
+        'generating_part1' => 30,
+        'generating_part2' => 30,
+    ];
+
+    /**
+     * Débloque une génération perdue : le chapitre passe en échec pour que l'utilisateur puisse la relancer,
+     * au lieu d'attendre indéfiniment. Si le message finit par être traité, le handler réécrit le statut.
+     */
+    private function failStaleGeneration(Chapter $chapter): void
+    {
+        $limit = self::STALE_GENERATION_MINUTES[$chapter->getGenerationStatus()] ?? null;
+        if ($limit === null || $chapter->getUpdatedAt() === null || $chapter->getUpdatedAt() > new \DateTime("-{$limit} minutes")) {
+            return;
+        }
+
+        $this->logger->warning("Chapter {$chapter->getId()} : génération sans progression depuis {$limit} min (statut {$chapter->getGenerationStatus()}), passage en échec");
+        $chapter->setGenerationStatus('failed');
+        $chapter->setGenerationError("La génération a été interrompue (aucune progression depuis {$limit} minutes). Relancez la génération.");
+        $this->emProvider->getEntityManager()->flush();
     }
 
     #[Route('/chapters/{id}/generate', methods: ['POST'])]

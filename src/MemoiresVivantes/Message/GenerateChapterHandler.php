@@ -66,6 +66,7 @@ class GenerateChapterHandler
 
             if ($message->part === 1) {
                 $chapter->setGenerationStatus('generating_part1');
+                $chapter->setGenerationError(null);
                 $em->flush();
 
                 $tone = isset($message->tone) ? $message->tone : 'intime et chaleureux';
@@ -94,6 +95,7 @@ class GenerateChapterHandler
                     $text = $this->anthropicService->generatePart1($chapter, $tone, $model);
                 }
                 
+                $this->assertNotEmpty($text, 1);
                 $text = $this->anthropicService->checkAndComplete($text, false, $model);
 
                 $chapter->setContentPart1($text);
@@ -131,6 +133,7 @@ class GenerateChapterHandler
                     $text = $this->anthropicService->generatePart2($chapter, $tone, $model);
                 }
 
+                $this->assertNotEmpty($text, 2);
                 $text = $this->anthropicService->checkAndComplete($text, true, $model);
 
                 $chapter->setContentPart2($text);
@@ -140,13 +143,42 @@ class GenerateChapterHandler
                 $chapter->setGenerationStatus('completed');
                 $em->flush();
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // \Throwable et pas seulement \Exception : une Error PHP laissait le chapitre bloqué en "generating"
             $this->logger->error("GenerateChapterHandler Error: " . $e->getMessage());
-            $chapter->setGenerationStatus('failed');
-            $chapter->setGenerationError($e->getMessage());
-            $em->flush();
+            $this->markFailed($chapter, $e->getMessage());
         } finally {
             $em->clear();
+        }
+    }
+
+    /**
+     * L'API renvoie un texte vide en cas d'erreur (surcharge, quota...) : ne jamais l'enregistrer comme un chapitre terminé.
+     */
+    private function assertNotEmpty(?string $text, int $part): void
+    {
+        if ($text === null || trim($text) === '') {
+            throw new \RuntimeException("L'IA n'a renvoyé aucun texte pour la partie {$part} (API surchargée ou en erreur). Relancez la génération.");
+        }
+    }
+
+    /**
+     * Enregistre l'échec même si l'EntityManager a été fermé par une erreur de base de données.
+     */
+    private function markFailed(Chapter $chapter, string $error): void
+    {
+        $em = $this->emProvider->getEntityManager();
+        try {
+            $chapter->setGenerationStatus('failed');
+            $chapter->setGenerationError($error);
+            $em->flush();
+        } catch (\Throwable $flushError) {
+            $this->logger->error("GenerateChapterHandler: échec du flush, statut écrit en SQL : " . $flushError->getMessage());
+            $em->getConnection()->update('mv_chapter', [
+                'generation_status' => 'failed',
+                'generation_error' => $error,
+                'updated_at' => (new \DateTime())->format('Y-m-d H:i:s'),
+            ], ['id' => (string) $chapter->getId()]);
         }
     }
 }

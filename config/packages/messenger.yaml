@@ -2,14 +2,26 @@
 
 framework:
     messenger:
+        # Messages dont toutes les tentatives ont échoué : conservés pour inspection / relance
+        # (messenger:failed:show, messenger:failed:retry) au lieu d'être perdus
+        failure_transport: failed
+
         transports:
             async:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    # File isolée dans la base Redis 1 : le cache applicatif (base 0) peut être vidé
+                    # sans effacer les générations en attente ni casser le groupe de consommateurs
+                    dbindex: 1
                 retry_strategy:
                     max_retries: 3
                     delay: 1000
                     multiplier: 2
                     max_delay: 0
+            failed:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%_failed'
+                options:
+                    dbindex: 1
 
         routing:
             'App\MemoiresVivantes\Message\GenerateChapterMessage': async
