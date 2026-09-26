@@ -21,10 +21,10 @@
     {% endif %}
 
     <form method="post" style="margin-top: 20px;">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token('otp_verify') }}">
       <div class="form-group">
         <label for="otp">Entrez votre code OTP :</label>
-        <input type="text" id="otp" name="otp" class="form-control" required>
+        <input type="text" id="otp" name="otp" class="form-control" required autocomplete="one-time-code" maxlength="10" pattern="[0-9A-Za-z]{4,10}">
       </div>
       <div style="text-align: center; margin-top: 20px;">
         <button type="submit" class="btn btn-primary">Valider</button>

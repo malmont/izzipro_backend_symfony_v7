@@ -80,9 +80,18 @@ class AdminStripeController extends AbstractController
      */
     #[Route('/disconnect', name: 'admin_stripe_disconnect', methods: ['GET', 'POST'])]
     public function disconnect(
+        Request $request,
         StripeService $stripeService,
         AdminUrlGenerator $adminUrlGenerator
     ): RedirectResponse {
+        if ($request->isMethod('POST')) {
+            $token = (string) ($request->request->get('_token') ?? $request->request->get('_csrf_token'));
+            if (!$this->isCsrfTokenValid('stripe_disconnect', $token)) {
+                $this->addFlash('danger', 'Jeton CSRF invalide.');
+                return $this->redirect($adminUrlGenerator->setController(StripeConfigCrudController::class)->generateUrl());
+            }
+        }
+
         $disconnected = $stripeService->disconnectCurrentTenant();
 
         if ($disconnected) {

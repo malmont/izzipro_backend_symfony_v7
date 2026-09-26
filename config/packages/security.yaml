@@ -30,6 +30,10 @@ security:
             logout:
                 path: app_logout
             user_checker:           App\Security\UserChecker
+            login_throttling:
+                max_attempts: 5
+                interval: '1 minute'
+                lock_factory: null
         
 
 

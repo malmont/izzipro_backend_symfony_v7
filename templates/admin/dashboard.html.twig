@@ -5,7 +5,7 @@
 {% block content_header %}
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h1 class="m-0 font-weight-bold text-dark">Tableau de Bord E-Commerce</h1>
+            <h1 class="m-0 font-weight-bold">Tableau de Bord E-Commerce</h1>
             <p class="text-muted m-0">Aperçu général des ventes, répartitions, taxes et stock en temps réel</p>
         </div>
         <div class="d-flex align-items-center">
@@ -178,7 +178,7 @@
     <div class="row mb-3 mt-2">
         <div class="col-12 d-flex justify-content-between align-items-center flex-wrap">
             <div>
-                <h5 class="font-weight-bold text-dark mb-1">
+                <h5 class="font-weight-bold mb-1">
                     <i class="fas fa-chart-line text-primary mr-2"></i>Fréquentation & Visiteurs : <span class="text-primary">{{ tenantReport.tenant_name }}</span>
                 </h5>
                 <p class="text-muted small mb-0">
@@ -186,7 +186,7 @@
                 </p>
             </div>
             <div class="d-flex align-items-center mt-2 mt-sm-0">
-                <span class="badge bg-white text-dark shadow-sm border px-3 py-2 rounded-pill mr-2">
+                <span class="badge shadow-sm border px-3 py-2 rounded-pill mr-2 live-badge">
                     <span class="live-dot mr-1"></span> Suivi Temps Réel (Redis)
                 </span>
                 <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 shadow-sm" type="button" data-toggle="collapse" data-target="#allTenantsCollapse" aria-expanded="false" aria-controls="allTenantsCollapse">
@@ -279,12 +279,12 @@
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table align-items-center table-flush mb-0 table-hover">
-                            <thead class="thead-light" style="background-color: #f8f9fc;">
+                            <thead>
                                 <tr>
-                                    <th class="border-0 font-weight-bold text-dark">Rang & Page du Site</th>
-                                    <th class="border-0 font-weight-bold text-dark text-center">Consultations</th>
-                                    <th class="border-0 font-weight-bold text-dark" style="min-width: 130px;">Part d'Audience</th>
-                                    <th class="border-0 font-weight-bold text-dark text-center">Action</th>
+                                    <th class="border-0 font-weight-bold">Rang & Page du Site</th>
+                                    <th class="border-0 font-weight-bold text-center">Consultations</th>
+                                    <th class="border-0 font-weight-bold" style="min-width: 130px;">Part d'Audience</th>
+                                    <th class="border-0 font-weight-bold text-center">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -298,27 +298,27 @@
                                                     </span>
                                                     <div>
                                                         {% if page.path == '/' %}
-                                                            <span class="font-weight-bold text-dark" style="font-size: 13px;">
+                                                            <span class="font-weight-bold" style="font-size: 13px;">
                                                                 Page d'accueil (Landing Page)
                                                             </span>
                                                             <span class="badge bg-light text-muted ml-1" style="font-size: 10px;">/</span>
                                                         {% elseif page.path == '/services' %}
-                                                            <span class="font-weight-bold text-dark" style="font-size: 13px;">
+                                                            <span class="font-weight-bold" style="font-size: 13px;">
                                                                 Nos Services
                                                             </span>
                                                             <span class="badge bg-light text-muted ml-1" style="font-size: 10px;">/services</span>
                                                         {% elseif page.path == '/tarifs' %}
-                                                            <span class="font-weight-bold text-dark" style="font-size: 13px;">
+                                                            <span class="font-weight-bold" style="font-size: 13px;">
                                                                 Tarifs & Formules
                                                             </span>
                                                             <span class="badge bg-light text-muted ml-1" style="font-size: 10px;">/tarifs</span>
                                                         {% elseif page.path == '/contact' %}
-                                                            <span class="font-weight-bold text-dark" style="font-size: 13px;">
+                                                            <span class="font-weight-bold" style="font-size: 13px;">
                                                                 Contact & Devis
                                                             </span>
                                                             <span class="badge bg-light text-muted ml-1" style="font-size: 10px;">/contact</span>
                                                         {% else %}
-                                                            <span class="font-weight-bold text-dark font-family-monospace" style="font-size: 13px;">
+                                                            <span class="font-weight-bold font-family-monospace" style="font-size: 13px;">
                                                                 {{ page.path }}
                                                             </span>
                                                         {% endif %}
@@ -326,7 +326,7 @@
                                                 </div>
                                             </td>
                                             <td class="text-center">
-                                                <span class="badge rounded-pill bg-light text-dark font-weight-bold px-3 py-1" style="font-size: 12px;">
+                                                <span class="badge rounded-pill font-weight-bold px-3 py-1" style="font-size: 12px;">
                                                     <i class="fas fa-eye text-primary mr-1"></i>{{ page.views }}
                                                 </span>
                                             </td>
@@ -481,7 +481,7 @@
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table align-items-center table-flush mb-0">
-                            <thead class="thead-light" style="background-color: #f8f9fc;">
+                            <thead>
                                 <tr>
                                     <th class="border-0">Réf. Commande</th>
                                     <th class="border-0">Client</th>
@@ -506,7 +506,7 @@
                                                 {% endif %}
                                             </td>
                                             <td>{{ order.orderDate ? order.orderDate|date('d/m/Y H:i') : '-' }}</td>
-                                            <td class="font-weight-bold text-dark">{{ (order.totalAmount / 100)|number_format(2, ',', ' ') }} $</td>
+                                            <td class="font-weight-bold">{{ (order.totalAmount / 100)|number_format(2, ',', ' ') }} $</td>
                                             <td class="text-center">
                                                 <a href="{{ ea_url().setController('App\\Controller\\Admin\\OrderAllCrudController').setAction('detail').setEntityId(order.id) }}" class="btn btn-sm btn-circle btn-light" title="Voir détails">
                                                     <i class="fas fa-eye text-primary"></i>

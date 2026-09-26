@@ -78,6 +78,7 @@ use Symfony\Component\Routing\Annotation\Route;
 use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Assets;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Option\ColorScheme;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
 use App\Entity\EmailConfiguration;
@@ -378,7 +379,8 @@ class DashboardController extends AbstractDashboardController
     {
         return Dashboard::new()
             ->setTitle('<img src="/assets/logo-arkanoa-media.png" alt="Arkanoa Media" style="max-height: 65px !important; max-width: 230px !important; width: auto !important; height: auto !important; object-fit: contain;">')
-            ->setFaviconPath('assets/arkanoa-favicon.png');
+            ->setFaviconPath('assets/arkanoa-favicon.png')
+            ->setDefaultColorScheme(ColorScheme::DARK);
     }
 
     public function configureAssets(): Assets

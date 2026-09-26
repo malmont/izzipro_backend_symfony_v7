@@ -43,6 +43,7 @@
             
             <div class="form-row">
                 <form action="{{ path('app_stripe_disconnect') }}" method="post">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('stripe_disconnect') }}">
                     <button type="submit" class="btn-submit btn-secondary" style="width: 100%;"
                             onclick="return confirm('Êtes-vous sûr de vouloir déconnecter ce compte Stripe ? Vous devrez recommencer le processus de connexion.')">
                         Changer de Compte

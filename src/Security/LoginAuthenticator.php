@@ -49,7 +49,17 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
 
     public function authenticate(Request $request): Passport
     {
-        $email = $request->request->get('email', '');
+        $email = trim((string) $request->request->get('email', ''));
+        $password = (string) $request->request->get('password', '');
+
+        // Sécurité renforcée : validation d'entrée anti-XSS et anti-DoS
+        if (strlen($email) > 180 || preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', $email)) {
+            throw new CustomUserMessageAuthenticationException('Format d\'identifiant invalide.');
+        }
+        if (strlen($password) > 4096) {
+            throw new CustomUserMessageAuthenticationException('Longueur de mot de passe invalide.');
+        }
+
         $request->getSession()->set(SecurityRequestAttributes::LAST_USERNAME, $email);
 
         return new Passport(
@@ -58,13 +68,13 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
                 $em = $this->tenantEmProvider->getEntityManager();
                 $user = $em->getRepository(User::class)->findOneBy(['email' => $userIdentifier]);
                 if (!$user) {
-                    throw new CustomUserMessageAuthenticationException('Utilisateur introuvable.');
+                    throw new CustomUserMessageAuthenticationException('Identifiant ou mot de passe incorrect.');
                 }
                 return $user;
             }),
-            new PasswordCredentials($request->request->get('password', '')),
+            new PasswordCredentials($password),
             [
-                new CsrfTokenBadge('authenticate', $request->request->get('_csrf_token')),
+                new CsrfTokenBadge('authenticate', (string) $request->request->get('_csrf_token')),
             ]
         );
     }
@@ -88,13 +98,13 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
             );
         }
 
-        // 2) Sinon, redirection vers la page demandée ou la page par défaut
+        // 2) Sinon, redirection vers la page demandée ou vers le tableau de bord admin
         if ($targetPath = $this->getTargetPath($session, $firewallName)) {
             return new RedirectResponse($targetPath);
         }
 
         return new RedirectResponse(
-            $this->urlGenerator->generate('app_account')
+            $this->urlGenerator->generate('admin')
         );
     }
 

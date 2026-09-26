@@ -27,24 +27,62 @@
   --ark-night-2:     #0E1533;
   --ark-night-3:     #17214A;
 
+  /* Texte & Contraste */
+  --ark-text-title:  #FFFFFF;
+  --ark-text-body:   #E9EEFB;
+  --ark-text-muted:  #A9B5D6;
+
   /* Typographie & Dégradés */
   --font-display:    "Michroma", "Eurostile", sans-serif;
   --font-body:       "Outfit", "Helvetica Neue", sans-serif;
   --crystal:         linear-gradient(115deg, #1B5FE6 0%, #2F8BFF 30%, #7B3FF0 58%, #E0158A 100%);
   --crystal-hover:   linear-gradient(115deg, #2F8BFF 0%, #33C3FF 35%, #9A6BFF 65%, #FF4FB0 100%);
   --ease:            cubic-bezier(.2, .7, .2, 1);
-  --shadow-plate:    inset 0 1px 0 #fff, inset 0 -3px 8px rgba(70, 100, 165, 0.10), 0 1px 2px rgba(20, 35, 80, 0.06), 0 18px 40px -18px rgba(20, 40, 100, 0.22);
+  --shadow-plate:    0 8px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  /* Overrides EasyAdmin Core Variables */
+  --body-bg:                         #070B1E;
+  --content-bg:                      transparent;
+  --text-color:                      #E9EEFB;
+  --text-primary-color:              #FFFFFF;
+  --text-secondary-color:            #A9B5D6;
+  --color-primary:                   #2F8BFF;
+  --color-primary-hover:             #33C3FF;
+  --sidebar-bg:                      #070B1E;
+  --sidebar-menu-color:              #A9B5D6;
+  --sidebar-menu-active-item-bg:     transparent;
+  --sidebar-menu-active-item-color:  #FFFFFF;
+  --table-thead-color:               #33C3FF;
+  --table-cell-color:                #E9EEFB;
+  --table-cell-border-color:         rgba(157, 179, 218, 0.12);
+  --table-hover-cell-bg:             rgba(47, 139, 255, 0.14);
+  --form-control-bg:                 rgba(14, 21, 51, 0.85);
+  --form-input-border-color:         rgba(157, 179, 218, 0.25);
+  --form-input-hover-border-color:   #33C3FF;
 }
 
 /* =========================================================
    BASE ET TYPOGRAPHIE
    ========================================================= */
-body, .content-wrapper, .main-sidebar, .sidebar {
+html,
+body,
+body.easyadmin,
+.wrapper,
+.content-wrapper,
+.content {
   font-family: var(--font-body) !important;
+  color: var(--ark-text-body) !important;
+  background: linear-gradient(180deg, #070B1E 0%, #0B1028 40%, #070B1E 100%) !important;
   -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
 }
 
-h1, h2, h3, .content-header-title h1, .sidebar-brand {
+h1, h2, h3, h4, h5, h6,
+.content-header-title h1,
+.content-header h1,
+h1.title,
+.page-title,
+.sidebar-brand {
   font-family: var(--font-display) !important;
   letter-spacing: -0.01em;
 }
@@ -58,8 +96,8 @@ aside.main-sidebar,
 .sidebar,
 aside.sidebar {
   background: linear-gradient(180deg, var(--ark-night) 0%, var(--ark-night-2) 60%, var(--ark-night-3) 100%) !important;
-  border-right: 1px solid rgba(157, 179, 218, 0.18) !important;
-  box-shadow: 4px 0 25px rgba(7, 11, 30, 0.35) !important;
+  border-right: 1px solid rgba(157, 179, 218, 0.16) !important;
+  box-shadow: 4px 0 25px rgba(7, 11, 30, 0.45) !important;
 }
 
 /* Conteneur du Logo */
@@ -74,7 +112,7 @@ aside.sidebar {
   align-items: center !important;
   justify-content: center !important;
   padding: 14px 16px !important;
-  background: rgba(7, 11, 30, 0.6) !important;
+  background: rgba(7, 11, 30, 0.75) !important;
   border-bottom: 1px solid rgba(157, 179, 218, 0.16) !important;
   position: relative;
 }
@@ -84,8 +122,8 @@ aside.sidebar {
   content: "";
   position: absolute;
   bottom: -1px;
-  left: 20%;
-  right: 20%;
+  left: 15%;
+  right: 15%;
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--ark-cyan), var(--ark-magenta), transparent);
 }
@@ -97,58 +135,105 @@ aside.sidebar {
 .navbar-brand img,
 .main-header .logo img,
 [class*="logo"] img {
-  max-height: 60px !important;
+  max-height: 62px !important;
   max-width: 230px !important;
   width: auto !important;
   height: auto !important;
   object-fit: contain !important;
-  filter: drop-shadow(0 2px 10px rgba(47, 139, 255, 0.35));
+  filter: drop-shadow(0 2px 10px rgba(47, 139, 255, 0.45));
   transition: transform 0.3s var(--ease), filter 0.3s;
 }
 
 .sidebar-brand:hover img,
 #header-logo a.logo:hover img {
   transform: scale(1.03);
-  filter: drop-shadow(0 4px 16px rgba(51, 195, 255, 0.6));
+  filter: drop-shadow(0 4px 18px rgba(51, 195, 255, 0.7));
 }
 
-/* Titres de sections (Menu Headers) */
-.sidebar-menu .menu-header,
-.sidebar-menu .header,
-.sidebar-menu li.header,
+:root,
+body,
+body.easyadmin,
+.ea-dark-scheme,
+.ea-light-scheme,
+[data-bs-theme="dark"],
+[data-bs-theme="light"] {
+  --sidebar-menu-active-item-bg: transparent !important;
+  --sidebar-menu-active-item-color: #FFFFFF !important;
+}
+
+/* Neutraliser complètement les fonds EasyAdmin par défaut sur les <li> */
+#main-menu .menu .menu-item,
+#main-menu .menu .menu-item.active,
+#main-menu .menu .menu-item:hover,
+ul.menu li.menu-item,
+ul.menu li.menu-item.active,
+ul.menu li.menu-item:hover,
+.sidebar-menu li,
+.sidebar-menu li.active,
+.sidebar-menu li:hover,
+body.ea-dark-scheme #main-menu .menu .menu-item,
+body.ea-dark-scheme #main-menu .menu .menu-item.active,
+body.ea-light-scheme #main-menu .menu .menu-item,
+body.ea-light-scheme #main-menu .menu .menu-item.active,
+body[data-bs-theme="dark"] #main-menu .menu .menu-item.active,
+body[data-bs-theme="light"] #main-menu .menu .menu-item.active {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Titres de sections (Menu Headers) — Un seul tiret cristal net */
+.sidebar-menu .menu-header::before,
+.sidebar-menu .header::before,
+.sidebar-menu li.header::before,
+ul.menu li.menu-header::before,
+#main-menu .menu .menu-header::before {
+  display: none !important;
+  content: none !important;
+}
+
 ul.menu li.menu-header,
+#main-menu .menu .menu-header {
+  background: transparent !important;
+  padding: 22px 16px 6px !important;
+  margin: 0 !important;
+  list-style: none !important;
+}
+
 .menu-header-contents {
   font-family: var(--font-display) !important;
   font-size: 10px !important;
   letter-spacing: 0.22em !important;
   text-transform: uppercase !important;
   color: var(--ark-cyan) !important;
-  padding: 18px 20px 8px !important;
-  opacity: 0.9;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  opacity: 0.95;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
-.sidebar-menu .menu-header::before,
-.sidebar-menu .header::before,
-ul.menu li.menu-header::before,
 .menu-header-contents::before {
-  content: "";
-  width: 14px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--crystal);
-  display: inline-block;
-  flex-shrink: 0;
+  content: "" !important;
+  width: 14px !important;
+  height: 2.5px !important;
+  border-radius: 2px !important;
+  background: var(--crystal) !important;
+  display: inline-block !important;
+  flex-shrink: 0 !important;
 }
 
-/* Éléments du menu */
+/* Éléments du menu (liens normaux) */
 .sidebar-menu li a,
 .sidebar .nav-link,
 .menu-item a,
+#main-menu .menu .menu-item a.menu-item-contents,
 ul.menu li.menu-item a.menu-item-contents {
-  color: var(--ark-on-dark-2, #A9B5D6) !important;
+  color: var(--ark-text-muted) !important;
   font-size: 14px !important;
   font-weight: 500 !important;
   padding: 10px 16px !important;
@@ -159,22 +244,26 @@ ul.menu li.menu-item a.menu-item-contents {
   align-items: center !important;
   gap: 12px !important;
   text-decoration: none !important;
+  border: 1px solid transparent !important;
 }
 
 .sidebar-menu li a:hover,
 .sidebar .nav-link:hover,
 .menu-item a:hover,
+#main-menu .menu .menu-item a.menu-item-contents:hover,
 ul.menu li.menu-item a.menu-item-contents:hover {
   color: #FFFFFF !important;
-  background: rgba(47, 139, 255, 0.12) !important;
+  background: rgba(47, 139, 255, 0.16) !important;
+  border-color: rgba(51, 195, 255, 0.35) !important;
   transform: translateX(4px);
-  box-shadow: inset 0 0 0 1px rgba(51, 195, 255, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(51, 195, 255, 0.3);
 }
 
 .sidebar-menu li a i,
 .sidebar-menu li a svg,
 .sidebar .nav-link i,
 .menu-item a i,
+#main-menu .menu .menu-icon,
 ul.menu li.menu-item .menu-icon {
   color: var(--ark-cyan) !important;
   font-size: 15px !important;
@@ -183,34 +272,50 @@ ul.menu li.menu-item .menu-icon {
 
 .sidebar-menu li a:hover i,
 .sidebar .nav-link:hover i,
+#main-menu .menu .menu-item a.menu-item-contents:hover .menu-icon,
 ul.menu li.menu-item a.menu-item-contents:hover .menu-icon {
   color: #FFFFFF !important;
   transform: scale(1.15);
 }
 
-/* Élément actif du menu */
+/* Élément ACTIF du menu (Bouton cristal Arkanoa pur sans boîte blanche externe) */
+#main-menu .menu .menu-item.active > a.menu-item-contents,
+ul.menu li.menu-item.active > a.menu-item-contents,
+ul.menu li.menu-item.expanded > a.menu-item-contents,
 .sidebar-menu li.active > a,
 .sidebar .nav-link.active,
 .menu-item.active > a,
-ul.menu li.menu-item.active > a.menu-item-contents,
-ul.menu li.menu-item.expanded > a.menu-item-contents {
+body.ea-dark-scheme ul.menu li.menu-item.active > a.menu-item-contents,
+body.ea-light-scheme ul.menu li.menu-item.active > a.menu-item-contents {
   color: #FFFFFF !important;
   font-weight: 600 !important;
-  background: linear-gradient(115deg, rgba(27, 95, 230, 0.5) 0%, rgba(123, 63, 240, 0.38) 55%, rgba(224, 21, 138, 0.32) 100%) !important;
-  border-left: 3.5px solid var(--ark-cyan) !important;
-  box-shadow: 0 4px 18px -4px rgba(47, 139, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  background: linear-gradient(115deg, #1B5FE6 0%, #2F8BFF 30%, #7B3FF0 65%, #E0158A 100%) !important;
+  background-size: 160% 100% !important;
+  border: none !important;
+  border-left: 4px solid var(--ark-cyan) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 18px -2px rgba(47, 139, 255, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+  padding: 10px 16px !important;
+  margin: 3px 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
 }
 
+#main-menu .menu .menu-item.active > a.menu-item-contents .menu-icon,
+#main-menu .menu .menu-item.active > a.menu-item-contents .menu-item-label,
+#main-menu .menu .menu-item.active > a.menu-item-contents i,
+#main-menu .menu .menu-item.active > a.menu-item-contents span,
 .sidebar-menu li.active > a i,
 .sidebar .nav-link.active i,
-ul.menu li.menu-item.active > a.menu-item-contents .menu-icon {
+.sidebar-menu li.active > a span {
   color: #FFFFFF !important;
-  filter: drop-shadow(0 0 6px var(--ark-cyan));
+  text-shadow: 0 0 8px var(--ark-cyan);
 }
 
 /* Submenu */
 ul.menu .submenu {
-  background: rgba(7, 11, 30, 0.45) !important;
+  background: rgba(7, 11, 30, 0.55) !important;
   border-radius: 8px;
   margin: 4px 10px 8px 24px !important;
   padding: 4px 0 !important;
@@ -224,17 +329,17 @@ ul.menu .submenu li.menu-item a.menu-item-contents {
 }
 
 /* =========================================================
-   EN-TÊTE SUPÉRIEURE (HEADER / TOPBAR & RESPONSIVE HEADER)
+   EN-TÊTE SUPÉRIEURE (HEADER / TOPBAR & SEARCH)
    ========================================================= */
 header.main-header,
 .content-top,
 .main-header,
 .responsive-header {
-  background: rgba(7, 11, 30, 0.94) !important;
-  -webkit-backdrop-filter: blur(14px) !important;
-  backdrop-filter: blur(14px) !important;
-  border-bottom: 1px solid rgba(157, 179, 218, 0.18) !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2) !important;
+  background: rgba(7, 11, 30, 0.90) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  backdrop-filter: blur(16px) !important;
+  border-bottom: 1px solid rgba(157, 179, 218, 0.16) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
 }
 
 .responsive-header {
@@ -258,48 +363,138 @@ header.main-header,
 
 .user-avatar {
   border-radius: 50%;
-  border: 1.5px solid var(--ark-cyan);
+  border: 2px solid var(--ark-cyan);
+  box-shadow: 0 0 10px rgba(51, 195, 255, 0.4);
+}
+
+/* Barre de recherche dans l'en-tête */
+.content-search input,
+.form-action-search input,
+.main-header input[type="search"] {
+  background: rgba(14, 21, 51, 0.85) !important;
+  border: 1.5px solid rgba(157, 179, 218, 0.25) !important;
+  border-radius: 999px !important;
+  color: #FFFFFF !important;
+  padding: 7px 18px 7px 38px !important;
+  font-size: 14px !important;
+  transition: all 0.25s var(--ease) !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35) !important;
+}
+
+.content-search input:focus,
+.form-action-search input:focus,
+.main-header input[type="search"]:focus {
+  border-color: var(--ark-cyan) !important;
+  box-shadow: 0 0 14px rgba(51, 195, 255, 0.4), inset 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+  background: rgba(23, 33, 74, 0.95) !important;
+  color: #FFFFFF !important;
+  outline: none !important;
+}
+
+.content-search input::placeholder,
+.form-action-search input::placeholder {
+  color: rgba(169, 181, 214, 0.65) !important;
+}
+
+.content-search .content-search-icon,
+.form-action-search i {
+  color: var(--ark-cyan) !important;
 }
 
 /* =========================================================
-   ZONE DE CONTENU PRINCIPALE (CARDS, TABLES, PANELS)
+   ZONE DE TITRE (CONTENT HEADER) — CRITICAL FIX
    ========================================================= */
-.content-wrapper,
-body.easyadmin {
-  background: linear-gradient(180deg, #F3F6FC 0%, #E9EEF7 100%) !important;
-}
-
 .content-header {
   padding: 24px 32px 16px !important;
+  background: transparent !important;
 }
 
 .content-header-title h1,
-.content-header h1 {
-  font-size: 24px !important;
-  font-weight: 600 !important;
-  color: var(--ark-night) !important;
+.content-header h1,
+h1.title,
+.page-title,
+.content-header .title,
+body.ea-dark-scheme .content-header-title h1,
+body.ea-dark-scheme .content-header h1,
+body.ea-light-scheme .content-header-title h1,
+body.ea-light-scheme .content-header h1 {
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  color: #FFFFFF !important;
+  text-shadow: 0 2px 14px rgba(47, 139, 255, 0.45) !important;
+  margin: 0 !important;
 }
 
-/* Cards et Conteneurs de données façon "Plaque Argentée" */
+.content-header p,
+.content-header small,
+.content-header .text-muted,
+.content-header-title .text-muted {
+  color: var(--ark-text-muted) !important;
+  font-size: 14px !important;
+  margin-top: 4px !important;
+}
+
+/* =========================================================
+   CARDS & PANELS (STYLE CRISTAL NUIT COSMIQUE)
+   ========================================================= */
 .content-body .card,
 .datagrid .card,
 .form-card,
 .box,
 .content-panel,
-.container-fluid .card {
-  background: linear-gradient(180deg, var(--ark-plate-top) 0%, var(--ark-plate-bot) 100%) !important;
-  border: 1.5px solid var(--ark-steel) !important;
+.container-fluid .card,
+.card.bg-white,
+.card.shadow-sm {
+  background: linear-gradient(145deg, rgba(14, 21, 51, 0.88) 0%, rgba(7, 11, 30, 0.95) 100%) !important;
+  border: 1px solid rgba(157, 179, 218, 0.20) !important;
   border-radius: 16px !important;
-  box-shadow: var(--shadow-plate) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(12px) !important;
   overflow: hidden;
   margin-bottom: 24px;
-  transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease) !important;
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease), border-color 0.25s !important;
 }
 
 .container-fluid .card:hover {
   transform: translateY(-3px);
-  box-shadow: var(--shadow-plate), 0 14px 28px -10px rgba(27, 95, 230, 0.25) !important;
-  border-color: var(--ark-steel-dark) !important;
+  box-shadow: 0 14px 32px -8px rgba(47, 139, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(51, 195, 255, 0.4) !important;
+}
+
+.card-header,
+.box-header {
+  background: rgba(7, 11, 30, 0.65) !important;
+  border-bottom: 1px solid rgba(157, 179, 218, 0.16) !important;
+  padding: 16px 22px !important;
+  font-weight: 600;
+}
+
+.card-header h6,
+.box-header h6,
+.card-header .font-weight-bold {
+  color: #FFFFFF !important;
+  font-family: var(--font-display) !important;
+  font-size: 14px !important;
+}
+
+.card-body {
+  color: var(--ark-text-body) !important;
+}
+
+/* Nombres & KPI Dashboard */
+.card .h3,
+.card .h4,
+.card .h5,
+.card .h6,
+.card .text-gray-800,
+.card .text-dark,
+.content .text-dark,
+.content .text-gray-800,
+.content-body .text-dark,
+.content-body .text-gray-800 {
+  color: #FFFFFF !important;
+  font-family: var(--font-display) !important;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4) !important;
 }
 
 .icon-circle {
@@ -309,52 +504,170 @@ body.easyadmin {
   align-items: center !important;
   justify-content: center !important;
   border-radius: 14px !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 16px -6px rgba(27, 95, 230, 0.4) !important;
-}
-
-.card-header,
-.box-header {
-  background: linear-gradient(180deg, #FFFFFF, var(--ark-silver)) !important;
-  border-bottom: 1.5px solid var(--ark-steel) !important;
-  padding: 16px 22px !important;
-  font-weight: 600;
-}
-
-/* Tables de données */
-table.table,
-.datagrid table {
-  background: transparent !important;
-  margin-bottom: 0 !important;
-}
-
-table.table thead th {
-  background: linear-gradient(180deg, #FFFFFF, var(--ark-silver-2)) !important;
-  color: var(--ark-night) !important;
-  font-family: var(--font-display) !important;
-  font-size: 11px !important;
-  letter-spacing: 0.1em !important;
-  text-transform: uppercase !important;
-  border-bottom: 1.5px solid var(--ark-steel) !important;
-  padding: 14px 16px !important;
-}
-
-table.table tbody tr {
-  transition: background-color 0.2s;
-}
-
-table.table tbody tr:hover {
-  background-color: rgba(47, 139, 255, 0.05) !important;
-}
-
-table.table tbody td {
-  padding: 13px 16px !important;
-  vertical-align: middle !important;
-  border-color: rgba(157, 179, 218, 0.25) !important;
-  font-size: 14.5px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 6px 18px -4px rgba(47, 139, 255, 0.4) !important;
 }
 
 /* =========================================================
-   BOUTONS & ACTIONS (INSPIRÉS DES BOUTONS CRISTAL)
+   TABLES DE DONNÉES (DATAGRID & DASHBOARD) — CRITICAL FIX
+   ========================================================= */
+.datagrid,
+.content-panel-body,
+.table-responsive {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+}
+
+table.table,
+.datagrid table,
+table {
+  background: transparent !important;
+  margin-bottom: 0 !important;
+  border: none !important;
+  --bs-table-bg: transparent !important;
+  --bs-table-striped-bg: rgba(23, 33, 74, 0.3) !important;
+  --bs-table-hover-bg: rgba(47, 139, 255, 0.16) !important;
+}
+
+/* En-tête des tables */
+table.table thead,
+table thead,
+.datagrid table thead,
+thead.thead-light {
+  background: linear-gradient(180deg, #17214A 0%, #0E1533 100%) !important;
+  border-bottom: 2px solid rgba(51, 195, 255, 0.35) !important;
+}
+
+table.table thead th,
+table thead th,
+.datagrid table thead th,
+thead th {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid rgba(51, 195, 255, 0.35) !important;
+  padding: 14px 16px !important;
+  vertical-align: middle !important;
+}
+
+/* Textes de l'en-tête (TOUS les liens, spans, titres) */
+table.table thead th,
+table.table thead th a,
+table.table thead th span,
+table.table thead th .column-title,
+table thead th,
+table thead th a,
+table thead th span,
+.datagrid table thead th,
+.datagrid table thead th a,
+.datagrid table thead th span {
+  color: var(--ark-cyan) !important;
+  font-family: var(--font-display) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  font-weight: 600 !important;
+  text-decoration: none !important;
+}
+
+/* Icônes de tri (flèches montantes / descendantes) */
+table.table thead th i,
+table.table thead th svg,
+table.table thead th .fa,
+.datagrid table thead th i {
+  color: var(--ark-magenta) !important;
+  font-size: 12px !important;
+  filter: drop-shadow(0 0 6px rgba(224, 21, 138, 0.7)) !important;
+}
+
+/* Lignes du corps de table */
+table.table tbody tr,
+table tbody tr,
+.datagrid table tbody tr {
+  background-color: rgba(7, 11, 30, 0.55) !important;
+  border-bottom: 1px solid rgba(157, 179, 218, 0.10) !important;
+  transition: background-color 0.2s ease, transform 0.15s ease !important;
+}
+
+table.table tbody tr:hover,
+table tbody tr:hover,
+.datagrid table tbody tr:hover {
+  background-color: rgba(47, 139, 255, 0.18) !important;
+}
+
+table.table tbody tr.selected,
+.datagrid table tbody tr.selected {
+  background-color: rgba(123, 63, 240, 0.25) !important;
+}
+
+/* Cellules */
+table.table tbody td,
+table tbody td,
+.datagrid table tbody td {
+  padding: 13px 16px !important;
+  vertical-align: middle !important;
+  border-color: rgba(157, 179, 218, 0.08) !important;
+  font-size: 14px !important;
+  color: var(--ark-text-body) !important;
+}
+
+/* Liens dans les tables */
+table.table tbody td a:not(.btn),
+.datagrid table tbody td a:not(.btn) {
+  color: var(--ark-blue-bright) !important;
+  font-weight: 500;
+  text-decoration: none !important;
+}
+
+table.table tbody td a:not(.btn):hover,
+.datagrid table tbody td a:not(.btn):hover {
+  color: var(--ark-cyan) !important;
+  text-decoration: underline !important;
+}
+
+/* Images & miniatures dans la table */
+table.table tbody td img,
+.datagrid table tbody td img {
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(157, 179, 218, 0.25) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  padding: 3px !important;
+}
+
+/* Checkbox sélecteur de masse */
+.form-batch-checkbox,
+.batch-actions-selector input[type="checkbox"],
+input[type="checkbox"].form-check-input {
+  border-color: rgba(157, 179, 218, 0.4) !important;
+  background-color: rgba(14, 21, 51, 0.8) !important;
+  border-radius: 5px !important;
+  cursor: pointer;
+}
+
+.form-batch-checkbox:checked,
+.batch-actions-selector input[type="checkbox"]:checked,
+input[type="checkbox"].form-check-input:checked {
+  background-color: var(--ark-cyan) !important;
+  border-color: var(--ark-cyan) !important;
+  box-shadow: 0 0 8px rgba(51, 195, 255, 0.5) !important;
+}
+
+/* Pied de table & Pagination EasyAdmin */
+.content-footer,
+.list-pagination {
+  background: rgba(7, 11, 30, 0.8) !important;
+  border-top: 1px solid rgba(157, 179, 218, 0.15) !important;
+  padding: 14px 22px !important;
+  color: var(--ark-text-muted) !important;
+}
+
+.list-pagination-counter {
+  color: var(--ark-text-muted) !important;
+  font-weight: 500;
+  font-size: 13.5px;
+}
+
+/* =========================================================
+   BOUTONS & ACTIONS (BOUTONS CRISTAL ARKANOA)
    ========================================================= */
 .btn-primary,
 .action-new,
@@ -370,9 +683,13 @@ a.btn-primary {
   font-family: var(--font-body) !important;
   font-weight: 600 !important;
   border-radius: 999px !important;
-  padding: 8px 22px !important;
-  box-shadow: 0 6px 18px -4px rgba(123, 63, 240, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+  padding: 9px 24px !important;
+  box-shadow: 0 6px 20px -3px rgba(123, 63, 240, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
   transition: all 0.3s var(--ease) !important;
+  text-decoration: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
 }
 
 .btn-primary:hover,
@@ -381,37 +698,60 @@ a.btn-primary {
 .btn-success:hover {
   background-position: 100% 50% !important;
   transform: translateY(-2px) !important;
-  box-shadow: 0 10px 24px -6px rgba(224, 21, 138, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 8px 24px -4px rgba(224, 21, 138, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
   color: #FFFFFF !important;
 }
 
 .btn-secondary,
 .btn-default,
+.btn-outline-secondary,
+.btn-light,
 .action-cancel {
-  background: linear-gradient(180deg, #FFFFFF, var(--ark-silver-2)) !important;
-  border: 1.5px solid var(--ark-steel) !important;
-  color: var(--ark-ink, #0E1530) !important;
+  background: rgba(14, 21, 51, 0.8) !important;
+  border: 1.5px solid rgba(157, 179, 218, 0.28) !important;
+  color: #E9EEFB !important;
   border-radius: 999px !important;
-  padding: 7px 20px !important;
+  padding: 8px 22px !important;
   font-weight: 500 !important;
-  box-shadow: var(--shadow-plate) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
   transition: all 0.25s var(--ease) !important;
+  text-decoration: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
 }
 
 .btn-secondary:hover,
-.btn-default:hover {
-  border-color: var(--ark-steel-dark) !important;
+.btn-default:hover,
+.btn-outline-secondary:hover,
+.btn-light:hover {
+  border-color: var(--ark-cyan) !important;
   transform: translateY(-1px) !important;
-  color: var(--ark-blue) !important;
+  color: #FFFFFF !important;
+  background: rgba(51, 195, 255, 0.16) !important;
+  box-shadow: 0 4px 14px rgba(51, 195, 255, 0.25) !important;
 }
 
 .btn-danger,
 .action-delete {
-  background: linear-gradient(135deg, #FF4560, #C2185B) !important;
+  background: linear-gradient(135deg, #FF3366 0%, #C2185B 100%) !important;
   border: none !important;
   border-radius: 999px !important;
-  box-shadow: 0 4px 14px -3px rgba(194, 24, 91, 0.5) !important;
-  color: #fff !important;
+  padding: 8px 22px !important;
+  box-shadow: 0 4px 16px -2px rgba(255, 51, 102, 0.5) !important;
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  transition: all 0.25s var(--ease) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.btn-danger:hover,
+.action-delete:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 20px -2px rgba(255, 51, 102, 0.7) !important;
+  color: #FFFFFF !important;
 }
 
 /* =========================================================
@@ -420,23 +760,60 @@ a.btn-primary {
 .form-control,
 .form-select,
 select,
+textarea,
 input[type="text"],
 input[type="email"],
-input[type="password"] {
-  border: 1.5px solid var(--ark-steel) !important;
+input[type="password"],
+input[type="search"],
+input[type="number"],
+input[type="tel"],
+input[type="url"] {
+  border: 1.5px solid rgba(157, 179, 218, 0.25) !important;
   border-radius: 10px !important;
   padding: 10px 14px !important;
-  background: #FFFFFF !important;
+  background: rgba(14, 21, 51, 0.85) !important;
+  color: #FFFFFF !important;
   font-size: 14.5px !important;
-  transition: border-color 0.2s, box-shadow 0.2s !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s !important;
 }
 
 .form-control:focus,
 .form-select:focus,
+select:focus,
+textarea:focus,
 input:focus {
-  border-color: var(--ark-blue) !important;
-  box-shadow: 0 0 0 4px rgba(47, 139, 255, 0.18) !important;
+  border-color: var(--ark-cyan) !important;
+  background: rgba(23, 33, 74, 0.95) !important;
+  box-shadow: 0 0 0 3px rgba(51, 195, 255, 0.25) !important;
+  color: #FFFFFF !important;
   outline: none !important;
+}
+
+.form-label,
+label {
+  color: var(--ark-text-muted) !important;
+  font-weight: 500 !important;
+  font-size: 13.5px !important;
+  margin-bottom: 6px !important;
+}
+
+.form-help,
+.form-text {
+  color: rgba(169, 181, 214, 0.7) !important;
+  font-size: 12.5px !important;
+}
+
+/* Switch & Checkbox */
+.form-switch .form-check-input {
+  background-color: rgba(157, 179, 218, 0.3) !important;
+  border-color: rgba(157, 179, 218, 0.4) !important;
+}
+
+.form-switch .form-check-input:checked {
+  background-color: var(--ark-cyan) !important;
+  border-color: var(--ark-cyan) !important;
+  box-shadow: 0 0 10px rgba(51, 195, 255, 0.5) !important;
 }
 
 /* =========================================================
@@ -453,18 +830,36 @@ input:focus {
 .badge-primary,
 .badge-success {
   background: linear-gradient(120deg, var(--ark-blue), var(--ark-violet)) !important;
-  color: #fff !important;
-  box-shadow: 0 2px 8px rgba(27, 95, 230, 0.3) !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 2px 8px rgba(27, 95, 230, 0.35) !important;
 }
 
 .badge-info {
   background: linear-gradient(120deg, var(--ark-cyan), var(--ark-blue)) !important;
-  color: #fff !important;
+  color: #FFFFFF !important;
 }
 
 .badge-warning {
   background: linear-gradient(120deg, #FF9800, #F4511E) !important;
-  color: #fff !important;
+  color: #FFFFFF !important;
+}
+
+.badge-danger {
+  background: linear-gradient(120deg, #FF3366, #C2185B) !important;
+  color: #FFFFFF !important;
+}
+
+.badge.bg-light {
+  background: rgba(255, 255, 255, 0.10) !important;
+  color: #E9EEFB !important;
+  border: 1px solid rgba(157, 179, 218, 0.20) !important;
+}
+
+.badge.live-badge,
+.badge.bg-white {
+  background: rgba(14, 21, 51, 0.90) !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(51, 195, 255, 0.35) !important;
 }
 
 /* =========================================================
@@ -473,14 +868,109 @@ input:focus {
 .pagination .page-item .page-link {
   border-radius: 8px !important;
   margin: 0 3px !important;
-  border: 1.5px solid var(--ark-steel) !important;
-  color: var(--ark-blue) !important;
+  border: 1.5px solid rgba(157, 179, 218, 0.25) !important;
+  background: rgba(14, 21, 51, 0.8) !important;
+  color: var(--ark-cyan) !important;
   font-weight: 600;
+  transition: all 0.2s;
+}
+
+.pagination .page-item .page-link:hover {
+  background: rgba(47, 139, 255, 0.2) !important;
+  color: #FFFFFF !important;
+  border-color: var(--ark-cyan) !important;
 }
 
 .pagination .page-item.active .page-link {
   background: var(--crystal) !important;
   border-color: transparent !important;
-  color: #fff !important;
-  box-shadow: 0 4px 12px rgba(123, 63, 240, 0.4) !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 14px rgba(123, 63, 240, 0.5) !important;
+}
+
+/* =========================================================
+   MODALS, DROPDOWNS & DÉTAILS
+   ========================================================= */
+.modal-content {
+  background: linear-gradient(180deg, #0E1533 0%, #070B1E 100%) !important;
+  border: 1px solid rgba(157, 179, 218, 0.25) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6) !important;
+  color: #E9EEFB !important;
+}
+
+.modal-header {
+  border-bottom: 1px solid rgba(157, 179, 218, 0.15) !important;
+}
+
+.modal-header .modal-title {
+  color: #FFFFFF !important;
+  font-family: var(--font-display) !important;
+}
+
+.modal-footer {
+  border-top: 1px solid rgba(157, 179, 218, 0.15) !important;
+}
+
+.dropdown-menu {
+  background: rgba(14, 21, 51, 0.96) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  backdrop-filter: blur(14px) !important;
+  border: 1px solid rgba(157, 179, 218, 0.20) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5) !important;
+  padding: 6px !important;
+}
+
+.dropdown-item {
+  color: var(--ark-text-muted) !important;
+  border-radius: 8px !important;
+  padding: 8px 14px !important;
+  font-size: 14px !important;
+  transition: all 0.2s;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background: rgba(47, 139, 255, 0.20) !important;
+  color: #FFFFFF !important;
+}
+
+/* Vue Détails (dl, dt, dd) */
+dl.datalist dt,
+.field-label {
+  color: var(--ark-cyan) !important;
+  font-family: var(--font-display) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  margin-top: 12px !important;
+}
+
+dl.datalist dd,
+.field-value {
+  color: #FFFFFF !important;
+  font-size: 14.5px !important;
+  margin-bottom: 14px !important;
+}
+
+/* =========================================================
+   SCROLLBAR STYLÉE
+   ========================================================= */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(7, 11, 30, 0.8);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--ark-blue), var(--ark-violet));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--ark-blue-bright), var(--ark-magenta));
 }

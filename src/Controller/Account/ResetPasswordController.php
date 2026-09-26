@@ -182,6 +182,22 @@ class ResetPasswordController extends AbstractController
             return $this->json(['error' => 'Missing data'], 400);
         }
 
+        // Validation CSRF pour les soumissions HTML
+        if (!$content) {
+            $csrfToken = (string) $request->request->get('_csrf_token');
+            if (!$this->isCsrfTokenValid('app_password_reset_confirm', $csrfToken)) {
+                return new Response('Jeton CSRF invalide ou expiré.', 403);
+            }
+        }
+
+        // Validation de la robustesse et longueur minimale du mot de passe
+        if (strlen((string) $newPassword) < 8 || strlen((string) $newPassword) > 4096) {
+            if ($content) {
+                return $this->json(['error' => 'Le mot de passe doit comporter au moins 8 caractères.'], 400);
+            }
+            return new Response('Le mot de passe doit comporter au moins 8 caractères.', 400);
+        }
+
         $em = $this->tenantEmProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['resetToken' => $token]);
 
@@ -190,7 +206,7 @@ class ResetPasswordController extends AbstractController
         }
 
         // Hash & Save
-        $user->setPassword($passwordHasher->hashPassword($user, $newPassword));
+        $user->setPassword($passwordHasher->hashPassword($user, (string) $newPassword));
         $user->setResetToken(null);
         $user->setResetTokenExpiresAt(null);
         $em->flush();

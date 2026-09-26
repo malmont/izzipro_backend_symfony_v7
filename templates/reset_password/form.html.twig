@@ -27,12 +27,11 @@
       {# Ce champ caché est une sécurité supplémentaire #}
       <input type="hidden" name="tenant_host" value="{{ tenant_host }}">
       
-      {# Si tu n'as pas activé CSRF pour cette route API/Front hybride, tu peux retirer cette ligne, sinon garde-la #}
-      {# <input type="hidden" name="_csrf_token" value="{{ csrf_token('app_password_reset_confirm') }}"> #}
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token('app_password_reset_confirm') }}">
       
       <div class="form-group" style="margin-bottom: 15px;">
         <label for="newPassword">Nouveau mot de passe</label>
-        <input type="password" id="newPassword" name="newPassword" class="form-control" required>
+        <input type="password" id="newPassword" name="newPassword" class="form-control" required autocomplete="new-password" minlength="8" maxlength="4096">
       </div>
       
       <div style="text-align: center;">

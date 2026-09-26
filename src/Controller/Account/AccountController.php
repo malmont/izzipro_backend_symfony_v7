@@ -18,13 +18,7 @@ class AccountController extends AbstractController
     #[Route('/account', name: 'app_account')]
     public function index(): Response
     {
-        /** @var \App\Entity\User|null $user */
-        $user = $this->getUser();
-        $orders = $user ? $this->getAccountOrdersUseCase->execute($user->getId()) : [];
-
-        return $this->render('account/index.html.twig', [
-            'orders' => $orders,
-        ]);
+        return $this->redirectToRoute('admin');
     }
 
     #[Route('/account/order/{id}', name: 'account_order_details')]

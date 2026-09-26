@@ -47,33 +47,37 @@ class OtpController extends AbstractController
         if ($request->isMethod('POST')) {
             // Vérification du token CSRF
             $submittedToken = $request->request->get('_csrf_token');
-            if (!$this->isCsrfTokenValid('otp_verify', $submittedToken)) {
+            if (!$this->isCsrfTokenValid('otp_verify', (string) $submittedToken)) {
                 $error = 'Jeton CSRF invalide.';
             } else {
-                $otp = $request->request->get('otp');
-                // Récupérer l'utilisateur et son code OTP
-                $em = $this->tenantEmProvider->getEntityManager();
-                $user = $em->getRepository(User::class)->find($pendingUserId);
-                if (!$user) {
-                    return $this->redirectToRoute('app_login');
-                }
-                
-                $otpCode = $em->getRepository(OtpCode::class)->findOneBy([
-                    'userOtp' => $user,
-                    'code' => $otp,
-                ]);
-                
-                if (!$otpCode || $otpCode->getExpiration() < new DateTime()) {
-                    $error = 'Code OTP invalide ou expiré';
+                $otp = trim((string) $request->request->get('otp', ''));
+                if (strlen($otp) < 4 || strlen($otp) > 10 || !preg_match('/^[0-9A-Za-z]+$/', $otp)) {
+                    $error = 'Format de code OTP invalide.';
                 } else {
-                    // Le code est correct : on supprime l'OTP et on marque la session comme validée
-                    $em->remove($otpCode);
-                    $em->flush();
-                    $this->session->set('otp_validated', true);
-                    $this->session->remove('pending_otp_user');
+                    // Récupérer l'utilisateur et son code OTP
+                    $em = $this->tenantEmProvider->getEntityManager();
+                    $user = $em->getRepository(User::class)->find($pendingUserId);
+                    if (!$user) {
+                        return $this->redirectToRoute('app_login');
+                    }
                     
-                    // Rediriger vers le dashboard ou une autre route protégée
-                    return new RedirectResponse($this->urlGenerator->generate('app_account'));
+                    $otpCode = $em->getRepository(OtpCode::class)->findOneBy([
+                        'userOtp' => $user,
+                        'code' => $otp,
+                    ]);
+                
+                    if (!$otpCode || $otpCode->getExpiration() < new DateTime()) {
+                        $error = 'Code OTP invalide ou expiré';
+                    } else {
+                        // Le code est correct : on supprime l'OTP et on marque la session comme validée
+                        $em->remove($otpCode);
+                        $em->flush();
+                        $this->session->set('otp_validated', true);
+                        $this->session->remove('pending_otp_user');
+                        
+                        // Rediriger vers le dashboard admin (/admin)
+                        return new RedirectResponse($this->urlGenerator->generate('admin'));
+                    }
                 }
             }
         }
