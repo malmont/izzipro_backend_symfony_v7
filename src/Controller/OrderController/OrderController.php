@@ -121,6 +121,10 @@ class OrderController extends AbstractController
             ];
         }
 
+        if (isset($data['priceShipping']) && (float) $data['priceShipping'] < 0) {
+            return $this->json(['error' => 'Frais de livraison invalides'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+
         $dto = new CreateOrderDTO(
             $user->getId(),
             $data['orderSource'],
@@ -353,6 +357,10 @@ class OrderController extends AbstractController
 
         $carrierId = $data['carrierId'] ?? null;
 
+        if (isset($data['priceShipping']) && (float) $data['priceShipping'] < 0) {
+            return $this->json(['error' => 'Frais de livraison invalides'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+
         $dto = new CreateOrderDTO(
             $user->getId(),
             $data['orderSource'] ?? 1,
@@ -495,6 +503,10 @@ class OrderController extends AbstractController
         $paymentMethods = array_map(function ($method) {
             return new PaymentMethodDTO($method['type'], $method['amount']);
         }, $data['paymentMethods'] ?? []);
+
+        if (isset($data['priceShipping']) && (float) $data['priceShipping'] < 0) {
+            return $this->json(['error' => 'Frais de livraison invalides'], JsonResponse::HTTP_BAD_REQUEST);
+        }
 
         $dto = new CreateOrderMultiPaymentDTO(
             $user->getId(),

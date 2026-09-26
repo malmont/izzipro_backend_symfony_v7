@@ -331,6 +331,10 @@ class StripeService
             $itemsTotal += $unitPrice * $quantity;
         }
 
+        // Frais de livraison fournis par le navigateur : négatifs, ils faisaient baisser le montant payé
+        if ($priceShipping < 0) {
+            return ['error' => 'Frais de livraison invalides', 'status' => 400];
+        }
         $subtotal = $itemsTotal + $priceShipping;
 
         // Create a dummy order for tax calculation (NOT PERSISTED)
