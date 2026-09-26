@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Rapport de Diagnostic - La Boussole ESG</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #2c3e50;
+            line-height: 1.5;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #16a085;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #16a085;
+            margin: 0;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        .section-title {
+            font-size: 20px;
+            color: #2c3e50;
+            border-left: 5px solid #16a085;
+            padding-left: 10px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        .grid {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .grid td {
+            padding: 8px;
+            vertical-align: top;
+        }
+        .card {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .score-box {
+            text-align: center;
+            background-color: #e8f8f5;
+            border: 2px solid #16a085;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .score-value {
+            font-size: 48px;
+            font-weight: bold;
+            color: #16a085;
+            line-height: 1;
+            margin: 5px 0;
+        }
+        .score-label {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #7f8c8d;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+        }
+        .table th {
+            background-color: #16a085;
+            color: #ffffff;
+            font-weight: bold;
+            text-align: left;
+            padding: 10px;
+            font-size: 14px;
+        }
+        .table td {
+            padding: 10px;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 13px;
+        }
+        .table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #ffffff;
+            background-color: #3498db;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+        .badge-eligible {
+            background-color: #2ecc71;
+        }
+        .badge-gap {
+            background-color: #e74c3c;
+        }
+        .page-break {
+            page-break-before: always;
+        }
+        .footer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 11px;
+            color: #95a5a6;
+            border-top: 1px solid #e9ecef;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 class="logo">LA BOUSSOLE ESG</h1>
+        <div class="subtitle">Rapport officiel de diagnostic de maturité de développement durable</div>
+    </div>
+
+    <table class="grid">
+        <tr>
+            <td style="width: 60%;">
+                <h3 style="margin-top: 0;">Informations de l'entreprise</h3>
+                <div class="card">
+                    <strong>Nom :</strong> {{ company.name }}<br>
+                    <strong>Secteur :</strong> {{ company.sector.value|replace({'_': ' '})|title }}<br>
+                    <strong>Taille :</strong> {{ company.sizeCategory.value|replace({'_': ' à '}) }} employés<br>
+                    <strong>Territoire :</strong> {{ company.territory ? company.territory.value : '' }}<br>
+                    {% if company.city %}<strong>Ville :</strong> {{ company.city }}<br>{% endif %}
+                    <strong>Contact :</strong> {{ company.contactEmail }}
+                </div>
+            </td>
+            <td style="width: 40%;">
+                <div class="score-box">
+                    <div class="score-label">Score Global</div>
+                    <div class="score-value">{{ session.scoreGlobal }}%</div>
+                    <div class="badge" style="background-color: #16a085; font-size: 13px; padding: 6px 12px; margin-top: 10px;">
+                        {{ session.maturityLevel }}
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="section-title">Scores par Pilier ESG</div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Pilier</th>
+                <th style="text-align: right; width: 100px;">Score Obtenu</th>
+                <th>Statut</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Environnement</td>
+                <td style="text-align: right; font-weight: bold;">{{ session.scoreEnvironment }}%</td>
+                <td>
+                    {% if session.scoreEnvironment >= 75 %}Excellence
+                    {% elseif session.scoreEnvironment >= 60 %}Confirmé
+                    {% elseif session.scoreEnvironment >= 40 %}Développant
+                    {% else %}Émergent{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Gouvernance</td>
+                <td style="text-align: right; font-weight: bold;">{{ session.scoreGovernance }}%</td>
+                <td>
+                    {% if session.scoreGovernance >= 75 %}Excellence
+                    {% elseif session.scoreGovernance >= 60 %}Confirmé
+                    {% elseif session.scoreGovernance >= 40 %}Développant
+                    {% else %}Émergent{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Social</td>
+                <td style="text-align: right; font-weight: bold;">{{ session.scoreSocial }}%</td>
+                <td>
+                    {% if session.scoreSocial >= 75 %}Excellence
+                    {% elseif session.scoreSocial >= 60 %}Confirmé
+                    {% elseif session.scoreSocial >= 40 %}Développant
+                    {% else %}Émergent{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Activateur Climat</td>
+                <td style="text-align: right; font-weight: bold;">{{ session.scoreClimate }}%</td>
+                <td>
+                    {% if session.scoreClimate >= 75 %}Excellence
+                    {% elseif session.scoreClimate >= 60 %}Confirmé
+                    {% elseif session.scoreClimate >= 40 %}Développant
+                    {% else %}Émergent{% endif %}
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="page-break"></div>
+
+    <div class="section-title">Simulation et Recommandations de Certifications</div>
+    <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 20px;">
+        Voici les opportunités de certifications analysées par rapport à votre niveau actuel de maturité ESG et votre localisation géographique.
+    </p>
+
+    {% if recommendations is empty %}
+        <p>Aucune recommandation disponible pour le moment.</p>
+    {% else %}
+        {% for reco in recommendations %}
+            <div class="card" style="margin-bottom: 25px; border-left: 4px solid {% if reco.isEligible %}#2ecc71{% else %}#e67e22{% endif %};">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td>
+                            <strong style="font-size: 16px; color: #2c3e50;">{{ reco.referential.name }}</strong>
+                            <span class="badge {% if reco.isEligible %}badge-eligible{% endif %}" style="margin-left: 10px;">
+                                {% if reco.isEligible %}Éligible{% else %}Non Éligible (Écart global : {{ reco.gapToThresholdGlobal }} pts){% endif %}
+                            </span>
+                        </td>
+                        <td style="text-align: right; font-size: 12px; color: #7f8c8d;">
+                            Priorité : <strong>{{ reco.priority }} / 5</strong>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="font-size: 12px; color: #7f8c8d; padding-top: 5px;">
+                            Catégorie : {{ reco.referential.category|title }} | Niveau visé : {{ reco.referential.certLevel|default('Standard')|title }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="padding-top: 10px; font-size: 13px;">
+                            {{ reco.referential.description }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="padding-top: 15px;">
+                            <table style="width: 100%; font-size: 12px; background-color: #ffffff; border: 1px solid #e9ecef; border-radius: 4px; padding: 10px;">
+                                <tr>
+                                    <td style="width: 33%;">Coût Brut Estimé : <br><strong>{{ reco.grossCostCad }} CAD</strong></td>
+                                    <td style="width: 33%;">Total Subventions : <br><strong style="color: #27ae60;">- {{ reco.totalSubsidyCad }} CAD</strong></td>
+                                    <td style="width: 33%; border-left: 1px solid #e9ecef; padding-left: 15px;">Coût Net Restant : <br><strong style="color: #2980b9; font-size: 14px;">{{ reco.netCostCad }} CAD</strong></td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    {% if reco.subsidyPrograms is not empty %}
+                        <tr>
+                            <td colspan="2" style="padding-top: 10px;">
+                                <div style="font-size: 11px; font-weight: bold; color: #7f8c8d;">Programmes de subventions applicables :</div>
+                                <ul style="margin: 5px 0 0 0; padding-left: 18px; font-size: 11px;">
+                                    {% for prog in reco.subsidyPrograms %}
+                                        <li>{{ prog.name }} (par {{ prog.organism }}) - Financement jusqu'à {{ prog.subsidyRatePercent }}% (Max : {{ prog.maxAmountCad|default('N/A') }} CAD)</li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </table>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="footer">
+        Rapport généré par la Boussole ESG - Plateforme Lizpro &copy; {{ "now"|date("Y") }}
+    </div>
+</body>
+</html>

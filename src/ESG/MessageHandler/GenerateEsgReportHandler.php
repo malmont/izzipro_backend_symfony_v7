@@ -73,7 +73,8 @@ class GenerateEsgReportHandler
             // 6. Generate PDF via Dompdf
             $options = new Options();
             $options->set('isHtml5ParserEnabled', true);
-            $options->set('isRemoteEnabled', true);
+            // Aucune ressource distante dans le modèle : pas de requête serveur vers une URL présente dans les données
+            $options->set('isRemoteEnabled', false);
             $dompdf = new Dompdf($options);
             $dompdf->loadHtml($html);
             $dompdf->setPaper('A4', 'portrait');
