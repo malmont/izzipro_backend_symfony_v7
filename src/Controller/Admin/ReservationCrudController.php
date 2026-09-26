@@ -28,6 +28,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ReservationCrudController extends BaseTenantCrudController
 {
+    use CsrfProtectedActionTrait;
+
     private ?string $previousStatus = null;
 
     public function __construct(
@@ -46,12 +48,12 @@ class ReservationCrudController extends BaseTenantCrudController
     public function configureActions(Actions $actions): Actions
     {
         $confirmAction = Action::new('confirmReservation', 'Confirmer', 'fa fa-check-circle')
-            ->linkToCrudAction('confirmReservation')
+            ->linkToUrl(fn (Reservation $reservation) => $this->csrfActionUrl('confirmReservation', $reservation->getId()))
             ->setCssClass('text-success')
             ->displayIf(fn (Reservation $reservation) => $reservation->getStatus() !== 'confirmed');
 
         $cancelAction = Action::new('cancelReservation', 'Annuler', 'fa fa-times-circle')
-            ->linkToCrudAction('cancelReservation')
+            ->linkToUrl(fn (Reservation $reservation) => $this->csrfActionUrl('cancelReservation', $reservation->getId()))
             ->setCssClass('text-danger')
             ->displayIf(fn (Reservation $reservation) => $reservation->getStatus() !== 'cancelled');
 
@@ -64,6 +66,11 @@ class ReservationCrudController extends BaseTenantCrudController
 
     public function confirmReservation(AdminContext $context): Response
     {
+        if (!$this->isCsrfActionValid($context, 'confirmReservation')) {
+            $this->addFlash('danger', 'Lien invalide ou expiré : action annulée. Utilisez le bouton depuis la liste.');
+            return $this->redirect($this->container->get(AdminUrlGenerator::class)->unsetAll()->setController(self::class)->setAction('index')->generateUrl());
+        }
+
         /** @var Reservation|null $reservation */
         $reservation = $context->getEntity()->getInstance();
         if (!$reservation) {
@@ -83,6 +90,11 @@ class ReservationCrudController extends BaseTenantCrudController
 
     public function cancelReservation(AdminContext $context): Response
     {
+        if (!$this->isCsrfActionValid($context, 'cancelReservation')) {
+            $this->addFlash('danger', 'Lien invalide ou expiré : action annulée. Utilisez le bouton depuis la liste.');
+            return $this->redirect($this->container->get(AdminUrlGenerator::class)->unsetAll()->setController(self::class)->setAction('index')->generateUrl());
+        }
+
         /** @var Reservation|null $reservation */
         $reservation = $context->getEntity()->getInstance();
         if (!$reservation) {

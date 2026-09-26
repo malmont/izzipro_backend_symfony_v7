@@ -358,10 +358,10 @@
         <div class="chapter-container{% if loop.first %} first-chapter{% endif %}" style="{% if loop.first %}page-break-before: avoid !important;{% endif %}">
             <div class="chapter-header">
                 {% if item.clean_theme %}
-                    <div class="chapter-theme">{{ item.clean_theme|raw }}</div>
+                    <div class="chapter-theme">{{ item.clean_theme }}</div>
                 {% endif %}
                 <div class="chapter-number">Chapitre {{ loop.index }}</div>
-                <h2 class="chapter-title">{{ item.clean_title|raw }}</h2>
+                <h2 class="chapter-title">{{ item.clean_title }}</h2>
             </div>
 
             <div class="story-content">
@@ -372,9 +372,9 @@
                         {% if pTrim %}
                             <p class="story-paragraph">
                                 {% if loop.first and pTrim|length > 1 %}
-                                    <span class="first-letter">{{ pTrim|slice(0, 1)|raw }}</span>{{ pTrim|slice(1)|raw }}
+                                    <span class="first-letter">{{ pTrim|slice(0, 1) }}</span>{{ pTrim|slice(1) }}
                                 {% else %}
-                                    {{ pTrim|nl2br|raw }}
+                                    {{ pTrim|nl2br }}
                                 {% endif %}
                             </p>
                         {% endif %}

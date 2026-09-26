@@ -17,6 +17,8 @@ class BookService
     {
         $em = $this->emProvider->getEntityManager();
         
+        $image = ImageUploadValidator::validate($file);
+
         $uploadDir = $this->projectDir . '/var/storage/public_bucket/uploads/memoires/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0775, true);
@@ -29,7 +31,7 @@ class BookService
             }
         }
 
-        $newFilename = uniqid() . '_cover.' . $file->guessExtension();
+        $newFilename = ImageUploadValidator::randomFilename($image['extension'], '_cover');
         $file->move($uploadDir, $newFilename);
 
         $book->setCoverPhotoPath($newFilename);

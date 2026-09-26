@@ -410,7 +410,11 @@ class ChapterController extends AbstractController
             ?? ($request->files->count() > 0 ? $request->files->getIterator()->current() : null);
         if (!$file) return $this->json(['error' => 'No file uploaded — expected field: photo, file, or image'], 400);
 
-        $this->addChapterPhotoUseCase->execute($chapter, $file, $request->request->all());
+        try {
+            $this->addChapterPhotoUseCase->execute($chapter, $file, $request->request->all());
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => $e->getMessage()], 400);
+        }
         
         $host = $this->resolveHost($request);
         return $this->json(new ChapterOutputDto($chapter, $host));

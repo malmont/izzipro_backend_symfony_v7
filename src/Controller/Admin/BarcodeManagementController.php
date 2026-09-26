@@ -15,6 +15,8 @@ use Symfony\Component\Routing\Attribute\Route;
 
 class BarcodeManagementController extends AbstractController
 {
+    private const MAX_COPIES = 500;
+
     private TenantEntityManagerProvider $emProvider;
     private AdminUrlGenerator $adminUrlGenerator;
 
@@ -79,6 +81,9 @@ class BarcodeManagementController extends AbstractController
     #[Route('/admin/print-barcode/{id}/{copies}', name: 'admin_print_barcode')]
     public function printBarcode(int $id, int $copies): Response
     {
+        // Borne le nombre d'étiquettes : un nombre démesuré bloquerait le serveur (rendu HTML/PDF)
+        $copies = max(1, min($copies, self::MAX_COPIES));
+
         $em = $this->emProvider->getEntityManager();
         $product = $em->getRepository(Product::class)->find($id);
         if (!$product) {
@@ -104,6 +109,9 @@ class BarcodeManagementController extends AbstractController
     #[Route('/admin/pdf/print-barcode/{id}/{copies}', name: 'admin_pdf_print_barcode')]
     public function pdfPrintBarcode(int $id, int $copies): Response
     {
+        // Borne le nombre d'étiquettes : un nombre démesuré bloquerait le serveur (rendu HTML/PDF)
+        $copies = max(1, min($copies, self::MAX_COPIES));
+
         $em = $this->emProvider->getEntityManager();
         $product = $em->getRepository(Product::class)->find($id);
         if (!$product) {

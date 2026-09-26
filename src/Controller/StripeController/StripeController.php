@@ -3,6 +3,7 @@
 namespace App\Controller\StripeController;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -24,8 +25,11 @@ class StripeController extends AbstractController
     }
 
     #[Route('/disconnect', name: 'app_stripe_disconnect', methods: ['GET', 'POST'])]
-    public function disconnect(): Response
+    public function disconnect(Request $request): Response
     {
-        return $this->redirectToRoute('admin_stripe_disconnect');
+        // Transmet le jeton CSRF du formulaire : la route admin le vérifie
+        $token = (string) ($request->request->get('_csrf_token') ?? $request->request->get('_token') ?? $request->query->get('_token', ''));
+
+        return $this->redirectToRoute('admin_stripe_disconnect', ['_token' => $token]);
     }
 }

@@ -84,12 +84,13 @@ class AdminStripeController extends AbstractController
         StripeService $stripeService,
         AdminUrlGenerator $adminUrlGenerator
     ): RedirectResponse {
-        if ($request->isMethod('POST')) {
-            $token = (string) ($request->request->get('_token') ?? $request->request->get('_csrf_token'));
-            if (!$this->isCsrfTokenValid('stripe_disconnect', $token)) {
-                $this->addFlash('danger', 'Jeton CSRF invalide.');
-                return $this->redirect($adminUrlGenerator->setController(StripeConfigCrudController::class)->generateUrl());
-            }
+        // Jeton exigé pour GET comme pour POST : sinon un simple lien externe déconnecte le compte Stripe du tenant
+        $token = $request->isMethod('POST')
+            ? (string) ($request->request->get('_token') ?? $request->request->get('_csrf_token'))
+            : (string) $request->query->get('_token', '');
+        if (!$this->isCsrfTokenValid('stripe_disconnect', $token)) {
+            $this->addFlash('danger', 'Jeton CSRF invalide ou manquant : déconnexion annulée.');
+            return $this->redirect($adminUrlGenerator->setController(StripeConfigCrudController::class)->generateUrl());
         }
 
         $disconnected = $stripeService->disconnectCurrentTenant();

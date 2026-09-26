@@ -23,9 +23,10 @@ class ChapterService
             mkdir($uploadDir, 0775, true);
         }
 
-        $newFilename = uniqid() . '.' . $file->guessExtension();
-        $fileSize = $file->getSize();
-        $mimeType = $file->getMimeType() ?? 'image/jpeg';
+        $image = ImageUploadValidator::validate($file);
+        $mimeType = $image['mimeType'];
+        $fileSize = $image['size'];
+        $newFilename = ImageUploadValidator::randomFilename($image['extension']);
         
         $file->move($uploadDir, $newFilename);
 

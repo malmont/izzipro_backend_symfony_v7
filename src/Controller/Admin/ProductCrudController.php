@@ -36,6 +36,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 
 class ProductCrudController extends BaseTenantCrudController
 {
+    use CsrfProtectedActionTrait;
+
     private AdminUrlGenerator $adminUrlGenerator;
 
     public function __construct(
@@ -158,7 +160,7 @@ class ProductCrudController extends BaseTenantCrudController
     public function configureActions(Actions $actions): Actions
     {
         $generateBarcode = Action::new('generateBarcode', 'Générer Code Barre', 'fa fa-barcode')
-            ->linkToCrudAction('generateBarcode');
+            ->linkToUrl(fn (Product $product) => $this->csrfActionUrl('generateBarcode', $product->getId()));
 
         $manageSpecifications = Action::new('manageSpecifications', 'Caractéristiques', 'fa fa-cogs')
             ->linkToRoute('admin_product_specifications', function (Product $product): array {
@@ -174,6 +176,11 @@ class ProductCrudController extends BaseTenantCrudController
 
     public function generateBarcode(AdminContext $context): RedirectResponse
     {
+        if (!$this->isCsrfActionValid($context, 'generateBarcode')) {
+            $this->addFlash('danger', 'Lien invalide ou expiré : action annulée. Utilisez le bouton depuis la liste.');
+            return $this->redirect($this->container->get(AdminUrlGenerator::class)->unsetAll()->setController(self::class)->setAction('index')->generateUrl());
+        }
+
         /** @var Product $product */
         $product = $context->getEntity()->getInstance();
         if (!$product) {

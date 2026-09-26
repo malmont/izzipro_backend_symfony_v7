@@ -35,7 +35,9 @@ class StripeConfigCrudController extends BaseTenantCrudController
             ->setCssClass('btn btn-primary');
 
         $disconnectStripe = Action::new('disconnectStripe', 'Déconnecter', 'fas fa-unlink')
-            ->linkToRoute('admin_stripe_disconnect')
+            ->linkToUrl(fn () => $this->generateUrl('admin_stripe_disconnect', [
+                '_token' => $this->container->get('security.csrf.token_manager')->getToken('stripe_disconnect')->getValue(),
+            ]))
             ->setCssClass('text-danger')
             ->displayIf(fn(StripeConfig $config) => (bool) $config->getAccountId());
 

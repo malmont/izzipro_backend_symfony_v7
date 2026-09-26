@@ -3,6 +3,7 @@
 namespace App\Controller\Admin\Memoires;
 
 use App\Controller\Admin\BaseTenantCrudController;
+use App\Controller\Admin\CsrfProtectedActionTrait;
 use App\MemoiresVivantes\Entity\BookPrintOrder;
 use App\MemoiresVivantes\Services\LuluPrintService;
 use App\Services\TenantEntityManagerProvider;
@@ -23,6 +24,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class BookPrintOrderCrudController extends BaseTenantCrudController
 {
+    use CsrfProtectedActionTrait;
+
     public function __construct(
         TenantEntityManagerProvider $emProvider,
         private readonly LuluPrintService $luluPrintService,
@@ -49,7 +52,7 @@ class BookPrintOrderCrudController extends BaseTenantCrudController
     {
         // Action personnalisée : Synchroniser avec Lulu
         $syncLuluAction = Action::new('syncLulu', 'Synchroniser Lulu', 'fas fa-sync')
-            ->linkToCrudAction('syncWithLulu')
+            ->linkToUrl(fn (BookPrintOrder $order) => $this->csrfActionUrl('syncWithLulu', (string) $order->getId()))
             ->setCssClass('btn btn-sm btn-outline-info');
 
         return $actions
@@ -142,6 +145,11 @@ class BookPrintOrderCrudController extends BaseTenantCrudController
      */
     public function syncWithLulu(AdminContext $context): Response
     {
+        if (!$this->isCsrfActionValid($context, 'syncWithLulu')) {
+            $this->addFlash('danger', 'Lien invalide ou expiré : action annulée. Utilisez le bouton depuis la liste.');
+            return $this->redirect($this->container->get(AdminUrlGenerator::class)->unsetAll()->setController(self::class)->setAction('index')->generateUrl());
+        }
+
         /** @var BookPrintOrder|null $order */
         $order = $context->getEntity()->getInstance();
         if ($order && $order->getLuluPrintJobId()) {

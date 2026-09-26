@@ -256,7 +256,8 @@ class BookPdfGeneratorService
         $html = $this->renderInteriorHtml($book, $customAuthorName);
 
         $options = new Options();
-        $options->set('isRemoteEnabled', true);
+        // Aucune ressource distante : le texte des chapitres vient des utilisateurs (pas de requête serveur vers une URL injectée)
+        $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isFontSubsettingEnabled', true);
         $options->set('defaultFont', 'DejaVu Serif');
@@ -280,7 +281,8 @@ class BookPdfGeneratorService
         $dims = $this->calculateCoverDimensions($pageCount);
 
         $options = new Options();
-        $options->set('isRemoteEnabled', true);
+        // Aucune ressource distante : le texte des chapitres vient des utilisateurs (pas de requête serveur vers une URL injectée)
+        $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isFontSubsettingEnabled', true);
         $options->set('defaultFont', 'DejaVu Serif');

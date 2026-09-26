@@ -14,6 +14,9 @@ class RedisAdminController extends AbstractController
     /** Flux Redis Messenger (normalement en base Redis 1, protégés ici au cas où ils se trouveraient en base 0) */
     private const MESSENGER_KEYS = ['messages', 'messages_failed'];
 
+    /** Sessions utilisateurs (RedisSessionHandler) : les supprimer déconnecterait tous les admins */
+    private const SESSION_PREFIX = 'sf_s';
+
     #[Route('/admin/redis/flush', name: 'admin_redis_flush', methods: ['GET', 'POST'])]
     public function flushRedis(Request $request, LoggerInterface $logger, ?CacheInterface $cache = null): Response
     {
@@ -56,6 +59,8 @@ class RedisAdminController extends AbstractController
                     foreach ($allKeys as $key) {
                         if (str_starts_with($key, 'tenant:traffic:')) {
                             $protectedTrafficKeysCount++;
+                        } elseif (str_starts_with($key, self::SESSION_PREFIX)) {
+                            continue;
                         } elseif (in_array($key, self::MESSENGER_KEYS, true)) {
                             // File de messages (générations en attente) : ne jamais la supprimer
                             continue;
@@ -121,9 +126,13 @@ class RedisAdminController extends AbstractController
             $this->addFlash('danger', 'Erreur : Impossible de vider le cache Redis.');
         }
 
-        $referer = $request->headers->get('referer');
-        if ($referer && str_contains($referer, '/admin')) {
-            return $this->redirect($referer);
+        // Retour à la page d'origine uniquement si elle est sur ce même site (pas de redirection vers un domaine externe)
+        $referer = (string) $request->headers->get('referer', '');
+        $refererHost = parse_url($referer, PHP_URL_HOST);
+        $refererPath = (string) parse_url($referer, PHP_URL_PATH);
+        if ($refererHost === $request->getHost() && str_starts_with($refererPath, '/admin')) {
+            $query = parse_url($referer, PHP_URL_QUERY);
+            return $this->redirect($refererPath . ($query ? '?' . $query : ''));
         }
 
         return $this->redirectToRoute('admin');
