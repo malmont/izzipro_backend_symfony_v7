@@ -396,7 +396,7 @@
                                         <td class="layout-grid-cell">
                                             {% if photo.filePath is defined and photo.filePath %}
                                                 <div class="photo-frame">
-                                                    <img src="{{ project_dir }}/public/uploads/memoires/{{ photo.filePath }}" class="photo-img-grid" alt="Photo">
+                                                    <img src="{{ photos_dir }}/{{ photo.filePath }}" class="photo-img-grid" alt="Photo">
                                                 </div>
                                             {% endif %}
                                         </td>
@@ -416,7 +416,7 @@
                                     <td class="layout-duo-v-cell">
                                         {% if photo.filePath is defined and photo.filePath %}
                                             <div class="photo-frame">
-                                                <img src="{{ project_dir }}/public/uploads/memoires/{{ photo.filePath }}" class="photo-img-duo-v" alt="Photo">
+                                                <img src="{{ photos_dir }}/{{ photo.filePath }}" class="photo-img-duo-v" alt="Photo">
                                             </div>
                                         {% endif %}
                                     </td>
@@ -433,7 +433,7 @@
                             {% for photo in ppage.photos %}
                                 {% if photo.filePath is defined and photo.filePath %}
                                     <div class="photo-frame" style="margin-bottom: 5mm;">
-                                        <img src="{{ project_dir }}/public/uploads/memoires/{{ photo.filePath }}" class="photo-img-duo-h" alt="Photo">
+                                        <img src="{{ photos_dir }}/{{ photo.filePath }}" class="photo-img-duo-h" alt="Photo">
                                     </div>
                                 {% endif %}
                             {% endfor %}
@@ -444,7 +444,7 @@
                         <div class="layout-single-block">
                             {% if ppage.photos[0] is defined and ppage.photos[0].filePath %}
                                 <div class="photo-frame">
-                                    <img src="{{ project_dir }}/public/uploads/memoires/{{ ppage.photos[0].filePath }}" class="photo-img-single" alt="Photo">
+                                    <img src="{{ photos_dir }}/{{ ppage.photos[0].filePath }}" class="photo-img-single" alt="Photo">
                                 </div>
                             {% endif %}
                         </div>

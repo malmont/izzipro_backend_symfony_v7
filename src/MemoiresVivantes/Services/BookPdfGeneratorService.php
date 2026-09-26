@@ -215,6 +215,8 @@ class BookPdfGeneratorService
             'author_name' => $this->resolveAuthorName($book, $customAuthorName),
             'chapters_data' => $chaptersData,
             'project_dir' => $this->projectDir,
+            // Répertoire partagé où ChapterService enregistre les photos (l'ancien public/uploads n'existe plus)
+            'photos_dir' => $this->projectDir . '/var/storage/public_bucket/uploads/memoires',
         ]);
     }
 
