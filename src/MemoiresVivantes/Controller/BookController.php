@@ -7,8 +7,8 @@ use App\MemoiresVivantes\Dto\BookOutputDto;
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\BookPrintOrder;
 use App\MemoiresVivantes\Entity\Contributor;
-use App\MemoiresVivantes\Entity\MemoireQuestion;
 use App\MemoiresVivantes\Services\BookService;
+use App\MemoiresVivantes\Services\ChapterQuestionProvider;
 use App\MemoiresVivantes\UseCase\CreateBookUseCase;
 use App\MemoiresVivantes\UseCase\GetBooksByUserUseCase;
 use App\MemoiresVivantes\UseCase\UpdateBookUseCase;
@@ -33,6 +33,7 @@ class BookController extends AbstractController
         private readonly UpdateBookUseCase $updateBookUseCase,
         private readonly DeleteBookUseCase $deleteBookUseCase,
         private readonly BookService $bookService,
+        private readonly ChapterQuestionProvider $questionProvider,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly GetBookReservationsUseCase $getBookReservationsUseCase,
         private readonly SyncBookPaymentStatusUseCase $syncBookPaymentStatusUseCase,
@@ -151,23 +152,7 @@ class BookController extends AbstractController
         );
         $ordersCount = $latestOrder ? $em->getRepository(BookPrintOrder::class)->count(['book' => $book]) : 0;
 
-        $questionsByTheme = [];
-        if ($book->getType()) {
-            $qb = $em->getRepository(MemoireQuestion::class)->createQueryBuilder('q')
-                ->where('q.isActive = true')
-                ->andWhere('q.bookType = :bookType')
-                ->setParameter('bookType', $book->getType());
-
-            if ($filterRole !== null) {
-                $qb->andWhere('(q.role IS NULL OR q.role = :role)')
-                   ->setParameter('role', $filterRole);
-            }
-
-            $qb->orderBy('q.displayOrder', 'ASC');
-            foreach ($qb->getQuery()->getResult() as $q) {
-                $questionsByTheme[$q->getTheme()][] = $q->toFrontArray();
-            }
-        }
+        $questionsByTheme = $this->questionProvider->forBook($book, $filterRole);
 
         $host = $this->resolveHost($request);
         return $this->json(new BookOutputDto(

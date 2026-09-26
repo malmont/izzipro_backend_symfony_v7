@@ -19,6 +19,7 @@ use App\MemoiresVivantes\UseCase\TranscribeAudioUseCase;
 use App\MemoiresVivantes\UseCase\UpdateChapterUseCase;
 use App\MemoiresVivantes\Services\HommageAggregationService;
 use App\MemoiresVivantes\Services\FamilleAggregationService;
+use App\MemoiresVivantes\Services\ChapterQuestionProvider;
 use App\Services\AnthropicService;
 use App\Services\MediaUrlResolver;
 use App\Services\TenantEntityManagerProvider;
@@ -44,6 +45,7 @@ class ChapterController extends AbstractController
         private readonly ImproveAnswerUseCase $improveAnswerUseCase,
         private readonly HommageAggregationService $hommageAggregationService,
         private readonly FamilleAggregationService $familleAggregationService,
+        private readonly ChapterQuestionProvider $questionProvider,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly MessageBusInterface $messageBus,
         private readonly \Psr\Log\LoggerInterface $logger,
@@ -93,23 +95,7 @@ class ChapterController extends AbstractController
             $role = ($book->isParentsDeceased() || $book->isParentsNotParticipating()) ? 'enfant' : 'parent';
         }
 
-        $questionsByTheme = [];
-        if ($book->getType()) {
-            $qb = $em->getRepository(MemoireQuestion::class)->createQueryBuilder('q')
-                ->where('q.isActive = true')
-                ->andWhere('q.bookType = :bookType')
-                ->setParameter('bookType', $book->getType());
-
-            if ($role !== null) {
-                $qb->andWhere('(q.role IS NULL OR q.role = :role)')
-                   ->setParameter('role', $role);
-            }
-
-            $qb->orderBy('q.displayOrder', 'ASC');
-            foreach ($qb->getQuery()->getResult() as $q) {
-                $questionsByTheme[$q->getTheme()][] = $q->toFrontArray();
-            }
-        }
+        $questionsByTheme = $this->questionProvider->forBook($book, $role);
 
         $chapters = $this->getChaptersByBookUseCase->execute($book);
         $host = $this->resolveHost($request);
@@ -180,27 +166,7 @@ class ChapterController extends AbstractController
             $role = ($chapter->getBook()->isParentsDeceased() || $chapter->getBook()->isParentsNotParticipating()) ? 'enfant' : 'parent';
         }
 
-        $questions = [];
-        if ($chapter->getTheme()) {
-            $qb = $em->getRepository(MemoireQuestion::class)->createQueryBuilder('q')
-                ->where('q.theme = :theme')
-                ->andWhere('q.isActive = true')
-                ->setParameter('theme', $chapter->getTheme());
-
-            if ($chapter->getBook() && $chapter->getBook()->getType()) {
-                $qb->andWhere('q.bookType = :bookType')
-                   ->setParameter('bookType', $chapter->getBook()->getType());
-            }
-
-            if ($role !== null) {
-                $qb->andWhere('(q.role IS NULL OR q.role = :role)')
-                   ->setParameter('role', $role);
-            }
-
-            $qb->orderBy('q.displayOrder', 'ASC');
-            $questionEntities = $qb->getQuery()->getResult();
-            $questions = array_map(fn(MemoireQuestion $q) => $q->toFrontArray(), $questionEntities);
-        }
+        $questions = $this->questionProvider->forChapter($chapter, $role);
 
         return $this->json(new ChapterOutputDto($chapter, $host, $questions, $validatedContributorId, $currentContributor));
     }
@@ -295,27 +261,7 @@ class ChapterController extends AbstractController
             $role = ($chapter->getBook()->isParentsDeceased() || $chapter->getBook()->isParentsNotParticipating()) ? 'enfant' : 'parent';
         }
 
-        $questions = [];
-        if ($chapter->getTheme()) {
-            $qb = $em->getRepository(MemoireQuestion::class)->createQueryBuilder('q')
-                ->where('q.theme = :theme')
-                ->andWhere('q.isActive = true')
-                ->setParameter('theme', $chapter->getTheme());
-
-            if ($chapter->getBook() && $chapter->getBook()->getType()) {
-                $qb->andWhere('q.bookType = :bookType')
-                   ->setParameter('bookType', $chapter->getBook()->getType());
-            }
-
-            if ($role !== null) {
-                $qb->andWhere('(q.role IS NULL OR q.role = :role)')
-                   ->setParameter('role', $role);
-            }
-
-            $qb->orderBy('q.displayOrder', 'ASC');
-            $questionEntities = $qb->getQuery()->getResult();
-            $questions = array_map(fn(MemoireQuestion $q) => $q->toFrontArray(), $questionEntities);
-        }
+        $questions = $this->questionProvider->forChapter($chapter, $role);
 
         return $this->json(new ChapterOutputDto($chapter, $host, $questions, $validatedContributorId, $currentContributor));
     }
