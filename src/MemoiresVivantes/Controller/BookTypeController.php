@@ -33,7 +33,7 @@ class BookTypeController extends AbstractController
     {
         $type = $this->emProvider->getEntityManager()->getRepository(BookType::class)->findOneBy(['code' => $code, 'isActive' => true]);
         if (!$type) {
-            return $this->json(['error' => 'Book type not found'], 404);
+            return $this->json(['error' => 'Type de livre introuvable.'], 404);
         }
 
         return $this->json($this->normalizer->toPublicArray($type));

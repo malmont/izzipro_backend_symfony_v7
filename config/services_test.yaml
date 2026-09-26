@@ -1,0 +1,10 @@
+# Services propres à l'environnement de test
+services:
+    # Aucun appel réel à l'API Anthropic pendant les tests
+    App\Services\AnthropicService:
+        class: App\Tests\Fake\FakeAnthropicService
+        arguments:
+            $httpClient: '@http_client'
+            $anthropicApiKey: 'test-sans-appel-reel'
+            $logger: '@logger'
+        public: true

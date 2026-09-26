@@ -349,6 +349,13 @@ class BookTypeAdminController extends AbstractController
 
     private function notFound(string $what): JsonResponse
     {
-        return $this->json(['error' => "{$what} not found"], 404);
+        $labels = [
+            'Book type' => 'Type de livre introuvable.',
+            'Chapter' => 'Chapitre introuvable.',
+            'Role' => 'Rôle introuvable.',
+            'Question' => 'Question introuvable.',
+        ];
+
+        return $this->json(['error' => $labels[$what] ?? 'Élément introuvable.'], 404);
     }
 }
