@@ -91,6 +91,7 @@ class GenerateEsgReportHandler
 
             // 8. Update Report details
             $report->setStatus(ReportStatusEnum::READY);
+            $report->setErrorMessage(null); // efface l'erreur d'une tentative précédente
             $report->setFilePath('reports/' . $sessionUuid . '.pdf');
             $report->setFileSize(strlen($pdfOutput));
             $report->setGeneratedAt(new \DateTimeImmutable());

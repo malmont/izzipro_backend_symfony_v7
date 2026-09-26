@@ -191,7 +191,7 @@ services:
 
     App\Services\GoogleTranslateService\GoogleTranslateService:
         arguments:
-            $googleApiKey: '%env(GOOGLE_API_KEY)%'        
+            $googleApiKey: '%env(default::GOOGLE_API_KEY)%'        
 
     App\Services\StripeService\StripeService:
         arguments:
