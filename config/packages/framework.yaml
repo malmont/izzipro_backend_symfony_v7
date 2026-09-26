@@ -3,6 +3,10 @@ framework:
     router:
             strict_requirements: true
     secret: '%env(APP_SECRET)%'
+    # Requêtes reçues via Nginx Proxy Manager puis nginx : sans cela, getClientIp() renvoie l'IP du proxy
+    # (limites de débit et journaux faussés). Seul X-Forwarded-For est pris en compte, pas l'hôte (détection du tenant inchangée).
+    trusted_proxies: '%env(TRUSTED_PROXIES)%'
+    trusted_headers: ['x-forwarded-for']
     csrf_protection: true
     http_method_override: false
 
@@ -13,7 +17,9 @@ framework:
         handler_id: '%env(REDIS_URL)%'
         cookie_secure: true
         cookie_httponly: true
-        cookie_samesite: none
+        # Lax : cookie non envoyé aux requêtes intersites en arrière-plan (fetch, iframe, POST) → protection CSRF de base.
+        # Vérifié le 26/09/2026 : seuls les domaines *.backend-strapi.online utilisent la session, les fronts passent par /api (JWT).
+        cookie_samesite: lax
         gc_maxlifetime: 3600
 
     #esi: true

@@ -70,11 +70,11 @@
                                 <tr style="border-bottom: 1px solid #e2e8f0;">
                                     <td style="padding: 14px 10px;">
                                         <div style="font-size: 15px; font-weight: 700; color: #0f172a;">
-                                            Livre personnalisé « {{ book.title|raw }} »
+                                            Livre personnalisé « {{ book.title|striptags|raw }} »
                                         </div>
                                         {% if book.subtitle %}
                                             <div style="font-size: 13px; color: #64748b; font-style: italic; margin-top: 2px;">
-                                                {{ book.subtitle|raw }}
+                                                {{ book.subtitle|striptags|raw }}
                                             </div>
                                         {% endif %}
                                         <div style="font-size: 12px; color: #64748b; margin-top: 4px;">

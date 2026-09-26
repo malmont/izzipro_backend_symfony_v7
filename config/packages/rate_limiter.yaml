@@ -1,0 +1,38 @@
+# Limitation de débit des routes publiques sensibles (appliquée par App\EventSubscriber\PublicEndpointRateLimitSubscriber).
+# Stockage : cache applicatif (Redis). lock_factory: null car le composant Lock n'est pas configuré (comme login_throttling).
+framework:
+    rate_limiter:
+        # Connexion par l'API : essais de mots de passe à la chaîne
+        api_login_account:
+            policy: sliding_window
+            limit: 10
+            interval: '15 minutes'
+            lock_factory: null
+        api_login_ip:
+            policy: sliding_window
+            limit: 50
+            interval: '15 minutes'
+            lock_factory: null
+        # Code OTP à 6 chiffres valable 5 minutes : sans limite, il peut être deviné
+        otp_verify_account:
+            policy: fixed_window
+            limit: 5
+            interval: '10 minutes'
+            lock_factory: null
+        # Mot de passe oublié : évite d'inonder une boîte mail
+        password_reset_account:
+            policy: sliding_window
+            limit: 3
+            interval: '1 hour'
+            lock_factory: null
+        password_reset_ip:
+            policy: sliding_window
+            limit: 20
+            interval: '1 hour'
+            lock_factory: null
+        # Formulaires publics (contact, newsletter, candidature, inscription, réservation...) : anti-spam
+        public_form_ip:
+            policy: sliding_window
+            limit: 10
+            interval: '10 minutes'
+            lock_factory: null

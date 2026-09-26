@@ -44,12 +44,12 @@
                             <table width="100%" border="0" cellspacing="0" cellpadding="6" style="font-size: 14px;">
                                 <tr>
                                     <td style="color: #64748b;">Titre de l'ouvrage :</td>
-                                    <td align="right" style="font-weight: 600; color: #0f172a;">{{ book.title|raw }}</td>
+                                    <td align="right" style="font-weight: 600; color: #0f172a;">{{ book.title|striptags|raw }}</td>
                                 </tr>
                                 {% if book.subtitle %}
                                 <tr>
                                     <td style="color: #64748b;">Sous-titre :</td>
-                                    <td align="right" style="color: #334155;">{{ book.subtitle|raw }}</td>
+                                    <td align="right" style="color: #334155;">{{ book.subtitle|striptags|raw }}</td>
                                 </tr>
                                 {% endif %}
                                 <tr>
