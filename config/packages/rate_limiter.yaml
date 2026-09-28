@@ -36,3 +36,9 @@ framework:
             limit: 10
             interval: '10 minutes'
             lock_factory: null
+        # Assistant IA des landing pages : 5 demandes par minute et par tenant
+        landing_ai_tenant:
+            policy: sliding_window
+            limit: 5
+            interval: '1 minute'
+            lock_factory: null

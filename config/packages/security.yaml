@@ -72,6 +72,9 @@ security:
         - { path: ^/api/boussole/referentials, roles: PUBLIC_ACCESS }
         - { path: ^/api/boussole/documents, roles: ROLE_COMPANY }
         - { path: ^/api/boussole, roles: [ROLE_COMPANY, ROLE_CONSULTANT, ROLE_USER, ROLE_ADMIN] }
+        # 🔹 Assistant IA des landing pages : administrateurs du tenant uniquement.
+        #    Placé avant la règle publique ci-dessous, dont le motif « landingpage » couvrirait aussi /api/landingpage-ai.
+        - { path: ^/api/landingpage-ai(/|$), roles: ROLE_ADMIN }
         # 🔹 Données personnelles (messages de contact, candidatures) : réservées aux admins.
         #    Le dépôt via les formulaires publics (POST) reste ouvert. Avant le 26/09/2026, la liste était lisible par tous.
         - { path: ^/api/(contacts|candidatures)(/|$), methods: [GET, PUT, PATCH, DELETE], roles: ROLE_ADMIN }

@@ -7,6 +7,9 @@ parameters:
     # Session web : durée du jeton d'accès et déconnexion après inactivité (secondes)
     env(WEB_ACCESS_TOKEN_TTL): '900'
     env(WEB_SESSION_IDLE_TTL): '3600'
+    # Assistant IA des landing pages : modèles (surchargeables par LANDING_AI_MODEL_EDIT / LANDING_AI_MODEL_PAGE)
+    landing_ai.default_model_edit: 'claude-sonnet-5'
+    landing_ai.default_model_page: 'claude-opus-5-5'
 
 services:
     # default configuration for services in *this* file

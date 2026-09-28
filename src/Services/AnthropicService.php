@@ -816,6 +816,37 @@ class AnthropicService
         }
     }
 
+    /**
+     * Requête brute à l'API Messages (outils, cache de prompt…) avec la clé fournie ; renvoie la réponse décodée
+     * en objets (les {} des entrées d'outil restent des objets).
+     * Utilisé par l'assistant IA des landing pages, qui a sa propre clé. Les exceptions ne contiennent jamais la clé.
+     *
+     * @throws \Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface délai ou réseau
+     * @throws \RuntimeException réponse d'erreur de l'API
+     */
+    public function sendMessagesRequest(array $payload, string $apiKey, float $timeoutSeconds): object
+    {
+        $response = $this->httpClient->request('POST', self::API_URL, [
+            'headers' => [
+                'x-api-key' => trim($apiKey, " \t\n\r\0\x0B\""),
+                'anthropic-version' => '2023-06-01',
+                'Content-Type' => 'application/json',
+            ],
+            'json' => $payload,
+            'timeout' => $timeoutSeconds,
+            'max_duration' => $timeoutSeconds,
+        ]);
+
+        $status = $response->getStatusCode();
+        if ($status !== 200) {
+            $error = json_decode($response->getContent(false), true)['error'] ?? [];
+            $this->logger->error('Anthropic Messages API error', ['status' => $status, 'type' => $error['type'] ?? null, 'message' => $error['message'] ?? null]);
+            throw new \RuntimeException(sprintf('API Anthropic : HTTP %d (%s)', $status, $error['type'] ?? 'erreur inconnue'));
+        }
+
+        return json_decode($response->getContent(), false, 512, JSON_THROW_ON_ERROR);
+    }
+
     public function formatAnswers(array $answers): string
     {
         $formatted = "";

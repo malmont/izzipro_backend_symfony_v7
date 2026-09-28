@@ -8,3 +8,8 @@ services:
             $anthropicApiKey: 'test-sans-appel-reel'
             $logger: '@logger'
         public: true
+
+    # Assistant IA des landing pages : client Anthropic simulé (réponses scriptées par les tests)
+    App\Tests\Fake\FakeLandingAiClient:
+        public: true
+    App\Services\LandingAiService\LandingAiClientInterface: '@App\Tests\Fake\FakeLandingAiClient'

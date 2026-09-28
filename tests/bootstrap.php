@@ -39,9 +39,14 @@ $overrides = [
     'MESSENGER_TRANSPORT_DSN' => 'in-memory://',
     'MAILER_DSN' => 'null://null',
     'ANTHROPIC_API_KEY' => 'test-sans-appel-reel',
+    // Clé de l'assistant des landing pages neutralisée, sauf pour le test d'intégration optionnel (LANDING_AI_REAL_TEST=1)
+    'ANTHROPIC_API_KEY_LANDING' => 'test-sans-appel-reel',
     'OPENAI_API_KEY' => 'test-sans-appel-reel',
     'STRIPE_SECRET_KEY' => 'sk_test_sans_appel_reel',
 ];
+if (getenv('LANDING_AI_REAL_TEST')) {
+    unset($overrides['ANTHROPIC_API_KEY_LANDING']); // lue dans .env
+}
 foreach ($overrides as $name => $value) {
     putenv("$name=$value");
     $_ENV[$name] = $_SERVER[$name] = $value;
