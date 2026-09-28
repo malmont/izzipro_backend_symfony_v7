@@ -82,8 +82,9 @@ class SecurityController extends AbstractController
         $refreshName = 'refresh_token_' . $tenantCode;
 
         // 1. Lecture du cookie tenant strict, puis cookie générique sans tenant
-        $refreshToken = $request->cookies->get($refreshName) 
+        $refreshToken = $request->cookies->get($refreshName)
             ?? $request->cookies->get('refresh_token');
+        $isWebSession = (bool) $refreshToken;
 
         // 2. Fallback payload JSON si le front envoie le token dans le body
         if (!$refreshToken) {
@@ -111,6 +112,25 @@ class SecurityController extends AbstractController
 
         if (!$user instanceof UserInterface) {
             return $this->json(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        if ($isWebSession) {
+            // Session web : l'activité repousse la déconnexion automatique (fenêtre d'inactivité glissante)
+            $validRefreshToken->setValid($this->tokenService->webSessionExpiry());
+            $refreshTokenManager->save($validRefreshToken);
+
+            $response = $this->json(['message' => 'Token refreshed successfully']);
+            $csrfTokenValue = $this->tokenService->attachWebSessionCookies(
+                $response,
+                $this->tokenService->createWebAccessToken($user),
+                $refreshToken
+            );
+            $response->setContent(json_encode([
+                'message'    => 'Token refreshed successfully',
+                'csrf_token' => $csrfTokenValue,
+            ]));
+
+            return $response;
         }
 
         $newToken = $JWTManager->create($user);

@@ -4,6 +4,7 @@ namespace App\Tests\Functional\Security;
 
 use App\Entity\User;
 use App\Services\TenantEntityManagerProvider;
+use Gesdinet\JWTRefreshTokenBundle\Entity\RefreshToken;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Response;
@@ -80,6 +81,67 @@ class AuthCookieFlowTest extends WebTestCase
         $cleared = array_map(fn ($c) => $c->getName(), array_filter($logout->headers->getCookies(), fn ($c) => $c->isCleared()));
         $this->assertContains("auth_token_$tenant", $cleared);
         $this->assertContains("refresh_token_$tenant", $cleared);
+    }
+
+    public function testWebSessionExpiresAfterInactivity(): void
+    {
+        // Session web : jeton d'accès 15 min, déconnexion après 1 h sans activité, chaque rafraîchissement repousse l'échéance
+        $client = static::createClient();
+        $email = 'auth-idle-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        $this->createUser($email);
+        $tenant = MV_TEST_TENANT_CODE;
+
+        $login = $this->send($client, 'POST', '/api/login', [], [], ['username' => $email, 'password' => self::PASSWORD, 'platform' => 'web']);
+        $cookies = $this->cookies($login);
+        $this->assertEqualsWithDelta(time() + 900, $cookies["auth_token_$tenant"]->getExpiresTime(), 5, 'cookie d\'accès : 15 min');
+        $this->assertEqualsWithDelta(time() + 3600, $cookies["refresh_token_$tenant"]->getExpiresTime(), 5, 'cookie de session : 1 h');
+        $jwtPayload = json_decode(base64_decode(strtr(explode('.', $cookies["auth_token_$tenant"]->getValue())[1], '-_', '+/')), true);
+        $this->assertEqualsWithDelta(time() + 900, $jwtPayload['exp'], 5, 'le JWT lui-même expire avec son cookie');
+        $refresh = $cookies["refresh_token_$tenant"]->getValue();
+        $this->assertEqualsWithDelta(time() + 3600, $this->storedRefreshToken($refresh)->getValid()->getTimestamp(), 5);
+
+        // Activité (rafraîchissement) peu avant l'échéance : la session est prolongée d'1 h
+        $this->setRefreshTokenValidity($refresh, '+2 minutes');
+        $r = $this->send($client, 'POST', '/api/token/refresh', ["refresh_token_$tenant" => $refresh]);
+        $this->assertSame(200, $r->getStatusCode(), $r->getContent());
+        $this->assertEqualsWithDelta(time() + 3600, $this->storedRefreshToken($refresh)->getValid()->getTimestamp(), 5, 'échéance repoussée');
+        $this->assertEqualsWithDelta(time() + 3600, $this->cookies($r)["refresh_token_$tenant"]->getExpiresTime(), 5, 'cookie de session prolongé');
+        $this->assertEqualsWithDelta(time() + 900, $this->cookies($r)["auth_token_$tenant"]->getExpiresTime(), 5);
+
+        // Inactivité au-delà de la fenêtre : plus de rafraîchissement possible → déconnecté
+        $this->setRefreshTokenValidity($refresh, '-1 minute');
+        $r = $this->send($client, 'POST', '/api/token/refresh', ["refresh_token_$tenant" => $refresh]);
+        $this->assertSame(401, $r->getStatusCode(), $r->getContent());
+
+        // Mobile : pas de cookies, session de 7 jours inchangée
+        $mobile = $this->send($client, 'POST', '/api/login', [], [], ['username' => $email, 'password' => self::PASSWORD, 'platform' => 'mobile']);
+        $this->assertSame(200, $mobile->getStatusCode(), $mobile->getContent());
+        $this->assertEmpty($mobile->headers->getCookies());
+        $mobileRefresh = json_decode($mobile->getContent(), true)['refresh_token'];
+        $this->assertEqualsWithDelta((new \DateTime('+7 days'))->getTimestamp(), $this->storedRefreshToken($mobileRefresh)->getValid()->getTimestamp(), 5);
+    }
+
+    private function storedRefreshToken(string $value): RefreshToken
+    {
+        $em = $this->em();
+        $em->clear();
+        return $em->getRepository(RefreshToken::class)->findOneBy(['refreshToken' => $value]);
+    }
+
+    private function setRefreshTokenValidity(string $value, string $modifier): void
+    {
+        $em = $this->em();
+        $em->clear();
+        $token = $em->getRepository(RefreshToken::class)->findOneBy(['refreshToken' => $value]);
+        $token->setValid(new \DateTime($modifier));
+        $em->flush();
+    }
+
+    private function em()
+    {
+        $provider = static::getContainer()->get(TenantEntityManagerProvider::class);
+        $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        return $provider->getEntityManager();
     }
 
     /** Requête vers https://mvtest.test avec les cookies donnés (via le bocal à cookies du client de test) */

@@ -61,7 +61,7 @@ class OtpApiController extends AbstractController
         $em->remove($otpCode);
         $em->flush();
 
-        $tokens = $this->tokenService->generateTokens($user);
+        $tokens = $this->tokenService->generateTokens($user, $platform);
 
         return $this->tokenService->createResponseWithTokens($tokens, $platform, $request->getHost());
     }

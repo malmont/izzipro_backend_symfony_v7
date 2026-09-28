@@ -81,7 +81,7 @@ class AuthenticationService
             );
         }
 
-        $tokens = $this->tokenService->generateTokens($user);
+        $tokens = $this->tokenService->generateTokens($user, $platform);
         $host = $request->getHost();
         return $this->tokenService->createResponseWithTokens($tokens, $platform, $host);
     }
