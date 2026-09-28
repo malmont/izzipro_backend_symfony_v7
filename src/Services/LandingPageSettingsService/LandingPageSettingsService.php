@@ -29,6 +29,19 @@ class LandingPageSettingsService
     }
 
 
+    /** Texte JSON tel qu'il est stocké (colonne json : le texte n'est pas réécrit par PostgreSQL) */
+    public function getRawConfiguration(LandingPageSetting $setting): ?string
+    {
+        if ($setting->getId() === null) {
+            return null;
+        }
+        $tenantEm = $this->emProvider->getEntityManager();
+        $table = $tenantEm->getClassMetadata(LandingPageSetting::class)->getTableName();
+        $raw = $tenantEm->getConnection()->fetchOne("SELECT configuration FROM $table WHERE id = ?", [$setting->getId()]);
+
+        return is_string($raw) ? $raw : null;
+    }
+
     public function updateSettings(LandingPageSetting $setting, array $newConfig): void
     {
         $tenantEm = $this->emProvider->getEntityManager();

@@ -1,0 +1,4080 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://izzipro.local/schemas/landingpage-reglable-v2.json",
+  "title": "Section réglable de landing page (composition libre, schemaVersion 2)",
+  "description": "Une propriété absente prend sa valeur par défaut ; une propriété présente doit être valide. Blocs rangés dans un tableau plat, hiérarchie par parentId (seul un container peut être parent, profondeur 8 maximum). L’ordre du tableau donne la superposition, et l’ordre des enfants d’un container en flux.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "blocks"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "layout": {
+      "const": "free"
+    },
+    "fullWidth": {
+      "type": "boolean",
+      "description": "Section sur toute la largeur de l’écran."
+    },
+    "autoHeight": {
+      "type": "boolean",
+      "description": "Section en pile : hauteur automatique naturelle dictée par son contenu, sans hauteur minimale artificielle de 700px (ex. navbar, footer)."
+    },
+    "height": {
+      "type": "number",
+      "minimum": 200,
+      "maximum": 3000,
+      "description": "Hauteur de la section en px à la largeur de référence."
+    },
+    "maxWidth": {
+      "type": "number",
+      "minimum": 320,
+      "maximum": 2400,
+      "description": "Largeur de référence en px (tailles de texte atteintes à cette largeur)."
+    },
+    "bgFixed": {
+      "type": "boolean",
+      "description": "Image de fond fixe au défilement."
+    },
+    "rootLayout": {
+      "enum": [
+        "free",
+        "stack"
+      ],
+      "description": "stack : les blocs de premier niveau s’empilent (centrés, largeur w %), la section grandit avec son contenu et height devient une hauteur minimale."
+    },
+    "rootGap": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 120,
+      "description": "Section en pile : espacement entre les blocs, en px."
+    },
+    "rootPadding": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 160,
+      "description": "Section en pile : marge intérieure, en px."
+    },
+    "rootPaddingX": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 160,
+      "description": "Section en pile : marge intérieure horizontale, en px (sinon rootPadding)."
+    },
+    "contentWidth": {
+      "type": "number",
+      "minimum": 320,
+      "maximum": 2400,
+      "description": "Avec fullWidth : le fond occupe tout l’écran, les blocs se placent dans une zone centrée de cette largeur (et les tailles de texte s’y réfèrent)."
+    },
+    "background": {
+      "$ref": "#/$defs/background"
+    },
+    "bgImage": {
+      "$ref": "#/$defs/url"
+    },
+    "bgGradient": {
+      "anyOf": [
+        {
+          "const": ""
+        },
+        {
+          "$ref": "#/$defs/gradient"
+        }
+      ]
+    },
+    "overlay": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 95,
+      "description": "Voile sombre sur le fond, en %."
+    },
+    "bgOverlay": {
+      "$ref": "#/$defs/background",
+      "description": "Voile (couleur ou dégradé) posé sur bgImage, seulement s’il y a une image (image liée aux données)."
+    },
+    "bgPosition": {
+      "enum": [
+        "top",
+        "bottom",
+        "left",
+        "right",
+        "left top",
+        "right top",
+        "left bottom",
+        "right bottom"
+      ],
+      "description": "Cadrage de l’image de fond (absent = centre)."
+    },
+    "scrollBackground": {
+      "$ref": "#/$defs/background",
+      "description": "Barre fixée (navbar) : fond quand la page a défilé."
+    },
+    "scrollColor": {
+      "$ref": "#/$defs/color",
+      "description": "Barre fixée : couleur des textes, menus, langue et icônes quand la page a défilé."
+    },
+    "scrollBlur": {
+      "type": "boolean",
+      "description": "Barre fixée : fond flouté (verre) quand la page a défilé."
+    },
+    "overlayTop": {
+      "type": "boolean",
+      "description": "Navbar superposée : fixée en haut par-dessus le début de la page (fond transparent sur un héros) ; en édition, affichée avec le fond de défilement."
+    },
+    "bgVideo": {
+      "anyOf": [
+        {
+          "const": ""
+        },
+        {
+          "$ref": "#/$defs/url"
+        },
+        {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        }
+      ],
+      "description": "Vidéo de fond de la section (lecture automatique, muette, en boucle) : URL d’un fichier vidéo ou clé de média sécurisé. Le voile bgGradient est posé par-dessus."
+    },
+    "mobileMinHeightVh": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Hauteur minimale de la section sur mobile, en % de l’écran (remplace minHeightVh et height sur mobile)."
+    },
+    "presetId": {
+      "type": "string",
+      "pattern": "^[\\w-]{1,100}$",
+      "description": "Identifiant du modèle d’origine de la composition (mis en valeur dans la liste des modèles de l’éditeur)."
+    },
+    "anchor": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,39}$",
+      "description": "Ancre de la section (id HTML) : cible des liens « #ancre » du menu et des boutons (ex. services, tarifs). Absente : celle du modèle d’origine, s’il en a une."
+    },
+    "minHeightVh": {
+      "type": "number",
+      "minimum": 10,
+      "maximum": 100,
+      "description": "Section en pile : hauteur minimale en % de la hauteur de l’écran (bannière plein écran = 100)."
+    },
+    "marginTop": {
+      "type": "number",
+      "minimum": -400,
+      "maximum": 200,
+      "description": "Décalage vertical en px sur grand écran (négatif : la section remonte sous une navbar transparente). Ignoré sur mobile et en édition."
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Fond de la section lu dans les données (ex. { \"bgImage\": \"imageUrl\", \"background\": \"colorBackground\" }). Une donnée vide garde le fond saisi.",
+      "properties": {
+        "bgImage": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9_.]+$",
+          "not": {
+            "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+          }
+        },
+        "background": {
+          "type": "string",
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9_.]+$",
+          "not": {
+            "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+          }
+        }
+      }
+    },
+    "mobile": {
+      "type": "object",
+      "properties": {
+        "layout": {
+          "const": "stack"
+        }
+      },
+      "additionalProperties": false
+    },
+    "blocks": {
+      "type": "array",
+      "maxItems": 80,
+      "items": {
+        "$ref": "#/$defs/block"
+      }
+    }
+  },
+  "$defs": {
+    "color": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        {
+          "type": "string",
+          "pattern": "^[rR][gG][bB][aA]?\\(\\s*\\d{1,3}\\s*,\\s*\\d{1,3}\\s*,\\s*\\d{1,3}\\s*(,\\s*(0|1|0?\\.\\d+|\\d{1,3}%)\\s*)?\\)$"
+        },
+        {
+          "const": "transparent"
+        }
+      ]
+    },
+    "gradient": {
+      "type": "string",
+      "maxLength": 2000,
+      "pattern": "^(repeating-)?(linear|radial|conic)-gradient\\([\\w\\s#.,%()-]+$",
+      "not": {
+        "pattern": "[uU][rR][lL]\\s*\\("
+      },
+      "description": "Parenthèses équilibrées ; ni url(), ni ; : \" ' { }."
+    },
+    "background": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/color"
+        },
+        {
+          "$ref": "#/$defs/gradient"
+        }
+      ]
+    },
+    "url": {
+      "type": "string",
+      "maxLength": 10000,
+      "pattern": "^$|^(https?://|/(?!/)|#|mailto:[^@]+@|tel:\\+?[0-9().-]+$)[^\\u0000-\\u0020\\\\]*$",
+      "description": "Vide, http(s)://…, chemin commençant par un seul /, ancre #, mailto: ou tel:. Jamais javascript: ni data:."
+    },
+    "block": {
+      "type": "object",
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000,
+          "description": "Identifiant unique dans la section."
+        },
+        "type": {
+          "enum": [
+            "container",
+            "title",
+            "text",
+            "button",
+            "image",
+            "badge",
+            "divider",
+            "stat",
+            "video",
+            "carousel",
+            "form",
+            "embed",
+            "nav",
+            "language",
+            "admin",
+            "products",
+            "icon"
+          ]
+        },
+        "parentId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "id d’un bloc container parent, null = racine de la section."
+        },
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Position gauche en % de la zone intérieure du parent. x + w ≤ 100. Ignoré dans un parent en flux."
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Position haute en % de la zone intérieure du parent. y + h ≤ 100. Ignoré dans un parent en flux."
+        },
+        "w": {
+          "type": "number",
+          "minimum": 2,
+          "maximum": 100,
+          "description": "Largeur en % du parent (aussi respectée dans une pile verticale ou une rangée)."
+        },
+        "h": {
+          "type": "number",
+          "minimum": 2,
+          "maximum": 100,
+          "description": "Hauteur en % du parent (hauteur minimale pour un container en flux)."
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Texte affiché. Balises autorisées : strong, em, u, s, br, p, ul, ol, li, a, span. Chiffre pour un bloc stat."
+        },
+        "url": {
+          "$ref": "#/$defs/url",
+          "description": "Lien du bouton, image ou vidéo (.mp4, YouTube, Vimeo)."
+        },
+        "alt": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Texte alternatif de l’image."
+        },
+        "size": {
+          "type": "number",
+          "minimum": 10,
+          "maximum": 120,
+          "description": "Taille du texte en px à la largeur de référence de la section."
+        },
+        "background": {
+          "$ref": "#/$defs/background"
+        },
+        "color": {
+          "$ref": "#/$defs/color"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 999,
+          "description": "Arrondi des coins en px."
+        },
+        "padding": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 120,
+          "description": "Marge interne en px."
+        },
+        "borderWidth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16,
+          "description": "Épaisseur de bordure en px (épaisseur de la ligne pour divider)."
+        },
+        "borderColor": {
+          "$ref": "#/$defs/color"
+        },
+        "align": {
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "fontWeight": {
+          "enum": [
+            "normal",
+            "bold",
+            "300",
+            "400",
+            "500",
+            "600",
+            "700",
+            "800",
+            "900"
+          ]
+        },
+        "fontStyle": {
+          "enum": [
+            "normal",
+            "italic"
+          ]
+        },
+        "textTransform": {
+          "enum": [
+            "none",
+            "uppercase",
+            "capitalize",
+            "lowercase"
+          ]
+        },
+        "objectFit": {
+          "enum": [
+            "cover",
+            "contain",
+            "fill"
+          ]
+        },
+        "dividerWidth": {
+          "type": "number",
+          "minimum": 5,
+          "maximum": 100,
+          "description": "Longueur de la ligne en % (divider)."
+        },
+        "layout": {
+          "enum": [
+            "free",
+            "stack",
+            "row",
+            "grid",
+            "slides"
+          ],
+          "description": "Container : free = positions en %, stack / row / grid = mise en page en flux dans l’ordre du tableau, slides = diaporama (un enfant ou un élément de liste par diapositive)."
+        },
+        "gap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 120,
+          "description": "Container en flux : espacement en px."
+        },
+        "columns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6,
+          "description": "Container en grille : nombre de colonnes."
+        },
+        "repeat": {
+          "type": "object",
+          "description": "Container liste : ses enfants sont répétés pour chaque élément ; lier leurs contenus avec item.title, item.text, item.imageUrl, item.buttonText, item.buttonUrl, item.index.",
+          "required": [
+            "source"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "enum": [
+                "presentationGroup",
+                "banners",
+                "marques",
+                "services",
+                "links"
+              ]
+            },
+            "id": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "pattern": "^[\\w-]{0,100}$",
+              "description": "Identifiant du groupe, vide = à choisir par l’administrateur."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 24
+            },
+            "alternate": {
+              "type": "boolean",
+              "description": "Rangées (layout row) inversées un élément sur deux (zigzag)."
+            },
+            "altBackground": {
+              "$ref": "#/$defs/color",
+              "description": "Fond des cartes (containers enfants directs) un élément sur deux."
+            },
+            "stagger": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Délai d’apparition ajouté à chaque élément, en secondes."
+            },
+            "separator": {
+              "type": "string",
+              "maxLength": 8,
+              "description": "Texte affiché entre deux éléments (ex. →), masqué sur mobile."
+            },
+            "featured": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 24,
+              "description": "Numéro de l’élément mis en avant."
+            },
+            "featuredBackground": {
+              "$ref": "#/$defs/background",
+              "description": "Fond de la carte mise en avant."
+            },
+            "featuredColor": {
+              "$ref": "#/$defs/color",
+              "description": "Couleur du texte de la carte mise en avant."
+            },
+            "pickedColor": {
+              "$ref": "#/$defs/color",
+              "description": "Couleur du texte de la carte choisie (liste sélectionnable)."
+            },
+            "lastItem": {
+              "enum": [
+                "exclude",
+                "only"
+              ],
+              "description": "Dernier élément à part : exclu de cette liste, ou seul affiché."
+            },
+            "lastItemMin": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 24,
+              "description": "Nombre d’éléments à partir duquel le dernier est mis à part."
+            },
+            "selectable": {
+              "type": "boolean",
+              "description": "Cliquer sur une carte la met en évidence (couleur accent du container)."
+            },
+            "filterBy": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]*$",
+              "description": "Champ de l’élément servant aux filtres (ex. raw.category)."
+            }
+          }
+        },
+        "mobile": {
+          "type": "object",
+          "description": "Réglages pour les écrans de 600 px et moins ; null = automatique.",
+          "additionalProperties": false,
+          "properties": {
+            "hidden": {
+              "type": "boolean"
+            },
+            "size": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 10,
+                  "maximum": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "order": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 999
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "w": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 10,
+                  "maximum": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Largeur sur mobile, en % du parent (par défaut 100)."
+            },
+            "columns": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Container en grille : colonnes sur mobile (par défaut 1)."
+            },
+            "align": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "left",
+                    "center",
+                    "right"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Alignement sur mobile (texte et blocs enfants), par exemple centré alors qu’il est à gauche sur grand écran."
+            },
+            "minHeight": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hauteur minimale sur mobile en px (remplace minHeight et minHeightVh)."
+            },
+            "fixedHeight": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 8,
+                  "maximum": 2000
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hauteur fixe sur mobile en px (remplace fixedHeight)."
+            },
+            "valign": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "start",
+                    "center",
+                    "end"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Rangée : alignement vertical des enfants sur mobile."
+            },
+            "padding": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Container : marge intérieure verticale sur mobile, en px."
+            }
+          }
+        },
+        "links": {
+          "type": "array",
+          "maxItems": 40,
+          "description": "Menu (nav) : liens lus dans les données par bindings.links (ex. navLinks, les onglets du site). Rarement écrit à la main.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "url": {
+                "$ref": "#/$defs/url"
+              },
+              "id": {
+                "type": "string",
+                "maxLength": 60
+              }
+            }
+          }
+        },
+        "images": {
+          "type": "array",
+          "maxItems": 20,
+          "description": "Carrousel : images affichées une par une.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "$ref": "#/$defs/url"
+              },
+              "alt": {
+                "type": "string",
+                "maxLength": 10000,
+                "description": "Texte alternatif."
+              },
+              "caption": {
+                "type": "string",
+                "maxLength": 500,
+                "description": "Légende sur l’image."
+              },
+              "key": {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{64}$",
+                "description": "Clé de média sécurisé (GET /media/secure/{clé}) ; remplace url."
+              },
+              "link": {
+                "$ref": "#/$defs/url",
+                "description": "Lien de la diapositive."
+              }
+            }
+          }
+        },
+        "autoplay": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 15,
+              "description": "Carrousel : défilement automatique en secondes, 0 = manuel."
+            },
+            {
+              "type": "boolean",
+              "description": "Vidéo : lecture automatique en sourdine et en boucle."
+            }
+          ],
+          "description": "Carrousel (secondes) ou vidéo (booléen)."
+        },
+        "arrows": {
+          "type": "boolean",
+          "description": "Carrousel : flèches précédent / suivant."
+        },
+        "dots": {
+          "type": "boolean",
+          "description": "Carrousel : points de navigation."
+        },
+        "controlsStyle": {
+          "enum": [
+            "dark",
+            "light"
+          ],
+          "description": "Carrousel : flèches sombres (défaut) ou claires à chevron sombre."
+        },
+        "dotsBelow": {
+          "type": "boolean",
+          "description": "Carrousel : points sous l’image plutôt que dessus."
+        },
+        "bindings": {
+          "type": "object",
+          "description": "Contenus lus dans les données : chemins title, text, imageUrl, buttonText, buttonUrl, raw.*, ou item.* dans une liste (item.index, item.number = 01…). images : chemin d’une liste (ex. items) pour un carrousel ; links : liste { title, url } d’un menu. offer : offre d’un bouton « Réserver » (ex. item.title). bgImage / background : fond d’un container lu dans les données (une donnée vide garde le fond saisi). poster : image d’attente vidéo.",
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]+$",
+              "not": {
+                "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+              }
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]+$",
+              "not": {
+                "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+              }
+            },
+            "alt": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]+$",
+              "not": {
+                "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+              }
+            },
+            "link": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]+$",
+              "not": {
+                "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+              }
+            },
+            "images": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]+$",
+              "not": {
+                "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+              }
+            },
+            "links": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]+$",
+              "not": {
+                "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+              }
+            },
+            "bgImage": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]+$",
+              "not": {
+                "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+              }
+            },
+            "background": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]+$",
+              "not": {
+                "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+              }
+            },
+            "poster": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]+$",
+              "not": {
+                "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+              }
+            },
+            "mediaKey": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]+$",
+              "not": {
+                "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+              }
+            },
+            "offer": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]+$",
+              "not": {
+                "pattern": "(^|\\.)(__proto__|prototype|constructor)(\\.|$)"
+              }
+            }
+          }
+        },
+        "translations": {
+          "type": "object",
+          "description": "Versions du bloc dans d’autres langues (la langue de base est celle des champs du bloc) : { en: { text, label, alt, placeholder, highlightWord, tabLabel, links } }. Affichées selon la langue du site ; un champ lié aux données (bindings) garde la valeur des données.",
+          "maxProperties": 5,
+          "propertyNames": {
+            "pattern": "^[a-z]{2}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "alt": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "placeholder": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "highlightWord": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "tabLabel": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "links": {
+                "type": "array",
+                "maxItems": 40,
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "description": "Titres des liens d’un menu, dans l’ordre (vide = titre de base)."
+              }
+            }
+          }
+        },
+        "lineHeight": {
+          "type": "number",
+          "minimum": 0.8,
+          "maximum": 3,
+          "description": "Interligne (multiplicateur). Types : title, text, button, badge, stat, nav, language."
+        },
+        "letterSpacing": {
+          "type": "number",
+          "minimum": -0.1,
+          "maximum": 1,
+          "description": "Espacement des lettres en em. Types : title, text, button, badge, stat, nav, language."
+        },
+        "fontFamily": {
+          "enum": [
+            "Inter",
+            "Montserrat",
+            "Outfit",
+            "Raleway",
+            "Playfair Display",
+            "Anton",
+            "Bebas Neue",
+            "Michroma",
+            "Dancing Script",
+            "Great Vibes",
+            "Sacramento",
+            "Aston Script",
+            "Georgia",
+            "Système"
+          ],
+          "description": "Police chargée par le site. Types : title, text, button, badge, stat, nav, language, container."
+        },
+        "shadow": {
+          "enum": [
+            "sm",
+            "md",
+            "lg",
+            "glow"
+          ],
+          "description": "Ombre prédéfinie. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 99,
+          "description": "Opacité en %, absente = 100. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "hover": {
+          "enum": [
+            "lift",
+            "glow",
+            "zoom",
+            "darken",
+            "lift-bar",
+            "nudge",
+            "rise",
+            "grow"
+          ],
+          "description": "Effet au survol (hors édition). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "animation": {
+          "enum": [
+            "fade",
+            "rise",
+            "from-top",
+            "from-left",
+            "from-right",
+            "zoom"
+          ],
+          "description": "Apparition quand le bloc entre dans l’écran (une fois) : fondu, montée, arrivée par la gauche / la droite, zoom. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "animationDelay": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1.5,
+          "description": "Délai avant l’apparition, en secondes, pour enchaîner les blocs. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "animationDuration": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 3,
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "animationDistance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 200,
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "link": {
+          "$ref": "#/$defs/url",
+          "description": "Rend tout le bloc cliquable (image, carte…). Types : container, title, text, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 120,
+          "description": "Flou en px (halos décoratifs). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "loop": {
+          "enum": [
+            "float",
+            "marquee",
+            "spin"
+          ],
+          "description": "Mouvement continu : float = le contenu flotte doucement (logo, icône). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "rotate": {
+          "type": "number",
+          "minimum": -30,
+          "maximum": 30,
+          "description": "Rotation en degrés. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "textShadow": {
+          "enum": [
+            "sm",
+            "md",
+            "lg"
+          ],
+          "description": "Ombre portée du texte (texte posé sur une photo). Types : title, text, button, badge, stat, nav, language."
+        },
+        "textGradient": {
+          "$ref": "#/$defs/gradient",
+          "description": "Texte rempli d’un dégradé (lettres dorées…). Types : title, text, button."
+        },
+        "action": {
+          "enum": [
+            "contact",
+            "reservation"
+          ],
+          "description": "contact : le bouton ouvre la fenêtre de contact du site au lieu de suivre url ; reservation : il présélectionne offer dans le formulaire de réservation de la page et fait défiler jusqu’à lui (sans formulaire dans la page, url s’applique). Types : button."
+        },
+        "offer": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Bouton « Réserver » (action reservation) : offre présélectionnée dans le formulaire (nom d’une formule ou d’un type de projet), souvent liée aux données (bindings.offer = item.title). Types : button."
+        },
+        "bgOverlay": {
+          "$ref": "#/$defs/background",
+          "description": "Voile (couleur ou dégradé) posé sur bgImage, seulement s’il y a une image. Types : container."
+        },
+        "minHeightVh": {
+          "type": "number",
+          "minimum": 10,
+          "maximum": 100,
+          "description": "Hauteur minimale en % de la hauteur de l’écran. Types : container."
+        },
+        "bgPosition": {
+          "enum": [
+            "top",
+            "bottom",
+            "left",
+            "right",
+            "left top",
+            "right top",
+            "left bottom",
+            "right bottom"
+          ],
+          "description": "Cadrage de l’image de fond (absent = centre). Types : container."
+        },
+        "slideAutoplay": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 15,
+          "description": "Diaporama : défilement automatique en secondes (0 = manuel). Types : container."
+        },
+        "slideArrows": {
+          "type": "boolean",
+          "description": "Diaporama : flèches précédent / suivant. Types : container."
+        },
+        "slideDots": {
+          "type": "boolean",
+          "description": "Diaporama : points de navigation. Types : container."
+        },
+        "slideControls": {
+          "enum": [
+            "dark",
+            "light"
+          ],
+          "description": "Diaporama : flèches sombres (défaut) ou claires. Types : container."
+        },
+        "headingSize": {
+          "type": "number",
+          "minimum": 10,
+          "maximum": 120,
+          "description": "Types : text."
+        },
+        "headingColor": {
+          "$ref": "#/$defs/color",
+          "description": "Types : text."
+        },
+        "headingFont": {
+          "enum": [
+            "Inter",
+            "Montserrat",
+            "Outfit",
+            "Raleway",
+            "Playfair Display",
+            "Anton",
+            "Bebas Neue",
+            "Michroma",
+            "Dancing Script",
+            "Great Vibes",
+            "Sacramento",
+            "Aston Script",
+            "Georgia",
+            "Système"
+          ],
+          "description": "Types : text."
+        },
+        "bullet": {
+          "enum": [
+            "check",
+            "dash",
+            "diamond",
+            "chips",
+            "tiles",
+            "none"
+          ],
+          "description": "Types : text."
+        },
+        "bulletColor": {
+          "$ref": "#/$defs/color",
+          "description": "Types : text."
+        },
+        "bulletBackground": {
+          "$ref": "#/$defs/background",
+          "description": "Types : text."
+        },
+        "bulletSize": {
+          "type": "number",
+          "minimum": 0.8,
+          "maximum": 3,
+          "description": "Types : text."
+        },
+        "listColumns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4,
+          "description": "Types : text."
+        },
+        "listInline": {
+          "type": "boolean",
+          "description": "Types : text."
+        },
+        "listSize": {
+          "type": "number",
+          "minimum": 8,
+          "maximum": 40,
+          "description": "Types : text."
+        },
+        "listDivider": {
+          "$ref": "#/$defs/color",
+          "description": "Types : text."
+        },
+        "paragraphGap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60,
+          "description": "Types : text."
+        },
+        "listGap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 40,
+          "description": "Types : text."
+        },
+        "leadItalic": {
+          "type": "boolean",
+          "description": "Types : text."
+        },
+        "leadColor": {
+          "$ref": "#/$defs/color",
+          "description": "Types : text."
+        },
+        "highlightWord": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Types : title, text."
+        },
+        "highlightFont": {
+          "enum": [
+            "Inter",
+            "Montserrat",
+            "Outfit",
+            "Raleway",
+            "Playfair Display",
+            "Anton",
+            "Bebas Neue",
+            "Michroma",
+            "Dancing Script",
+            "Great Vibes",
+            "Sacramento",
+            "Aston Script",
+            "Georgia",
+            "Système"
+          ],
+          "description": "Types : title, text."
+        },
+        "highlightColor": {
+          "$ref": "#/$defs/color",
+          "description": "Types : title, text."
+        },
+        "highlightScale": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 3,
+          "description": "Types : title, text."
+        },
+        "highlightBlock": {
+          "type": "boolean",
+          "description": "Types : title, text."
+        },
+        "highlightCapitalize": {
+          "type": "boolean",
+          "description": "Types : title, text."
+        },
+        "valign": {
+          "enum": [
+            "start",
+            "center",
+            "end"
+          ],
+          "description": "Types : container."
+        },
+        "wrap": {
+          "type": "boolean",
+          "description": "Types : container."
+        },
+        "mobileRow": {
+          "type": "boolean",
+          "description": "Types : container."
+        },
+        "fitContent": {
+          "type": "boolean",
+          "description": "Types : button, badge, title, text, nav, language, admin, icon, container, image."
+        },
+        "underline": {
+          "type": "boolean",
+          "description": "Texte souligné (lien d’un pied de page…). Types : title, text, button, badge, stat, nav, language."
+        },
+        "underlineColor": {
+          "$ref": "#/$defs/color",
+          "description": "Couleur du soulignement (sinon celle du texte). Types : title, text, button, badge, stat, nav, language."
+        },
+        "trailingIcon": {
+          "enum": [
+            "facebook",
+            "instagram",
+            "linkedin",
+            "youtube",
+            "x",
+            "tiktok",
+            "whatsapp",
+            "mail",
+            "phone",
+            "map-pin",
+            "globe",
+            "arrow-up",
+            "arrow-right",
+            "arrow-up-right",
+            "check",
+            "star",
+            "heart",
+            "play",
+            "menu",
+            "gear",
+            "layers",
+            "smartphone",
+            "monitor",
+            "trending-up",
+            "triangle",
+            "download",
+            "crystal"
+          ],
+          "description": "Bouton : icône après le texte (arrow-right, arrow-up-right…). Types : button."
+        },
+        "listSeparator": {
+          "$ref": "#/$defs/color",
+          "description": "Texte riche : trait entre les éléments d’une liste. Types : text."
+        },
+        "maskRadial": {
+          "type": "boolean",
+          "description": "Image ou vidéo : bords fondus en cercle (visuel d’ambiance). Types : image, video."
+        },
+        "minHeight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2000,
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "fixedHeight": {
+          "type": "number",
+          "minimum": 8,
+          "maximum": 1200,
+          "description": "Hauteur fixe en px dans une pile, une rangée ou une grille (logo, vignette), aussi sur mobile. Une image s’y ajuste selon objectFit. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "paddingX": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 160,
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "pushEnd": {
+          "type": "boolean",
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+        },
+        "bindingFallback": {
+          "type": "boolean",
+          "description": "Types : title, text, button, badge, stat."
+        },
+        "hideEmpty": {
+          "type": "boolean",
+          "description": "Types : title, text."
+        },
+        "quoteMarks": {
+          "type": "boolean",
+          "description": "Types : text."
+        },
+        "tabs": {
+          "type": "boolean",
+          "description": "Onglets : chaque enfant container est un panneau, un seul visible à la fois. Types : container."
+        },
+        "tabLabel": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Libellé de l’onglet, sur un panneau d’un container à onglets. Types : container."
+        },
+        "accent": {
+          "$ref": "#/$defs/color",
+          "description": "Couleur de l’onglet actif, de la carte choisie et du filtre actif. Types : container."
+        },
+        "accentBackground": {
+          "$ref": "#/$defs/background",
+          "description": "Types : container."
+        },
+        "tabsStyle": {
+          "enum": [
+            "segmented"
+          ],
+          "description": "Types : container."
+        },
+        "aspectRatio": {
+          "enum": [
+            "1/1",
+            "4/3",
+            "3/2",
+            "16/10",
+            "16/9",
+            "21/9",
+            "3/4",
+            "2/3"
+          ],
+          "description": "Proportions : la hauteur découle de la largeur, h est alors ignoré. Types : image, video, container, carousel."
+        },
+        "objectPosition": {
+          "enum": [
+            "top",
+            "bottom",
+            "left",
+            "right"
+          ],
+          "description": "Point focal de l’image ou de la vidéo, absent = centre. Types : image, video, carousel."
+        },
+        "headingLevel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4,
+          "description": "Niveau de titre HTML, absent = 2. Un seul 1 par page. Types : title."
+        },
+        "target": {
+          "enum": [
+            "_blank"
+          ],
+          "description": "Ouvre le lien dans un nouvel onglet. Types : button."
+        },
+        "bgImage": {
+          "$ref": "#/$defs/url",
+          "description": "Image de fond du container, par-dessus background. Types : container."
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Libellé sous le chiffre (text contient le chiffre). Types : stat."
+        },
+        "poster": {
+          "$ref": "#/$defs/url",
+          "description": "Image affichée avant la lecture de la vidéo. Types : video."
+        },
+        "controls": {
+          "type": "boolean",
+          "description": "Affiche les contrôles ; sinon lecture automatique muette en boucle. Types : video."
+        },
+        "formType": {
+          "enum": [
+            "contact",
+            "reservation",
+            "candidature",
+            "newsletter",
+            "search"
+          ],
+          "description": "Type de formulaire interactif (contact ou reservation). Types : form."
+        },
+        "placeholder": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Formulaire newsletter : texte du champ e-mail. Types : form."
+        },
+        "navDirection": {
+          "enum": [
+            "row",
+            "column"
+          ],
+          "description": "Menu : liens en rangée (défaut) ou en colonne. Types : nav."
+        },
+        "navGap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 80,
+          "description": "Menu : espacement entre les liens, en px. Types : nav."
+        },
+        "activeColor": {
+          "$ref": "#/$defs/color",
+          "description": "Menu : couleur du lien de la page courante ; langue : fond de la langue choisie. Types : nav, language."
+        },
+        "hoverColor": {
+          "$ref": "#/$defs/color",
+          "description": "Menu : couleur d’un lien au survol. Types : nav."
+        },
+        "activeBackground": {
+          "$ref": "#/$defs/background",
+          "description": "Menu : fond (pastille) du lien de la page courante. Types : nav."
+        },
+        "navUnderline": {
+          "$ref": "#/$defs/background",
+          "description": "Menu : trait (couleur ou dégradé) sous le lien actif et au survol. Types : nav."
+        },
+        "linkPadding": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 30,
+          "description": "Menu : marge intérieure horizontale des liens, en px (verticale : moitié). Types : nav."
+        },
+        "navMobile": {
+          "enum": [
+            "burger",
+            "stack",
+            "hidden"
+          ],
+          "description": "Menu sur mobile : burger (tiroir, défaut en rangée), stack (liens empilés) ou hidden. Types : nav."
+        },
+        "navBurger": {
+          "enum": [
+            "plain",
+            "boxed"
+          ],
+          "description": "Types : nav."
+        },
+        "navLanguage": {
+          "type": "boolean",
+          "description": "Menu : choix de la langue dans le tiroir mobile. Types : nav."
+        },
+        "drawerBackground": {
+          "$ref": "#/$defs/background",
+          "description": "Menu : fond du tiroir mobile. Types : nav."
+        },
+        "drawerColor": {
+          "$ref": "#/$defs/color",
+          "description": "Menu : couleur du texte du tiroir mobile. Types : nav."
+        },
+        "languageStyle": {
+          "enum": [
+            "select",
+            "code",
+            "pills"
+          ],
+          "description": "Langue : liste déroulante des noms (défaut), liste « FR / EN » (code) ou pastilles FR / EN. Types : language."
+        },
+        "iconName": {
+          "enum": [
+            "facebook",
+            "instagram",
+            "linkedin",
+            "youtube",
+            "x",
+            "tiktok",
+            "whatsapp",
+            "mail",
+            "phone",
+            "map-pin",
+            "globe",
+            "arrow-up",
+            "arrow-right",
+            "arrow-up-right",
+            "check",
+            "star",
+            "heart",
+            "play",
+            "menu",
+            "gear",
+            "layers",
+            "smartphone",
+            "monitor",
+            "trending-up",
+            "triangle",
+            "download",
+            "crystal"
+          ],
+          "description": "Icône : nom de l’icône intégrée. Types : icon."
+        },
+        "mediaKey": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$",
+          "description": "Clé d’un média sécurisé du backend (64 caractères hexadécimaux) : image, vidéo ou icône affichée depuis GET /media/secure/{clé} ; sur un bouton, lien de téléchargement (?download=1). Remplace url. Types : image, video, icon, button."
+        },
+        "iconCycle": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "enum": [
+              "facebook",
+              "instagram",
+              "linkedin",
+              "youtube",
+              "x",
+              "tiktok",
+              "whatsapp",
+              "mail",
+              "phone",
+              "map-pin",
+              "globe",
+              "arrow-up",
+              "arrow-right",
+              "arrow-up-right",
+              "check",
+              "star",
+              "heart",
+              "play",
+              "menu",
+              "gear",
+              "layers",
+              "smartphone",
+              "monitor",
+              "trending-up",
+              "triangle",
+              "download",
+              "crystal"
+            ]
+          },
+          "description": "Icône dans une liste : une icône par position (1er élément, 2e…), en boucle ; iconName sert hors liste. Types : icon."
+        },
+        "backgroundCycle": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/background"
+          },
+          "description": "Container dans une liste : un fond par position (1er élément, 2e…), en boucle. Types : container."
+        },
+        "mediaCycle": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "anyOf": [
+              {
+                "const": ""
+              },
+              {
+                "$ref": "#/$defs/url"
+              },
+              {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{64}$"
+              }
+            ]
+          },
+          "description": "Types : icon, image."
+        },
+        "cardStyle": {
+          "enum": [
+            "typeA",
+            "typeB",
+            "typeC",
+            "typeD",
+            "typeE",
+            "typeF"
+          ],
+          "description": "Produits : style de carte de la boutique (A à F). Types : products."
+        },
+        "productFetch": {
+          "enum": [
+            "typeBestsellers",
+            "typeNewarrivals",
+            "typeSpecialoffers",
+            "typeIsfeatured",
+            "typeIsAccessory"
+          ],
+          "description": "Produits : sélection (meilleures ventes, nouveautés, offres, en vedette, accessoires). Types : products."
+        },
+        "formStyle": {
+          "enum": [
+            "typeA",
+            "typeB",
+            "typeC",
+            "typeD"
+          ],
+          "description": "Variante stylistique du formulaire (typeA, typeB, typeC, typeD). Types : form."
+        },
+        "buttonBg": {
+          "$ref": "#/$defs/background",
+          "description": "Couleur ou dégradé du bouton d’envoi du formulaire. Types : form."
+        },
+        "buttonColor": {
+          "$ref": "#/$defs/color",
+          "description": "Couleur du texte du bouton d’envoi du formulaire. Types : form."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text",
+                    "button",
+                    "badge",
+                    "stat",
+                    "nav",
+                    "language"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "lineHeight"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text",
+                    "button",
+                    "badge",
+                    "stat",
+                    "nav",
+                    "language"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "letterSpacing"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text",
+                    "button",
+                    "badge",
+                    "stat",
+                    "nav",
+                    "language",
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "fontFamily"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "shadow"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "opacity"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "hover"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "animation"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "animationDelay"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "animationDuration"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "animationDistance"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "link"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "blur"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "loop"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "rotate"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text",
+                    "button",
+                    "badge",
+                    "stat",
+                    "nav",
+                    "language"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "textShadow"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text",
+                    "button"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "textGradient"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "button"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "action"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "button"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "offer"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "bgOverlay"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "minHeightVh"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "bgPosition"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "slideAutoplay"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "slideArrows"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "slideDots"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "slideControls"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "headingSize"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "headingColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "headingFont"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "bullet"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "bulletColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "bulletBackground"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "bulletSize"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "listColumns"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "listInline"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "listSize"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "listDivider"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "paragraphGap"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "listGap"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "leadItalic"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "leadColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "highlightWord"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "highlightFont"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "highlightColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "highlightScale"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "highlightBlock"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "highlightCapitalize"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "valign"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "wrap"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "mobileRow"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "button",
+                    "badge",
+                    "title",
+                    "text",
+                    "nav",
+                    "language",
+                    "admin",
+                    "icon",
+                    "container",
+                    "image"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "fitContent"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text",
+                    "button",
+                    "badge",
+                    "stat",
+                    "nav",
+                    "language"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "underline"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text",
+                    "button",
+                    "badge",
+                    "stat",
+                    "nav",
+                    "language"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "underlineColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "button"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "trailingIcon"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "listSeparator"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "image",
+                    "video"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "maskRadial"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "minHeight"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "fixedHeight"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "paddingX"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "pushEnd"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text",
+                    "button",
+                    "badge",
+                    "stat"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "bindingFallback"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title",
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "hideEmpty"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "text"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "quoteMarks"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "tabs"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "tabLabel"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "accent"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "accentBackground"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "tabsStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "image",
+                    "video",
+                    "container",
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "aspectRatio"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "image",
+                    "video",
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "objectPosition"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "title"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "headingLevel"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "button"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "target"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "bgImage"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "stat"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "label"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "video"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "poster"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "video"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "controls"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "form"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "formType"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "form"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "placeholder"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navDirection"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navGap"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav",
+                    "language"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "activeColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "hoverColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "activeBackground"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navUnderline"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "linkPadding"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navMobile"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navBurger"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navLanguage"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "drawerBackground"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "drawerColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "language"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "languageStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "iconName"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "image",
+                    "video",
+                    "icon",
+                    "button"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "mediaKey"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "iconCycle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "backgroundCycle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "icon",
+                    "image"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "mediaCycle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "products"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "cardStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "products"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "productFetch"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "form"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "formStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "form"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "buttonBg"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "form"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "buttonColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel",
+                    "video"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "autoplay"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "repeat"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "links"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "images"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "arrows"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "dots"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "controlsStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "dotsBelow"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
