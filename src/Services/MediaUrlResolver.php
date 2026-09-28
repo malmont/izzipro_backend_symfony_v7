@@ -113,6 +113,33 @@ class MediaUrlResolver
         return $this->getPublicHost($fallbackHost) . '/uploads/memoires';
     }
 
+    public function getSharedMediaBaseUrl(?string $fallbackHost = null): string
+    {
+        return $this->getPublicHost($fallbackHost) . '/assets/uploads/shared';
+    }
+
+    /**
+     * Résout l'URL d'un SharedMedia selon son mode d'accès (public ou privé par clé).
+     */
+    public function resolveSharedMediaUrl(\App\Entity\SharedMedia $media, ?string $fallbackHost = null): string
+    {
+        if ($media->isPrivate() && !empty($media->getAccessKey())) {
+            $host = $fallbackHost !== null ? rtrim($fallbackHost, '/') : '';
+            return $host . '/media/secure/' . $media->getAccessKey();
+        }
+
+        $filename = $media->getFilename();
+        if (empty($filename)) {
+            return '';
+        }
+
+        if (str_starts_with($filename, 'http')) {
+            return $filename;
+        }
+
+        return $this->getSharedMediaBaseUrl($fallbackHost) . '/' . ltrim($filename, '/');
+    }
+
     // --- Helpers de résolution directe pour les DTOs et entités ---
 
     public function resolveProductImage(?string $filename, ?string $fallbackHost = null): ?string

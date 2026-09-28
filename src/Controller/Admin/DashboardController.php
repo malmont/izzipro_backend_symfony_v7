@@ -68,6 +68,8 @@ use App\Entity\BaniereStatiqueTranslation;
 use App\Entity\StripeConfig;
 use App\Entity\Currency;
 use App\Controller\Admin\StripeConfigCrudController;
+use App\Entity\SharedMedia;
+use App\Controller\Admin\SharedMediaCrudController;
 
 
 
@@ -424,6 +426,10 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Bannières Statiques', 'fas fa-image', BaniereStatique::class);
         yield MenuItem::linkToCrud('Présentations', 'fas fa-columns', Presentation::class);
         yield MenuItem::linkToCrud('Groupes de Présentation', 'fas fa-columns', PresentationGroup::class);
+
+        yield MenuItem::section('Médiathèque & Partage');
+        yield MenuItem::linkToCrud('Partage de Fichiers & Médias', 'fas fa-share-alt', SharedMedia::class)
+            ->setController(SharedMediaCrudController::class);
 
 
 
