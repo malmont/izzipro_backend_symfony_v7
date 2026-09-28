@@ -75,9 +75,9 @@ class TokenService
         $response = new Response();
 
         if ($platform === 'web') {
-            // Fix: Isoler le cookie au domaine spécifique pour éviter le partage entre sous-domaines (Tenant isolation)
-            // Si sur localhost, domain=null est préférable. Sinon, on utilise le FQDN exact.
-            $cookieDomain = ($host === 'localhost') ? null : $host;
+            // Cookie Host-Only (domain=null) : indispensable en multi-domaine et derrière reverse-proxy
+            // pour éviter que le navigateur rejette le cookie à cause d'une discordance de domaine.
+            $cookieDomain = null;
 
 
 

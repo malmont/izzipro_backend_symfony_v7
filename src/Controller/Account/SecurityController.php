@@ -65,7 +65,7 @@ class SecurityController extends AbstractController
         return $auth->login(
             $data['username']  ?? '',
             $data['password']  ?? '',
-            $data['platform']  ?? 'mobile',
+            $data['platform']  ?? 'web',
             $request
         );
     }
@@ -81,10 +81,17 @@ class SecurityController extends AbstractController
         $tenantCode = $this->tenantConnProvider->getTenantCode() ?? 'default';
         $refreshName = 'refresh_token_' . $tenantCode;
 
-        // Migration: On lit le cookie strict
-        $refreshToken = $request->cookies->get($refreshName);
+        // 1. Lecture du cookie tenant strict, puis cookie générique sans tenant
+        $refreshToken = $request->cookies->get($refreshName) 
+            ?? $request->cookies->get('refresh_token');
+
+        // 2. Fallback payload JSON si le front envoie le token dans le body
         if (!$refreshToken) {
-            // Fallback temporaire ? Non, sécurité stricte requise.
+            $data = json_decode($request->getContent(), true) ?? [];
+            $refreshToken = $data['refresh_token'] ?? $data['refreshToken'] ?? null;
+        }
+
+        if (!$refreshToken) {
             return $this->json(['error' => 'Refresh token not found'], Response::HTTP_UNAUTHORIZED);
         }
 
@@ -112,9 +119,8 @@ class SecurityController extends AbstractController
             'message' => 'Token refreshed successfully'
         ], Response::HTTP_OK);
 
-        // Fix: Isoler le cookie au domaine (Tenant isolation)
-        $host = $request->getHost();
-        $cookieDomain = ($host === 'localhost') ? null : $host;
+        // Cookie Host-Only (domain=null) : indispensable en multi-domaine et derrière reverse-proxy
+        $cookieDomain = null;
 
         $tenantCode = $this->tenantConnProvider->getTenantCode() ?? 'default';
         $jwtName = 'auth_token_' . $tenantCode;
@@ -170,43 +176,48 @@ class SecurityController extends AbstractController
 
 
     #[Route(path: '/api/logout', name: 'api_logout', methods: ['POST'])]
-    public function logoutWeb(Request $request): Response
+    public function logoutWeb(Request $request, RefreshTokenManagerInterface $refreshTokenManager): Response
     {
-        $domain = $request->getHost();
         $response = $this->json([
             'message' => 'Successfully logged out',
         ]);
 
-        // Fix: Tenant isolation domain
-        $host = $request->getHost();
-        $cookieDomain = ($host === 'localhost') ? null : $host;
-
-        // Retour à la méthode clearCookie qui fonctionnait, en s'assurant des paramètres EXACTS
-        // Path: '/', Domain: $cookieDomain, Secure: true, HttpOnly: true, SameSite: None
-
         $tenantCode = $this->tenantConnProvider->getTenantCode() ?? 'default';
-        $jwtName = 'auth_token_' . $tenantCode;
         $refreshName = 'refresh_token_' . $tenantCode;
 
-        // 1. Suppression Cookies du Tenant Courant
-        $response->headers->clearCookie($jwtName, '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
-        $response->headers->clearCookie($refreshName, '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
+        // 1. Révocation côté serveur : le jeton de rafraîchissement ne peut plus reconnecter personne,
+        //    même si un cookie survivait dans le navigateur
+        $refreshValue = $request->cookies->get($refreshName) ?? $request->cookies->get('refresh_token');
+        if (!$refreshValue) {
+            $data = json_decode($request->getContent(), true) ?? [];
+            $refreshValue = $data['refresh_token'] ?? $data['refreshToken'] ?? null;
+        }
+        if (is_string($refreshValue) && $refreshValue !== '') {
+            $stored = $refreshTokenManager->get($refreshValue);
+            if ($stored) {
+                $refreshTokenManager->delete($stored);
+            }
+        }
 
-        // 2. Nettoyage de sécurité (Anciens cookies potentiels)
-        $response->headers->clearCookie('auth_token_strict', '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
-        $response->headers->clearCookie('refresh_token_strict', '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
-        $response->headers->clearCookie('jwt', '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
-        $response->headers->clearCookie('refresh_token', '/', $cookieDomain, true, true, Cookie::SAMESITE_NONE);
-        // On essaie aussi sans le domain pour nettoyer les cookies 'host-only'
-        $response->headers->clearCookie('jwt', '/', null, true, true, Cookie::SAMESITE_NONE);
-        $response->headers->clearCookie('refresh_token', '/', null, true, true, Cookie::SAMESITE_NONE);
-        // Important: HttpOnly doit être FALSE pour XSRF-TOKEN pour correspondre à sa création
-        $csrfCookieName = 'XSRF-TOKEN_' . $tenantCode;
-        $response->headers->clearCookie($csrfCookieName, '/', $cookieDomain, true, false, Cookie::SAMESITE_NONE);
-        // Nettoyage de sécurité (Anciens cookies potentiels sans tenant)
-        $response->headers->clearCookie('XSRF-TOKEN', '/', $cookieDomain, true, false, Cookie::SAMESITE_NONE);
+        // 2. Suppression des cookies sous leurs deux formes : sans domaine (« host-only », forme actuelle)
+        //    et avec le domaine explicite (forme utilisée avant le 27/09/2026, encore présente dans les navigateurs).
+        //    Pour un navigateur ce sont deux cookies distincts : effacer l'un ne supprime pas l'autre.
+        $host = $request->getHost();
+        $domains = [null];
+        if ($host !== 'localhost' && !str_ends_with($host, '.localhost')) {
+            $domains[] = $host;
+        }
 
-
+        $httpOnlyCookies = ['auth_token_' . $tenantCode, $refreshName, 'auth_token_strict', 'refresh_token_strict', 'jwt', 'refresh_token'];
+        $readableCookies = ['XSRF-TOKEN_' . $tenantCode, 'XSRF-TOKEN'];
+        foreach ($domains as $domain) {
+            foreach ($httpOnlyCookies as $name) {
+                $response->headers->clearCookie($name, '/', $domain, true, true, Cookie::SAMESITE_NONE);
+            }
+            foreach ($readableCookies as $name) {
+                $response->headers->clearCookie($name, '/', $domain, true, false, Cookie::SAMESITE_NONE);
+            }
+        }
 
         return $response;
     }

@@ -98,7 +98,8 @@ class AuthController extends AbstractController
             $host = explode(':', $host)[0];
         }
 
-        $cookieDomain = ($host === 'localhost' || str_ends_with($host, '.localhost')) ? null : $host;
+        // Cookie sans domaine (« host-only »), comme TokenService : lié exactement à l'hôte qui l'a servi
+        $cookieDomain = null;
         $tenantCode = $this->tenantConnProvider->getTenantCode() ?? 'default';
         $jwtName = 'auth_token_' . $tenantCode;
 
