@@ -4,10 +4,11 @@ namespace App\Entity;
 
 use App\Repository\AiCreditSettingRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Crédits mensuels de l'assistant IA pour le tenant (une ligne par base tenant, sans interface :
- * modifiable en SQL, par exemple UPDATE ai_credit_setting SET monthly_credits = 200).
+ * Crédits mensuels de l'assistant IA pour le tenant (une seule ligne par base tenant ; sans ligne, 100 crédits).
+ * Modifiable dans EasyAdmin (Landing Page › Assistant IA : crédits) ou en SQL.
  */
 #[ORM\Entity(repositoryClass: AiCreditSettingRepository::class)]
 #[ORM\Table(name: 'ai_credit_setting')]
@@ -21,6 +22,8 @@ class AiCreditSetting
     private ?int $id = null;
 
     #[ORM\Column]
+    #[Assert\PositiveOrZero(message: 'Le nombre de crédits ne peut pas être négatif.')]
+    #[Assert\LessThanOrEqual(value: 100000, message: 'Au plus 100 000 crédits par mois.')]
     private int $monthlyCredits = self::DEFAULT_MONTHLY_CREDITS;
 
     public function getId(): ?int { return $this->id; }

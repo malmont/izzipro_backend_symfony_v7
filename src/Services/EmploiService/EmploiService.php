@@ -8,6 +8,7 @@ use App\Services\TenantEntityManagerProvider;
 class EmploiService
 {
     private TenantEntityManagerProvider $emProvider;
+    private $repository;
 
     public function __construct(TenantEntityManagerProvider $emProvider)
     {

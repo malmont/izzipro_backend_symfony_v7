@@ -75,6 +75,34 @@ final class LandingAiEvalChecks
         return ['V1' => $v1, 'V2' => $v2, 'V3' => $v3, 'V4' => $v4, 'V5' => $v5, 'V6' => $v6];
     }
 
+    /**
+     * Vérifications d'une création : V1 à V3 et V5 comme en retouche ; V4 (liaisons conservées) et V6 (blocs non
+     * visés identiques) ne s'appliquent pas à une composition neuve. V5 compare aux textes de la demande et des
+     * données du site, jamais à ceux des modèles (exemples de mise en page).
+     *
+     * @param list<string> $allowedMedia
+     * @return array<string, array{ok: bool|null, detail: string}>
+     */
+    public function commonCreate(object $composition, string $componentKey, array $allowedMedia, string $knownText): array
+    {
+        $errors = $this->validator->validateComposition($composition);
+        $tools = $this->catalogue->tools($componentKey);
+        $badTypes = array_values(array_unique(array_filter(array_map(fn ($b) => $b->type ?? null, $this->inspector->blocks($composition)), fn ($t) => !in_array($t, $tools, true))));
+        $allowed = array_flip($allowedMedia);
+        $badMedia = array_values(array_filter($this->inspector->mediaReferences($composition), fn ($r) => !isset($allowed[$r['value']])));
+        $known = array_flip($this->numbers($knownText));
+        $invented = array_values(array_unique(array_filter($this->numbers($this->allTexts($composition)), fn ($n) => !isset($known[$n]))));
+
+        return [
+            'V1' => ['ok' => !$errors, 'detail' => $errors ? count($errors) . ' erreur(s), ex. ' . $errors[0]['path'] . ' : ' . $errors[0]['message'] : ''],
+            'V2' => ['ok' => !$badTypes, 'detail' => $badTypes ? 'types hors famille : ' . implode(', ', $badTypes) : ''],
+            'V3' => ['ok' => !$badMedia, 'detail' => $badMedia ? count($badMedia) . ' média(s) inventé(s), ex. ' . $badMedia[0]['path'] : ''],
+            'V4' => ['ok' => null, 'detail' => 'sans objet en création'],
+            'V5' => ['ok' => !$invented, 'detail' => $invented ? 'chiffres absents des données : ' . implode(', ', array_slice($invented, 0, 5)) : '(chiffres uniquement ; noms propres non mesurés)'],
+            'V6' => ['ok' => null, 'detail' => 'sans objet en création'],
+        ];
+    }
+
     /** Textes visibles de la composition (textes de base et traductions), balises HTML retirées */
     public function allTexts(object $composition): string
     {

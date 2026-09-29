@@ -17,7 +17,8 @@ final class LandingAiSiteContext
     public function __construct(
         private readonly LandingPageSettingsService $settings,
         private readonly ReglableCompositionValidator $validator,
-        private readonly CompositionInspector $inspector
+        private readonly CompositionInspector $inspector,
+        private readonly LandingAiCatalogue $catalogue
     ) {
     }
 
@@ -58,13 +59,28 @@ final class LandingAiSiteContext
     }
 
     /**
-     * Médias autorisés : ceux des compositions données et ceux fournis dans la demande.
+     * Compositions des modèles de la famille (catalogue du frontend) : leurs images sont des fichiers du frontend,
+     * réutilisables dans une création.
+     *
+     * @return list<object>
+     */
+    public function presetCompositions(string $componentKey): array
+    {
+        return array_values(array_filter(array_map(
+            fn ($preset) => json_decode(json_encode($preset['composition'] ?? null, JSON_PRESERVE_ZERO_FRACTION), false),
+            $this->catalogue->family($componentKey)['presets'] ?? []
+        ), 'is_object'));
+    }
+
+    /**
+     * Médias autorisés : ceux des compositions données, ceux fournis avec la demande et les adresses http(s)
+     * écrites dans la demande par l'administrateur.
      *
      * @param list<object> $compositions
      * @param list<array{kind?: string, url?: ?string, mediaKey?: ?string, label?: ?string}> $requestMedia
      * @return list<string>
      */
-    public function allowedMedia(array $compositions, array $requestMedia = []): array
+    public function allowedMedia(array $compositions, array $requestMedia = [], string $prompt = ''): array
     {
         $allowed = [];
         foreach ($compositions as $composition) {
@@ -78,6 +94,10 @@ final class LandingAiSiteContext
                     $allowed[$media[$key]] = true;
                 }
             }
+        }
+        preg_match_all('#https?://[^\s<>"\'`]+#u', $prompt, $matches);
+        foreach ($matches[0] as $url) {
+            $allowed[rtrim($url, '.,;:!?)»')] = true;
         }
 
         return array_keys($allowed);

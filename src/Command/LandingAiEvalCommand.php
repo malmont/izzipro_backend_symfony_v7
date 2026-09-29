@@ -7,6 +7,7 @@ use App\Services\LandingAiService\Eval\LandingAiEvalCases;
 use App\Services\LandingAiService\Eval\LandingAiEvalChecks;
 use App\Services\LandingAiService\LandingAiCatalogue;
 use App\Services\LandingAiService\LandingAiComposer;
+use App\Services\LandingAiService\LandingAiDataSources;
 use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiSiteContext;
 use App\Services\TenantConnectionManager;
@@ -25,12 +26,15 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 )]
 class LandingAiEvalCommand extends Command
 {
+    private const MODES = ['edit', 'create'];
+
     public function __construct(
         private readonly TenantConnectionManager $connectionManager,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly LandingAiCatalogue $catalogue,
         private readonly LandingAiComposer $composer,
         private readonly LandingAiSiteContext $site,
+        private readonly LandingAiDataSources $data,
         private readonly LandingAiEvalCases $cases,
         private readonly LandingAiEvalChecks $checks,
         #[Autowire('%kernel.project_dir%/var/landing-ai-eval')]
@@ -42,8 +46,9 @@ class LandingAiEvalCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('tenant', 't', InputOption::VALUE_REQUIRED, 'Code du tenant de test (palette et médias lus sur ce site, rien n\'y est écrit)')
-            ->addOption('case', 'c', InputOption::VALUE_REQUIRED, 'Un seul cas (ex. R1)');
+            ->addOption('tenant', 't', InputOption::VALUE_REQUIRED, 'Code du tenant de test (palette, médias et données lus sur ce site, rien n\'y est écrit)')
+            ->addOption('mode', 'm', InputOption::VALUE_REQUIRED, 'edit, create ou all', 'all')
+            ->addOption('case', 'c', InputOption::VALUE_REQUIRED, 'Un seul cas (ex. R1, C3)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -63,71 +68,41 @@ class LandingAiEvalCommand extends Command
         }
         $this->emProvider->switchTenant($dbName, $tenant);
 
-        $cases = $this->cases->editCases();
-        if ($only = $input->getOption('case')) {
-            $cases = array_values(array_filter($cases, fn ($c) => strcasecmp($c['id'], $only) === 0));
-        }
-        if (!$cases) {
+        $mode = (string) $input->getOption('mode');
+        $modes = $mode === 'all' ? self::MODES : array_intersect(self::MODES, [$mode]);
+        $only = $input->getOption('case');
+        $filter = fn (array $cases) => array_values(array_filter($cases, fn ($c) => !$only || strcasecmp($c['id'], $only) === 0));
+        $edit = in_array('edit', $modes, true) ? $filter($this->cases->editCases()) : [];
+        $create = in_array('create', $modes, true) ? $filter($this->cases->createCases()) : [];
+        if (!$edit && !$create) {
             $io->error('Aucun cas à jouer.');
             return Command::INVALID;
         }
 
         $stored = $this->site->storedCompositions();
         $palette = $this->site->palette($stored);
-        $io->title(sprintf('Évaluation de l\'assistant IA : %d cas, modèle %s, tenant %s', count($cases), $this->composer->editModel(), $tenant));
+        $io->title(sprintf('Évaluation de l\'assistant IA : %d cas, modèle %s, tenant %s', count($edit) + count($create), $this->composer->editModel(), $tenant));
 
         $report = ['date' => date(DATE_ATOM), 'tenant' => $tenant, 'model' => $this->composer->editModel(), 'cases' => []];
         $rows = [];
-        foreach ($cases as $case) {
-            [$family, $preset] = $this->catalogue->preset($case['presetId']) ?? [null, null];
-            if ($preset === null) {
-                $report['cases'][] = ['id' => $case['id'], 'status' => 'skipped', 'reason' => "modèle {$case['presetId']} absent du catalogue"];
-                $rows[] = [$case['id'], 'ignoré', '', '', '', '', "modèle {$case['presetId']} absent"];
-                continue;
-            }
-            $componentKey = $family['componentKey'];
-            $before = CompositionEditApplier::copy(json_decode(json_encode($preset['composition'], JSON_PRESERVE_ZERO_FRACTION), false));
-            $allowedMedia = $this->site->allowedMedia([...$stored, $before]);
-            $io->writeln(sprintf(' <info>%s</info> %s/%s : « %s »', $case['id'], $componentKey, $case['presetId'], $case['prompt']));
-
-            try {
-                $result = $this->composer->edit($componentKey, $before, $case['prompt']);
-            } catch (LandingAiException $e) {
-                $stats = $e->getStats()?->toArray() ?? [];
-                $report['cases'][] = ['id' => $case['id'], 'status' => 'failed', 'httpStatus' => $e->getStatusCode(), 'message' => $e->getMessage(), 'errors' => $e->getErrors(), 'usage' => $stats];
-                $rows[] = [$case['id'], 'échec ' . $e->getStatusCode(), $stats['attempts'] ?? '', $stats['inputTokens'] ?? '', $stats['outputTokens'] ?? '', $stats['durationMs'] ?? '', $e->getMessage()];
-                continue;
-            }
-
-            $common = $this->checks->common($before, $result, $componentKey, $allowedMedia, $case['prompt']);
-            $specific = ($case['check'])($before, $result->composition, $result, $palette);
-            $failed = array_keys(array_filter($common, fn ($c) => !$c['ok']));
-            $report['cases'][] = [
-                'id' => $case['id'],
-                'presetId' => $case['presetId'],
-                'componentKey' => $componentKey,
-                'prompt' => $case['prompt'],
-                'status' => 'ok',
-                'checks' => $common,
-                'specific' => $specific,
-                'summary' => $result->summary,
-                'warnings' => $result->warnings,
-                'operations' => $result->operations,
-                'composition' => $result->composition,
-                'usage' => $result->stats->toArray(),
-            ];
-            $rows[] = [
-                $case['id'],
-                ($failed ? 'V ✗ ' . implode(',', $failed) : 'V1-V6 ✓') . ' / ' . ($specific['ok'] === null ? 'propre ?' : ($specific['ok'] ? 'propre ✓' : 'propre ✗')),
-                $result->stats->attempts,
-                $result->stats->inputTokens . ' (+' . $result->stats->cacheReadTokens . ' cache)',
-                $result->stats->outputTokens,
-                $result->stats->durationMs,
-                mb_substr($specific['detail'], 0, 90),
-            ];
+        foreach ($edit as $case) {
+            [$caseReport, $row] = $this->playEdit($io, $case, $stored, $palette);
+            $report['cases'][] = $caseReport;
+            $rows[] = $row;
+        }
+        foreach ($create as $case) {
+            [$caseReport, $row] = $this->playCreate($io, $case, $stored);
+            $report['cases'][] = $caseReport;
+            $rows[] = $row;
         }
 
-        $report['summary'] = $this->summarize($report['cases']);
+        $report['summary'] = [];
+        foreach (self::MODES as $m) {
+            $modeCases = array_values(array_filter($report['cases'], fn ($c) => ($c['mode'] ?? null) === $m));
+            if ($modeCases) {
+                $report['summary'][$m] = $this->summarize($modeCases);
+            }
+        }
         if (!is_dir($this->reportDir)) {
             mkdir($this->reportDir, 0775, true);
         }
@@ -135,19 +110,102 @@ class LandingAiEvalCommand extends Command
         file_put_contents($file, json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION));
 
         $io->table(['Cas', 'Vérifications', 'Essais', 'Jetons entrée', 'Sortie', 'ms', 'Détail propre au cas'], $rows);
-        $s = $report['summary'];
-        $lines = [['Cas réussis (composition obtenue)' => sprintf('%d / %d', $s['succeeded'], $s['played'])]];
-        foreach ($s['checks'] as $check => $count) {
-            $lines[] = [$check => sprintf('%d / %d', $count, $s['succeeded'])];
+        foreach ($report['summary'] as $m => $s) {
+            $io->section($m === 'edit' ? 'Retouche (edit)' : 'Création (create)');
+            $lines = [['Cas réussis (composition obtenue)' => sprintf('%d / %d joués%s', $s['succeeded'], $s['played'], $s['skipped'] ? sprintf(' (%d sans objet)', $s['skipped']) : '')]];
+            foreach ($s['checks'] as $check => [$ok, $measured]) {
+                $lines[] = [$check => $measured ? sprintf('%d / %d', $ok, $measured) : 'sans objet'];
+            }
+            $lines[] = ['Vérifications propres réussies' => sprintf('%d / %d mesurables', $s['specificOk'], $s['specificMeasured'])];
+            $lines[] = ['Essais moyens' => $s['avgAttempts']];
+            $lines[] = ['Jetons moyens (entrée / cache lu / sortie)' => sprintf('%s / %s / %s', $s['avgInputTokens'], $s['avgCacheReadTokens'], $s['avgOutputTokens'])];
+            $lines[] = ['Durée moyenne' => $s['avgDurationMs'] . ' ms'];
+            $io->definitionList(...$lines);
         }
-        $lines[] = ['Vérifications propres réussies' => sprintf('%d / %d mesurables', $s['specificOk'], $s['specificMeasured'])];
-        $lines[] = ['Essais moyens' => $s['avgAttempts']];
-        $lines[] = ['Jetons moyens (entrée / cache lu / sortie)' => sprintf('%s / %s / %s', $s['avgInputTokens'], $s['avgCacheReadTokens'], $s['avgOutputTokens'])];
-        $lines[] = ['Durée moyenne' => $s['avgDurationMs'] . ' ms'];
-        $lines[] = ['Rapport' => $file];
-        $io->definitionList(...$lines);
+        $io->writeln('Rapport : ' . $file);
 
         return Command::SUCCESS;
+    }
+
+    private function playEdit(SymfonyStyle $io, array $case, array $stored, array $palette): array
+    {
+        [$family, $preset] = $this->catalogue->preset($case['presetId']) ?? [null, null];
+        if ($preset === null) {
+            return [['id' => $case['id'], 'mode' => 'edit', 'status' => 'skipped', 'reason' => "modèle {$case['presetId']} absent du catalogue"], [$case['id'], 'ignoré', '', '', '', '', "modèle {$case['presetId']} absent"]];
+        }
+        $componentKey = $family['componentKey'];
+        $before = CompositionEditApplier::copy(json_decode(json_encode($preset['composition'], JSON_PRESERVE_ZERO_FRACTION), false));
+        $allowedMedia = $this->site->allowedMedia([...$stored, $before], [], $case['prompt']);
+        $io->writeln(sprintf(' <info>%s</info> %s/%s : « %s »', $case['id'], $componentKey, $case['presetId'], $case['prompt']));
+
+        try {
+            $result = $this->composer->edit($componentKey, $before, $case['prompt']);
+        } catch (LandingAiException $e) {
+            return $this->failure($case['id'], 'edit', $e);
+        }
+
+        $common = $this->checks->common($before, $result, $componentKey, $allowedMedia, $case['prompt']);
+        $specific = ($case['check'])($before, $result->composition, $result, $palette);
+
+        return [
+            ['id' => $case['id'], 'mode' => 'edit', 'presetId' => $case['presetId'], 'componentKey' => $componentKey, 'prompt' => $case['prompt'], 'status' => 'ok',
+                'checks' => $common, 'specific' => $specific, 'summary' => $result->summary, 'warnings' => $result->warnings,
+                'operations' => $result->operations, 'composition' => $result->composition, 'usage' => $result->stats->toArray()],
+            $this->row($case['id'], $common, $specific, $result->stats),
+        ];
+    }
+
+    private function playCreate(SymfonyStyle $io, array $case, array $stored): array
+    {
+        if (isset($case['skip'])) {
+            return [['id' => $case['id'], 'mode' => 'create', 'status' => 'skipped', 'reason' => $case['skip']], [$case['id'], 'sans objet', '', '', '', '', mb_substr($case['skip'], 0, 90)]];
+        }
+        $componentKey = $case['componentKey'];
+        $available = $this->data->familyUsesData($componentKey) ? $this->data->available($componentKey) : [];
+        $allowedMedia = $this->site->allowedMedia([...$stored, ...$this->site->presetCompositions($componentKey)], $case['media'], $case['prompt']);
+        $io->writeln(sprintf(' <info>%s</info> %s (création, %d donnée(s)) : « %s »', $case['id'], $componentKey, count($available), $case['prompt']));
+
+        try {
+            $result = $this->composer->create($componentKey, $case['prompt'], 'fr', $case['media']);
+        } catch (LandingAiException $e) {
+            return $this->failure($case['id'], 'create', $e);
+        }
+
+        $knownText = $case['prompt'] . "\n" . implode("\n", array_map(fn ($d) => $d['title'] . ' ' . $d['details'], $available));
+        $common = $this->checks->commonCreate($result->composition, $componentKey, $allowedMedia, $knownText);
+        $specific = ($case['check'])($result, array_column($available, 'id'));
+
+        return [
+            ['id' => $case['id'], 'mode' => 'create', 'componentKey' => $componentKey, 'prompt' => $case['prompt'], 'status' => 'ok',
+                'dataType' => $result->dataType, 'checks' => $common, 'specific' => $specific, 'summary' => $result->summary,
+                'warnings' => $result->warnings, 'composition' => $result->composition, 'usage' => $result->stats->toArray()],
+            $this->row($case['id'], $common, $specific, $result->stats),
+        ];
+    }
+
+    private function failure(string $id, string $mode, LandingAiException $e): array
+    {
+        $stats = $e->getStats()?->toArray() ?? [];
+
+        return [
+            ['id' => $id, 'mode' => $mode, 'status' => 'failed', 'httpStatus' => $e->getStatusCode(), 'message' => $e->getMessage(), 'errors' => $e->getErrors(), 'usage' => $stats],
+            [$id, 'échec ' . $e->getStatusCode(), $stats['attempts'] ?? '', $stats['inputTokens'] ?? '', $stats['outputTokens'] ?? '', $stats['durationMs'] ?? '', $e->getMessage()],
+        ];
+    }
+
+    private function row(string $id, array $common, array $specific, $stats): array
+    {
+        $failed = array_keys(array_filter($common, fn ($c) => $c['ok'] === false));
+
+        return [
+            $id,
+            ($failed ? 'V ✗ ' . implode(',', $failed) : 'V ✓') . ' / ' . ($specific['ok'] === null ? 'propre ?' : ($specific['ok'] ? 'propre ✓' : 'propre ✗')),
+            $stats->attempts,
+            $stats->inputTokens . ' (+' . $stats->cacheReadTokens . ' cache)',
+            $stats->outputTokens,
+            $stats->durationMs,
+            mb_substr($specific['detail'], 0, 90),
+        ];
     }
 
     private function summarize(array $cases): array
@@ -156,13 +214,15 @@ class LandingAiEvalCommand extends Command
         $ok = array_values(array_filter($played, fn ($c) => $c['status'] === 'ok'));
         $checks = [];
         foreach (['V1', 'V2', 'V3', 'V4', 'V5', 'V6'] as $v) {
-            $checks[$v] = count(array_filter($ok, fn ($c) => $c['checks'][$v]['ok']));
+            $measured = array_filter($ok, fn ($c) => $c['checks'][$v]['ok'] !== null);
+            $checks[$v] = [count(array_filter($measured, fn ($c) => $c['checks'][$v]['ok'])), count($measured)];
         }
         $measured = array_filter($ok, fn ($c) => $c['specific']['ok'] !== null);
         $avg = fn (string $key) => $played ? (int) round(array_sum(array_map(fn ($c) => $c['usage'][$key] ?? 0, $played)) / count($played)) : 0;
 
         return [
             'played' => count($played),
+            'skipped' => count($cases) - count($played),
             'succeeded' => count($ok),
             'checks' => $checks,
             'specificMeasured' => count($measured),

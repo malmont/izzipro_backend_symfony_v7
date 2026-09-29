@@ -37,7 +37,7 @@ class LandingAiComposeTest extends WebTestCase
         $settingsBefore = $this->get('/api/landingpage-settings')->getContent();
         $before = $this->preset('group-type-t');
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([
-            ['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#1B5FE6', 'bindings' => new \stdClass()], 'unset' => ['letterSpacing']],
+            ['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#1B5FE6', 'translations' => new \stdClass()], 'unset' => ['letterSpacing']],
             ['op' => 'add', 'after' => 't-titre', 'block' => ['id' => 't-sous-titre', 'type' => 'text', 'parentId' => null, 'text' => 'Nos offres', 'lineHeight' => 1.0]],
             ['op' => 'section', 'set' => ['rootGap' => 64]],
         ], 'Titre recoloré, sous-titre ajouté.');
@@ -49,7 +49,8 @@ class LandingAiComposeTest extends WebTestCase
         $after = $this->blocksById($body->composition);
         $this->assertSame('#1B5FE6', $after['t-titre']->color);
         $this->assertFalse(property_exists($after['t-titre'], 'letterSpacing'));
-        $this->assertEquals(new \stdClass(), $after['t-titre']->bindings, '{} reste un objet');
+        $this->assertEquals(new \stdClass(), $after['t-titre']->translations, '{} reste un objet');
+        $this->assertEquals((object) ['text' => 'title'], $after['t-titre']->bindings, 'liaisons non visées conservées');
         $this->assertStringContainsString('"lineHeight":1.0', $response->getContent(), '1.0 reste un décimal');
         $this->assertSame(64, $body->composition->rootGap);
         $ids = array_column(array_map(fn ($b) => (array) $b, $body->composition->blocks), 'id');
@@ -220,7 +221,7 @@ class LandingAiComposeTest extends WebTestCase
             'demande trop longue' => ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => new \stdClass(), 'prompt' => str_repeat('a', 2001)],
             'composition absente' => ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'prompt' => 'x'],
             'média invalide' => ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => new \stdClass(), 'prompt' => 'x', 'media' => [['kind' => 'image', 'url' => 'javascript:alert(1)']]],
-            'mode create (étape 2)' => ['mode' => 'create', 'componentKey' => 'PresentationGroup', 'prompt' => 'x'],
+            'mode page (étape 3)' => ['mode' => 'page', 'prompt' => 'x'],
         ];
         foreach ($cases as $name => $body) {
             $response = $this->compose($body);
@@ -269,6 +270,101 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame(['monthly', 'used', 'remaining', 'resetAt'], array_keys($body['credits']));
         $this->assertStringStartsWith((new \DateTimeImmutable('first day of next month', new \DateTimeZone('America/Toronto')))->format('Y-m-01'), $body['credits']['resetAt']);
         $this->assertSame(['id', 'createdAt', 'user', 'mode', 'componentKey', 'status', 'credits', 'model', 'attempts', 'durationMs', 'promptExcerpt'], array_keys($body['history'][0]));
+    }
+
+    public function testCreateReturnsCompositionAndChosenDataType(): void
+    {
+        $groups = $this->availableIds('PresentationGroup');
+        $this->assertNotEmpty($groups, 'la base de test contient des groupes');
+        $composition = $this->preset('group-type-a');
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($composition, (int) end($groups), 'Grille des forfaits.');
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'PresentationGroup', 'dataType' => $groups[0], 'prompt' => 'Section qui présente mes forfaits.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent(), false);
+        $this->assertSame('create', $body->mode);
+        $this->assertSame((string) end($groups), $body->dataType, 'donnée choisie par l\'IA, renvoyée en texte');
+        $this->assertSame(json_encode($composition), json_encode($body->composition));
+        $this->assertSame(3, $body->credits->used, 'création : 3 crédits');
+
+        $request = FakeLandingAiClient::$requests[0];
+        $this->assertSame('creer_composition', $request['tools'][0]['name']);
+        $this->assertSame(['type' => 'tool', 'name' => 'creer_composition'], $request['tool_choice']);
+        $this->assertStringContainsString('valeurs possibles de dataType', $request['messages'][0]['content']);
+        $this->assertStringContainsString('Donnée sélectionnée par défaut dans l\'éditeur : ' . $groups[0], $request['messages'][0]['content']);
+        $history = json_decode($this->get('/api/landingpage-ai/usage')->getContent(), true)['history'];
+        $this->assertSame(['create', 'success', 3], [$history[0]['mode'], $history[0]['status'], $history[0]['credits']]);
+    }
+
+    public function testCreateWithDataTypeOutsideTheSiteDataTriggersAnotherAttempt(): void
+    {
+        $groups = $this->availableIds('PresentationGroup');
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('group-type-a'), '999999');
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('group-type-a'), $groups[0]);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'PresentationGroup', 'prompt' => 'Une grille.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $feedback = FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'];
+        $this->assertStringContainsString('dataType', $feedback);
+        $this->assertStringContainsString('creer_composition', $feedback);
+    }
+
+    public function testCreateForAFamilyWithoutDataRequiresNullDataType(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('contact-type-a'), '1');
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('contact-type-a'), null);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Contact', 'prompt' => 'Formulaire de contact.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertNull(json_decode($response->getContent())->dataType);
+        $this->assertStringContainsString('null attendu', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+        $this->assertStringContainsString('n\'utilise pas de donnée', FakeLandingAiClient::$requests[0]['messages'][0]['content']);
+    }
+
+    public function testCreateRejectsAnUnknownDefaultDataType(): void
+    {
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'PresentationGroup', 'dataType' => '999999', 'prompt' => 'Une grille.']);
+        $this->assertSame(400, $response->getStatusCode(), $response->getContent());
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Contact', 'dataType' => '1', 'prompt' => 'Contact.']);
+        $this->assertSame(400, $response->getStatusCode(), $response->getContent());
+        $this->assertSame([], FakeLandingAiClient::$requests);
+    }
+
+    public function testCreateAcceptsUrlsWrittenInThePromptAndPresetImages(): void
+    {
+        $composition = $this->preset('presentation-type-b'); // image de fond du modèle : /landingpage/presets/type-b-fond.webp
+        $composition->blocks[] = (object) ['id' => 'c-video', 'type' => 'video', 'parentId' => null, 'x' => 54, 'y' => 80, 'w' => 36, 'h' => 15, 'url' => 'https://media.example.com/intro.mp4'];
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($composition, $this->availableIds('Presentation')[0]);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Presentation', 'prompt' => 'Héros avec cette vidéo : https://media.example.com/intro.mp4, titre et bouton de contact.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertCount(1, FakeLandingAiClient::$requests, 'accepté au premier essai');
+    }
+
+    public function testCreateWithAnInventedImageTriggersAnotherAttempt(): void
+    {
+        $invented = $this->preset('presentation-type-b');
+        $invented->bgImage = 'https://images.example.com/inventee.jpg';
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($invented, $this->availableIds('Presentation')[0]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('presentation-type-b'), $this->availableIds('Presentation')[0]);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Presentation', 'prompt' => 'Une présentation.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertStringContainsString('bgImage', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+    }
+
+    /** @return list<string> */
+    private function availableIds(string $componentKey): array
+    {
+        $this->db();
+
+        return static::getContainer()->get(\App\Services\LandingAiService\LandingAiDataSources::class)->availableIds($componentKey);
     }
 
     /** Test d'intégration réel (cas R1), activé seulement avec LANDING_AI_REAL_TEST=1 : consomme des jetons. */

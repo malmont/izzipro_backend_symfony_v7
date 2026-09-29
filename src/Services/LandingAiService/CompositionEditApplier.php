@@ -10,6 +10,11 @@ namespace App\Services\LandingAiService;
  *   { "op": "add", "block": {…}, "after": "b0" | null }     null ou absent : à la fin du tableau
  *   { "op": "remove", "id": "b3" }                            retire aussi les descendants
  *   { "op": "section", "set": {…}, "unset": […] }
+ *
+ * « set » fusionne récursivement les objets simples (mobile, repeat, bindings, translations,
+ * translations.<langue>…) : set { mobile: { align: "center" } } garde mobile.w. Les tableaux (links, images,
+ * iconCycle, mediaCycle, backgroundCycle…) et les valeurs simples sont remplacés entiers.
+ * « unset » accepte des chemins pointés vers une clé d'objet imbriqué : "mobile.w", "bindings.offer".
  */
 final class CompositionEditApplier
 {
@@ -126,18 +131,55 @@ final class CompositionEditApplier
             if (in_array($key, $protected, true)) {
                 return ["set.$key", 'propriété non modifiable par une retouche'];
             }
-            $target->$key = self::copy($value);
+            $target->$key = self::merge($target->$key ?? null, $value);
         }
         $unset = $operation->unset ?? [];
         if (!is_array($unset)) {
             return ['unset', 'liste de propriétés attendue'];
         }
-        foreach ($unset as $key) {
-            if (!is_string($key) || in_array($key, $protected, true)) {
-                return ['unset', sprintf('propriété « %s » non supprimable', is_string($key) ? $key : json_encode($key))];
+        foreach ($unset as $i => $path) {
+            $segments = is_string($path) ? explode('.', $path) : [];
+            if ($segments === [] || in_array('', $segments, true) || in_array($segments[0], $protected, true)) {
+                return ["unset[$i]", sprintf('propriété « %s » non supprimable', is_string($path) ? $path : json_encode($path))];
             }
-            unset($target->$key);
+            $error = $this->unsetPath($target, $segments);
+            if ($error !== null) {
+                return ["unset[$i]", $error];
+            }
         }
+
+        return null;
+    }
+
+    /** Fusion récursive : objet dans objet fusionné, tout le reste (tableaux compris) remplacé */
+    private static function merge(mixed $current, mixed $value): mixed
+    {
+        if (!is_object($current) || !is_object($value)) {
+            return self::copy($value);
+        }
+        $merged = self::copy($current);
+        foreach ((array) $value as $key => $item) {
+            $merged->$key = self::merge($merged->$key ?? null, $item);
+        }
+
+        return $merged;
+    }
+
+    /** Retire une clé, éventuellement imbriquée ; chemin absent : sans effet */
+    private function unsetPath(object $target, array $segments): ?string
+    {
+        $last = array_pop($segments);
+        $node = $target;
+        foreach ($segments as $segment) {
+            if (!property_exists($node, $segment)) {
+                return null;
+            }
+            if (!is_object($node->$segment)) {
+                return sprintf('« %s » n\'est pas un objet : seuls les objets imbriqués acceptent un chemin pointé', $segment);
+            }
+            $node = $node->$segment;
+        }
+        unset($node->$last);
 
         return null;
     }

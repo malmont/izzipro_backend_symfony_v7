@@ -3,11 +3,13 @@
 namespace App\Services\LandingAiService\Eval;
 
 use App\Services\LandingAiService\CompositionInspector;
+use App\Services\LandingAiService\LandingAiCreateResult;
 use App\Services\LandingAiService\LandingAiEditResult;
 
 /**
  * Cas de l'étape 1 (retouche) du jeu d'essai, avec leurs vérifications propres quand elles sont mesurables.
  * Les compositions de départ sont les modèles du catalogue (« groupe T » = presentation-group/group-type-t…).
+ * Corrections du 28/09/2026 (frontend) : R4 part de footer-type-d, R9 de video-type-a.
  * Une vérification renvoie ['ok' => true|false|null, 'detail' => string] ; null = non mesurable sur ce départ.
  */
 final class LandingAiEvalCases
@@ -60,7 +62,7 @@ final class LandingAiEvalCases
                 },
             ],
             [
-                'id' => 'R4', 'presetId' => 'footer-type-e', 'prompt' => 'Sur mobile, centre tout et masque la colonne Navigation.',
+                'id' => 'R4', 'presetId' => 'footer-type-d', 'prompt' => 'Sur mobile, centre tout et masque la colonne Navigation.',
                 'check' => function (object $before, object $after) {
                     $centered = (($after->mobile->align ?? null) === 'center') || $this->find($after, fn ($b) => ($b->mobile->align ?? null) === 'center') !== null;
                     $desktopChanged = [];
@@ -71,11 +73,13 @@ final class LandingAiEvalCases
                             $desktopChanged[] = $b->id;
                         }
                     }
-                    $hasNavigation = $this->find($before, fn ($b) => str_contains((string) ($b->text ?? ''), 'Navigation')) !== null;
+                    $navTitle = $this->find($before, fn ($b) => trim(strip_tags((string) ($b->text ?? ''))) === 'Navigation');
+                    $navColumn = $navTitle ? ($this->inspector->blocksById($after)[$navTitle->parentId ?? ''] ?? null) : null;
+                    $hidden = $navColumn !== null && ($navColumn->mobile->hidden ?? false) === true;
 
-                    return $this->result($centered && !$desktopChanged, ($centered ? 'mobile.align = center' : 'pas de centrage mobile')
+                    return $this->result($centered && !$desktopChanged && $hidden, ($centered ? 'mobile.align = center' : 'pas de centrage mobile')
                         . ($desktopChanged ? ' ; grand écran modifié : ' . implode(', ', $desktopChanged) : ' ; grand écran inchangé')
-                        . ($hasNavigation ? '' : ' ; colonne Navigation absente du modèle (masquage non mesurable)'));
+                        . ($navTitle === null ? ' ; colonne Navigation absente du modèle' : ($hidden ? ' ; colonne Navigation masquée sur mobile' : ' ; colonne Navigation non masquée')));
                 },
             ],
             [
@@ -123,7 +127,7 @@ final class LandingAiEvalCases
                 },
             ],
             [
-                'id' => 'R9', 'presetId' => 'banner-type-l', 'prompt' => 'Supprime le badge et agrandis le titre.',
+                'id' => 'R9', 'presetId' => 'video-type-a', 'prompt' => 'Supprime le badge et agrandis le titre.',
                 'check' => function (object $before, object $after) {
                     $hadBadge = $this->find($before, fn ($b) => ($b->type ?? null) === 'badge') !== null;
                     $badgeLeft = $this->find($after, fn ($b) => ($b->type ?? null) === 'badge') !== null;
@@ -146,6 +150,107 @@ final class LandingAiEvalCases
                 },
             ],
         ];
+    }
+
+    /** Clé de média fictive fournie avec la demande C4 (format de GET /media/secure/{clé}) */
+    public const C4_MEDIA_KEY = 'a4c1e2f3b5d60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90';
+
+    /**
+     * Cas de l'étape 2 (création). Les sites cités par le jeu d'essai ne sont pas relus : tous les cas jouent sur le
+     * tenant de test de la commande (données, palette et médias de ce site).
+     *
+     * @return list<array{id: string, componentKey: string, prompt: string, media: list<array>, skip?: string, check?: callable(LandingAiCreateResult, list<string>): array}>
+     */
+    public function createCases(): array
+    {
+        return [
+            [
+                'id' => 'C1', 'componentKey' => 'Service', 'media' => [], 'prompt' => 'Grille de mes services avec prix et bouton Réserver.',
+                'check' => function (LandingAiCreateResult $r) {
+                    $list = $this->find($r->composition, fn ($b) => ($b->repeat->source ?? null) === 'services');
+                    $bound = $this->boundPaths($r->composition);
+                    $button = $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'button' && ($b->action ?? null) === 'reservation');
+
+                    return $this->result($list !== null && in_array('item.title', $bound, true) && in_array('item.price', $bound, true) && ($button->bindings->offer ?? null) === 'item.title',
+                        sprintf('liste services : %s ; item.title : %s ; item.price : %s ; bouton reservation + offer=item.title : %s',
+                            $list ? 'oui' : 'non', in_array('item.title', $bound, true) ? 'oui' : 'non', in_array('item.price', $bound, true) ? 'oui' : 'non',
+                            ($button->bindings->offer ?? null) === 'item.title' ? 'oui' : 'non'));
+                },
+            ],
+            [
+                'id' => 'C2', 'componentKey' => 'PresentationGroup', 'media' => [], 'prompt' => 'Section qui présente mes forfaits.',
+                'check' => function (LandingAiCreateResult $r, array $availableIds) {
+                    $items = array_filter($this->boundPaths($r->composition), fn ($p) => str_starts_with($p, 'item.'));
+
+                    return $this->result(in_array($r->dataType, $availableIds, true) && $items !== [],
+                        sprintf('dataType = %s (%s) ; liaisons item.* : %d', json_encode($r->dataType), in_array($r->dataType, $availableIds, true) ? 'donnée du site' : 'hors site', count($items)));
+                },
+            ],
+            [
+                'id' => 'C3', 'componentKey' => 'Presentation', 'media' => [], 'prompt' => 'Héros avec cette vidéo : https://media.example.com/intro.mp4, titre et bouton de contact.',
+                'check' => function (LandingAiCreateResult $r) {
+                    $video = $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'video' && ($b->url ?? null) === 'https://media.example.com/intro.mp4');
+                    $contact = $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'button' && (($b->action ?? null) === 'contact' || ($b->url ?? null) === '#contact'));
+
+                    return $this->result($video !== null && $contact !== null, sprintf('vidéo avec l\'URL exacte : %s ; bouton de contact : %s', $video ? 'oui' : 'non', $contact ? 'oui' : 'non'));
+                },
+            ],
+            [
+                'id' => 'C4', 'componentKey' => 'Presentation', 'prompt' => 'Section À propos avec la photo de l\'équipe.',
+                'media' => [['kind' => 'image', 'url' => null, 'mediaKey' => self::C4_MEDIA_KEY, 'label' => 'photo de l\'équipe']],
+                'check' => function (LandingAiCreateResult $r) {
+                    $image = $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'image' && ($b->mediaKey ?? null) === self::C4_MEDIA_KEY);
+
+                    return $this->result($image !== null, $image ? 'image avec la clé fournie' : 'clé de média fournie non utilisée');
+                },
+            ],
+            [
+                'id' => 'C5', 'componentKey' => 'PresentationGroup', 'media' => [], 'prompt' => 'Comme la section Tarifs, mais pour le Branding.',
+                'check' => function (LandingAiCreateResult $r) {
+                    $structure = $this->find($r->composition, fn ($b) => ($b->tabs ?? false) === true || ($b->repeat->source ?? null) === 'presentationGroup');
+                    $branding = stripos(json_encode($r->composition, JSON_UNESCAPED_UNICODE), 'branding') !== false;
+
+                    return $this->result($structure !== null && $branding, sprintf('structure onglets / liste de formules : %s ; textes sur le Branding : %s', $structure ? 'oui' : 'non', $branding ? 'oui' : 'non'));
+                },
+            ],
+            [
+                'id' => 'C6', 'componentKey' => 'Contact', 'media' => [], 'prompt' => 'Formulaire de contact avec coordonnées à gauche.',
+                'check' => function (LandingAiCreateResult $r) {
+                    $form = $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'form' && ($b->formType ?? 'contact') === 'contact');
+                    $bound = $this->boundPaths($r->composition);
+                    $email = in_array('email', $bound, true) || in_array('emailUrl', $bound, true);
+                    $phone = in_array('phone', $bound, true) || in_array('telUrl', $bound, true);
+
+                    return $this->result($form !== null && $email && $phone, sprintf('formulaire de contact : %s ; e-mail lié : %s ; téléphone lié : %s', $form ? 'oui' : 'non', $email ? 'oui' : 'non', $phone ? 'oui' : 'non'));
+                },
+            ],
+            [
+                'id' => 'C7', 'componentKey' => 'Navbar', 'media' => [], 'prompt' => 'Barre transparente sur le héros, menu burger sur mobile.',
+                'check' => function (LandingAiCreateResult $r) {
+                    $nav = $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'nav');
+                    $overlay = ($r->composition->overlayTop ?? false) === true;
+                    $burger = $nav !== null && in_array($nav->navMobile ?? 'burger', ['burger'], true);
+                    $linked = ($nav->bindings->links ?? null) === 'navLinks';
+
+                    return $this->result($overlay && $burger && $linked, sprintf('overlayTop : %s ; burger mobile : %s ; liens liés aux onglets : %s', $overlay ? 'oui' : 'non', $burger ? 'oui' : 'non', $linked ? 'oui' : 'non'));
+                },
+            ],
+            [
+                'id' => 'C8', 'componentKey' => 'PresentationGroup', 'media' => [], 'prompt' => 'Enregistre ce résultat comme modèle "Cartes premium".',
+                'skip' => 'sans objet côté backend : l\'enregistrement d\'un modèle personnel se fait dans l\'éditeur (reglablePresets, PUT des réglages) ; l\'endpoint n\'écrit jamais les réglages',
+            ],
+        ];
+    }
+
+    /** @return list<string> chemins de liaison utilisés dans la composition (blocs et section) */
+    private function boundPaths(object $composition): array
+    {
+        $paths = array_values((array) ($composition->bindings ?? []));
+        foreach ($this->inspector->blocks($composition) as $block) {
+            array_push($paths, ...array_values((array) ($block->bindings ?? [])));
+        }
+
+        return array_values(array_filter($paths, 'is_string'));
     }
 
     /** @return list<array{0: object, 1: object}> blocs présents avant et après, par identifiant */

@@ -39,6 +39,25 @@ class FakeLandingAiClient implements LandingAiClientInterface
         ], JSON_PRESERVE_ZERO_FRACTION), false);
     }
 
+    /** Réponse type : un appel de l'outil de création */
+    public static function createResponse(object|array $composition, string|int|null $dataType, string $summary = 'Section créée.', array $warnings = []): object
+    {
+        return json_decode(json_encode([
+            'id' => 'msg_' . bin2hex(random_bytes(6)),
+            'type' => 'message',
+            'role' => 'assistant',
+            'model' => 'claude-sonnet-5',
+            'stop_reason' => 'tool_use',
+            'content' => [[
+                'type' => 'tool_use',
+                'id' => 'toolu_' . bin2hex(random_bytes(6)),
+                'name' => 'creer_composition',
+                'input' => ['dataType' => $dataType, 'composition' => $composition, 'summary' => $summary, 'warnings' => $warnings],
+            ]],
+            'usage' => ['input_tokens' => 2500, 'output_tokens' => 3000, 'cache_read_input_tokens' => 30000, 'cache_creation_input_tokens' => 0],
+        ], JSON_PRESERVE_ZERO_FRACTION), false);
+    }
+
     public function createMessage(array $payload, float $timeoutSeconds): object
     {
         self::$requests[] = json_decode(json_encode($payload), true);

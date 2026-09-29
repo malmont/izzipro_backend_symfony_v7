@@ -47,7 +47,7 @@ par exemple `tabs[0].sections[2].reglableConfig.blocks[3].fontColor`. Rien n'est
   généré par `npm run ia:catalogue`). Pour chaque famille (`componentKey`) : types de blocs autorisés (`tools`), champs liables
   (`sectionFields`, `boundTools`, `list`) et modèles de référence (`presets`). Lu par `App\Services\LandingAiService\LandingAiCatalogue`.
 - `ia-assistant-jeu-essai.md` : jeu d'essai (cas R1–R10, C1–C8, P1–P3 et vérifications V1–V6), rejoué par
-  `php bin/console app:landingpage-ai:eval --tenant=<tenant de test> [--case=R1]` (sans HTTP ni quota, aucune écriture ;
+  `php bin/console app:landingpage-ai:eval --tenant=<tenant de test> [--mode=edit|create|all] [--case=R1]` (sans HTTP ni quota, aucune écriture ;
   rapport JSON dans `var/landing-ai-eval/`).
 
 ### Mettre à jour le catalogue quand le frontend le change
@@ -63,12 +63,22 @@ par exemple `tabs[0].sections[2].reglableConfig.blocks[3].fontColor`. Rien n'est
    ```
 4. Rejouer le jeu d'essai (`app:landingpage-ai:eval`) et comparer le rapport au précédent avant de déployer.
 
-### Fonctionnement (étape 1 : retouche)
+### Fonctionnement (étapes 1 et 2 : retouche et création)
 
-- `POST /api/landingpage-ai/compose` (ROLE_ADMIN du tenant) : `{ mode: "edit", componentKey, composition, prompt, locale?, media? }`.
-  L'IA renvoie des opérations (`update`, `add`, `remove`, `section`) appliquées par le serveur sur la composition envoyée ;
-  la proposition passe par `ReglableCompositionValidator`, les types de la famille et la liste des médias autorisés
-  (3 essais au total, erreurs renvoyées au modèle). Les réglages du site ne sont jamais enregistrés par cet endpoint.
+- `POST /api/landingpage-ai/compose` (ROLE_ADMIN du tenant) :
+  - **edit** `{ mode: "edit", componentKey, composition, prompt, locale?, media? }` : l'IA renvoie des opérations
+    (`update`, `add`, `remove`, `section`) appliquées par le serveur sur la composition envoyée. `set` **fusionne**
+    récursivement les objets imbriqués (mobile, repeat, bindings, translations…) et **remplace** les tableaux (links,
+    images, iconCycle…) ; `unset` accepte des chemins pointés (`"mobile.w"`, `"bindings.offer"`).
+  - **create** `{ mode: "create", componentKey, dataType?, prompt, locale?, media? }` : l'IA compose une section complète
+    et choisit la donnée affichée (`dataType`) parmi les données du site pour cette famille (présentations, groupes,
+    bannières statiques, vidéos, intégrations, liens multiples, recherches, offres d'emploi, catégories de marques ;
+    `null` pour les familles sans donnée). Le `dataType` envoyé sert de donnée par défaut ; la réponse contient le
+    `dataType` retenu.
+  - La proposition passe par `ReglableCompositionValidator`, les types de la famille et la liste des médias autorisés
+    (médias du site, médias fournis avec la demande, adresses http(s) écrites dans la demande et, en création, images
+    des modèles de la famille), avec 3 essais au total (erreurs renvoyées au modèle). Les réglages du site ne sont
+    jamais enregistrés par cet endpoint. `translations` n'est rempli que si la demande le demande explicitement.
 - `GET /api/landingpage-ai/usage` : crédits du mois et 50 dernières demandes.
 - Quota : 100 crédits par mois (fuseau America/Toronto), modifiable par tenant en SQL :
   `INSERT INTO ai_credit_setting (monthly_credits) VALUES (200)` (ou `UPDATE` si la ligne existe). Coût : retouche 1,

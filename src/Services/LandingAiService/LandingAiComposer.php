@@ -22,6 +22,7 @@ final class LandingAiComposer
         private readonly CompositionEditApplier $applier,
         private readonly LandingAiCompositionChecker $checker,
         private readonly LandingAiSiteContext $site,
+        private readonly LandingAiDataSources $data,
         private readonly LoggerInterface $logger,
         #[Autowire('%env(default:landing_ai.default_model_edit:LANDING_AI_MODEL_EDIT)%')]
         private readonly string $editModel
@@ -41,45 +42,104 @@ final class LandingAiComposer
      */
     public function edit(string $componentKey, object $composition, string $prompt, string $locale = 'fr', array $media = []): LandingAiEditResult
     {
-        $stats = new LandingAiUsageStats($this->editModel);
-        $start = microtime(true);
-
         $stored = $this->site->storedCompositions();
-        $allowedMedia = $this->site->allowedMedia([...$stored, $composition], $media);
+        $allowedMedia = $this->site->allowedMedia([...$stored, $composition], $media, $prompt);
         $payload = $this->prompts->editPayload($this->editModel, $componentKey, $composition, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored));
 
+        return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia) {
+            $operations = is_array($input->operations ?? null) ? $input->operations : [];
+            $applied = $this->applier->apply($composition, $operations);
+            $errors = $applied['errors'] ?: $this->checker->check($applied['composition'], $componentKey, $allowedMedia);
+            if ($errors) {
+                return [null, $errors];
+            }
+
+            return [new LandingAiEditResult($applied['composition'], $this->summary($input), $this->warnings($input->warnings ?? []), $applied['touched'], $operations, $stats), []];
+        });
+    }
+
+    /**
+     * Création : l'IA compose une section complète de la famille et choisit la donnée affichée (dataType) parmi
+     * celles du site ; la donnée indiquée par l'éditeur sert de valeur par défaut.
+     *
+     * @param list<array> $media médias fournis par l'administrateur
+     * @throws LandingAiException 502 ou 504
+     */
+    public function create(string $componentKey, string $prompt, string $locale = 'fr', array $media = [], ?string $defaultDataType = null): LandingAiCreateResult
+    {
+        $stored = $this->site->storedCompositions();
+        $usesData = $this->data->familyUsesData($componentKey);
+        $available = $usesData ? $this->data->available($componentKey) : [];
+        $availableIds = array_column($available, 'id');
+        $allowedMedia = $this->site->allowedMedia([...$stored, ...$this->site->presetCompositions($componentKey)], $media, $prompt);
+        $payload = $this->prompts->createPayload($this->editModel, $componentKey, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $usesData, $available, $defaultDataType);
+
+        return $this->run($payload, LandingAiPromptBuilder::CREATE_TOOL, function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $usesData, $availableIds) {
+            $composition = $input->composition ?? null;
+            if (!is_object($composition)) {
+                return [null, [['path' => 'composition', 'message' => 'composition complète attendue (objet schemaVersion 2)']]];
+            }
+            $dataType = $input->dataType ?? null;
+            $dataType = is_int($dataType) || is_string($dataType) ? (string) $dataType : null;
+            if (isset($input->dataType) && $dataType === null) {
+                return [null, [['path' => 'dataType', 'message' => 'identifiant (texte ou nombre) ou null attendu']]];
+            }
+
+            $errors = $this->checker->check($composition, $componentKey, $allowedMedia);
+            if (!$usesData && $dataType !== null) {
+                $errors[] = ['path' => 'dataType', 'message' => 'cette famille n\'utilise pas de donnée : null attendu'];
+            } elseif ($usesData && $availableIds && !in_array($dataType, $availableIds, true)) {
+                $errors[] = ['path' => 'dataType', 'message' => sprintf('dataType à choisir parmi les données du site : %s', implode(', ', array_slice($availableIds, 0, 20)))];
+            } elseif ($usesData && !$availableIds && $dataType !== null) {
+                $errors[] = ['path' => 'dataType', 'message' => 'le site n\'a aucune donnée de ce type : null attendu (signale-le dans warnings)'];
+            }
+            if ($errors) {
+                return [null, $errors];
+            }
+
+            return [new LandingAiCreateResult($composition, $dataType, $this->summary($input), $this->warnings($input->warnings ?? []), $stats), []];
+        });
+    }
+
+    /**
+     * Boucle commune : appel, lecture de l'outil, évaluation par $handle (résultat ou erreurs), nouvel essai avec
+     * les erreurs renvoyées au modèle (3 essais au total).
+     *
+     * @param callable(object, LandingAiUsageStats): array{0: mixed, 1: list<array{path: string, message: string}>} $handle
+     */
+    private function run(array $payload, string $tool, callable $handle): mixed
+    {
+        $stats = new LandingAiUsageStats($this->editModel);
+        $start = microtime(true);
         $errors = [];
+
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
             $response = $this->call($payload, $start, $stats);
 
-            $input = $this->toolInput($response, LandingAiPromptBuilder::EDIT_TOOL);
+            $input = $this->toolInput($response, $tool);
             if ($input === null) {
-                $errors = [['path' => '', 'message' => sprintf('réponse sans appel valide de l\'outil %s (arrêt : %s)', LandingAiPromptBuilder::EDIT_TOOL, $response->stop_reason ?? '?')]];
+                $errors = [['path' => '', 'message' => sprintf('réponse sans appel valide de l\'outil %s (arrêt : %s)', $tool, $response->stop_reason ?? '?')]];
             } else {
-                $operations = is_array($input->operations ?? null) ? $input->operations : [];
-                $applied = $this->applier->apply($composition, $operations);
-                $errors = $applied['errors'] ?: $this->checker->check($applied['composition'], $componentKey, $allowedMedia);
-                if (!$errors) {
+                [$result, $errors] = $handle($input, $stats);
+                if ($result !== null) {
                     $stats->durationMs = $this->elapsedMs($start);
 
-                    return new LandingAiEditResult(
-                        $applied['composition'],
-                        mb_substr(is_string($input->summary ?? null) ? $input->summary : '', 0, 1000),
-                        $this->warnings($input->warnings ?? []),
-                        $applied['touched'],
-                        $operations,
-                        $stats
-                    );
+                    return $result;
                 }
             }
 
-            $this->logger->info('Assistant IA : proposition refusée', ['attempt' => $attempt, 'errors' => array_slice($errors, 0, 10)]);
+            $this->logger->info('Assistant IA : proposition refusée', ['tool' => $tool, 'attempt' => $attempt, 'errors' => array_slice($errors, 0, 10)]);
             $payload['messages'][] = ['role' => 'assistant', 'content' => $response->content ?? []];
-            $payload['messages'][] = $this->prompts->retryMessage($response, $errors);
+            $payload['messages'][] = $this->prompts->retryMessage($response, $errors, $tool);
         }
 
         $stats->durationMs = $this->elapsedMs($start);
         throw new LandingAiException(502, 'Proposition invalide', sprintf('L\'IA n\'a pas produit de composition valide après %d essais. Aucun crédit n\'a été consommé.', self::MAX_ATTEMPTS), array_slice($errors, 0, 40), [], $stats);
+    }
+
+    private function summary(object $input): string
+    {
+        return mb_substr(is_string($input->summary ?? null) ? $input->summary : '', 0, 1000);
     }
 
     private function call(array $payload, float $start, LandingAiUsageStats $stats): object

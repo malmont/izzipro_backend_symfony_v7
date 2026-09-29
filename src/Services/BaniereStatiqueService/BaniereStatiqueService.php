@@ -7,6 +7,8 @@ use App\Services\TenantEntityManagerProvider;
 
 class BaniereStatiqueService
 {
+    private $repository;
+
     public function __construct(private TenantEntityManagerProvider $emProvider) {
 
         $tenantEm = $this->emProvider->getEntityManager();
