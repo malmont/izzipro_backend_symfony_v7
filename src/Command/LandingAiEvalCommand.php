@@ -27,7 +27,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 class LandingAiEvalCommand extends Command
 {
     private const MODES = ['edit', 'create', 'page'];
-    private const MODE_TITLES = ['edit' => 'Retouche (edit)', 'create' => 'Création (create)', 'page' => 'Page (page, images)'];
+    private const MODE_TITLES = ['edit' => 'Retouche (edit)', 'create' => 'Création (create)', 'page' => 'Page (page, images)', 'review' => 'Relecture visuelle (edit + captures)'];
 
     public function __construct(
         private readonly TenantConnectionManager $connectionManager,
@@ -106,7 +106,7 @@ class LandingAiEvalCommand extends Command
         }
 
         $report['summary'] = [];
-        foreach (self::MODES as $m) {
+        foreach (array_keys(self::MODE_TITLES) as $m) {
             $modeCases = array_values(array_filter($report['cases'], fn ($c) => ($c['mode'] ?? null) === $m));
             if ($modeCases) {
                 $report['summary'][$m] = $this->summarize($modeCases);
@@ -197,7 +197,10 @@ class LandingAiEvalCommand extends Command
         if (isset($case['skip'])) {
             return [['id' => $case['id'], 'mode' => 'page', 'status' => 'skipped', 'reason' => $case['skip']], [$case['id'], 'sans objet', '', '', '', '', mb_substr($case['skip'], 0, 90)]];
         }
-        $images = array_map(fn ($file) => ['mediaType' => 'image/png', 'data' => base64_encode(file_get_contents($this->fixturesDir . '/' . $file))], $case['images']);
+        if (isset($case['presetId'])) {
+            return $this->playReview($io, $case, $stored);
+        }
+        $images = $this->images($case['images']);
         $families = $case['componentKey'] !== null ? [$case['componentKey']] : $this->catalogue->componentKeys();
         $presets = array_merge(...array_map(fn ($key) => $this->site->presetCompositions($key), $families));
         $allowedMedia = $this->site->allowedMedia([...$stored, ...$presets], $case['media'], $case['prompt']);
@@ -224,6 +227,47 @@ class LandingAiEvalCommand extends Command
                 'sections' => $result->sections, 'usage' => $result->stats->toArray()],
             $this->row($case['id'], $common, $specific, $result->stats),
         ];
+    }
+
+    /**
+     * Relecture visuelle : retouche d'une composition dégradée ($case['prepare']) avec les captures de son rendu.
+     */
+    private function playReview(SymfonyStyle $io, array $case, array $stored): array
+    {
+        [$family, $preset] = $this->catalogue->preset($case['presetId']) ?? [null, null];
+        if ($preset === null) {
+            return [['id' => $case['id'], 'mode' => 'review', 'status' => 'skipped', 'reason' => "modèle {$case['presetId']} absent du catalogue"], [$case['id'], 'ignoré', '', '', '', '', "modèle {$case['presetId']} absent"]];
+        }
+        $componentKey = $family['componentKey'];
+        $before = CompositionEditApplier::copy(json_decode(json_encode($preset['composition'], JSON_PRESERVE_ZERO_FRACTION), false));
+        ($case['prepare'])($before);
+        $allowedMedia = $this->site->allowedMedia([...$stored, $before], [], $case['prompt']);
+        $io->writeln(sprintf(' <info>%s</info> %s/%s (%s) : « %s »', $case['id'], $componentKey, $case['presetId'], implode(', ', $case['images']), $case['prompt']));
+
+        try {
+            $result = $this->composer->edit($componentKey, $before, $case['prompt'], 'fr', [], $this->images($case['images']));
+        } catch (LandingAiException $e) {
+            return $this->failure($case['id'], 'review', $e);
+        }
+
+        $common = $this->checks->common($before, $result, $componentKey, $allowedMedia, $case['prompt']);
+        $specific = ($case['check'])($before, $result->composition);
+
+        return [
+            ['id' => $case['id'], 'mode' => 'review', 'presetId' => $case['presetId'], 'componentKey' => $componentKey, 'images' => $case['images'], 'prompt' => $case['prompt'], 'status' => 'ok',
+                'checks' => $common, 'specific' => $specific, 'summary' => $result->summary, 'warnings' => $result->warnings,
+                'operations' => $result->operations, 'composition' => $result->composition, 'usage' => $result->stats->toArray()],
+            $this->row($case['id'], $common, $specific, $result->stats),
+        ];
+    }
+
+    /** @return list<array{mediaType: string, data: string}> images du dossier fixtures */
+    private function images(array $files): array
+    {
+        return array_map(fn (string $file) => [
+            'mediaType' => str_ends_with($file, '.jpg') ? 'image/jpeg' : 'image/png',
+            'data' => base64_encode(file_get_contents($this->fixturesDir . '/' . $file)),
+        ], $files);
     }
 
     private function failure(string $id, string $mode, LandingAiException $e): array

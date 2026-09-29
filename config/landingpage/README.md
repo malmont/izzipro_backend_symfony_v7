@@ -105,6 +105,10 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     l'IA n'emploie que ses couleurs et polices (plus blanc, noir, gris neutres). Capture d'écran : l'IA en reproduit la
     structure ; les images de la capture ne sont pas des médias utilisables. Une requête avec images passe au modèle
     page et coûte 10 crédits.
+  - **Relecture visuelle** (bouton de l'éditeur) : retouche dont la demande commence par « Relecture visuelle : », avec
+    2 captures JPEG du rendu actuel de la section (ordinateur 1280 px, puis mobile 390 px). L'IA corrige les défauts
+    visibles (contraste, espacements, alignements, textes coupés, mobile via `mobile.*`) par des opérations, sans toucher
+    aux textes, liaisons et médias. Cas P3 de l'évaluation (`Eval/fixtures/p3-*.jpg`).
   - La proposition passe par `ReglableCompositionValidator`, les types de la famille (`tools` du catalogue) et la liste
     des médias autorisés
     (médias du site, médias fournis avec la demande, adresses http(s) écrites dans la demande et, en création ou page,

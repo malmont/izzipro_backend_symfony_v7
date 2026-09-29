@@ -256,7 +256,8 @@ final class LandingAiEvalCases
 
     /**
      * Cas de l'étape 3 (page, images). Les images sont dans Eval/fixtures (P1 : charte 2 couleurs, 1 police, logo ;
-     * P2 : capture d'une section services, 3 cartes en colonnes). P3 (auto-critique) attend la capture du rendu.
+     * P2 : capture d'une section services, 3 cartes en colonnes ; P3 : relecture visuelle, captures ordinateur et mobile
+     * du rendu d'une section dégradée). P3 est une retouche (presetId, prepare) : vérifications V1 à V6 de la retouche.
      *
      * @return list<array{id: string, prompt: string, componentKey: ?string, media: list<array>, images: list<string>, skip?: string, check?: callable(LandingAiPageResult): array}>
      */
@@ -312,10 +313,54 @@ final class LandingAiEvalCases
                 },
             ],
             [
-                'id' => 'P3', 'componentKey' => null, 'images' => [], 'media' => [], 'prompt' => 'Auto-critique de la page P1 à partir d\'une capture du rendu.',
-                'skip' => 'viendra avec la capture du rendu envoyée par le frontend (version suivante)',
+                // Relecture visuelle (bouton de l'éditeur) : retouche avec les captures du rendu (ordinateur 1280 px,
+                // puis mobile 390 px, JPEG). Départ : presentation-type-f dégradé comme sur les captures.
+                'id' => 'P3', 'presetId' => 'presentation-type-f', 'images' => ['p3-ordinateur.jpg', 'p3-mobile.jpg'],
+                'prompt' => 'Relecture visuelle : repère et corrige les défauts visibles sur les captures.',
+                'prepare' => function (object $composition): void {
+                    $blocks = $this->inspector->blocksById($composition);
+                    $blocks['f-texte']->color = self::P3_WEAK_TEXT; // contraste 1,7:1 sur fond blanc
+                    $blocks['f-gauche']->gap = 4;                    // colonne tassée
+                    $blocks['f-titre']->size = 56;                   // titre coupé sur mobile
+                },
+                'check' => function (object $before, object $after) {
+                    $blocks = $this->inspector->blocksById($after);
+                    $background = is_string($after->background ?? null) ? $after->background : '#ffffff';
+                    $contrast = $this->contrast((string) ($blocks['f-texte']->color ?? ''), $background);
+                    $gap = $blocks['f-gauche']->gap ?? 0;
+                    $mobileSize = $blocks['f-titre']->mobile->size ?? $blocks['f-titre']->size ?? 56;
+                    $contrastFixed = $contrast !== null && $contrast >= 4.5;
+                    $gapFixed = is_numeric($gap) && $gap >= 12;
+
+                    return $this->result($contrastFixed || $gapFixed, sprintf(
+                        'contraste du texte : %s (1,7 avant) ; espacement de la colonne : %s px (4 avant) ; titre mobile : %s px (56 avant)',
+                        $contrast !== null ? number_format($contrast, 1, ',', '') : '?',
+                        is_numeric($gap) ? $gap : '?',
+                        is_numeric($mobileSize) ? $mobileSize : '?'
+                    ));
+                },
             ],
         ];
+    }
+
+    public const P3_WEAK_TEXT = '#C4C4C4';
+
+    /** Rapport de contraste WCAG entre deux couleurs opaques, ou null si l'une est illisible */
+    private function contrast(string $foreground, string $background): ?float
+    {
+        $luminance = function (string $color): ?float {
+            $rgb = $this->rgb(trim($color));
+            if ($rgb === null) {
+                return null;
+            }
+            $linear = array_map(fn ($c) => ($c /= 255) <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4, $rgb);
+
+            return 0.2126 * $linear[0] + 0.7152 * $linear[1] + 0.0722 * $linear[2];
+        };
+        $a = $luminance($foreground);
+        $b = $luminance(in_array(strtolower($background), ['transparent', 'white'], true) ? '#ffffff' : $background);
+
+        return $a === null || $b === null ? null : (max($a, $b) + 0.05) / (min($a, $b) + 0.05);
     }
 
     /** Couleur de la charte (quelle que soit l'opacité) ou neutre (blanc, noir, gris) */

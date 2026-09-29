@@ -493,6 +493,22 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame(10, $job->result->credits->used);
     }
 
+    public function testVisualReviewSendsBothCapturesAsTheCurrentRendering(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]], 'Contraste du titre renforcé.');
+        $jpeg = $this->jpegDataUrl();
+
+        $job = $this->composeInBackground(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Relecture visuelle : surtout le mobile.', 'images' => [$jpeg, $jpeg]]);
+
+        $this->assertSame('done', $job->status);
+        $this->assertSame(10, $job->result->credits->used);
+        $content = FakeLandingAiClient::$requests[0]['messages'][0]['content'];
+        $this->assertSame(['image', 'image', 'text'], array_column($content, 'type'), 'captures avant le texte');
+        $this->assertSame('image/jpeg', $content[0]['source']['media_type']);
+        $this->assertStringContainsString('rendu actuel de cette section tel qu\'un visiteur la voit (1re : ordinateur, 1280 px de large ; 2e : mobile, 390 px)', $content[2]['text']);
+        $this->assertStringContainsString('Relecture visuelle (retouche', FakeLandingAiClient::$requests[0]['system'][0]['text']);
+    }
+
     public function testFailedJobReleasesCreditsAndReportsTheError(): void
     {
         $invalid = FakeLandingAiClient::pageResponse([['componentKey' => 'Inconnue', 'dataType' => null, 'composition' => new \stdClass()]]);
@@ -624,6 +640,17 @@ class LandingAiComposeTest extends WebTestCase
         foreach ($messages as $message) {
             $handler($message);
         }
+    }
+
+    /** Petite image JPEG valide (format des captures de la relecture visuelle), en data URL */
+    private function jpegDataUrl(): string
+    {
+        $image = imagecreatetruecolor(8, 8);
+        imagefill($image, 0, 0, imagecolorallocate($image, 250, 250, 250));
+        ob_start();
+        imagejpeg($image);
+
+        return 'data:image/jpeg;base64,' . base64_encode(ob_get_clean());
     }
 
     /** Petite image PNG valide, en data URL */
