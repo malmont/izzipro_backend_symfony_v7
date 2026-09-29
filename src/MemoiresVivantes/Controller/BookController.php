@@ -7,6 +7,7 @@ use App\MemoiresVivantes\Dto\BookOutputDto;
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\BookPrintOrder;
 use App\MemoiresVivantes\Entity\Contributor;
+use App\MemoiresVivantes\Security\BookAccessGuard;
 use App\MemoiresVivantes\Services\BookService;
 use App\MemoiresVivantes\Services\ChapterQuestionProvider;
 use App\MemoiresVivantes\BookType\BookTypeResolver;
@@ -39,6 +40,7 @@ class BookController extends AbstractController
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly GetBookReservationsUseCase $getBookReservationsUseCase,
         private readonly SyncBookPaymentStatusUseCase $syncBookPaymentStatusUseCase,
+        private readonly BookAccessGuard $accessGuard,
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
@@ -260,127 +262,11 @@ class BookController extends AbstractController
         return $this->json(new BookOutputDto($book, $host));
     }
 
+    /** Lien de chapitre signé ou voter : voir BookAccessGuard::canView */
     private function validateSignatureOrGrant(string $attribute, Book $book, Request $request): ?JsonResponse
     {
-        $expires = $request->query->get('expires');
-        $signature = $request->query->get('signature');
-        $chapterId = $request->query->get('chapterId') ?? $request->query->get('chapter_id');
-        $contributorId = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
+        $denied = $this->accessGuard->canView($book, $request, $attribute);
 
-        if ($expires === null || $signature === null || $chapterId === null) {
-            if ($request->request->has('expires')) {
-                $expires = $request->request->get('expires');
-            }
-            if ($request->request->has('signature')) {
-                $signature = $request->request->get('signature');
-            }
-            if ($request->request->has('chapterId')) {
-                $chapterId = $request->request->get('chapterId');
-            } elseif ($request->request->has('chapter_id')) {
-                $chapterId = $request->request->get('chapter_id');
-            }
-            if ($contributorId === null) {
-                if ($request->request->has('contributorId')) {
-                    $contributorId = $request->request->get('contributorId');
-                } elseif ($request->request->has('contributor_id')) {
-                    $contributorId = $request->request->get('contributor_id');
-                }
-            }
-        }
-
-        if ($expires === null || $signature === null || $chapterId === null) {
-            $content = $request->getContent();
-            if ($content) {
-                $data = json_decode($content, true);
-                if (is_array($data)) {
-                    $expires = $expires ?? $data['expires'] ?? null;
-                    $signature = $signature ?? $data['signature'] ?? null;
-                    $chapterId = $chapterId ?? $data['chapterId'] ?? $data['chapter_id'] ?? null;
-                    $contributorId = $contributorId ?? $data['contributorId'] ?? $data['contributor_id'] ?? null;
-                }
-            }
-        }
-
-        if ($expires === null || $signature === null || $chapterId === null) {
-            $expires = $request->headers->get('X-Expires');
-            $signature = $request->headers->get('X-Signature');
-            $chapterId = $chapterId ?? $request->headers->get('X-Chapter-Id');
-            $contributorId = $contributorId ?? $request->headers->get('X-Contributor-Id');
-        }
-
-        if ($expires === null || $signature === null || $chapterId === null) {
-            $referer = $request->headers->get('Referer');
-            if ($referer) {
-                $query = parse_url($referer, PHP_URL_QUERY);
-                if ($query) {
-                    parse_str($query, $params);
-                    $expires = $expires ?? $params['expires'] ?? null;
-                    $signature = $signature ?? $params['signature'] ?? null;
-                    $chapterId = $chapterId ?? $params['chapterId'] ?? $params['chapter_id'] ?? null;
-                    $contributorId = $contributorId ?? $params['contributorId'] ?? $params['contributor_id'] ?? null;
-                }
-            }
-        }
-
-        $hasValidSignature = false;
-        if ($expires !== null && $signature !== null && $chapterId !== null) {
-            if (time() <= (int)$expires) {
-                $secret = $this->getParameter('kernel.secret');
-
-                // 1. Signature spécifique au contributeur
-                if ($contributorId !== null) {
-                    $dataToSignWithContrib = "chapterId=" . $chapterId . "&contributorId=" . $contributorId . "&expires=" . $expires;
-                    $expectedWithContrib = hash_hmac('sha256', $dataToSignWithContrib, $secret);
-                    if (hash_equals($expectedWithContrib, $signature)) {
-                        $em = $this->emProvider->getEntityManager();
-                        $chapter = $em->getRepository(\App\MemoiresVivantes\Entity\Chapter::class)->find(Uuid::fromString($chapterId));
-                        if ($chapter && (string)$chapter->getBook()->getId() === (string)$book->getId()) {
-                            $hasValidSignature = true;
-                            $request->attributes->set('validatedContributorId', $contributorId);
-                        }
-                    }
-                }
-
-                // 2. Signature classique globale
-                if (!$hasValidSignature) {
-                    $dataToSign = "chapterId=" . $chapterId . "&expires=" . $expires;
-                    $expectedSignature = hash_hmac('sha256', $dataToSign, $secret);
-
-                    if (hash_equals($expectedSignature, $signature)) {
-                        $em = $this->emProvider->getEntityManager();
-                        $chapter = $em->getRepository(\App\MemoiresVivantes\Entity\Chapter::class)->find(Uuid::fromString($chapterId));
-                        if ($chapter && (string)$chapter->getBook()->getId() === (string)$book->getId()) {
-                            $hasValidSignature = true;
-                            if ($contributorId !== null) {
-                                $request->attributes->set('validatedContributorId', $contributorId);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if ($hasValidSignature) {
-            return null;
-        }
-
-        $user = $this->getUser();
-        if ($user !== null) {
-            try {
-                $this->denyAccessUnlessGranted($attribute, $book);
-                return null;
-            } catch (\Symfony\Component\Security\Core\Exception\AccessDeniedException $e) {
-                // proceed to return JsonResponse below
-            }
-        }
-
-        if ($expires !== null && $signature !== null && $chapterId !== null) {
-            if (time() > (int)$expires) {
-                return $this->json(['error' => 'This sharing link has expired.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
-            }
-            return $this->json(['error' => 'Invalid signature or resource mismatch.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
-        }
-
-        return $this->json(['error' => 'Access denied. Missing or invalid signature.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
+        return $denied === null ? null : $this->json(['error' => $denied[1]], $denied[0]);
     }
 }

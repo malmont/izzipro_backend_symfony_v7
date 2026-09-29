@@ -5,6 +5,7 @@ namespace App\MemoiresVivantes\Controller;
 use App\Entity\User;
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\BookPrintOrder;
+use App\MemoiresVivantes\Security\BookAccessGuard;
 use App\MemoiresVivantes\UseCase\Print\CreateBookPrintOrderUseCase;
 use App\MemoiresVivantes\UseCase\Print\EstimateBookPrintUseCase;
 use App\MemoiresVivantes\UseCase\Print\GetBookPrintOrderUseCase;
@@ -23,7 +24,8 @@ class BookPrintApiController extends AbstractController
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly EstimateBookPrintUseCase $estimateUseCase,
         private readonly CreateBookPrintOrderUseCase $createOrderUseCase,
-        private readonly GetBookPrintOrderUseCase $getOrderUseCase
+        private readonly GetBookPrintOrderUseCase $getOrderUseCase,
+        private readonly BookAccessGuard $accessGuard
     ) {}
 
     /**
@@ -35,6 +37,9 @@ class BookPrintApiController extends AbstractController
         $book = $this->findBook($id);
         if (!$book) {
             return $this->json(['error' => 'Livre introuvable'], Response::HTTP_NOT_FOUND);
+        }
+        if ($denied = $this->accessGuard->canManage($book)) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
         }
 
         $data = json_decode($request->getContent(), true) ?: [];
@@ -65,6 +70,12 @@ class BookPrintApiController extends AbstractController
         $data = json_decode($request->getContent(), true) ?: [];
         $bookId = $id ?: ($data['book_id'] ?? null);
         $book = $bookId ? $this->findBook($bookId) : null;
+        if (!$book) {
+            return $this->json(['error' => 'Livre introuvable'], Response::HTTP_NOT_FOUND);
+        }
+        if ($denied = $this->accessGuard->canManage($book)) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
+        }
 
         $amount = (float)($data['amount'] ?? $data['total_cost'] ?? 0.0);
         $currency = strtolower((string)($data['currency'] ?? 'cad'));
@@ -108,12 +119,12 @@ class BookPrintApiController extends AbstractController
             return $this->json(['error' => 'Livre introuvable'], Response::HTTP_NOT_FOUND);
         }
 
-        /** @var User|null $user */
-        $user = $this->getUser();
-        if (!$user) {
-            // Pour le dev/test si l'authentification n'est pas passée dans la requête
-            $user = $book->getUser();
+        // Propriétaire du livre ou admin, connecté (plus de repli sur le propriétaire pour une requête anonyme)
+        if ($denied = $this->accessGuard->canManage($book)) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
         }
+        /** @var User $user */
+        $user = $this->getUser();
 
         $shippingData = $data['shipping_address'] ?? $data;
         $shippingData['quantity'] = $data['quantity'] ?? $shippingData['quantity'] ?? 1;
@@ -167,6 +178,9 @@ class BookPrintApiController extends AbstractController
         if (!$book) {
             return $this->json(['error' => 'Livre introuvable'], Response::HTTP_NOT_FOUND);
         }
+        if ($denied = $this->accessGuard->canManage($book)) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
+        }
 
         $em = $this->emProvider->getEntityManager();
         /** @var BookPrintOrder[] $orders */
@@ -187,6 +201,19 @@ class BookPrintApiController extends AbstractController
     #[Route('/print/orders/{orderId}', methods: ['GET'])]
     public function getOrder(string $orderId, Request $request): JsonResponse
     {
+        // Accès vérifié avant la synchronisation avec Lulu
+        try {
+            $found = $this->emProvider->getEntityManager()->getRepository(BookPrintOrder::class)->find($orderId);
+        } catch (\Throwable) {
+            $found = null; // identifiant mal formé
+        }
+        if ($found === null || $found->getBook() === null) {
+            return $this->json(['error' => 'Commande d\'impression introuvable.'], Response::HTTP_NOT_FOUND);
+        }
+        if ($denied = $this->accessGuard->canManage($found->getBook())) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
+        }
+
         try {
             $order = $this->getOrderUseCase->execute($orderId);
             $host = $request->getSchemeAndHttpHost();

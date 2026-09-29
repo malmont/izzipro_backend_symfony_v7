@@ -5,6 +5,7 @@ namespace App\MemoiresVivantes\Controller;
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Services\BookPdfGeneratorService;
 use App\Services\TenantEntityManagerProvider;
+use App\MemoiresVivantes\Security\BookAccessGuard;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,7 +18,8 @@ class BookPdfController extends AbstractController
 {
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
-        private readonly BookPdfGeneratorService $pdfService
+        private readonly BookPdfGeneratorService $pdfService,
+        private readonly BookAccessGuard $accessGuard
     ) {}
 
     #[Route('/{id}/pdf/preview-interior', name: 'api_memoires_book_preview_interior', methods: ['GET'])]
@@ -30,6 +32,9 @@ class BookPdfController extends AbstractController
 
         if (!$book) {
             return $this->json(['error' => 'Livre introuvable'], 404);
+        }
+        if ($denied = $this->accessGuard->canView($book, $request)) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
         }
 
         $author = $request->query->get('author');
@@ -51,6 +56,9 @@ class BookPdfController extends AbstractController
 
         if (!$book) {
             return $this->json(['error' => 'Livre introuvable'], 404);
+        }
+        if ($denied = $this->accessGuard->canView($book, $request)) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
         }
 
         $style = (string)$request->query->get('style', 'biographic_split');
@@ -79,6 +87,9 @@ class BookPdfController extends AbstractController
 
         if (!$book) {
             return $this->json(['error' => 'Livre introuvable'], 404);
+        }
+        if ($denied = $this->accessGuard->canManage($book)) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
         }
 
         $data = json_decode($request->getContent(), true) ?: [];

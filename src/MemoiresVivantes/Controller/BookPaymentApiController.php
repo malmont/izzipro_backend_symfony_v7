@@ -3,6 +3,7 @@
 namespace App\MemoiresVivantes\Controller;
 
 use App\MemoiresVivantes\Entity\Book;
+use App\MemoiresVivantes\Security\BookAccessGuard;
 use App\MemoiresVivantes\UseCase\Payment\GenerateBookPaymentLinkUseCase;
 use App\MemoiresVivantes\UseCase\Payment\GetBookPaymentStatusUseCase;
 use App\Services\TenantEntityManagerProvider;
@@ -21,7 +22,8 @@ class BookPaymentApiController extends AbstractController
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly GenerateBookPaymentLinkUseCase $generateBookPaymentLinkUseCase,
         private readonly GetBookPaymentStatusUseCase $getBookPaymentStatusUseCase,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly BookAccessGuard $accessGuard
     ) {}
 
     /**
@@ -35,8 +37,15 @@ class BookPaymentApiController extends AbstractController
         if (!$book) {
             return $this->json(['error' => 'Livre introuvable'], Response::HTTP_NOT_FOUND);
         }
+        if ($denied = $this->accessGuard->canManage($book)) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
+        }
 
         $data = json_decode($request->getContent(), true) ?: [];
+        // Montant imposé : administrateur seulement (sinon, celui du livre)
+        if (!$this->isGranted('ROLE_ADMIN') && !$this->isGranted('ROLE_SUPER_ADMIN')) {
+            unset($data['amount'], $data['currency']);
+        }
 
         $recipientEmail = trim((string) (
             $data['recipient_email'] 
@@ -131,11 +140,14 @@ class BookPaymentApiController extends AbstractController
      * Récupère le statut de paiement actuel d'un livre (avec synchro Stripe via UseCase).
      */
     #[Route('/{id}/payment-status', methods: ['GET'])]
-    public function getPaymentStatus(string $id): JsonResponse
+    public function getPaymentStatus(string $id, Request $request): JsonResponse
     {
         $book = $this->findBook($id);
         if (!$book) {
             return $this->json(['error' => 'Livre introuvable'], Response::HTTP_NOT_FOUND);
+        }
+        if ($denied = $this->accessGuard->canView($book, $request)) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
         }
 
         $paymentStatus = $this->getBookPaymentStatusUseCase->execute($book);

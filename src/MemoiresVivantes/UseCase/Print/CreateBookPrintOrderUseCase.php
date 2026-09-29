@@ -15,7 +15,9 @@ class CreateBookPrintOrderUseCase
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly BookPdfGeneratorService $pdfGeneratorService,
-        private readonly LuluPrintService $luluPrintService
+        private readonly LuluPrintService $luluPrintService,
+        private readonly string $projectDir,
+        private readonly string $storagePublicUrl = ''
     ) {}
 
     /**
@@ -51,6 +53,11 @@ class CreateBookPrintOrderUseCase
         }
         $customCoverPdfUrl = !empty($shippingData['custom_cover_pdf_url']) ? trim((string)$shippingData['custom_cover_pdf_url']) : null;
         $customInteriorPdfUrl = !empty($shippingData['custom_interior_pdf_url']) ? trim((string)$shippingData['custom_interior_pdf_url']) : null;
+        foreach ([$customCoverPdfUrl, $customInteriorPdfUrl] as $customUrl) {
+            if ($customUrl !== null) {
+                $this->assertBookPdfUrl($book, $customUrl, $publicBaseUrl);
+            }
+        }
 
         if ($customCoverPdfUrl && $customInteriorPdfUrl) {
             $interiorPublicUrl = $customInteriorPdfUrl;
@@ -111,5 +118,27 @@ class CreateBookPrintOrderUseCase
         $this->luluPrintService->createPrintJob($order, $interiorPublicUrl, $coverPublicUrl);
 
         return $order;
+    }
+
+    /**
+     * Un PDF fourni par l'appelant doit être l'un de ceux générés pour ce livre, sur notre stockage : Lulu imprime ce
+     * que désigne l'URL, aux frais de la plateforme.
+     */
+    private function assertBookPdfUrl(Book $book, string $url, string $publicBaseUrl): void
+    {
+        $bookId = $book->getId()->toRfc4122();
+        $parts = parse_url($url);
+        $allowedHosts = array_filter([parse_url($publicBaseUrl, PHP_URL_HOST), parse_url($this->storagePublicUrl, PHP_URL_HOST)]);
+        $path = (string) ($parts['path'] ?? '');
+
+        $valid = in_array($parts['scheme'] ?? '', ['http', 'https'], true)
+            && in_array($parts['host'] ?? '', $allowedHosts, true)
+            && !isset($parts['query'])
+            && preg_match('#/uploads/memoires/books/' . preg_quote($bookId, '#') . '/([A-Za-z0-9._-]+\.pdf)$#', $path, $m)
+            && is_file($this->projectDir . '/var/storage/public_bucket/uploads/memoires/books/' . $bookId . '/' . $m[1]);
+
+        if (!$valid) {
+            throw new BadRequestHttpException('PDF refusé : seuls les PDF générés pour ce livre peuvent être imprimés.');
+        }
     }
 }
