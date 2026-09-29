@@ -5,6 +5,7 @@ namespace App\Services\LandingAiService\Eval;
 use App\Services\LandingAiService\CompositionInspector;
 use App\Services\LandingAiService\LandingAiCreateResult;
 use App\Services\LandingAiService\LandingAiEditResult;
+use App\Services\LandingAiService\LandingAiPageResult;
 
 /**
  * Cas de l'étape 1 (retouche) du jeu d'essai, avec leurs vérifications propres quand elles sont mesurables.
@@ -189,10 +190,17 @@ final class LandingAiEvalCases
             [
                 'id' => 'C3', 'componentKey' => 'Presentation', 'media' => [], 'prompt' => 'Héros avec cette vidéo : https://media.example.com/intro.mp4, titre et bouton de contact.',
                 'check' => function (LandingAiCreateResult $r) {
-                    $video = $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'video' && ($b->url ?? null) === 'https://media.example.com/intro.mp4');
+                    // vidéo : bloc video ou vidéo de fond (bgVideo) de la section ou d'un conteneur, avec l'URL exacte
+                    $url = 'https://media.example.com/intro.mp4';
+                    $video = match (true) {
+                        ($r->composition->bgVideo ?? null) === $url => 'fond de section',
+                        $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'video' && ($b->url ?? null) === $url) !== null => 'bloc vidéo',
+                        $this->find($r->composition, fn ($b) => ($b->bgVideo ?? null) === $url) !== null => 'fond de conteneur',
+                        default => null,
+                    };
                     $contact = $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'button' && (($b->action ?? null) === 'contact' || ($b->url ?? null) === '#contact'));
 
-                    return $this->result($video !== null && $contact !== null, sprintf('vidéo avec l\'URL exacte : %s ; bouton de contact : %s', $video ? 'oui' : 'non', $contact ? 'oui' : 'non'));
+                    return $this->result($video !== null && $contact !== null, sprintf('vidéo avec l\'URL exacte : %s ; bouton de contact : %s', $video ?? 'non', $contact ? 'oui' : 'non'));
                 },
             ],
             [
@@ -240,6 +248,163 @@ final class LandingAiEvalCases
                 'skip' => 'sans objet côté backend : l\'enregistrement d\'un modèle personnel se fait dans l\'éditeur (reglablePresets, PUT des réglages) ; l\'endpoint n\'écrit jamais les réglages',
             ],
         ];
+    }
+
+    public const P1_COLORS = ['#1B2A4A', '#C9A227'];
+    public const P1_FONT = 'Montserrat';
+    public const P1_LOGO = 'https://media.example.com/horizon-conseil-logo.png';
+
+    /**
+     * Cas de l'étape 3 (page, images). Les images sont dans Eval/fixtures (P1 : charte 2 couleurs, 1 police, logo ;
+     * P2 : capture d'une section services, 3 cartes en colonnes). P3 (auto-critique) attend la capture du rendu.
+     *
+     * @return list<array{id: string, prompt: string, componentKey: ?string, media: list<array>, images: list<string>, skip?: string, check?: callable(LandingAiPageResult): array}>
+     */
+    public function pageCases(): array
+    {
+        return [
+            [
+                'id' => 'P1', 'componentKey' => null, 'images' => ['p1-charte.png'],
+                'media' => [['kind' => 'image', 'url' => self::P1_LOGO, 'mediaKey' => null, 'label' => 'logo du cabinet (celui de la charte)']],
+                'prompt' => 'Page d\'accueil d\'un cabinet de conseil : héros, services, témoignages, contact.',
+                'check' => function (LandingAiPageResult $r) {
+                    $families = array_column($r->sections, 'componentKey');
+                    $colors = [];
+                    $fonts = [];
+                    $logo = false;
+                    foreach ($r->sections as $section) {
+                        $colors += $this->inspector->colors($section['composition']);
+                        $fonts += $this->inspector->fonts($section['composition']);
+                        $logo = $logo || str_contains(json_encode($section['composition'], JSON_UNESCAPED_SLASHES), self::P1_LOGO);
+                    }
+                    $offColors = array_values(array_filter(array_keys($colors), fn ($c) => !$this->charterColor($c, self::P1_COLORS)));
+                    $offFonts = array_values(array_filter(array_keys($fonts), fn ($f) => stripos($f, self::P1_FONT) === false && !in_array(strtolower(trim($f)), ['inherit', 'sans-serif', 'serif'], true)));
+                    $ok = count($r->sections) === 4 && end($families) === 'Contact' && !$offColors && !$offFonts;
+
+                    return $this->result($ok, sprintf(
+                        'sections : %s ; couleurs hors charte : %s ; polices hors charte : %s ; logo : %s',
+                        implode(' > ', $families),
+                        $offColors ? implode(', ', array_slice($offColors, 0, 4)) : 'aucune',
+                        $offFonts ? implode(', ', $offFonts) : 'aucune',
+                        $logo ? 'oui' : 'non'
+                    ));
+                },
+            ],
+            [
+                'id' => 'P2', 'componentKey' => null, 'images' => ['p2-capture.png'], 'media' => [],
+                'prompt' => 'Reproduis cette section.',
+                'check' => function (LandingAiPageResult $r) {
+                    $composition = $r->sections[0]['composition'] ?? null;
+                    if (count($r->sections) !== 1 || !is_object($composition)) {
+                        return $this->result(false, sprintf('%d section(s) au lieu d\'une', count($r->sections)));
+                    }
+                    $columns = $this->threeColumns($composition);
+                    $title = $this->find($composition, fn ($b) => ($b->type ?? null) === 'title') !== null;
+                    $button = $this->find($composition, fn ($b) => ($b->type ?? null) === 'button') !== null;
+
+                    return $this->result($columns !== null && $title && $button, sprintf(
+                        '%s ; 3 colonnes : %s ; titre : %s ; bouton : %s',
+                        $r->sections[0]['componentKey'],
+                        $columns ?? 'non',
+                        $title ? 'oui' : 'non',
+                        $button ? 'oui' : 'non'
+                    ));
+                },
+            ],
+            [
+                'id' => 'P3', 'componentKey' => null, 'images' => [], 'media' => [], 'prompt' => 'Auto-critique de la page P1 à partir d\'une capture du rendu.',
+                'skip' => 'viendra avec la capture du rendu envoyée par le frontend (version suivante)',
+            ],
+        ];
+    }
+
+    /** Couleur de la charte (quelle que soit l'opacité) ou neutre (blanc, noir, gris) */
+    private function charterColor(string $value, array $charter): bool
+    {
+        if (preg_match('/^(transparent|inherit|currentcolor|white|black)$/i', trim($value))) {
+            return true;
+        }
+        $charterRgb = array_map(fn ($hex) => $this->rgb($hex), $charter);
+        preg_match_all('/#[0-9a-f]{3,8}\b|rgba?\([^)]*\)/i', $value, $m);
+        if (!$m[0]) {
+            return false;
+        }
+        foreach ($m[0] as $token) {
+            $rgb = $this->rgb($token);
+            if ($rgb === null || !(in_array($rgb, $charterRgb, true) || $this->saturation($rgb) <= 0.2)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Saturation HSL (0 à 1) : un gris neutre reste sous 0,2, gris froids courants compris (#4b5563 : 0,14 ;
+     * #374151 : 0,19), alors qu'un vert sapin foncé (#243b35 : 0,24) ou un beige (#d9cbb0 : 0,35) n'en sont pas.
+     *
+     * @param array{int, int, int} $rgb
+     */
+    private function saturation(array $rgb): float
+    {
+        $max = max($rgb) / 255;
+        $min = min($rgb) / 255;
+        $divider = 1 - abs($max + $min - 1);
+
+        return $divider > 0 ? ($max - $min) / $divider : 0.0;
+    }
+
+    /** @return array{int, int, int}|null */
+    private function rgb(string $color): ?array
+    {
+        if (preg_match('/^#([0-9a-f]{3,4})$/i', $color, $m)) {
+            return array_map(fn ($c) => hexdec($c . $c), str_split(substr($m[1], 0, 3)));
+        }
+        if (preg_match('/^#([0-9a-f]{6})([0-9a-f]{2})?$/i', $color, $m)) {
+            return array_map('hexdec', str_split($m[1], 2));
+        }
+        if (preg_match('/^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i', $color, $m)) {
+            return [(int) $m[1], (int) $m[2], (int) $m[3]];
+        }
+
+        return null;
+    }
+
+    /**
+     * Rangée de 3 colonnes : container en grille de 3 colonnes, container en rangée d'au moins 3 enfants (ou liste
+     * répétée en rangée), ou, en positions libres, 3 containers alignés sur la même hauteur. Renvoie la forme trouvée.
+     */
+    private function threeColumns(object $composition): ?string
+    {
+        $blocks = $this->inspector->blocks($composition);
+        $children = [];
+        foreach ($blocks as $block) {
+            $children[$block->parentId ?? ''][] = $block;
+        }
+        foreach ($blocks as $block) {
+            if (($block->type ?? null) !== 'container') {
+                continue;
+            }
+            $layout = $block->layout ?? 'free';
+            if ($layout === 'grid' && ($block->columns ?? null) === 3) {
+                return sprintf('grille de 3 colonnes (%s)', $block->id);
+            }
+            if (in_array($layout, ['row', 'grid'], true) && count($children[$block->id] ?? []) >= 3) {
+                return sprintf('rangée de %d éléments (%s)', count($children[$block->id]), $block->id);
+            }
+            if (in_array($layout, ['row', 'grid'], true) && is_object($block->repeat ?? null)) {
+                return sprintf('liste répétée en %s (%s, source %s)', $layout, $block->id, $block->repeat->source ?? '?');
+            }
+        }
+        $containers = array_values(array_filter($blocks, fn ($b) => ($b->type ?? null) === 'container' && is_numeric($b->y ?? null) && is_numeric($b->x ?? null)));
+        foreach ($containers as $a) {
+            $aligned = array_filter($containers, fn ($b) => abs($b->y - $a->y) <= 3 && ($b->parentId ?? null) === ($a->parentId ?? null));
+            if (count($aligned) >= 3 && count(array_unique(array_map(fn ($b) => (int) round($b->x), $aligned))) >= 3) {
+                return sprintf('%d containers alignés en positions libres', count($aligned));
+            }
+        }
+
+        return null;
     }
 
     /** @return list<string> chemins de liaison utilisés dans la composition (blocs et section) */

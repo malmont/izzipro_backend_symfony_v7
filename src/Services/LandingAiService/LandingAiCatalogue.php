@@ -10,6 +10,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  */
 final class LandingAiCatalogue
 {
+    private const REFERENCE_MAX_CHARS = 6000;
+
     private ?array $catalogue = null;
 
     public function __construct(
@@ -41,10 +43,23 @@ final class LandingAiCatalogue
         return array_values(array_map(fn ($f) => (string) $f['componentKey'], $this->load()['families'] ?? []));
     }
 
-    /** @return list<string> types de blocs autorisés pour la famille */
+    /**
+     * Types de blocs autorisés pour la famille : ses outils, plus les types employés par ses propres modèles
+     * (ex. « form » des modèles Recherche, absent de la liste d'outils du catalogue).
+     *
+     * @return list<string>
+     */
     public function tools(string $componentKey): array
     {
-        return array_values($this->family($componentKey)['tools'] ?? []);
+        $family = $this->family($componentKey);
+        $types = $family['tools'] ?? [];
+        foreach ($family['presets'] ?? [] as $preset) {
+            foreach ($preset['composition']['blocks'] ?? [] as $block) {
+                $types[] = $block['type'] ?? null;
+            }
+        }
+
+        return array_values(array_unique(array_filter($types, 'is_string')));
     }
 
     /** Modèle par identifiant, toutes familles confondues : [famille, modèle] ou null */
@@ -94,6 +109,25 @@ final class LandingAiCatalogue
         );
 
         return $family;
+    }
+
+    /**
+     * Modèle de référence d'une famille pour le mode page (un seul par famille, pour garder le contexte fixe et
+     * cachable) : le plus complet sous REFERENCE_MAX_CHARS caractères, sinon le plus court.
+     */
+    public function referencePreset(string $componentKey): ?array
+    {
+        $sizes = [];
+        foreach ($this->family($componentKey)['presets'] ?? [] as $i => $preset) {
+            $sizes[$i] = strlen(json_encode($preset['composition'] ?? null));
+        }
+        if (!$sizes) {
+            return null;
+        }
+        $fitting = array_filter($sizes, fn ($size) => $size <= self::REFERENCE_MAX_CHARS);
+        $index = $fitting ? array_search(max($fitting), $fitting, true) : array_search(min($sizes), $sizes, true);
+
+        return $this->family($componentKey)['presets'][$index];
     }
 
     /** @return list<string> */

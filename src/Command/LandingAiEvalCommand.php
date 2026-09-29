@@ -26,7 +26,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 )]
 class LandingAiEvalCommand extends Command
 {
-    private const MODES = ['edit', 'create'];
+    private const MODES = ['edit', 'create', 'page'];
+    private const MODE_TITLES = ['edit' => 'Retouche (edit)', 'create' => 'Création (create)', 'page' => 'Page (page, images)'];
 
     public function __construct(
         private readonly TenantConnectionManager $connectionManager,
@@ -38,7 +39,9 @@ class LandingAiEvalCommand extends Command
         private readonly LandingAiEvalCases $cases,
         private readonly LandingAiEvalChecks $checks,
         #[Autowire('%kernel.project_dir%/var/landing-ai-eval')]
-        private readonly string $reportDir
+        private readonly string $reportDir,
+        #[Autowire('%kernel.project_dir%/src/Services/LandingAiService/Eval/fixtures')]
+        private readonly string $fixturesDir
     ) {
         parent::__construct();
     }
@@ -47,7 +50,7 @@ class LandingAiEvalCommand extends Command
     {
         $this
             ->addOption('tenant', 't', InputOption::VALUE_REQUIRED, 'Code du tenant de test (palette, médias et données lus sur ce site, rien n\'y est écrit)')
-            ->addOption('mode', 'm', InputOption::VALUE_REQUIRED, 'edit, create ou all', 'all')
+            ->addOption('mode', 'm', InputOption::VALUE_REQUIRED, 'edit, create, page ou all', 'all')
             ->addOption('case', 'c', InputOption::VALUE_REQUIRED, 'Un seul cas (ex. R1, C3)');
     }
 
@@ -74,16 +77,17 @@ class LandingAiEvalCommand extends Command
         $filter = fn (array $cases) => array_values(array_filter($cases, fn ($c) => !$only || strcasecmp($c['id'], $only) === 0));
         $edit = in_array('edit', $modes, true) ? $filter($this->cases->editCases()) : [];
         $create = in_array('create', $modes, true) ? $filter($this->cases->createCases()) : [];
-        if (!$edit && !$create) {
+        $page = in_array('page', $modes, true) ? $filter($this->cases->pageCases()) : [];
+        if (!$edit && !$create && !$page) {
             $io->error('Aucun cas à jouer.');
             return Command::INVALID;
         }
 
         $stored = $this->site->storedCompositions();
         $palette = $this->site->palette($stored);
-        $io->title(sprintf('Évaluation de l\'assistant IA : %d cas, modèle %s, tenant %s', count($edit) + count($create), $this->composer->editModel(), $tenant));
+        $io->title(sprintf('Évaluation de l\'assistant IA : %d cas, modèles %s (edit, create) et %s (page, images), tenant %s', count($edit) + count($create) + count($page), $this->composer->editModel(), $this->composer->pageModel(), $tenant));
 
-        $report = ['date' => date(DATE_ATOM), 'tenant' => $tenant, 'model' => $this->composer->editModel(), 'cases' => []];
+        $report = ['date' => date(DATE_ATOM), 'tenant' => $tenant, 'models' => ['edit' => $this->composer->editModel(), 'page' => $this->composer->pageModel()], 'cases' => []];
         $rows = [];
         foreach ($edit as $case) {
             [$caseReport, $row] = $this->playEdit($io, $case, $stored, $palette);
@@ -92,6 +96,11 @@ class LandingAiEvalCommand extends Command
         }
         foreach ($create as $case) {
             [$caseReport, $row] = $this->playCreate($io, $case, $stored);
+            $report['cases'][] = $caseReport;
+            $rows[] = $row;
+        }
+        foreach ($page as $case) {
+            [$caseReport, $row] = $this->playPage($io, $case, $stored);
             $report['cases'][] = $caseReport;
             $rows[] = $row;
         }
@@ -111,7 +120,7 @@ class LandingAiEvalCommand extends Command
 
         $io->table(['Cas', 'Vérifications', 'Essais', 'Jetons entrée', 'Sortie', 'ms', 'Détail propre au cas'], $rows);
         foreach ($report['summary'] as $m => $s) {
-            $io->section($m === 'edit' ? 'Retouche (edit)' : 'Création (create)');
+            $io->section(self::MODE_TITLES[$m]);
             $lines = [['Cas réussis (composition obtenue)' => sprintf('%d / %d joués%s', $s['succeeded'], $s['played'], $s['skipped'] ? sprintf(' (%d sans objet)', $s['skipped']) : '')]];
             foreach ($s['checks'] as $check => [$ok, $measured]) {
                 $lines[] = [$check => $measured ? sprintf('%d / %d', $ok, $measured) : 'sans objet'];
@@ -179,6 +188,40 @@ class LandingAiEvalCommand extends Command
             ['id' => $case['id'], 'mode' => 'create', 'componentKey' => $componentKey, 'prompt' => $case['prompt'], 'status' => 'ok',
                 'dataType' => $result->dataType, 'checks' => $common, 'specific' => $specific, 'summary' => $result->summary,
                 'warnings' => $result->warnings, 'composition' => $result->composition, 'usage' => $result->stats->toArray()],
+            $this->row($case['id'], $common, $specific, $result->stats),
+        ];
+    }
+
+    private function playPage(SymfonyStyle $io, array $case, array $stored): array
+    {
+        if (isset($case['skip'])) {
+            return [['id' => $case['id'], 'mode' => 'page', 'status' => 'skipped', 'reason' => $case['skip']], [$case['id'], 'sans objet', '', '', '', '', mb_substr($case['skip'], 0, 90)]];
+        }
+        $images = array_map(fn ($file) => ['mediaType' => 'image/png', 'data' => base64_encode(file_get_contents($this->fixturesDir . '/' . $file))], $case['images']);
+        $families = $case['componentKey'] !== null ? [$case['componentKey']] : $this->catalogue->componentKeys();
+        $presets = array_merge(...array_map(fn ($key) => $this->site->presetCompositions($key), $families));
+        $allowedMedia = $this->site->allowedMedia([...$stored, ...$presets], $case['media'], $case['prompt']);
+        $knownText = $case['prompt'];
+        foreach ($families as $family) {
+            foreach ($this->data->available($family) as $d) {
+                $knownText .= "\n" . $d['title'] . ' ' . $d['details'];
+            }
+        }
+        $io->writeln(sprintf(' <info>%s</info> page (%s) : « %s »', $case['id'], implode(', ', $case['images']) ?: 'sans image', $case['prompt']));
+
+        try {
+            $result = $this->composer->page($case['prompt'], 'fr', $case['media'], $images, $case['componentKey']);
+        } catch (LandingAiException $e) {
+            return $this->failure($case['id'], 'page', $e);
+        }
+
+        $common = $this->checks->commonPage($result->sections, $allowedMedia, $knownText);
+        $specific = ($case['check'])($result);
+
+        return [
+            ['id' => $case['id'], 'mode' => 'page', 'images' => $case['images'], 'prompt' => $case['prompt'], 'status' => 'ok',
+                'checks' => $common, 'specific' => $specific, 'summary' => $result->summary, 'warnings' => $result->warnings,
+                'sections' => $result->sections, 'usage' => $result->stats->toArray()],
             $this->row($case['id'], $common, $specific, $result->stats),
         ];
     }

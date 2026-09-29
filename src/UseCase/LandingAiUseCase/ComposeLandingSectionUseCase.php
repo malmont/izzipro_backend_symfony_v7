@@ -12,7 +12,8 @@ use App\Services\TenantConnectionProvider;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 
 /**
- * POST /api/landingpage-ai/compose (modes edit et create) : contrôles, limite par minute, réservation des crédits, appel à l'IA,
+ * POST /api/landingpage-ai/compose (modes edit, create et page ; images acceptées dans tous les modes) : contrôles,
+ * limite par minute, réservation des crédits, appel à l'IA,
  * puis consommation (succès) ou libération (échec). N'enregistre jamais les réglages du site : la proposition
  * est appliquée par l'administrateur dans l'éditeur puis enregistrée avec le PUT habituel.
  */
@@ -37,9 +38,6 @@ class ComposeLandingSectionUseCase
         if ($errors) {
             throw LandingAiException::badRequest('Requête invalide : ' . $errors[0]['path'] . ' : ' . $errors[0]['message'], $errors);
         }
-        if ($dto->mode === 'page') {
-            throw LandingAiException::badRequest('Le mode « page » n\'est pas encore disponible (retouche et création uniquement).');
-        }
         $defaultDataType = $dto->dataType !== null ? (string) $dto->dataType : null;
         if ($dto->mode === 'create' && $defaultDataType !== null) {
             if (!$this->data->familyUsesData((string) $dto->componentKey)) {
@@ -49,9 +47,6 @@ class ComposeLandingSectionUseCase
                 throw LandingAiException::badRequest('Donnée introuvable sur ce site.', [['path' => 'dataType', 'message' => 'identifiant absent des données du site']]);
             }
         }
-        if ($dto->images) {
-            throw LandingAiException::badRequest('Les images (captures, charte) ne sont pas encore prises en charge.');
-        }
 
         $limit = $this->landingAiTenantLimiter->create('tenant:' . ($this->tenantProvider->getTenantCode() ?? 'default'))->consume();
         if (!$limit->isAccepted()) {
@@ -59,12 +54,14 @@ class ComposeLandingSectionUseCase
             throw new LandingAiException(429, 'Trop de demandes', sprintf('Limite de demandes à l\'assistant atteinte. Réessayez dans %d seconde(s).', $retryAfter), [], ['Retry-After' => (string) $retryAfter]);
         }
 
-        $usage = $this->quota->reserve($dto->mode, (string) $dto->componentKey, LandingAiQuotaService::cost($dto->mode), $userIdentifier, $dto->prompt);
+        $usage = $this->quota->reserve($dto->mode, $dto->componentKey ?? '', LandingAiQuotaService::cost($dto->mode, $dto->images !== []), $userIdentifier, $dto->prompt);
 
         try {
-            $result = $dto->mode === 'create'
-                ? $this->composer->create((string) $dto->componentKey, $dto->prompt, $dto->locale, $dto->media, $defaultDataType)
-                : $this->composer->edit((string) $dto->componentKey, $dto->composition, $dto->prompt, $dto->locale, $dto->media);
+            $result = match ($dto->mode) {
+                'create' => $this->composer->create((string) $dto->componentKey, $dto->prompt, $dto->locale, $dto->media, $defaultDataType, $dto->images),
+                'page' => $this->composer->page($dto->prompt, $dto->locale, $dto->media, $dto->images, $dto->componentKey),
+                default => $this->composer->edit((string) $dto->componentKey, $dto->composition, $dto->prompt, $dto->locale, $dto->media, $dto->images),
+            };
         } catch (LandingAiException $e) {
             $this->quota->release($usage, $e->getStats());
             throw $e;
@@ -75,10 +72,11 @@ class ComposeLandingSectionUseCase
 
         $this->quota->complete($usage, $result->stats);
 
-        $response = ['mode' => $dto->mode, 'composition' => $result->composition];
-        if ($dto->mode === 'create') {
-            $response['dataType'] = $result->dataType;
-        }
+        $response = match ($dto->mode) {
+            'page' => ['mode' => 'page', 'sections' => $result->sections],
+            'create' => ['mode' => 'create', 'composition' => $result->composition, 'dataType' => $result->dataType],
+            default => ['mode' => 'edit', 'composition' => $result->composition],
+        };
 
         return $response + [
             'summary' => $result->summary,

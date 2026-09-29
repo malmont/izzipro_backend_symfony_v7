@@ -12,6 +12,11 @@ class LandingAiComposeInputDto
     public const MAX_PROMPT_LENGTH = 2000;
     public const MAX_MEDIA = 20;
     public const MAX_BODY_BYTES = 1048576;
+    /** Images (captures d'écran, charte) : nombre, poids en base64 (limite de l'API : 5 Mo) et côté maximal */
+    public const MAX_IMAGES = 5;
+    public const MAX_IMAGE_BASE64_BYTES = 5242880;
+    public const MAX_IMAGE_SIDE = 8000;
+    private const IMAGE_TYPES = [IMAGETYPE_PNG => 'image/png', IMAGETYPE_JPEG => 'image/jpeg', IMAGETYPE_WEBP => 'image/webp', IMAGETYPE_GIF => 'image/gif'];
 
     public ?string $mode = null;
     public ?string $componentKey = null;
@@ -21,7 +26,7 @@ class LandingAiComposeInputDto
     public string $locale = 'fr';
     /** @var list<array{kind: string, url: ?string, mediaKey: ?string, label: ?string}> */
     public array $media = [];
-    /** @var list<string> */
+    /** @var list<array{mediaType: string, data: string}> images décodées depuis leurs data URL (data = base64) */
     public array $images = [];
 
     /** @var list<array{path: string, message: string}> erreurs de forme relevées à la lecture */
@@ -85,9 +90,62 @@ class LandingAiComposeInputDto
         if (isset($body->media) && !is_array($body->media)) {
             $dto->shapeErrors[] = ['path' => 'media', 'message' => 'liste attendue'];
         }
-        $dto->images = array_values(array_filter(is_array($body->images ?? null) ? $body->images : [], 'is_string'));
+        if (isset($body->images) && !is_array($body->images)) {
+            $dto->shapeErrors[] = ['path' => 'images', 'message' => 'liste de data URL attendue'];
+        }
+        $images = is_array($body->images ?? null) ? $body->images : [];
+        if (count($images) > self::MAX_IMAGES) {
+            $dto->shapeErrors[] = ['path' => 'images', 'message' => sprintf('%d images au plus', self::MAX_IMAGES)];
+            $images = [];
+        }
+        foreach ($images as $i => $image) {
+            $error = null;
+            $read = self::readImage($image, $error);
+            $read !== null
+                ? $dto->images[] = $read
+                : $dto->shapeErrors[] = ['path' => "images[$i]", 'message' => $error];
+        }
 
         return $dto;
+    }
+
+    /**
+     * data:image/png|jpeg|webp|gif;base64,… dont le contenu est bien une image de ce type.
+     *
+     * @return array{mediaType: string, data: string}|null
+     */
+    private static function readImage(mixed $image, ?string &$error): ?array
+    {
+        if (!is_string($image) || !preg_match('#^data:(image/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$#', $image, $m)) {
+            $error = 'data URL base64 d\'une image PNG, JPEG, WebP ou GIF attendue';
+
+            return null;
+        }
+        if (strlen($m[2]) > self::MAX_IMAGE_BASE64_BYTES) {
+            $error = sprintf('image trop lourde (%d Mo au plus en base64)', self::MAX_IMAGE_BASE64_BYTES / 1048576);
+
+            return null;
+        }
+        $bytes = base64_decode($m[2], true);
+        $info = $bytes !== false ? @getimagesizefromstring($bytes) : false;
+        if ($info === false || (self::IMAGE_TYPES[$info[2]] ?? null) !== $m[1]) {
+            $error = sprintf('contenu illisible ou différent du type annoncé (%s)', $m[1]);
+
+            return null;
+        }
+        if ($info[0] > self::MAX_IMAGE_SIDE || $info[1] > self::MAX_IMAGE_SIDE) {
+            $error = sprintf('image trop grande (%d px au plus de côté)', self::MAX_IMAGE_SIDE);
+
+            return null;
+        }
+
+        return ['mediaType' => $m[1], 'data' => $m[2]];
+    }
+
+    /** Taille maximale du corps de la requête : JSON ordinaire plus les images */
+    public static function maxBodyBytes(): int
+    {
+        return self::MAX_BODY_BYTES + self::MAX_IMAGES * (self::MAX_IMAGE_BASE64_BYTES + 64);
     }
 
     /**
@@ -100,7 +158,8 @@ class LandingAiComposeInputDto
         if (!in_array($this->mode, self::MODES, true)) {
             $errors[] = ['path' => 'mode', 'message' => 'edit, create ou page attendu'];
         }
-        if ($this->mode !== 'page' && !in_array($this->componentKey, $componentKeys, true)) {
+        // en mode page, componentKey est facultatif : il impose alors la famille de toutes les sections
+        if (($this->mode !== 'page' || $this->componentKey !== null) && !in_array($this->componentKey, $componentKeys, true)) {
             $errors[] = ['path' => 'componentKey', 'message' => 'famille absente du catalogue de l\'éditeur'];
         }
         if ($this->prompt === '') {

@@ -103,6 +103,7 @@ class LandingAiComposeTest extends WebTestCase
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $this->assertSame(2, json_decode($response->getContent())->usage->attempts);
+        $this->assertEqualsWithDelta(\App\Services\LandingAiService\LandingAiComposer::CALL_TIMEOUT, FakeLandingAiClient::$timeouts[0], 1.0, 'retouche : 90 s');
         $retry = FakeLandingAiClient::$requests[1]['messages'];
         $this->assertSame('assistant', $retry[1]['role']);
         $this->assertSame('tool_result', $retry[2]['content'][0]['type']);
@@ -221,7 +222,12 @@ class LandingAiComposeTest extends WebTestCase
             'demande trop longue' => ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => new \stdClass(), 'prompt' => str_repeat('a', 2001)],
             'composition absente' => ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'prompt' => 'x'],
             'média invalide' => ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => new \stdClass(), 'prompt' => 'x', 'media' => [['kind' => 'image', 'url' => 'javascript:alert(1)']]],
-            'mode page (étape 3)' => ['mode' => 'page', 'prompt' => 'x'],
+            'page : famille imposée inconnue' => ['mode' => 'page', 'componentKey' => 'Inconnue', 'prompt' => 'x'],
+            'image : pas une data URL' => ['mode' => 'page', 'prompt' => 'x', 'images' => ['https://example.com/capture.png']],
+            'image : type annoncé différent du contenu' => ['mode' => 'page', 'prompt' => 'x', 'images' => [str_replace('image/png', 'image/jpeg', $this->pngDataUrl())]],
+            'image : contenu illisible' => ['mode' => 'page', 'prompt' => 'x', 'images' => ['data:image/png;base64,AAAA']],
+            'image : plus de 5' => ['mode' => 'page', 'prompt' => 'x', 'images' => array_fill(0, 6, $this->pngDataUrl())],
+            'images : pas une liste' => ['mode' => 'page', 'prompt' => 'x', 'images' => 'data:image/png;base64,AAAA'],
         ];
         foreach ($cases as $name => $body) {
             $response = $this->compose($body);
@@ -324,6 +330,52 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertStringContainsString('n\'utilise pas de donnée', FakeLandingAiClient::$requests[0]['messages'][0]['content']);
     }
 
+    public function testDataFamiliesFollowComponentsConfig(): void
+    {
+        $this->db();
+        $data = static::getContainer()->get(\App\Services\LandingAiService\LandingAiDataSources::class);
+
+        foreach (['Presentation', 'PresentationGroup', 'BaniereStatique', 'Video', 'Embed', 'MultiLien', 'Candidature', 'Marque', 'Reservation'] as $family) {
+            $this->assertTrue($data->familyUsesData($family), $family);
+        }
+        foreach (['Recherche', 'Contact', 'APropos', 'Baniere', 'Service', 'Carousel', 'Footer', 'Navbar'] as $family) {
+            $this->assertFalse($data->familyUsesData($family), $family);
+            $this->assertSame([], $data->available($family), $family);
+        }
+        $this->assertTrue($data->dataOptional('Reservation'));
+        $this->assertFalse($data->dataOptional('Presentation'));
+    }
+
+    public function testCreateReservationAcceptsNullForAllServicesOrAChosenService(): void
+    {
+        $services = $this->availableIds('Reservation');
+        $this->assertNotEmpty($services, 'prestations du site (ou liste par défaut)');
+
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('reservation-type-b'), null);
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Reservation', 'prompt' => 'Formulaire de réservation.']);
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertNull(json_decode($response->getContent())->dataType, 'null = toutes les prestations');
+        $this->assertStringContainsString('Donnée facultative', FakeLandingAiClient::$requests[0]['messages'][0]['content']);
+
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('reservation-type-b'), $services[0]);
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Reservation', 'dataType' => $services[0], 'prompt' => 'Réservation de cette prestation.']);
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertSame($services[0], json_decode($response->getContent())->dataType);
+        $this->assertCount(2, FakeLandingAiClient::$requests, 'acceptées au premier essai');
+    }
+
+    public function testCreateRechercheRequiresNullDataType(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('recherche-bandeau'), '1');
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('recherche-bandeau'), null);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Recherche', 'prompt' => 'Bandeau de recherche.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertNull(json_decode($response->getContent())->dataType);
+        $this->assertStringContainsString('null attendu', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+    }
+
     public function testCreateRejectsAnUnknownDefaultDataType(): void
     {
         $response = $this->compose(['mode' => 'create', 'componentKey' => 'PresentationGroup', 'dataType' => '999999', 'prompt' => 'Une grille.']);
@@ -357,6 +409,104 @@ class LandingAiComposeTest extends WebTestCase
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $this->assertStringContainsString('bgImage', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+    }
+
+    public function testPageReturnsSectionsOnThePageModelWithImagesFor10Credits(): void
+    {
+        $presentations = $this->availableIds('Presentation');
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([
+            ['componentKey' => 'Presentation', 'dataType' => (int) $presentations[0], 'composition' => $this->preset('presentation-type-b')],
+            ['componentKey' => 'Contact', 'dataType' => null, 'composition' => $this->preset('contact-type-a')],
+        ], 'Héros puis contact.');
+
+        $response = $this->compose(['mode' => 'page', 'prompt' => 'Page d\'accueil : héros puis contact, avec ma charte.', 'images' => [$this->pngDataUrl()]]);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent(), false);
+        $this->assertSame('page', $body->mode);
+        $this->assertObjectNotHasProperty('composition', $body);
+        $this->assertSame(['Presentation', 'Contact'], array_column((array) $body->sections, 'componentKey'));
+        $this->assertSame([(string) $presentations[0], null], array_map(fn ($s) => $s->dataType, $body->sections));
+        $this->assertSame(json_encode($this->preset('contact-type-a')), json_encode($body->sections[1]->composition));
+        $this->assertSame(10, $body->credits->used, 'page : 10 crédits');
+
+        $request = FakeLandingAiClient::$requests[0];
+        $pageModel = static::getContainer()->get(\App\Services\LandingAiService\LandingAiComposer::class)->pageModel();
+        $this->assertSame($pageModel, $request['model']);
+        $this->assertSame($pageModel, $body->usage->model);
+        $this->assertSame('composer_page', $request['tools'][0]['name']);
+        $this->assertSame(['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => 'image/png', 'data' => substr($this->pngDataUrl(), 22)]], $request['messages'][0]['content'][0]);
+        $this->assertStringContainsString('Données du site par famille', $request['messages'][0]['content'][1]['text']);
+        $this->assertStringContainsString('CATALOGUE DE L\'ÉDITEUR', $request['system'][2]['text']);
+        $this->assertEqualsWithDelta(\App\Services\LandingAiService\LandingAiComposer::PAGE_CALL_TIMEOUT, FakeLandingAiClient::$timeouts[0], 1.0, 'page : délai long');
+        $history = json_decode($this->get('/api/landingpage-ai/usage')->getContent(), true)['history'];
+        $this->assertSame(['page', '', 'success', 10], [$history[0]['mode'], $history[0]['componentKey'], $history[0]['status'], $history[0]['credits']]);
+    }
+
+    public function testPageWithAnInvalidSectionIsRetriedWithTheSectionPath(): void
+    {
+        $contact = $this->preset('contact-type-a');
+        $invented = $this->preset('presentation-type-b');
+        $invented->bgImage = 'https://images.example.com/inventee.jpg';
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([
+            ['componentKey' => 'Presentation', 'dataType' => $this->availableIds('Presentation')[0], 'composition' => $invented],
+            ['componentKey' => 'Contact', 'dataType' => '1', 'composition' => $contact],
+        ]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([
+            ['componentKey' => 'Presentation', 'dataType' => $this->availableIds('Presentation')[0], 'composition' => $this->preset('presentation-type-b')],
+            ['componentKey' => 'Contact', 'dataType' => null, 'composition' => $contact],
+        ]);
+
+        $response = $this->compose(['mode' => 'page', 'prompt' => 'Héros et contact.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $feedback = FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'];
+        $this->assertStringContainsString('sections[0].composition.bgImage', $feedback);
+        $this->assertStringContainsString('sections[1].dataType', $feedback);
+        $this->assertStringContainsString('TOUTES les sections', $feedback);
+        $this->assertSame(10, json_decode($response->getContent())->credits->used, 'sans images, une page coûte aussi 10 crédits');
+    }
+
+    public function testPageWithAnImposedFamilyRejectsOtherFamilies(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Contact', 'dataType' => null, 'composition' => $this->preset('contact-type-a')]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Presentation', 'dataType' => $this->availableIds('Presentation')[0], 'composition' => $this->preset('presentation-type-b')]]);
+
+        $response = $this->compose(['mode' => 'page', 'componentKey' => 'Presentation', 'prompt' => 'Reproduis cette section.', 'images' => [$this->pngDataUrl()]]);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertStringContainsString('famille imposée : Presentation', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+        $this->assertStringContainsString('Famille imposée pour toutes les sections : Presentation', FakeLandingAiClient::$requests[0]['messages'][0]['content'][1]['text']);
+        $history = json_decode($this->get('/api/landingpage-ai/usage')->getContent(), true)['history'];
+        $this->assertSame('Presentation', $history[0]['componentKey']);
+    }
+
+    public function testEditWithAnImageUsesThePageModelAndCosts10(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre de la couleur de la capture.', 'images' => [$this->pngDataUrl()]]);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $request = FakeLandingAiClient::$requests[0];
+        $this->assertSame(static::getContainer()->get(\App\Services\LandingAiService\LandingAiComposer::class)->pageModel(), $request['model']);
+        $this->assertSame('image', $request['messages'][0]['content'][0]['type']);
+        $this->assertSame(10, json_decode($response->getContent())->credits->used);
+    }
+
+    /** Petite image PNG valide, en data URL */
+    private function pngDataUrl(): string
+    {
+        static $url = null;
+        if ($url === null) {
+            $image = imagecreatetruecolor(4, 4);
+            imagefill($image, 0, 0, imagecolorallocate($image, 16, 64, 128));
+            ob_start();
+            imagepng($image);
+            $url = 'data:image/png;base64,' . base64_encode(ob_get_clean());
+        }
+
+        return $url;
     }
 
     /** @return list<string> */

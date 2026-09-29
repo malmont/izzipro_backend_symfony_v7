@@ -27,7 +27,7 @@ class LandingAiController extends AbstractController
     public function compose(Request $request): JsonResponse
     {
         try {
-            if (strlen($request->getContent()) > LandingAiComposeInputDto::MAX_BODY_BYTES) {
+            if (strlen($request->getContent()) > LandingAiComposeInputDto::maxBodyBytes()) {
                 throw LandingAiException::badRequest('Requête trop volumineuse.');
             }
             try {

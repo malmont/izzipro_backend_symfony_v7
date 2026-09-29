@@ -103,6 +103,27 @@ final class LandingAiEvalChecks
         ];
     }
 
+    /**
+     * Vérifications d'une page : celles de la création sur chaque section ; une vérification échoue dès qu'une
+     * section échoue (détail : première section en défaut).
+     *
+     * @param list<array{componentKey: string, dataType: ?string, composition: object}> $sections
+     * @return array<string, array{ok: bool|null, detail: string}>
+     */
+    public function commonPage(array $sections, array $allowedMedia, string $knownText): array
+    {
+        $checks = [];
+        foreach ($sections as $i => $section) {
+            foreach ($this->commonCreate($section['composition'], $section['componentKey'], $allowedMedia, $knownText) as $v => $check) {
+                if (!isset($checks[$v]) || ($checks[$v]['ok'] === true && $check['ok'] === false)) {
+                    $checks[$v] = $check['ok'] === false ? ['ok' => false, 'detail' => sprintf('section %d (%s) : %s', $i + 1, $section['componentKey'], $check['detail'])] : $check;
+                }
+            }
+        }
+
+        return $checks;
+    }
+
     /** Textes visibles de la composition (textes de base et traductions), balises HTML retirées */
     public function allTexts(object $composition): string
     {
