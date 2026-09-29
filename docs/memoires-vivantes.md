@@ -2,7 +2,8 @@
 
 Livres de souvenirs écrits à partir des réponses d'un narrateur (ou de contributeurs), rédigés chapitre par chapitre
 par l'IA, puis mis en page (PDF), payés et imprimés (Lulu). Contexte : `docs/architecture.md`.
-Code : `src/MemoiresVivantes/` (module autonome). Côté frontend : `components/MemoiresVivantes/`, `app/memoires/`.
+Code : `src/MemoiresVivantes/` (module autonome). Côté frontend : `src/components/MemoiresVivantes/README.md`
+(dépôt `Izzipro_next`).
 
 ## Endpoints
 

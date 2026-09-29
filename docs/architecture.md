@@ -205,11 +205,19 @@ docker exec -w /var/www -e SYMFONY_DEPRECATIONS_HELPER=disabled symfony_app_v2 p
 |---|---|---|
 | Landing Page (réglages, validation, assistant IA, synchronisation) | `Services/Landing*`, `Controller/Landing*`, `config/landingpage/` | `docs/landingpage.md` |
 | Mémoires Vivantes | `src/MemoiresVivantes/` | `docs/memoires-vivantes.md` |
-| Boussole ESG | `src/ESG/` | `docs/boussole-esg.md` (à écrire) |
-| Boutique (produits, commandes, paiement, livraison, caisse) | `Controller/*`, `Services/*` hors modules ci-dessus | à écrire ; routes dans `docs/endpoints.md` |
+| Boussole ESG | `src/ESG/` | `docs/boussole-esg.md` |
+| Boutique (produits, commandes, paiement, livraison, caisse ; aucune en production) | `Controller/*`, `Services/*` hors modules ci-dessus | à écrire ; routes dans `docs/endpoints.md` |
 
 ## Contrats partagés avec le frontend
 
 `config/landingpage/` : schéma des compositions réglables, catalogue de l'assistant IA, jeu d'essai, synchronisés
-depuis le frontend (voir `docs/landingpage.md`). Côté frontend : `src/components/LandingPage/README.md` (dépôt
-`Izzipro_next`).
+depuis le frontend (voir `docs/landingpage.md`).
+
+Fiches correspondantes côté frontend (dépôt `Izzipro_next`) :
+
+| Module | Fiche frontend |
+|---|---|
+| Landing Page | `src/components/LandingPage/README.md` |
+| Mémoires Vivantes | `src/components/MemoiresVivantes/README.md` |
+| Boussole ESG | `src/components/BoussoleESG/README.md` |
+| Boutique | `src/components/Boutique/README.md` |

@@ -11,8 +11,8 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Une route : méthode, rôle exigé, contrôleur | `docs/endpoints.md` (généré, voir son en-tête) |
 | Landing Page : réglages, validation, assistant IA, synchronisation | `docs/landingpage.md`, puis `config/landingpage/README.md` |
 | Mémoires Vivantes | `docs/memoires-vivantes.md` |
-| Boussole ESG | `docs/boussole-esg.md` (à écrire) ; code `src/ESG/` |
-| Boutique (produits, commandes, paiement, livraison) | à écrire ; routes dans `docs/endpoints.md` |
+| Boussole ESG | `docs/boussole-esg.md` ; code `src/ESG/` |
+| Boutique (produits, commandes, paiement, livraison ; aucune en production) | fiche à écrire ; routes dans `docs/endpoints.md` ; côté frontend `src/components/Boutique/README.md` |
 | Contrats partagés avec le frontend (schéma, catalogue IA, jeu d'essai) | `config/landingpage/` (synchronisés, ne pas modifier à la main) |
 | Côté frontend | `AGENTS.md` et `docs/architecture.md` du dépôt `Izzipro_next` |
 
