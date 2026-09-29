@@ -1,6 +1,5 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-28",
   "note": "Généré par npm run ia:catalogue (frontend Izzipro_next). Ne pas modifier à la main.",
   "blockTypes": {
     "container": "Bloc",
@@ -41,7 +40,8 @@
         "button",
         "badge",
         "divider",
-        "image"
+        "image",
+        "icon"
       ],
       "sectionFields": [
         "title",
@@ -22316,7 +22316,8 @@
         "button",
         "badge",
         "divider",
-        "image"
+        "image",
+        "form"
       ],
       "sectionFields": [
         "title",
@@ -22793,7 +22794,8 @@
         "button",
         "badge",
         "divider",
-        "image"
+        "image",
+        "stat"
       ],
       "sectionFields": [
         "title",

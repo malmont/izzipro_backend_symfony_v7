@@ -53,9 +53,11 @@ par exemple `tabs[0].sections[2].reglableConfig.blocks[3].fontColor`. Rien n'est
 
 ### Synchronisation depuis le frontend (remplace les copies manuelles)
 
-Les fichiers de ce dossier ne servent plus que de **version de repli** (`bundled`), tant qu'aucune synchronisation n'a eu
-lieu. La version active est lue dans `var/landingpage-config/` (`LandingConfigStore`) par le validateur, le catalogue et
-le constructeur de prompts, sans redémarrage (worker compris).
+Les fichiers de ce dossier ne servent plus que de **version de repli** (`bundled`) : serveur sans synchronisation
+(nouvelle installation) et tests. Ce sont des copies de la dernière version synchronisée et validée (29/09/2026 :
+`a966c990f8a0934f`, première synchronisation réelle) ; les recopier depuis `var/landingpage-config/versions/<id>/`
+quand le frontend change de version. La version active est lue dans `var/landingpage-config/` (`LandingConfigStore`)
+par le validateur, le catalogue et le constructeur de prompts, sans redémarrage (worker compris).
 
 - Le frontend publie sous `FRONTEND_CONFIG_URL` (ex. `https://<frontend>/reglable-config/`) : `manifest.json`
   `{ "version", "files": { "<nom>": "<sha256>" } }` et les 3 fichiers `landingpage-reglable.schema.json`,
@@ -103,14 +105,15 @@ le constructeur de prompts, sans redémarrage (worker compris).
     l'IA n'emploie que ses couleurs et polices (plus blanc, noir, gris neutres). Capture d'écran : l'IA en reproduit la
     structure ; les images de la capture ne sont pas des médias utilisables. Une requête avec images passe au modèle
     page et coûte 10 crédits.
-  - La proposition passe par `ReglableCompositionValidator`, les types de la famille (outils du catalogue, plus les
-    types employés par ses propres modèles, ex. `form` des modèles Recherche) et la liste des médias autorisés
+  - La proposition passe par `ReglableCompositionValidator`, les types de la famille (`tools` du catalogue) et la liste
+    des médias autorisés
     (médias du site, médias fournis avec la demande, adresses http(s) écrites dans la demande et, en création ou page,
     images des modèles des familles concernées), avec 3 essais au total (erreurs renvoyées au modèle ; en page, chemins
     `sections[i].…`). Les réglages du site ne sont jamais enregistrés par cet endpoint. `translations` n'est rempli que
     si la demande le demande explicitement.
   - **Tâches de fond** : le mode page et toute requête avec images répondent **202** `{ jobId, credits }` (en-tête
-    `Location`) après les contrôles et la réservation des crédits ; le worker Messenger (transport `async`) traite la
+    `Location`) après les contrôles et la réservation des crédits ; le worker Messenger dédié (transport `landing_ai`,
+    conteneur `symfony_messenger_worker_landing_v2`) traite la
     demande. `GET /api/landingpage-ai/jobs/{jobId}` → `{ jobId, status: pending | running | done | failed, result?
     (même contenu que la réponse synchrone), error? { status, error, message, errors? } }`, réservé aux administrateurs
     du tenant de la tâche (404 pour un autre tenant). Résultat conservé 1 heure ; la requête (images comprises) est

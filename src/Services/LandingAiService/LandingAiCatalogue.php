@@ -43,23 +43,10 @@ final class LandingAiCatalogue
         return array_values(array_map(fn ($f) => (string) $f['componentKey'], $this->load()['families'] ?? []));
     }
 
-    /**
-     * Types de blocs autorisés pour la famille : ses outils, plus les types employés par ses propres modèles
-     * (ex. « form » des modèles Recherche, absent de la liste d'outils du catalogue).
-     *
-     * @return list<string>
-     */
+    /** @return list<string> types de blocs autorisés pour la famille */
     public function tools(string $componentKey): array
     {
-        $family = $this->family($componentKey);
-        $types = $family['tools'] ?? [];
-        foreach ($family['presets'] ?? [] as $preset) {
-            foreach ($preset['composition']['blocks'] ?? [] as $block) {
-                $types[] = $block['type'] ?? null;
-            }
-        }
-
-        return array_values(array_unique(array_filter($types, 'is_string')));
+        return array_values($this->family($componentKey)['tools'] ?? []);
     }
 
     /** Modèle par identifiant, toutes familles confondues : [famille, modèle] ou null */
