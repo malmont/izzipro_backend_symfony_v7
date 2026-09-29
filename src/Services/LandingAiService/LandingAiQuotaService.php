@@ -14,7 +14,8 @@ use App\Services\TenantEntityManagerProvider;
  *
  * Réservation atomique avant l'appel à l'IA : verrou PostgreSQL (pg_advisory_xact_lock) par base tenant, de sorte
  * que deux demandes simultanées au bord du quota ne le dépassent pas. Consommation au succès, libération à l'échec,
- * réservation orpheline (processus interrompu) libérée après 5 minutes. Lignes supprimées après 90 jours.
+ * réservation orpheline (processus interrompu) libérée à son échéance : 5 minutes pour une demande synchrone, 35 minutes
+ * pour une tâche de fond (attente dans la file, puis 300 s de traitement au plus). Lignes supprimées après 90 jours.
  */
 final class LandingAiQuotaService
 {
@@ -22,6 +23,7 @@ final class LandingAiQuotaService
     public const COSTS = ['edit' => 1, 'create' => 3, 'page' => 10];
     public const IMAGES_COST = 10;
     public const RESERVATION_TTL_SECONDS = 300;
+    public const JOB_RESERVATION_TTL_SECONDS = 2100;
     public const RETENTION_DAYS = 90;
     /** Clé du verrou consultatif (propre à la base du tenant) */
     public const LOCK_KEY = 7414201;
@@ -40,7 +42,7 @@ final class LandingAiQuotaService
     /**
      * @throws LandingAiException 402 si le quota du mois ne couvre pas le coût
      */
-    public function reserve(string $mode, string $componentKey, int $cost, ?string $user, string $prompt): AiUsage
+    public function reserve(string $mode, string $componentKey, int $cost, ?string $user, string $prompt, int $ttlSeconds = self::RESERVATION_TTL_SECONDS): AiUsage
     {
         $em = $this->emProvider->getEntityManager();
         $connection = $em->getConnection();
@@ -51,7 +53,7 @@ final class LandingAiQuotaService
             $connection->executeQuery('SELECT pg_advisory_xact_lock(?)', [self::LOCK_KEY]);
 
             $usages = $this->usages();
-            $usages->expireReservationsBefore($now->modify(sprintf('-%d seconds', self::RESERVATION_TTL_SECONDS)));
+            $usages->expireReservations($now);
             $usages->deleteOlderThan($now->modify(sprintf('-%d days', self::RETENTION_DAYS)));
 
             $credits = $this->credits();
@@ -70,6 +72,7 @@ final class LandingAiQuotaService
                 ->setComponentKey($componentKey)
                 ->setCredits($cost)
                 ->setStatus(AiUsage::STATUS_RESERVED)
+                ->setReservedUntil($now->modify(sprintf('+%d seconds', $ttlSeconds)))
                 ->setPromptExcerpt($prompt);
             $em->persist($usage);
             $em->flush();
@@ -107,10 +110,7 @@ final class LandingAiQuotaService
         $utc = new \DateTimeZone(date_default_timezone_get());
 
         $monthly = $this->settings()->monthlyCredits();
-        $used = $this->usages()->sumCommittedCredits(
-            $monthStart->setTimezone($utc),
-            (new \DateTimeImmutable())->modify(sprintf('-%d seconds', self::RESERVATION_TTL_SECONDS))
-        );
+        $used = $this->usages()->sumCommittedCredits($monthStart->setTimezone($utc), new \DateTimeImmutable());
 
         return [
             'monthly' => $monthly,

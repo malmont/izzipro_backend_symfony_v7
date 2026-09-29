@@ -10,6 +10,8 @@ parameters:
     # Assistant IA des landing pages : modèles (surchargeables par LANDING_AI_MODEL_EDIT / LANDING_AI_MODEL_PAGE)
     landing_ai.default_model_edit: 'claude-sonnet-5'
     landing_ai.default_model_page: 'claude-opus-5-5'
+    # Fichiers de configuration des landing pages synchronisés depuis le frontend (versions, état actif)
+    landing_config.dir: '%kernel.project_dir%/var/landingpage-config'
 
 services:
     # default configuration for services in *this* file
@@ -221,3 +223,8 @@ services:
         arguments:
             $frontendBaseDomain: '%env(resolve:FRONTEND_BASE_DOMAIN)%'
             $backendBaseDomain: '%env(resolve:BACKEND_BASE_DOMAIN)%'
+
+when@test:
+    parameters:
+        # Dossier propre aux tests : jamais la configuration active de la production
+        landing_config.dir: '%kernel.project_dir%/var/landingpage-config-test'

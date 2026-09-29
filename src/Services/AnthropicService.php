@@ -791,6 +791,8 @@ class AnthropicService
                 ],
                 'json' => $jsonPayload,
                 'timeout' => 300,
+                // durée totale bornée : un appel qui traîne ne bloque pas le worker des chapitres indéfiniment
+                'max_duration' => 600,
             ]);
 
             if ($response->getStatusCode() !== 200) {

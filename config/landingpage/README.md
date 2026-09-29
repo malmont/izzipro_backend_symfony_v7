@@ -51,18 +51,33 @@ par exemple `tabs[0].sections[2].reglableConfig.blocks[3].fontColor`. Rien n'est
   rapport JSON dans `var/landing-ai-eval/`). Images des cas P1 (charte) et P2 (capture) :
   `src/Services/LandingAiService/Eval/fixtures/`.
 
-### Mettre à jour le catalogue quand le frontend le change
+### Synchronisation depuis le frontend (remplace les copies manuelles)
 
-1. Côté frontend : `npm run ia:catalogue`.
-2. Copier `docs/landingpage-ia-catalogue.json` ici, **à l'identique**, sous le même nom (et `docs/ia-assistant-jeu-essai.md`
-   s'il a changé).
-3. Vérifier que tous les modèles du catalogue passent le contrat des compositions (un modèle refusé serait un mauvais exemple
-   pour l'IA) et lancer les tests :
-   ```
-   docker exec -w /var/www -e SYMFONY_DEPRECATIONS_HELPER=disabled symfony_app_v2 \
-       php vendor/bin/phpunit tests/Functional/LandingPage
-   ```
-4. Rejouer le jeu d'essai (`app:landingpage-ai:eval`) et comparer le rapport au précédent avant de déployer.
+Les fichiers de ce dossier ne servent plus que de **version de repli** (`bundled`), tant qu'aucune synchronisation n'a eu
+lieu. La version active est lue dans `var/landingpage-config/` (`LandingConfigStore`) par le validateur, le catalogue et
+le constructeur de prompts, sans redémarrage (worker compris).
+
+- Le frontend publie sous `FRONTEND_CONFIG_URL` (ex. `https://<frontend>/reglable-config/`) : `manifest.json`
+  `{ "version", "files": { "<nom>": "<sha256>" } }` et les 3 fichiers `landingpage-reglable.schema.json`,
+  `landingpage-ia-catalogue.json`, `ia-assistant-jeu-essai.md`.
+- `GET /api/landingpage-config/status` → `{ active: { id, version, files }, available: { version, files } | null,
+  availableError, upToDate, previous, history }` (20 dernières actions).
+- `POST /api/landingpage-config/sync` : télécharge depuis `FRONTEND_CONFIG_URL` **uniquement** (le corps de la requête est
+  ignoré), vérifie chaque sha256 (422 sinon), vérifie que le schéma et le catalogue sont utilisables (422), puis contrôle
+  avec le nouveau schéma **toutes les compositions de tous les tenants et tous les modèles du catalogue** : une seule
+  refusée → 409 avec la liste (`errors`, `refusedCount`), rien n'est activé. Sinon activation atomique ; l'ancienne
+  version devient `previous`. Même version déjà active → `up_to_date`.
+- `POST /api/landingpage-config/rollback` : revient à la version précédente (même contrôle : 409 si une composition
+  enregistrée depuis serait refusée). Un second retour revient à la version quittée.
+- Accès : utilisateur `ROLE_SUPER_ADMIN`, ou en-tête `X-Deploy-Token: <DEPLOY_SYNC_TOKEN>` (GitHub Action ; jeton de 32
+  caractères au moins, sinon désactivé). GitHub Action :
+  `curl -fsS -X POST -H "X-Deploy-Token: $DEPLOY_SYNC_TOKEN" https://v2.backend-strapi.online/api/landingpage-config/sync`
+- Historique : table `landing_config_sync` de la base maître (`app_v2_db`, pas dans les bases tenant) :
+  `CREATE TABLE IF NOT EXISTS landing_config_sync (id SERIAL PRIMARY KEY, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
+  action VARCHAR(10) NOT NULL, version VARCHAR(100) DEFAULT NULL, author VARCHAR(255) NOT NULL, result VARCHAR(32) NOT NULL,
+  details TEXT DEFAULT NULL)`.
+- Après une synchronisation : rejouer le jeu d'essai (`app:landingpage-ai:eval`) et comparer le rapport au précédent.
+  `app:landingpage:check-reglable` contrôle les compositions avec la version active.
 
 ### Fonctionnement (étapes 1 à 3 : retouche, création, page et images)
 
@@ -94,6 +109,14 @@ par exemple `tabs[0].sections[2].reglableConfig.blocks[3].fontColor`. Rien n'est
     images des modèles des familles concernées), avec 3 essais au total (erreurs renvoyées au modèle ; en page, chemins
     `sections[i].…`). Les réglages du site ne sont jamais enregistrés par cet endpoint. `translations` n'est rempli que
     si la demande le demande explicitement.
+  - **Tâches de fond** : le mode page et toute requête avec images répondent **202** `{ jobId, credits }` (en-tête
+    `Location`) après les contrôles et la réservation des crédits ; le worker Messenger (transport `async`) traite la
+    demande. `GET /api/landingpage-ai/jobs/{jobId}` → `{ jobId, status: pending | running | done | failed, result?
+    (même contenu que la réponse synchrone), error? { status, error, message, errors? } }`, réservé aux administrateurs
+    du tenant de la tâche (404 pour un autre tenant). Résultat conservé 1 heure ; la requête (images comprises) est
+    effacée dès le traitement. Tâche en attente depuis 30 min (worker arrêté) ou en cours depuis 10 min : échec 504,
+    crédits libérés. Réservation des crédits : 35 min pour une tâche de fond, 5 min en synchrone
+    (`ai_usage.reserved_until`). Edit et create sans image restent synchrones (200).
   - Délais : retouche et création 90 s par appel, 180 s au total ; page et requêtes avec images 180 s par appel, 300 s
     au total (504 au-delà, crédits libérés). **Les intermédiaires doivent laisser passer 330 s** : `fastcgi_read_timeout
     330s` dans `docker/nginx/default.conf` (le défaut de 60 s coupait la réponse en 504 pendant que PHP terminait et
@@ -105,5 +128,7 @@ par exemple `tabs[0].sections[2].reglableConfig.blocks[3].fontColor`. Rien n'est
   création 3, page ou images 10. Limite : 5 demandes par minute et par tenant.
 - Variables : `ANTHROPIC_API_KEY_LANDING` (clé dédiée), `LANDING_AI_MODEL_EDIT` (défaut `claude-sonnet-5`),
   `LANDING_AI_MODEL_PAGE` (défaut `claude-opus-5-5` : mode page et requêtes avec images).
-- Tables par tenant : `ai_usage` (historique, supprimé après 90 jours, jamais de composition ni de réponse du modèle) et
-  `ai_credit_setting` — `scripts/migrate_all_v2_landing_ai.sh` / migration `Version20260928200000`.
+- Tables par tenant : `ai_usage` (historique, supprimé après 90 jours, jamais de composition ni de réponse du modèle),
+  `ai_credit_setting` et `ai_job` (tâches de fond) — `scripts/migrate_all_v2_landing_ai.sh` / migrations
+  `Version20260928200000` et `Version20260929150000`.
+- Variables de la synchronisation : `FRONTEND_CONFIG_URL`, `DEPLOY_SYNC_TOKEN`.

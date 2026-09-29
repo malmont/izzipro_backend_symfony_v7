@@ -2,10 +2,8 @@
 
 namespace App\Command;
 
-use App\Entity\LandingPageSetting;
+use App\Services\LandingPageSettingsService\ReglableCompositionScanner;
 use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
-use App\Services\TenantConnectionManager;
-use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -20,8 +18,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 class CheckReglableCompositionsCommand extends Command
 {
     public function __construct(
-        private readonly TenantConnectionManager $connectionManager,
-        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly ReglableCompositionScanner $scanner,
         private readonly ReglableCompositionValidator $validator
     ) {
         parent::__construct();
@@ -35,27 +32,16 @@ class CheckReglableCompositionsCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $databases = $this->connectionManager->getPdoMaster()
-            ->query('SELECT DISTINCT dbname FROM tenants ORDER BY dbname')
-            ->fetchAll(\PDO::FETCH_COLUMN);
-
         $total = $invalid = 0;
         $export = [];
-        foreach ($databases as $dbName) {
-            try {
-                $this->emProvider->switchTenant($dbName);
-                $em = $this->emProvider->getEntityManager();
-                $table = $em->getClassMetadata(LandingPageSetting::class)->getTableName();
-                $raw = $em->getConnection()->fetchOne("SELECT configuration FROM $table ORDER BY id LIMIT 1");
-            } catch (\Throwable $e) {
-                $io->writeln(sprintf(' <comment>%s</comment> : ignorée (%s)', $dbName, $e->getMessage()));
-                continue;
-            }
-            if (!is_string($raw)) {
+        foreach ($this->scanner->scan() as $database) {
+            $dbName = $database['database'];
+            if ($database['error'] !== null) {
+                $io->writeln(sprintf(' <comment>%s</comment> : ignorée (%s)', $dbName, $database['error']));
                 continue;
             }
 
-            $compositions = $this->validator->compositions(json_decode($raw, false));
+            $compositions = $database['compositions'];
             $siteErrors = 0;
             foreach ($compositions as $path => $composition) {
                 $total++;

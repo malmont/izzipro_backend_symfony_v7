@@ -3,8 +3,10 @@
 namespace App\Controller\LandingAiController;
 
 use App\Dto\LandingAiComposeInputDto;
+use App\Services\LandingAiService\LandingAiComposeRunner;
 use App\Services\LandingAiService\LandingAiException;
 use App\UseCase\LandingAiUseCase\ComposeLandingSectionUseCase;
+use App\UseCase\LandingAiUseCase\GetLandingAiJobUseCase;
 use App\UseCase\LandingAiUseCase\GetLandingAiUsageUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -19,7 +21,8 @@ class LandingAiController extends AbstractController
 {
     public function __construct(
         private readonly ComposeLandingSectionUseCase $composeUseCase,
-        private readonly GetLandingAiUsageUseCase $usageUseCase
+        private readonly GetLandingAiUsageUseCase $usageUseCase,
+        private readonly GetLandingAiJobUseCase $jobUseCase
     ) {
     }
 
@@ -38,8 +41,18 @@ class LandingAiController extends AbstractController
 
             $result = $this->composeUseCase->execute(LandingAiComposeInputDto::fromRequestBody($body), $this->getUser()?->getUserIdentifier());
 
-            // Encodage direct : la composition garde ses {} et ses nombres décimaux (1.0)
-            return new JsonResponse(json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR), 200, [], true);
+            // 200 : proposition (edit, create) ; 202 : tâche de fond (page, images) à lire sur /jobs/{jobId}
+            return new JsonResponse(LandingAiComposeRunner::encode($result->body), $result->status, $result->headers, true);
+        } catch (LandingAiException $e) {
+            return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
+        }
+    }
+
+    #[Route('/jobs/{jobId}', name: 'api_landingpage_ai_job', methods: ['GET'])]
+    public function job(string $jobId): JsonResponse
+    {
+        try {
+            return new JsonResponse($this->jobUseCase->execute($jobId), 200, [], true);
         } catch (LandingAiException $e) {
             return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
         }

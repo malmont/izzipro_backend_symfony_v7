@@ -40,6 +40,10 @@ class AiUsage
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $completedAt = null;
 
+    /** Fin de validité d'une réservation (reserved) : au-delà, processus supposé interrompu et crédits libérés */
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $reservedUntil = null;
+
     #[ORM\Column(length: 10)]
     private string $mode = 'edit';
 
@@ -91,6 +95,9 @@ class AiUsage
 
     public function getCompletedAt(): ?\DateTimeImmutable { return $this->completedAt; }
     public function setCompletedAt(?\DateTimeImmutable $completedAt): static { $this->completedAt = $completedAt; return $this; }
+
+    public function getReservedUntil(): ?\DateTimeImmutable { return $this->reservedUntil; }
+    public function setReservedUntil(?\DateTimeImmutable $reservedUntil): static { $this->reservedUntil = $reservedUntil; return $this; }
 
     public function getMode(): string { return $this->mode; }
     public function setMode(string $mode): static { $this->mode = $mode; return $this; }

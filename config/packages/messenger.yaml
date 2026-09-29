@@ -6,18 +6,40 @@ framework:
         # (messenger:failed:show, messenger:failed:retry) au lieu d'être perdus
         failure_transport: failed
 
+        # Une file et un worker par projet (docker-compose.yml) : une génération de chapitre ne bloque ni les rapports
+        # ESG ni l'assistant des landing pages, et inversement. Files isolées dans la base Redis 1 : le cache
+        # applicatif (base 0) peut être vidé sans effacer les messages en attente ni casser les groupes de consommateurs.
+        # Le nom de la file est le chemin du DSN (…/messages, …/messages_esg…) : l'option « stream » est ignorée quand
+        # le DSN a un chemin, et tous les workers liraient alors la même file.
         transports:
+            # Mémoires Vivantes (génération des chapitres) — nom historique conservé
             async:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
                 options:
-                    # File isolée dans la base Redis 1 : le cache applicatif (base 0) peut être vidé
-                    # sans effacer les générations en attente ni casser le groupe de consommateurs
                     dbindex: 1
                 retry_strategy:
                     max_retries: 3
                     delay: 1000
                     multiplier: 2
                     max_delay: 0
+            # Boussole ESG (rapports PDF)
+            esg:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%_esg'
+                options:
+                    dbindex: 1
+                retry_strategy:
+                    max_retries: 3
+                    delay: 1000
+                    multiplier: 2
+                    max_delay: 0
+            # Assistant IA des landing pages (mode page, images) : jamais relancé, le handler écrit lui-même les
+            # erreurs dans la tâche (une relance repayerait un appel à l'IA)
+            landing_ai:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%_landing_ai'
+                options:
+                    dbindex: 1
+                retry_strategy:
+                    max_retries: 0
             failed:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%_failed'
                 options:
@@ -25,4 +47,5 @@ framework:
 
         routing:
             'App\MemoiresVivantes\Message\GenerateChapterMessage': async
-            'App\ESG\Message\GenerateEsgReportMessage': async
+            'App\ESG\Message\GenerateEsgReportMessage': esg
+            'App\Message\LandingAiJobMessage': landing_ai

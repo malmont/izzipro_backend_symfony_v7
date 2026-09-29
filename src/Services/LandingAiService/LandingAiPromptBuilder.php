@@ -2,7 +2,7 @@
 
 namespace App\Services\LandingAiService;
 
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use App\Services\LandingConfigService\LandingConfigStore;
 
 /**
  * Construit la requête à l'API Messages. Ordre stable pour le cache de prompt : consignes, contrat (JSON Schema),
@@ -45,11 +45,12 @@ Règles :
 TXT;
 
     private ?string $schemaText = null;
+    /** Fichier chargé dans $schemaText */
+    private ?string $schemaFrom = null;
 
     public function __construct(
         private readonly LandingAiCatalogue $catalogue,
-        #[Autowire('%kernel.project_dir%/config/landingpage/landingpage-reglable.schema.json')]
-        private readonly string $schemaPath
+        private readonly LandingConfigStore $configStore
     ) {
     }
 
@@ -330,7 +331,13 @@ TXT;
 
     private function schema(): string
     {
-        return $this->schemaText ??= $this->json(json_decode(file_get_contents($this->schemaPath), false, 512, JSON_THROW_ON_ERROR));
+        $path = $this->configStore->path(LandingConfigStore::SCHEMA);
+        if ($this->schemaText === null || $this->schemaFrom !== $path) {
+            $this->schemaText = $this->json(json_decode(file_get_contents($path), false, 512, JSON_THROW_ON_ERROR));
+            $this->schemaFrom = $path;
+        }
+
+        return $this->schemaText;
     }
 
     private function json(mixed $value): string

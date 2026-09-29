@@ -10,34 +10,33 @@ use Doctrine\ORM\EntityRepository;
  */
 class AiUsageRepository extends EntityRepository
 {
-    /** Crédits engagés depuis une date : consommés, ou réservés depuis moins que $reservationTtl secondes */
-    public function sumCommittedCredits(\DateTimeImmutable $since, \DateTimeImmutable $reservedAfter): int
+    /** Crédits engagés depuis une date : consommés, ou réservés et encore valides à $now */
+    public function sumCommittedCredits(\DateTimeImmutable $since, \DateTimeImmutable $now): int
     {
         return (int) $this->createQueryBuilder('u')
             ->select('COALESCE(SUM(u.credits), 0)')
             ->where('u.createdAt >= :since')
-            ->andWhere('u.status = :success OR (u.status = :reserved AND u.createdAt >= :reservedAfter)')
+            ->andWhere('u.status = :success OR (u.status = :reserved AND u.reservedUntil >= :now)')
             ->setParameter('since', $since)
             ->setParameter('success', AiUsage::STATUS_SUCCESS)
             ->setParameter('reserved', AiUsage::STATUS_RESERVED)
-            ->setParameter('reservedAfter', $reservedAfter)
+            ->setParameter('now', $now)
             ->getQuery()
             ->getSingleScalarResult();
     }
 
-    /** Réservations restées ouvertes (processus interrompu) : crédits libérés */
-    public function expireReservationsBefore(\DateTimeImmutable $before): int
+    /** Réservations dont l'échéance est passée (processus interrompu) : crédits libérés */
+    public function expireReservations(\DateTimeImmutable $now): int
     {
         return $this->createQueryBuilder('u')
             ->update()
             ->set('u.status', ':expired')
             ->set('u.completedAt', ':now')
             ->where('u.status = :reserved')
-            ->andWhere('u.createdAt < :before')
+            ->andWhere('u.reservedUntil < :now OR u.reservedUntil IS NULL')
             ->setParameter('expired', AiUsage::STATUS_EXPIRED)
-            ->setParameter('now', new \DateTimeImmutable())
+            ->setParameter('now', $now)
             ->setParameter('reserved', AiUsage::STATUS_RESERVED)
-            ->setParameter('before', $before)
             ->getQuery()
             ->execute();
     }

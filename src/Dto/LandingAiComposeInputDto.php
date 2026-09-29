@@ -142,6 +142,27 @@ class LandingAiComposeInputDto
         return ['mediaType' => $m[1], 'data' => $m[2]];
     }
 
+    /** Page et requêtes avec images : traitées en tâche de fond (réponse 202, résultat à interroger) */
+    public function isAsync(): bool
+    {
+        return $this->mode === 'page' || $this->images !== [];
+    }
+
+    /** Requête normalisée, relue par le worker avec fromRequestBody() */
+    public function toJson(): string
+    {
+        return json_encode([
+            'mode' => $this->mode,
+            'componentKey' => $this->componentKey,
+            'dataType' => $this->dataType,
+            'composition' => $this->composition,
+            'prompt' => $this->prompt,
+            'locale' => $this->locale,
+            'media' => $this->media,
+            'images' => array_map(fn ($image) => sprintf('data:%s;base64,%s', $image['mediaType'], $image['data']), $this->images),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+    }
+
     /** Taille maximale du corps de la requête : JSON ordinaire plus les images */
     public static function maxBodyBytes(): int
     {

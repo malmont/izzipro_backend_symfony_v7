@@ -3,27 +3,35 @@
 namespace App\UseCase\LandingAiUseCase;
 
 use App\Dto\LandingAiComposeInputDto;
+use App\Dto\LandingAiComposeOutputDto;
+use App\Message\LandingAiJobMessage;
 use App\Services\LandingAiService\LandingAiCatalogue;
-use App\Services\LandingAiService\LandingAiComposer;
+use App\Services\LandingAiService\LandingAiComposeRunner;
 use App\Services\LandingAiService\LandingAiDataSources;
 use App\Services\LandingAiService\LandingAiException;
+use App\Services\LandingAiService\LandingAiJobService;
 use App\Services\LandingAiService\LandingAiQuotaService;
 use App\Services\TenantConnectionProvider;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 
 /**
- * POST /api/landingpage-ai/compose (modes edit, create et page ; images acceptées dans tous les modes) : contrôles,
- * limite par minute, réservation des crédits, appel à l'IA,
- * puis consommation (succès) ou libération (échec). N'enregistre jamais les réglages du site : la proposition
- * est appliquée par l'administrateur dans l'éditeur puis enregistrée avec le PUT habituel.
+ * POST /api/landingpage-ai/compose : contrôles, limite par minute, réservation des crédits, puis
+ * - edit, create : appel à l'IA et réponse 200 avec la proposition ;
+ * - page ou requête avec images : tâche de fond (worker Messenger), réponse 202 { jobId, credits }, résultat à lire
+ *   sur GET /api/landingpage-ai/jobs/{jobId}.
+ * N'enregistre jamais les réglages du site : la proposition est appliquée par l'administrateur dans l'éditeur puis
+ * enregistrée avec le PUT habituel.
  */
 class ComposeLandingSectionUseCase
 {
     public function __construct(
         private readonly LandingAiCatalogue $catalogue,
-        private readonly LandingAiComposer $composer,
+        private readonly LandingAiComposeRunner $runner,
         private readonly LandingAiQuotaService $quota,
         private readonly LandingAiDataSources $data,
+        private readonly LandingAiJobService $jobs,
+        private readonly MessageBusInterface $bus,
         private readonly TenantConnectionProvider $tenantProvider,
         private readonly RateLimiterFactory $landingAiTenantLimiter
     ) {
@@ -32,7 +40,7 @@ class ComposeLandingSectionUseCase
     /**
      * @throws LandingAiException
      */
-    public function execute(LandingAiComposeInputDto $dto, ?string $userIdentifier): array
+    public function execute(LandingAiComposeInputDto $dto, ?string $userIdentifier): LandingAiComposeOutputDto
     {
         $errors = $dto->validate($this->catalogue->componentKeys());
         if ($errors) {
@@ -54,35 +62,27 @@ class ComposeLandingSectionUseCase
             throw new LandingAiException(429, 'Trop de demandes', sprintf('Limite de demandes à l\'assistant atteinte. Réessayez dans %d seconde(s).', $retryAfter), [], ['Retry-After' => (string) $retryAfter]);
         }
 
-        $usage = $this->quota->reserve($dto->mode, $dto->componentKey ?? '', LandingAiQuotaService::cost($dto->mode, $dto->images !== []), $userIdentifier, $dto->prompt);
+        $cost = LandingAiQuotaService::cost($dto->mode, $dto->images !== []);
 
-        try {
-            $result = match ($dto->mode) {
-                'create' => $this->composer->create((string) $dto->componentKey, $dto->prompt, $dto->locale, $dto->media, $defaultDataType, $dto->images),
-                'page' => $this->composer->page($dto->prompt, $dto->locale, $dto->media, $dto->images, $dto->componentKey),
-                default => $this->composer->edit((string) $dto->componentKey, $dto->composition, $dto->prompt, $dto->locale, $dto->media, $dto->images),
-            };
-        } catch (LandingAiException $e) {
-            $this->quota->release($usage, $e->getStats());
-            throw $e;
-        } catch (\Throwable $e) {
-            $this->quota->release($usage, null);
-            throw $e;
+        if ($dto->isAsync()) {
+            $usage = $this->quota->reserve($dto->mode, $dto->componentKey ?? '', $cost, $userIdentifier, $dto->prompt, LandingAiQuotaService::JOB_RESERVATION_TTL_SECONDS);
+            $job = null;
+            try {
+                $job = $this->jobs->create($usage, $userIdentifier, $dto->toJson());
+                $this->bus->dispatch(new LandingAiJobMessage($job->getId(), (string) $this->tenantProvider->getTenantCode()));
+            } catch (\Throwable $e) {
+                $this->quota->release($usage, null);
+                if ($job !== null) {
+                    $this->jobs->fail($job, new LandingAiException(502, 'Service IA indisponible', 'La demande n\'a pas pu être mise en file. Aucun crédit n\'a été consommé.'));
+                }
+                throw $e;
+            }
+
+            return new LandingAiComposeOutputDto(202, ['jobId' => $job->getId(), 'credits' => $this->quota->credits()], ['Location' => '/api/landingpage-ai/jobs/' . $job->getId()]);
         }
 
-        $this->quota->complete($usage, $result->stats);
+        $usage = $this->quota->reserve($dto->mode, $dto->componentKey ?? '', $cost, $userIdentifier, $dto->prompt);
 
-        $response = match ($dto->mode) {
-            'page' => ['mode' => 'page', 'sections' => $result->sections],
-            'create' => ['mode' => 'create', 'composition' => $result->composition, 'dataType' => $result->dataType],
-            default => ['mode' => 'edit', 'composition' => $result->composition],
-        };
-
-        return $response + [
-            'summary' => $result->summary,
-            'warnings' => $result->warnings,
-            'credits' => $this->quota->credits(),
-            'usage' => $result->stats->toArray(),
-        ];
+        return new LandingAiComposeOutputDto(200, $this->runner->run($dto, $usage));
     }
 }

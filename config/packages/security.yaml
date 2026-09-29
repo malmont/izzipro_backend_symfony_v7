@@ -75,6 +75,9 @@ security:
         # 🔹 Assistant IA des landing pages : administrateurs du tenant uniquement.
         #    Placé avant la règle publique ci-dessous, dont le motif « landingpage » couvrirait aussi /api/landingpage-ai.
         - { path: ^/api/landingpage-ai(/|$), roles: ROLE_ADMIN }
+        # 🔹 Synchronisation de la configuration des landing pages : ROLE_SUPER_ADMIN ou jeton de déploiement
+        #    (X-Deploy-Token), vérifiés par LandingConfigController. Avant la règle publique « landingpage ».
+        - { path: ^/api/landingpage-config(/|$), roles: PUBLIC_ACCESS }
         # 🔹 Données personnelles (messages de contact, candidatures) : réservées aux admins.
         #    Le dépôt via les formulaires publics (POST) reste ouvert. Avant le 26/09/2026, la liste était lisible par tous.
         - { path: ^/api/(contacts|candidatures)(/|$), methods: [GET, PUT, PATCH, DELETE], roles: ROLE_ADMIN }

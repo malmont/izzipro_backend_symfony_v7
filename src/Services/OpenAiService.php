@@ -56,6 +56,7 @@ class OpenAiService
                 ),
                 'body' => $formData->bodyToIterable(),
                 'timeout' => 120,
+                'max_duration' => 300,
             ]);
 
             if ($response->getStatusCode() !== 200) {

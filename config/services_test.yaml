@@ -13,3 +13,11 @@ services:
     App\Tests\Fake\FakeLandingAiClient:
         public: true
     App\Services\LandingAiService\LandingAiClientInterface: '@App\Tests\Fake\FakeLandingAiClient'
+
+    # Synchronisation de la configuration des landing pages : faux frontend (aucun appel réseau)
+    App\Tests\Fake\FakeFrontendConfigHttpClient:
+        public: true
+    App\Services\LandingConfigService\FrontendConfigFetcher:
+        arguments:
+            $httpClient: '@App\Tests\Fake\FakeFrontendConfigHttpClient'
+            $baseUrl: !php/const App\Tests\Fake\FakeFrontendConfigHttpClient::BASE_URL

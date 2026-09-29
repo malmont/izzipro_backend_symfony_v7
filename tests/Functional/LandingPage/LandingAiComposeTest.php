@@ -21,6 +21,8 @@ class LandingAiComposeTest extends WebTestCase
 
     private KernelBrowser $client;
     private array $session = [];
+    /** Tenant des requêtes : [hôte, base, code] */
+    private array $tenant = [MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE];
 
     protected function setUp(): void
     {
@@ -28,6 +30,7 @@ class LandingAiComposeTest extends WebTestCase
         FakeLandingAiClient::reset();
         static::getContainer()->get('limiter.landing_ai_tenant')->create('tenant:' . MV_TEST_TENANT_CODE)->reset();
         $this->db()->executeStatement('DELETE FROM ai_usage');
+        $this->db()->executeStatement('DELETE FROM ai_job');
         $this->db()->executeStatement('DELETE FROM ai_credit_setting');
         $this->session = $this->login(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
     }
@@ -178,7 +181,7 @@ class LandingAiComposeTest extends WebTestCase
     public function testOrphanReservationIsReleasedAfterFiveMinutes(): void
     {
         $this->db()->executeStatement('INSERT INTO ai_credit_setting (monthly_credits) VALUES (1)');
-        $this->db()->executeStatement("INSERT INTO ai_usage (tenant, created_at, mode, component_key, status, credits) VALUES ('mvtest', NOW() - INTERVAL '6 minutes', 'edit', 'PresentationGroup', 'reserved', 1)");
+        $this->db()->executeStatement("INSERT INTO ai_usage (tenant, created_at, reserved_until, mode, component_key, status, credits) VALUES ('mvtest', NOW() - INTERVAL '6 minutes', NOW() - INTERVAL '1 minute', 'edit', 'PresentationGroup', 'reserved', 1)");
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([]);
 
         $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Rien à changer.']);
@@ -419,10 +422,8 @@ class LandingAiComposeTest extends WebTestCase
             ['componentKey' => 'Contact', 'dataType' => null, 'composition' => $this->preset('contact-type-a')],
         ], 'Héros puis contact.');
 
-        $response = $this->compose(['mode' => 'page', 'prompt' => 'Page d\'accueil : héros puis contact, avec ma charte.', 'images' => [$this->pngDataUrl()]]);
+        $body = $this->composeInBackground(['mode' => 'page', 'prompt' => 'Page d\'accueil : héros puis contact, avec ma charte.', 'images' => [$this->pngDataUrl()]])->result;
 
-        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
-        $body = json_decode($response->getContent(), false);
         $this->assertSame('page', $body->mode);
         $this->assertObjectNotHasProperty('composition', $body);
         $this->assertSame(['Presentation', 'Contact'], array_column((array) $body->sections, 'componentKey'));
@@ -457,14 +458,14 @@ class LandingAiComposeTest extends WebTestCase
             ['componentKey' => 'Contact', 'dataType' => null, 'composition' => $contact],
         ]);
 
-        $response = $this->compose(['mode' => 'page', 'prompt' => 'Héros et contact.']);
+        $job = $this->composeInBackground(['mode' => 'page', 'prompt' => 'Héros et contact.']);
 
-        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertSame('done', $job->status);
         $feedback = FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'];
         $this->assertStringContainsString('sections[0].composition.bgImage', $feedback);
         $this->assertStringContainsString('sections[1].dataType', $feedback);
         $this->assertStringContainsString('TOUTES les sections', $feedback);
-        $this->assertSame(10, json_decode($response->getContent())->credits->used, 'sans images, une page coûte aussi 10 crédits');
+        $this->assertSame(10, $job->result->credits->used, 'sans images, une page coûte aussi 10 crédits');
     }
 
     public function testPageWithAnImposedFamilyRejectsOtherFamilies(): void
@@ -472,9 +473,7 @@ class LandingAiComposeTest extends WebTestCase
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Contact', 'dataType' => null, 'composition' => $this->preset('contact-type-a')]]);
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Presentation', 'dataType' => $this->availableIds('Presentation')[0], 'composition' => $this->preset('presentation-type-b')]]);
 
-        $response = $this->compose(['mode' => 'page', 'componentKey' => 'Presentation', 'prompt' => 'Reproduis cette section.', 'images' => [$this->pngDataUrl()]]);
-
-        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertSame('done', $this->composeInBackground(['mode' => 'page', 'componentKey' => 'Presentation', 'prompt' => 'Reproduis cette section.', 'images' => [$this->pngDataUrl()]])->status);
         $this->assertStringContainsString('famille imposée : Presentation', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
         $this->assertStringContainsString('Famille imposée pour toutes les sections : Presentation', FakeLandingAiClient::$requests[0]['messages'][0]['content'][1]['text']);
         $history = json_decode($this->get('/api/landingpage-ai/usage')->getContent(), true)['history'];
@@ -485,13 +484,146 @@ class LandingAiComposeTest extends WebTestCase
     {
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]);
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre de la couleur de la capture.', 'images' => [$this->pngDataUrl()]]);
+        $job = $this->composeInBackground(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre de la couleur de la capture.', 'images' => [$this->pngDataUrl()]]);
 
-        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertSame('edit', $job->result->mode, 'une retouche avec image passe aussi en tâche de fond');
         $request = FakeLandingAiClient::$requests[0];
         $this->assertSame(static::getContainer()->get(\App\Services\LandingAiService\LandingAiComposer::class)->pageModel(), $request['model']);
         $this->assertSame('image', $request['messages'][0]['content'][0]['type']);
-        $this->assertSame(10, json_decode($response->getContent())->credits->used);
+        $this->assertSame(10, $job->result->credits->used);
+    }
+
+    public function testFailedJobReleasesCreditsAndReportsTheError(): void
+    {
+        $invalid = FakeLandingAiClient::pageResponse([['componentKey' => 'Inconnue', 'dataType' => null, 'composition' => new \stdClass()]]);
+        FakeLandingAiClient::$queue = [$invalid, $invalid, $invalid];
+
+        $response = $this->compose(['mode' => 'page', 'prompt' => 'Une page.']);
+        $this->assertSame(10, json_decode($response->getContent())->credits->used, 'crédits réservés pendant la tâche');
+        $jobId = json_decode($response->getContent())->jobId;
+        $this->runWorker($this->sentJobMessages());
+
+        $job = json_decode($this->get('/api/landingpage-ai/jobs/' . $jobId)->getContent(), false);
+        $this->assertSame('failed', $job->status);
+        $this->assertObjectNotHasProperty('result', $job);
+        $this->assertSame(502, $job->error->status);
+        $this->assertSame('Proposition invalide', $job->error->error);
+        $this->assertSame('sections[0].componentKey', $job->error->errors[0]->path);
+        $usage = json_decode($this->get('/api/landingpage-ai/usage')->getContent(), true);
+        $this->assertSame(0, $usage['credits']['used'], 'crédits libérés');
+        $this->assertSame('failed', $usage['history'][0]['status']);
+        $this->assertNull($this->db()->fetchOne('SELECT input FROM ai_job'), 'requête effacée après le traitement');
+    }
+
+    public function testJobIsOnlyVisibleToItsTenant(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Contact', 'dataType' => null, 'composition' => $this->preset('contact-type-a')]]);
+        $jobId = json_decode($this->compose(['mode' => 'page', 'prompt' => 'Un contact.'])->getContent())->jobId;
+        $this->runWorker($this->sentJobMessages());
+        $this->assertSame(200, $this->get('/api/landingpage-ai/jobs/' . $jobId)->getStatusCode());
+
+        $this->tenant = [MV_TEST_TENANT2_HOST, MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE];
+        $this->session = $this->login(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
+        $response = $this->get('/api/landingpage-ai/jobs/' . $jobId);
+        $this->assertSame(404, $response->getStatusCode(), 'tâche d\'un autre tenant');
+        $this->assertSame('Tâche introuvable', json_decode($response->getContent())->error);
+
+        $this->assertSame(404, $this->get('/api/landingpage-ai/jobs/00000000-0000-4000-8000-000000000000')->getStatusCode());
+        $this->assertSame(404, $this->get('/api/landingpage-ai/jobs/pas-un-identifiant')->getStatusCode());
+    }
+
+    public function testNonAdminCannotReadAJob(): void
+    {
+        $this->session = $this->login(['ROLE_USER_INTERNET']);
+        $this->assertSame(403, $this->get('/api/landingpage-ai/jobs/00000000-0000-4000-8000-000000000000')->getStatusCode());
+    }
+
+    public function testMessageDeliveredTwiceCallsTheAiOnce(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Contact', 'dataType' => null, 'composition' => $this->preset('contact-type-a')]]);
+        $this->compose(['mode' => 'page', 'prompt' => 'Un contact.']);
+        $messages = $this->sentJobMessages();
+
+        $this->runWorker([...$messages, ...$messages]);
+
+        $this->assertCount(1, FakeLandingAiClient::$requests);
+        $this->assertSame('done', $this->db()->fetchOne('SELECT status FROM ai_job'));
+    }
+
+    public function testStuckJobFailsAndReleasesCredits(): void
+    {
+        $jobId = json_decode($this->compose(['mode' => 'page', 'prompt' => 'Une page.'])->getContent())->jobId;
+        $reservedFor = (int) $this->db()->fetchOne('SELECT EXTRACT(EPOCH FROM reserved_until - created_at) FROM ai_usage');
+        $this->assertSame(\App\Services\LandingAiService\LandingAiQuotaService::JOB_RESERVATION_TTL_SECONDS, $reservedFor, 'réservation plus longue qu\'en synchrone');
+
+        // worker arrêté : la tâche attend depuis 31 minutes
+        $this->db()->executeStatement("UPDATE ai_job SET created_at = NOW() - INTERVAL '31 minutes'");
+        $job = json_decode($this->get('/api/landingpage-ai/jobs/' . $jobId)->getContent(), false);
+
+        $this->assertSame('failed', $job->status);
+        $this->assertSame(504, $job->error->status);
+        $this->assertSame(0, json_decode($this->get('/api/landingpage-ai/usage')->getContent())->credits->used);
+        $this->runWorker($this->sentJobMessages());
+        $this->assertSame([], FakeLandingAiClient::$requests, 'une tâche en échec n\'est plus traitée');
+    }
+
+    public function testFinishedJobExpiresAfterOneHour(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Contact', 'dataType' => null, 'composition' => $this->preset('contact-type-a')]]);
+        $jobId = json_decode($this->compose(['mode' => 'page', 'prompt' => 'Un contact.'])->getContent())->jobId;
+        $this->runWorker($this->sentJobMessages());
+
+        $this->db()->executeStatement("UPDATE ai_job SET finished_at = NOW() - INTERVAL '61 minutes'");
+
+        $this->assertSame(404, $this->get('/api/landingpage-ai/jobs/' . $jobId)->getStatusCode());
+        $this->assertSame(0, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM ai_job'));
+    }
+
+    /**
+     * Mode page ou images : POST (202 { jobId, credits }), passage du worker, puis lecture de la tâche.
+     *
+     * @return object { jobId, status, result? , error? }
+     */
+    private function composeInBackground(array $body): object
+    {
+        $response = $this->compose($body);
+        $this->assertSame(202, $response->getStatusCode(), $response->getContent());
+        $accepted = json_decode($response->getContent(), false);
+        $this->assertSame('/api/landingpage-ai/jobs/' . $accepted->jobId, $response->headers->get('Location'));
+        $this->assertSame([], FakeLandingAiClient::$requests, 'aucun appel à l\'IA avant le passage du worker');
+        $messages = $this->sentJobMessages();
+        $this->assertCount(1, $messages);
+        $this->assertSame('pending', json_decode($this->get('/api/landingpage-ai/jobs/' . $accepted->jobId)->getContent())->status);
+
+        $this->runWorker($messages);
+
+        $job = $this->get('/api/landingpage-ai/jobs/' . $accepted->jobId);
+        $this->assertSame(200, $job->getStatusCode(), $job->getContent());
+
+        return json_decode($job->getContent(), false);
+    }
+
+    /**
+     * Messages de tâches envoyés par la dernière requête (transport en mémoire). À lire avant la requête suivante :
+     * le client de test redémarre le noyau, et donc le transport, à chaque requête.
+     *
+     * @return list<\App\Message\LandingAiJobMessage>
+     */
+    private function sentJobMessages(): array
+    {
+        return array_values(array_filter(
+            array_map(fn ($envelope) => $envelope->getMessage(), static::getContainer()->get('messenger.transport.landing_ai')->getSent()),
+            fn ($message) => $message instanceof \App\Message\LandingAiJobMessage
+        ));
+    }
+
+    /** Traite les messages comme le worker Messenger */
+    private function runWorker(array $messages): void
+    {
+        $handler = static::getContainer()->get(\App\MessageHandler\LandingAiJobHandler::class);
+        foreach ($messages as $message) {
+            $handler($message);
+        }
     }
 
     /** Petite image PNG valide, en data URL */
@@ -575,13 +707,13 @@ class LandingAiComposeTest extends WebTestCase
         $jar = $this->client->getCookieJar();
         $jar->clear();
         foreach ($this->session as $name => $value) {
-            $jar->set(new \Symfony\Component\BrowserKit\Cookie($name, $value, null, '/', MV_TEST_TENANT_HOST, true));
+            $jar->set(new \Symfony\Component\BrowserKit\Cookie($name, $value, null, '/', $this->tenant[0], true));
         }
-        $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . $path, [], [], array_filter([
-            'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST,
+        $this->client->request($method, 'https://' . $this->tenant[0] . $path, [], [], array_filter([
+            'HTTP_X_TENANT_HOST' => $this->tenant[0],
             'CONTENT_TYPE' => 'application/json',
             'HTTP_ACCEPT' => 'application/json',
-            'HTTP_X_XSRF_TOKEN' => $this->session['XSRF-TOKEN_' . MV_TEST_TENANT_CODE] ?? null,
+            'HTTP_X_XSRF_TOKEN' => $this->session['XSRF-TOKEN_' . $this->tenant[2]] ?? null,
         ]), $body);
 
         return $this->client->getResponse();
@@ -590,7 +722,7 @@ class LandingAiComposeTest extends WebTestCase
     private function db(): \Doctrine\DBAL\Connection
     {
         $provider = static::getContainer()->get(TenantEntityManagerProvider::class);
-        $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $provider->switchTenant($this->tenant[1], $this->tenant[2]);
 
         return $provider->getEntityManager()->getConnection();
     }
@@ -601,15 +733,15 @@ class LandingAiComposeTest extends WebTestCase
         $email = 'landing-ai-' . bin2hex(random_bytes(3)) . '@example.invalid';
         $container = static::getContainer();
         $provider = $container->get(TenantEntityManagerProvider::class);
-        $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
+        $provider->switchTenant($this->tenant[1], $this->tenant[2]);
         $user = (new User())->setEmail($email)->setUsername($email)->setFirstname('Landing')->setLastname('IA')->setRoles($roles)->setIsVerified(true);
         $user->setPassword($container->get(UserPasswordHasherInterface::class)->hashPassword($user, self::PASSWORD));
         $provider->getEntityManager()->persist($user);
         $provider->getEntityManager()->flush();
 
         $this->client->getCookieJar()->clear();
-        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/api/login', [], [], [
-            'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
+        $this->client->request('POST', 'https://' . $this->tenant[0] . '/api/login', [], [], [
+            'HTTP_X_TENANT_HOST' => $this->tenant[0], 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
         ], json_encode(['username' => $email, 'password' => self::PASSWORD, 'platform' => 'web']));
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $this->client->getResponse()->getContent());
         $session = [];

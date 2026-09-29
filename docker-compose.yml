@@ -55,7 +55,11 @@ services:
       - app
     restart: always
 
+  # Workers Messenger : un par projet, chacun sur sa file (config/packages/messenger.yaml) et avec son propre cache
+  # Symfony (docker/worker/consume.sh). Redémarrage automatique toutes les 15 minutes, entre deux messages, pour
+  # reprendre le code à jour sans intervention.
   messenger_worker:
+    &messenger_worker
     image: app_v2-app:latest
     container_name: symfony_messenger_worker_v2
     restart: always
@@ -66,14 +70,29 @@ services:
       - ./docker/php/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
     env_file:
       - .env
+    environment:
+      APP_CACHE_DIR: /tmp/symfony-worker-cache
+      APP_DEBUG: "0"
     networks:
       - symfony_v2
     depends_on:
       - app
       - db
       - redis
-    command: ["php", "bin/console", "messenger:consume", "async", "--limit=50", "--time-limit=3600", "--memory-limit=256M"]
+    # Mémoires Vivantes (chapitres)
+    command: ["sh", "docker/worker/consume.sh", "async", "--limit=50", "--time-limit=900", "--memory-limit=256M"]
 
+  messenger_worker_esg:
+    <<: *messenger_worker
+    container_name: symfony_messenger_worker_esg_v2
+    # Boussole ESG (rapports PDF)
+    command: ["sh", "docker/worker/consume.sh", "esg", "--limit=50", "--time-limit=900", "--memory-limit=256M"]
+
+  messenger_worker_landing:
+    <<: *messenger_worker
+    container_name: symfony_messenger_worker_landing_v2
+    # Assistant IA des landing pages (mode page, images)
+    command: ["sh", "docker/worker/consume.sh", "landing_ai", "--limit=50", "--time-limit=900", "--memory-limit=256M"]
 
 volumes:
   db_data_v2:

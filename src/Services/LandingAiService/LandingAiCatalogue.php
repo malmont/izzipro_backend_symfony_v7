@@ -2,7 +2,7 @@
 
 namespace App\Services\LandingAiService;
 
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use App\Services\LandingConfigService\LandingConfigStore;
 
 /**
  * Catalogue du frontend (config/landingpage/landingpage-ia-catalogue.json, copie exacte de npm run ia:catalogue) :
@@ -13,11 +13,11 @@ final class LandingAiCatalogue
     private const REFERENCE_MAX_CHARS = 6000;
 
     private ?array $catalogue = null;
+    /** Fichier chargé dans $catalogue */
+    private ?string $loadedFrom = null;
 
-    public function __construct(
-        #[Autowire('%kernel.project_dir%/config/landingpage/landingpage-ia-catalogue.json')]
-        private readonly string $path
-    ) {
+    public function __construct(private readonly LandingConfigStore $configStore)
+    {
     }
 
     public function hasFamily(string $componentKey): bool
@@ -140,11 +140,13 @@ final class LandingAiCatalogue
 
     private function load(): array
     {
-        if ($this->catalogue === null) {
-            if (!is_file($this->path)) {
-                throw new \RuntimeException(sprintf('Catalogue de l\'assistant introuvable : %s (voir config/landingpage/README.md)', $this->path));
+        $path = $this->configStore->path(LandingConfigStore::CATALOGUE);
+        if ($this->catalogue === null || $this->loadedFrom !== $path) {
+            if (!is_file($path)) {
+                throw new \RuntimeException(sprintf('Catalogue de l\'assistant introuvable : %s (voir config/landingpage/README.md)', $path));
             }
-            $this->catalogue = json_decode(file_get_contents($this->path), true, 512, JSON_THROW_ON_ERROR);
+            $this->catalogue = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+            $this->loadedFrom = $path;
         }
 
         return $this->catalogue;

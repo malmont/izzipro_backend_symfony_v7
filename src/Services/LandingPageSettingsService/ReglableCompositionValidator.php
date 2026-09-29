@@ -5,7 +5,7 @@ namespace App\Services\LandingPageSettingsService;
 use Opis\JsonSchema\Errors\ErrorFormatter;
 use Opis\JsonSchema\Errors\ValidationError;
 use Opis\JsonSchema\Validator;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use App\Services\LandingConfigService\LandingConfigStore;
 
 /**
  * Validation des compositions « réglables » (schemaVersion 2) des landing pages, à l'écriture uniquement.
@@ -23,11 +23,22 @@ final class ReglableCompositionValidator
     private const MAX_ERRORS = 50;
 
     private ?object $schema = null;
+    /** Fichier du schéma chargé dans $schema */
+    private ?string $loadedFrom = null;
+    /** Schéma imposé (contrôle d'une version candidate), sinon celui de la version active */
+    private ?string $schemaFile = null;
 
-    public function __construct(
-        #[Autowire('%kernel.project_dir%/config/landingpage/landingpage-reglable.schema.json')]
-        private string $schemaPath
-    ) {
+    public function __construct(private readonly LandingConfigStore $configStore)
+    {
+    }
+
+    /** Validateur utilisant le schéma de $schemaFile (version candidate d'une synchronisation) */
+    public function withSchemaFile(string $schemaFile): self
+    {
+        $validator = new self($this->configStore);
+        $validator->schemaFile = $schemaFile;
+
+        return $validator;
     }
 
     /**
@@ -297,12 +308,14 @@ final class ReglableCompositionValidator
 
     private function schema(): object
     {
-        if ($this->schema === null) {
-            if (!is_file($this->schemaPath)) {
-                throw new \RuntimeException(sprintf('Schéma des compositions réglables introuvable : %s (voir config/landingpage/README.md)', $this->schemaPath));
+        $path = $this->schemaFile ?? $this->configStore->path(LandingConfigStore::SCHEMA);
+        if ($this->schema === null || $this->loadedFrom !== $path) {
+            if (!is_file($path)) {
+                throw new \RuntimeException(sprintf('Schéma des compositions réglables introuvable : %s (voir config/landingpage/README.md)', $path));
             }
-            $this->schema = json_decode(file_get_contents($this->schemaPath), false, 512, JSON_THROW_ON_ERROR);
+            $this->schema = json_decode(file_get_contents($path), false, 512, JSON_THROW_ON_ERROR);
             $this->translatePatterns($this->schema);
+            $this->loadedFrom = $path;
         }
 
         return $this->schema;
