@@ -53,7 +53,10 @@ class TransactionalEmailTest extends KernelTestCase
     public function testAWritingSessionIsAnnouncedNotRequested(): void
     {
         // Séance programmée par le biographe (liée à un livre) : ce n'est pas une demande à examiner
-        $book = $this->em()->getRepository(Book::class)->findOneBy([]);
+        $em = $this->em();
+        $book = $em->getRepository(Book::class)->findOneBy([]);
+        $book->setClientAddress("12 rue des Flamboyants\n97200 Fort-de-France");
+        $em->flush();
         $session = $this->reservation()->setBookId((string) $book->getId())->setStepNumber(2)->setTotalSteps(5)->setServiceName('Séance 2 / 5');
         $this->em()->flush();
 
@@ -67,7 +70,12 @@ class TransactionalEmailTest extends KernelTestCase
         $this->assertStringNotContainsString('demande de réservation', $html);
         $this->assertStringNotContainsString('examiner votre demande', $html);
         $this->assertStringContainsString('Séance programmée — Séance 2 / 5 avec Client Test', (string) $messages[1]->getSubject());
-        $this->assertStringContainsString('SUMMARY:Séance d\'écriture', $messages[0]->getAttachments()[0]->getBody());
+        $calendar = $messages[0]->getAttachments()[0]->getBody();
+        $this->assertStringContainsString('SUMMARY:Séance d\'écriture', $calendar);
+        $this->assertStringContainsString('LOCATION:12 rue des Flamboyants 97200 Fort-de-France', $calendar, 'lieu de la séance dans l\'agenda');
+        $this->assertStringContainsString('Chez vous, 12 rue des Flamboyants', $html);
+        $internal = (string) $messages[1]->getHtmlBody();
+        $this->assertStringContainsString('https://www.google.com/maps/dir/?api=1&amp;destination=12%20rue%20des%20Flamboyants', $internal, 'itinéraire pour le biographe');
 
         static::getContainer()->get(ReservationMailerService::class)->sendStatusChangeEmail($session, 'confirmed');
         $confirmed = $this->messages()[2];

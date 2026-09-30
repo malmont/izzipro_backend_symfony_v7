@@ -9,6 +9,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 
 class BookCrudController extends BaseTenantCrudController
 {
@@ -32,6 +33,7 @@ class BookCrudController extends BaseTenantCrudController
         yield TextField::new('subtitle', 'Sous-titre');
         yield TextField::new('type', 'Type (Individuel, Couple, Famille)');
         yield TextField::new('format', 'Format');
+        yield TextareaField::new('clientAddress', 'Adresse du client (séances)')->hideOnIndex();
         yield AssociationField::new('user', 'Utilisateur')->hideOnForm();
         yield DateTimeField::new('createdAt', 'Créé le')->hideOnForm();
     }

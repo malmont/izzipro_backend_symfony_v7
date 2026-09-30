@@ -48,7 +48,7 @@ plus qu'un dernier repli : chaque site a son frontend.
 
 | Table | Entité | Contenu |
 |---|---|---|
-| `mv_book` | `Book` | livre (propriétaire, type, statut de paiement…) ; identifiant UUID |
+| `mv_book` | `Book` | livre (propriétaire, type, statut de paiement, adresse du client `client_address` : itinéraire Google Maps pour le biographe, `clientAddressMapsUrl` dans l'API, jamais montrée aux invités) ; identifiant UUID |
 | `mv_chapter` | `Chapter` | réponses, texte généré, `generation_status` |
 | `mv_chapter_photo` | `ChapterPhoto` | photos d'un chapitre |
 | `mv_contributor` | `Contributor` | contributeurs (livres collectifs) |

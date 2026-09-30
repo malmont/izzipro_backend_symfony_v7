@@ -30,6 +30,12 @@
             <td style="padding: 8px 0; color: #0f172a;">{{ reservation.reservationSlot }}</td>
         </tr>
         {% endif %}
+        {% if clientAddress %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; vertical-align: top;">Lieu :</td>
+            <td style="padding: 8px 0; color: #0f172a; white-space: pre-wrap;">Chez vous, {{ clientAddress }}</td>
+        </tr>
+        {% endif %}
         {% if biographerName %}
         <tr>
             <td style="padding: 8px 0; font-weight: bold; color: #475569;">Avec :</td>

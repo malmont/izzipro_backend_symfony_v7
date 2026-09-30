@@ -6,6 +6,7 @@ use App\Entity\EmailConfiguration;
 use App\Entity\Entreprise;
 use App\Entity\Reservation;
 use App\MemoiresVivantes\Entity\Book;
+use App\MemoiresVivantes\Services\MapsLink;
 use Symfony\Component\Uid\Uuid;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
 use App\Services\EmailConfigurationService\TenantMailerFactory;
@@ -51,20 +52,36 @@ class ReservationMailerService
             $label = sprintf('Séance %d%s%s', $reservation->getStepNumber(), $reservation->getTotalSteps() ? ' sur ' . $reservation->getTotalSteps() : '', $label !== '' ? ' — ' . $label : '');
         }
 
-        $bookTitle = null;
-        if ($reservation->getBookId()) {
-            try {
-                $book = $this->emProvider->getEntityManager()->getRepository(Book::class)->find(Uuid::fromString($reservation->getBookId()));
-                $bookTitle = $book?->getTitle();
-            } catch (\Throwable) {
-                // Identifiant hors format ou module absent : le titre n'est pas indispensable
-            }
-        }
-
+        $book = $this->bookOf($reservation);
         $biographer = $reservation->getBiographer();
         $biographerName = $biographer ? trim($biographer->getFirstname() . ' ' . $biographer->getLastname()) : null;
 
-        return ['sessionLabel' => $label !== '' ? $label : 'Séance d\'écriture', 'bookTitle' => $bookTitle, 'biographerName' => $biographerName ?: null];
+        return [
+            'sessionLabel' => $label !== '' ? $label : 'Séance d\'écriture',
+            'bookTitle' => $book?->getTitle(),
+            'biographerName' => $biographerName ?: null,
+            'clientAddress' => $book?->getClientAddress(),
+            'clientAddressMapsUrl' => MapsLink::directionsUrl($book?->getClientAddress()),
+        ];
+    }
+
+    private function bookOf(Reservation $reservation): ?Book
+    {
+        if (!$reservation->getBookId()) {
+            return null;
+        }
+        try {
+            return $this->emProvider->getEntityManager()->getRepository(Book::class)->find(Uuid::fromString($reservation->getBookId()));
+        } catch (\Throwable) {
+            // Identifiant hors format ou module absent : le livre n'est pas indispensable à l'e-mail
+            return null;
+        }
+    }
+
+    /** Lieu d'une séance d'écriture : chez le client quand son adresse est connue */
+    private function sessionLocation(Reservation $reservation): ?string
+    {
+        return self::isWritingSession($reservation) ? $this->bookOf($reservation)?->getClientAddress() : null;
     }
 
     /**
@@ -376,7 +393,7 @@ class ReservationMailerService
             $reservation->getNotes() ?: 'Aucune',
             $domain
         );
-        $location = $entreprise && $entreprise->getAdress() ? $entreprise->getAdress() : $domain;
+        $location = $this->sessionLocation($reservation) ?? ($entreprise && $entreprise->getAdress() ? $entreprise->getAdress() : $domain);
 
         return 'https://calendar.google.com/calendar/render?' . http_build_query([
             'action' => 'TEMPLATE',
@@ -418,6 +435,10 @@ class ReservationMailerService
         $ics .= "DTEND:{$dtEnd}\r\n";
         $ics .= "SUMMARY:{$summary}\r\n";
         $ics .= "DESCRIPTION:{$description}\r\n";
+        // Lieu de la séance : l'agenda du biographe propose alors l'itinéraire d'un clic
+        if ($location = $this->sessionLocation($reservation)) {
+            $ics .= sprintf("LOCATION:%s\r\n", addcslashes(preg_replace('/\s+/u', ' ', $location), ';,\\'));
+        }
         $ics .= sprintf("ORGANIZER;CN=%s:mailto:%s\r\n", addcslashes($organizerName, ';,'), $organizerEmail);
         if ($reservation->getClientEmail()) {
             $ics .= sprintf("ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;CN=%s:mailto:%s\r\n", addcslashes($reservation->getClientName(), ';,'), $reservation->getClientEmail());

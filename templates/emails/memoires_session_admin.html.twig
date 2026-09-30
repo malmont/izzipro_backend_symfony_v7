@@ -15,6 +15,7 @@
         {% if biographerName %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Biographe :</td><td style="padding: 8px 0; color: #0f172a;">{{ biographerName }}</td></tr>{% endif %}
         <tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Client :</td><td style="padding: 8px 0; color: #0f172a; font-weight: 600;">{{ reservation.clientName }}</td></tr>
         <tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">E-mail :</td><td style="padding: 8px 0;"><a href="mailto:{{ reservation.clientEmail }}" style="color: #2563eb;">{{ reservation.clientEmail }}</a></td></tr>
+        {% if clientAddress %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569; vertical-align: top;">Adresse :</td><td style="padding: 8px 0; color: #0f172a; white-space: pre-wrap;">{{ clientAddress }}<br><a href="{{ clientAddressMapsUrl }}" target="_blank" style="color: #2563eb; font-weight: 600;">Itinéraire Google Maps</a></td></tr>{% endif %}
         {% if reservation.clientPhone %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Téléphone :</td><td style="padding: 8px 0;"><a href="tel:{{ reservation.clientPhone }}" style="color: #2563eb;">{{ reservation.clientPhone }}</a></td></tr>{% endif %}
         {% if reservation.forfaitName %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Formule :</td><td style="padding: 8px 0; color: #0f172a;">{{ reservation.forfaitName }}</td></tr>{% endif %}
         {% if reservation.notes %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569; vertical-align: top;">Précisions :</td><td style="padding: 8px 0; color: #0f172a; white-space: pre-wrap;">{{ reservation.notes }}</td></tr>{% endif %}
@@ -23,5 +24,8 @@
 
 <div style="text-align: center; margin: 30px 0;">
     <a href="{{ googleCalendarUrl }}" target="_blank" style="display: inline-block; background-color: #b59449; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px;">Ajouter à Google Agenda</a>
+    {% if clientAddressMapsUrl %}
+    <a href="{{ clientAddressMapsUrl }}" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px; margin-left: 8px;">Itinéraire vers le client</a>
+    {% endif %}
 </div>
 {% endblock %}

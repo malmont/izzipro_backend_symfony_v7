@@ -77,6 +77,10 @@ class Book
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
     private bool $parentsDeceased = false;
+
+    /** Adresse du client, où se tiennent les séances d'écriture : itinéraire du biographe (jamais montrée aux invités) */
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $clientAddress = null;
  
     #[ORM\Column(length: 20)]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
@@ -286,6 +290,18 @@ class Book
     public function setParentsDeceased(bool $parentsDeceased): static
     {
         $this->parentsDeceased = $parentsDeceased;
+        return $this;
+    }
+
+    public function getClientAddress(): ?string
+    {
+        return $this->clientAddress;
+    }
+
+    public function setClientAddress(?string $clientAddress): static
+    {
+        $clientAddress = trim((string) $clientAddress);
+        $this->clientAddress = $clientAddress !== '' ? $clientAddress : null;
         return $this;
     }
 
