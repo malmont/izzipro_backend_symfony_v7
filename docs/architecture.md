@@ -27,8 +27,32 @@ CRUD EasyAdmin : étendre `BaseTenantCrudController`.
 
 - **Site de test `demo`** (`demo.arkanoa-media.ca`, base `db_demo`) : copie du site de l'agence, réservée aux essais
   (éditeur, assistant IA, évaluation). Seul site sur lequel on peut écrire librement ; les autres sont des clients.
-- **Nouveau tenant** : `CREATE DATABASE … WITH TEMPLATE gmasuite` (`TenantConnectionManager::createTenant`,
-  `app:tenant:create`) ; ce que contient `gmasuite` devient la valeur par défaut des nouveaux clients.
+### Créer un nouveau site (tenant) : la table `tenants` est la seule source
+
+**Rien n'est codé en dur** : le listener associe l'hôte de chaque requête à sa base **uniquement** par la table
+`tenants` de la base maître. Un site absent de cette table n'existe pas pour l'application, quel que soit le DNS ou
+le proxy. Procédure :
+
+1. **La base** : `CREATE DATABASE "db_<code>" WITH TEMPLATE gmasuite` (`app:tenant:create`, qui fait aussi l'étape 2),
+   ou copie d'un site existant par `pg_dump | psql` (sans coupure ; le site de test `demo` a été fait ainsi).
+2. **L'enregistrement dans `tenants`** de la base maître (`app_v2_db`, `MASTER_DATABASE_URL`) :
+   `code` (identifiant, aussi sous-domaine `<code>.backend-strapi.online` et `?tenant=<code>` d'EasyAdmin), `name`,
+   `dbname`, `custom_domain` (le domaine public du frontend, ex. `demo.arkanoa-media.ca` ; c'est lui que le relais
+   du frontend envoie dans `X-Tenant-Host`), `is_internal_store`. Les colonnes `dbuser`, `dbpass`, `gemsuite_token`
+   restent vides (connexion par `DATABASE_URL`). Un même `dbname` peut servir plusieurs codes ou domaines
+   (`esgboost` / `esgboost1`).
+   **Aussi dans l'ancienne base `master`** tant que les scripts `scripts/migrate_all_v2_*.sh` y lisent la liste des
+   bases (à corriger un jour : une seule table).
+3. **Le cache** : `php bin/console cache:pool:invalidate-tags tenants` (la résolution hôte → site est en cache 1 h).
+4. **Vérifier** : `curl -H "X-Tenant-Host: <custom_domain>" https://v2.backend-strapi.online/api/service-offers` répond
+   avec les données de la nouvelle base.
+5. **Hors backend** : DNS du domaine public vers le serveur du frontend (certificat automatique) ; entrée Nginx Proxy
+   Manager `<code>.backend-strapi.online` seulement pour ouvrir EasyAdmin à sa propre adresse (le DNS
+   `*.backend-strapi.online` est un joker). Aucun changement de code ni de configuration nginx, **sauf** pour un
+   nouveau domaine racine appelé directement par un navigateur : la liste CORS de `docker/nginx/default.conf` est
+   la seule liste de domaines codée en dur (inutile pour les appels qui passent par le relais du frontend).
+
+Ce que contient `gmasuite` devient la valeur par défaut des nouveaux clients (`TenantConnectionManager::createTenant`).
 - **Schéma sur toutes les bases** : les deux, toujours :
   1. une migration Doctrine dans `migrations/`, **idempotente** (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT
      EXISTS`) : c'est la trace versionnée, rejouable par `app:tenant:migrate-all` (un tenant : `app:tenant:migrate-db`,
