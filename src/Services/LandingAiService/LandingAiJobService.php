@@ -51,6 +51,14 @@ final class LandingAiJobService
         return $this->jobs()->find($id);
     }
 
+    /** Tâche en attente ou en cours de cet utilisateur, après nettoyage des tâches bloquées (null : aucune) */
+    public function activeFor(?string $user): ?AiJob
+    {
+        $this->cleanUp();
+
+        return $this->jobs()->findActiveFor($user);
+    }
+
     public function start(AiJob $job): void
     {
         $job->start();

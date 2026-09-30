@@ -21,6 +21,19 @@ class AiJobRepository extends EntityRepository
             ->execute();
     }
 
+    /** Tâche en attente ou en cours de cet utilisateur (base du site courant), la plus récente */
+    public function findActiveFor(?string $user): ?AiJob
+    {
+        $qb = $this->createQueryBuilder('j')
+            ->where('j.status IN (:active)')
+            ->setParameter('active', [AiJob::STATUS_PENDING, AiJob::STATUS_RUNNING])
+            ->orderBy('j.createdAt', 'DESC')
+            ->setMaxResults(1);
+        $user === null ? $qb->andWhere('j.user IS NULL') : $qb->andWhere('j.user = :user')->setParameter('user', $user);
+
+        return $qb->getQuery()->getOneOrNullResult();
+    }
+
     /**
      * Tâches bloquées : en attente depuis $pendingBefore (worker arrêté) ou en cours depuis $runningBefore (worker
      * interrompu).

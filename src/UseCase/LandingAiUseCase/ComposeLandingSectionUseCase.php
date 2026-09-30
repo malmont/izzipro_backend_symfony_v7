@@ -65,6 +65,12 @@ class ComposeLandingSectionUseCase
             ), array_slice($invalid, 0, 40));
         }
 
+        // Une seule tâche de fond à la fois par utilisateur : un double clic ne paie pas deux fois
+        if ($dto->isAsync() && ($active = $this->jobs->activeFor($userIdentifier))) {
+            throw new LandingAiException(409, 'Tâche en cours', 'Une demande est déjà en cours de traitement : attendez son résultat. Aucun crédit n\'a été consommé.',
+                [], ['Location' => '/api/landingpage-ai/jobs/' . $active->getId()], null, ['jobId' => $active->getId(), 'status' => $active->getStatus()]);
+        }
+
         $limit = $this->landingAiTenantLimiter->create('tenant:' . ($this->tenantProvider->getTenantCode() ?? 'default'))->consume();
         if (!$limit->isAccepted()) {
             $retryAfter = max(1, $limit->getRetryAfter()->getTimestamp() - time());

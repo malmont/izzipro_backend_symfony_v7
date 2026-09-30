@@ -2,6 +2,7 @@
 
 namespace App\Services\LandingAiService;
 
+use App\Services\AnthropicApiException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -18,6 +19,9 @@ final class LandingAiComposer
     public const PAGE_CALL_TIMEOUT = 180.0;
     public const PAGE_TOTAL_TIMEOUT = 300.0;
     private const MIN_CALL_TIME = 5.0;
+    /** Nouveaux essais d'un même appel sur une erreur passagère de l'API (429, 529, 5xx), dans le délai total */
+    public const TRANSIENT_RETRIES = 2;
+    private const MAX_RETRY_DELAY = 20;
 
     public function __construct(
         private readonly LandingAiClientInterface $client,
@@ -257,7 +261,7 @@ final class LandingAiComposer
         }
 
         try {
-            $response = $this->client->createMessage($payload, min($callTimeout, $remaining));
+            $response = $this->createMessageWithRetries($payload, $start, $callTimeout, $totalTimeout);
         } catch (LandingAiTimeoutException) {
             $stats->durationMs = $this->elapsedMs($start);
             throw new LandingAiException(504, 'Délai dépassé', 'L\'IA n\'a pas répondu à temps. Aucun crédit n\'a été consommé.', [], [], $stats);
@@ -276,6 +280,29 @@ final class LandingAiComposer
         }
 
         return $response;
+    }
+
+    /**
+     * Appel à l'API, repris jusqu'à TRANSIENT_RETRIES fois sur une erreur passagère (délai : Retry-After de l'API,
+     * sinon 2 puis 4 s), tant que le délai total le permet. Les autres erreurs remontent aussitôt.
+     */
+    private function createMessageWithRetries(array $payload, float $start, float $callTimeout, float $totalTimeout): object
+    {
+        for ($retry = 0; ; $retry++) {
+            $remaining = $totalTimeout - (microtime(true) - $start);
+            try {
+                return $this->client->createMessage($payload, min($callTimeout, $remaining));
+            } catch (AnthropicApiException $e) {
+                $delay = min(self::MAX_RETRY_DELAY, $e->getRetryAfter() ?? 2 ** ($retry + 1));
+                if (!$e->isTransient() || $retry >= self::TRANSIENT_RETRIES || $remaining - $delay < self::MIN_CALL_TIME * 2) {
+                    throw $e;
+                }
+                $this->logger->warning('Assistant IA : erreur passagère de l\'API, nouvel essai', ['status' => $e->getStatusCode(), 'retry' => $retry + 1, 'delay' => $delay]);
+                if ($delay > 0) {
+                    usleep($delay * 1000000);
+                }
+            }
+        }
     }
 
     /** Entrée de l'outil, décodée en objets (les {} restent des objets), ou null */

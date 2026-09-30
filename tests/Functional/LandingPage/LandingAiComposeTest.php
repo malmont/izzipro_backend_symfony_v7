@@ -522,6 +522,63 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame([], FakeLandingAiClient::$requests);
     }
 
+    public function testSecondBackgroundRequestWhileOneIsPendingGets409WithTheExistingJob(): void
+    {
+        $body = ['mode' => 'page', 'prompt' => 'Une page.'];
+        $first = json_decode($this->compose($body)->getContent());
+        $messages = $this->sentJobMessages();
+
+        $response = $this->compose($body);
+
+        $this->assertSame(409, $response->getStatusCode(), $response->getContent());
+        $conflict = json_decode($response->getContent());
+        $this->assertSame([$first->jobId, 'pending'], [$conflict->jobId, $conflict->status]);
+        $this->assertSame('/api/landingpage-ai/jobs/' . $first->jobId, $response->headers->get('Location'));
+        $this->assertSame(1, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM ai_usage'), 'une seule réservation');
+
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Contact', 'dataType' => null, 'composition' => $this->preset('contact-type-a')]]);
+        $this->runWorker($messages);
+        $this->assertSame(202, $this->compose($body)->getStatusCode(), 'tâche terminée : nouvelle demande acceptée');
+    }
+
+    public function testTransientApiErrorsAreRetried(): void
+    {
+        FakeLandingAiClient::$queue = [
+            new \App\Services\AnthropicApiException(529, 'overloaded_error', 0),
+            new \App\Services\AnthropicApiException(429, 'rate_limit_error', 0),
+            FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]),
+        ];
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre en noir.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertCount(3, FakeLandingAiClient::$requests);
+        $this->assertSame(1, json_decode($response->getContent())->usage->attempts, 'les reprises ne sont pas des essais de proposition');
+    }
+
+    public function testPersistentOverloadGives502AfterRetriesAndANonTransientErrorIsNotRetried(): void
+    {
+        $overloaded = fn () => new \App\Services\AnthropicApiException(529, 'overloaded_error', 0);
+        FakeLandingAiClient::$queue = [$overloaded(), $overloaded(), $overloaded()];
+        $body = ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre en noir.'];
+
+        $this->assertSame(502, $this->compose($body)->getStatusCode());
+        $this->assertCount(1 + \App\Services\LandingAiService\LandingAiComposer::TRANSIENT_RETRIES, FakeLandingAiClient::$requests);
+
+        FakeLandingAiClient::reset();
+        FakeLandingAiClient::$queue = [new \App\Services\AnthropicApiException(400, 'invalid_request_error')];
+        $this->assertSame(502, $this->compose($body)->getStatusCode());
+        $this->assertCount(1, FakeLandingAiClient::$requests, 'erreur de requête : pas de nouvel essai');
+    }
+
+    public function testSonnet55GetsAutomaticToolChoice(): void
+    {
+        $payload = static::getContainer()->get(\App\Services\LandingAiService\LandingAiPromptBuilder::class)
+            ->editPayload('claude-sonnet-5-5', 'PresentationGroup', $this->preset('group-type-t'), 'Titre en noir.', 'fr', [], [], ['colors' => [], 'fonts' => []]);
+
+        $this->assertSame(['type' => 'auto'], $payload['tool_choice']);
+    }
+
     public function testTooManyFailuresInADaySuspendTheAssistantOnThisSite(): void
     {
         $insert = "INSERT INTO ai_usage (tenant, created_at, reserved_until, mode, component_key, status, credits, attempts) VALUES ('mvtest', NOW() - INTERVAL '2 hours', NOW(), 'edit', 'PresentationGroup', 'failed', 1, %d)";

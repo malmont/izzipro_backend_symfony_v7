@@ -21,7 +21,7 @@ final class LandingAiPromptBuilder
     private const PAGE_DATA_ITEMS = 15;
 
     /** Modèles qui refusent tool_choice forcé (any / tool) : auto + consigne explicite */
-    private const MODELS_WITHOUT_FORCED_TOOL = ['claude-opus-5-5', 'claude-fable-5-1', 'claude-mythos-5-1'];
+    public const MODELS_WITHOUT_FORCED_TOOL = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-fable-5-1', 'claude-mythos-5-1'];
 
     private const SYSTEM = <<<'TXT'
 Tu es l'assistant de l'éditeur de landing pages. Tu produis des compositions de section (JSON « schemaVersion 2 ») conformes au contrat fourni, rien d'autre.

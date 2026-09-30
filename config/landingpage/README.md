@@ -112,6 +112,13 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
   - **Avant tout appel à l'IA** (30/09/2026) : en retouche, la composition reçue est limitée à 200 Ko (400) et doit
     déjà passer le contrat, les types de la famille et les médias (422 `Composition invalide`, sans crédit ni limite
     par minute consommés). Une composition invalide faisait échouer les 3 essais, payés, avec les crédits libérés.
+  - **Une tâche de fond à la fois par utilisateur** : une nouvelle demande page ou images pendant qu'une tâche du même
+    utilisateur est en attente ou en cours reçoit 409 `Tâche en cours` avec `jobId`, `status` et l'en-tête `Location`
+    de la tâche existante (aucun crédit consommé).
+  - **Erreurs passagères de l'API** (429, 529, 5xx) : jusqu'à 2 nouveaux essais du même appel (délai `Retry-After`,
+    sinon 2 puis 4 s), dans le délai total ; les autres erreurs donnent 502 aussitôt.
+  - **Modèles** : `LANDING_AI_MODEL_EDIT` / `LANDING_AI_MODEL_PAGE` ; un modèle qui refuse l'appel d'outil forcé doit
+    figurer dans `LandingAiPromptBuilder::MODELS_WITHOUT_FORCED_TOOL` (Opus 5.5, Sonnet 5.5, Fable 5.1, Mythos 5.1).
   - **Plafond d'échecs** : 20 demandes échouées après un appel réel à l'IA, par site et sur 24 h glissantes ; au-delà,
     429 `Trop d'échecs` avec `Retry-After` (`LandingAiQuotaService::FAILED_REQUESTS_PER_DAY`). Les échecs libèrent
     les crédits mais les appels sont payés : sans ce plafond, seule la limite par minute les bornait.

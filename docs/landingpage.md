@@ -75,9 +75,9 @@ Rapport complet transmis au frontend ; corrections par lots (tests à chaque lot
 |---|---|---|
 | 1 | `ROLE_SUPER_ADMIN` attribuable par un admin de site dans EasyAdmin (pilote la configuration commune) | corrigé le 30/09 (`RoleAssignmentPolicy`) |
 | 1 | Échecs de l'IA payés sans crédit ; composition de retouche non validée ni plafonnée | corrigé le 30/09 (validation préalable, 200 Ko, plafond d'échecs) |
-| 2 | Demande identique pendant une tâche en cours : payée deux fois | à faire : 409 avec le `jobId` existant |
-| 2 | Aucune reprise sur 429, 529 et 5xx de l'API | à faire : 1 ou 2 nouveaux essais |
-| 2 | `claude-sonnet-5-5` absent de `MODELS_WITHOUT_FORCED_TOOL` | à faire |
+| 2 | Demande identique pendant une tâche en cours : payée deux fois | corrigé le 30/09 (409 avec le `jobId` existant) |
+| 2 | Aucune reprise sur 429, 529 et 5xx de l'API | corrigé le 30/09 (2 nouveaux essais, `AnthropicApiException`) |
+| 2 | `claude-sonnet-5-5` absent de `MODELS_WITHOUT_FORCED_TOOL` | corrigé le 30/09 |
 | 3 | Balises HTML des textes non contrôlées côté backend | à faire : liste blanche identique au frontend (sans `<a>`, attribut `style` limité) |
 | 3 | 400 au lieu de 413 JSON pour un corps trop volumineux | à faire, sur toute la chaîne |
 | 3 | CORS de `/media/secure` limité à une liste de domaines codée en dur dans nginx | à faire : depuis la table `tenants` |

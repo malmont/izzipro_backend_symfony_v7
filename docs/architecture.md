@@ -205,6 +205,8 @@ docker exec -w /var/www -e SYMFONY_DEPRECATIONS_HELPER=disabled symfony_app_v2 p
 - Services simulés (`config/services_test.yaml`) : `FakeAnthropicService`, `FakeLandingAiClient`,
   `FakeFrontendConfigHttpClient`. Aucun appel réel ; test réel optionnel : `LANDING_AI_REAL_TEST=1`.
 - Dossiers : `tests/Functional/LandingPage`, `MemoiresVivantes`, `Security`.
+- Limite de connexions par IP relevée en test seulement (`when@test` dans `config/packages/rate_limiter.yaml`) : toute
+  la suite se connecte depuis la même IP.
 
 ## Modules (fiches)
 

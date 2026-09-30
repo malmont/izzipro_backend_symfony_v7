@@ -17,7 +17,8 @@ class LandingAiException extends \RuntimeException
         string $message,
         private readonly array $errors = [],
         private readonly array $headers = [],
-        private readonly ?LandingAiUsageStats $stats = null
+        private readonly ?LandingAiUsageStats $stats = null,
+        private readonly array $extra = []
     ) {
         parent::__construct($message);
     }
@@ -41,6 +42,6 @@ class LandingAiException extends \RuntimeException
             'error' => $this->error,
             'message' => $this->getMessage(),
             'errors' => $this->errors ?: null,
-        ], fn ($v) => $v !== null);
+        ], fn ($v) => $v !== null) + $this->extra;
     }
 }

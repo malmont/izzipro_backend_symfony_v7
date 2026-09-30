@@ -843,7 +843,8 @@ class AnthropicService
         if ($status !== 200) {
             $error = json_decode($response->getContent(false), true)['error'] ?? [];
             $this->logger->error('Anthropic Messages API error', ['status' => $status, 'type' => $error['type'] ?? null, 'message' => $error['message'] ?? null]);
-            throw new \RuntimeException(sprintf('API Anthropic : HTTP %d (%s)', $status, $error['type'] ?? 'erreur inconnue'));
+            $retryAfter = $response->getHeaders(false)['retry-after'][0] ?? null;
+            throw new AnthropicApiException($status, $error['type'] ?? null, is_numeric($retryAfter) ? (int) $retryAfter : null);
         }
 
         return json_decode($response->getContent(), false, 512, JSON_THROW_ON_ERROR);
