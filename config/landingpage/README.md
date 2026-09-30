@@ -211,7 +211,7 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   (`/dev/reglable-compare?compare=<fichier>`) : cas C1…Cn, `componentKey`, `prompt`, puis une clé par variante avec
   `composition` (ou `sections` en page), `dataType`, `summary`, `warnings`, `blocs`, `essais`, `jetonsSortie`,
   `dureeMs`. Les noms de variantes sont libres.
-- **Site de test `demo`** (`demo.arkanoa-media.ca`, base `db_demo`, copie d'`arkanoa-media` du 30/09/2026 avec 4 prestations
+- **Site de test `demo`** (`demo.arkanoa-media.com`, base `db_demo`, copie d'`arkanoa-media` du 30/09/2026 avec 4 prestations
   fictives et 1 000 crédits par mois) : site par défaut de l'évaluation (`--tenant=demo`) et des essais de l'éditeur. On
   peut y écrire, casser et réinitialiser à volonté ; jamais d'évaluation sur un site client.
 - La réponse (`usage`) et le rapport d'évaluation comptent à part les écritures de cache (`cacheWriteTokens`, comprises

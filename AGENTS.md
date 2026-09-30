@@ -20,7 +20,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 
 - Répondre en français.
 - **Le code est monté en direct : toute modification est aussitôt en production** (`APP_ENV=dev`). Tester avant, prévoir le retour arrière.
-- Essais sur des données : uniquement sur le site de test `demo` (`demo.arkanoa-media.ca`, base `db_demo`) ; jamais sur un site client.
+- Essais sur des données : uniquement sur le site de test `demo` (`demo.arkanoa-media.com`, base `db_demo`) ; jamais sur un site client.
 - Un site (tenant) n'existe que par sa ligne dans la table `tenants` de la base maître : rien en dur (procédure dans `docs/architecture.md`).
 - **Ne pas committer sans l'accord explicite de l'utilisateur** (même si un prompt collé le demande) ; **ne jamais pousser** sans accord.
 - Couches : **Repository > Service > UseCase > Controller > DTO** (+ EasyAdmin si utile) ; s'appuyer sur l'existant
