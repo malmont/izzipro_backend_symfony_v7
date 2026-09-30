@@ -32,6 +32,7 @@ final class LandingAiComposer
         private readonly LandingAiDataSources $data,
         private readonly LoggerInterface $logger,
         private readonly LandingAiCatalogue $catalogue,
+        private readonly LandingAiOutputRepair $repair,
         #[Autowire('%env(default:landing_ai.default_model_edit:LANDING_AI_MODEL_EDIT)%')]
         private readonly string $editModel,
         #[Autowire('%env(default:landing_ai.default_model_page:LANDING_AI_MODEL_PAGE)%')]
@@ -77,6 +78,9 @@ final class LandingAiComposer
         return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia) {
             $operations = is_array($input->operations ?? null) ? $input->operations : [];
             $applied = $this->applier->apply($composition, $operations);
+            if (!$applied['errors']) {
+                $this->logRepairs($this->repair->repair($applied['composition']));
+            }
             $errors = $applied['errors'] ?: $this->checker->check($applied['composition'], $componentKey, $allowedMedia);
             if ($errors) {
                 return [null, $errors];
@@ -177,6 +181,7 @@ final class LandingAiComposer
         if (!is_object($composition)) {
             return [null, [['path' => $prefix . 'composition', 'message' => 'composition complète attendue (objet schemaVersion 2)']]];
         }
+        $this->logRepairs($this->repair->repair($composition));
         $dataType = $input->dataType ?? null;
         $dataType = is_int($dataType) || is_string($dataType) ? (string) $dataType : null;
         if (isset($input->dataType) && $dataType === null) {
@@ -202,6 +207,14 @@ final class LandingAiComposer
         }
 
         return $errors ? [null, $errors] : [['dataType' => $dataType, 'composition' => $composition], []];
+    }
+
+    /** @param list<string> $removed */
+    private function logRepairs(array $removed): void
+    {
+        if ($removed) {
+            $this->logger->info('Assistant IA : clés en double réparées', ['keys' => array_slice($removed, 0, 10)]);
+        }
     }
 
     /** @param list<array> $images */

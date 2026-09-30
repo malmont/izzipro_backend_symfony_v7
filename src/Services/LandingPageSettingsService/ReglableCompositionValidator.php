@@ -89,6 +89,20 @@ final class ReglableCompositionValidator
         return $found;
     }
 
+    /**
+     * Noms des propriétés connues du contrat actif.
+     *
+     * @param 'section'|'block' $scope
+     * @return list<string>
+     */
+    public function propertyNames(string $scope): array
+    {
+        $schema = $this->schema();
+        $properties = $scope === 'block' ? ($schema->{'$defs'}->block->properties ?? null) : ($schema->properties ?? null);
+
+        return is_object($properties) ? array_keys(get_object_vars($properties)) : [];
+    }
+
     /** @return list<array{path: string, message: string}> */
     public function validateComposition(mixed $composition, string $prefix = ''): array
     {

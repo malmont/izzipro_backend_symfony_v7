@@ -11,6 +11,8 @@ final class LandingAiUsageStats
     public int $inputTokens = 0;
     public int $outputTokens = 0;
     public int $cacheReadTokens = 0;
+    /** Jetons écrits dans le cache (déjà compris dans inputTokens), facturés 1,25 fois (5 min) ou 2 fois (1 h) */
+    public int $cacheWriteTokens = 0;
     public int $durationMs = 0;
 
     public function __construct(public string $model)
@@ -24,6 +26,7 @@ final class LandingAiUsageStats
         $this->inputTokens += (int) ($usage['input_tokens'] ?? 0) + (int) ($usage['cache_creation_input_tokens'] ?? 0);
         $this->outputTokens += (int) ($usage['output_tokens'] ?? 0);
         $this->cacheReadTokens += (int) ($usage['cache_read_input_tokens'] ?? 0);
+        $this->cacheWriteTokens += (int) ($usage['cache_creation_input_tokens'] ?? 0);
     }
 
     public function toArray(): array
@@ -34,6 +37,7 @@ final class LandingAiUsageStats
             'inputTokens' => $this->inputTokens,
             'outputTokens' => $this->outputTokens,
             'cacheReadTokens' => $this->cacheReadTokens,
+            'cacheWriteTokens' => $this->cacheWriteTokens,
             'durationMs' => $this->durationMs,
         ];
     }

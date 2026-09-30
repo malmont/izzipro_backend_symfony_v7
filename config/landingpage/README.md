@@ -161,3 +161,44 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
   `ai_credit_setting` et `ai_job` (tâches de fond) — `scripts/migrate_all_v2_landing_ai.sh` / migrations
   `Version20260928200000` et `Version20260929150000`.
 - Variables de la synchronisation : `FRONTEND_CONFIG_URL`, `DEPLOY_SYNC_TOKEN`.
+
+### Réglages de coût et de qualité (effort, cache)
+
+Variables facultatives (`LandingAiTuning`) ; vides, l'API applique l'effort par défaut du modèle (Sonnet 5 : `high` ;
+Opus 5.5 : `medium`) et le cache de 5 minutes. Valeurs d'effort : `low`, `medium`, `high`, `xhigh`, `max`.
+
+| Variable | Demandes concernées |
+|---|---|
+| `LANDING_AI_EFFORT_EDIT` | retouche sans image |
+| `LANDING_AI_EFFORT_CREATE` | création sans image |
+| `LANDING_AI_EFFORT_PAGE` | mode page |
+| `LANDING_AI_EFFORT_IMAGES` | retouche ou création avec images (relecture visuelle) |
+| `LANDING_AI_CACHE_TTL_PAGE` | `1h` : cache d'une heure du contexte fixe des demandes du modèle page (page, images) |
+
+**Mesures du 30/09/2026** (`app:landingpage-ai:eval`, tenant `arkanoa-media`, un passage par réglage ; toutes les
+vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'est pas mesurée) :
+
+| Nature | Effort | Essais | Jetons de sortie | Durée | Coût estimé |
+|---|---|---|---|---|---|
+| Retouche (Sonnet 5, 10 cas) | `high` (défaut) / `medium` / `low` | 1 / 1 / 1 | 331 / 313 / 300 | 3,9 / 3,7 / 4,0 s | 0,034 $ aux trois niveaux |
+| Création (Sonnet 5, 7 cas) | `high` (défaut) | 1,14 | 3 166 | 23,5 s | 0,065 $ |
+| | `medium` | 1,0 | 2 092 | 16,3 s | 0,050 $ |
+| | `low` | 1,0 | 2 117 | 15,4 s | 0,050 $ |
+| Page P1, 4 sections (Opus 5.5) | `low` / `medium` (défaut) / `high` | 1 / 1 / 1 | 3 537 / 7 163 / 10 497 | 28 / 58 / 84 s | 0,45 / 0,52 / 0,59 $ cache froid ; 0,11 / 0,18 / 0,25 $ cache chaud |
+| Relecture visuelle P3 (Opus 5.5) | `low` / `medium` (défaut) / `high` | 1 / 1 / 1 | 539 / 1 000 / 1 293 | 7 / 11 / 14 s | 0,16 à 0,17 $ cache froid |
+
+- **Proposition** : `LANDING_AI_EFFORT_CREATE=medium` (coût −23 %, durée −30 %, mêmes vérifications réussies) ; le
+  reste sur le défaut du modèle. En retouche, l'effort ne change rien de mesurable (le coût vient des jetons d'entrée).
+  En page, `low` divise la durée par deux mais a choisi des familles moins adaptées sur P1 (services rendus par un
+  groupe de présentations) ; l'économie est faible, l'écriture du cache dominant le coût.
+- **Cache d'une heure** : accepté par l'API. Contexte fixe du mode page : ~70 600 jetons ; écriture 0,35 $ (5 min) ou
+  0,56 $ (1 h), lecture 0,014 $. Le cache est commun à tous les sites. Le cache d'une heure devient rentable quand
+  plus de 40 % environ des demandes du modèle page arrivent entre 5 minutes et 1 heure après la précédente ; en
+  dessous, il coûte 0,21 $ de plus par demande. Au 30/09/2026 : 3 demandes de page au total, donc 5 minutes.
+  À réévaluer avec `ai_usage` (`created_at`, `mode`, `model`) quand l'usage sera régulier.
+- **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
+  `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
+  valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.
+- La réponse (`usage`) et le rapport d'évaluation comptent à part les écritures de cache (`cacheWriteTokens`, comprises
+  dans `inputTokens`) ; le rapport estime le coût en dollars (prix dans `LandingAiEvalCommand::PRICES`, à tenir à jour).
+

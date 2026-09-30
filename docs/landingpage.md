@@ -23,9 +23,10 @@ Routes et rôles : `docs/endpoints.md`, section « Landing Page » ; données de
 | Sujet | Fichiers |
 |---|---|
 | Réglages | `Controller/LandingPageSettingsController/`, entité `LandingPageSetting` (une ligne JSON par tenant) |
-| Validation (422 `{ path, message }`) | `Services/LandingPageSettingsService/ReglableCompositionValidator.php` (JSON Schema opis + règles entre blocs), `ReglableCompositionScanner.php` (toutes les bases) |
+| Validation (422 `{ path, message }`) | `Services/LandingPageSettingsService/ReglableCompositionValidator.php` (JSON Schema opis + règles entre blocs), `RichTextPolicy.php` (HTML permis dans les textes), `ReglableCompositionScanner.php` (toutes les bases) |
 | Familles (`components-config`) | `Services/LandingPagesService/ComponentsConfigProvider.php` (source unique : endpoint et assistant) |
 | Assistant : moteur | `Services/LandingAiService/` : `LandingAiComposer` (appel, vérifications, 3 essais), `LandingAiPromptBuilder` (prompt système, outils, cache), `LandingAiCatalogue`, `LandingAiDataSources` (valeurs de `dataType`), `CompositionEditApplier` (opérations de retouche), `LandingAiCompositionChecker`, `AnthropicLandingAiClient` |
+| Assistant : réglages, réparation | `LandingAiTuning` (effort par nature de demande, durée du cache), `LandingAiOutputRepair` (clés en double du modèle) |
 | Assistant : quota, tâches | `LandingAiQuotaService` (réservation atomique, `pg_advisory_xact_lock`), `LandingAiJobService`, `LandingAiComposeRunner` |
 | Assistant : cas d'usage, HTTP | `UseCase/LandingAiUseCase/` (`ComposeLandingSection`, `RunLandingAiJob`, `GetLandingAiJob`, `GetLandingAiUsage`), `Controller/LandingAiController/`, DTO `LandingAiComposeInputDto` / `OutputDto` |
 | Worker | `Message/LandingAiJobMessage.php`, `MessageHandler/LandingAiJobHandler.php` (transport `landing_ai`) |

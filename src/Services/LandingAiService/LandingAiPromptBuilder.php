@@ -52,7 +52,8 @@ TXT;
 
     public function __construct(
         private readonly LandingAiCatalogue $catalogue,
-        private readonly LandingConfigStore $configStore
+        private readonly LandingConfigStore $configStore,
+        private readonly LandingAiTuning $tuning
     ) {
     }
 
@@ -88,7 +89,7 @@ TXT;
             sprintf('Appelle l\'outil %s avec la liste des opérations à appliquer à la composition actuelle, un résumé et les avertissements éventuels.', self::EDIT_TOOL),
         ];
 
-        return $this->payload($model, $this->familyContext($componentKey), implode("\n", $context), $this->editTool(), $images);
+        return $this->payload($model, $this->familyContext($componentKey), implode("\n", $context), $this->editTool(), $images, self::MAX_TOKENS, LandingAiTuning::kind('edit', $images !== []));
     }
 
     /** Message d'erreur renvoyé au modèle pour un nouvel essai */
@@ -157,7 +158,7 @@ TXT;
             sprintf('Appelle l\'outil %s avec le dataType choisi, la composition complète, un résumé et les avertissements éventuels.', self::CREATE_TOOL),
         ];
 
-        return $this->payload($model, $this->familyContext($componentKey), implode("\n", $context), $this->createTool(), $images);
+        return $this->payload($model, $this->familyContext($componentKey), implode("\n", $context), $this->createTool(), $images, self::MAX_TOKENS, LandingAiTuning::kind('create', $images !== []));
     }
 
     /**
@@ -195,7 +196,7 @@ TXT;
             sprintf('Appelle l\'outil %s avec les sections dans l\'ordre de la page (componentKey, dataType, composition complète), un résumé et les avertissements éventuels.', self::PAGE_TOOL),
         ];
 
-        return $this->payload($model, $this->pageContext(), implode("\n", $context), $this->pageTool(), $images, self::PAGE_MAX_TOKENS);
+        return $this->payload($model, $this->pageContext(), implode("\n", $context), $this->pageTool(), $images, self::PAGE_MAX_TOKENS, 'page');
     }
 
     /** Contexte fixe d'une famille (retouche, création) */
@@ -232,8 +233,10 @@ TXT;
     /**
      * @param list<array{mediaType: string, data: string}> $images placées avant le texte (recommandation de l'API vision)
      */
-    private function payload(string $model, string $familyContext, string $userText, array $tool, array $images = [], int $maxTokens = self::MAX_TOKENS): array
+    private function payload(string $model, string $familyContext, string $userText, array $tool, array $images = [], int $maxTokens = self::MAX_TOKENS, string $kind = 'edit'): array
     {
+        $cache = ['type' => 'ephemeral'] + (($ttl = $this->tuning->cacheTtl($kind)) !== null ? ['ttl' => $ttl] : []);
+
         $content = $userText;
         if ($images) {
             $content = [
@@ -247,12 +250,15 @@ TXT;
             'max_tokens' => $maxTokens,
             'system' => [
                 ['type' => 'text', 'text' => self::SYSTEM],
-                ['type' => 'text', 'text' => "CONTRAT DES COMPOSITIONS (JSON Schema 2020-12, règles en plus : identifiants uniques, parentId = null ou id d'un bloc container, pas de boucle, 8 niveaux au plus, x + w ≤ 100, y + h ≤ 100) :\n" . $this->schema(), 'cache_control' => ['type' => 'ephemeral']],
-                ['type' => 'text', 'text' => $familyContext, 'cache_control' => ['type' => 'ephemeral']],
+                ['type' => 'text', 'text' => "CONTRAT DES COMPOSITIONS (JSON Schema 2020-12, règles en plus : identifiants uniques, parentId = null ou id d'un bloc container, pas de boucle, 8 niveaux au plus, x + w ≤ 100, y + h ≤ 100) :\n" . $this->schema(), 'cache_control' => $cache],
+                ['type' => 'text', 'text' => $familyContext, 'cache_control' => $cache],
             ],
             'tools' => [$tool],
             'messages' => [['role' => 'user', 'content' => $content]],
         ];
+        if (($effort = $this->tuning->effort($kind)) !== null) {
+            $payload['output_config'] = ['effort' => $effort];
+        }
         $payload['tool_choice'] = in_array($model, self::MODELS_WITHOUT_FORCED_TOOL, true)
             ? ['type' => 'auto']
             : ['type' => 'tool', 'name' => $tool['name']];

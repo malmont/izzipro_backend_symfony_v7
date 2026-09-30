@@ -10,6 +10,7 @@ use App\Services\LandingAiService\LandingAiComposer;
 use App\Services\LandingAiService\LandingAiDataSources;
 use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiSiteContext;
+use App\Services\LandingAiService\LandingAiTuning;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -27,6 +28,17 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 class LandingAiEvalCommand extends Command
 {
     private const MODES = ['edit', 'create', 'page'];
+    /**
+     * Prix par million de jetons (USD, API Anthropic, relevés le 30/09/2026) : entrée, sortie, lecture du cache.
+     * Écriture du cache : 1,25 fois l'entrée (5 minutes), 2 fois (1 heure). À mettre à jour avec les tarifs.
+     */
+    private const PRICES = [
+        'claude-sonnet-5' => [2.0, 10.0, 0.20],
+        'claude-sonnet-5-5' => [2.0, 10.0, 0.20],
+        'claude-opus-5-5' => [4.0, 20.0, 0.20],
+        'claude-opus-5' => [5.0, 25.0, 0.50],
+        'claude-fable-5-1' => [10.0, 50.0, 0.25],
+    ];
     private const MODE_TITLES = ['edit' => 'Retouche (edit)', 'create' => 'Création (create)', 'page' => 'Page (page, images)', 'review' => 'Relecture visuelle (edit + captures)'];
 
     public function __construct(
@@ -38,6 +50,7 @@ class LandingAiEvalCommand extends Command
         private readonly LandingAiDataSources $data,
         private readonly LandingAiEvalCases $cases,
         private readonly LandingAiEvalChecks $checks,
+        private readonly LandingAiTuning $tuning,
         #[Autowire('%kernel.project_dir%/var/landing-ai-eval')]
         private readonly string $reportDir,
         #[Autowire('%kernel.project_dir%/src/Services/LandingAiService/Eval/fixtures')]
@@ -87,7 +100,8 @@ class LandingAiEvalCommand extends Command
         $palette = $this->site->palette($stored);
         $io->title(sprintf('Évaluation de l\'assistant IA : %d cas, modèles %s (edit, create) et %s (page, images), tenant %s', count($edit) + count($create) + count($page), $this->composer->editModel(), $this->composer->pageModel(), $tenant));
 
-        $report = ['date' => date(DATE_ATOM), 'tenant' => $tenant, 'models' => ['edit' => $this->composer->editModel(), 'page' => $this->composer->pageModel()], 'cases' => []];
+        $report = ['date' => date(DATE_ATOM), 'tenant' => $tenant, 'models' => ['edit' => $this->composer->editModel(), 'page' => $this->composer->pageModel()], 'tuning' => $this->tuning->describe(), 'cases' => []];
+        $io->writeln('Réglages : ' . json_encode($this->tuning->describe(), JSON_UNESCAPED_UNICODE));
         $rows = [];
         foreach ($edit as $case) {
             [$caseReport, $row] = $this->playEdit($io, $case, $stored, $palette);
@@ -118,7 +132,7 @@ class LandingAiEvalCommand extends Command
         $file = sprintf('%s/eval-%s-%s.json', $this->reportDir, $tenant, date('Ymd-His'));
         file_put_contents($file, json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION));
 
-        $io->table(['Cas', 'Vérifications', 'Essais', 'Jetons entrée', 'Sortie', 'ms', 'Détail propre au cas'], $rows);
+        $io->table(['Cas', 'Vérifications', 'Essais', 'Jetons entrée', 'Sortie', 'ms', '≈ $', 'Détail propre au cas'], $rows);
         foreach ($report['summary'] as $m => $s) {
             $io->section(self::MODE_TITLES[$m]);
             $lines = [['Cas réussis (composition obtenue)' => sprintf('%d / %d joués%s', $s['succeeded'], $s['played'], $s['skipped'] ? sprintf(' (%d sans objet)', $s['skipped']) : '')]];
@@ -129,6 +143,7 @@ class LandingAiEvalCommand extends Command
             $lines[] = ['Essais moyens' => $s['avgAttempts']];
             $lines[] = ['Jetons moyens (entrée / cache lu / sortie)' => sprintf('%s / %s / %s', $s['avgInputTokens'], $s['avgCacheReadTokens'], $s['avgOutputTokens'])];
             $lines[] = ['Durée moyenne' => $s['avgDurationMs'] . ' ms'];
+            $lines[] = ['Coût estimé (moyen / total)' => sprintf('%.3f $ / %.2f $', $s['avgCostUsd'], $s['totalCostUsd'])];
             $io->definitionList(...$lines);
         }
         $io->writeln('Rapport : ' . $file);
@@ -140,7 +155,7 @@ class LandingAiEvalCommand extends Command
     {
         [$family, $preset] = $this->catalogue->preset($case['presetId']) ?? [null, null];
         if ($preset === null) {
-            return [['id' => $case['id'], 'mode' => 'edit', 'status' => 'skipped', 'reason' => "modèle {$case['presetId']} absent du catalogue"], [$case['id'], 'ignoré', '', '', '', '', "modèle {$case['presetId']} absent"]];
+            return [['id' => $case['id'], 'mode' => 'edit', 'status' => 'skipped', 'reason' => "modèle {$case['presetId']} absent du catalogue"], [$case['id'], 'ignoré', '', '', '', '', '', "modèle {$case['presetId']} absent"]];
         }
         $componentKey = $family['componentKey'];
         $before = CompositionEditApplier::copy(json_decode(json_encode($preset['composition'], JSON_PRESERVE_ZERO_FRACTION), false));
@@ -167,7 +182,7 @@ class LandingAiEvalCommand extends Command
     private function playCreate(SymfonyStyle $io, array $case, array $stored): array
     {
         if (isset($case['skip'])) {
-            return [['id' => $case['id'], 'mode' => 'create', 'status' => 'skipped', 'reason' => $case['skip']], [$case['id'], 'sans objet', '', '', '', '', mb_substr($case['skip'], 0, 90)]];
+            return [['id' => $case['id'], 'mode' => 'create', 'status' => 'skipped', 'reason' => $case['skip']], [$case['id'], 'sans objet', '', '', '', '', '', mb_substr($case['skip'], 0, 90)]];
         }
         $componentKey = $case['componentKey'];
         $available = $this->data->familyUsesData($componentKey) ? $this->data->available($componentKey) : [];
@@ -195,7 +210,7 @@ class LandingAiEvalCommand extends Command
     private function playPage(SymfonyStyle $io, array $case, array $stored): array
     {
         if (isset($case['skip'])) {
-            return [['id' => $case['id'], 'mode' => 'page', 'status' => 'skipped', 'reason' => $case['skip']], [$case['id'], 'sans objet', '', '', '', '', mb_substr($case['skip'], 0, 90)]];
+            return [['id' => $case['id'], 'mode' => 'page', 'status' => 'skipped', 'reason' => $case['skip']], [$case['id'], 'sans objet', '', '', '', '', '', mb_substr($case['skip'], 0, 90)]];
         }
         if (isset($case['presetId'])) {
             return $this->playReview($io, $case, $stored);
@@ -236,7 +251,7 @@ class LandingAiEvalCommand extends Command
     {
         [$family, $preset] = $this->catalogue->preset($case['presetId']) ?? [null, null];
         if ($preset === null) {
-            return [['id' => $case['id'], 'mode' => 'review', 'status' => 'skipped', 'reason' => "modèle {$case['presetId']} absent du catalogue"], [$case['id'], 'ignoré', '', '', '', '', "modèle {$case['presetId']} absent"]];
+            return [['id' => $case['id'], 'mode' => 'review', 'status' => 'skipped', 'reason' => "modèle {$case['presetId']} absent du catalogue"], [$case['id'], 'ignoré', '', '', '', '', '', "modèle {$case['presetId']} absent"]];
         }
         $componentKey = $family['componentKey'];
         $before = CompositionEditApplier::copy(json_decode(json_encode($preset['composition'], JSON_PRESERVE_ZERO_FRACTION), false));
@@ -276,7 +291,7 @@ class LandingAiEvalCommand extends Command
 
         return [
             ['id' => $id, 'mode' => $mode, 'status' => 'failed', 'httpStatus' => $e->getStatusCode(), 'message' => $e->getMessage(), 'errors' => $e->getErrors(), 'usage' => $stats],
-            [$id, 'échec ' . $e->getStatusCode(), $stats['attempts'] ?? '', $stats['inputTokens'] ?? '', $stats['outputTokens'] ?? '', $stats['durationMs'] ?? '', $e->getMessage()],
+            [$id, 'échec ' . $e->getStatusCode(), $stats['attempts'] ?? '', $stats['inputTokens'] ?? '', $stats['outputTokens'] ?? '', $stats['durationMs'] ?? '', sprintf('%.3f', $this->cost($stats)), $e->getMessage()],
         ];
     }
 
@@ -291,8 +306,22 @@ class LandingAiEvalCommand extends Command
             $stats->inputTokens . ' (+' . $stats->cacheReadTokens . ' cache)',
             $stats->outputTokens,
             $stats->durationMs,
+            sprintf('%.3f', $this->cost($stats->toArray())),
             mb_substr($specific['detail'], 0, 90),
         ];
+    }
+
+    /** Coût estimé d'une demande (USD), d'après les jetons et les prix du modèle ; 0 si le modèle est inconnu */
+    private function cost(array $usage): float
+    {
+        [$input, $output, $read] = self::PRICES[$usage['model'] ?? ''] ?? [0.0, 0.0, 0.0];
+        $write = (int) ($usage['cacheWriteTokens'] ?? 0);
+        $writeFactor = $this->tuning->cacheTtl('page') !== null && ($usage['model'] ?? '') === $this->composer->pageModel() ? 2.0 : 1.25;
+
+        return (((int) ($usage['inputTokens'] ?? 0) - $write) * $input
+            + $write * $input * $writeFactor
+            + (int) ($usage['cacheReadTokens'] ?? 0) * $read
+            + (int) ($usage['outputTokens'] ?? 0) * $output) / 1000000;
     }
 
     private function summarize(array $cases): array
@@ -319,6 +348,9 @@ class LandingAiEvalCommand extends Command
             'avgCacheReadTokens' => $avg('cacheReadTokens'),
             'avgOutputTokens' => $avg('outputTokens'),
             'avgDurationMs' => $avg('durationMs'),
+            'avgCacheWriteTokens' => $avg('cacheWriteTokens'),
+            'avgCostUsd' => $played ? round(array_sum(array_map(fn ($c) => $this->cost($c['usage'] ?? []), $played)) / count($played), 4) : 0,
+            'totalCostUsd' => round(array_sum(array_map(fn ($c) => $this->cost($c['usage'] ?? []), $played)), 3),
         ];
     }
 }

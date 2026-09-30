@@ -599,6 +599,65 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertCount(1, FakeLandingAiClient::$requests, 'erreur de requête : pas de nouvel essai');
     }
 
+    public function testTuningIsOffByDefaultAndSetsEffortAndCacheTtlWhenConfigured(): void
+    {
+        $container = static::getContainer();
+        $args = ['PresentationGroup', $this->preset('group-type-t'), 'Titre en noir.', 'fr', [], [], ['colors' => [], 'fonts' => []]];
+        $image = [['mediaType' => 'image/png', 'data' => substr($this->pngDataUrl(), 22)]];
+
+        $default = $container->get(\App\Services\LandingAiService\LandingAiPromptBuilder::class)->editPayload('claude-sonnet-5', ...$args);
+        $this->assertArrayNotHasKey('output_config', $default, 'sans réglage : effort par défaut du modèle');
+        $this->assertSame(['type' => 'ephemeral'], $default['system'][1]['cache_control'], 'sans réglage : cache de 5 minutes');
+
+        $tuned = new \App\Services\LandingAiService\LandingAiPromptBuilder(
+            $container->get(LandingAiCatalogue::class),
+            $container->get(\App\Services\LandingConfigService\LandingConfigStore::class),
+            new \App\Services\LandingAiService\LandingAiTuning('low', 'medium', 'high', 'medium', '1h')
+        );
+        $edit = $tuned->editPayload('claude-sonnet-5', ...$args);
+        $this->assertSame(['effort' => 'low'], $edit['output_config']);
+        $this->assertSame(['type' => 'ephemeral'], $edit['system'][1]['cache_control'], 'cache d\'une heure réservé au modèle page');
+
+        $review = $tuned->editPayload('claude-opus-5-5', ...[...$args, $image]);
+        $this->assertSame(['effort' => 'medium'], $review['output_config'], 'retouche avec images : réglage « images »');
+        $this->assertSame(['type' => 'ephemeral', 'ttl' => '1h'], $review['system'][1]['cache_control']);
+        $this->assertSame(['type' => 'ephemeral', 'ttl' => '1h'], $review['system'][2]['cache_control']);
+
+        $ignored = new \App\Services\LandingAiService\LandingAiTuning('turbo');
+        $this->assertNull($ignored->effort('edit'), 'valeur inconnue ignorée');
+    }
+
+    public function testStutteredNumericKeyIsRepairedWithoutAnotherAttempt(): void
+    {
+        $composition = $this->preset('contact-type-a');
+        $composition->blocks[0]->dividerWidth100 = 100;   // double de "dividerWidth": 100
+        unset($composition->blocks[1]->dividerWidth);
+        $composition->blocks[1]->dividerWidth50 = 50;     // la propriété manquait : rétablie
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($composition, null);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Contact', 'prompt' => 'Formulaire de contact.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertCount(1, FakeLandingAiClient::$requests, 'aucun nouvel essai');
+        $blocks = json_decode($response->getContent())->composition->blocks;
+        $this->assertObjectNotHasProperty('dividerWidth100', $blocks[0]);
+        $this->assertObjectNotHasProperty('dividerWidth50', $blocks[1]);
+        $this->assertSame(50, $blocks[1]->dividerWidth);
+    }
+
+    public function testOtherUnknownKeysAreStillSentBackToTheModel(): void
+    {
+        $wrong = $this->preset('contact-type-a');
+        $wrong->blocks[0]->dividerWidth100 = 40; // valeur différente du nombre collé : intention ambiguë, pas de réparation
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($wrong, null);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('contact-type-a'), null);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Contact', 'prompt' => 'Formulaire de contact.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertStringContainsString('dividerWidth100', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+    }
+
     public function testSonnet55GetsAutomaticToolChoice(): void
     {
         $payload = static::getContainer()->get(\App\Services\LandingAiService\LandingAiPromptBuilder::class)
