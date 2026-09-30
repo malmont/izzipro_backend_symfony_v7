@@ -64,6 +64,28 @@ recopiés depuis la dernière version synchronisée.
 - `ANTHROPIC_API_KEY_LANDING` : clé distincte de celle de Mémoires Vivantes ; jamais dans une réponse ni un journal.
 - Claude Opus 5.5 refuse `tool_choice` forcé : `tool_choice: auto` + consigne (`LandingAiPromptBuilder::MODELS_WITHOUT_FORCED_TOOL`).
 - Après une modification du prompt ou du modèle : rejouer l'évaluation et comparer le rapport (`var/landing-ai-eval/`).
+- Une retouche commence par valider la composition reçue (`LandingAiComposer::editErrors`) : ne jamais appeler l'IA
+  sur une entrée invalide (3 essais payés, crédits libérés). Plafond : 20 échecs réels par site et par 24 h.
+
+## Audit du 29/09/2026 : points ouverts
+
+Rapport complet transmis au frontend ; corrections par lots (tests à chaque lot).
+
+| Lot | Point | État |
+|---|---|---|
+| 1 | `ROLE_SUPER_ADMIN` attribuable par un admin de site dans EasyAdmin (pilote la configuration commune) | corrigé le 30/09 (`RoleAssignmentPolicy`) |
+| 1 | Échecs de l'IA payés sans crédit ; composition de retouche non validée ni plafonnée | corrigé le 30/09 (validation préalable, 200 Ko, plafond d'échecs) |
+| 2 | Demande identique pendant une tâche en cours : payée deux fois | à faire : 409 avec le `jobId` existant |
+| 2 | Aucune reprise sur 429, 529 et 5xx de l'API | à faire : 1 ou 2 nouveaux essais |
+| 2 | `claude-sonnet-5-5` absent de `MODELS_WITHOUT_FORCED_TOOL` | à faire |
+| 3 | Balises HTML des textes non contrôlées côté backend | à faire : liste blanche identique au frontend (sans `<a>`, attribut `style` limité) |
+| 3 | 400 au lieu de 413 JSON pour un corps trop volumineux | à faire, sur toute la chaîne |
+| 3 | CORS de `/media/secure` limité à une liste de domaines codée en dur dans nginx | à faire : depuis la table `tenants` |
+| 3 | Jeton JWT sans `tenant_code` accepté ; synchronisation activée malgré une base illisible ; pas de limite sur `X-Deploy-Token` ; limite des images ; nettoyage des tâches | à faire |
+
+Côté frontend (29/09) : le schéma corrigé (texte sans `<a>`, `id` des blocs `^[A-Za-z0-9_-]{1,100}$`) arrive par la
+synchronisation au prochain déploiement ; les images de la console sont réduites à 2 000 px en JPEG ; la vérification
+TLS du relais `/api` est réactivée.
 
 ## Tenir cette fiche à jour
 

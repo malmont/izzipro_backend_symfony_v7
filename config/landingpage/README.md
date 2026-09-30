@@ -100,7 +100,7 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     `composition`. Sans `componentKey`, elle choisit la famille de chaque section dans le catalogue ; avec, toutes les
     sections sont de cette famille (ex. « Reproduis cette section » sur une capture). Chaque section est vérifiée comme
     une création. Contexte fixe mis en cache : le catalogue de toutes les familles avec un modèle de référence chacune.
-  - **images** (tous les modes) : `images: ["data:image/png;base64,…"]`, 5 au plus, PNG, JPEG, WebP ou GIF, 5 Mo au
+  - **images** (tous les modes ; le frontend les réduit à 2 000 px en JPEG avant envoi) : `images: ["data:image/png;base64,…"]`, 5 au plus, PNG, JPEG, WebP ou GIF, 5 Mo au
     plus chacune en base64, 8000 px au plus de côté ; le contenu doit correspondre au type annoncé. Charte graphique :
     l'IA n'emploie que ses couleurs et polices (plus blanc, noir, gris neutres). Capture d'écran : l'IA en reproduit la
     structure ; les images de la capture ne sont pas des médias utilisables. Une requête avec images passe au modèle
@@ -109,6 +109,12 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     2 captures JPEG du rendu actuel de la section (ordinateur 1280 px, puis mobile 390 px). L'IA corrige les défauts
     visibles (contraste, espacements, alignements, textes coupés, mobile via `mobile.*`) par des opérations, sans toucher
     aux textes, liaisons et médias. Cas P3 de l'évaluation (`Eval/fixtures/p3-*.jpg`).
+  - **Avant tout appel à l'IA** (30/09/2026) : en retouche, la composition reçue est limitée à 200 Ko (400) et doit
+    déjà passer le contrat, les types de la famille et les médias (422 `Composition invalide`, sans crédit ni limite
+    par minute consommés). Une composition invalide faisait échouer les 3 essais, payés, avec les crédits libérés.
+  - **Plafond d'échecs** : 20 demandes échouées après un appel réel à l'IA, par site et sur 24 h glissantes ; au-delà,
+    429 `Trop d'échecs` avec `Retry-After` (`LandingAiQuotaService::FAILED_REQUESTS_PER_DAY`). Les échecs libèrent
+    les crédits mais les appels sont payés : sans ce plafond, seule la limite par minute les bornait.
   - La proposition passe par `ReglableCompositionValidator`, les types de la famille (`tools` du catalogue) et la liste
     des médias autorisés
     (médias du site, médias fournis avec la demande, adresses http(s) écrites dans la demande et, en création ou page,

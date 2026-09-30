@@ -47,6 +47,17 @@ final class LandingAiComposer
     }
 
     /**
+     * Composition reçue pour une retouche : contrat, types de la famille, médias. À vérifier AVANT tout appel à l'IA :
+     * une composition déjà invalide ferait échouer les 3 essais (appels payés, crédits libérés).
+     *
+     * @return list<array{path: string, message: string}>
+     */
+    public function editErrors(string $componentKey, object $composition): array
+    {
+        return $this->checker->check($composition, $componentKey, $this->site->allowedMedia([$composition]));
+    }
+
+    /**
      * Retouche : l'IA renvoie des opérations, appliquées par le serveur sur la composition actuelle.
      *
      * @param list<array> $media médias fournis par l'administrateur

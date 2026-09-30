@@ -41,6 +41,31 @@ class AiUsageRepository extends EntityRepository
             ->execute();
     }
 
+    /** Demandes échouées depuis $since après au moins un appel à l'IA (attempts > 0) */
+    public function countFailedWithCallsSince(\DateTimeImmutable $since): int
+    {
+        return (int) $this->createQueryBuilder('u')
+            ->select('COUNT(u.id)')
+            ->where('u.status = :failed AND u.attempts > 0 AND u.createdAt >= :since')
+            ->setParameter('failed', AiUsage::STATUS_FAILED)
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function oldestFailedWithCallsSince(\DateTimeImmutable $since): ?\DateTimeImmutable
+    {
+        $oldest = $this->createQueryBuilder('u')
+            ->select('MIN(u.createdAt)')
+            ->where('u.status = :failed AND u.attempts > 0 AND u.createdAt >= :since')
+            ->setParameter('failed', AiUsage::STATUS_FAILED)
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return $oldest !== null ? new \DateTimeImmutable((string) $oldest) : null;
+    }
+
     public function deleteOlderThan(\DateTimeImmutable $before): int
     {
         return $this->createQueryBuilder('u')

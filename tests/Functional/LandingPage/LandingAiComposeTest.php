@@ -493,6 +493,57 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame(10, $job->result->credits->used);
     }
 
+    public function testEditRefusesAnInvalidCompositionBeforeAnyAiCall(): void
+    {
+        $composition = $this->preset('group-type-t');
+        $composition->blocks[0]->x = 150; // x + w > 100 : composition déjà invalide
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $composition, 'prompt' => 'Titre en noir.']);
+
+        $this->assertSame(422, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent());
+        $this->assertSame('Composition invalide', $body->error);
+        $this->assertStringContainsString('blocks[0]', $body->errors[0]->path);
+        $this->assertSame([], FakeLandingAiClient::$requests, 'aucun appel à l\'IA');
+        $this->assertSame(0, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM ai_usage'), 'aucune réservation');
+        $limiter = static::getContainer()->get('limiter.landing_ai_tenant')->create('tenant:' . MV_TEST_TENANT_CODE);
+        $this->assertSame(5, $limiter->consume(0)->getRemainingTokens(), 'limite par minute non consommée');
+    }
+
+    public function testEditRefusesAnOversizedComposition(): void
+    {
+        $composition = $this->preset('group-type-t');
+        $composition->translations = (object) ['en' => (object) ['bourrage' => str_repeat('x', 210000)]];
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $composition, 'prompt' => 'Titre en noir.']);
+
+        $this->assertSame(400, $response->getStatusCode(), $response->getContent());
+        $this->assertStringContainsString('200 Ko', $response->getContent());
+        $this->assertSame([], FakeLandingAiClient::$requests);
+    }
+
+    public function testTooManyFailuresInADaySuspendTheAssistantOnThisSite(): void
+    {
+        $insert = "INSERT INTO ai_usage (tenant, created_at, reserved_until, mode, component_key, status, credits, attempts) VALUES ('mvtest', NOW() - INTERVAL '2 hours', NOW(), 'edit', 'PresentationGroup', 'failed', 1, %d)";
+        for ($i = 0; $i < 5; $i++) {
+            $this->db()->executeStatement(sprintf($insert, 0)); // échecs sans appel à l'IA : non comptés
+        }
+        for ($i = 0; $i < \App\Services\LandingAiService\LandingAiQuotaService::FAILED_REQUESTS_PER_DAY - 1; $i++) {
+            $this->db()->executeStatement(sprintf($insert, 3));
+        }
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]);
+        $body = ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre en noir.'];
+        $this->assertSame(200, $this->compose($body)->getStatusCode(), 'sous le plafond');
+
+        $this->db()->executeStatement(sprintf($insert, 3));
+        $response = $this->compose($body);
+
+        $this->assertSame(429, $response->getStatusCode(), $response->getContent());
+        $this->assertSame('Trop d\'échecs', json_decode($response->getContent())->error);
+        $this->assertGreaterThan(20 * 3600, (int) $response->headers->get('Retry-After'), 'jusqu\'à la sortie du plus ancien échec de la fenêtre de 24 h');
+        $this->assertCount(1, FakeLandingAiClient::$requests, 'aucun appel après le plafond');
+    }
+
     public function testVisualReviewSendsBothCapturesAsTheCurrentRendering(): void
     {
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]], 'Contraste du titre renforcé.');

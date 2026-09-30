@@ -25,6 +25,11 @@ final class LandingAiQuotaService
     public const RESERVATION_TTL_SECONDS = 300;
     public const JOB_RESERVATION_TTL_SECONDS = 2100;
     public const RETENTION_DAYS = 90;
+    /**
+     * Demandes échouées après un appel réel à l'IA, par site et sur 24 h glissantes : au-delà, refus (429). Un échec
+     * libère les crédits mais les appels sont payés : sans ce plafond, seule la limite par minute les bornait.
+     */
+    public const FAILED_REQUESTS_PER_DAY = 20;
     /** Clé du verrou consultatif (propre à la base du tenant) */
     public const LOCK_KEY = 7414201;
 
@@ -55,6 +60,16 @@ final class LandingAiQuotaService
             $usages = $this->usages();
             $usages->expireReservations($now);
             $usages->deleteOlderThan($now->modify(sprintf('-%d days', self::RETENTION_DAYS)));
+
+            $dayAgo = $now->modify('-1 day');
+            if ($usages->countFailedWithCallsSince($dayAgo) >= self::FAILED_REQUESTS_PER_DAY) {
+                $connection->rollBack();
+                $retryAfter = max(60, ($usages->oldestFailedWithCallsSince($dayAgo)?->getTimestamp() ?? $now->getTimestamp()) + 86400 - $now->getTimestamp());
+                throw new LandingAiException(429, 'Trop d\'échecs', sprintf(
+                    'L\'assistant a échoué %d fois en 24 h sur ce site : nouvelles demandes suspendues pendant environ %d minute(s). Vérifiez la section concernée ou reformulez la demande.',
+                    self::FAILED_REQUESTS_PER_DAY, (int) ceil($retryAfter / 60)
+                ), [], ['Retry-After' => (string) $retryAfter]);
+            }
 
             $credits = $this->credits();
             if ($credits['used'] + $cost > $credits['monthly']) {

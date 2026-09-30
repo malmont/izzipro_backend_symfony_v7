@@ -53,7 +53,7 @@ CRUD EasyAdmin : étendre `BaseTenantCrudController`.
 | Connexion web | `POST /api/login` → cookies `auth_token_<tenant>` (JWT) et `XSRF-TOKEN_<tenant>` ; `POST /api/token/refresh` ; `POST /api/logout` (`Controller/Account/SecurityController`) |
 | JWT lu depuis le cookie | `EventListener/JWTFromCookieListener` (si pas d'en-tête `Authorization`) ; durées : `WEB_ACCESS_TOKEN_TTL`, `WEB_SESSION_IDLE_TTL` |
 | CSRF | `EventListener/CsrfValidationListener` : sur `/api/*` hors GET, si le cookie d'auth du tenant est présent, en-tête `X-XSRF-TOKEN` = cookie `XSRF-TOKEN_<tenant>` |
-| Rôles | `ROLE_ADMIN` (administrateur du site), `ROLE_SUPER_ADMIN` (propriétaire de la plateforme, testé explicitement : pas de `role_hierarchy`), `ROLE_USER_INTERNET` (nécessaire à la connexion web), `ROLE_USER_POS`, rôles Boussole (`ROLE_COMPANY`, `ROLE_CONSULTANT`) |
+| Rôles | `ROLE_ADMIN` (administrateur du site), `ROLE_SUPER_ADMIN` (propriétaire de la plateforme, testé explicitement : pas de `role_hierarchy` ; ni attribuable ni retirable par un admin de site : `Security/RoleAssignmentPolicy`, appliquée par l'écran EasyAdmin des utilisateurs ; sinon en SQL), `ROLE_USER_INTERNET` (nécessaire à la connexion web), `ROLE_USER_POS`, rôles Boussole (`ROLE_COMPANY`, `ROLE_CONSULTANT`) |
 | Limites de débit | `config/packages/rate_limiter.yaml` (connexion, OTP, mot de passe, formulaires publics par IP, assistant IA par tenant) ; `EventSubscriber/PublicEndpointRateLimitSubscriber` |
 
 **`access_control` : la première règle qui correspond l'emporte.** L'ordre compte : une règle précise (ex.
@@ -171,6 +171,13 @@ chaque requête.
 
 - Conteneurs : `symfony_app_v2` (PHP-FPM), `symfony_nginx_v2`, `symfony_db_v2`, `redis_cache_v2`, les 3 workers.
 - Chaîne HTTP : Nginx Proxy Manager (hôtes `*.backend-strapi.online`) → `symfony_nginx_v2` → PHP-FPM.
+  Certificats TLS valides pour `backend-strapi.online`, `v2.backend-strapi.online` et les sous-domaines de tenant ;
+  **pas** pour `esgboost.v2.` et `lintendantprive.v2.backend-strapi.online` (déclarés dans NPM). Le relais `/api` du
+  frontend vérifie le certificat : viser un hôte couvert.
+- Taille des requêtes : NPM 2 000 Mo, nginx 200 Mo, PHP 200 Mo ; l'assistant IA limite lui-même le corps à ~27 Mo.
+- CORS (nginx) : `/uploads`, `/assets/uploads`, `/bucket-simulator/…` : `*` ; tout le reste, dont `/media/secure` et
+  `/api` : origine renvoyée seulement si elle figure dans la liste de `docker/nginx/default.conf` (à compléter pour
+  chaque nouveau domaine client).
   Délais portés à **330 s** : `fastcgi_read_timeout` (`docker/nginx/default.conf`) et fichier personnalisé de NPM
   `/data/nginx/custom/server_proxy.conf` (inclus dans tous les hôtes, conservé par NPM).
 - Recharger nginx : `docker exec symfony_nginx_v2 nginx -t && docker exec symfony_nginx_v2 nginx -s reload`.

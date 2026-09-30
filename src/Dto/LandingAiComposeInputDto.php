@@ -11,6 +11,8 @@ class LandingAiComposeInputDto
     public const MODES = ['edit', 'create', 'page'];
     public const MAX_PROMPT_LENGTH = 2000;
     public const MAX_MEDIA = 20;
+    /** Composition envoyée en retouche : au-delà, chaque appel à l'IA coûterait des centaines de milliers de jetons */
+    public const MAX_COMPOSITION_BYTES = 204800;
     public const MAX_BODY_BYTES = 1048576;
     /** Images (captures d'écran, charte) : nombre, poids en base64 (limite de l'API : 5 Mo) et côté maximal */
     public const MAX_IMAGES = 5;
@@ -190,6 +192,9 @@ class LandingAiComposeInputDto
         }
         if ($this->mode === 'edit' && $this->composition === null) {
             $errors[] = ['path' => 'composition', 'message' => 'composition actuelle de la section obligatoire en retouche'];
+        }
+        if ($this->composition !== null && strlen((string) json_encode($this->composition)) > self::MAX_COMPOSITION_BYTES) {
+            $errors[] = ['path' => 'composition', 'message' => sprintf('composition trop volumineuse (%d Ko au plus)', self::MAX_COMPOSITION_BYTES / 1024)];
         }
         if (count($this->media) > self::MAX_MEDIA) {
             $errors[] = ['path' => 'media', 'message' => sprintf('%d médias au plus', self::MAX_MEDIA)];

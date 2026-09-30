@@ -8,7 +8,8 @@ use App\Services\TenantEntityManagerProvider;
 use App\Controller\Admin\BaseTenantCrudController;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder; 
-use EasyCorp\Bundle\EasyAdminBundle\Field\ArrayField;
+use App\Security\RoleAssignmentPolicy;
+use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField; 
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\EmailField;
@@ -25,7 +26,8 @@ class UserCrudController extends BaseTenantCrudController
 
     public function __construct(
         UserPasswordHasherInterface $userPasswordHasher,
-        TenantEntityManagerProvider $emProvider
+        TenantEntityManagerProvider $emProvider,
+        private readonly RoleAssignmentPolicy $rolePolicy
     ) {
         parent::__construct($emProvider);
         $this->userPasswordHasher = $userPasswordHasher;
@@ -62,7 +64,11 @@ class UserCrudController extends BaseTenantCrudController
             AssociationField::new('adresses', 'Toutes les adresses')
                 ->hideOnForm(), 
 
-            ArrayField::new('roles'),
+            // Liste fermée : ROLE_SUPER_ADMIN n'est proposé qu'à un super administrateur (voir RoleAssignmentPolicy)
+            ChoiceField::new('roles', 'Rôles')
+                ->setChoices($this->rolePolicy->choices($this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)))
+                ->allowMultipleChoices()
+                ->renderExpanded(),
             BooleanField::new('isVerified', 'Verified'),
             BooleanField::new('otpEnabled', 'OTP Enabled'),
             TextField::new('plainPassword', 'Password')
@@ -74,13 +80,28 @@ class UserCrudController extends BaseTenantCrudController
     public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         $this->hashPassword($entityInstance);
+        $this->applyRolePolicy($entityInstance, []);
         parent::persistEntity($entityManager, $entityInstance);
     }
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         $this->hashPassword($entityInstance);
+        $original = $this->emProvider->getEntityManager()->getUnitOfWork()->getOriginalEntityData($entityInstance);
+        $this->applyRolePolicy($entityInstance, (array) ($original['roles'] ?? []));
         parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    /** Règle appliquée côté serveur, même si le formulaire est forgé */
+    private function applyRolePolicy($entityInstance, array $previousRoles): void
+    {
+        if ($entityInstance instanceof User) {
+            $entityInstance->setRoles($this->rolePolicy->apply(
+                $entityInstance->getRoles(),
+                $previousRoles,
+                $this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)
+            ));
+        }
     }
     
     private function hashPassword($entityInstance): void

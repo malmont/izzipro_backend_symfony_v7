@@ -7,6 +7,7 @@ use App\Dto\LandingAiComposeOutputDto;
 use App\Message\LandingAiJobMessage;
 use App\Services\LandingAiService\LandingAiCatalogue;
 use App\Services\LandingAiService\LandingAiComposeRunner;
+use App\Services\LandingAiService\LandingAiComposer;
 use App\Services\LandingAiService\LandingAiDataSources;
 use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiJobService;
@@ -28,6 +29,7 @@ class ComposeLandingSectionUseCase
     public function __construct(
         private readonly LandingAiCatalogue $catalogue,
         private readonly LandingAiComposeRunner $runner,
+        private readonly LandingAiComposer $composer,
         private readonly LandingAiQuotaService $quota,
         private readonly LandingAiDataSources $data,
         private readonly LandingAiJobService $jobs,
@@ -54,6 +56,13 @@ class ComposeLandingSectionUseCase
             if (!in_array($defaultDataType, $this->data->availableIds((string) $dto->componentKey), true)) {
                 throw LandingAiException::badRequest('Donnée introuvable sur ce site.', [['path' => 'dataType', 'message' => 'identifiant absent des données du site']]);
             }
+        }
+
+        if ($dto->mode === 'edit' && ($invalid = $this->composer->editErrors((string) $dto->componentKey, $dto->composition))) {
+            throw new LandingAiException(422, 'Composition invalide', sprintf(
+                'La composition actuelle de la section est invalide, l\'IA ne peut pas la retoucher : %s : %s. Aucun crédit n\'a été consommé.',
+                $invalid[0]['path'], $invalid[0]['message']
+            ), array_slice($invalid, 0, 40));
         }
 
         $limit = $this->landingAiTenantLimiter->create('tenant:' . ($this->tenantProvider->getTenantCode() ?? 'default'))->consume();
