@@ -51,7 +51,7 @@ CRUD EasyAdmin : étendre `BaseTenantCrudController`.
 | Pare-feux | `config/packages/security.yaml` : `api` (`^/api` sauf routes publiques listées, JWT sans état), `main` (reste : formulaire Twig, session) |
 | Utilisateurs | par tenant : `Security/TenantUserProvider` (table des utilisateurs de la base du tenant) |
 | Connexion web | `POST /api/login` → cookies `auth_token_<tenant>` (JWT) et `XSRF-TOKEN_<tenant>` ; `POST /api/token/refresh` ; `POST /api/logout` (`Controller/Account/SecurityController`) |
-| JWT lu depuis le cookie | `EventListener/JWTFromCookieListener` (si pas d'en-tête `Authorization`) ; durées : `WEB_ACCESS_TOKEN_TTL`, `WEB_SESSION_IDLE_TTL` |
+| JWT lu depuis le cookie | `EventListener/JWTFromCookieListener` (si pas d'en-tête `Authorization`) ; durées : `WEB_ACCESS_TOKEN_TTL`, `WEB_SESSION_IDLE_TTL` ; le jeton porte `tenant_code` et n'est valable que sur ce site ; un jeton sans `tenant_code` (émis hors de tout site) est refusé sur un site (`JWTDecodedListener`) |
 | CSRF | `EventListener/CsrfValidationListener` : sur `/api/*` hors GET, si le cookie d'auth du tenant est présent, en-tête `X-XSRF-TOKEN` = cookie `XSRF-TOKEN_<tenant>` |
 | Rôles | `ROLE_ADMIN` (administrateur du site), `ROLE_SUPER_ADMIN` (propriétaire de la plateforme, testé explicitement : pas de `role_hierarchy` ; ni attribuable ni retirable par un admin de site : `Security/RoleAssignmentPolicy`, appliquée par l'écran EasyAdmin des utilisateurs et par `/api/memoires/admin/users` (compte super admin : ni modifiable ni supprimable par un admin de site) ; sinon en SQL. Détenu par le seul compte du propriétaire, dans toutes les bases, `gmasuite` comprise, donc aussi dans chaque nouveau site), `ROLE_USER_INTERNET` (nécessaire à la connexion web), `ROLE_USER_POS`, rôles Boussole (`ROLE_COMPANY`, `ROLE_CONSULTANT`) |
 | Limites de débit | `config/packages/rate_limiter.yaml` (connexion, OTP, mot de passe, formulaires publics par IP, assistant IA par tenant) ; `EventSubscriber/PublicEndpointRateLimitSubscriber` |
@@ -175,9 +175,10 @@ chaque requête.
   **pas** pour `esgboost.v2.` et `lintendantprive.v2.backend-strapi.online` (déclarés dans NPM). Le relais `/api` du
   frontend vérifie le certificat : viser un hôte couvert.
 - Taille des requêtes : NPM 2 000 Mo, nginx 200 Mo, PHP 200 Mo ; l'assistant IA limite lui-même le corps à ~27 Mo.
-- CORS (nginx) : `/uploads`, `/assets/uploads`, `/bucket-simulator/…` : `*` ; tout le reste, dont `/media/secure` et
-  `/api` : origine renvoyée seulement si elle figure dans la liste de `docker/nginx/default.conf` (à compléter pour
-  chaque nouveau domaine client).
+- CORS (nginx) : `/uploads`, `/assets/uploads`, `/bucket-simulator/…` et `/media/secure/` : `*` sans cookies (fichiers
+  publics ou protégés par leur seule clé) ; `/api` et le reste : origine renvoyée seulement si elle figure dans la liste
+  de `docker/nginx/default.conf` (à compléter pour chaque nouveau domaine client qui appelle l'API directement).
+- Corps trop volumineux : 413 en JSON pour `/api/` (`error_page 413`, redéclaré dans la location PHP), HTML sinon.
   Délais portés à **330 s** : `fastcgi_read_timeout` (`docker/nginx/default.conf`) et fichier personnalisé de NPM
   `/data/nginx/custom/server_proxy.conf` (inclus dans tous les hôtes, conservé par NPM).
 - Recharger nginx : `docker exec symfony_nginx_v2 nginx -t && docker exec symfony_nginx_v2 nginx -s reload`.

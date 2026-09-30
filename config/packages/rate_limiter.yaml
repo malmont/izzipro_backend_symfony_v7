@@ -43,6 +43,13 @@ framework:
             interval: '1 minute'
             lock_factory: null
 
+        # Synchronisation de la configuration des landing pages : essais de jeton de déploiement invalides par IP
+        landing_config_token:
+            policy: sliding_window
+            limit: 10
+            interval: '15 minutes'
+            lock_factory: null
+
 # Tests : toutes les connexions viennent de la même IP ; la suite dépasse 50 connexions en 15 minutes.
 # La limite de production reste celle ci-dessus.
 when@test:

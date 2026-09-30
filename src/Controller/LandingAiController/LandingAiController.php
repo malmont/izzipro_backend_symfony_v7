@@ -31,7 +31,7 @@ class LandingAiController extends AbstractController
     {
         try {
             if (strlen($request->getContent()) > LandingAiComposeInputDto::maxBodyBytes()) {
-                throw LandingAiException::badRequest('Requête trop volumineuse.');
+                throw new LandingAiException(413, 'Requête trop volumineuse', sprintf('Le corps de la requête dépasse %d Mo (images comprises).', intdiv(LandingAiComposeInputDto::maxBodyBytes(), 1048576)));
             }
             try {
                 $body = json_decode($request->getContent(), false, 512, JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING);

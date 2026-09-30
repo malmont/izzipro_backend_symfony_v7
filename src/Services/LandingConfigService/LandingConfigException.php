@@ -15,7 +15,8 @@ final class LandingConfigException extends \RuntimeException
         private readonly string $error,
         string $message,
         private readonly array $errors = [],
-        private readonly array $extra = []
+        private readonly array $extra = [],
+        private readonly array $headers = []
     ) {
         parent::__construct($message);
     }
@@ -24,6 +25,8 @@ final class LandingConfigException extends \RuntimeException
     public function getError(): string { return $this->error; }
     /** @return list<array<string, mixed>> */
     public function getErrors(): array { return $this->errors; }
+    /** @return array<string, string> */
+    public function getHeaders(): array { return $this->headers; }
 
     public function toArray(): array
     {

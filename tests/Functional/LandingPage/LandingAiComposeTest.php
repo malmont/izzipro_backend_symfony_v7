@@ -522,6 +522,34 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame([], FakeLandingAiClient::$requests);
     }
 
+    public function testOversizedBodyGets413InJson(): void
+    {
+        $response = $this->request('POST', '/api/landingpage-ai/compose', str_repeat(' ', \App\Dto\LandingAiComposeInputDto::maxBodyBytes() + 1));
+
+        $this->assertSame(413, $response->getStatusCode());
+        $this->assertSame('Requête trop volumineuse', json_decode($response->getContent())->error);
+    }
+
+    public function testImageOverTheApiLimitIsRefused(): void
+    {
+        $response = $this->compose(['mode' => 'page', 'prompt' => 'x', 'images' => ['data:image/png;base64,' . str_repeat('A', \App\Dto\LandingAiComposeInputDto::MAX_IMAGE_BASE64_BYTES + 4)]]);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertStringContainsString('trop lourde', $response->getContent());
+    }
+
+    public function testProposalWithALinkInATextIsSentBackForCorrection(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['text' => 'Voir <a href="https://exemple.com">ici</a>']]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['text' => 'Voir <strong>ici</strong>']]]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Ajoute un lien.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertStringContainsString('balise <a> non autorisée', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+        $this->assertStringContainsString('jamais de lien <a>', FakeLandingAiClient::$requests[0]['system'][0]['text']);
+    }
+
     public function testSecondBackgroundRequestWhileOneIsPendingGets409WithTheExistingJob(): void
     {
         $body = ['mode' => 'page', 'prompt' => 'Une page.'];

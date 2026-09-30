@@ -34,6 +34,12 @@ class RollbackLandingConfigUseCase
             $target = $this->store->describe($previous);
 
             $report = $this->checker->check($this->store->versionPath($previous, LandingConfigStore::SCHEMA), $this->store->versionPath($previous, LandingConfigStore::CATALOGUE));
+            // Une base de site illisible n'a pas été contrôlée : ne rien activer à l'aveugle
+            if ($report['skipped'] !== []) {
+                throw new LandingConfigException(409, 'Bases illisibles', sprintf(
+                    '%d base(s) de site n\'ont pas pu être contrôlées : rien n\'a été activé. Réessayez quand elles répondent.', count($report['skipped'])
+                ), array_map(fn ($s) => ['path' => $s['database'], 'message' => $s['reason']], $report['skipped']), ['skipped' => $report['skipped']]);
+            }
             if ($report['refusedCount'] > 0) {
                 $this->history->add('rollback', $target['version'], $author, 'rejected_compositions', ['refusedCount' => $report['refusedCount'], 'errors' => array_slice($report['refused'], 0, 5)]);
                 throw new LandingConfigException(409, 'Compositions refusées', sprintf(

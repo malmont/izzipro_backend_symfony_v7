@@ -294,6 +294,7 @@ final class LandingAiComposer
                 return $this->client->createMessage($payload, min($callTimeout, $remaining));
             } catch (AnthropicApiException $e) {
                 $delay = min(self::MAX_RETRY_DELAY, $e->getRetryAfter() ?? 2 ** ($retry + 1));
+                $remaining = $totalTimeout - (microtime(true) - $start); // l'appel en échec a pu durer
                 if (!$e->isTransient() || $retry >= self::TRANSIENT_RETRIES || $remaining - $delay < self::MIN_CALL_TIME * 2) {
                     throw $e;
                 }

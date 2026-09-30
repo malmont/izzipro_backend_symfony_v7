@@ -72,7 +72,9 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
 - `POST /api/landingpage-config/rollback` : revient à la version précédente (même contrôle : 409 si une composition
   enregistrée depuis serait refusée). Un second retour revient à la version quittée.
 - Accès : utilisateur `ROLE_SUPER_ADMIN`, ou en-tête `X-Deploy-Token: <DEPLOY_SYNC_TOKEN>` (GitHub Action ; jeton de 32
-  caractères au moins, sinon désactivé). GitHub Action :
+  caractères au moins, sinon désactivé ; 10 jetons invalides par IP et par 15 minutes, puis 429).
+- Une base de site illisible pendant le contrôle bloque l'activation (409 `Bases illisibles`) : rien n'est activé sans
+  avoir contrôlé toutes les compositions. GitHub Action :
   `curl -fsS -X POST -H "X-Deploy-Token: $DEPLOY_SYNC_TOKEN" https://v2.backend-strapi.online/api/landingpage-config/sync`
 - Historique : table `landing_config_sync` de la base maître (`app_v2_db`, pas dans les bases tenant) :
   `CREATE TABLE IF NOT EXISTS landing_config_sync (id SERIAL PRIMARY KEY, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL,
@@ -112,6 +114,13 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
   - **Avant tout appel à l'IA** (30/09/2026) : en retouche, la composition reçue est limitée à 200 Ko (400) et doit
     déjà passer le contrat, les types de la famille et les médias (422 `Composition invalide`, sans crédit ni limite
     par minute consommés). Une composition invalide faisait échouer les 3 essais, payés, avec les crédits libérés.
+  - **HTML des textes** (toutes les chaînes de la composition : textes, traductions, légendes d'images, titres de
+    liens…) : liste blanche identique à RichText du frontend (`RichTextPolicy`, grammaire stricte : tout ce qui
+    ressemble à une balise et n'a pas exactement une forme permise est refusé) : p, div, span, strong, b, em, i, u,
+    s, br, hr, ul, ol, li, blockquote, small, sub, sup, h2 à h6 ; aucun attribut sauf `style` (font-style, font-weight,
+    text-decoration, color) ; pas de `<a>`. Refus 422 au PUT des réglages, et nouvel essai de l'IA si elle en produit.
+  - **Corps trop volumineux** : 413 `{ error, message }` (Symfony au-delà de ~26 Mo, nginx au-delà de 200 Mo). Image :
+    5 000 000 caractères base64 au plus.
   - **Une tâche de fond à la fois par utilisateur** : une nouvelle demande page ou images pendant qu'une tâche du même
     utilisateur est en attente ou en cours reçoit 409 `Tâche en cours` avec `jobId`, `status` et l'en-tête `Location`
     de la tâche existante (aucun crédit consommé).

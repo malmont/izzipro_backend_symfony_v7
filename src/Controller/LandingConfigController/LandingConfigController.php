@@ -11,6 +11,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Annotation\Route;
 
 /**
@@ -31,6 +32,7 @@ class LandingConfigController extends AbstractController
         private readonly SyncLandingConfigUseCase $syncUseCase,
         private readonly RollbackLandingConfigUseCase $rollbackUseCase,
         private readonly TenantConnectionProvider $tenantProvider,
+        private readonly RateLimiterFactory $landingConfigTokenLimiter,
         #[Autowire('%env(default::DEPLOY_SYNC_TOKEN)%')]
         private readonly ?string $deployToken
     ) {
@@ -59,7 +61,7 @@ class LandingConfigController extends AbstractController
         try {
             return new JsonResponse($action($this->author($request)));
         } catch (LandingConfigException $e) {
-            return new JsonResponse($e->toArray(), $e->getStatusCode());
+            return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
         }
     }
 
@@ -68,10 +70,18 @@ class LandingConfigController extends AbstractController
     {
         $token = $request->headers->get(self::TOKEN_HEADER);
         if ($token !== null) {
+            // Essais de jetons : 10 échecs par IP et par 15 minutes, puis refus même avec le bon jeton
+            $limiter = $this->landingConfigTokenLimiter->create('ip:' . $request->getClientIp());
+            $state = $limiter->consume(0);
+            if ($state->getRemainingTokens() === 0) {
+                $retryAfter = max(1, $state->getRetryAfter()->getTimestamp() - time());
+                throw new LandingConfigException(429, 'Trop d\'essais', sprintf('Trop de jetons invalides : réessayez dans %d seconde(s).', $retryAfter), [], [], ['Retry-After' => (string) $retryAfter]);
+            }
             $expected = (string) $this->deployToken;
             if (strlen($expected) >= self::MIN_TOKEN_LENGTH && hash_equals($expected, $token)) {
                 return 'jeton de déploiement';
             }
+            $limiter->consume(1);
             throw new LandingConfigException(401, 'Jeton invalide', 'Jeton de déploiement invalide.');
         }
         if ($this->isGranted('ROLE_SUPER_ADMIN')) {

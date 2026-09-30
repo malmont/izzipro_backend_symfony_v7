@@ -40,15 +40,33 @@ final class LandingAiJobService
         return $job;
     }
 
-    /** Tâche du tenant courant, après nettoyage (null : inconnue, expirée ou identifiant mal formé) */
+    /**
+     * Tâche du tenant courant (null : inconnue, expirée ou identifiant mal formé). Ne traite que cette tâche : le
+     * frontend l'interroge toutes les 3 s, le nettoyage global se fait ailleurs (cleanUp).
+     */
     public function find(string $id): ?AiJob
     {
         if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $id)) {
             return null;
         }
-        $this->cleanUp();
+        $job = $this->jobs()->find($id);
+        if ($job === null) {
+            return null;
+        }
 
-        return $this->jobs()->find($id);
+        $now = new \DateTimeImmutable();
+        if ($job->getFinishedAt() !== null && $job->getFinishedAt() < $now->modify(sprintf('-%d seconds', self::RESULT_TTL_SECONDS))) {
+            $em = $this->emProvider->getEntityManager();
+            $em->remove($job);
+            $em->flush();
+
+            return null;
+        }
+        if ($this->isStale($job, $now)) {
+            $this->failStale($job);
+        }
+
+        return $job;
     }
 
     /** Tâche en attente ou en cours de cet utilisateur, après nettoyage des tâches bloquées (null : aucune) */
@@ -88,12 +106,28 @@ final class LandingAiJobService
             $now->modify(sprintf('-%d seconds', self::RUNNING_TIMEOUT_SECONDS))
         );
         foreach ($stale as $job) {
-            $usage = $this->emProvider->getEntityManager()->find(AiUsage::class, $job->getUsageId());
-            if ($usage !== null && $usage->getStatus() === AiUsage::STATUS_RESERVED) {
-                $this->quota->release($usage, null);
-            }
-            $this->fail($job, new LandingAiException(504, 'Délai dépassé', 'La demande n\'a pas pu être traitée à temps. Aucun crédit n\'a été consommé.'));
+            $this->failStale($job);
         }
+    }
+
+    /** En attente depuis 30 min (worker arrêté) ou en cours depuis 10 min (worker interrompu) */
+    private function isStale(AiJob $job, \DateTimeImmutable $now): bool
+    {
+        return match ($job->getStatus()) {
+            AiJob::STATUS_PENDING => $job->getCreatedAt() < $now->modify(sprintf('-%d seconds', self::PENDING_TIMEOUT_SECONDS)),
+            AiJob::STATUS_RUNNING => $job->getStartedAt() !== null && $job->getStartedAt() < $now->modify(sprintf('-%d seconds', self::RUNNING_TIMEOUT_SECONDS)),
+            default => false,
+        };
+    }
+
+    /** Tâche bloquée : échec 504, crédits libérés */
+    private function failStale(AiJob $job): void
+    {
+        $usage = $this->emProvider->getEntityManager()->find(AiUsage::class, $job->getUsageId());
+        if ($usage !== null && $usage->getStatus() === AiUsage::STATUS_RESERVED) {
+            $this->quota->release($usage, null);
+        }
+        $this->fail($job, new LandingAiException(504, 'Délai dépassé', 'La demande n\'a pas pu être traitée à temps. Aucun crédit n\'a été consommé.'));
     }
 
     private function jobs(): AiJobRepository

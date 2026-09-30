@@ -16,7 +16,7 @@ class LandingAiComposeInputDto
     public const MAX_BODY_BYTES = 1048576;
     /** Images (captures d'écran, charte) : nombre, poids en base64 (limite de l'API : 5 Mo) et côté maximal */
     public const MAX_IMAGES = 5;
-    public const MAX_IMAGE_BASE64_BYTES = 5242880;
+    public const MAX_IMAGE_BASE64_BYTES = 5000000;
     public const MAX_IMAGE_SIDE = 8000;
     private const IMAGE_TYPES = [IMAGETYPE_PNG => 'image/png', IMAGETYPE_JPEG => 'image/jpeg', IMAGETYPE_WEBP => 'image/webp', IMAGETYPE_GIF => 'image/gif'];
 
@@ -124,7 +124,7 @@ class LandingAiComposeInputDto
             return null;
         }
         if (strlen($m[2]) > self::MAX_IMAGE_BASE64_BYTES) {
-            $error = sprintf('image trop lourde (%d Mo au plus en base64)', self::MAX_IMAGE_BASE64_BYTES / 1048576);
+            $error = sprintf('image trop lourde (%d Mo au plus en base64)', intdiv(self::MAX_IMAGE_BASE64_BYTES, 1000000));
 
             return null;
         }

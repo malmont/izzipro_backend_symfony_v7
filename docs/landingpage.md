@@ -67,7 +67,7 @@ recopiés depuis la dernière version synchronisée.
 - Une retouche commence par valider la composition reçue (`LandingAiComposer::editErrors`) : ne jamais appeler l'IA
   sur une entrée invalide (3 essais payés, crédits libérés). Plafond : 20 échecs réels par site et par 24 h.
 
-## Audit du 29/09/2026 : points ouverts
+## Audit du 29/09/2026 : suivi des corrections
 
 Rapport complet transmis au frontend ; corrections par lots (tests à chaque lot).
 
@@ -78,10 +78,10 @@ Rapport complet transmis au frontend ; corrections par lots (tests à chaque lot
 | 2 | Demande identique pendant une tâche en cours : payée deux fois | corrigé le 30/09 (409 avec le `jobId` existant) |
 | 2 | Aucune reprise sur 429, 529 et 5xx de l'API | corrigé le 30/09 (2 nouveaux essais, `AnthropicApiException`) |
 | 2 | `claude-sonnet-5-5` absent de `MODELS_WITHOUT_FORCED_TOOL` | corrigé le 30/09 |
-| 3 | Balises HTML des textes non contrôlées côté backend | à faire : liste blanche identique au frontend (sans `<a>`, attribut `style` limité) |
-| 3 | 400 au lieu de 413 JSON pour un corps trop volumineux | à faire, sur toute la chaîne |
-| 3 | CORS de `/media/secure` limité à une liste de domaines codée en dur dans nginx | à faire : depuis la table `tenants` |
-| 3 | Jeton JWT sans `tenant_code` accepté ; synchronisation activée malgré une base illisible ; pas de limite sur `X-Deploy-Token` ; limite des images ; nettoyage des tâches | à faire |
+| 3 | Balises HTML des textes non contrôlées côté backend | corrigé le 30/09 (`RichTextPolicy` : liste du frontend, sans `<a>`, `style` limité) |
+| 3 | 400 au lieu de 413 JSON pour un corps trop volumineux | corrigé le 30/09 (Symfony et nginx) |
+| 3 | CORS de `/media/secure` limité à une liste de domaines codée en dur dans nginx | corrigé le 30/09 : `*` sans cookies (la clé est la seule autorisation), valable pour tout nouveau domaine |
+| 3 | Jeton JWT sans `tenant_code` accepté sur un site ; synchronisation activée malgré une base illisible ; pas de limite sur `X-Deploy-Token` ; limite des images ; nettoyage des tâches | corrigé le 30/09 |
 
 Côté frontend (29/09) : le schéma corrigé (texte sans `<a>`, `id` des blocs `^[A-Za-z0-9_-]{1,100}$`) arrive par la
 synchronisation au prochain déploiement ; les images de la console sont réduites à 2 000 px en JPEG ; la vérification

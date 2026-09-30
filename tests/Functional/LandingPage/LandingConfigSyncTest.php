@@ -31,6 +31,8 @@ class LandingConfigSyncTest extends WebTestCase
         FakeFrontendConfigHttpClient::clear();
         exec('rm -rf ' . escapeshellarg(static::getContainer()->getParameter('landing_config.dir')));
         $this->master()->exec('DELETE FROM landing_config_sync');
+        $this->master()->exec("DELETE FROM tenants WHERE code = 'illisible'");
+        static::getContainer()->get('limiter.landing_config_token')->create('ip:127.0.0.1')->reset();
         $this->originalConfiguration = $this->db()->fetchOne('SELECT configuration FROM landing_page_setting ORDER BY id LIMIT 1') ?: null;
     }
 
@@ -158,6 +160,37 @@ class LandingConfigSyncTest extends WebTestCase
 
         $this->assertSame(409, $response->getStatusCode(), $response->getContent());
         $this->assertSame('souple', $this->status()->active->version);
+    }
+
+    public function testUnreadableTenantDatabaseBlocksTheSync(): void
+    {
+        $this->master()->exec("INSERT INTO tenants (code, name, dbname) VALUES ('illisible', 'Base absente', 'db_qui_n_existe_pas')");
+        FakeFrontendConfigHttpClient::publish('2026.10.02-1', [LandingConfigStore::SCHEMA => $this->schemaVariant(fn ($s) => $s->{'$comment'} = 'x')]);
+
+        try {
+            $response = $this->call('POST', '/api/landingpage-config/sync', self::TOKEN);
+        } finally {
+            $this->master()->exec("DELETE FROM tenants WHERE code = 'illisible'");
+        }
+
+        $this->assertSame(409, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent());
+        $this->assertSame('Bases illisibles', $body->error);
+        $this->assertSame('db_qui_n_existe_pas', $body->errors[0]->path);
+        $this->assertSame('bundled', $this->status()->active->version, 'rien n\'est activé');
+        $this->assertSame('rejected_unreadable', $this->status()->history[0]->result);
+    }
+
+    public function testRepeatedInvalidTokensAreRateLimited(): void
+    {
+        for ($i = 0; $i < 10; $i++) {
+            $this->assertSame(401, $this->call('GET', '/api/landingpage-config/status', 'mauvais-jeton-' . $i)->getStatusCode());
+        }
+
+        $response = $this->call('GET', '/api/landingpage-config/status', self::TOKEN);
+
+        $this->assertSame(429, $response->getStatusCode(), 'même le bon jeton est refusé pendant la pénalité');
+        $this->assertGreaterThan(0, (int) $response->headers->get('Retry-After'));
     }
 
     public function testAccessIsReservedToThePlatformOwner(): void

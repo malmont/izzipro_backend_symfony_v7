@@ -53,5 +53,8 @@ class RunLandingAiJobUseCase
             }
             $this->jobs->fail($job, new LandingAiException(500, 'Erreur interne', 'La demande n\'a pas pu être traitée. Aucun crédit n\'a été consommé.'));
         }
+
+        // Nettoyage du site : résultats de plus d'une heure, tâches bloquées
+        $this->jobs->cleanUp();
     }
 }

@@ -54,6 +54,13 @@ class SyncLandingConfigUseCase
                 }
 
                 $report = $this->checker->check($this->store->versionPath($id, LandingConfigStore::SCHEMA), $this->store->versionPath($id, LandingConfigStore::CATALOGUE));
+                // Une base de site illisible n'a pas été contrôlée : ne rien activer à l'aveugle
+                if ($report['skipped'] !== []) {
+                    $this->store->uninstall($id);
+                    throw new LandingConfigException(409, 'Bases illisibles', sprintf(
+                        '%d base(s) de site n\'ont pas pu être contrôlées : rien n\'a été activé. Réessayez quand elles répondent.', count($report['skipped'])
+                    ), array_map(fn ($s) => ['path' => $s['database'], 'message' => $s['reason']], $report['skipped']), ['skipped' => $report['skipped']]);
+                }
                 if ($report['refusedCount'] > 0) {
                     $this->store->uninstall($id);
                     throw new LandingConfigException(409, 'Compositions refusées', sprintf(
@@ -74,7 +81,7 @@ class SyncLandingConfigUseCase
                 ];
             } catch (LandingConfigException $e) {
                 $this->history->add('sync', $version, $author, match ($e->getStatusCode()) {
-                    409 => 'rejected_compositions',
+                    409 => $e->getError() === 'Bases illisibles' ? 'rejected_unreadable' : 'rejected_compositions',
                     422 => $e->getError() === 'Empreinte invalide' ? 'rejected_hash' : 'rejected_file',
                     default => 'error',
                 }, ['message' => $e->getMessage(), 'errors' => array_slice($e->getErrors(), 0, 5)]);

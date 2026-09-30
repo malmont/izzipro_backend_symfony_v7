@@ -104,9 +104,31 @@ final class ReglableCompositionValidator
         }
         if (is_object($composition) || is_array($composition)) {
             $this->validateGradients($composition, $prefix, $errors);
+            $this->validateRichText($composition, $prefix, $errors);
         }
 
         return $this->unique($errors);
+    }
+
+    /**
+     * HTML de toutes les chaînes de la composition (textes des blocs, traductions, légendes d'images, titres de liens,
+     * séparateurs…) : liste blanche de RichTextPolicy, celle du frontend. Les valeurs sans « < » (URL, couleurs,
+     * identifiants) passent sans effet.
+     *
+     * @param list<array{path: string, message: string}> $errors
+     */
+    private function validateRichText(object|array $node, string $path, array &$errors): void
+    {
+        foreach ($node as $key => $value) {
+            $childPath = is_int($key) ? $path . "[$key]" : $this->join($path, (string) $key);
+            if (is_string($value)) {
+                foreach (RichTextPolicy::problems($value) as $problem) {
+                    $errors[] = ['path' => $childPath, 'message' => $problem];
+                }
+            } elseif (is_object($value) || is_array($value)) {
+                $this->validateRichText($value, $childPath, $errors);
+            }
+        }
     }
 
     /** @return list<array{path: string, message: string}> */

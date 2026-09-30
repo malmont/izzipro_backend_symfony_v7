@@ -81,6 +81,31 @@ class ReglableCompositionValidatorTest extends KernelTestCase
         yield 'dégradé aux parenthèses déséquilibrées' => [fn ($c) => $c->background = 'linear-gradient(red, blue', 'background', 'parenthèses'];
         yield 'url javascript' => [fn ($c) => $c->blocks[2]->url = 'javascript:alert(1)', 'blocks[2].url', 'format'];
         yield 'clé de liaison inconnue' => [fn ($c) => $c->blocks[2]->bindings->color = 'item.color', 'blocks[2].bindings.color', 'propriété inconnue'];
+        // HTML des textes : liste blanche identique à RichText du frontend (30/09/2026)
+        yield 'lien dans un texte' => [fn ($c) => $c->blocks[1]->text = 'Voir <a href="https://exemple.com">ici</a>', 'blocks[1].text', 'balise <a> non autorisée'];
+        yield 'script dans un texte' => [fn ($c) => $c->blocks[1]->text = '<script>alert(1)</script>', 'blocks[1].text', 'balise <script> non autorisée'];
+        yield 'gestionnaire d\'événement' => [fn ($c) => $c->blocks[1]->text = '<p onclick="alert(1)">x</p>', 'blocks[1].text', 'attribut « onclick » non autorisé'];
+        yield 'style hors liste' => [fn ($c) => $c->blocks[1]->text = '<span style="background:url(x)">x</span>', 'blocks[1].text', 'style « background » non autorisé'];
+        yield 'couleur de style piégée' => [fn ($c) => $c->blocks[1]->text = '<span style="color:expression(alert(1))">x</span>', 'blocks[1].text', 'valeur de color'];
+        yield 'HTML dans une traduction' => [fn ($c) => $c->blocks[1]->translations->en->text = '<img src=x onerror=alert(1)>', 'blocks[1].translations.en.text', 'balise <img> non autorisée'];
+        yield 'guillemet égaré (balise exécutée par le navigateur)' => [fn ($c) => $c->blocks[1]->text = '<img src=x" onerror=alert(1)>', 'blocks[1].text', 'balise <img> non autorisée'];
+        yield 'attribut après un guillemet égaré' => [fn ($c) => $c->blocks[1]->text = '<p title=x" onclick=alert(1)>x</p>', 'blocks[1].text', 'attribut « title » non autorisé'];
+        yield 'attribut collé par une barre oblique' => [fn ($c) => $c->blocks[1]->text = '<p/onmouseover=alert(1)>x</p>', 'blocks[1].text', 'attribut « onmouseover » non autorisé'];
+        yield 'style sans guillemets' => [fn ($c) => $c->blocks[1]->text = '<p style=color:red>x</p>', 'blocks[1].text', 'mal formée'];
+        yield 'balise non fermée' => [fn ($c) => $c->blocks[1]->text = 'Texte <strong', 'blocks[1].text', 'mal formée ou non fermée'];
+        yield 'commentaire HTML' => [fn ($c) => $c->blocks[1]->text = '<!-- x --><p>a</p>', 'blocks[1].text', 'commentaire'];
+        yield 'légende d\'image' => [fn ($c) => $c->blocks[0]->images = [(object) ['url' => '/uploads/a.webp', 'caption' => '<script>x</script>']], 'blocks[0].images[0].caption', 'balise <script> non autorisée'];
+        yield 'titre de lien d\'une traduction' => [fn ($c) => $c->blocks[1]->translations->en->links = ['<a href="x">y</a>'], 'blocks[1].translations.en.links[0]', 'balise <a> non autorisée'];
+        yield 'HTML dans un champ secondaire' => [fn ($c) => $c->blocks[2]->offer = '<iframe src="x"></iframe>', 'blocks[2].offer', 'balise <iframe> non autorisée'];
+    }
+
+    public function testAllowedRichTextIsAccepted(): void
+    {
+        $composition = $this->composition();
+        $composition->blocks[1]->text = '<h2>Titre</h2><p style="color:#243b35; font-weight:bold">Texte <strong>fort</strong>, <em>penché</em>, '
+            . '<span style="text-decoration: underline">souligné</span></p><ul><li>Un</li><li>Deux</li></ul><br/><hr>5 &lt; 6 et 5 < 6';
+
+        $this->assertSame([], $this->validator()->validateComposition($composition));
     }
 
     public function testDepthOfEightParentsIsAccepted(): void
