@@ -2,6 +2,7 @@
 
 namespace App\MemoiresVivantes\Controller\Admin;
 
+use App\Security\RoleAssignmentPolicy;
 use App\Entity\User;
 use App\MemoiresVivantes\Entity\Book;
 use App\Services\MediaUrlResolver;
@@ -21,6 +22,7 @@ class UserManagementController extends AbstractController
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly UserPasswordHasherInterface $passwordHasher,
+        private readonly RoleAssignmentPolicy $rolePolicy,
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
@@ -167,6 +169,9 @@ class UserManagementController extends AbstractController
         if (!$targetUser) {
             return $this->json(['error' => 'Utilisateur introuvable.'], Response::HTTP_NOT_FOUND);
         }
+        if ($denied = $this->protectOwner($targetUser)) {
+            return $denied;
+        }
 
         $data = json_decode($request->getContent(), true) ?? [];
 
@@ -185,7 +190,8 @@ class UserManagementController extends AbstractController
             $assignedRoles = ($newRole === 'ROLE_ADMIN')
                 ? ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_USER_POS', 'ROLE_USER_INTERNET']
                 : ['ROLE_USER', 'ROLE_USER_INTERNET'];
-            $targetUser->setRoles($assignedRoles);
+            // Cet écran ne gère jamais ROLE_SUPER_ADMIN : conservé tel quel
+            $targetUser->setRoles($this->rolePolicy->apply($assignedRoles, $targetUser->getRoles(), false));
         }
 
         if (isset($data['firstName']) || isset($data['firstname'])) {
@@ -245,6 +251,9 @@ class UserManagementController extends AbstractController
         if (!$targetUser) {
             return $this->json(['error' => 'Utilisateur introuvable.'], Response::HTTP_NOT_FOUND);
         }
+        if ($denied = $this->protectOwner($targetUser)) {
+            return $denied;
+        }
 
         // Guardrail : interdiction de supprimer son propre compte
         /** @var User $currentUser */
@@ -277,5 +286,15 @@ class UserManagementController extends AbstractController
             'status' => 'success',
             'message' => 'Utilisateur supprimé avec succès.'
         ]);
+    }
+
+    /** Compte du propriétaire de la plateforme (ROLE_SUPER_ADMIN) : modifiable ou supprimable par un super admin seulement */
+    private function protectOwner(User $targetUser): ?JsonResponse
+    {
+        if (in_array(RoleAssignmentPolicy::SUPER_ADMIN, $targetUser->getRoles(), true) && !$this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)) {
+            return $this->json(['error' => 'Compte du propriétaire de la plateforme : modification réservée.'], Response::HTTP_FORBIDDEN);
+        }
+
+        return null;
     }
 }
