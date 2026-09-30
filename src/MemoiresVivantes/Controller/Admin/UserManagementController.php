@@ -5,7 +5,9 @@ namespace App\MemoiresVivantes\Controller\Admin;
 use App\Security\RoleAssignmentPolicy;
 use App\Entity\User;
 use App\MemoiresVivantes\Entity\Book;
-use App\Services\MediaUrlResolver;
+use App\MemoiresVivantes\Services\FrontendUrlResolver;
+use App\Services\EmailConfigurationService\EmailSenderService;
+use Psr\Log\LoggerInterface;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -23,13 +25,15 @@ class UserManagementController extends AbstractController
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly RoleAssignmentPolicy $rolePolicy,
-        private readonly ?MediaUrlResolver $mediaUrlResolver = null
+        private readonly FrontendUrlResolver $frontendUrl,
+        private readonly EmailSenderService $emailSender,
+        private readonly LoggerInterface $logger
     ) {}
 
+    /** Adresse du site frontend (les liens d'activation y renvoient ; avant, ils pointaient vers le stockage des médias) */
     private function resolveHost(Request $request): string
     {
-        return $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
-            ?? $request->getSchemeAndHttpHost();
+        return $this->frontendUrl->baseUrl($request);
     }
 
     #[Route('', methods: ['GET'])]
@@ -138,6 +142,11 @@ class UserManagementController extends AbstractController
         $em->persist($newUser);
         $em->flush();
 
+        $emailSent = false;
+        if ($activationUrl !== null) {
+            $emailSent = $this->sendInvitation($newUser, $activationUrl, $request);
+        }
+
         return $this->json([
             'status' => 'created',
             'user' => [
@@ -152,11 +161,35 @@ class UserManagementController extends AbstractController
                 'booksCount' => 0,
                 'token' => $token,
                 'activationUrl' => $activationUrl,
+                'emailSent' => $emailSent,
             ],
             'message' => $activationUrl
-                ? 'Collaborateur invité avec succès. Transmettez-lui le lien d\'activation.'
+                ? ($emailSent
+                    ? 'Invitation envoyée par e-mail. Le lien d\'activation reste disponible ci-dessous si besoin.'
+                    : 'Compte créé, mais l\'e-mail d\'invitation n\'a pas pu être envoyé : transmettez le lien d\'activation vous-même.')
                 : 'Utilisateur créé avec succès avec son mot de passe initial.'
         ], Response::HTTP_CREATED);
+    }
+
+    /** E-mail d'invitation par le serveur d'envoi du site ; un échec n'empêche pas la création du compte */
+    private function sendInvitation(User $user, string $activationUrl, Request $request): bool
+    {
+        $inviter = $this->getUser();
+        $invitedBy = trim(($inviter?->getFirstname() ?? '') . ' ' . ($inviter?->getLastname() ?? '')) ?: 'Votre biographe';
+        try {
+            return $this->emailSender->sendTemplatedEmail(
+                $user->getEmail(),
+                'Activez votre compte',
+                'emails/memoires_account_invitation.html.twig',
+                ['firstName' => $user->getFirstname() ?: 'bienvenue', 'email' => $user->getEmail(), 'activationUrl' => $activationUrl, 'invitedBy' => $invitedBy],
+                (string) $request->query->get('locale', 'fr'),
+                $request->getSchemeAndHttpHost()
+            );
+        } catch (\Throwable $e) {
+            $this->logger->error('Invitation Mémoires Vivantes non envoyée : ' . $e->getMessage());
+
+            return false;
+        }
     }
 
     #[Route('/{id}', methods: ['PUT', 'PATCH'])]

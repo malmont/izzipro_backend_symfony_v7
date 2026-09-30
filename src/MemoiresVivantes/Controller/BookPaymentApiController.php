@@ -4,6 +4,7 @@ namespace App\MemoiresVivantes\Controller;
 
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Security\BookAccessGuard;
+use App\MemoiresVivantes\Services\FrontendUrlResolver;
 use App\MemoiresVivantes\UseCase\Payment\GenerateBookPaymentLinkUseCase;
 use App\MemoiresVivantes\UseCase\Payment\GetBookPaymentStatusUseCase;
 use App\Services\TenantEntityManagerProvider;
@@ -23,7 +24,8 @@ class BookPaymentApiController extends AbstractController
         private readonly GenerateBookPaymentLinkUseCase $generateBookPaymentLinkUseCase,
         private readonly GetBookPaymentStatusUseCase $getBookPaymentStatusUseCase,
         private readonly LoggerInterface $logger,
-        private readonly BookAccessGuard $accessGuard
+        private readonly BookAccessGuard $accessGuard,
+        private readonly FrontendUrlResolver $frontendUrl
     ) {}
 
     /**
@@ -70,24 +72,8 @@ class BookPaymentApiController extends AbstractController
         $sendEmail = isset($data['send_email']) ? filter_var($data['send_email'], FILTER_VALIDATE_BOOLEAN) : true;
         $customMessage = $data['custom_message'] ?? null;
 
-        // Détection de l'hôte frontend : Origin/Referer ou repli sur le .env
-        $origin = $request->headers->get('Origin') 
-            ?: $request->headers->get('Referer') 
-            ?: $request->getSchemeAndHttpHost();
-
-        $frontendBaseUrl = rtrim((string) $origin, '/');
-        if (preg_match('#^(https?://[^/]+)#', $frontendBaseUrl, $matches)) {
-            $frontendBaseUrl = $matches[1];
-        }
-
-        $envFrontendUrl = $_ENV['MEMOIRES_FRONTEND_URL'] 
-            ?? ('https://memoiresvivantes.' . ($_ENV['FRONTEND_BASE_DOMAIN'] ?? 'arkanoa-media.com'));
-
-        if (empty($frontendBaseUrl) || !filter_var($frontendBaseUrl, FILTER_VALIDATE_URL) || str_contains($frontendBaseUrl, 'backend-strapi.online')) {
-            $frontendBaseUrl = rtrim($envFrontendUrl, '/');
-        }
-        // Force HTTPS pour éviter les redirections non sécurisées
-        $frontendBaseUrl = preg_replace('#^http://#', 'https://', $frontendBaseUrl);
+        // Adresse du site frontend du tenant (origine de la requête, sinon domaine du site)
+        $frontendBaseUrl = preg_replace('#^http://#', 'https://', $this->frontendUrl->baseUrl($request));
 
         $successUrl = $data['success_url'] ?? ($frontendBaseUrl . '/payment-success?book_id=' . $book->getId());
         $cancelUrl = $data['cancel_url'] ?? ($frontendBaseUrl . '/books/' . $book->getId());

@@ -19,8 +19,9 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
   - voters : `Security/BookVoter.php`, `Security/ChapterVoter.php`.
 - Toute nouvelle action doit en utiliser un : rien ne la protège sinon. Lecture : `canView` ; tout ce qui coûte,
   engage ou modifie : `canManage`.
-- **Invités (lien signé)** : ils ne modifient que `answers` et `contributorAnswers` (titre, position, texte final :
-  propriétaire seulement) ; ils ne voient ni l'e-mail du propriétaire ni le lien de paiement (`BookOutputDto`,
+- **Invités (lien signé)** : ils modifient `answers` et `contributorAnswers` ; le texte final (`contentFinal`) aussi,
+  mais seulement par le lien de partage du chapitre (relecture, « Partager l'édition » du frontend), jamais par le
+  lien personnel d'un contributeur ; titre, thème et position restent au propriétaire ; ils ne voient ni l'e-mail du propriétaire ni le lien de paiement (`BookOutputDto`,
   `$withPrivateDetails`). Un contributeur retiré du livre perd son lien (`BookAccessGuard::contributorBelongsTo`).
 - **Témoignages** : un enregistrement ne peut pas effacer le témoignage d'un contributeur du livre absent de l'envoi
   (`UpdateChapterUseCase::keepMissingContributors`) ; pour retirer un témoignage, retirer le contributeur.
@@ -37,7 +38,11 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Impression | `/books/{id}/print/estimate`, `print/payment-intent`, `print/order`, `print/orders` ; `POST /api/webhooks/lulu` | `BookPrintApiController`, `LuluWebhookController` |
 | Types de livre (lecture) | `GET /book-types`, `/book-types/{code}`, `GET /questions`, `GET /ai-models` | `BookTypeController`, `QuestionController` |
 | Administration | `/admin/book-types…`, `/admin/book-type-chapters…`, `/admin/book-type-roles…`, `/admin/questions…`, `/admin/users…` | `Controller/Admin/` (`#[IsGranted('ROLE_ADMIN')]`) |
-| Activation de compte | `POST /auth/activate` | `AccountActivationController` |
+| Activation de compte | `POST /auth/activate` | `AccountActivationController` ; l'invitation (`POST /admin/users` sans mot de passe) envoie un e-mail avec le lien (`emails/memoires_account_invitation.html.twig`) |
+
+Liens envoyés aux utilisateurs (activation, partage de chapitre, retour de paiement) : `Services/FrontendUrlResolver`
+(origine de la requête, sinon domaine du tenant, sinon `<code>.<FRONTEND_BASE_DOMAIN>`). `MEMOIRES_FRONTEND_URL` n'est
+plus qu'un dernier repli : chaque site a son frontend.
 
 ## Données
 
@@ -81,7 +86,9 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
   `generating_*`, 60 min en `pending` ou `part1_done`.
 - Appels à l'IA : 3 essais sur surcharge ou erreur passagère (429, 529, 5xx), bornés dans le temps (10 min).
 - Texte envoyé à l'IA pour une réponse : `ChapterQuestionProvider::answerText` (version améliorée si elle existe et
-  n'a pas été écartée, sinon réponse saisie). Prénom du narrateur : celui du livre, jamais un compte générique
+  n'a pas été écartée, sinon réponse saisie). Livres « couple » : le frontend envoie les deux voix dans un seul texte
+  (« Elle: … ⏎ Lui: … », saisie et amélioration) avec un choix par voix (`useImproved1`, `useImproved2`) ; le texte
+  est recomposé voix par voix, et des étiquettes sans texte ne comptent pas comme une réponse. Prénom du narrateur : celui du livre, jamais un compte générique
   (`AnthropicService::narratorFirstName`).
 - Transcription audio : OpenAI Whisper (`Services/OpenAiService.php`), WebM/Ogg (Chrome, Firefox) et MP4/AAC (Safari) ;
   un enregistrement sans parole répond 422 `noSpeech` (`TranscribeAudioUseCase`). Amélioration d'une réponse : 503 si

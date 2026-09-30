@@ -157,12 +157,74 @@ class ChapterQuestionProvider
     {
         $improved = $entry['improvedAnswer'] ?? $entry['improved_answer'] ?? '';
         $improved = is_string($improved) ? trim($improved) : '';
-        if ($improved !== '' && ($entry['useImproved'] ?? true) !== false) {
+        $answer = $entry['answer'] ?? '';
+        $answer = is_string($answer) ? trim($answer) : '';
+
+        // Livres « couple » : une réponse par voix (« Elle: … » / « Lui: … ») et un choix par voix (useImproved1/2)
+        if (array_key_exists('useImproved1', $entry) || array_key_exists('useImproved2', $entry)) {
+            return self::coupleText($answer, $improved, $entry);
+        }
+
+        if ($improved !== '' && ($entry['useImproved'] ?? true) !== false && !self::isLabelsOnly($improved)) {
             return $improved;
         }
-        $answer = $entry['answer'] ?? '';
 
-        return is_string($answer) ? trim($answer) : '';
+        return self::isLabelsOnly($answer) ? '' : $answer;
+    }
+
+    /**
+     * Compose la réponse d'un couple voix par voix : version améliorée de la voix si elle existe et n'est pas écartée,
+     * sinon version saisie. Le frontend envoie toujours les deux textes sous la forme « Prénom: texte », même vides.
+     */
+    private static function coupleText(string $answer, string $improved, array $entry): string
+    {
+        $rawVoices = self::voices($answer);
+        $improvedVoices = self::voices($improved);
+        if ($rawVoices === [] && $improvedVoices === []) {
+            return '';
+        }
+
+        $lines = [];
+        $position = 0;
+        foreach (array_keys($rawVoices + $improvedVoices) as $label) {
+            $position++;
+            $useImproved = ($entry['useImproved' . $position] ?? true) !== false;
+            $text = $useImproved && trim($improvedVoices[$label] ?? '') !== '' ? $improvedVoices[$label] : ($rawVoices[$label] ?? '');
+            if (trim($text) !== '') {
+                $lines[] = $label === '' ? trim($text) : $label . ' : ' . trim($text);
+            }
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Découpe « Elle: texte ⏎ Lui: texte » en [étiquette => texte]. Un texte sans étiquette est rendu sous une clé vide.
+     *
+     * @return array<string, string>
+     */
+    private static function voices(string $text): array
+    {
+        $text = trim(str_replace("\r", '', $text));
+        if ($text === '') {
+            return [];
+        }
+        if (!preg_match_all('/^([^\n:]{1,40}):[ \t]*(.*?)(?=^[^\n:]{1,40}:|\z)/msu', $text, $matches, PREG_SET_ORDER) || $matches === []) {
+            return ['' => $text];
+        }
+
+        $voices = [];
+        foreach ($matches as [, $label, $part]) {
+            $voices[trim($label)] = trim(($voices[trim($label)] ?? '') . ' ' . trim($part));
+        }
+
+        return $voices;
+    }
+
+    /** « Elle: ⏎ Lui: » : des étiquettes sans aucun texte, ce n'est pas une réponse */
+    private static function isLabelsOnly(string $text): bool
+    {
+        return $text !== '' && trim((string) preg_replace('/^[^\n:]{1,40}:[ \t]*$/mu', '', $text)) === '';
     }
 
     public static function isAnswered(array $entry): bool

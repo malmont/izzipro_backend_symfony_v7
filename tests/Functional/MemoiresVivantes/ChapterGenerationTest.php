@@ -168,6 +168,19 @@ class ChapterGenerationTest extends BookTypeApiTestCase
         $this->assertSame("Q: Q1\nR: brute", $formatted, 'ni question sans réponse, ni question passée');
     }
 
+    public function testCoupleAnswersAreComposedVoiceByVoice(): void
+    {
+        // Le frontend envoie « Elle: … ⏎ Lui: … » (saisie et amélioration), avec un choix par voix (useImproved1/2)
+        $entry = ['answer' => "Elle: Née en Martinique.\nLui: À Paris.", 'improvedAnswer' => "Elle: Née en Martinique, joyau des Caraïbes.\nLui: ", 'useImproved1' => true, 'useImproved2' => false];
+        $this->assertSame("Elle : Née en Martinique, joyau des Caraïbes.\nLui : À Paris.", ChapterQuestionProvider::answerText($entry));
+
+        $entry['useImproved1'] = false;
+        $this->assertSame("Elle : Née en Martinique.\nLui : À Paris.", ChapterQuestionProvider::answerText($entry), 'amélioration écartée pour la première voix');
+
+        $this->assertSame('', ChapterQuestionProvider::answerText(['answer' => "Elle: \n Lui: ", 'improvedAnswer' => "Elle: \n Lui: ", 'useImproved1' => false, 'useImproved2' => false]), 'étiquettes sans texte : pas une réponse');
+        $this->assertSame('', ChapterQuestionProvider::answerText(['answer' => "Danielle: \n Michel: "]), 'même sans les drapeaux couple');
+    }
+
     public function testASilentRecordingIsNotTranscribedAsAnAnswer(): void
     {
         $this->assertTrue(TranscribeAudioUseCase::isSilence(''));

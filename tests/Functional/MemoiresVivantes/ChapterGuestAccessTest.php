@@ -3,7 +3,8 @@
 namespace App\Tests\Functional\MemoiresVivantes;
 
 /**
- * Liens de partage et de contribution : un invité ne modifie que des réponses, les témoignages des contributeurs
+ * Liens de partage et de contribution : un invité modifie des réponses (et le texte final par le lien de partage du
+ * chapitre, jamais par un lien de contributeur), les témoignages des contributeurs
  * survivent à un enregistrement fait avec une page ancienne, un contributeur retiré perd son lien, et l'invité ne
  * voit ni l'e-mail du propriétaire ni le lien de paiement. Avant le 30/09/2026, un lien de partage permettait de
  * réécrire le titre et le texte final, et l'enregistrement du propriétaire effaçait les témoignages arrivés entre-temps.
@@ -37,8 +38,14 @@ class ChapterGuestAccessTest extends BookTypeApiTestCase
 
         $this->assertSame(200, $status);
         $row = self::db()->query("SELECT title, content_final, position, theme, answers FROM mv_chapter WHERE id = '{$this->chapterId}'")->fetch();
-        $this->assertSame(['Paroles d\'enfants', 'Texte du propriétaire.', 2, 'regards_croises'], [$row['title'], $row['content_final'], $row['position'], $row['theme']]);
+        $this->assertSame(['Paroles d\'enfants', 2, 'regards_croises'], [$row['title'], $row['position'], $row['theme']], 'titre, position et thème restent au propriétaire');
+        $this->assertSame('Texte réécrit.', $row['content_final'], 'le lien de partage du chapitre sert à relire le texte (« Partager l\'édition »)');
         $this->assertStringContainsString('invit', $row['answers'], 'la réponse de l\'invité est enregistrée');
+
+        // Le lien personnel d'un contributeur ne touche pas au texte final
+        [$status] = $this->api('PUT', "/chapters/{$this->chapterId}?" . $this->signed($this->lea['id']), ['contentFinal' => 'Réécrit par Léa.'], null);
+        $this->assertSame(200, $status);
+        $this->assertSame('Texte réécrit.', self::db()->query("SELECT content_final FROM mv_chapter WHERE id = '{$this->chapterId}'")->fetchColumn());
 
         // Le propriétaire, lui, modifie tout
         [$status] = $this->api('PUT', "/chapters/{$this->chapterId}", ['title' => 'Nouveau titre', 'contentFinal' => 'Texte relu.'], 'client');

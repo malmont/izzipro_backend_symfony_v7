@@ -52,13 +52,13 @@ class EmailSenderService
         string $domain,
         ?string $customFromName = null,
         ?string $replyTo = null
-    ): void {
+    ): bool {
         try {
             $emailConfig = $this->emailConfigService->findOneByLocale($locale);
 
             if (!$emailConfig) {
                 $this->logger->warning('EmailConfiguration introuvable.');
-                return;
+                return false;
             }
 
             $emailConfigTranslation = $emailConfig->getTranslation($locale);
@@ -108,8 +108,12 @@ class EmailSenderService
             // paiement ; le serveur global (.env) ne sert que si le site n'a pas le sien. Avant, ces e-mails (mot de
             // passe oublié, code de connexion, contact, commande) passaient toujours par le serveur global.
             $this->tenantMailerFactory->createMailer($emailConfig)->send($emailMessage);
+
+            return true;
         } catch (\Throwable $e) {
             $this->logger->error("Erreur lors de l'envoi de l'email: " . $e->getMessage());
+
+            return false;
         }
     }
 }

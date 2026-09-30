@@ -18,6 +18,7 @@ use App\MemoiresVivantes\UseCase\TranscribeAudioUseCase;
 use App\MemoiresVivantes\UseCase\UpdateChapterUseCase;
 use App\MemoiresVivantes\Security\BookAccessGuard;
 use App\MemoiresVivantes\Services\ChapterGenerationService;
+use App\MemoiresVivantes\Services\FrontendUrlResolver;
 use App\MemoiresVivantes\UseCase\NoSpeechDetectedException;
 use App\MemoiresVivantes\Services\ChapterQuestionProvider;
 use App\MemoiresVivantes\BookType\BookTypeResolver;
@@ -45,6 +46,7 @@ class ChapterController extends AbstractController
         private readonly ImproveAnswerUseCase $improveAnswerUseCase,
         private readonly ChapterGenerationService $generationService,
         private readonly BookAccessGuard $accessGuard,
+        private readonly FrontendUrlResolver $frontendUrl,
         private readonly ChapterQuestionProvider $questionProvider,
         private readonly BookTypeResolver $bookTypeResolver,
         private readonly TenantEntityManagerProvider $emProvider,
@@ -201,10 +203,15 @@ class ChapterController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $data = is_array($data) ? $data : [];
 
-        // Accès par lien signé (invité, contributeur) : seules les réponses sont modifiables. Titre, position et
-        // texte final du chapitre restent au propriétaire du livre.
+        // Accès par lien signé : les réponses sont modifiables ; le texte final aussi, mais seulement par le lien de
+        // partage du chapitre (relecture, « Partager l'édition »), pas par le lien personnel d'un contributeur.
+        // Titre, thème et position restent au propriétaire du livre.
         if ($this->getUser() === null || !$this->isGranted('CHAPTER_EDIT', $chapter)) {
-            $data = array_intersect_key($data, ['answers' => true, 'contributorAnswers' => true]);
+            $allowed = ['answers' => true, 'contributorAnswers' => true];
+            if (!$validatedContributorId) {
+                $allowed['contentFinal'] = true;
+            }
+            $data = array_intersect_key($data, $allowed);
         }
 
         // Si la requête provient d'un lien contributeur individuel, restreindre la modification à ce contributeur
@@ -855,10 +862,7 @@ class ChapterController extends AbstractController
         $chapterId = (string)$chapter->getId();
         $bookId = (string)$chapter->getBook()->getId();
 
-        $frontendHost = rtrim(
-            $_ENV['MEMOIRES_FRONTEND_URL'] ?? ('https://memoiresvivantes.' . ($_ENV['FRONTEND_BASE_DOMAIN'] ?? 'arkanoa-media.com')),
-            '/'
-        );
+        $frontendHost = $this->frontendUrl->baseUrl($request);
 
         $contributorId = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
         if ($contributorId) {
@@ -909,10 +913,7 @@ class ChapterController extends AbstractController
         $chapterId = (string)$chapter->getId();
         $bookId = (string)$chapter->getBook()->getId();
 
-        $frontendHost = rtrim(
-            $_ENV['MEMOIRES_FRONTEND_URL'] ?? ('https://memoiresvivantes.' . ($_ENV['FRONTEND_BASE_DOMAIN'] ?? 'arkanoa-media.com')),
-            '/'
-        );
+        $frontendHost = $this->frontendUrl->baseUrl($request);
 
         $contributors = $chapter->getBook()->getContributors();
         $links = [];
