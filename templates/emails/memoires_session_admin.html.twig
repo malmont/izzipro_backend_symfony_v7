@@ -1,0 +1,27 @@
+{% extends 'base.email.html.twig' %}
+{# Copie interne d'une séance d'écriture programmée (ReservationMailerService) #}
+
+{% block title %}Séance programmée — {{ sessionLabel }} avec {{ reservation.clientName }}{% endblock %}
+
+{% block body %}
+<h2>Séance programmée</h2>
+<p>Une séance d'écriture vient d'être programmée. Récapitulatif :</p>
+
+<div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #b59449; margin: 25px 0;">
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr><td style="padding: 8px 0; font-weight: bold; color: #475569; width: 160px;">Séance :</td><td style="padding: 8px 0; color: #0f172a; font-weight: 600;">{{ sessionLabel }}</td></tr>
+        {% if bookTitle %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Livre :</td><td style="padding: 8px 0; color: #0f172a;">{{ bookTitle }}</td></tr>{% endif %}
+        <tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Date :</td><td style="padding: 8px 0; color: #0f172a;"><strong>{{ reservation.reservationDate|date('d/m/Y') }}</strong>{% if reservation.reservationSlot %}, {{ reservation.reservationSlot }}{% endif %}</td></tr>
+        {% if biographerName %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Biographe :</td><td style="padding: 8px 0; color: #0f172a;">{{ biographerName }}</td></tr>{% endif %}
+        <tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Client :</td><td style="padding: 8px 0; color: #0f172a; font-weight: 600;">{{ reservation.clientName }}</td></tr>
+        <tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">E-mail :</td><td style="padding: 8px 0;"><a href="mailto:{{ reservation.clientEmail }}" style="color: #2563eb;">{{ reservation.clientEmail }}</a></td></tr>
+        {% if reservation.clientPhone %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Téléphone :</td><td style="padding: 8px 0;"><a href="tel:{{ reservation.clientPhone }}" style="color: #2563eb;">{{ reservation.clientPhone }}</a></td></tr>{% endif %}
+        {% if reservation.forfaitName %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Formule :</td><td style="padding: 8px 0; color: #0f172a;">{{ reservation.forfaitName }}</td></tr>{% endif %}
+        {% if reservation.notes %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569; vertical-align: top;">Précisions :</td><td style="padding: 8px 0; color: #0f172a; white-space: pre-wrap;">{{ reservation.notes }}</td></tr>{% endif %}
+    </table>
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ googleCalendarUrl }}" target="_blank" style="display: inline-block; background-color: #b59449; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px;">Ajouter à Google Agenda</a>
+</div>
+{% endblock %}

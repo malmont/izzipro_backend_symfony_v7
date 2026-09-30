@@ -50,6 +50,37 @@ class TransactionalEmailTest extends KernelTestCase
         $this->assertMatchesRegularExpression('/^UID:reservation-\d+-\d+@' . preg_quote(MV_TEST_TENANT_HOST, '/') . '\r?$/m', $calendar, 'identifiant du rendez-vous au domaine du site');
     }
 
+    public function testAWritingSessionIsAnnouncedNotRequested(): void
+    {
+        // Séance programmée par le biographe (liée à un livre) : ce n'est pas une demande à examiner
+        $book = $this->em()->getRepository(Book::class)->findOneBy([]);
+        $session = $this->reservation()->setBookId((string) $book->getId())->setStepNumber(2)->setTotalSteps(5)->setServiceName('Séance 2 / 5');
+        $this->em()->flush();
+
+        static::getContainer()->get(ReservationMailerService::class)->sendReservationEmails($session, 'fr', MV_TEST_TENANT_HOST);
+        $messages = $this->messages();
+        $this->assertCount(2, $messages);
+        $this->assertSame('Votre séance d\'écriture est programmée — Séance 2 / 5', $messages[0]->getSubject());
+        $html = (string) $messages[0]->getHtmlBody();
+        $this->assertStringContainsString('Comme convenu ensemble', $html);
+        $this->assertStringContainsString((string) $book->getTitle(), $html);
+        $this->assertStringNotContainsString('demande de réservation', $html);
+        $this->assertStringNotContainsString('examiner votre demande', $html);
+        $this->assertStringContainsString('Séance programmée — Séance 2 / 5 avec Client Test', (string) $messages[1]->getSubject());
+        $this->assertStringContainsString('SUMMARY:Séance d\'écriture', $messages[0]->getAttachments()[0]->getBody());
+
+        static::getContainer()->get(ReservationMailerService::class)->sendStatusChangeEmail($session, 'confirmed');
+        $confirmed = $this->messages()[2];
+        $this->assertSame('Votre séance d\'écriture est confirmée — Séance 2 / 5', $confirmed->getSubject());
+        $this->assertStringNotContainsString('Votre demande a été validée', (string) $confirmed->getHtmlBody());
+
+        // Une demande de réservation ordinaire (landing page) garde son texte
+        static::getContainer()->get(ReservationMailerService::class)->sendReservationEmails($this->reservation(), 'fr', MV_TEST_TENANT_HOST);
+        $request = $this->messages()[3];
+        $this->assertStringContainsString('Confirmation de votre demande de réservation', (string) $request->getSubject());
+        $this->assertStringContainsString('examiner votre demande', (string) $request->getHtmlBody());
+    }
+
     public function testBookPaymentLinkEmail(): void
     {
         $book = $this->em()->getRepository(Book::class)->findOneBy([]);

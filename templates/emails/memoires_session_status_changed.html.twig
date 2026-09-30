@@ -1,0 +1,58 @@
+{% extends 'base.email.html.twig' %}
+{# Changement d'état d'une séance d'écriture (ReservationMailerService) #}
+
+{% block title %}
+    {% if status == 'confirmed' %}Votre séance d'écriture est confirmée — {{ sessionLabel }}{% elseif status == 'cancelled' %}Votre séance d'écriture est annulée — {{ sessionLabel }}{% else %}Votre séance d'écriture — {{ sessionLabel }}{% endif %}
+{% endblock %}
+
+{% block body %}
+<h2>Bonjour {{ reservation.clientName }},</h2>
+
+{% if status == 'confirmed' %}
+    <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 16px; border-radius: 6px; margin: 20px 0;">
+        <p style="margin: 0; color: #065f46; font-size: 16px; font-weight: bold;">Votre séance d'écriture est confirmée.</p>
+    </div>
+    <p>Nous vous attendons à la date et à l'horaire ci-dessous. Rassemblez d'ici là les souvenirs, photos et anecdotes qui vous reviennent : ils nourriront le récit.</p>
+    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #0284c7; padding: 14px 16px; border-radius: 6px; margin: 20px 0;">
+        <p style="margin: 0; color: #334155; font-size: 14px; line-height: 1.5;">
+            <strong>Un empêchement ?</strong> Répondez à cet e-mail ou appelez-nous dès que possible, et nous conviendrons ensemble d'un autre moment.
+        </p>
+    </div>
+{% elseif status == 'cancelled' %}
+    <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; border-radius: 6px; margin: 20px 0;">
+        <p style="margin: 0; color: #991b1b; font-size: 16px; font-weight: bold;">Votre séance d'écriture est annulée.</p>
+    </div>
+    <p>La séance prévue ci-dessous n'aura pas lieu. Nous reprendrons contact avec vous pour convenir d'un nouveau moment ; vous pouvez aussi nous écrire en répondant à cet e-mail.</p>
+{% else %}
+    <p>Votre séance d'écriture a été mise à jour. En voici le récapitulatif.</p>
+{% endif %}
+
+<div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 25px 0;">
+    <h3 style="margin-top: 0; color: #1e293b; font-size: 16px;">Récapitulatif</h3>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+        <tr><td style="padding: 8px 0; font-weight: bold; color: #475569; width: 160px;">Séance :</td><td style="padding: 8px 0; color: #0f172a; font-weight: 600;">{{ sessionLabel }}</td></tr>
+        {% if bookTitle %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Livre :</td><td style="padding: 8px 0; color: #0f172a;">{{ bookTitle }}</td></tr>{% endif %}
+        <tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Date :</td><td style="padding: 8px 0; color: #0f172a;">{{ reservation.reservationDate|date('d/m/Y') }}</td></tr>
+        {% if reservation.reservationSlot %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Horaire :</td><td style="padding: 8px 0; color: #0f172a;">{{ reservation.reservationSlot }}</td></tr>{% endif %}
+        {% if biographerName %}<tr><td style="padding: 8px 0; font-weight: bold; color: #475569;">Avec :</td><td style="padding: 8px 0; color: #0f172a;">{{ biographerName }}</td></tr>{% endif %}
+    </table>
+</div>
+
+{% if status == 'confirmed' %}
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ googleCalendarUrl }}" target="_blank" style="display: inline-block; background-color: #b59449; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px;">Ajouter à Google Agenda</a>
+    <p style="font-size: 12px; color: #64748b; margin-top: 10px;"><em>Une invitation de calendrier (<strong>rendez-vous.ics</strong>) est jointe à cet e-mail.</em></p>
+</div>
+{% endif %}
+
+{% if signature %}
+<div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+    {{ signature|raw }}
+</div>
+{% else %}
+<p style="color: #475569; margin-top: 25px;">
+    À très bientôt,<br>
+    <strong>{{ fromName }}</strong>
+</p>
+{% endif %}
+{% endblock %}

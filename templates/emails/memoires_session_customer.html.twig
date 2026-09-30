@@ -1,0 +1,81 @@
+{% extends 'base.email.html.twig' %}
+{# Séance d'écriture Mémoires Vivantes programmée par le biographe (ReservationMailerService, réservation liée à un livre) #}
+
+{% block title %}Votre séance d'écriture est programmée — {{ sessionLabel }}{% endblock %}
+
+{% block body %}
+<h2>Bonjour {{ reservation.clientName }},</h2>
+<p>Comme convenu ensemble, votre prochaine séance d'écriture est programmée. En voici les détails.</p>
+
+<div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #b59449; margin: 25px 0;">
+    <h3 style="margin-top: 0; color: #1e293b; font-size: 16px;">Votre séance</h3>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; width: 160px;">Séance :</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">{{ sessionLabel }}</td>
+        </tr>
+        {% if bookTitle %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Livre :</td>
+            <td style="padding: 8px 0; color: #0f172a;">{{ bookTitle }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Date :</td>
+            <td style="padding: 8px 0; color: #0f172a;">{{ reservation.reservationDate|date('d/m/Y') }}</td>
+        </tr>
+        {% if reservation.reservationSlot %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Horaire :</td>
+            <td style="padding: 8px 0; color: #0f172a;">{{ reservation.reservationSlot }}</td>
+        </tr>
+        {% endif %}
+        {% if biographerName %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Avec :</td>
+            <td style="padding: 8px 0; color: #0f172a;">{{ biographerName }}</td>
+        </tr>
+        {% endif %}
+        {% if reservation.forfaitName %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569;">Formule :</td>
+            <td style="padding: 8px 0; color: #0f172a;">{{ reservation.forfaitName }}</td>
+        </tr>
+        {% endif %}
+        {% if reservation.notes %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; vertical-align: top;">Précisions :</td>
+            <td style="padding: 8px 0; color: #0f172a; white-space: pre-wrap;">{{ reservation.notes }}</td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+
+<p>Avant la séance, prenez le temps de rassembler vos souvenirs sur les questions du chapitre : photos, dates, anecdotes. Tout ce qui vous revient nourrira le récit.</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #0284c7; padding: 14px 16px; border-radius: 6px; margin: 20px 0;">
+    <p style="margin: 0; color: #334155; font-size: 14px; line-height: 1.5;">
+        <strong>Un empêchement ?</strong> Répondez simplement à cet e-mail ou appelez-nous, et nous conviendrons ensemble d'un autre moment.
+    </p>
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{ googleCalendarUrl }}" target="_blank" style="display: inline-block; background-color: #b59449; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px;">
+        Ajouter à Google Agenda
+    </a>
+    <p style="font-size: 12px; color: #64748b; margin-top: 10px;">
+        <em>Une invitation de calendrier (<strong>rendez-vous.ics</strong>) est jointe à cet e-mail pour Outlook, Apple Mail et les autres agendas.</em>
+    </p>
+</div>
+
+{% if signature %}
+<div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+    {{ signature|raw }}
+</div>
+{% else %}
+<p style="color: #475569; margin-top: 25px;">
+    À très bientôt,<br>
+    <strong>{{ fromName }}</strong>
+</p>
+{% endif %}
+{% endblock %}

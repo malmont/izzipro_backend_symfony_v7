@@ -5,6 +5,8 @@ namespace App\Services\ReservationService;
 use App\Entity\EmailConfiguration;
 use App\Entity\Entreprise;
 use App\Entity\Reservation;
+use App\MemoiresVivantes\Entity\Book;
+use Symfony\Component\Uid\Uuid;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
 use App\Services\EmailConfigurationService\TenantMailerFactory;
 use App\Services\TenantConnectionManager;
@@ -26,6 +28,43 @@ class ReservationMailerService
         private TenantMailerFactory $tenantMailerFactory,
         private TenantConnectionManager $tenantManager
     ) {
+    }
+
+    /**
+     * Séance d'écriture Mémoires Vivantes (programmée par le biographe avec le client, liée à un livre) ou demande
+     * de réservation envoyée par un visiteur (landing page) : le texte des e-mails n'est pas le même.
+     */
+    public static function isWritingSession(Reservation $reservation): bool
+    {
+        return $reservation->getBookId() !== null || $reservation->getBiographer() !== null || $reservation->getStepNumber() !== null;
+    }
+
+    /**
+     * Variables propres aux séances : libellé (« Séance 2 sur 5 » ou nom de la prestation), titre du livre, biographe.
+     *
+     * @return array{sessionLabel: string, bookTitle: ?string, biographerName: ?string}
+     */
+    private function sessionContext(Reservation $reservation): array
+    {
+        $label = trim((string) $reservation->getServiceName());
+        if ($reservation->getStepNumber() !== null && !preg_match('/\d+\s*(\/|sur)\s*\d+/u', $label)) {
+            $label = sprintf('Séance %d%s%s', $reservation->getStepNumber(), $reservation->getTotalSteps() ? ' sur ' . $reservation->getTotalSteps() : '', $label !== '' ? ' — ' . $label : '');
+        }
+
+        $bookTitle = null;
+        if ($reservation->getBookId()) {
+            try {
+                $book = $this->emProvider->getEntityManager()->getRepository(Book::class)->find(Uuid::fromString($reservation->getBookId()));
+                $bookTitle = $book?->getTitle();
+            } catch (\Throwable) {
+                // Identifiant hors format ou module absent : le titre n'est pas indispensable
+            }
+        }
+
+        $biographer = $reservation->getBiographer();
+        $biographerName = $biographer ? trim($biographer->getFirstname() . ' ' . $biographer->getLastname()) : null;
+
+        return ['sessionLabel' => $label !== '' ? $label : 'Séance d\'écriture', 'bookTitle' => $bookTitle, 'biographerName' => $biographerName ?: null];
     }
 
     /**
@@ -157,13 +196,15 @@ class ReservationMailerService
                 ? $this->tenantMailerFactory->createMailer($emailConfig)
                 : $this->defaultMailer;
 
+            $session = self::isWritingSession($reservation);
+            $context = $session ? $this->sessionContext($reservation) : ['sessionLabel' => $reservation->getServiceName()];
             $subject = match ($newStatus) {
-                'confirmed' => sprintf('✨ Votre rendez-vous est confirmé — %s', $reservation->getServiceName()),
-                'cancelled' => sprintf('Information concernant votre réservation — %s', $reservation->getServiceName()),
-                default => sprintf('Mise à jour de votre réservation — %s', $reservation->getServiceName()),
+                'confirmed' => $session ? sprintf('Votre séance d\'écriture est confirmée — %s', $context['sessionLabel']) : sprintf('✨ Votre rendez-vous est confirmé — %s', $reservation->getServiceName()),
+                'cancelled' => $session ? sprintf('Votre séance d\'écriture est annulée — %s', $context['sessionLabel']) : sprintf('Information concernant votre réservation — %s', $reservation->getServiceName()),
+                default => $session ? sprintf('Votre séance d\'écriture — %s', $context['sessionLabel']) : sprintf('Mise à jour de votre réservation — %s', $reservation->getServiceName()),
             };
 
-            $html = $this->twig->render('emails/reservation_status_changed.html.twig', [
+            $html = $this->twig->render($session ? 'emails/memoires_session_status_changed.html.twig' : 'emails/reservation_status_changed.html.twig', $context + [
                 'reservation' => $reservation,
                 'status' => $newStatus,
                 'fromName' => $fromName,
@@ -213,7 +254,9 @@ class ReservationMailerService
         string $icsContent
     ): void {
         try {
-            $html = $this->twig->render('emails/reservation_customer_confirmation.html.twig', [
+            $session = self::isWritingSession($reservation);
+            $context = $session ? $this->sessionContext($reservation) : [];
+            $html = $this->twig->render($session ? 'emails/memoires_session_customer.html.twig' : 'emails/reservation_customer_confirmation.html.twig', $context + [
                 'reservation' => $reservation,
                 'fromName' => $fromName,
                 'signature' => $signature,
@@ -226,7 +269,9 @@ class ReservationMailerService
                 ->from(sprintf('%s <%s>', $fromName, $fromEmail))
                 ->to($reservation->getClientEmail())
                 ->replyTo($fromEmail)
-                ->subject(sprintf('Confirmation de votre demande de réservation — %s', $reservation->getServiceName()))
+                ->subject($session
+                    ? sprintf('Votre séance d\'écriture est programmée — %s', $context['sessionLabel'])
+                    : sprintf('Confirmation de votre demande de réservation — %s', $reservation->getServiceName()))
                 ->html($html)
                 ->addPart(new DataPart($icsContent, 'rendez-vous.ics', 'text/calendar; charset=utf-8; method=REQUEST'));
 
@@ -250,7 +295,9 @@ class ReservationMailerService
         string $icsContent
     ): void {
         try {
-            $html = $this->twig->render('emails/reservation_admin_notification.html.twig', [
+            $session = self::isWritingSession($reservation);
+            $context = $session ? $this->sessionContext($reservation) : [];
+            $html = $this->twig->render($session ? 'emails/memoires_session_admin.html.twig' : 'emails/reservation_admin_notification.html.twig', $context + [
                 'reservation' => $reservation,
                 'fromName' => $fromName,
                 'signature' => $signature,
@@ -263,7 +310,9 @@ class ReservationMailerService
                 ->from(sprintf('%s <%s>', $fromName, $fromEmail))
                 ->to($adminEmail)
                 ->replyTo($reservation->getClientEmail())
-                ->subject(sprintf('🔔 Nouvelle réservation #%d — %s (%s)', $reservation->getId(), $reservation->getServiceName(), $reservation->getClientName()))
+                ->subject($session
+                    ? sprintf('Séance programmée — %s avec %s', $context['sessionLabel'], $reservation->getClientName())
+                    : sprintf('🔔 Nouvelle réservation #%d — %s (%s)', $reservation->getId(), $reservation->getServiceName(), $reservation->getClientName()))
                 ->html($html)
                 ->addPart(new DataPart($icsContent, 'rendez-vous.ics', 'text/calendar; charset=utf-8; method=REQUEST'));
 
@@ -316,7 +365,7 @@ class ReservationMailerService
         $startStr = $startUtc->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z');
         $endStr = $endUtc->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z');
 
-        $title = sprintf('Rendez-vous : %s', $reservation->getServiceName());
+        $title = self::isWritingSession($reservation) ? sprintf('Séance d\'écriture : %s', $reservation->getServiceName()) : sprintf('Rendez-vous : %s', $reservation->getServiceName());
         $details = sprintf(
             "Prestation : %s\nClient : %s\nTéléphone : %s\nEmail : %s\nNombre de personnes : %d\nNotes : %s\nSite web : https://%s",
             $reservation->getServiceName(),
@@ -347,7 +396,7 @@ class ReservationMailerService
         $dtEnd = $endDate->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z');
 
         $uid = sprintf('reservation-%d-%s@%s', $reservation->getId() ?: rand(1000, 9999), time(), $domain);
-        $summary = sprintf('Rendez-vous : %s', $reservation->getServiceName());
+        $summary = self::isWritingSession($reservation) ? sprintf('Séance d\'écriture : %s', $reservation->getServiceName()) : sprintf('Rendez-vous : %s', $reservation->getServiceName());
         $description = sprintf(
             "Prestation: %s\\nClient: %s\\nTéléphone: %s\\nEmail: %s\\nNotes: %s",
             $reservation->getServiceName(),

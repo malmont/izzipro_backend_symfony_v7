@@ -197,6 +197,9 @@ Médiathèque partagée : `/api/shared-media` (`SharedMediaApiController`). URL 
 - Chaque site envoie par **son** serveur : table `email_configuration` du tenant (écran EasyAdmin « Email
   Configuration » : serveur SMTP, identifiant, expéditeur), via `Services/EmailConfigurationService/TenantMailerFactory`.
   Le serveur global (`MAILER_DSN`) ne sert que si le site n'a pas de serveur SMTP.
+- Rendez-vous (`ReservationMailerService`) : une réservation liée à un livre ou à un biographe est une **séance
+  d'écriture** Mémoires Vivantes, programmée avec le client (gabarits `emails/memoires_session_*`) ; sinon c'est une
+  demande de réservation d'un visiteur à examiner (gabarits `emails/reservation_*`).
 - Tous les e-mails passent par là : rendez-vous (`ReservationMailerService`), contact (`ContactMailerService`), paiement
   des livres (`BookPaymentService`), mot de passe oublié, code de connexion, inscription, commande (`EmailSenderService`).
 - Les erreurs d'envoi sont journalisées sans interrompre la requête : chercher « Erreur » et « email » dans
