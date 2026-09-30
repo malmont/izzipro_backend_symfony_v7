@@ -104,7 +104,13 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
   produire de HTML. Un chapitre sans texte ni photo n'apparaît ni au sommaire ni dans le livre.
 - Couverture : **Dompdf ignore `box-sizing`**. Chaque bloc est positionné en absolu avec une largeur explicite ; les
   textes sont centrés sur la zone visible (hors rembordage et fond perdu, `edge_pt`). Le corps du titre est ajusté au
-  mot le plus long (`fitFontSize`), la couleur de fond est validée (`normalizeColor`).
+  mot le plus long, **mesuré avec la police** (`fitFontSize`) : un titre ne passe à la ligne qu'entre deux mots, jamais
+  au milieu d'un mot (ni `word-wrap: break-word`, ni règle propre à un titre) ; même garantie pour la tranche
+  (`fitLine`) et les pages de titre de l'intérieur. La couleur de fond est validée (`normalizeColor`).
+- Géométrie de la couverture dépliée (points PDF) : `coverGeometry()`, renvoyée dans l'en-tête `X-Cover-Geometry` de
+  `pdf/preview-cover` et dans `cover_geometry` de `pdf/generate`. Un seul gabarit quel que soit `format` : plat de
+  658,28 pt (210 mm + rembordage 19,05 mm + fond perdu 3,175 mm), hauteur 967,89 pt, tranche
+  `max(6,5 mm ; pages × 0,057 mm + 1,5 mm)` ; zone visible d'un plat : 595,28 × 841,89 pt.
 - Auteur : texte ou objet `author` du livre (`normalizeAuthorName`) ; à l'impression, jamais le destinataire du colis.
 - Vérifier un rendu : générer le PDF et le regarder (les tests ne contrôlent que le HTML produit).
 

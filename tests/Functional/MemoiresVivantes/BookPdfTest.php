@@ -80,11 +80,48 @@ class BookPdfTest extends BookTypeApiTestCase
         $this->assertNull(BookPdfGeneratorService::normalizeColor('rouge'));
         $this->assertTrue(BookPdfGeneratorService::isDarkColor('#1b2838'));
         $this->assertFalse(BookPdfGeneratorService::isDarkColor('#faf8f3'));
-        // Le mot le plus long tient dans la colonne
-        $size = BookPdfGeneratorService::fitFontSize('Extraordinaires', 195.0, 40, 0.64);
-        $this->assertLessThanOrEqual(195.0, 15 * 0.64 * $size);
-        $this->assertGreaterThanOrEqual(16, $size);
-        $this->assertSame(40, BookPdfGeneratorService::fitFontSize('Carole', 400.0, 40, 0.64));
+        // Le corps suit le mot le plus long (mesuré avec la police), sans jamais descendre sous le minimum lisible
+        $this->assertSame(40, $service->fitFontSize('Carole', 400.0, 40));
+        $this->assertLessThan(40, $service->fitFontSize('Anticonstitutionnellement', 196.0, 40));
+        $this->assertGreaterThanOrEqual(7, $service->fitFontSize('Anticonstitutionnellement', 196.0, 40));
+        $this->assertLessThan($service->fitFontSize('Extraordinaires', 300.0, 40), $service->fitFontSize('Extraordinaires', 300.0, 40, true, 1.5) + 1, 'capitales et interlettrage : corps plus petit ou égal');
+    }
+
+    public function testATitleIsNeverCutInTheMiddleOfAWord(): void
+    {
+        // Avant le 30/09/2026 (soir), « Empreinte » sortait en « Em » + « preinte » : règle écrite pour ce titre
+        $service = static::getContainer()->get(BookPdfGeneratorService::class);
+
+        foreach (['Empreinte', 'Mémoires de Dana', 'Anticonstitutionnellement', 'Les souvenirs lumineux d\'une enfance martiniquaise retrouvée'] as $title) {
+            $book = (new Book())->setTitle($title)->setPerson1FirstName('Dana');
+            foreach (['biographic_split', 'full_photo', 'gallery_frame', 'modern_banner', 'classic_text'] as $style) {
+                $html = $service->renderCoverHtml($book, 40, $style);
+                $this->assertStringContainsString('>' . htmlspecialchars($title, ENT_QUOTES) . '</div>', $html, "$title / $style : titre entier dans un seul bloc");
+                $this->assertStringNotContainsString('break-word;', $html);
+                $this->assertStringNotContainsString('>Em</span>', $html);
+            }
+            $interior = $service->renderInteriorHtml($book);
+            $this->assertMatchesRegularExpression('/class="main-title" style="font-size: \d+pt;">' . preg_quote(htmlspecialchars($title, ENT_QUOTES), '/') . '</', $interior);
+        }
+
+        // Un mot démesuré réduit le corps de la page de titre au lieu de déborder
+        $this->assertStringContainsString('class="main-title" style="font-size: 32pt;"', $service->renderInteriorHtml((new Book())->setTitle('Empreinte')));
+        $this->assertStringNotContainsString('class="main-title" style="font-size: 32pt;"', $service->renderInteriorHtml((new Book())->setTitle('Anticonstitutionnellement')));
+    }
+
+    public function testCoverGeometryIsExposed(): void
+    {
+        $geometry = static::getContainer()->get(BookPdfGeneratorService::class)->coverGeometry(40);
+
+        $this->assertSame('pt', $geometry['unit']);
+        $this->assertEqualsWithDelta(658.28, $geometry['panels']['back']['width'], 0.01, 'plat : 210 mm + rembordage 19,05 mm + fond perdu 3,175 mm');
+        $this->assertEqualsWithDelta(18.43, $geometry['panels']['spine']['width'], 0.01, 'tranche minimale de 6,5 mm');
+        $this->assertEqualsWithDelta(967.89, $geometry['height'], 0.01);
+        $this->assertEqualsWithDelta($geometry['width'], 2 * 658.28 + $geometry['panels']['spine']['width'], 0.02);
+        $this->assertEqualsWithDelta(595.28, $geometry['visible']['front']['width'], 0.01, 'zone visible : une page A4');
+        $this->assertEqualsWithDelta(841.89, $geometry['visible']['front']['height'], 0.01);
+        $this->assertSame($geometry['panels']['front']['x'], $geometry['visible']['front']['x'], 'la 1re de couverture visible commence juste après la tranche');
+        $this->assertGreaterThan($geometry['panels']['spine']['width'], static::getContainer()->get(BookPdfGeneratorService::class)->coverGeometry(400)['panels']['spine']['width']);
     }
 
     public function testAuthorNameAcceptsTheBookAuthorObject(): void
@@ -115,6 +152,11 @@ class BookPdfTest extends BookTypeApiTestCase
             $response = $this->client->getResponse();
             $this->assertSame(200, $response->getStatusCode());
             $this->assertStringStartsWith('%PDF', (string) $response->getContent());
+            $this->assertIsArray($body['cover_geometry']['visible']['front'], 'géométrie de la couverture dans la réponse de génération');
+
+            $this->client->request('GET', "/api/memoires/books/{$book['id']}/pdf/preview-cover?locale=fr&pages=40", [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_AUTHORIZATION' => 'Bearer ' . $this->tokenFor('client')]);
+            $header = json_decode((string) $this->client->getResponse()->headers->get('X-Cover-Geometry'), true);
+            $this->assertEqualsWithDelta(595.28, $header['visible']['front']['width'], 0.01, 'géométrie dans l\'en-tête de l\'aperçu');
             $this->assertStringContainsString("filename*=utf-8''", (string) $response->headers->get('Content-Disposition'), 'nom de fichier avec accents et guillemets');
         } finally {
             // Les PDF des tests ne restent pas dans le stockage partagé

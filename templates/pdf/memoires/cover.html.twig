@@ -107,7 +107,7 @@
             left: 50%;
             transform: translate(-50%, -50%) rotate(90deg);
             white-space: nowrap;
-            font-size: 10pt;
+            font-size: {{ spine_pt|default(10) }}pt;
             letter-spacing: 3px;
             text-transform: uppercase;
             color: {{ spine_dark ? '#ffffff' : '#2b3a42' }};
@@ -144,9 +144,10 @@
             margin-bottom: 4mm;
         }
 
+        /* Un titre ne passe à la ligne qu'entre deux mots : pas de « word-wrap: break-word » ni de césure. Son corps
+           (title_pt, calculé par BookPdfGeneratorService::fitFontSize) garantit que le mot le plus long tient. */
         .title {
             font-weight: bold;
-            word-wrap: break-word;
         }
     </style>
 </head>
@@ -261,15 +262,7 @@
                 {% set col_w = vw - photo_w - 2 * pad %}
                 <div class="photo" style="top: 0; left: 0; width: {{ photo_w }}pt; height: {{ fh }}pt; background-position: center top;"></div>
                 <div class="abs" style="top: {{ top0 + 30 * mm }}pt; left: {{ col_x }}pt; width: {{ col_w }}pt;">
-                    {% if title|lower in ['empreinte', 'empreintes'] %}
-                        {# Composition d'origine du modèle « Empreintes » : le titre coupé en deux corps #}
-                        <div class="title" style="line-height: 0.95; margin-bottom: 14mm;">
-                            <span style="display: block; font-size: 52pt; color: #1f2d34;">Em</span>
-                            <span style="display: block; font-size: 38pt; color: #3b4d57;">{{ title|slice(2) }}</span>
-                        </div>
-                    {% else %}
-                        <div class="title" style="font-size: {{ title_pt.biographic }}pt; line-height: 1.05; color: #1f2d34; margin-bottom: 14mm;">{{ title }}</div>
-                    {% endif %}
+                    <div class="title" style="font-size: {{ title_pt.biographic }}pt; line-height: 1.05; color: #1f2d34; margin-bottom: 14mm;">{{ title }}</div>
                     {% if subtitle %}
                         <div style="font-size: 13pt; line-height: 1.5; color: #b59449;">{{ subtitle }}</div>
                     {% endif %}

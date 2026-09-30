@@ -75,6 +75,9 @@ class BookPdfController extends AbstractController
         return new Response($pdfBinary, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => self::inlineDisposition('couverture_' . $style . '_' . $book->getTitle()),
+            // Géométrie de la couverture dépliée (points PDF) : le frontend découpe 4e, tranche et 1re sans approximation
+            'X-Cover-Geometry' => json_encode($this->pdfService->coverGeometry($pages)),
+            'Access-Control-Expose-Headers' => 'X-Cover-Geometry',
         ]);
     }
 
@@ -111,6 +114,7 @@ class BookPdfController extends AbstractController
             'interior_url' => '/' . $result['interior_path'],
             'cover_url' => '/' . $result['cover_path'],
             'page_count' => $result['page_count'],
+            'cover_geometry' => $result['cover_geometry'],
         ]);
     }
 

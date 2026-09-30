@@ -16,6 +16,11 @@ class BookPdfGeneratorService
     private const WRAP_PT = 54.0; // 19.05 mm = 0.75 pouce (rembordage couverture rigide)
     private const A4_WIDTH_PT = 595.28;  // 210 mm
     private const A4_HEIGHT_PT = 841.89; // 297 mm
+    private const MM_PT = 2.8346;
+    /** Corps en dessous duquel un titre n'est plus lisible : atteint seulement pour un mot démesuré */
+    private const MIN_TITLE_PT = 7;
+
+    private ?\Dompdf\FontMetrics $fontMetrics = null;
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -60,6 +65,42 @@ class BookPdfGeneratorService
             'back_cover_width_pt' => round($sideWidthPt, 2),
             'front_cover_width_pt' => round($sideWidthPt, 2),
             'spine_width_pt' => round($spinePt, 2),
+        ];
+    }
+
+    /**
+     * Géométrie de la couverture dépliée, en points PDF (1 pt = 1/72 pouce), pour découper la 4e, la tranche et la
+     * 1re de couverture sans approximation. Origine en haut à gauche de la page. Un seul gabarit aujourd'hui, quel
+     * que soit le format du livre : A4 relié, couverture rigide rembordée.
+     *
+     * « panels » : les trois zones imprimées, fond perdu et rembordage compris. « visible » : ce qui reste visible une
+     * fois le livre relié (un plat de 210 × 297 mm) : c'est la zone à montrer dans un aperçu.
+     */
+    public function coverGeometry(int $pageCount): array
+    {
+        $d = $this->calculateCoverDimensions($pageCount);
+        $edge = self::WRAP_PT + self::BLEED_PT;
+        $frontX = round($d['back_cover_width_pt'] + $d['spine_width_pt'], 2);
+        $visibleWidth = round($d['front_cover_width_pt'] - $edge, 2);
+        $visibleHeight = round($d['cover_height_pt'] - 2 * $edge, 2);
+
+        return [
+            'unit' => 'pt',
+            'page_count' => $pageCount,
+            'width' => $d['cover_width_pt'],
+            'height' => $d['cover_height_pt'],
+            'bleed' => self::BLEED_PT,
+            'wrap' => self::WRAP_PT,
+            'edge' => $edge,
+            'panels' => [
+                'back' => ['x' => 0.0, 'width' => $d['back_cover_width_pt']],
+                'spine' => ['x' => $d['back_cover_width_pt'], 'width' => $d['spine_width_pt']],
+                'front' => ['x' => $frontX, 'width' => $d['front_cover_width_pt']],
+            ],
+            'visible' => [
+                'back' => ['x' => $edge, 'y' => $edge, 'width' => $visibleWidth, 'height' => $visibleHeight],
+                'front' => ['x' => $frontX, 'y' => $edge, 'width' => $visibleWidth, 'height' => $visibleHeight],
+            ],
         ];
     }
 
@@ -233,6 +274,9 @@ class BookPdfGeneratorService
             'clean_title' => $this->formatter->plain($book->getTitle()),
             'clean_subtitle' => $this->formatter->plain($book->getSubtitle()),
             'author_name' => $this->resolveAuthorName($book, $customAuthorName),
+            // Largeur utile d'une page : 216,41 mm moins deux marges de 24 mm. Faux-titre en capitales (interlettrage 3 px)
+            'half_title_pt' => $this->fitFontSize($this->formatter->plain($book->getTitle()), (216.41 - 48) * self::MM_PT, 20, true, 2.25),
+            'main_title_pt' => $this->fitFontSize($this->formatter->plain($book->getTitle()), (216.41 - 48) * self::MM_PT, 32, false, 1.5),
             'chapters_data' => $chaptersData,
             'project_dir' => $this->projectDir,
             // Répertoire partagé où ChapterService enregistre les photos (l'ancien public/uploads n'existe plus)
@@ -277,14 +321,22 @@ class BookPdfGeneratorService
             'edge_pt' => $edge,
             'visible_width_pt' => round($visibleWidth, 2),
             'visible_height_pt' => round($dimensions['cover_height_pt'] - 2 * $edge, 2),
-            // Corps du titre ajusté au mot le plus long : un titre ne déborde plus de sa colonne
+            // Corps du titre ajusté au mot le plus long, mesuré avec la police : un mot n'est jamais coupé et un titre
+            // ne déborde pas de sa colonne. Largeurs : celles des blocs de titre de cover.html.twig (mm = 2,8346 pt).
             'title_pt' => [
-                'biographic' => self::fitFontSize($cleanTitle, $visibleWidth * 0.48 - 90, 40, 0.64),
-                'full' => self::fitFontSize($cleanTitle, $visibleWidth - 142, 44, 0.64),
-                'gallery' => self::fitFontSize($cleanTitle, $visibleWidth - 142, 36, 0.64),
-                'banner' => self::fitFontSize($cleanTitle, $visibleWidth - 142, 38, 0.64),
-                'classic' => self::fitFontSize($cleanTitle, $visibleWidth - 200, 40, 0.80),
+                'biographic' => $this->fitFontSize($cleanTitle, $visibleWidth * 0.48 - 28 * self::MM_PT, 40),
+                'full' => $this->fitFontSize($cleanTitle, $visibleWidth - 50 * self::MM_PT, 44),
+                'gallery' => $this->fitFontSize($cleanTitle, $visibleWidth - 50 * self::MM_PT, 36, false, 0.75),
+                'banner' => $this->fitFontSize($cleanTitle, $visibleWidth - 50 * self::MM_PT, 38),
+                'classic' => $this->fitFontSize($cleanTitle, $visibleWidth - 70 * self::MM_PT, 40, true, 1.5),
             ],
+            // Tranche : titre et auteur sur une seule ligne (jamais coupée), réduite si elle dépasse la hauteur visible
+            'spine_pt' => $this->fitLine(
+                mb_strtoupper($cleanTitle . ($authorName !== '' ? ' • ' . $authorName : '')),
+                $dimensions['cover_height_pt'] - 2 * $edge - 30 * self::MM_PT,
+                10.0,
+                2.25
+            ),
             'project_dir' => $this->projectDir,
         ]));
     }
@@ -313,24 +365,66 @@ class BookPdfGeneratorService
     }
 
     /**
-     * Plus grand corps (en points) pour que le mot le plus long du titre tienne dans la largeur donnée.
+     * Plus grand corps (en points entiers) pour que le mot le plus long du titre tienne dans la largeur donnée.
+     * La largeur est mesurée avec la police du PDF (DejaVu Serif gras), pas estimée : le titre ne passe à la ligne
+     * qu'entre deux mots, et un mot très long réduit le corps au lieu d'être coupé ou de déborder.
      *
-     * @param float $charRatio largeur moyenne d'un caractère rapportée au corps (capitales grasses : ~0,8)
+     * @param bool  $uppercase       le gabarit affiche le titre en capitales
+     * @param float $letterSpacingPt interlettrage du gabarit, en points (1 px CSS = 0,75 pt)
      */
-    public static function fitFontSize(string $title, float $widthPt, int $maxPt, float $charRatio, int $minPt = 16): int
+    public function fitFontSize(string $title, float $widthPt, int $maxPt, bool $uppercase = false, float $letterSpacingPt = 0.0): int
     {
+        $title = trim($title);
+        if ($uppercase) {
+            $title = mb_strtoupper($title);
+        }
+
         // Titre long : plusieurs lignes, donc un corps plus petit pour ne pas chevaucher ce qui suit
-        $length = mb_strlen(trim($title));
+        $length = mb_strlen($title);
         if ($length > 28) {
             $maxPt = (int) round($maxPt * ($length > 45 ? 0.62 : 0.75));
         }
 
-        $longest = 1;
-        foreach (preg_split('/\s+/u', trim($title)) ?: [] as $word) {
-            $longest = max($longest, mb_strlen($word));
+        $metrics = $this->fontMetrics();
+        $font = $metrics->getFont('DejaVu Serif', 'bold');
+        $size = $maxPt;
+        foreach (preg_split('/\s+/u', $title) ?: [] as $word) {
+            if ($word === '') {
+                continue;
+            }
+            // Largeur proportionnelle au corps, plus l'interlettrage (fixe) ; 3 % de marge pour les arrondis du rendu
+            $unitWidth = (float) $metrics->getTextWidth($word, $font, 100.0) / 100.0;
+            $available = $widthPt * 0.97 - $letterSpacingPt * mb_strlen($word);
+            if ($unitWidth > 0) {
+                $size = min($size, (int) floor($available / $unitWidth));
+            }
         }
 
-        return (int) max($minPt, min($maxPt, floor($widthPt / ($longest * $charRatio))));
+        return max(self::MIN_TITLE_PT, $size);
+    }
+
+    /** Plus grand corps (au demi-point) pour qu'une ligne entière, sans retour à la ligne, tienne dans la largeur donnée */
+    private function fitLine(string $text, float $widthPt, float $maxPt, float $letterSpacingPt = 0.0): float
+    {
+        $metrics = $this->fontMetrics();
+        $unitWidth = (float) $metrics->getTextWidth($text, $metrics->getFont('DejaVu Serif', 'normal'), 100.0) / 100.0;
+        if ($unitWidth <= 0) {
+            return $maxPt;
+        }
+        $size = floor(2 * ($widthPt * 0.97 - $letterSpacingPt * mb_strlen($text)) / $unitWidth) / 2;
+
+        return max(5.0, min($maxPt, $size));
+    }
+
+    private function fontMetrics(): \Dompdf\FontMetrics
+    {
+        if ($this->fontMetrics === null) {
+            $options = new Options();
+            $options->set('isRemoteEnabled', false);
+            $this->fontMetrics = (new Dompdf($options))->getFontMetrics();
+        }
+
+        return $this->fontMetrics;
     }
 
     /**
@@ -415,6 +509,7 @@ class BookPdfGeneratorService
             'interior_path' => 'uploads/memoires/books/' . $book->getId()->toRfc4122() . '/interior.pdf',
             'cover_path' => 'uploads/memoires/books/' . $book->getId()->toRfc4122() . '/cover.pdf',
             'page_count' => $pageCount,
+            'cover_geometry' => $this->coverGeometry($pageCount),
         ];
     }
 

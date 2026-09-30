@@ -334,12 +334,12 @@
 
     {# 1. Faux-titre #}
     <div class="half-title-page">
-        <div class="half-title">{{ clean_title|default(book.title) }}</div>
+        <div class="half-title" style="font-size: {{ half_title_pt|default(20) }}pt;">{{ clean_title|default(book.title) }}</div>
     </div>
 
     {# 2. Grand Titre #}
     <div class="title-page">
-        <div class="main-title">{{ clean_title|default(book.title) }}</div>
+        <div class="main-title" style="font-size: {{ main_title_pt|default(32) }}pt;">{{ clean_title|default(book.title) }}</div>
         {% if clean_subtitle or book.subtitle %}
             <div class="subtitle">{{ clean_subtitle|default(book.subtitle) }}</div>
         {% endif %}
