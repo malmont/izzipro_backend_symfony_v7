@@ -62,7 +62,7 @@ class LandingAiEvalCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('tenant', 't', InputOption::VALUE_REQUIRED, 'Code du tenant de test (palette, médias et données lus sur ce site, rien n\'y est écrit)')
+            ->addOption('tenant', 't', InputOption::VALUE_REQUIRED, 'Code du site de test (palette, médias et données lus sur ce site, rien n\'y est écrit) ; jamais un client', 'demo')
             ->addOption('mode', 'm', InputOption::VALUE_REQUIRED, 'edit, create, page ou all', 'all')
             ->addOption('case', 'c', InputOption::VALUE_REQUIRED, 'Un seul cas (ex. R1, C3)');
     }

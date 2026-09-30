@@ -55,7 +55,8 @@ recopiés depuis la dernière version synchronisée.
 
 - `tests/Functional/LandingPage/` : `LandingAiComposeTest` (client IA simulé : modes, quota, tâches, isolation),
   `LandingConfigSyncTest` (faux frontend), `CompositionEditApplierTest`, `LandingAiEasyAdminTest`.
-- Évaluation réelle, sur un tenant de test uniquement : `app:landingpage-ai:eval --tenant=arkanoa-media [--mode=edit|create|page|all] [--case=R1]`.
+- Évaluation réelle, sur le site de test `demo` uniquement (défaut) : `app:landingpage-ai:eval [--tenant=demo] [--mode=edit|create|page|all] [--case=R1]` ;
+  comparaison de deux passages pour le banc du frontend : `app:landingpage-ai:compare` (voir `config/landingpage/README.md`).
 - Compositions de tous les sites : `app:landingpage:check-reglable`.
 
 ## Pièges connus

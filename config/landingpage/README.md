@@ -47,7 +47,7 @@ par exemple `tabs[0].sections[2].reglableConfig.blocks[3].fontColor`. Rien n'est
   généré par `npm run ia:catalogue`). Pour chaque famille (`componentKey`) : types de blocs autorisés (`tools`), champs liables
   (`sectionFields`, `boundTools`, `list`) et modèles de référence (`presets`). Lu par `App\Services\LandingAiService\LandingAiCatalogue`.
 - `ia-assistant-jeu-essai.md` : jeu d'essai (cas R1–R10, C1–C8, P1–P3 et vérifications V1–V6), rejoué par
-  `php bin/console app:landingpage-ai:eval --tenant=<tenant de test> [--mode=edit|create|page|all] [--case=R1]` (sans HTTP ni quota, aucune écriture ;
+  `php bin/console app:landingpage-ai:eval [--tenant=demo] [--mode=edit|create|page|all] [--case=R1]` (sans HTTP ni quota, aucune écriture ;
   rapport JSON dans `var/landing-ai-eval/`). Images des cas P1 (charte) et P2 (capture) :
   `src/Services/LandingAiService/Eval/fixtures/`.
 
@@ -205,6 +205,15 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.
+- **Comparer deux variantes** (prompt, effort, modèle) : un passage par variante, puis
+  `php bin/console app:landingpage-ai:compare <sujet> avant=<rapport> apres=<rapport> [--objet="…"]` écrit
+  `var/landing-ai-eval/comparaison-<sujet>-<AAAAMMJJ>.json`, le format que le banc du frontend affiche côte à côte
+  (`/dev/reglable-compare?compare=<fichier>`) : cas C1…Cn, `componentKey`, `prompt`, puis une clé par variante avec
+  `composition` (ou `sections` en page), `dataType`, `summary`, `warnings`, `blocs`, `essais`, `jetonsSortie`,
+  `dureeMs`. Les noms de variantes sont libres.
+- **Site de test `demo`** (`demo.arkanoa-media.ca`, base `db_demo`, copie d'`arkanoa-media` du 30/09/2026 avec 4 prestations
+  fictives et 1 000 crédits par mois) : site par défaut de l'évaluation (`--tenant=demo`) et des essais de l'éditeur. On
+  peut y écrire, casser et réinitialiser à volonté ; jamais d'évaluation sur un site client.
 - La réponse (`usage`) et le rapport d'évaluation comptent à part les écritures de cache (`cacheWriteTokens`, comprises
   dans `inputTokens`) ; le rapport estime le coût en dollars (prix dans `LandingAiEvalCommand::PRICES`, à tenir à jour).
 

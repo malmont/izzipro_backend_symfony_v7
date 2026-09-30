@@ -25,6 +25,8 @@ Ce qui est commun à tout le backend. Chaque module a sa fiche (voir « Modules 
 jamais par l'EntityManager par défaut ni `ManagerRegistry`. Commandes et workers : `switchTenant($dbname, $code)`.
 CRUD EasyAdmin : étendre `BaseTenantCrudController`.
 
+- **Site de test `demo`** (`demo.arkanoa-media.ca`, base `db_demo`) : copie du site de l'agence, réservée aux essais
+  (éditeur, assistant IA, évaluation). Seul site sur lequel on peut écrire librement ; les autres sont des clients.
 - **Nouveau tenant** : `CREATE DATABASE … WITH TEMPLATE gmasuite` (`TenantConnectionManager::createTenant`,
   `app:tenant:create`) ; ce que contient `gmasuite` devient la valeur par défaut des nouveaux clients.
 - **Schéma sur toutes les bases** : les deux, toujours :
