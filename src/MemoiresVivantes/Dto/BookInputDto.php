@@ -21,23 +21,29 @@ class BookInputDto
 
     public function __construct(array $data)
     {
-        $this->title = $data['title'] ?? null;
-        $this->subtitle = $data['subtitle'] ?? null;
-        $this->birthplace = $data['birthplace'] ?? null;
-        $this->format = $data['format'] ?? null;
+        $this->title = self::text($data['title'] ?? null);
+        $this->subtitle = self::text($data['subtitle'] ?? null);
+        $this->birthplace = self::text($data['birthplace'] ?? null);
+        $this->format = self::text($data['format'] ?? null);
         $typeInput = $data['type'] ?? null;
         // Code bien formé uniquement : l'existence du type (historique ou actif en base) est vérifiée par les use cases
         $this->type = (is_string($typeInput) && preg_match('/^[a-z][a-z0-9_]{0,49}$/', $typeInput)) ? $typeInput : null;
-        $this->person1FirstName = $data['person1FirstName'] ?? null;
-        $this->person1Birthplace = $data['person1Birthplace'] ?? null;
-        $this->person2FirstName = $data['person2FirstName'] ?? null;
-        $this->person2Birthplace = $data['person2Birthplace'] ?? null;
-        $this->birthYear = isset($data['birthYear']) ? (string)$data['birthYear'] : ($data['birth_year'] ?? null);
-        $this->deathYear = isset($data['deathYear']) ? (string)$data['deathYear'] : ($data['death_year'] ?? null);
-        $this->epigraph = $data['epigraph'] ?? null;
+        $this->person1FirstName = self::text($data['person1FirstName'] ?? null);
+        $this->person1Birthplace = self::text($data['person1Birthplace'] ?? null);
+        $this->person2FirstName = self::text($data['person2FirstName'] ?? null);
+        $this->person2Birthplace = self::text($data['person2Birthplace'] ?? null);
+        $this->birthYear = self::text($data['birthYear'] ?? $data['birth_year'] ?? null);
+        $this->deathYear = self::text($data['deathYear'] ?? $data['death_year'] ?? null);
+        $this->epigraph = self::text($data['epigraph'] ?? null);
 
         $deceased = $data['parentsDeceased'] ?? $data['parents_deceased'] ?? $data['parentsNotParticipating'] ?? $data['parents_not_participating'] ?? null;
         $this->parentsDeceased = $deceased !== null ? (bool)$deceased : null;
         $this->parentsNotParticipating = $this->parentsDeceased;
+    }
+
+    /** Texte ou nombre seulement : un tableau envoyé à la place d'un texte provoquait une erreur 500 */
+    private static function text(mixed $value): ?string
+    {
+        return is_scalar($value) && !is_bool($value) ? (string) $value : null;
     }
 }

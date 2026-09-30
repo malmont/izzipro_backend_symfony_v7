@@ -9,6 +9,7 @@ use App\Services\AnthropicService;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantConnectionManager;
 use App\MemoiresVivantes\Entity\Chapter;
+use App\MemoiresVivantes\Services\ChapterGenerationService;
 use App\MemoiresVivantes\Services\HommageAggregationService;
 use App\MemoiresVivantes\Services\FamilleAggregationService;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
@@ -27,6 +28,7 @@ class GenerateChapterHandler
         private readonly FamilleAggregationService $familleAggregationService,
         private readonly BookTypeResolver $bookTypeResolver,
         private readonly DatabasePromptEngine $promptEngine,
+        private readonly ChapterGenerationService $generationService,
         private readonly MessageBusInterface $messageBus,
         private readonly LoggerInterface $logger
     ) {}
@@ -57,14 +59,22 @@ class GenerateChapterHandler
             return;
         }
 
-        $answers = $chapter->getAnswers();
-        $this->logger->info("GenerateChapterHandler: Chapter {$message->chapterId} answers count: " . count($answers));
-        $this->logger->info("GenerateChapterHandler: Chapter {$message->chapterId} raw answers: " . json_encode($answers));
+        // Jamais le contenu des réponses dans les journaux : ce sont des souvenirs personnels
+        $this->logger->info("GenerateChapterHandler: Chapter {$message->chapterId} part {$message->part}, answers count: " . count($chapter->getAnswers()));
 
         try {
             $model = $message->model ?? null;
 
             if ($message->part === 1) {
+                // Dernier garde-fou : sans réponse ni témoignage, l'IA rédigerait un refus ou inventerait
+                $reason = $this->generationService->cannotGenerateReason($chapter);
+                if ($reason !== null) {
+                    $this->logger->warning("GenerateChapterHandler: Chapter {$message->chapterId} sans matériau, rédaction annulée");
+                    $this->markFailed($chapter, $reason);
+
+                    return;
+                }
+
                 $chapter->setGenerationStatus('generating_part1');
                 $chapter->setGenerationError(null);
                 $em->flush();

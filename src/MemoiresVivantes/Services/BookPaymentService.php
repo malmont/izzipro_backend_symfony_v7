@@ -297,10 +297,33 @@ class BookPaymentService
                     $sessionId
                 ));
                 $this->handleCheckoutCompleted($sessionId, $session->toArray());
+            } elseif ($session && $session->status === 'expired') {
+                // Un lien Stripe Checkout expire au bout de 24 h : le livre ne reste pas « en attente » indéfiniment
+                $this->resetExpiredPayment($book, 'session expirée');
+            }
+        } catch (\Stripe\Exception\InvalidRequestException $e) {
+            if ($e->getStripeCode() === 'resource_missing') {
+                // Session inconnue du compte connecté (compte Stripe changé depuis) : le lien ne peut plus être payé
+                $this->resetExpiredPayment($book, 'session introuvable');
+            } else {
+                $this->logger->warning('[BookPaymentService] Impossible de vérifier le statut Stripe en direct: ' . $e->getMessage());
             }
         } catch (\Throwable $e) {
             $this->logger->warning('[BookPaymentService] Impossible de vérifier le statut Stripe en direct: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Lien de paiement devenu inutilisable : le livre revient à « non payé » (un nouveau lien peut être envoyé) et
+     * l'application cesse d'interroger Stripe à chaque ouverture du livre. Montant et devise sont conservés.
+     */
+    private function resetExpiredPayment(Book $book, string $reason): void
+    {
+        $this->logger->info(sprintf('[BookPaymentService] Lien de paiement du livre %s abandonné (%s)', $book->getId(), $reason));
+        $book->setPaymentStatus('unpaid');
+        $book->setPaymentLinkUrl(null);
+        $book->setStripeSessionId(null);
+        $this->getEm()->flush();
     }
 
     /**

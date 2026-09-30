@@ -8,7 +8,6 @@ use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\Chapter;
 use App\MemoiresVivantes\Entity\Contributor;
 use App\MemoiresVivantes\Entity\MemoireQuestion;
-use App\MemoiresVivantes\Message\GenerateChapterMessage;
 use App\MemoiresVivantes\UseCase\AddChapterPhotoUseCase;
 use App\MemoiresVivantes\UseCase\CreateChapterUseCase;
 use App\MemoiresVivantes\UseCase\DeleteChapterUseCase;
@@ -17,11 +16,11 @@ use App\MemoiresVivantes\UseCase\GetChaptersByBookUseCase;
 use App\MemoiresVivantes\UseCase\ImproveAnswerUseCase;
 use App\MemoiresVivantes\UseCase\TranscribeAudioUseCase;
 use App\MemoiresVivantes\UseCase\UpdateChapterUseCase;
-use App\MemoiresVivantes\Services\HommageAggregationService;
-use App\MemoiresVivantes\Services\FamilleAggregationService;
+use App\MemoiresVivantes\Security\BookAccessGuard;
+use App\MemoiresVivantes\Services\ChapterGenerationService;
+use App\MemoiresVivantes\UseCase\NoSpeechDetectedException;
 use App\MemoiresVivantes\Services\ChapterQuestionProvider;
 use App\MemoiresVivantes\BookType\BookTypeResolver;
-use App\MemoiresVivantes\BookType\DatabasePromptEngine;
 use App\Services\AnthropicService;
 use App\Services\MediaUrlResolver;
 use App\Services\TenantEntityManagerProvider;
@@ -29,7 +28,6 @@ use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Uid\Uuid;
 
@@ -45,13 +43,11 @@ class ChapterController extends AbstractController
         private readonly AddChapterPhotoUseCase $addChapterPhotoUseCase,
         private readonly TranscribeAudioUseCase $transcribeAudioUseCase,
         private readonly ImproveAnswerUseCase $improveAnswerUseCase,
-        private readonly HommageAggregationService $hommageAggregationService,
-        private readonly FamilleAggregationService $familleAggregationService,
+        private readonly ChapterGenerationService $generationService,
+        private readonly BookAccessGuard $accessGuard,
         private readonly ChapterQuestionProvider $questionProvider,
         private readonly BookTypeResolver $bookTypeResolver,
-        private readonly DatabasePromptEngine $promptEngine,
         private readonly TenantEntityManagerProvider $emProvider,
-        private readonly MessageBusInterface $messageBus,
         private readonly \Psr\Log\LoggerInterface $logger,
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
@@ -119,8 +115,22 @@ class ChapterController extends AbstractController
 
         $this->denyAccessUnlessGranted('BOOK_EDIT', $book);
 
-        $data = json_decode($request->getContent(), true) ?? [];
-        $this->logger->info("Raw Chapter Create Data: " . $request->getContent());
+        $data = json_decode($request->getContent(), true);
+        $data = is_array($data) ? $data : [];
+        foreach (['title', 'theme'] as $field) {
+            if (!is_string($data[$field] ?? null) || trim($data[$field]) === '') {
+                return $this->json(['error' => "Le champ « $field » est obligatoire."], 422);
+            }
+        }
+        if (!is_numeric($data['position'] ?? null)) {
+            return $this->json(['error' => 'Le champ « position » est obligatoire.'], 422);
+        }
+        $data['position'] = (int) $data['position'];
+        foreach (['answers', 'contributorAnswers'] as $field) {
+            if (isset($data[$field]) && !is_array($data[$field])) {
+                return $this->json(['error' => "Le champ « $field » doit être une liste."], 422);
+            }
+        }
         $tenantHost = $request->headers->get('X-Tenant-Host') ?? $request->getHost();
         $chapter = $this->createChapterUseCase->execute($book, new ChapterInputDto($data), $tenantHost);
         
@@ -138,6 +148,8 @@ class ChapterController extends AbstractController
 
         $res = $this->validateSignatureOrGrant('CHAPTER_VIEW', $chapter, $request);
         if ($res !== null) return $res;
+
+        $this->generationService->failIfLost($chapter);
 
         $host = $this->resolveHost($request);
 
@@ -186,8 +198,14 @@ class ChapterController extends AbstractController
         if ($res !== null) return $res;
 
         $validatedContributorId = $request->attributes->get('validatedContributorId');
-        $data = json_decode($request->getContent(), true) ?? [];
-        error_log("RAW UPDATE BODY: " . $request->getContent());
+        $data = json_decode($request->getContent(), true);
+        $data = is_array($data) ? $data : [];
+
+        // Accès par lien signé (invité, contributeur) : seules les réponses sont modifiables. Titre, position et
+        // texte final du chapitre restent au propriétaire du livre.
+        if ($this->getUser() === null || !$this->isGranted('CHAPTER_EDIT', $chapter)) {
+            $data = array_intersect_key($data, ['answers' => true, 'contributorAnswers' => true]);
+        }
 
         // Si la requête provient d'un lien contributeur individuel, restreindre la modification à ce contributeur
         if ($validatedContributorId && isset($data['contributorAnswers']) && is_array($data['contributorAnswers'])) {
@@ -290,46 +308,15 @@ class ChapterController extends AbstractController
         $chapter = $em->getRepository(Chapter::class)->find(Uuid::fromString($id));
         if (!$chapter) return $this->json(['error' => 'Chapter not found'], 404);
 
-        $this->logger->info("Generating Chapter: " . $id . " | Answers Count: " . count($chapter->getAnswers()));
-
         $this->denyAccessUnlessGranted('CHAPTER_VIEW', $chapter);
 
-        $this->failStaleGeneration($chapter);
+        $this->generationService->failIfLost($chapter);
 
         return $this->json([
             'status'  => $chapter->getGenerationStatus(),
             'content' => $chapter->getGenerationStatus() === 'completed' ? $chapter->getContentFinal() : null,
             'error'   => $chapter->getGenerationError(),
         ]);
-    }
-
-    /**
-     * Minutes sans progression au-delà desquelles une génération est considérée comme perdue
-     * (message effacé de la file, worker arrêté en pleine génération...). Seuils larges : avec un seul
-     * worker, un chapitre peut attendre son tour derrière ceux d'un livre entier.
-     */
-    private const STALE_GENERATION_MINUTES = [
-        'pending' => 60,
-        'part1_done' => 60,
-        'generating_part1' => 30,
-        'generating_part2' => 30,
-    ];
-
-    /**
-     * Débloque une génération perdue : le chapitre passe en échec pour que l'utilisateur puisse la relancer,
-     * au lieu d'attendre indéfiniment. Si le message finit par être traité, le handler réécrit le statut.
-     */
-    private function failStaleGeneration(Chapter $chapter): void
-    {
-        $limit = self::STALE_GENERATION_MINUTES[$chapter->getGenerationStatus()] ?? null;
-        if ($limit === null || $chapter->getUpdatedAt() === null || $chapter->getUpdatedAt() > new \DateTime("-{$limit} minutes")) {
-            return;
-        }
-
-        $this->logger->warning("Chapter {$chapter->getId()} : génération sans progression depuis {$limit} min (statut {$chapter->getGenerationStatus()}), passage en échec");
-        $chapter->setGenerationStatus('failed');
-        $chapter->setGenerationError("La génération a été interrompue (aucune progression depuis {$limit} minutes). Relancez la génération.");
-        $this->emProvider->getEntityManager()->flush();
     }
 
     #[Route('/chapters/{id}/generate', methods: ['POST'])]
@@ -341,50 +328,25 @@ class ChapterController extends AbstractController
 
         $this->denyAccessUnlessGranted('CHAPTER_EDIT', $chapter);
 
-        // Guardrail pour Hommage : vérifier les prérequis de synthèse transversale
-        if ($chapter->getBook() && $chapter->getBook()->getType() === 'hommage') {
-            $theme = $chapter->getTheme();
-            if ($theme === 'portrait_croise' || $theme === 'une_vie') {
-                $check = $this->hommageAggregationService->checkCanGenerateSynthesis($chapter);
-                if (!$check['canGenerate']) {
-                    return $this->json([
-                        'error' => $check['reason'] ?? 'Les témoignages préalables sont requis pour ce chapitre de synthèse.'
-                    ], 422);
-                }
-            }
+        // Rédaction déjà en file ou en cours (double clic, relance du frontend) : pas de seconde rédaction payée
+        if ($this->generationService->isInProgress($chapter)) {
+            return $this->json(['status' => 'Generation already in progress', 'alreadyInProgress' => true]);
         }
 
-        // Guardrail pour Famille : vérifier les prérequis de synthèse pour l'histoire des parents
-        if ($chapter->getBook() && $chapter->getBook()->getType() === 'famille') {
-            $theme = $chapter->getTheme();
-            if ($theme === 'histoire_parents' || $theme === 'histoire_aine') {
-                $check = $this->familleAggregationService->checkCanGenerateSynthesis($chapter);
-                if (!$check['canGenerate']) {
-                    return $this->json([
-                        'error' => $check['reason'] ?? 'Les témoignages des proches ou des parents sont requis avant de pouvoir générer ce chapitre.'
-                    ], 422);
-                }
-            }
-        }
-
-        // Garde générique : chapitres de synthèse des types sur consignes en base
-        $databaseType = $this->bookTypeResolver->findDatabasePromptType($chapter->getBook());
-        if ($databaseType !== null) {
-            $check = $this->promptEngine->checkCanGenerate($chapter, $databaseType);
-            if (!$check['canGenerate']) {
-                return $this->json(['error' => $check['reason']], 422);
-            }
+        // Sans réponse ni témoignage, l'IA rédigerait un refus ou inventerait
+        $reason = $this->generationService->cannotGenerateReason($chapter);
+        if ($reason !== null) {
+            return $this->json(['error' => $reason], 422);
         }
 
         $data = json_decode($request->getContent(), true) ?? $request->request->all();
-        $tone = $data['tone'] ?? 'intime et chaleureux';
+        $tone = is_string($data['tone'] ?? null) && trim($data['tone']) !== '' ? trim($data['tone']) : 'intime et chaleureux';
         $model = isset($data['model']) && is_string($data['model']) && trim($data['model']) !== '' ? trim($data['model']) : null;
 
-        $chapter->setGenerationStatus('pending');
-        $em->flush();
-
         $tenantHost = $request->headers->get('X-Tenant-Host') ?? $request->getHost();
-        $this->messageBus->dispatch(new GenerateChapterMessage((string) $chapter->getId(), 1, $tenantHost, $tone, $model));
+        if (!$this->generationService->start($chapter, $tenantHost, $tone, $model)) {
+            return $this->json(['error' => $chapter->getGenerationError()], 503);
+        }
 
         return $this->json(['status' => 'Generation started']);
     }
@@ -498,19 +460,27 @@ class ChapterController extends AbstractController
         }
 
         // Validate mime-type / extension
-        $allowedExtensions = ['webm', 'ogg', 'wav', 'mp3', 'm4a'];
-        $allowedMimeTypes = ['audio/webm', 'audio/ogg', 'audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/x-m4a'];
-        
+        // Safari (iPhone, iPad) enregistre en MP4/AAC, Chrome et Firefox en WebM/Ogg : les deux familles sont acceptées,
+        // y compris quand le type détecté est celui du conteneur vidéo (un MP4 audio est souvent vu comme « video/mp4 »).
+        $allowedExtensions = ['webm', 'ogg', 'oga', 'wav', 'mp3', 'm4a', 'mp4', 'aac'];
+        $mimeExtensions = [
+            'audio/webm' => 'webm', 'video/webm' => 'webm',
+            'audio/ogg' => 'ogg', 'application/ogg' => 'ogg',
+            'audio/wav' => 'wav', 'audio/x-wav' => 'wav', 'audio/wave' => 'wav',
+            'audio/mpeg' => 'mp3', 'audio/mp3' => 'mp3',
+            'audio/mp4' => 'mp4', 'video/mp4' => 'mp4', 'audio/x-m4a' => 'm4a', 'audio/m4a' => 'm4a',
+            'audio/aac' => 'aac', 'audio/x-hx-aac-adts' => 'aac',
+        ];
+
         $extension = strtolower($file->getClientOriginalExtension());
-        if (empty($extension)) {
-            $extension = $file->guessExtension();
-        }
+        $mimeType = (string) $file->getMimeType();
 
-        $mimeType = $file->getMimeType();
-
-        if (!in_array($extension, $allowedExtensions) && !in_array($mimeType, $allowedMimeTypes)) {
-            return $this->json(['error' => 'Invalid audio format. Allowed formats: webm, ogg, wav, mp3, m4a'], 400);
+        if (!in_array($extension, $allowedExtensions, true) && !isset($mimeExtensions[$mimeType])) {
+            return $this->json(['error' => 'Invalid audio format. Allowed formats: webm, ogg, wav, mp3, m4a, mp4'], 400);
         }
+        // L'extension enregistrée suit le contenu réel quand il est reconnu : la transcription s'appuie sur elle
+        // (un enregistrement MP4 d'iPhone nommé « .webm » par le navigateur serait refusé par Whisper)
+        $extension = $mimeExtensions[$mimeType] ?? (in_array($extension, $allowedExtensions, true) ? $extension : 'webm');
 
         // Ensure upload directory exists
         $projectDir = $this->getParameter('kernel.project_dir');
@@ -527,7 +497,14 @@ class ChapterController extends AbstractController
 
         try {
             // Call Whisper API for transcription
-            $transcribedText = $this->transcribeAudioUseCase->execute($absoluteFilePath);
+            try {
+                $transcribedText = $this->transcribeAudioUseCase->execute($absoluteFilePath);
+            } catch (NoSpeechDetectedException $e) {
+                // Rien d'audible : ne pas enregistrer une phrase inventée par la transcription
+                @unlink($absoluteFilePath);
+
+                return $this->json(['error' => $e->getMessage(), 'noSpeech' => true], 422);
+            }
 
             // Update database JSON
             $answers = $chapter->getAnswers();
@@ -593,7 +570,7 @@ class ChapterController extends AbstractController
                 if (!$updated && preg_match('/^(\d+)_(\d+)$/', $questionIndex, $matches)) {
                     $contribIdx = (int)$matches[1];
                     $questionIdx = (int)$matches[2];
-                    if (isset($contributorAnswers[$contribIdx])) {
+                    if (is_array($contributorAnswers[$contribIdx]['answers'] ?? null)) {
                         foreach ($contributorAnswers[$contribIdx]['answers'] as &$ans) {
                             if (isset($ans['index']) && (int)$ans['index'] === $questionIdx) {
                                 $ans['audioUrl'] = '/uploads/audio/' . $newFilename;
@@ -617,7 +594,7 @@ class ChapterController extends AbstractController
                             preg_match('/\d+/', $questionIndex, $matches);
                             $targetIndex = $matches[0] ?? null;
                             
-                            if ($targetIndex !== null) {
+                            if ($targetIndex !== null && is_array($contrib['answers'] ?? null)) {
                                 foreach ($contrib['answers'] as &$ans) {
                                     if (isset($ans['index']) && (string)$ans['index'] === (string)$targetIndex) {
                                         $ans['audioUrl'] = '/uploads/audio/' . $newFilename;
@@ -771,6 +748,15 @@ class ChapterController extends AbstractController
 
         try {
             $improvedText = $this->improveAnswerUseCase->execute($question, $answer, $model);
+
+            // IA en erreur ou surchargée : ni texte vide présenté comme une amélioration, ni essai consommé
+            if (trim($improvedText) === '') {
+                return $this->json([
+                    'error' => "L'amélioration par l'IA est momentanément indisponible. Votre réponse n'a pas été modifiée : réessayez dans un instant.",
+                    'alreadyImproved' => false,
+                    'canImprove' => true,
+                ], 503);
+            }
 
             if ($isGuest && $targetContribId) {
                 if ($targetContribEntry === null) {
@@ -1031,7 +1017,9 @@ class ChapterController extends AbstractController
                 if ($contributorId !== null) {
                     $dataToSignWithContrib = "chapterId=" . $chapterId . "&contributorId=" . $contributorId . "&expires=" . $expires;
                     $expectedWithContrib = hash_hmac('sha256', $dataToSignWithContrib, $secret);
-                    if (hash_equals($expectedWithContrib, $signature) && (string)$chapter->getId() === $chapterId) {
+                    // Lien personnel d'un contributeur : refusé dès que le contributeur a été retiré du livre
+                    if (hash_equals($expectedWithContrib, $signature) && (string)$chapter->getId() === $chapterId
+                        && $this->accessGuard->contributorBelongsTo((string) $contributorId, $chapter->getBook())) {
                         $hasValidSignature = true;
                         $request->attributes->set('validatedContributorId', $contributorId);
                     }
@@ -1044,7 +1032,7 @@ class ChapterController extends AbstractController
 
                     if (hash_equals($expectedSignature, $signature) && (string)$chapter->getId() === $chapterId) {
                         $hasValidSignature = true;
-                        if ($contributorId !== null) {
+                        if ($contributorId !== null && $this->accessGuard->contributorBelongsTo((string) $contributorId, $chapter->getBook())) {
                             $request->attributes->set('validatedContributorId', $contributorId);
                         }
                     }
@@ -1076,125 +1064,11 @@ class ChapterController extends AbstractController
         return $this->json(['error' => 'Access denied. Missing or invalid signature.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
     }
 
+    /** Lien de chapitre signé ou voter : voir BookAccessGuard::canView */
     private function validateBookSignatureOrGrant(string $attribute, Book $book, Request $request): ?JsonResponse
     {
-        $expires = $request->query->get('expires');
-        $signature = $request->query->get('signature');
-        $chapterId = $request->query->get('chapterId') ?? $request->query->get('chapter_id');
-        $contributorId = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
+        $denied = $this->accessGuard->canView($book, $request, $attribute);
 
-        if ($expires === null || $signature === null || $chapterId === null) {
-            if ($request->request->has('expires')) {
-                $expires = $request->request->get('expires');
-            }
-            if ($request->request->has('signature')) {
-                $signature = $request->request->get('signature');
-            }
-            if ($request->request->has('chapterId')) {
-                $chapterId = $request->request->get('chapterId');
-            } elseif ($request->request->has('chapter_id')) {
-                $chapterId = $request->request->get('chapter_id');
-            }
-            if ($contributorId === null) {
-                if ($request->request->has('contributorId')) {
-                    $contributorId = $request->request->get('contributorId');
-                } elseif ($request->request->has('contributor_id')) {
-                    $contributorId = $request->request->get('contributor_id');
-                }
-            }
-        }
-
-        if ($expires === null || $signature === null || $chapterId === null) {
-            $content = $request->getContent();
-            if ($content) {
-                $data = json_decode($content, true);
-                if (is_array($data)) {
-                    $expires = $expires ?? $data['expires'] ?? null;
-                    $signature = $signature ?? $data['signature'] ?? null;
-                    $chapterId = $chapterId ?? $data['chapterId'] ?? $data['chapter_id'] ?? null;
-                    $contributorId = $contributorId ?? $data['contributorId'] ?? $data['contributor_id'] ?? null;
-                }
-            }
-        }
-
-        if ($expires === null || $signature === null || $chapterId === null) {
-            $expires = $request->headers->get('X-Expires');
-            $signature = $request->headers->get('X-Signature');
-            $chapterId = $chapterId ?? $request->headers->get('X-Chapter-Id');
-            $contributorId = $contributorId ?? $request->headers->get('X-Contributor-Id');
-        }
-
-        if ($expires === null || $signature === null || $chapterId === null) {
-            $referer = $request->headers->get('Referer');
-            if ($referer) {
-                $query = parse_url($referer, PHP_URL_QUERY);
-                if ($query) {
-                    parse_str($query, $params);
-                    $expires = $expires ?? $params['expires'] ?? null;
-                    $signature = $signature ?? $params['signature'] ?? null;
-                    $chapterId = $chapterId ?? $params['chapterId'] ?? $params['chapter_id'] ?? null;
-                    $contributorId = $contributorId ?? $params['contributorId'] ?? $params['contributor_id'] ?? null;
-                }
-            }
-        }
-
-        $hasValidSignature = false;
-        if ($expires !== null && $signature !== null && $chapterId !== null) {
-            if (time() <= (int)$expires) {
-                $secret = $this->getParameter('kernel.secret');
-
-                // 1. Signature spécifique au contributeur
-                if ($contributorId !== null) {
-                    $dataToSignWithContrib = "chapterId=" . $chapterId . "&contributorId=" . $contributorId . "&expires=" . $expires;
-                    $expectedWithContrib = hash_hmac('sha256', $dataToSignWithContrib, $secret);
-                    if (hash_equals($expectedWithContrib, $signature)) {
-                        $em = $this->emProvider->getEntityManager();
-                        $chapter = $em->getRepository(Chapter::class)->find(Uuid::fromString($chapterId));
-                        if ($chapter && (string)$chapter->getBook()->getId() === (string)$book->getId()) {
-                            $hasValidSignature = true;
-                            $request->attributes->set('validatedContributorId', $contributorId);
-                        }
-                    }
-                }
-
-                // 2. Signature classique globale
-                if (!$hasValidSignature) {
-                    $dataToSign = "chapterId=" . $chapterId . "&expires=" . $expires;
-                    $expectedSignature = hash_hmac('sha256', $dataToSign, $secret);
-
-                    if (hash_equals($expectedSignature, $signature)) {
-                        $em = $this->emProvider->getEntityManager();
-                        $chapter = $em->getRepository(Chapter::class)->find(Uuid::fromString($chapterId));
-                        if ($chapter && (string)$chapter->getBook()->getId() === (string)$book->getId()) {
-                            $hasValidSignature = true;
-                            if ($contributorId !== null) {
-                                $request->attributes->set('validatedContributorId', $contributorId);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if ($hasValidSignature) {
-            return null;
-        }
-
-        $user = $this->getUser();
-        if ($user !== null) {
-            try {
-                $this->denyAccessUnlessGranted($attribute, $book);
-                return null;
-            } catch (\Symfony\Component\Security\Core\Exception\AccessDeniedException) {}
-        }
-
-        if ($expires !== null && $signature !== null && $chapterId !== null) {
-            if (time() > (int)$expires) {
-                return $this->json(['error' => 'This sharing link has expired.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
-            }
-            return $this->json(['error' => 'Invalid signature or resource mismatch.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
-        }
-
-        return $this->json(['error' => 'Access denied. Missing or invalid signature.'], \Symfony\Component\HttpFoundation\Response::HTTP_UNAUTHORIZED);
+        return $denied === null ? null : $this->json(['error' => $denied[1]], $denied[0]);
     }
 }

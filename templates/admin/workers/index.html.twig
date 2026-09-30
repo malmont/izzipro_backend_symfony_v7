@@ -1,0 +1,117 @@
+{# Écran « Workers » (WorkerAdminController). Habillage EasyAdmin quand la page est ouverte depuis le menu. #}
+{% extends ea is defined ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Workers{% endblock %}
+{% block content_title %}Workers — tâches de fond{% endblock %}
+
+{% block main %}{{ block('workers_panel') }}{% endblock %}
+{% block body %}
+    {% for type, messages in app.flashes %}
+        {% for message in messages %}<div class="alert alert-{{ type }}">{{ message }}</div>{% endfor %}
+    {% endfor %}
+    <h1 class="mb-4">Workers — tâches de fond</h1>
+    {{ block('workers_panel') }}
+{% endblock %}
+
+{% block workers_panel %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <p class="text-muted mb-0">
+            État à {{ refreshed_at|date('H:i:s') }}. Actualisation automatique toutes les 10 secondes.
+        </p>
+        <div>
+            <a href="{{ app.request.uri }}" class="btn btn-secondary">Actualiser</a>
+            <form action="{{ path('admin_workers_restart') }}" method="post" class="d-inline"
+                  onsubmit="return confirm('Redémarrer les workers ? Chacun termine d\'abord son traitement en cours.');">
+                <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                <button type="submit" class="btn btn-warning">Redémarrer les workers</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="row">
+        {% for transport, worker in workers %}
+            <div class="col-lg-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ worker.label }}</h5>
+                        <p><span class="badge badge-{{ worker.level }} bg-{{ worker.level }}" data-worker="{{ transport }}" data-state="{{ worker.state }}">{{ worker.stateLabel }}</span></p>
+                        <p class="mb-2">{{ worker.detail }}</p>
+                        <ul class="list-unstyled small text-muted mb-0">
+                            {% if worker.queue is not null %}
+                                <li>En attente dans la file : <strong>{{ worker.queue.waiting }}</strong> — en cours de traitement : <strong>{{ worker.queue.inFlight }}</strong></li>
+                            {% else %}
+                                <li>File non lisible (Redis injoignable).</li>
+                            {% endif %}
+                            {% if worker.heartbeat %}
+                                {% if worker.heartbeat.startedAt is defined and worker.heartbeat.startedAt %}
+                                    <li>Démarré à {{ worker.heartbeat.startedAt|date('H:i:s') }} (redémarrage automatique toutes les 15 min), {{ worker.heartbeat.handled|default(0) }} message(s) traité(s) depuis.</li>
+                                {% endif %}
+                                {% if worker.heartbeat.lastMessage is defined %}
+                                    <li>Dernier message : {{ worker.heartbeat.lastMessage }}, {{ worker.heartbeat.lastResult|default('') }} à {{ worker.heartbeat.lastMessageAt|date('H:i:s') }}.</li>
+                                {% endif %}
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    {% if failed_count %}
+        <div class="alert alert-warning">
+            {{ failed_count }} message(s) dans la file des échecs (toutes les tentatives ont échoué). Inspection :
+            <code>php bin/console messenger:failed:show</code>.
+        </div>
+    {% endif %}
+
+    <h4 class="mt-4">Rédactions de chapitres — ce site</h4>
+    <p class="text-muted">Rédactions en cours, et échecs des dernières 48 heures. Une rédaction qui n'est plus dans la file passe en échec au bout de 2 minutes : elle peut alors être relancée.</p>
+    {% if chapters is empty %}
+        <p>Aucune rédaction en cours ni en échec.</p>
+    {% else %}
+        <table class="table datagrid">
+            <thead>
+                <tr><th>Livre</th><th>Chapitre</th><th>État</th><th>Depuis</th><th>Détail</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for chapter in chapters %}
+                    <tr>
+                        <td>{{ chapter.book }}</td>
+                        <td>{{ chapter.title }}</td>
+                        <td>
+                            {% if chapter.inProgress %}
+                                <span class="badge badge-primary bg-primary">{{ {pending: 'En file d\'attente', generating_part1: 'Rédaction, partie 1', part1_done: 'Partie 1 terminée', generating_part2: 'Rédaction, partie 2'}[chapter.status]|default(chapter.status) }}</span>
+                            {% else %}
+                                <span class="badge badge-danger bg-danger">Échec</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ chapter.age }}</td>
+                        <td class="small">{{ chapter.error }}</td>
+                        <td class="text-right text-end text-nowrap">
+                            {% if chapter.inProgress %}
+                                <form action="{{ path('admin_workers_chapter_fail', {id: chapter.id}) }}" method="post" class="d-inline"
+                                      onsubmit="return confirm('Arrêter le suivi de cette rédaction ? Le chapitre passera en échec et pourra être relancé.');">
+                                    <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                                    <button type="submit" class="btn btn-sm btn-secondary">Libérer</button>
+                                </form>
+                            {% elseif chapter.canGenerate %}
+                                <form action="{{ path('admin_workers_chapter_relaunch', {id: chapter.id}) }}" method="post" class="d-inline">
+                                    <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                                    <button type="submit" class="btn btn-sm btn-primary">Relancer</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+    <script>
+        // Actualisation automatique, suspendue dès qu'une boîte de confirmation est ouverte ou qu'un envoi est en cours
+        (function () {
+            var timer = setTimeout(function () { window.location.reload(); }, 10000);
+            document.addEventListener('submit', function () { clearTimeout(timer); }, true);
+        })();
+    </script>
+{% endblock %}

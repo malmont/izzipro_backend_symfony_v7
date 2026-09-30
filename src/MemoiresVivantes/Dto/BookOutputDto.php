@@ -56,16 +56,17 @@ class BookOutputDto
         int $ordersCount = 0,
         array $questionsByTheme = [],
         ?string $filterContributorId = null,
-        ?array $currentContributor = null
+        ?array $currentContributor = null,
+        bool $withPrivateDetails = true
     ) {
         $this->id = (string) $book->getId();
         if ($book->getUser()) {
             $this->author = [
-                'id' => $book->getUser()->getId(),
+                'id' => $withPrivateDetails ? $book->getUser()->getId() : null,
                 'firstName' => $book->getUser()->getFirstname(),
                 'lastName' => $book->getUser()->getLastname(),
                 'fullName' => trim($book->getUser()->getFirstname() . ' ' . $book->getUser()->getLastname()),
-                'email' => $book->getUser()->getEmail(),
+                'email' => $withPrivateDetails ? $book->getUser()->getEmail() : null,
             ];
         }
         $this->title = $book->getTitle();
@@ -75,8 +76,8 @@ class BookOutputDto
         $this->status = $book->getStatus();
         $this->paymentStatus = $book->getPaymentStatus();
         $this->payment_status = $book->getPaymentStatus();
-        $this->paymentLinkUrl = $book->getPaymentLinkUrl();
-        $this->payment_link_url = $book->getPaymentLinkUrl();
+        $this->paymentLinkUrl = $withPrivateDetails ? $book->getPaymentLinkUrl() : null;
+        $this->payment_link_url = $this->paymentLinkUrl;
         $this->paidAt = $book->getPaidAt()?->format(\DateTimeInterface::ATOM);
         $this->paid_at = $book->getPaidAt()?->format(\DateTimeInterface::ATOM);
         $this->paymentAmount = $book->getPaymentAmount();

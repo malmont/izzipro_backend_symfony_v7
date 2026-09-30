@@ -148,6 +148,23 @@ class ChapterQuestionProvider
         return array_values(array_unique($texts));
     }
 
+    /**
+     * Texte d'une réponse retenu pour la rédaction : la version améliorée par l'IA si elle existe et que
+     * l'utilisateur ne l'a pas écartée (useImproved = false), sinon la réponse saisie. Une clé « improvedAnswer »
+     * vide ne masque jamais la réponse saisie.
+     */
+    public static function answerText(array $entry): string
+    {
+        $improved = $entry['improvedAnswer'] ?? $entry['improved_answer'] ?? '';
+        $improved = is_string($improved) ? trim($improved) : '';
+        if ($improved !== '' && ($entry['useImproved'] ?? true) !== false) {
+            return $improved;
+        }
+        $answer = $entry['answer'] ?? '';
+
+        return is_string($answer) ? trim($answer) : '';
+    }
+
     public static function isAnswered(array $entry): bool
     {
         foreach (['answer', 'improvedAnswer', 'improved_answer', 'audioUrl', 'audioUrl1', 'audioUrl2'] as $field) {

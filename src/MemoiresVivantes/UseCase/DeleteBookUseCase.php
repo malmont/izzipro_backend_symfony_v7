@@ -38,7 +38,20 @@ class DeleteBookUseCase
             $em->remove($chapter);
         }
 
+        $bookId = $book->getId()->toRfc4122();
+
         $em->remove($book);
         $em->flush();
+
+        // PDF générés pour ce livre (intérieur, couverture) : ils restaient accessibles par leur URL après la suppression
+        $pdfDir = $uploadDir . 'books/' . $bookId;
+        if (is_dir($pdfDir)) {
+            foreach (glob($pdfDir . '/*') ?: [] as $file) {
+                if (is_file($file)) {
+                    unlink($file);
+                }
+            }
+            @rmdir($pdfDir);
+        }
     }
 }

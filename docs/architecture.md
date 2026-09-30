@@ -173,6 +173,14 @@ Une file et un worker par projet, dans la base Redis 1 (`config/packages/messeng
 - Le nom de la file est le **chemin du DSN** (`%env(MESSENGER_TRANSPORT_DSN)%_esg`) : l'option `stream` est ignorée
   quand le DSN a un chemin.
 - Ne jamais vider Redis en entier (`FLUSHALL`) ; le cache applicatif est dans la base 0.
+- **Écran « Workers »** (EasyAdmin, menu Maintenance ; `Controller/Admin/WorkerAdminController`, `/admin/workers`),
+  réservé à `ROLE_SUPER_ADMIN` (entrée de menu, contrôleur et `access_control`) : état de chaque worker, contenu des
+  files, rédactions de chapitres en cours ou en échec du site (relance, libération), bouton de redémarrage (même signal
+  que `messenger:stop-workers`). L'état vient du battement que
+  chaque worker écrit toutes les 5 s dans le cache applicatif (`Services/Worker/WorkerHeartbeatSubscriber`, lu par
+  `WorkerMonitor`) : « Arrêté » après 2 min sans battement.
+- Redis garde un journal AOF (`docker-compose.yml`) : les messages en attente survivent à un redémarrage de Redis.
+- Un worker interrompu en plein traitement reprend son message à son redémarrage (message non acquitté).
 
 ## Fichiers et médias
 
@@ -183,6 +191,21 @@ Une file et un worker par projet, dans la base Redis 1 (`config/packages/messeng
 | Boussole ESG | `var/storage/esg/` (documents, rapports) | contrôleurs du module ESG |
 
 Médiathèque partagée : `/api/shared-media` (`SharedMediaApiController`). URL publiques : `Services/MediaUrlResolver`.
+
+## E-mails
+
+- Chaque site envoie par **son** serveur : table `email_configuration` du tenant (écran EasyAdmin « Email
+  Configuration » : serveur SMTP, identifiant, expéditeur), via `Services/EmailConfigurationService/TenantMailerFactory`.
+  Le serveur global (`MAILER_DSN`) ne sert que si le site n'a pas de serveur SMTP.
+- Tous les e-mails passent par là : rendez-vous (`ReservationMailerService`), contact (`ContactMailerService`), paiement
+  des livres (`BookPaymentService`), mot de passe oublié, code de connexion, inscription, commande (`EmailSenderService`).
+- Les erreurs d'envoi sont journalisées sans interrompre la requête : chercher « Erreur » et « email » dans
+  `var/log/dev.log`. Tester l'envoi d'un site : `php bin/console app:test-tenant-smtp <code> <destinataire>`.
+- La notification interne (nouveau rendez-vous, paiement reçu) part vers l'e-mail de l'entreprise (`entreprise.email`) :
+  vide, elle n'est pas envoyée ou retombe sur l'expéditeur.
+- Invitations de calendrier des rendez-vous : fuseau `Europe/Paris` en dur (`ReservationMailerService`), à rendre
+  configurable pour un site d'un autre fuseau.
+- Tests : `tests/bootstrap.php` retire le serveur SMTP des sites de test (aucun envoi réel).
 
 ## Configuration (variables d'environnement)
 

@@ -20,7 +20,8 @@ class BookPdfGeneratorService
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly Environment $twig,
-        private readonly string $projectDir
+        private readonly string $projectDir,
+        private readonly ChapterTextFormatter $formatter = new ChapterTextFormatter()
     ) {}
 
     /**
@@ -77,9 +78,27 @@ class BookPdfGeneratorService
     /**
      * Détermine le nom de l'auteur à afficher (en évitant le nom Admin User).
      */
+    /**
+     * Nom d'auteur reçu d'une requête : un texte, ou l'objet « author » du livre que le frontend renvoie tel quel
+     * ({firstName, lastName, fullName}). Le libellé par défaut du champ (« Auteur ») n'est pas un nom.
+     */
+    public static function normalizeAuthorName(mixed $author): ?string
+    {
+        if (is_array($author)) {
+            $author = $author['fullName'] ?? $author['full_name'] ?? $author['name']
+                ?? trim(((string) ($author['firstName'] ?? '')) . ' ' . ((string) ($author['lastName'] ?? '')));
+        }
+        if (!is_string($author)) {
+            return null;
+        }
+        $author = trim($author);
+
+        return $author === '' || in_array(mb_strtolower($author), ['auteur', 'author', 'admin user'], true) ? null : $author;
+    }
+
     public function resolveAuthorName(Book $book, ?string $customAuthorName = null): string
     {
-        $authorName = $customAuthorName;
+        $authorName = self::normalizeAuthorName($customAuthorName);
         if (empty($authorName)) {
             if ($book->getPerson1FirstName()) {
                 $authorName = $book->getPerson1FirstName();
@@ -93,7 +112,7 @@ class BookPdfGeneratorService
                 $authorName = 'Danielle Almont';
             }
         }
-        return $this->cleanText($authorName);
+        return $this->formatter->plain($authorName);
     }
 
     /**
@@ -194,24 +213,25 @@ class BookPdfGeneratorService
     {
         $chaptersData = [];
         foreach ($book->getChapters() as $chapter) {
-            $title = $this->cleanText($chapter->getTitle());
-            $theme = $this->cleanText($chapter->getTheme());
-            $rawContent = $chapter->getContentFinal() ?: ($chapter->getContentGenerated() ?: '');
-            $cleanContent = $this->cleanText($rawContent);
+            $blocks = $this->formatter->blocks($this->cleanText($chapter->getContentFinal() ?: ($chapter->getContentGenerated() ?: '')));
+            $photoPages = $this->resolveChapterPhotoPages($chapter);
+            // Chapitre pas encore rédigé et sans photo : ni page vide dans le livre, ni ligne au sommaire
+            if ($blocks === [] && $photoPages === []) {
+                continue;
+            }
 
             $chaptersData[] = [
                 'chapter' => $chapter,
-                'clean_title' => $title,
-                'clean_theme' => $theme,
-                'clean_content' => $cleanContent,
-                'photo_pages' => $this->resolveChapterPhotoPages($chapter),
+                'title' => $this->formatter->chapterTitle($chapter->getTitle()),
+                'blocks' => $blocks,
+                'photo_pages' => $photoPages,
             ];
         }
 
         return $this->twig->render('pdf/memoires/interior.html.twig', [
             'book' => $book,
-            'clean_title' => $this->cleanText($book->getTitle()),
-            'clean_subtitle' => $this->cleanText($book->getSubtitle()),
+            'clean_title' => $this->formatter->plain($book->getTitle()),
+            'clean_subtitle' => $this->formatter->plain($book->getSubtitle()),
             'author_name' => $this->resolveAuthorName($book, $customAuthorName),
             'chapters_data' => $chaptersData,
             'project_dir' => $this->projectDir,
@@ -234,8 +254,13 @@ class BookPdfGeneratorService
         }
 
         $authorName = $this->resolveAuthorName($book, $customAuthorName);
-        $cleanTitle = $this->cleanText($book->getTitle());
-        $cleanSubtitle = $this->cleanText($book->getSubtitle());
+        $cleanTitle = $this->formatter->plain($book->getTitle());
+        $cleanSubtitle = $this->formatter->plain($book->getSubtitle());
+        $bgColor = self::normalizeColor($bgColor);
+
+        // Zone repliée autour du carton (rembordage + fond perdu) : hors de la couverture visible une fois le livre relié
+        $edge = self::WRAP_PT + self::BLEED_PT;
+        $visibleWidth = $dimensions['front_cover_width_pt'] - $edge;
 
         return $this->twig->render('pdf/memoires/cover.html.twig', array_merge($dimensions, [
             'book' => $book,
@@ -246,8 +271,66 @@ class BookPdfGeneratorService
             'cover_style' => $coverStyle,
             'author_name' => $authorName,
             'bg_color' => $bgColor,
+            'bg_is_dark' => $bgColor !== null && self::isDarkColor($bgColor),
+            'classic_bg' => $bgColor ?? '#1b2838',
+            'classic_is_dark' => self::isDarkColor($bgColor ?? '#1b2838'),
+            'edge_pt' => $edge,
+            'visible_width_pt' => round($visibleWidth, 2),
+            'visible_height_pt' => round($dimensions['cover_height_pt'] - 2 * $edge, 2),
+            // Corps du titre ajusté au mot le plus long : un titre ne déborde plus de sa colonne
+            'title_pt' => [
+                'biographic' => self::fitFontSize($cleanTitle, $visibleWidth * 0.48 - 90, 40, 0.64),
+                'full' => self::fitFontSize($cleanTitle, $visibleWidth - 142, 44, 0.64),
+                'gallery' => self::fitFontSize($cleanTitle, $visibleWidth - 142, 36, 0.64),
+                'banner' => self::fitFontSize($cleanTitle, $visibleWidth - 142, 38, 0.64),
+                'classic' => self::fitFontSize($cleanTitle, $visibleWidth - 200, 40, 0.80),
+            ],
             'project_dir' => $this->projectDir,
         ]));
+    }
+
+    /** Couleur hexadécimale (#rgb ou #rrggbb) ou null : la valeur vient d'une requête et finit dans une feuille de style */
+    public static function normalizeColor(?string $color): ?string
+    {
+        $color = trim((string) $color);
+        if ($color !== '' && $color[0] !== '#') {
+            $color = '#' . $color;
+        }
+
+        return preg_match('/^#([0-9a-f]{3}|[0-9a-f]{6})$/i', $color) ? strtolower($color) : null;
+    }
+
+    /** Fond sombre (texte clair par-dessus) ou clair (texte foncé) */
+    public static function isDarkColor(string $hex): bool
+    {
+        $hex = ltrim($hex, '#');
+        if (strlen($hex) === 3) {
+            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+        }
+        [$r, $g, $b] = [hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2))];
+
+        return (0.299 * $r + 0.587 * $g + 0.114 * $b) < 140;
+    }
+
+    /**
+     * Plus grand corps (en points) pour que le mot le plus long du titre tienne dans la largeur donnée.
+     *
+     * @param float $charRatio largeur moyenne d'un caractère rapportée au corps (capitales grasses : ~0,8)
+     */
+    public static function fitFontSize(string $title, float $widthPt, int $maxPt, float $charRatio, int $minPt = 16): int
+    {
+        // Titre long : plusieurs lignes, donc un corps plus petit pour ne pas chevaucher ce qui suit
+        $length = mb_strlen(trim($title));
+        if ($length > 28) {
+            $maxPt = (int) round($maxPt * ($length > 45 ? 0.62 : 0.75));
+        }
+
+        $longest = 1;
+        foreach (preg_split('/\s+/u', trim($title)) ?: [] as $word) {
+            $longest = max($longest, mb_strlen($word));
+        }
+
+        return (int) max($minPt, min($maxPt, floor($widthPt / ($longest * $charRatio))));
     }
 
     /**

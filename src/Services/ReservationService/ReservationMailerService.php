@@ -7,6 +7,7 @@ use App\Entity\Entreprise;
 use App\Entity\Reservation;
 use App\Services\EmailConfigurationService\EmailConfigurationService;
 use App\Services\EmailConfigurationService\TenantMailerFactory;
+use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
@@ -22,13 +23,35 @@ class ReservationMailerService
         private EmailConfigurationService $emailConfigService,
         private LoggerInterface $logger,
         private TenantEntityManagerProvider $emProvider,
-        private TenantMailerFactory $tenantMailerFactory
+        private TenantMailerFactory $tenantMailerFactory,
+        private TenantConnectionManager $tenantManager
     ) {
+    }
+
+    /**
+     * Domaine du site courant quand l'appelant n'en fournit pas (changement de statut depuis l'administration) :
+     * domaine propre du tenant, sinon son sous-domaine. Avant, tous les sites héritaient du domaine d'un seul client.
+     */
+    private function defaultDomain(): string
+    {
+        $code = (string) $this->tenantManager->getCurrentTenantCode();
+        try {
+            $stmt = $this->tenantManager->getPdoMaster()->prepare('SELECT custom_domain FROM tenants WHERE code = :code');
+            $stmt->execute(['code' => $code]);
+            $customDomain = trim((string) $stmt->fetchColumn());
+            if ($customDomain !== '') {
+                return $customDomain;
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning('Domaine du site non résolu pour un e-mail de réservation : ' . $e->getMessage());
+        }
+
+        return ($code !== '' ? $code . '.' : '') . ($_ENV['FRONTEND_BASE_DOMAIN'] ?? 'arkanoa-media.com');
     }
 
     public function sendReservationEmails(Reservation $reservation, string $locale = 'fr', ?string $domain = null): void
     {
-        $domain = $domain ?: 'lintendantprive.com';
+        $domain = $domain ?: $this->defaultDomain();
 
         try {
             $tenantEm = $this->emProvider->getEntityManager();
@@ -45,7 +68,7 @@ class ReservationMailerService
 
             $fromName = ($emailConfigTranslation && $emailConfigTranslation->getFromName())
                 ? $emailConfigTranslation->getFromName()
-                : ($entreprise && $entreprise->getName() ? $entreprise->getName() : 'L\'Intendant Privé');
+                : ($entreprise && $entreprise->getName() ? $entreprise->getName() : 'Service client');
 
             $signature = $emailConfigTranslation ? $emailConfigTranslation->getSignature() : null;
             $logoUrl = $emailConfig ? $emailConfig->getLogo() : null;
@@ -106,7 +129,7 @@ class ReservationMailerService
             return;
         }
 
-        $domain = $domain ?: 'lintendantprive.com';
+        $domain = $domain ?: $this->defaultDomain();
 
         try {
             $tenantEm = $this->emProvider->getEntityManager();
@@ -122,7 +145,7 @@ class ReservationMailerService
 
             $fromName = ($emailConfigTranslation && $emailConfigTranslation->getFromName())
                 ? $emailConfigTranslation->getFromName()
-                : ($entreprise && $entreprise->getName() ? $entreprise->getName() : 'L\'Intendant Privé');
+                : ($entreprise && $entreprise->getName() ? $entreprise->getName() : 'Service client');
 
             $signature = $emailConfigTranslation ? $emailConfigTranslation->getSignature() : null;
             $logoUrl = $emailConfig ? $emailConfig->getLogo() : null;

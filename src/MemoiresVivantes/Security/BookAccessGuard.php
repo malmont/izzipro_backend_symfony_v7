@@ -50,14 +50,16 @@ class BookAccessGuard
 
         if ($expires !== null && $signature !== null && $chapterId !== null && time() <= (int) $expires) {
             // 1. Signature propre au contributeur, puis 2. signature globale du chapitre
+            // Un contributeur retiré du livre perd son lien personnel, et n'est plus reconnu sur un lien global
+            $knownContributor = $contributorId !== null && $this->contributorBelongsTo($contributorId, $book);
             $signed = [];
-            if ($contributorId !== null) {
+            if ($knownContributor) {
                 $signed[] = "chapterId=$chapterId&contributorId=$contributorId&expires=$expires";
             }
             $signed[] = "chapterId=$chapterId&expires=$expires";
             foreach ($signed as $data) {
                 if (hash_equals(hash_hmac('sha256', $data, $this->secret), (string) $signature) && $this->chapterBelongsTo($chapterId, $book)) {
-                    if ($contributorId !== null) {
+                    if ($knownContributor) {
                         $request->attributes->set('validatedContributorId', $contributorId);
                     }
 
@@ -111,6 +113,21 @@ class BookAccessGuard
         };
 
         return [$pick(['expires']), $pick(['signature']), $pick(['chapterId', 'chapter_id']), $pick(['contributorId', 'contributor_id'])];
+    }
+
+    /** Le contributeur existe-t-il encore dans ce livre ? */
+    public function contributorBelongsTo(string $contributorId, ?Book $book): bool
+    {
+        if ($book === null) {
+            return false;
+        }
+        foreach ($book->getContributors() as $contributor) {
+            if (strcasecmp((string) $contributor->getId(), $contributorId) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function chapterBelongsTo(string $chapterId, Book $book): bool

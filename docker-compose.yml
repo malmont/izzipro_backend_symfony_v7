@@ -34,6 +34,9 @@ services:
     image: redis:7
     container_name: redis_cache_v2
     restart: unless-stopped
+    # Journal AOF : les files Messenger (rédactions en attente) survivent à un redémarrage de Redis. Sans lui, seul
+    # l'instantané périodique (jusqu'à une heure d'écart) était conservé. Activé aussi à chaud le 30/09/2026.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     networks:
       - symfony_v2
     volumes:

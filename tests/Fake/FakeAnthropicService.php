@@ -30,8 +30,19 @@ class FakeAnthropicService extends AnthropicService
         return "===Un sous-titre de test===\n\nUn paragraphe généré par la fausse IA de test.";
     }
 
+    /** Réponse de « Améliorer ma réponse » ; chaîne vide = IA en erreur ou surchargée */
+    public static string $improvedAnswer = 'Réponse améliorée par la fausse IA de test.';
+
+    public function improveAnswer(string $question, string $answer, ?string $model = null): string
+    {
+        self::$calls[] = ['prompt' => "Question : $question\nRéponse : $answer", 'maxTokens' => 2000, 'system' => 'improve', 'model' => $model];
+
+        return self::$improvedAnswer;
+    }
+
     public static function reset(): void
     {
         self::$calls = [];
+        self::$improvedAnswer = 'Réponse améliorée par la fausse IA de test.';
     }
 }

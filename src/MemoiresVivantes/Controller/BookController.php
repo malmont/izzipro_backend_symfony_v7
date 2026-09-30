@@ -111,13 +111,14 @@ class BookController extends AbstractController
         $book = $em->getRepository(Book::class)->find(Uuid::fromString($id));
         if (!$book) return $this->json(['error' => 'Book not found'], 404);
 
-        // Si le statut de paiement est en attente, tentative de synchronisation en direct avec Stripe
+        $res = $this->validateSignatureOrGrant('BOOK_VIEW', $book, $request);
+        if ($res !== null) return $res;
+
+        // Si le statut de paiement est en attente, tentative de synchronisation en direct avec Stripe (après le
+        // contrôle d'accès : un appel anonyme ne doit pas déclencher de requête vers Stripe)
         if ($book->getPaymentStatus() === 'pending') {
             $this->syncBookPaymentStatusUseCase->execute($book);
         }
-
-        $res = $this->validateSignatureOrGrant('BOOK_VIEW', $book, $request);
-        if ($res !== null) return $res;
 
         $validatedContributorId = $request->attributes->get('validatedContributorId');
         $contributorIdParam = $request->query->get('contributorId') ?? $request->query->get('contributor_id');
@@ -163,7 +164,9 @@ class BookController extends AbstractController
             $ordersCount,
             $questionsByTheme,
             $targetContribId,
-            $currentContributor
+            $currentContributor,
+            // E-mail du propriétaire et lien de paiement : jamais pour un invité venu par un lien de partage
+            $this->getUser() !== null && $this->isGranted('BOOK_VIEW', $book)
         ));
     }
 
@@ -187,8 +190,12 @@ class BookController extends AbstractController
         $user = $this->getUser();
         if (!$user) return $this->json(['error' => 'Unauthorized'], 401);
 
-        $data = json_decode($request->getContent(), true) ?? [];
-        $book = $this->createBookUseCase->execute($user, new BookInputDto($data));
+        $data = json_decode($request->getContent(), true);
+        $dto = new BookInputDto(is_array($data) ? $data : []);
+        if ($dto->title === null || trim($dto->title) === '') {
+            return $this->json(['error' => 'Le titre du livre est obligatoire.'], 422);
+        }
+        $book = $this->createBookUseCase->execute($user, $dto);
         
         $host = $this->resolveHost($request);
         return $this->json(new BookOutputDto($book, $host), 201);
@@ -203,8 +210,8 @@ class BookController extends AbstractController
 
         $this->denyAccessUnlessGranted('BOOK_EDIT', $book);
 
-        $data = json_decode($request->getContent(), true) ?? [];
-        $book = $this->updateBookUseCase->execute($book, new BookInputDto($data));
+        $data = json_decode($request->getContent(), true);
+        $book = $this->updateBookUseCase->execute($book, new BookInputDto(is_array($data) ? $data : []));
         
         $host = $this->resolveHost($request);
         return $this->json(new BookOutputDto($book, $host));

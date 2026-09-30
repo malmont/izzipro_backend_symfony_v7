@@ -131,6 +131,7 @@ class BookPrintApiController extends AbstractController
         $shippingData['shipping_level'] = $data['shipping_level'] ?? $shippingData['shipping_level'] ?? null;
         $shippingData['cover_style'] = $data['cover_style'] ?? $shippingData['cover_style'] ?? 'biographic_split';
         $shippingData['bg_color'] = $data['bg_color'] ?? $shippingData['bg_color'] ?? null;
+        $shippingData['author_name'] = $data['author_name'] ?? $shippingData['author_name'] ?? null;
         $shippingData['custom_cover_pdf_url'] = $data['custom_cover_pdf_url'] ?? $shippingData['custom_cover_pdf_url'] ?? null;
         $shippingData['custom_interior_pdf_url'] = $data['custom_interior_pdf_url'] ?? $shippingData['custom_interior_pdf_url'] ?? null;
 

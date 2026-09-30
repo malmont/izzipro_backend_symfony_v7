@@ -7,6 +7,7 @@ use App\MemoiresVivantes\Services\BookPdfGeneratorService;
 use App\Services\TenantEntityManagerProvider;
 use App\MemoiresVivantes\Security\BookAccessGuard;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -37,12 +38,12 @@ class BookPdfController extends AbstractController
             return $this->json(['error' => $denied[1]], $denied[0]);
         }
 
-        $author = $request->query->get('author');
+        $author = BookPdfGeneratorService::normalizeAuthorName($request->query->all()['author'] ?? null);
         $pdfBinary = $this->pdfService->generateInteriorBinary($book, $author);
 
         return new Response($pdfBinary, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="interieur_' . $book->getTitle() . '.pdf"',
+            'Content-Disposition' => self::inlineDisposition('interieur_' . $book->getTitle()),
         ]);
     }
 
@@ -62,7 +63,7 @@ class BookPdfController extends AbstractController
         }
 
         $style = (string)$request->query->get('style', 'biographic_split');
-        $author = $request->query->get('author');
+        $author = BookPdfGeneratorService::normalizeAuthorName($request->query->all()['author'] ?? null);
         $pages = max(24, (int)$request->query->get('pages', 64));
         $color = (string)($request->query->get('color') ?: $request->query->get('bg') ?: $request->query->get('bg_color') ?: '');
         if (!empty($color) && !str_starts_with($color, '#') && ctype_xdigit($color)) {
@@ -73,7 +74,7 @@ class BookPdfController extends AbstractController
 
         return new Response($pdfBinary, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="couverture_' . $style . '_' . $book->getTitle() . '.pdf"',
+            'Content-Disposition' => self::inlineDisposition('couverture_' . $style . '_' . $book->getTitle()),
         ]);
     }
 
@@ -93,9 +94,11 @@ class BookPdfController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true) ?: [];
-        $style = (string)($data['cover_style'] ?? $request->query->get('style', 'biographic_split'));
-        $author = $data['author_name'] ?? $request->query->get('author');
-        $color = (string)($data['bg_color'] ?? $data['color'] ?? $request->query->get('color') ?? $request->query->get('bg_color') ?? '');
+        $style = is_string($data['cover_style'] ?? null) ? $data['cover_style'] : (string) $request->query->get('style', 'biographic_split');
+        // Texte, ou objet « author » du livre renvoyé tel quel par le frontend (provoquait une erreur 500)
+        $author = BookPdfGeneratorService::normalizeAuthorName($data['author_name'] ?? $data['author'] ?? $request->query->all()['author'] ?? null);
+        $color = $data['bg_color'] ?? $data['color'] ?? $request->query->get('color') ?? $request->query->get('bg_color') ?? '';
+        $color = is_string($color) ? $color : '';
         if (!empty($color) && !str_starts_with($color, '#') && ctype_xdigit($color)) {
             $color = '#' . $color;
         }
@@ -109,5 +112,14 @@ class BookPdfController extends AbstractController
             'cover_url' => '/' . $result['cover_path'],
             'page_count' => $result['page_count'],
         ]);
+    }
+
+    /** Nom de fichier sûr pour l'en-tête (accents, guillemets et retours à la ligne d'un titre de livre) */
+    private static function inlineDisposition(string $name): string
+    {
+        $name = trim((string) preg_replace('#[\\\\/\x00-\x1F%"]+#u', ' ', $name)) ?: 'livre';
+        $ascii = trim((string) preg_replace('/[^A-Za-z0-9 ._-]+/', '_', (string) iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $name)), '_ ') ?: 'livre';
+
+        return HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_INLINE, $name . '.pdf', $ascii . '.pdf');
     }
 }

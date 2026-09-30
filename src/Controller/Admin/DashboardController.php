@@ -404,6 +404,9 @@ class DashboardController extends AbstractDashboardController
         
         yield MenuItem::section('Maintenance');
         yield MenuItem::linkToRoute('Vider cache Redis', 'fas fa-trash-alt', 'admin_redis_flush');
+        // Workers communs à tous les sites : propriétaire de la plateforme seulement
+        yield MenuItem::linkToRoute('Workers (tâches de fond)', 'fas fa-heartbeat', 'admin_workers')
+            ->setPermission('ROLE_SUPER_ADMIN');
         
         yield MenuItem::section('UI');
         yield MenuItem::linkToCrud('Home Slider', 'fas fa-images', HomeSlider::class);

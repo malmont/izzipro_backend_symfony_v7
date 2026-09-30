@@ -14,14 +14,17 @@ class EmailSenderService
     private EmailConfigurationService $emailConfigService;
     private EmailLogoHelper $emailLogoHelper;
     private LoggerInterface $logger;
+    private TenantMailerFactory $tenantMailerFactory;
 
     public function __construct(
         MailerInterface $mailer,
         Environment $twig,
         EmailConfigurationService $emailConfigService,
         EmailLogoHelper $emailLogoHelper,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        TenantMailerFactory $tenantMailerFactory
     ) {
+        $this->tenantMailerFactory = $tenantMailerFactory;
         $this->mailer = $mailer;
         $this->twig = $twig;
         $this->emailConfigService = $emailConfigService;
@@ -101,8 +104,11 @@ class EmailSenderService
                 $emailMessage->replyTo($replyTo);
             }
 
-            $this->mailer->send($emailMessage);
-        } catch (\Exception $e) {
+            // Serveur d'envoi du site (configuration e-mail du tenant), comme les e-mails de rendez-vous et de
+            // paiement ; le serveur global (.env) ne sert que si le site n'a pas le sien. Avant, ces e-mails (mot de
+            // passe oublié, code de connexion, contact, commande) passaient toujours par le serveur global.
+            $this->tenantMailerFactory->createMailer($emailConfig)->send($emailMessage);
+        } catch (\Throwable $e) {
             $this->logger->error("Erreur lors de l'envoi de l'email: " . $e->getMessage());
         }
     }

@@ -23,8 +23,6 @@ class UpdateChapterUseCase
         if (isset($data['theme'])) $chapter->setTheme($data['theme']);
         if (isset($data['position'])) $chapter->setPosition((int)$data['position']);
         if (isset($data['answers'])) {
-            error_log("DEBUG ANSWERS: " . json_encode($data['answers']));
-            
             $existingAnswers = $chapter->getAnswers();
             $newAnswers = $data['answers'];
             
@@ -131,7 +129,11 @@ class UpdateChapterUseCase
                 }
                 unset($newContrib);
             }
-            
+
+            if (is_array($newContributors)) {
+                $newContributors = $this->keepMissingContributors($chapter, $newContributors);
+            }
+
             $chapter->setContributorAnswers($newContributors);
         }
         if (isset($data['contentFinal'])) $chapter->setContentFinal($data['contentFinal']);
@@ -145,5 +147,52 @@ class UpdateChapterUseCase
         }
 
         return $chapter;
+    }
+
+    /**
+     * Un enregistrement envoie toute la liste des témoignages telle que la page l'a chargée : si un contributeur a
+     * répondu entre-temps, sa réponse n'y figure pas et serait effacée. Les témoignages des contributeurs du livre
+     * absents de l'envoi sont donc conservés ; pour retirer un témoignage, on retire le contributeur du livre.
+     */
+    private function keepMissingContributors(Chapter $chapter, array $submitted): array
+    {
+        $existing = $chapter->getContributorAnswers();
+        if (!is_array($existing) || $existing === []) {
+            return $submitted;
+        }
+
+        $bookContributorIds = [];
+        foreach ($chapter->getBook()?->getContributors() ?? [] as $contributor) {
+            $bookContributorIds[strtolower((string) $contributor->getId())] = true;
+        }
+
+        $submittedIds = [];
+        $submittedNames = [];
+        foreach ($submitted as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            if (isset($entry['id']) && is_scalar($entry['id'])) {
+                $submittedIds[strtolower((string) $entry['id'])] = true;
+            }
+            $name = $entry['contributorName'] ?? $entry['firstName'] ?? null;
+            if (is_string($name) && $name !== '') {
+                $submittedNames[mb_strtolower($name)] = true;
+            }
+        }
+
+        foreach ($existing as $entry) {
+            $id = is_array($entry) && isset($entry['id']) && is_scalar($entry['id']) ? strtolower((string) $entry['id']) : null;
+            if ($id === null || !isset($bookContributorIds[$id]) || isset($submittedIds[$id])) {
+                continue;
+            }
+            $name = $entry['contributorName'] ?? $entry['firstName'] ?? null;
+            if (is_string($name) && isset($submittedNames[mb_strtolower($name)])) {
+                continue;
+            }
+            $submitted[] = $entry;
+        }
+
+        return $submitted;
     }
 }

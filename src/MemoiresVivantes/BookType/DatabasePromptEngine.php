@@ -117,7 +117,7 @@ class DatabasePromptEngine
      */
     public function variables(Book $book, Chapter $chapter, string $tone): array
     {
-        $prenom1 = $book->getPerson1FirstName() ?: ($book->getUser()?->getFirstname() ?: '');
+        $prenom1 = AnthropicService::narratorFirstName($book) ?? '';
         $prenom2 = $book->getPerson2FirstName() ?: '';
         $sujets = ($prenom1 && $prenom2) ? "{$prenom1} et {$prenom2}" : ($prenom1 ?: (string) $book->getTitle());
         $dates = ($book->getBirthYear() || $book->getDeathYear()) ? "({$book->getBirthYear()} - {$book->getDeathYear()})" : '';

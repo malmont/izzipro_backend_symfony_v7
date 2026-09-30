@@ -37,7 +37,7 @@ class HommageAggregationService
                 foreach ($contribAnswers as $contrib) {
                     if (!empty($contrib['answers'])) {
                         foreach ($contrib['answers'] as $ans) {
-                            $text = trim($ans['improvedAnswer'] ?? $ans['answer'] ?? '');
+                            $text = is_array($ans) ? ChapterQuestionProvider::answerText($ans) : '';
                             if ($text !== '') {
                                 $hasTestimonies = true;
                                 break 3;
@@ -50,7 +50,7 @@ class HommageAggregationService
             $soloAnswers = $otherChapter->getAnswers();
             if (is_array($soloAnswers) && !empty($soloAnswers)) {
                 foreach ($soloAnswers as $ans) {
-                    $text = trim($ans['improvedAnswer'] ?? $ans['answer'] ?? '');
+                    $text = is_array($ans) ? ChapterQuestionProvider::answerText($ans) : '';
                     if ($text !== '') {
                         $hasTestimonies = true;
                         break 2;
@@ -122,11 +122,11 @@ class HommageAggregationService
                     $formattedAnswers = [];
                     foreach ($answers as $ans) {
                         $idx = $ans['index'] ?? 0;
-                        $ansText = trim($ans['improvedAnswer'] ?? $ans['answer'] ?? '');
+                        $ansText = is_array($ans) ? ChapterQuestionProvider::answerText($ans) : '';
                         if ($ansText === '') continue;
 
                         $roleKey = $role . '_' . $idx;
-                        $qText = $questionMap[$theme][$roleKey] ?? $questionMap[$theme][(string)$idx] ?? ("Question " . ($idx + 1));
+                        $qText = self::questionOf($ans) ?? $questionMap[$theme][$roleKey] ?? $questionMap[$theme][(string)$idx] ?? ("Question " . ($idx + 1));
 
                         $formattedAnswers[] = [
                             'question' => $qText,
@@ -146,10 +146,10 @@ class HommageAggregationService
                 $formattedAnswers = [];
                 foreach ($directAnswers as $ans) {
                     $idx = $ans['index'] ?? 0;
-                    $ansText = trim($ans['improvedAnswer'] ?? $ans['answer'] ?? '');
+                    $ansText = is_array($ans) ? ChapterQuestionProvider::answerText($ans) : '';
                     if ($ansText === '') continue;
 
-                    $qText = $questionMap[$theme][(string)$idx] ?? ("Question " . ($idx + 1));
+                    $qText = self::questionOf($ans) ?? $questionMap[$theme][(string)$idx] ?? ("Question " . ($idx + 1));
                     $formattedAnswers[] = [
                         'question' => $qText,
                         'answer' => $ansText,
@@ -188,5 +188,13 @@ class HommageAggregationService
             'contributors' => $testimoniesByContributor,
             'formattedContext' => $formattedText,
         ];
+    }
+
+    /** La question enregistrée avec la réponse fait foi ; l'ordre d'affichage des questions n'est qu'un repli */
+    private static function questionOf(mixed $answer): ?string
+    {
+        $question = is_array($answer) ? ($answer['question'] ?? null) : null;
+
+        return is_string($question) && trim($question) !== '' ? trim($question) : null;
     }
 }

@@ -34,8 +34,9 @@ class CreateBookPrintOrderUseCase
         $countryCode = $normalizedAddress['country_code'];
 
         $recipientName = $normalizedAddress['name'];
-        if (($recipientName === 'Destinataire' || empty($recipientName)) && method_exists($user, 'getUserIdentifier')) {
-            $recipientName = $user->getUserIdentifier();
+        if ($recipientName === 'Destinataire' || empty($recipientName)) {
+            // Nom du client plutôt que son identifiant de connexion (une adresse e-mail)
+            $recipientName = trim($user->getFirstname() . ' ' . $user->getLastname()) ?: $user->getUserIdentifier();
             $normalizedAddress['name'] = $recipientName;
         }
 
@@ -64,7 +65,9 @@ class CreateBookPrintOrderUseCase
             $coverPublicUrl = $customCoverPdfUrl;
             $pageCount = 64;
         } else {
-            $pdfResult = $this->pdfGeneratorService->generateAndSaveBookPdfs($book, $coverStyle, $recipientName, $bgColor);
+            // Auteur imprimé sur la couverture : celui du livre (ou celui fourni), jamais le destinataire du colis
+            $authorName = BookPdfGeneratorService::normalizeAuthorName($shippingData['author_name'] ?? null);
+            $pdfResult = $this->pdfGeneratorService->generateAndSaveBookPdfs($book, $coverStyle, $authorName, $bgColor);
             $interiorPublicUrl = $customInteriorPdfUrl ?: (rtrim($publicBaseUrl, '/') . '/' . ltrim($pdfResult['interior_path'], '/'));
             $coverPublicUrl = $customCoverPdfUrl ?: (rtrim($publicBaseUrl, '/') . '/' . ltrim($pdfResult['cover_path'], '/'));
             $pageCount = $pdfResult['page_count'];

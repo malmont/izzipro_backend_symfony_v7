@@ -193,8 +193,20 @@
             text-indent: 6mm;
         }
 
-        .story-paragraph:first-of-type {
+        /* Début de chapitre ou paragraphe qui suit un sous-titre : pas d'alinéa */
+        .story-paragraph-first {
             text-indent: 0;
+        }
+
+        /* Sous-titres du récit (===Titre=== dans le texte rédigé) */
+        .story-subtitle {
+            font-size: 13pt;
+            font-weight: normal;
+            font-style: italic;
+            text-align: center;
+            color: #b59449;
+            margin: 9mm 0 5mm 0;
+            page-break-after: avoid;
         }
 
         /* Lettrine sur le premier paragraphe */
@@ -342,10 +354,10 @@
     {# 3. Sommaire #}
     <div class="toc-page">
         <div class="toc-title">Sommaire</div>
-        {% for chapter in book.chapters %}
+        {% for item in chapters_data|default([]) %}
             <div class="toc-item">
                 <span class="toc-item-title">
-                    <strong>Chapitre {{ loop.index }}</strong> — {{ chapter.title }}
+                    <strong>Chapitre {{ loop.index }}</strong> — {{ item.title }}
                 </span>
             </div>
         {% endfor %}
@@ -357,29 +369,22 @@
         {% set chapter = item.chapter %}
         <div class="chapter-container{% if loop.first %} first-chapter{% endif %}" style="{% if loop.first %}page-break-before: avoid !important;{% endif %}">
             <div class="chapter-header">
-                {% if item.clean_theme %}
-                    <div class="chapter-theme">{{ item.clean_theme }}</div>
-                {% endif %}
                 <div class="chapter-number">Chapitre {{ loop.index }}</div>
-                <h2 class="chapter-title">{{ item.clean_title }}</h2>
+                <h2 class="chapter-title">{{ item.title }}</h2>
             </div>
 
+            {# Texte découpé par ChapterTextFormatter : sous-titres (===Titre===) et paragraphes, sans balisage #}
             <div class="story-content">
-                {% if item.clean_content %}
-                    {% set paragraphs = item.clean_content|split("\n\n") %}
-                    {% for p in paragraphs %}
-                        {% set pTrim = p|trim %}
-                        {% if pTrim %}
-                            <p class="story-paragraph">
-                                {% if loop.first and pTrim|length > 1 %}
-                                    <span class="first-letter">{{ pTrim|slice(0, 1) }}</span>{{ pTrim|slice(1) }}
-                                {% else %}
-                                    {{ pTrim|nl2br }}
-                                {% endif %}
-                            </p>
-                        {% endif %}
-                    {% endfor %}
-                {% endif %}
+                {% for block in item.blocks %}
+                    {% if block.type == 'heading' %}
+                        <h3 class="story-subtitle">{{ block.text }}</h3>
+                    {% else %}
+                        <p class="story-paragraph{% if block.first %} story-paragraph-first{% endif %}">
+                            {%- if block.dropCap %}<span class="first-letter">{{ block.dropCap }}</span>{% endif -%}
+                            {{- block.text|nl2br -}}
+                        </p>
+                    {% endif %}
+                {% endfor %}
             </div>
         </div>
 

@@ -389,7 +389,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (12)
+## Administration (EasyAdmin) (16)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -404,6 +404,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET, POST | `/admin/stripe/connect` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::connect` |
 | GET, POST | `/admin/stripe/disconnect` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::disconnect` |
 | GET | `/admin/stripe/success` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::success` |
+| POST | `/admin/workers/chapters/{id}/fail` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::failChapter` |
+| POST | `/admin/workers/chapters/{id}/relaunch` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::relaunchChapter` |
+| POST | `/admin/workers/restart` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::restart` |
+| GET | `/admin/workers` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::index` |
 | ANY | `/admin` | ROLE_ADMIN | `Controller\Admin\DashboardController::index` |
 
 ## API Platform (34)

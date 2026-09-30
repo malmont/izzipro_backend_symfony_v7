@@ -79,6 +79,14 @@ $insertTenant = $master->prepare('INSERT INTO tenants (code, name, dbname, custo
 $insertTenant->execute([MV_TEST_TENANT_CODE, 'Tenant de test', MV_TEST_TENANT_DB, MV_TEST_TENANT_HOST]);
 $insertTenant->execute([MV_TEST_TENANT2_CODE, 'Second tenant de test', MV_TEST_TENANT2_DB, MV_TEST_TENANT2_HOST]);
 
+// Aucun e-mail réel pendant les tests : le modèle des bases de test porte la configuration SMTP d'un vrai site, que
+// TenantMailerFactory utiliserait à la place de MAILER_DSN (null://). Sans serveur propre, tout part vers null://.
+foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
+    $tenantDb = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $u['host'], $u['port'] ?? 5432, $db), urldecode($u['user']), urldecode($u['pass']), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $tenantDb->exec("UPDATE email_configuration SET smtp_host = NULL, smtp_user = NULL, smtp_password = NULL, from_email = 'contact@mvtest.test'");
+    $tenantDb = null;
+}
+
 // Configuration des landing pages de test (versions synchronisées) repartie de zéro
 exec('rm -rf ' . escapeshellarg(dirname(__DIR__) . '/var/landingpage-config-test'));
 

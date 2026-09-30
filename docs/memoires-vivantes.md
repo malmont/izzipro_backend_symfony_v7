@@ -19,6 +19,12 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
   - voters : `Security/BookVoter.php`, `Security/ChapterVoter.php`.
 - Toute nouvelle action doit en utiliser un : rien ne la protège sinon. Lecture : `canView` ; tout ce qui coûte,
   engage ou modifie : `canManage`.
+- **Invités (lien signé)** : ils ne modifient que `answers` et `contributorAnswers` (titre, position, texte final :
+  propriétaire seulement) ; ils ne voient ni l'e-mail du propriétaire ni le lien de paiement (`BookOutputDto`,
+  `$withPrivateDetails`). Un contributeur retiré du livre perd son lien (`BookAccessGuard::contributorBelongsTo`).
+- **Témoignages** : un enregistrement ne peut pas effacer le témoignage d'un contributeur du livre absent de l'envoi
+  (`UpdateChapterUseCase::keepMissingContributors`) ; pour retirer un témoignage, retirer le contributeur.
+- Identifiant mal formé : 404 (`EventListener/InvalidIdentifierListener`) ; champs obligatoires absents : 422.
 
 | Groupe | Routes | Contrôleur |
 |---|---|---|
@@ -60,19 +66,49 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
 
 ## Génération d'un chapitre (tâche de fond)
 
-`POST /chapters/{id}/generate` → message `GenerateChapterMessage` (transport `async`, worker
-`symfony_messenger_worker_v2`) → `Message/GenerateChapterHandler.php` (2 parties, Claude via `AnthropicService`).
+`POST /chapters/{id}/generate` → `Services/ChapterGenerationService` → message `GenerateChapterMessage` (transport
+`async`, worker `symfony_messenger_worker_v2`) → `Message/GenerateChapterHandler.php` (2 parties, Claude via
+`AnthropicService`).
 
 - `generation_status` : `pending` → `generating_part1` → `part1_done` → `generating_part2` → `completed` | `failed`.
-- `GET /chapters/{id}/status` fait échouer une génération bloquée : 30 min en `generating_*`, 60 min en `pending` ou
-  `part1_done` (`ChapterController::STALE_GENERATION_MINUTES`).
-- Transcription audio : OpenAI Whisper (`Services/OpenAiService.php`). Appels à l'IA bornés dans le temps (10 min, 5 min).
+  Un chapitre créé sans réponse est `completed` avec un texte vide : `pending` signifie « rédaction en file ».
+- **Rien n'est envoyé à l'IA sans matériau** (`cannotGenerateReason`) : 422 à la demande, aucune rédaction à la création
+  d'un chapitre vide (le frontend les crée vides), dernier contrôle dans le handler. Chapitres de synthèse : au moins
+  un témoignage dans le livre.
+- **Une seule rédaction à la fois** par chapitre : une seconde demande répond 200 `alreadyInProgress` sans rien lancer.
+- **Rédaction perdue** (`failIfLost`, appelé par `GET /chapters/{id}`, `/status`, `/generate` et l'écran Workers) :
+  échec au bout de 2 min si la file est vide et que rien n'est en cours de traitement ; sinon 30 min en
+  `generating_*`, 60 min en `pending` ou `part1_done`.
+- Appels à l'IA : 3 essais sur surcharge ou erreur passagère (429, 529, 5xx), bornés dans le temps (10 min).
+- Texte envoyé à l'IA pour une réponse : `ChapterQuestionProvider::answerText` (version améliorée si elle existe et
+  n'a pas été écartée, sinon réponse saisie). Prénom du narrateur : celui du livre, jamais un compte générique
+  (`AnthropicService::narratorFirstName`).
+- Transcription audio : OpenAI Whisper (`Services/OpenAiService.php`), WebM/Ogg (Chrome, Firefox) et MP4/AAC (Safari) ;
+  un enregistrement sans parole répond 422 `noSpeech` (`TranscribeAudioUseCase`). Amélioration d'une réponse : 503 si
+  l'IA ne répond pas, sans consommer l'essai de l'invité.
+- Suivi et relance : écran EasyAdmin « Workers » (`docs/architecture.md`, « Tâches de fond »).
+
+## Mise en page du livre (PDF)
+
+`Services/BookPdfGeneratorService.php`, gabarits `templates/pdf/memoires/` (Dompdf).
+
+- Texte des chapitres : `Services/ChapterTextFormatter.php` le découpe en sous-titres (`===Titre===`, `## Titre`,
+  `**Titre**` seul sur sa ligne) et paragraphes, retire le balisage Markdown et les emojis (absents des polices), sans
+  produire de HTML. Un chapitre sans texte ni photo n'apparaît ni au sommaire ni dans le livre.
+- Couverture : **Dompdf ignore `box-sizing`**. Chaque bloc est positionné en absolu avec une largeur explicite ; les
+  textes sont centrés sur la zone visible (hors rembordage et fond perdu, `edge_pt`). Le corps du titre est ajusté au
+  mot le plus long (`fitFontSize`), la couleur de fond est validée (`normalizeColor`).
+- Auteur : texte ou objet `author` du livre (`normalizeAuthorName`) ; à l'impression, jamais le destinataire du colis.
+- Vérifier un rendu : générer le PDF et le regarder (les tests ne contrôlent que le HTML produit).
 
 ## Tester
 
-- `tests/Functional/MemoiresVivantes/` (contrat de l'API des types de livre ; `BookTypeApiTestCase` imite le frontend :
-  `?locale=fr`, `X-XSRF-TOKEN`, JWT). Base modèle des tests : `db_mv_test_booktypes` (ne jamais la supprimer).
-- Client Anthropic simulé : `tests/Fake/FakeAnthropicService.php`.
+- `tests/Functional/MemoiresVivantes/` (`BookTypeApiTestCase` imite le frontend : `?locale=fr`, `X-XSRF-TOKEN`, JWT) :
+  contrat des types de livre, accès aux livres, rédaction (`ChapterGenerationTest`), invités et contributeurs
+  (`ChapterGuestAccessTest`), PDF (`BookPdfTest`). Base modèle des tests : `db_mv_test_booktypes` (ne jamais la supprimer).
+- Client Anthropic simulé : `tests/Fake/FakeAnthropicService.php` (`complete` et `improveAnswer` ; les consignes
+  historiques du code appellent l'API réelle : ne pas exécuter le handler d'un type historique dans un test).
+- Essai réel de bout en bout : sur le site `demo` uniquement (types et questions publiés le 30/09/2026).
 
 ## Pièges connus et points à vérifier
 
@@ -81,6 +117,12 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
   - la commande d'impression acceptait une requête anonyme ;
   - `payment-link` acceptait un montant fourni par l'appelant (réservé désormais aux admins) ;
   - les URL de PDF fournies à la commande d'impression sont limitées aux PDF générés pour ce livre.
+- Corrigé le 30/09/2026 (voir les sections ci-dessus) : chapitres vides envoyés à l'IA, « Admin » comme prénom du
+  narrateur, réponses saisies ignorées par les synthèses quand la clé `improvedAnswer` était vide, PDF (balisage brut,
+  couverture décalée), erreur 500 de `pdf/generate` avec l'objet auteur, livre bloqué « pending » sur un lien de
+  paiement expiré (un lien Stripe Checkout vit 24 h : `BookPaymentService::resetExpiredPayment`).
+- Auteur par défaut « Danielle Almont » en dur (`resolveAuthorName`) : à rendre configurable par site avant un
+  second client.
 - **À faire avant de passer Lulu en production** (aujourd'hui : bac à sable) : le paiement de l'impression n'existe
   pas (`print/payment-intent` renvoie un `client_secret` vide) et `print/order` transmet le travail à Lulu dès sa
   création. Le propriétaire connecté peut donc commander une impression sans payer. Il faut vérifier le paiement

@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\Chapter;
+use App\MemoiresVivantes\Services\ChapterQuestionProvider;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Psr\Log\LoggerInterface;
 
@@ -56,6 +58,10 @@ class AnthropicService
 
     private const API_URL = 'https://api.anthropic.com/v1/messages';
 
+    /** Essais d'un appel en cas de surcharge ou d'erreur passagère de l'API */
+    private const MAX_ATTEMPTS = 3;
+    private const RETRYABLE_STATUSES = [429, 500, 502, 503, 529];
+
     public function __construct(
         private readonly HttpClientInterface $httpClient,
         private readonly string $anthropicApiKey,
@@ -91,15 +97,47 @@ class AnthropicService
         return self::DEFAULT_MODEL;
     }
 
+    /**
+     * Prénom de la personne dont le livre raconte la vie : celui saisi dans le livre, à défaut celui du compte
+     * propriétaire, sauf s'il s'agit d'un compte générique (« Admin » se retrouvait dans les récits).
+     */
+    public static function narratorFirstName(Book $book): ?string
+    {
+        $firstName = trim((string) $book->getPerson1FirstName());
+        if ($firstName === '') {
+            $firstName = trim((string) $book->getUser()?->getFirstname());
+            if (in_array(mb_strtolower($firstName), ['admin', 'administrateur', 'administrator', 'user', 'test'], true)) {
+                $firstName = '';
+            }
+        }
+
+        return $firstName !== '' ? $firstName : null;
+    }
+
+    /** Phrase de présentation du narrateur pour les livres à une voix */
+    private static function narratorIntroduction(Book $book): string
+    {
+        $firstName = self::narratorFirstName($book);
+        $birthplace = trim((string) ($book->getPerson1Birthplace() ?: $book->getBirthplace()));
+
+        $sentence = $firstName !== null
+            ? "La personne s'appelle {$firstName}"
+            : "Le prénom de la personne n'est pas connu : ne lui en invente pas et ne la nomme pas";
+        if ($birthplace !== '') {
+            $sentence .= $firstName !== null ? ", née à {$birthplace}" : ". Elle est née à {$birthplace}";
+        }
+
+        return $sentence . '.';
+    }
+
     public function generatePart1(Chapter $chapter, string $tone = 'intime et chaleureux', ?string $model = null): string
     {
         $book = $chapter->getBook();
-        $prenom = $book->getUser()->getFirstname();
-        $birthplace = $book->getBirthplace() ?? 'un lieu cher à votre cœur';
+        $narrator = self::narratorIntroduction($book);
         $themeTitle = $chapter->getTitle();
         $answersFormatted = $this->formatAnswers($chapter->getAnswers());
 
-        $prompt = "Tu es un écrivain biographe de talent, spécialisé dans les mémoires de vie. La personne s'appelle {$prenom}, née à {$birthplace}.\n\n" .
+        $prompt = "Tu es un écrivain biographe de talent, spécialisé dans les mémoires de vie. {$narrator}\n\n" .
                   "Voici ses réponses pour le chapitre \"{$themeTitle}\" :\n{$answersFormatted}\n\n" .
                   "CONSIGNES PARTIE 1/2 :\n" .
                   "- Développe CHAQUE réponse en profondeur : contexte, émotions, souvenirs associés, ambiances\n" .
@@ -122,15 +160,14 @@ class AnthropicService
     public function generatePart2(Chapter $chapter, string $tone = 'intime et chaleureux', ?string $model = null): string
     {
         $book = $chapter->getBook();
-        $prenom = $book->getUser()->getFirstname();
-        $birthplace = $book->getBirthplace() ?? 'un lieu cher à votre cœur';
+        $narrator = self::narratorIntroduction($book);
         $themeTitle = $chapter->getTitle();
         $answersFormatted = $this->formatAnswers($chapter->getAnswers());
         
         $contentPart1 = $chapter->getContentPart1() ?? '';
         $lastParagraphs = $this->extractLastParagraphs($contentPart1, 3);
 
-        $prompt = "Tu es un écrivain biographe de talent, spécialisé dans les mémoires de vie. La personne s'appelle {$prenom}, née à {$birthplace}.\n\n" .
+        $prompt = "Tu es un écrivain biographe de talent, spécialisé dans les mémoires de vie. {$narrator}\n\n" .
                   "Voici ses réponses pour le chapitre \"{$themeTitle}\" :\n{$answersFormatted}\n\n" .
                   "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
                   "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUNE scène déjà traitée. Si le matériel est épuisé, conclus élégamment en quelques paragraphes.\n\n" .
@@ -149,7 +186,7 @@ class AnthropicService
     public function generatePart1Couple(Chapter $chapter, string $tone = 'intime et chaleureux', ?string $model = null): string
     {
         $book = $chapter->getBook();
-        $prenom1 = $book->getPerson1FirstName() ?? ($book->getUser() ? $book->getUser()->getFirstname() : 'la première personne');
+        $prenom1 = self::narratorFirstName($book) ?? 'la première personne';
         $birthplace1 = $book->getPerson1Birthplace() ?? $book->getBirthplace() ?? 'un lieu cher à son cœur';
         $prenom2 = $book->getPerson2FirstName() ?? 'son conjoint';
         $birthplace2 = $book->getPerson2Birthplace() ?? 'un lieu cher à son cœur';
@@ -218,7 +255,7 @@ class AnthropicService
     public function generatePart2Couple(Chapter $chapter, string $tone = 'intime et chaleureux', ?string $model = null): string
     {
         $book = $chapter->getBook();
-        $prenom1 = $book->getPerson1FirstName() ?? ($book->getUser() ? $book->getUser()->getFirstname() : 'la première personne');
+        $prenom1 = self::narratorFirstName($book) ?? 'la première personne';
         $birthplace1 = $book->getPerson1Birthplace() ?? $book->getBirthplace() ?? 'un lieu cher à son cœur';
         $prenom2 = $book->getPerson2FirstName() ?? 'son conjoint';
         $birthplace2 = $book->getPerson2Birthplace() ?? 'un lieu cher à son cœur';
@@ -323,7 +360,7 @@ class AnthropicService
                       "- Chaque paragraphe séparé par une ligne vide et terminé par un point complet.\n" .
                       "- Une 2e partie suivra — pas besoin de conclure pour l'instant.";
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
         // Chapitre 2 & 3 : Regards croisés (Paroles d'enfants) et Petits-enfants (100% Verbatim)
@@ -351,7 +388,7 @@ class AnthropicService
                       "- PAS de titre général — commence directement par le premier témoignage.\n" .
                       "- Une 2e partie suivra — pas besoin de conclure.";
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
         // Chapitre 4 : Rituels et valeurs (Hybride / Mixte)
@@ -371,7 +408,7 @@ class AnthropicService
                       "- Style vivant, plein de saveur, réconfortant et joyeux, {$tone}.\n" .
                       "- Une 2e partie suivra.";
 
-            return $this->callAnthropic($prompt, 32000);
+            return $this->callAnthropic($prompt, 32000, null, $model);
         }
 
         // Chapitre 5 : Épilogue collectif / Lettre d'amour
@@ -783,22 +820,32 @@ class AnthropicService
                 $jsonPayload['system'] = $system;
             }
 
-            $response = $this->httpClient->request('POST', self::API_URL, [
-                'headers' => [
-                    'x-api-key' => $apiKey,
-                    'anthropic-version' => '2023-06-01',
-                    'Content-Type' => 'application/json',
-                ],
-                'json' => $jsonPayload,
-                'timeout' => 300,
-                // durée totale bornée : un appel qui traîne ne bloque pas le worker des chapitres indéfiniment
-                'max_duration' => 600,
-            ]);
+            for ($attempt = 1; ; $attempt++) {
+                $response = $this->httpClient->request('POST', self::API_URL, [
+                    'headers' => [
+                        'x-api-key' => $apiKey,
+                        'anthropic-version' => '2023-06-01',
+                        'Content-Type' => 'application/json',
+                    ],
+                    'json' => $jsonPayload,
+                    'timeout' => 300,
+                    // durée totale bornée : un appel qui traîne ne bloque pas le worker des chapitres indéfiniment
+                    'max_duration' => 600,
+                ]);
 
-            if ($response->getStatusCode() !== 200) {
-                $errorContent = $response->getContent(false);
-                $this->logger->error("Anthropic Error Output: " . $errorContent);
-                return "";
+                $status = $response->getStatusCode();
+                if ($status === 200) {
+                    break;
+                }
+
+                $this->logger->error("Anthropic Error Output: " . $response->getContent(false), ['status' => $status, 'attempt' => $attempt]);
+                // Surcharge ou erreur passagère de l'API (429, 529, 5xx) : nouvel essai après une courte attente,
+                // au lieu de faire échouer tout un chapitre. Les autres erreurs (clé, requête) ne se réessaient pas.
+                if ($attempt >= self::MAX_ATTEMPTS || !in_array($status, self::RETRYABLE_STATUSES, true)) {
+                    return "";
+                }
+                $retryAfter = (int) ($response->getHeaders(false)['retry-after'][0] ?? 0);
+                sleep(min(20, max($retryAfter, 3 * $attempt)));
             }
 
             $data = $response->toArray();
@@ -859,11 +906,11 @@ class AnthropicService
                     continue;
                 }
                 
-                $ansVal = (isset($answer['improvedAnswer']) && $answer['improvedAnswer'] !== '')
-                    ? $answer['improvedAnswer']
-                    : ((isset($answer['improved_answer']) && $answer['improved_answer'] !== '')
-                        ? $answer['improved_answer']
-                        : ($answer['answer'] ?? ''));
+                // Version améliorée si elle existe et n'a pas été écartée, sinon réponse saisie ; rien pour une question sans réponse
+                $ansVal = ChapterQuestionProvider::answerText($answer);
+                if ($ansVal === '') {
+                    continue;
+                }
 
                 $formatted .= "Q: " . ($answer['question'] ?? '') . "\nR: " . $ansVal . "\n\n";
             } elseif (is_string($answer)) {
