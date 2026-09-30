@@ -228,8 +228,11 @@ final class LandingAiEvalCases
                     $bound = $this->boundPaths($r->composition);
                     $email = in_array('email', $bound, true) || in_array('emailUrl', $bound, true);
                     $phone = in_array('phone', $bound, true) || in_array('telUrl', $bound, true);
+                    // Données de l'entreprise liables par la famille (relevé du frontend du 30/09/2026 : medium les omettait)
+                    $logo = in_array('logoUrl', $bound, true);
+                    $tagline = in_array('tagline', $bound, true);
 
-                    return $this->result($form !== null && $email && $phone, sprintf('formulaire de contact : %s ; e-mail lié : %s ; téléphone lié : %s', $form ? 'oui' : 'non', $email ? 'oui' : 'non', $phone ? 'oui' : 'non'));
+                    return $this->result($form !== null && $email && $phone && $logo && $tagline, sprintf('formulaire de contact : %s ; e-mail lié : %s ; téléphone lié : %s ; logo lié : %s ; accroche liée : %s', $form ? 'oui' : 'non', $email ? 'oui' : 'non', $phone ? 'oui' : 'non', $logo ? 'oui' : 'non', $tagline ? 'oui' : 'non'));
                 },
             ],
             [

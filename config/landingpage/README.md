@@ -196,6 +196,12 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   plus de 40 % environ des demandes du modèle page arrivent entre 5 minutes et 1 heure après la précédente ; en
   dessous, il coûte 0,21 $ de plus par demande. Au 30/09/2026 : 3 demandes de page au total, donc 5 minutes.
   À réévaluer avec `ai_usage` (`created_at`, `mode`, `model`) quand l'usage sera régulier.
+- **Comparaison visuelle du 30/09/2026** (banc du frontend, 7 cas de création, données d'arkanoa-media) : `medium` est
+  plus sobre, pas plus pauvre (C5 : les 11 blocs de plus en `high` étaient un onglet aux textes inventés ; C2 : `medium`
+  meilleur). Seul C6 omettait le logo et l'accroche de l'entreprise : le prompt de création demande désormais de lier
+  les données de l'entreprise que la famille permet (`sectionFields`, `boundTools`) et fixe le repli d'une url liée à
+  « # ». C6 rejoué 4 fois en `medium` : logo et accroche liés 3 fois sur 4 avant la règle du repli, 2 sur 2 après ;
+  passage complet ensuite sans régression (edit 10/10, create 7/7, page 2/2, relecture 1/1).
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.
