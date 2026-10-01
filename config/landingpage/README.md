@@ -202,6 +202,15 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   les données de l'entreprise que la famille permet (`sectionFields`, `boundTools`) et fixe le repli d'une url liée à
   « # ». C6 rejoué 4 fois en `medium` : logo et accroche liés 3 fois sur 4 avant la règle du repli, 2 sur 2 après ;
   passage complet ensuite sans régression (edit 10/10, create 7/7, page 2/2, relecture 1/1).
+- **Mesures du 01/10/2026** (site `demo`) :
+  - Retouche : le modèle d'origine de la section était envoyé en exemple, en double de la composition. Avec 2 exemples
+    (dont l'origine) / 1 (sans l'origine) / 0 : entrée 12 510 / 7 823 / 5 397 jetons, coût 0,034 / 0,024 / 0,020 $,
+    mêmes vérifications réussies (10 cas, plus R11 qui ajoute un bloc). **Adopté : 0 exemple** (−41 %) ;
+    `LANDING_AI_EDIT_EXAMPLES=1` ou `2` pour en remettre.
+  - Mode page et relecture visuelle sur Claude Sonnet 5.5 au lieu d'Opus 5.5 (`LANDING_AI_MODEL_PAGE=claude-sonnet-5-5`) :
+    page 0,16 $ au lieu de 0,31 à 0,44 $, P1 en 45 s au lieu de 58 à 140 s ; relecture 0,083 $ au lieu de 0,169 $ ;
+    toutes les vérifications réussies, mais P1 n'a pas placé le logo fourni. **Non adopté** tant que le frontend n'a
+    pas comparé le rendu (`comparaison-page-opus55-sonnet55-20261001.json`).
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

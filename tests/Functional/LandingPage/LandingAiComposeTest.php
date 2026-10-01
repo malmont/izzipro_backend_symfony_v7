@@ -608,6 +608,16 @@ class LandingAiComposeTest extends WebTestCase
         $default = $container->get(\App\Services\LandingAiService\LandingAiPromptBuilder::class)->editPayload('claude-sonnet-5', ...$args);
         $this->assertArrayNotHasKey('output_config', $default, 'sans réglage : effort par défaut du modèle');
         $this->assertSame(['type' => 'ephemeral'], $default['system'][1]['cache_control'], 'sans réglage : cache de 5 minutes');
+        $this->assertStringNotContainsString('<exemples_de_la_famille>', $default['messages'][0]['content'], 'retouche : aucun exemple par défaut');
+
+        $withExamples = new \App\Services\LandingAiService\LandingAiPromptBuilder(
+            $container->get(LandingAiCatalogue::class),
+            $container->get(\App\Services\LandingConfigService\LandingConfigStore::class),
+            new \App\Services\LandingAiService\LandingAiTuning(null, null, null, null, null, '1')
+        );
+        $content = $withExamples->editPayload('claude-sonnet-5', ...$args)['messages'][0]['content'];
+        $this->assertStringContainsString('<exemples_de_la_famille>', $content);
+        $this->assertStringNotContainsString('"id":"group-type-t"', $content, 'jamais le modèle d\'origine de la section (doublon)');
 
         $tuned = new \App\Services\LandingAiService\LandingAiPromptBuilder(
             $container->get(LandingAiCatalogue::class),

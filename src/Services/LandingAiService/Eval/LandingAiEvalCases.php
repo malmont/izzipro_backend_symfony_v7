@@ -150,6 +150,22 @@ final class LandingAiEvalCases
                     return $this->result(!$inventedImage && $r->warnings !== [], ($inventedImage ? 'image de fond ajoutée' : 'aucune image inventée') . ($r->warnings ? ' ; avertissement : ' . mb_substr($r->warnings[0], 0, 120) : ' ; aucun avertissement'));
                 },
             ],
+            [
+                // Ajout d'un bloc : le seul cas où les exemples de la famille pourraient manquer (mesure du 01/10/2026)
+                'id' => 'R11', 'presetId' => 'presentation-type-f', 'prompt' => 'Ajoute un second bouton « Nous contacter » à côté du bouton existant, vers l\'ancre #contact.',
+                'check' => function (object $before, object $after) {
+                    $beforeIds = array_keys($this->inspector->blocksById($before));
+                    $existing = $this->inspector->blocksById($after)['f-bouton'] ?? null;
+                    $added = $this->find($after, fn ($b) => ($b->type ?? null) === 'button' && !in_array($b->id ?? null, $beforeIds, true));
+                    $target = $added !== null && (($added->url ?? null) === '#contact' || ($added->action ?? null) === 'contact');
+                    $placed = $added !== null && $existing !== null && $this->sameRow($after, $added, $existing);
+
+                    return $this->result($added !== null && $target && $existing !== null, sprintf(
+                        'bouton ajouté : %s ; vers #contact : %s ; bouton existant conservé : %s ; placé avec lui : %s',
+                        $added ? 'oui (' . ($added->id ?? '?') . ')' : 'non', $target ? 'oui' : 'non', $existing ? 'oui' : 'non', $placed ? 'oui' : 'non'
+                    ));
+                },
+            ],
         ];
     }
 
@@ -494,6 +510,17 @@ final class LandingAiEvalCases
         }
 
         return $changed;
+    }
+
+    /** Deux blocs côte à côte : même parent, ou réunis dans un container en rangée */
+    private function sameRow(object $composition, object $a, object $b): bool
+    {
+        if (($a->parentId ?? null) === ($b->parentId ?? null)) {
+            return true;
+        }
+        $parent = $this->inspector->blocksById($composition)[$a->parentId ?? ''] ?? null;
+
+        return $parent !== null && ($parent->layout ?? null) === 'row';
     }
 
     private function find(object $composition, callable $predicate): ?object

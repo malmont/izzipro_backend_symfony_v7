@@ -64,14 +64,17 @@ TXT;
      */
     public function editPayload(string $model, string $componentKey, object $composition, string $prompt, string $locale, array $media, array $allowedMedia, array $palette, array $images = []): array
     {
-        $examples = $this->catalogue->examples($componentKey, is_string($composition->presetId ?? null) ? $composition->presetId : null, $prompt, 2);
+        $setting = $this->tuning->editExamples();
+        $examples = $this->catalogue->examples($componentKey, is_string($composition->presetId ?? null) ? $composition->presetId : null, $prompt, $setting['count'], $setting['excludeOrigin']);
 
         $context = [
-            '<exemples_de_la_famille>',
-            'Modèles de référence (compositions valides) :',
-            $this->json(array_map(fn ($p) => ['id' => $p['id'] ?? '', 'name' => $p['name'] ?? '', 'composition' => $p['composition'] ?? null], $examples)),
-            '</exemples_de_la_famille>',
-            '',
+            ...($examples ? [
+                '<exemples_de_la_famille>',
+                'Modèles de référence (compositions valides) :',
+                $this->json(array_map(fn ($p) => ['id' => $p['id'] ?? '', 'name' => $p['name'] ?? '', 'composition' => $p['composition'] ?? null], $examples)),
+                '</exemples_de_la_famille>',
+                '',
+            ] : []),
             '<donnees_du_site>',
             'Palette du site (couleur => nombre d\'utilisations) : ' . $this->json($palette['colors']),
             'Polices du site : ' . $this->json($palette['fonts']),

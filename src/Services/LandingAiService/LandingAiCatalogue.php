@@ -69,9 +69,17 @@ final class LandingAiCatalogue
      *
      * @return list<array> modèles (id, name, description, composition)
      */
-    public function examples(string $componentKey, ?string $originPresetId, string $prompt, int $count = 3): array
+    public function examples(string $componentKey, ?string $originPresetId, string $prompt, int $count = 3, bool $excludeOrigin = false): array
     {
+        if ($count <= 0) {
+            return [];
+        }
         $presets = $this->family($componentKey)['presets'] ?? [];
+        if ($excludeOrigin && $originPresetId !== null) {
+            // En retouche, le modèle d'origine est presque identique à la composition déjà envoyée : doublon
+            $presets = array_values(array_filter($presets, fn ($p) => ($p['id'] ?? null) !== $originPresetId));
+            $originPresetId = null;
+        }
         $words = $this->words($prompt);
         $scored = [];
         foreach ($presets as $i => $preset) {
