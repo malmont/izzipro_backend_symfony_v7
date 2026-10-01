@@ -50,6 +50,11 @@ class BookOutputDto
     public ?string $paymentCurrency = 'eur';
     public ?string $payment_currency = 'eur';
     public ?array $author = null;
+    /**
+     * Type du livre, même désactivé, dans la forme d'un élément de GET /book-types, plus isActive. null si le type
+     * n'existe pas en base (site sans types configurés).
+     */
+    public ?array $typeInfo = null;
     /** Police du livre : code du catalogue (GET /api/memoires/book-fonts) */
     public string $font;
     public ?string $clientAddress = null;
@@ -67,8 +72,10 @@ class BookOutputDto
         ?string $filterContributorId = null,
         ?array $currentContributor = null,
         bool $withPrivateDetails = true,
-        array $speakersByTheme = []
+        array $speakersByTheme = [],
+        ?array $typeInfo = null
     ) {
+        $this->typeInfo = $typeInfo;
         $this->id = (string) $book->getId();
         if ($book->getUser()) {
             $this->author = [

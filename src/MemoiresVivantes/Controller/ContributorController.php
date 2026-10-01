@@ -2,6 +2,7 @@
 
 namespace App\MemoiresVivantes\Controller;
 
+use App\MemoiresVivantes\BookType\BookTypeResolver;
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\Contributor;
 use App\Services\TenantEntityManagerProvider;
@@ -15,8 +16,30 @@ use Symfony\Component\Uid\Uuid;
 class ContributorController extends AbstractController
 {
     public function __construct(
-        private readonly TenantEntityManagerProvider $emProvider
+        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly BookTypeResolver $bookTypeResolver
     ) {}
+
+    /**
+     * Rôle hors du type de livre : refusé pour les types configurables (le contributeur ne recevrait que les
+     * questions transversales). Les quatre types d'origine gardent leurs rôles libres.
+     */
+    private function invalidRole(Book $book, mixed $role): ?JsonResponse
+    {
+        $type = $this->bookTypeResolver->findDatabasePromptType($book);
+        if ($type === null) {
+            return null;
+        }
+        $allowed = array_values(array_map(fn ($r) => $r->getCode(), $type->getRoles()->toArray()));
+        if (is_string($role) && in_array($role, $allowed, true)) {
+            return null;
+        }
+
+        return $this->json([
+            'error' => 'Ce rôle n\'existe pas pour ce type de livre. Rôles possibles : ' . (implode(', ', $allowed) ?: 'aucun') . '.',
+            'allowedRoles' => $allowed,
+        ], 422);
+    }
 
     #[Route('/books/{id}/contributors', methods: ['POST'])]
     public function create(string $id, Request $request): JsonResponse
@@ -32,6 +55,10 @@ class ContributorController extends AbstractController
         $data = json_decode($request->getContent(), true) ?? [];
         if (empty($data['firstName']) || empty($data['role'])) {
             return $this->json(['error' => 'Missing firstName or role'], 400);
+        }
+
+        if ($invalid = $this->invalidRole($book, $data['role'])) {
+            return $invalid;
         }
 
         $contributor = new Contributor();
@@ -70,6 +97,9 @@ class ContributorController extends AbstractController
             $contributor->setFirstName($data['firstName']);
         }
         if (isset($data['role'])) {
+            if ($invalid = $this->invalidRole($contributor->getBook(), $data['role'])) {
+                return $invalid;
+            }
             $contributor->setRole($data['role']);
         }
         if (isset($data['sortOrder'])) {

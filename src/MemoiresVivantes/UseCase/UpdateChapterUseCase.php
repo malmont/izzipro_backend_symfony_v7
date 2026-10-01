@@ -124,6 +124,11 @@ class UpdateChapterUseCase
                                 }
                                 unset($newAns);
                             }
+
+                            // Réponses déjà enregistrées que l'envoi ne mentionne pas : conservées (voir keepUnmentionedAnswers)
+                            if (is_array($extContrib['answers'] ?? null)) {
+                                $newContrib['answers'] = self::keepUnmentionedAnswers($newContrib['answers'] ?? null, $extContrib['answers']);
+                            }
                         }
                     }
                 }
@@ -147,6 +152,50 @@ class UpdateChapterUseCase
         }
 
         return $chapter;
+    }
+
+    /**
+     * Les réponses d'un contributeur renvoyées par l'API sont filtrées sur les questions du rôle demandé : la page
+     * du propriétaire ne reçoit pas les réponses aux questions des autres rôles, et les effaçait en enregistrant.
+     * Une réponse existante que l'envoi ne mentionne pas (question absente) est donc conservée ; pour effacer une
+     * réponse, il faut l'envoyer avec un texte vide.
+     */
+    private static function keepUnmentionedAnswers(mixed $submitted, mixed $existing): mixed
+    {
+        if (!is_array($existing) || $existing === []) {
+            return $submitted;
+        }
+        if (!is_array($submitted)) {
+            return $existing;
+        }
+
+        $questions = [];
+        $indexes = [];
+        foreach ($submitted as $answer) {
+            if (!is_array($answer)) {
+                continue;
+            }
+            if (is_string($answer['question'] ?? null) && trim($answer['question']) !== '') {
+                $questions[trim($answer['question'])] = true;
+            } elseif (isset($answer['index']) && is_scalar($answer['index'])) {
+                $indexes[(string) $answer['index']] = true;
+            }
+        }
+
+        foreach ($existing as $answer) {
+            if (!is_array($answer)) {
+                continue;
+            }
+            $question = is_string($answer['question'] ?? null) ? trim($answer['question']) : '';
+            $mentioned = $question !== ''
+                ? isset($questions[$question])
+                : (isset($answer['index']) && is_scalar($answer['index']) && isset($indexes[(string) $answer['index']]));
+            if (!$mentioned) {
+                $submitted[] = $answer;
+            }
+        }
+
+        return $submitted;
     }
 
     /**

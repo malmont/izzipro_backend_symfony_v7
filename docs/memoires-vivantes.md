@@ -25,6 +25,13 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
   `$withPrivateDetails`). Un contributeur retiré du livre perd son lien (`BookAccessGuard::contributorBelongsTo`).
 - **Témoignages** : un enregistrement ne peut pas effacer le témoignage d'un contributeur du livre absent de l'envoi
   (`UpdateChapterUseCase::keepMissingContributors`) ; pour retirer un témoignage, retirer le contributeur.
+- **Réponses des contributeurs filtrées par rôle** : `contributorAnswers` ne contient, pour chaque contributeur, que
+  les réponses aux questions du rôle demandé (`?role=`, `?contributorId=`, sinon rôle par défaut du type). Un `PUT`
+  ne supprime donc pas les réponses qu'il ne mentionne pas (`UpdateChapterUseCase::keepUnmentionedAnswers`) ; pour
+  effacer une réponse, l'envoyer avec un texte vide.
+- Le livre renvoie `typeInfo` : son type, même désactivé, dans la forme d'un élément de `GET /book-types`, plus
+  `isActive`. Rôle d'un contributeur : vérifié pour les types configurables (422, `allowedRoles`), libre pour les
+  quatre types d'origine.
 - Identifiant mal formé : 404 (`EventListener/InvalidIdentifierListener`) ; champs obligatoires absents : 422.
 
 | Groupe | Routes | Contrôleur |

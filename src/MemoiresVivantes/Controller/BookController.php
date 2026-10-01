@@ -10,6 +10,7 @@ use App\MemoiresVivantes\Entity\Contributor;
 use App\MemoiresVivantes\Security\BookAccessGuard;
 use App\MemoiresVivantes\Services\BookService;
 use App\MemoiresVivantes\Services\ChapterQuestionProvider;
+use App\MemoiresVivantes\BookType\BookTypeNormalizer;
 use App\MemoiresVivantes\BookType\BookTypeResolver;
 use App\MemoiresVivantes\UseCase\CreateBookUseCase;
 use App\MemoiresVivantes\UseCase\GetBooksByUserUseCase;
@@ -41,8 +42,20 @@ class BookController extends AbstractController
         private readonly GetBookReservationsUseCase $getBookReservationsUseCase,
         private readonly SyncBookPaymentStatusUseCase $syncBookPaymentStatusUseCase,
         private readonly BookAccessGuard $accessGuard,
+        private readonly BookTypeNormalizer $bookTypeNormalizer,
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
+
+    /**
+     * Propriétés du type du livre, même s'il a été désactivé depuis : le frontend ne le trouve alors plus dans
+     * GET /book-types et ne saurait plus ni ses rôles ni ses chapitres.
+     */
+    private function typeInfo(Book $book): ?array
+    {
+        $type = $this->bookTypeResolver->find($book->getType());
+
+        return $type === null ? null : $this->bookTypeNormalizer->toPublicArray($type) + ['isActive' => $type->isActive()];
+    }
 
     private function resolveHost(Request $request): string
     {
@@ -96,12 +109,14 @@ class BookController extends AbstractController
 
         // Interlocuteurs des chapitres : une lecture par type de livre, pas par livre
         $speakersByType = [];
-        $dtos = array_map(function($b) use ($host, $latestOrdersByBookId, $ordersCountByBookId, &$speakersByType) {
+        $typeInfoByType = [];
+        $dtos = array_map(function($b) use ($host, $latestOrdersByBookId, $ordersCountByBookId, &$speakersByType, &$typeInfoByType) {
             $bId = (string) $b->getId();
             $latest = $latestOrdersByBookId[$bId] ?? null;
             $count = $ordersCountByBookId[$bId] ?? 0;
             $speakersByType[$b->getType()] ??= $this->bookTypeResolver->speakersByTheme($b);
-            return new BookOutputDto($b, $host, $latest, $count, speakersByTheme: $speakersByType[$b->getType()]);
+            $typeInfoByType[$b->getType()] ??= [$this->typeInfo($b)];
+            return new BookOutputDto($b, $host, $latest, $count, speakersByTheme: $speakersByType[$b->getType()], typeInfo: $typeInfoByType[$b->getType()][0]);
         }, $books);
 
         return $this->json($dtos);
@@ -170,7 +185,8 @@ class BookController extends AbstractController
             $currentContributor,
             // E-mail du propriétaire et lien de paiement : jamais pour un invité venu par un lien de partage
             $this->getUser() !== null && $this->isGranted('BOOK_VIEW', $book),
-            $this->bookTypeResolver->speakersByTheme($book)
+            $this->bookTypeResolver->speakersByTheme($book),
+            $this->typeInfo($book)
         ));
     }
 
@@ -202,7 +218,7 @@ class BookController extends AbstractController
         $book = $this->createBookUseCase->execute($user, $dto);
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book)), 201);
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book)), 201);
     }
 
     #[Route('/{id}', methods: ['PUT'])]
@@ -218,7 +234,7 @@ class BookController extends AbstractController
         $book = $this->updateBookUseCase->execute($book, new BookInputDto(is_array($data) ? $data : []));
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book)));
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book)));
     }
 
     #[Route('/{id}', methods: ['DELETE'])]
@@ -255,7 +271,7 @@ class BookController extends AbstractController
         }
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book)));
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book)));
     }
 
     #[Route('/{id}/cover', methods: ['DELETE'])]
@@ -270,7 +286,7 @@ class BookController extends AbstractController
         $this->bookService->removeCover($book);
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book)));
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book)));
     }
 
     /** Lien de chapitre signé ou voter : voir BookAccessGuard::canView */
