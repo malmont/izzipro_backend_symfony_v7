@@ -18,6 +18,11 @@ Routes et rôles : `docs/endpoints.md`, section « Landing Page » ; données de
 | Crédits et historique | `GET /api/landingpage-ai/usage` | `ROLE_ADMIN` |
 | Synchronisation de la configuration | `GET /api/landingpage-config/status`, `POST …/sync`, `POST …/rollback` | `ROLE_SUPER_ADMIN` ou en-tête `X-Deploy-Token` |
 
+Le PUT enregistre le document tel quel et le GET le restitue à l'identique : seuls sont contrôlés les compositions
+(`reglableConfig`, contrat et HTML des textes) et le nom facultatif d'une section (`tabs[].sections[].name` : texte de
+60 caractères au plus, sans `<` ni `>` ; absent, `null` ou vide = pas de nom). Tout autre champ ajouté par le frontend
+au niveau d'un onglet ou d'une section est conservé sans contrôle.
+
 ## Code
 
 | Sujet | Fichiers |

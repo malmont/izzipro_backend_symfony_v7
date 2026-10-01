@@ -59,6 +59,61 @@ class LandingPageSettingsApiTest extends WebTestCase
         $this->assertSame($before, $this->request('GET')->getContent(), 'rien n\'est enregistré');
     }
 
+    public function testSectionNameIsStoredAndReturnedUnchanged(): void
+    {
+        $this->loginAsAdmin();
+        $body = $this->withSectionNames('Héros d\'accueil « été »', str_repeat('é', 60));
+
+        $this->assertSame(200, $this->request('PUT', $body)->getStatusCode());
+
+        $sections = json_decode($this->request('GET')->getContent())->tabs[0]->sections;
+        $this->assertSame('Héros d\'accueil « été »', $sections[0]->name);
+        $this->assertSame(str_repeat('é', 60), $sections[1]->name, '60 caractères (et non 60 octets)');
+    }
+
+    public function testEmptyOrAbsentSectionNameIsAccepted(): void
+    {
+        $this->loginAsAdmin();
+
+        $this->assertSame(200, $this->request('PUT', $this->withSectionNames('', null))->getStatusCode(), 'vide ou null : pas de nom');
+        $this->assertSame(200, $this->request('PUT', $this->configurationJson('{"id": "titre", "type": "title"}'))->getStatusCode(), 'champ absent');
+    }
+
+    /** @dataProvider refusedSectionNames */
+    public function testInvalidSectionNameIsRefusedAndNotStored(mixed $name, string $expectedMessage): void
+    {
+        $this->loginAsAdmin();
+        $this->assertSame(200, $this->request('PUT', $this->configurationJson('{"id": "titre", "type": "title"}'))->getStatusCode());
+        $before = $this->request('GET')->getContent();
+
+        $put = $this->request('PUT', $this->withSectionNames('Nom valide', $name));
+
+        $this->assertSame(Response::HTTP_UNPROCESSABLE_ENTITY, $put->getStatusCode(), $put->getContent());
+        $errors = json_decode($put->getContent(), true)['errors'];
+        $this->assertSame('tabs[0].sections[1].name', $errors[0]['path']);
+        $this->assertStringContainsString($expectedMessage, $errors[0]['message']);
+        $this->assertSame($before, $this->request('GET')->getContent(), 'rien n\'est enregistré');
+    }
+
+    public static function refusedSectionNames(): iterable
+    {
+        yield '61 caractères' => [str_repeat('a', 61), '60 caractères au plus'];
+        yield 'balise' => ['Héros <b>important</b>', 'balises non autorisées'];
+        yield 'script' => ['<script>alert(1)</script>', 'balises non autorisées'];
+        yield 'nombre' => [42, 'texte attendu'];
+        yield 'objet' => [['fr' => 'Héros'], 'texte attendu'];
+    }
+
+    /** Configuration de test avec un nom sur chacune des deux sections */
+    private function withSectionNames(mixed $first, mixed $second): string
+    {
+        $body = json_decode($this->configurationJson('{"id": "titre", "type": "title"}'), false);
+        $body->configuration->tabs[0]->sections[0]->name = $first;
+        $body->configuration->tabs[0]->sections[1]->name = $second;
+
+        return json_encode($body, JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+    }
+
     public function testWritingRequiresAnAdministrator(): void
     {
         $response = $this->request('PUT', $this->configurationJson('{"id": "titre", "type": "title"}'));

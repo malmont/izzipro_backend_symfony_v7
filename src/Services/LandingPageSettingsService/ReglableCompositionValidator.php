@@ -21,6 +21,7 @@ final class ReglableCompositionValidator
 {
     public const MAX_DEPTH = 8;
     private const MAX_ERRORS = 50;
+    public const SECTION_NAME_MAX_LENGTH = 60;
 
     private ?object $schema = null;
     /** Fichier du schéma chargé dans $schema */
@@ -51,6 +52,36 @@ final class ReglableCompositionValidator
         $errors = [];
         foreach ($this->compositions($configuration) as $path => $composition) {
             array_push($errors, ...$this->validateComposition($composition, $path));
+        }
+        array_push($errors, ...$this->validateSectionNames($configuration));
+
+        return $errors;
+    }
+
+    /**
+     * Nom donné à une section par l'administrateur (tabs[].sections[].name, facultatif) : texte de
+     * SECTION_NAME_MAX_LENGTH caractères au plus, sans balise. Absent, null ou vide : pas de nom.
+     *
+     * @return list<array{path: string, message: string}>
+     */
+    private function validateSectionNames(mixed $configuration): array
+    {
+        $errors = [];
+        foreach (is_object($configuration) && is_array($configuration->tabs ?? null) ? $configuration->tabs : [] as $t => $tab) {
+            foreach (is_object($tab) && is_array($tab->sections ?? null) ? $tab->sections : [] as $s => $section) {
+                if (!is_object($section) || !isset($section->name)) {
+                    continue;
+                }
+                $path = "tabs[$t].sections[$s].name";
+                $name = $section->name;
+                if (!is_string($name)) {
+                    $errors[] = ['path' => $path, 'message' => 'texte attendu'];
+                } elseif (mb_strlen($name) > self::SECTION_NAME_MAX_LENGTH) {
+                    $errors[] = ['path' => $path, 'message' => sprintf('%d caractères au plus', self::SECTION_NAME_MAX_LENGTH)];
+                } elseif (preg_match('/[<>]/', $name)) {
+                    $errors[] = ['path' => $path, 'message' => 'balises non autorisées (ni « < » ni « > »)'];
+                }
+            }
         }
 
         return $errors;
