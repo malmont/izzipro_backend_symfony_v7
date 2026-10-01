@@ -688,6 +688,35 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertStringContainsString('dividerWidth100', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
     }
 
+    public function testContainerWithoutBackgroundBecomesTransparentInACreation(): void
+    {
+        $composition = $this->preset('contact-type-a');
+        $index = array_key_first(array_filter($composition->blocks, fn ($b) => $b->type === 'container'));
+        unset($composition->blocks[$index]->background); // rendu : blanc opaque
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($composition, null);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Contact', 'prompt' => 'Formulaire de contact.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertCount(1, FakeLandingAiClient::$requests, 'aucun nouvel essai');
+        $this->assertSame('transparent', json_decode($response->getContent())->composition->blocks[$index]->background);
+    }
+
+    public function testEditOnlyCompletesTheBackgroundOfAddedContainers(): void
+    {
+        $composition = $this->preset('group-type-t');
+        $index = array_key_first(array_filter($composition->blocks, fn ($b) => $b->type === 'container'));
+        unset($composition->blocks[$index]->background);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'add', 'block' => ['id' => 't-cadre', 'type' => 'container', 'parentId' => null]]]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $composition, 'prompt' => 'Ajoute un cadre vide en bas.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $blocks = array_column(json_decode($response->getContent())->composition->blocks, null, 'id');
+        $this->assertSame('transparent', $blocks['t-cadre']->background, 'container ajouté par l\'IA');
+        $this->assertObjectNotHasProperty('background', $blocks[$composition->blocks[$index]->id], 'bloc de départ non visé : inchangé');
+    }
+
     public function testSonnet55GetsAutomaticToolChoice(): void
     {
         $payload = static::getContainer()->get(\App\Services\LandingAiService\LandingAiPromptBuilder::class)

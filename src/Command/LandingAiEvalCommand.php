@@ -329,7 +329,7 @@ class LandingAiEvalCommand extends Command
         $played = array_values(array_filter($cases, fn ($c) => $c['status'] !== 'skipped'));
         $ok = array_values(array_filter($played, fn ($c) => $c['status'] === 'ok'));
         $checks = [];
-        foreach (['V1', 'V2', 'V3', 'V4', 'V5', 'V6'] as $v) {
+        foreach (['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7'] as $v) {
             $measured = array_filter($ok, fn ($c) => $c['checks'][$v]['ok'] !== null);
             $checks[$v] = [count(array_filter($measured, fn ($c) => $c['checks'][$v]['ok'])), count($measured)];
         }

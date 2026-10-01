@@ -223,6 +223,20 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
     `LANDING_AI_MODEL_PAGE` réglait les deux à la fois : `LANDING_AI_MODEL_IMAGES` les sépare. Bascule du mode page
     seul : `LANDING_AI_MODEL_PAGE=claude-sonnet-5-5` et `LANDING_AI_MODEL_IMAGES=claude-opus-5-5` dans `.env`, puis
     redémarrage du worker de l'assistant.
+  - Second verdict du frontend sur P1 régénéré : **mode page validé sur Sonnet 5.5**. Défaut grave relevé sur la
+    variante Opus 5.5 : ses containers n'avaient pas de `background`, que le moteur rend en blanc opaque (titre blanc
+    sur cadre blanc dans un héros bleu nuit), sans qu'aucune vérification ne le voie. Corrections du jour : garde-fou
+    (voir « Réparation des sorties »), vérification V7 du contraste sur le fond réel, et trois consignes (liaison par
+    défaut, texte écrit à la main seulement si la donnée contredit la demande, avec un avertissement ; contraste
+    4,5:1, pas de couleur claire en texte sur fond clair ; chaque container écrit son `background`). P1 rejoué sur
+    Sonnet 5.5 : un seul essai, 32 blocs, V7 réussie, héros de nouveau lié à la bannière, 0,27 $ cache froid
+    (`comparaison-page-p1-sonnet55-fonds-20261001.json`).
+- **Fond des containers** (`LandingAiOutputRepair::transparentContainers`) : un container produit par l'IA sans
+  `background` reçoit « transparent », sans nouvel essai (création, page ; en retouche, seulement les containers
+  ajoutés, les blocs de départ ne sont pas touchés).
+- **V7, contraste** (`Eval/LandingAiContrastCheck`, création et page) : chaque titre, texte, bouton ou badge est mesuré
+  sur son fond réel (premier fond opaque en remontant les parents puis la section ; container sans `background` =
+  blanc opaque). Seuils : 4,5:1, ou 3:1 à partir de 24 px. Fond image, vidéo, dégradé ou lié à une donnée : non mesuré.
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

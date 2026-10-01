@@ -9,6 +9,10 @@ use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
  * connue suivie d'un nombre, dont la valeur est ce même nombre (ex. "dividerWidth100": 100, en double de
  * "dividerWidth": 100). Mesuré le 30/09/2026 : 8 refus sur 9 en création venaient de là, chacun coûtant un essai
  * de plus. Toute autre clé inconnue reste une erreur renvoyée au modèle.
+ *
+ * Fond des containers : le moteur de rendu donne un fond blanc opaque à un container sans « background ». Le modèle
+ * l'omet parfois sur un fond coloré (01/10/2026 : titre blanc sur cadre blanc dans un héros bleu nuit, illisible).
+ * Un container produit par l'IA sans « background » reçoit donc « transparent », sans nouvel essai.
  */
 final class LandingAiOutputRepair
 {
@@ -29,6 +33,31 @@ final class LandingAiOutputRepair
         }
 
         return $removed;
+    }
+
+    /**
+     * Écrit background = « transparent » sur les containers qui n'en ont pas. $skipIds : blocs à laisser tels quels
+     * (en retouche, ceux de la composition de départ : seuls les blocs ajoutés par l'IA sont complétés).
+     *
+     * @param list<string> $skipIds
+     * @return list<string> identifiants des containers complétés
+     */
+    public function transparentContainers(object $composition, array $skipIds = []): array
+    {
+        $completed = [];
+        foreach (is_array($composition->blocks ?? null) ? $composition->blocks : [] as $block) {
+            if (!is_object($block) || ($block->type ?? null) !== 'container' || property_exists($block, 'background')) {
+                continue;
+            }
+            $id = is_string($block->id ?? null) ? $block->id : '';
+            if (in_array($id, $skipIds, true)) {
+                continue;
+            }
+            $block->background = 'transparent';
+            $completed[] = $id;
+        }
+
+        return $completed;
     }
 
     /**

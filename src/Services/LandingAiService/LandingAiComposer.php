@@ -88,6 +88,8 @@ final class LandingAiComposer
             $applied = $this->applier->apply($composition, $operations);
             if (!$applied['errors']) {
                 $this->logRepairs($this->repair->repair($applied['composition']));
+                $existing = array_values(array_filter(array_map(fn ($b) => is_object($b) && is_string($b->id ?? null) ? $b->id : null, is_array($composition->blocks ?? null) ? $composition->blocks : [])));
+                $this->logBackgrounds($this->repair->transparentContainers($applied['composition'], $existing));
             }
             $errors = $applied['errors'] ?: $this->checker->check($applied['composition'], $componentKey, $allowedMedia);
             if ($errors) {
@@ -190,6 +192,7 @@ final class LandingAiComposer
             return [null, [['path' => $prefix . 'composition', 'message' => 'composition complète attendue (objet schemaVersion 2)']]];
         }
         $this->logRepairs($this->repair->repair($composition));
+        $this->logBackgrounds($this->repair->transparentContainers($composition));
         $dataType = $input->dataType ?? null;
         $dataType = is_int($dataType) || is_string($dataType) ? (string) $dataType : null;
         if (isset($input->dataType) && $dataType === null) {
@@ -222,6 +225,14 @@ final class LandingAiComposer
     {
         if ($removed) {
             $this->logger->info('Assistant IA : clés en double réparées', ['keys' => array_slice($removed, 0, 10)]);
+        }
+    }
+
+    /** @param list<string> $ids */
+    private function logBackgrounds(array $ids): void
+    {
+        if ($ids) {
+            $this->logger->info('Assistant IA : containers sans fond passés en transparent', ['count' => count($ids), 'ids' => array_slice($ids, 0, 10)]);
         }
     }
 
