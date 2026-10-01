@@ -103,6 +103,37 @@ class ChapterGenerationTest extends BookTypeApiTestCase
         $this->assertFalse($this->serviceWithQueue(true)->failIfLost($recent), 'délai de grâce juste après le lancement');
     }
 
+    public function testABookChapterTellsWhoSpeaksAndWhetherItIsASynthesis(): void
+    {
+        // Le frontend présente un chapitre de synthèse sans questionnaire : il le reconnaît à ces deux champs
+        $familyId = $this->createBook('famille');
+        $synthesisId = $this->createChapter($familyId, 'histoire_parents');
+        $testimoniesId = $this->createChapter($familyId, 'regards_croises');
+
+        [, $synthesis] = $this->api('GET', "/chapters/$synthesisId", null, 'client');
+        $this->assertSame(['synthesis', true], [$synthesis['speaker'], $synthesis['isSynthesis']]);
+        [, $testimonies] = $this->api('GET', "/chapters/$testimoniesId", null, 'client');
+        $this->assertSame(['contributors', false], [$testimonies['speaker'], $testimonies['isSynthesis']]);
+
+        [, $book] = $this->api('GET', "/books/$familyId", null, 'client');
+        $this->assertEqualsCanonicalizing(['synthesis', 'contributors'], array_column($book['chapters'], 'speaker'));
+        [, $list] = $this->api('GET', "/books/$familyId/chapters", null, 'client');
+        $this->assertEqualsCanonicalizing([true, false], array_column($list, 'isSynthesis'));
+
+        [, $solo] = $this->api('GET', '/chapters/' . $this->createChapter($this->createBook(), 'enfance'), null, 'client');
+        $this->assertSame(['person1', false], [$solo['speaker'], $solo['isSynthesis']]);
+
+        // Une synthèse sans question se rédige dès qu'un témoignage existe dans le livre, pas avant
+        [$status, $body] = $this->api('POST', "/chapters/$synthesisId/generate", [], 'client');
+        $this->assertSame(422, $status);
+        $this->assertNotEmpty($body['error']);
+        $this->api('PUT', "/chapters/$testimoniesId", ['answers' => [self::ANSWER]], 'client');
+        $this->sentMessages();
+        [$status, $body] = $this->api('POST', "/chapters/$synthesisId/generate", [], 'client');
+        $this->assertSame([200, 'Generation started'], [$status, $body['status'] ?? null]);
+        $this->assertCount(1, $this->sentMessages());
+    }
+
     public function testInvalidInputIsRejectedWithoutServerError(): void
     {
         [$status] = $this->api('POST', '/books', [], 'client');

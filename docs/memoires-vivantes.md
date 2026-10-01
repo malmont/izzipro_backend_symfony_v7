@@ -78,6 +78,9 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
 
 - `generation_status` : `pending` → `generating_part1` → `part1_done` → `generating_part2` → `completed` | `failed`.
   Un chapitre créé sans réponse est `completed` avec un texte vide : `pending` signifie « rédaction en file ».
+- Le chapitre d'un livre renvoie `speaker` (interlocuteur défini par son type : `person1`, `person2`, `both`,
+  `contributors`, `synthesis`) et `isSynthesis` (`BookTypeResolver::speakersByTheme`) : un chapitre de synthèse n'a pas
+  besoin de question, le frontend l'affiche sans questionnaire.
 - **Rien n'est envoyé à l'IA sans matériau** (`cannotGenerateReason`) : 422 à la demande, aucune rédaction à la création
   d'un chapitre vide (le frontend les crée vides), dernier contrôle dans le handler. Chapitres de synthèse : au moins
   un témoignage dans le livre.

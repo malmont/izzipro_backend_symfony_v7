@@ -54,6 +54,12 @@ class ChapterController extends AbstractController
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
+    /** Interlocuteur du chapitre dans le type de son livre (« synthesis » pour un chapitre de synthèse) */
+    private function speakerOf(Chapter $chapter): ?string
+    {
+        return $this->bookTypeResolver->speakersByTheme($chapter->getBook())[$chapter->getTheme()] ?? null;
+    }
+
     private function resolveHost(Request $request): string
     {
         return $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
@@ -101,9 +107,10 @@ class ChapterController extends AbstractController
 
         $chapters = $this->getChaptersByBookUseCase->execute($book);
         $host = $this->resolveHost($request);
-        return $this->json(array_map(function($c) use ($host, $questionsByTheme, $targetContribId, $currentContributor) {
+        $speakers = $this->bookTypeResolver->speakersByTheme($book);
+        return $this->json(array_map(function($c) use ($host, $questionsByTheme, $targetContribId, $currentContributor, $speakers) {
             $themeQuestions = $questionsByTheme[$c->getTheme()] ?? [];
-            return new ChapterOutputDto($c, $host, $themeQuestions, $targetContribId, $currentContributor);
+            return new ChapterOutputDto($c, $host, $themeQuestions, $targetContribId, $currentContributor, $speakers[$c->getTheme()] ?? null);
         }, $chapters));
     }
 
@@ -137,7 +144,7 @@ class ChapterController extends AbstractController
         $chapter = $this->createChapterUseCase->execute($book, new ChapterInputDto($data), $tenantHost);
         
         $host = $this->resolveHost($request);
-        return $this->json(new ChapterOutputDto($chapter, $host), 201);
+        return $this->json(new ChapterOutputDto($chapter, $host, speaker: $this->speakerOf($chapter)), 201);
     }
 
     #[Route('/chapters/{id}', methods: ['GET'])]
@@ -186,7 +193,7 @@ class ChapterController extends AbstractController
 
         $questions = $this->questionProvider->forChapter($chapter, $role);
 
-        return $this->json(new ChapterOutputDto($chapter, $host, $questions, $validatedContributorId, $currentContributor));
+        return $this->json(new ChapterOutputDto($chapter, $host, $questions, $validatedContributorId, $currentContributor, $this->speakerOf($chapter)));
     }
 
     #[Route('/chapters/{id}', methods: ['PUT'])]
@@ -292,7 +299,7 @@ class ChapterController extends AbstractController
 
         $questions = $this->questionProvider->forChapter($chapter, $role);
 
-        return $this->json(new ChapterOutputDto($chapter, $host, $questions, $validatedContributorId, $currentContributor));
+        return $this->json(new ChapterOutputDto($chapter, $host, $questions, $validatedContributorId, $currentContributor, $this->speakerOf($chapter)));
     }
 
     #[Route('/chapters/{id}', methods: ['DELETE'])]
@@ -386,7 +393,7 @@ class ChapterController extends AbstractController
         }
         
         $host = $this->resolveHost($request);
-        return $this->json(new ChapterOutputDto($chapter, $host));
+        return $this->json(new ChapterOutputDto($chapter, $host, speaker: $this->speakerOf($chapter)));
     }
 
     #[Route('/chapters/{id}/photos/layout', methods: ['POST'])]
@@ -420,7 +427,7 @@ class ChapterController extends AbstractController
             'photoPages' => $photoPages,
             'photo_layout' => $photoPages,
             'photoLayout' => $photoPages,
-            'chapter' => new ChapterOutputDto($chapter, $resolvedHost),
+            'chapter' => new ChapterOutputDto($chapter, $resolvedHost, speaker: $this->speakerOf($chapter)),
         ]);
     }
 

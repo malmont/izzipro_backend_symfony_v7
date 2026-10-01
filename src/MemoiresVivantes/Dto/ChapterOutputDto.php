@@ -29,14 +29,21 @@ class ChapterOutputDto
     public bool $parents_deceased = false;
     public bool $parentsNotParticipating = false;
     public bool $parents_not_participating = false;
+    /** Interlocuteur du chapitre dans son type de livre (person1, person2, both, contributors, synthesis) ; null si inconnu */
+    public ?string $speaker = null;
+    /** Chapitre de synthèse : rédigé à partir de tous les témoignages du livre, sans questionnaire obligatoire */
+    public bool $isSynthesis = false;
 
     public function __construct(
         Chapter $chapter,
         string $host,
         array $questions = [],
         ?string $filterContributorId = null,
-        ?array $currentContributor = null
+        ?array $currentContributor = null,
+        ?string $speaker = null
     ) {
+        $this->speaker = $speaker;
+        $this->isSynthesis = $speaker === 'synthesis';
         $this->id = (string) $chapter->getId();
         $this->bookId = (string) $chapter->getBook()->getId();
         $book = $chapter->getBook();

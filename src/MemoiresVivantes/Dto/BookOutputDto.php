@@ -66,7 +66,8 @@ class BookOutputDto
         array $questionsByTheme = [],
         ?string $filterContributorId = null,
         ?array $currentContributor = null,
-        bool $withPrivateDetails = true
+        bool $withPrivateDetails = true,
+        array $speakersByTheme = []
     ) {
         $this->id = (string) $book->getId();
         if ($book->getUser()) {
@@ -132,7 +133,7 @@ class BookOutputDto
 
         foreach ($book->getChapters() as $chapter) {
             $themeQuestions = $questionsByTheme[$chapter->getTheme()] ?? [];
-            $this->chapters[] = new ChapterOutputDto($chapter, $host, $themeQuestions, $filterContributorId, $currentContributor);
+            $this->chapters[] = new ChapterOutputDto($chapter, $host, $themeQuestions, $filterContributorId, $currentContributor, $speakersByTheme[$chapter->getTheme()] ?? null);
         }
 
         if ($latestOrder) {

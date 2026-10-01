@@ -44,6 +44,38 @@ class BookTypeResolver
     }
 
     /**
+     * Interlocuteur de chaque chapitre du type du livre : thème du chapitre => person1, person2, both, contributors
+     * ou synthesis. Le frontend s'en sert pour présenter un chapitre de synthèse (rédigé à partir de tout le livre)
+     * sans questionnaire. Type absent de la base : repli sur le catalogue historique.
+     *
+     * @return array<string, string>
+     */
+    public function speakersByTheme(?Book $book): array
+    {
+        $code = $book?->getType();
+        $speakers = [];
+
+        $type = $this->find($code);
+        if ($type !== null) {
+            foreach ($type->getChapters() as $chapter) {
+                $speakers[$chapter->getCode()] = $chapter->getSpeaker();
+            }
+
+            return $speakers;
+        }
+
+        foreach (LegacyBookTypeCatalog::all() as $legacy) {
+            if ($legacy['code'] === $code) {
+                foreach ($legacy['chapters'] as $chapter) {
+                    $speakers[$chapter['code']] = $chapter['speaker'];
+                }
+            }
+        }
+
+        return $speakers;
+    }
+
+    /**
      * Code accepté à la création / modification d'un livre : type historique, ou type actif en base.
      */
     public function isSelectable(string $code): bool

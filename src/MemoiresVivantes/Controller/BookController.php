@@ -94,11 +94,14 @@ class BookController extends AbstractController
             }
         }
 
-        $dtos = array_map(function($b) use ($host, $latestOrdersByBookId, $ordersCountByBookId) {
+        // Interlocuteurs des chapitres : une lecture par type de livre, pas par livre
+        $speakersByType = [];
+        $dtos = array_map(function($b) use ($host, $latestOrdersByBookId, $ordersCountByBookId, &$speakersByType) {
             $bId = (string) $b->getId();
             $latest = $latestOrdersByBookId[$bId] ?? null;
             $count = $ordersCountByBookId[$bId] ?? 0;
-            return new BookOutputDto($b, $host, $latest, $count);
+            $speakersByType[$b->getType()] ??= $this->bookTypeResolver->speakersByTheme($b);
+            return new BookOutputDto($b, $host, $latest, $count, speakersByTheme: $speakersByType[$b->getType()]);
         }, $books);
 
         return $this->json($dtos);
@@ -166,7 +169,8 @@ class BookController extends AbstractController
             $targetContribId,
             $currentContributor,
             // E-mail du propriétaire et lien de paiement : jamais pour un invité venu par un lien de partage
-            $this->getUser() !== null && $this->isGranted('BOOK_VIEW', $book)
+            $this->getUser() !== null && $this->isGranted('BOOK_VIEW', $book),
+            $this->bookTypeResolver->speakersByTheme($book)
         ));
     }
 
@@ -198,7 +202,7 @@ class BookController extends AbstractController
         $book = $this->createBookUseCase->execute($user, $dto);
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host), 201);
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book)), 201);
     }
 
     #[Route('/{id}', methods: ['PUT'])]
@@ -214,7 +218,7 @@ class BookController extends AbstractController
         $book = $this->updateBookUseCase->execute($book, new BookInputDto(is_array($data) ? $data : []));
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host));
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book)));
     }
 
     #[Route('/{id}', methods: ['DELETE'])]
@@ -251,7 +255,7 @@ class BookController extends AbstractController
         }
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host));
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book)));
     }
 
     #[Route('/{id}/cover', methods: ['DELETE'])]
@@ -266,7 +270,7 @@ class BookController extends AbstractController
         $this->bookService->removeCover($book);
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host));
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book)));
     }
 
     /** Lien de chapitre signé ou voter : voir BookAccessGuard::canView */
