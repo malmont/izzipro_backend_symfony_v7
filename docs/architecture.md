@@ -202,6 +202,10 @@ Médiathèque partagée : `/api/shared-media` (`SharedMediaApiController`). URL 
   demande de réservation d'un visiteur à examiner (gabarits `emails/reservation_*`).
 - Tous les e-mails passent par là : rendez-vous (`ReservationMailerService`), contact (`ContactMailerService`), paiement
   des livres (`BookPaymentService`), mot de passe oublié, code de connexion, inscription, commande (`EmailSenderService`).
+- Logo : fichier de `var/storage/public_bucket/assets/uploads/email-logos/`, **incorporé à l'e-mail** (image
+  `cid:`) par `EmailSenderService` et `BookPaymentService` via `EmailLogoHelper::getLocalPath` ; à défaut de fichier,
+  adresse absolue du backend (`getLogoUrl`, qui ne garde du « domaine » fourni par l'appelant que son origine http(s)).
+  Les e-mails de rendez-vous et de séance n'affichent pas de logo.
 - Les erreurs d'envoi sont journalisées sans interrompre la requête : chercher « Erreur » et « email » dans
   `var/log/dev.log`. Tester l'envoi d'un site : `php bin/console app:test-tenant-smtp <code> <destinataire>`.
 - La notification interne (nouveau rendez-vous, paiement reçu) part vers l'e-mail de l'entreprise (`entreprise.email`) :

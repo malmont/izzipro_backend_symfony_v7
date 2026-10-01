@@ -16,6 +16,8 @@ class EmailSenderService
     private LoggerInterface $logger;
     private TenantMailerFactory $tenantMailerFactory;
 
+    private const LOGO_CID = 'email_logo';
+
     public function __construct(
         MailerInterface $mailer,
         Environment $twig,
@@ -83,7 +85,10 @@ class EmailSenderService
                 $fromName = 'Support';
             }
 
-            $logoUrl = $this->emailLogoHelper->getLogoUrl($emailConfig, $domain);
+            // Logo incorporé à l'e-mail quand son fichier est sur le serveur (affiché même si la messagerie bloque
+            // les images distantes) ; sinon adresse publique absolue
+            $logoPath = $this->emailLogoHelper->getLocalPath($emailConfig);
+            $logoUrl = $logoPath !== null ? 'cid:' . self::LOGO_CID : $this->emailLogoHelper->getLogoUrl($emailConfig, $domain);
             $signature = $emailConfigTranslation ? $emailConfigTranslation->getSignature() : '';
 
             // Injecte les variables globales dans le contexte pour Twig
@@ -102,6 +107,10 @@ class EmailSenderService
 
             if ($replyTo) {
                 $emailMessage->replyTo($replyTo);
+            }
+
+            if ($logoPath !== null) {
+                $emailMessage->embedFromPath($logoPath, self::LOGO_CID);
             }
 
             // Serveur d'envoi du site (configuration e-mail du tenant), comme les e-mails de rendez-vous et de

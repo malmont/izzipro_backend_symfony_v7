@@ -6,6 +6,7 @@ use App\Entity\EmailConfiguration;
 use App\Entity\Entreprise;
 use App\Entity\StripeConfig;
 use App\MemoiresVivantes\Entity\Book;
+use App\Services\EmailConfigurationService\EmailLogoHelper;
 use App\Services\EmailConfigurationService\TenantMailerFactory;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
@@ -25,6 +26,7 @@ class BookPaymentService
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly TenantConnectionManager $connectionManager,
         private readonly TenantMailerFactory $tenantMailerFactory,
+        private readonly EmailLogoHelper $emailLogoHelper,
         private readonly MailerInterface $defaultMailer,
         private readonly Environment $twig,
         private readonly LoggerInterface $logger,
@@ -145,27 +147,8 @@ class BookPaymentService
         $fromName = $emailConfig?->getFromName()
             ?: ($entreprise?->getName() ?: 'Mémoires Vivantes');
 
-        // Résolution du logo (CID inline + fallback URL absolue)
-        $logoFileName = $emailConfig?->getLogo();
-        $logoPathOnDisk = null;
-        $logoCid = null;
-        $logoUrl = null;
-
-        if (!empty($logoFileName)) {
-            if (str_starts_with($logoFileName, 'http://') || str_starts_with($logoFileName, 'https://')) {
-                $logoUrl = $logoFileName;
-            } else {
-                $localPath = rtrim($this->projectDir, '/') . '/public/assets/uploads/email-logos/' . ltrim($logoFileName, '/');
-                if (file_exists($localPath) && is_readable($localPath)) {
-                    $logoPathOnDisk = $localPath;
-                    $logoCid = 'email_logo';
-                }
-                $publicBase = !empty($_ENV['STORAGE_PUBLIC_URL'])
-                    ? rtrim($_ENV['STORAGE_PUBLIC_URL'], '/')
-                    : ('https://' . ($_ENV['BACKEND_BASE_DOMAIN'] ?? 'backend-strapi.online'));
-                $logoUrl = $publicBase . '/assets/uploads/email-logos/' . ltrim($logoFileName, '/');
-            }
-        }
+        // Logo incorporé à l'e-mail quand le fichier est sur le serveur, sinon adresse publique absolue
+        [$logoPathOnDisk, $logoCid, $logoUrl] = $this->resolveLogo($emailConfig, 'email_logo');
 
         $currencySymbol = match (strtolower((string) $currency)) {
             'eur' => '€',
@@ -207,6 +190,21 @@ class BookPaymentService
             $recipientEmail,
             $book->getId()
         ));
+    }
+
+    /**
+     * Logo des e-mails : fichier du stockage public à incorporer (identifiant « cid »), et adresse publique absolue en
+     * repli. Avant, le fichier était cherché dans l'ancien dossier public/ et l'adresse de repli était relative
+     * (« /bucket-simulator/… ») : le logo n'apparaissait dans aucun e-mail de paiement.
+     *
+     * @return array{0: ?string, 1: ?string, 2: ?string} chemin sur le serveur, identifiant cid, adresse publique
+     */
+    private function resolveLogo(?EmailConfiguration $emailConfig, string $cid): array
+    {
+        $path = $this->emailLogoHelper->getLocalPath($emailConfig);
+        $url = $this->emailLogoHelper->getLogoUrl($emailConfig, 'https://' . ($_ENV['BACKEND_BASE_DOMAIN'] ?? 'backend-strapi.online'));
+
+        return [$path, $path !== null ? $cid : null, $url];
     }
 
     /**
@@ -397,27 +395,8 @@ class BookPaymentService
 
         $companyAddress = $entreprise?->getAdress() ?: null;
 
-        // Résolution du logo (CID inline + fallback URL absolue)
-        $logoFileName = $emailConfig?->getLogo();
-        $logoPathOnDisk = null;
-        $logoCid = null;
-        $logoUrl = null;
-
-        if (!empty($logoFileName)) {
-            if (str_starts_with($logoFileName, 'http://') || str_starts_with($logoFileName, 'https://')) {
-                $logoUrl = $logoFileName;
-            } else {
-                $localPath = rtrim($this->projectDir, '/') . '/public/assets/uploads/email-logos/' . ltrim($logoFileName, '/');
-                if (file_exists($localPath) && is_readable($localPath)) {
-                    $logoPathOnDisk = $localPath;
-                    $logoCid = 'invoice_logo';
-                }
-                $publicBase = !empty($_ENV['STORAGE_PUBLIC_URL'])
-                    ? rtrim($_ENV['STORAGE_PUBLIC_URL'], '/')
-                    : ('https://' . ($_ENV['BACKEND_BASE_DOMAIN'] ?? 'backend-strapi.online'));
-                $logoUrl = $publicBase . '/assets/uploads/email-logos/' . ltrim($logoFileName, '/');
-            }
-        }
+        // Logo incorporé à l'e-mail quand le fichier est sur le serveur, sinon adresse publique absolue
+        [$logoPathOnDisk, $logoCid, $logoUrl] = $this->resolveLogo($emailConfig, 'invoice_logo');
 
         $amountPaid = isset($sessionData['amount_total']) ? ($sessionData['amount_total'] / 100) : ($book->getPaymentAmount() ?: 49.00);
         $currency = strtoupper($sessionData['currency'] ?? $book->getPaymentCurrency() ?? 'CAD');

@@ -104,6 +104,32 @@ class TransactionalEmailTest extends KernelTestCase
         $this->assertStringContainsString('Merci pour votre confiance.', $html);
     }
 
+    public function testThePaymentEmailCarriesTheLogo(): void
+    {
+        // Avant le 01/10/2026 : fichier cherché dans l'ancien dossier public/ et adresse de repli relative, donc image cassée
+        $logos = glob(static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/public_bucket/assets/uploads/email-logos/*.png') ?: [];
+        if ($logos === []) {
+            $this->markTestSkipped('Aucun logo d\'e-mail dans le stockage.');
+        }
+        $em = $this->em();
+        $em->getConnection()->executeStatement('UPDATE email_configuration SET logo = ?', [basename($logos[0])]);
+        $em->clear();
+        $book = $em->getRepository(Book::class)->findOneBy([]);
+
+        static::getContainer()->get(BookPaymentService::class)->sendPaymentLinkEmail($book, 'client@example.invalid', 'https://checkout.example/x', 49.0, 'eur');
+
+        $message = $this->messages()[0];
+        $this->assertStringContainsString('<img src="cid:', (string) $message->getHtmlBody(), 'logo incorporé à l\'e-mail');
+        $this->assertCount(1, $message->getAttachments());
+        $this->assertSame('image', $message->getAttachments()[0]->getMediaType());
+
+        // Logo absent du serveur : adresse publique absolue, jamais un chemin relatif
+        $em->getConnection()->executeStatement("UPDATE email_configuration SET logo = 'introuvable.png'");
+        $em->clear();
+        static::getContainer()->get(BookPaymentService::class)->sendPaymentLinkEmail($em->getRepository(Book::class)->findOneBy([]), 'client@example.invalid', 'https://checkout.example/x', 49.0, 'eur');
+        $this->assertMatchesRegularExpression('#<img src="https://[^"]+/assets/uploads/email-logos/introuvable\.png"#', (string) $this->messages()[1]->getHtmlBody());
+    }
+
     public function testAccountEmailsGoThroughTheSiteMailer(): void
     {
         $user = (new User())->setEmail('client@example.invalid')->setFirstname('Client')->setLastname('Test');
@@ -117,6 +143,38 @@ class TransactionalEmailTest extends KernelTestCase
         $this->assertCount(1, $messages);
         $this->assertSame('contact@mvtest.test', $messages[0]->getFrom()[0]->getAddress(), 'expéditeur du site');
         $this->assertStringContainsString('https://mvtest.test/reinitialiser?token=abc', (string) $messages[0]->getHtmlBody());
+    }
+
+    public function testEveryTemplatedEmailFindsTheLogo(): void
+    {
+        $logos = glob(static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/public_bucket/assets/uploads/email-logos/*.png') ?: [];
+        if ($logos === []) {
+            $this->markTestSkipped('Aucun logo d\'e-mail dans le stockage.');
+        }
+        $em = $this->em();
+        $sender = static::getContainer()->get(EmailSenderService::class);
+        $send = fn (string $domain) => $sender->sendTemplatedEmail('client@example.invalid', 'Password Reset', 'reset_password/reset.html.twig',
+            ['resetUrl' => 'https://mvtest.test/r', 'user' => (new User())->setEmail('client@example.invalid')->setFirstname('Client')], 'fr', $domain);
+
+        // Fichier présent sur le serveur : incorporé, quel que soit le « domaine » fourni par l'appelant
+        $em->getConnection()->executeStatement('UPDATE email_configuration SET logo = ?', [basename($logos[0])]);
+        $em->clear();
+        $send('lintendantprive.com');
+        $message = $this->messages()[0];
+        $this->assertStringContainsString('<img src="cid:', (string) $message->getHtmlBody());
+        $this->assertCount(1, $message->getAttachments());
+
+        // Fichier absent : adresse absolue du backend, même avec un hôte de frontend sans schéma (contact) ou une
+        // adresse déjà complétée d'un chemin (commandes)
+        $em->getConnection()->executeStatement("UPDATE email_configuration SET logo = 'introuvable.png'");
+        $em->clear();
+        $send('lintendantprive.com');
+        $send('https://demo.backend-strapi.online/bucket-simulator/assets/uploads/email-logos/');
+        $messages = $this->messages();
+        $this->assertMatchesRegularExpression('#<img src="https://[^"/]+/[^"]*assets/uploads/email-logos/introuvable\.png"#', (string) $messages[1]->getHtmlBody());
+        $this->assertStringNotContainsString('lintendantprive.com/', (string) $messages[1]->getHtmlBody(), 'le frontend ne sert pas les logos');
+        $this->assertSame(1, substr_count((string) $messages[2]->getHtmlBody(), 'assets/uploads/email-logos/'), 'chemin non doublé');
+        $this->assertStringContainsString('https://demo.backend-strapi.online/', (string) $messages[2]->getHtmlBody());
     }
 
     private function reservation(): Reservation
