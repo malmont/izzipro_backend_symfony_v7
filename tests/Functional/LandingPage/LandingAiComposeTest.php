@@ -497,6 +497,7 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testImagesModelSettingAppliesToImageRequestsButNotToPageMode(): void
     {
+        $before = $_ENV['LANDING_AI_MODEL_IMAGES'] ?? '';
         $_ENV['LANDING_AI_MODEL_IMAGES'] = $_SERVER['LANDING_AI_MODEL_IMAGES'] = 'modele-des-images';
         try {
             FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]);
@@ -509,7 +510,7 @@ class LandingAiComposeTest extends WebTestCase
             $composer = static::getContainer()->get(\App\Services\LandingAiService\LandingAiComposer::class);
             $this->assertSame($composer->pageModel(), FakeLandingAiClient::$requests[0]['model'], 'le mode page garde son modèle, même avec des images');
         } finally {
-            unset($_ENV['LANDING_AI_MODEL_IMAGES'], $_SERVER['LANDING_AI_MODEL_IMAGES']);
+            $_ENV['LANDING_AI_MODEL_IMAGES'] = $_SERVER['LANDING_AI_MODEL_IMAGES'] = $before;
         }
     }
 
@@ -715,6 +716,37 @@ class LandingAiComposeTest extends WebTestCase
         $blocks = array_column(json_decode($response->getContent())->composition->blocks, null, 'id');
         $this->assertSame('transparent', $blocks['t-cadre']->background, 'container ajouté par l\'IA');
         $this->assertObjectNotHasProperty('background', $blocks[$composition->blocks[$index]->id], 'bloc de départ non visé : inchangé');
+    }
+
+    public function testButtonWithoutBackgroundIsSentBackToTheModel(): void
+    {
+        $wrong = $this->preset('presentation-type-b');
+        $index = array_key_first(array_filter($wrong->blocks, fn ($b) => $b->type === 'button'));
+        unset($wrong->blocks[$index]->background); // rendu : blanc opaque, couleur impossible à deviner
+        $dataType = $this->availableIds('Presentation')[0];
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($wrong, $dataType);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('presentation-type-b'), $dataType);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Presentation', 'prompt' => 'Section de présentation.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $retry = FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'];
+        $this->assertStringContainsString("blocks[$index].background", $retry);
+        $this->assertStringContainsString('fond blanc opaque', $retry);
+    }
+
+    public function testEditKeepsAnExistingButtonWithoutBackground(): void
+    {
+        $composition = $this->preset('presentation-type-b');
+        $index = array_key_first(array_filter($composition->blocks, fn ($b) => $b->type === 'button'));
+        unset($composition->blocks[$index]->background);
+        $title = array_values(array_filter($composition->blocks, fn ($b) => $b->type === 'title'))[0];
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => $title->id, 'set' => ['color' => '#000000']]]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'Presentation', 'composition' => $composition, 'prompt' => 'Titre en noir.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertCount(1, FakeLandingAiClient::$requests, 'un bloc de départ sans fond n\'est pas une erreur de l\'IA');
     }
 
     public function testSonnet55GetsAutomaticToolChoice(): void

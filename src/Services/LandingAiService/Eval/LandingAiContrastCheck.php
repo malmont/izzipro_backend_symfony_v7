@@ -5,10 +5,11 @@ namespace App\Services\LandingAiService\Eval;
 use App\Services\LandingAiService\CompositionInspector;
 
 /**
- * Contraste des textes sur leur fond réel (V7 du jeu d'essai, en création et en page). Le fond réel d'un bloc est le
- * premier fond opaque en remontant ses parents, puis la section ; les fonds semi-transparents sont superposés. Un
- * container sans « background » compte pour blanc opaque (défaut du moteur de rendu). Fond inconnu (image, vidéo,
- * dégradé, couleur liée à une donnée) : bloc non mesuré.
+ * Contraste des textes sur leur fond réel (V7 du jeu d'essai, en création et en page). Le moteur de rendu ne dessine
+ * le « background » que des containers, boutons et badges (absent : blanc opaque) ; celui d'un titre ou d'un texte
+ * n'est jamais dessiné. Fond réel : pour un bouton ou un badge, le sien ; sinon le premier container parent qui
+ * dessine un fond opaque, puis la section ; les fonds semi-transparents sont superposés. Fond inconnu (image,
+ * vidéo, dégradé, couleur liée à une donnée) : bloc non mesuré.
  */
 final class LandingAiContrastCheck
 {
@@ -17,6 +18,8 @@ final class LandingAiContrastCheck
     public const MIN_RATIO = 4.5;
     public const MIN_RATIO_LARGE = 3.0;
     public const LARGE_SIZE = 24;
+    /** Types dont le fond est dessiné (absent : blanc opaque) */
+    private const DRAWN_BACKGROUND_TYPES = ['container', 'button', 'badge'];
     private const MAX_DEPTH = 10;
 
     public function __construct(private readonly CompositionInspector $inspector)
@@ -58,10 +61,11 @@ final class LandingAiContrastCheck
         $layers = [];
         $node = $block;
         for ($depth = 0; $node !== null && $depth < self::MAX_DEPTH; $depth++) {
-            if (isset($node->bindings->background) || isset($node->bindings->bgImage) || !empty($node->bgImage)) {
+            $drawn = in_array($node->type ?? null, self::DRAWN_BACKGROUND_TYPES, true);
+            if ($drawn && (isset($node->bindings->background) || isset($node->bindings->bgImage) || !empty($node->bgImage))) {
                 return null;
             }
-            $value = property_exists($node, 'background') ? $node->background : (($node->type ?? null) === 'container' ? '#ffffff' : 'transparent');
+            $value = !$drawn ? 'transparent' : (property_exists($node, 'background') ? $node->background : '#ffffff');
             if ($value !== 'transparent' && $value !== '' && $value !== null) {
                 $layer = $this->rgba($value);
                 if ($layer === null) {

@@ -10,6 +10,9 @@ use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
  */
 final class LandingAiCompositionChecker
 {
+    /** Types, hors container, dont le moteur de rendu dessine le fond (absent : blanc opaque) */
+    public const DRAWN_BACKGROUND_TYPES = ['button', 'badge'];
+
     public function __construct(
         private readonly ReglableCompositionValidator $validator,
         private readonly LandingAiCatalogue $catalogue,
@@ -37,6 +40,30 @@ final class LandingAiCompositionChecker
         foreach ($this->inspector->mediaReferences($composition) as $ref) {
             if (!isset($allowed[$ref['value']])) {
                 $errors[] = ['path' => $ref['path'], 'message' => 'média absent de la liste autorisée : n\'invente pas d\'URL ni de clé, laisse l\'emplacement vide et signale-le dans warnings'];
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Boutons et badges produits par l'IA sans « background » : le moteur de rendu les dessine sur fond blanc opaque,
+     * ce qui est rarement voulu, et la couleur ne se devine pas : erreur renvoyée au modèle. $skipIds : blocs à ne pas
+     * vérifier (en retouche, ceux de la composition de départ). Les containers sont complétés sans nouvel essai
+     * (LandingAiOutputRepair::transparentContainers) ; les autres types ne dessinent pas de fond.
+     *
+     * @param list<string> $skipIds
+     * @return list<array{path: string, message: string}>
+     */
+    public function missingBackgrounds(object $composition, array $skipIds = []): array
+    {
+        $errors = [];
+        foreach (is_array($composition->blocks ?? null) ? $composition->blocks : [] as $i => $block) {
+            if (!is_object($block) || !in_array($block->type ?? null, self::DRAWN_BACKGROUND_TYPES, true) || property_exists($block, 'background')) {
+                continue;
+            }
+            if (!in_array($block->id ?? null, $skipIds, true)) {
+                $errors[] = ['path' => "blocks[$i].background", 'message' => sprintf('background attendu sur un bloc %s (absent : fond blanc opaque) : écris sa couleur, ou « transparent »', $block->type)];
             }
         }
 

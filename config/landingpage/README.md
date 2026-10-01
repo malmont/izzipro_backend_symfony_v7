@@ -230,13 +230,33 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
     défaut, texte écrit à la main seulement si la donnée contredit la demande, avec un avertissement ; contraste
     4,5:1, pas de couleur claire en texte sur fond clair ; chaque container écrit son `background`). P1 rejoué sur
     Sonnet 5.5 : un seul essai, 32 blocs, V7 réussie, héros de nouveau lié à la bannière, 0,27 $ cache froid
-    (`comparaison-page-p1-sonnet55-fonds-20261001.json`).
-- **Fond des containers** (`LandingAiOutputRepair::transparentContainers`) : un container produit par l'IA sans
-  `background` reçoit « transparent », sans nouvel essai (création, page ; en retouche, seulement les containers
-  ajoutés, les blocs de départ ne sont pas touchés).
+    (`comparaison-page-p1-sonnet55-fonds-20261001.json`). **Adopté le 01/10/2026** : `.env` porte
+    `LANDING_AI_MODEL_PAGE=claude-sonnet-5-5` et `LANDING_AI_MODEL_IMAGES=claude-opus-5-5` (retour arrière : retirer
+    ces deux lignes et redémarrer le worker de l'assistant) ; P2 rejoué sous ce réglage : un essai, V7 réussie.
+- **Fond des blocs** : le moteur de rendu ne dessine `background` que pour les containers, boutons et badges, en
+  blanc opaque s'il est absent ; un titre, un texte, une image… ne dessinent jamais de fond (frontend :
+  `blockBackground`, `normalizeCanvas`). Un container produit par l'IA sans `background` reçoit « transparent », sans
+  nouvel essai (`LandingAiOutputRepair::transparentContainers`). Un bouton ou un badge sans `background` est renvoyé
+  au modèle : la couleur ne se devine pas (`LandingAiCompositionChecker::missingBackgrounds`). En retouche, seuls les
+  blocs ajoutés par l'IA sont concernés ; ceux de départ ne sont ni complétés ni refusés.
 - **V7, contraste** (`Eval/LandingAiContrastCheck`, création et page) : chaque titre, texte, bouton ou badge est mesuré
-  sur son fond réel (premier fond opaque en remontant les parents puis la section ; container sans `background` =
-  blanc opaque). Seuils : 4,5:1, ou 3:1 à partir de 24 px. Fond image, vidéo, dégradé ou lié à une donnée : non mesuré.
+  sur son fond réel : pour un bouton ou un badge, le sien (blanc opaque s'il est absent) ; pour un titre ou un texte,
+  le premier container parent qui dessine un fond opaque, puis la section. Seuils : 4,5:1, ou 3:1 à partir de 24 px. Fond image, vidéo, dégradé ou lié à une donnée : non mesuré.
+- **V8, alignement des blocs `fitContent`** (`Eval/LandingAiAlignCheck`, création et page) : dans un container en
+  pile, un bloc en `fitContent` se place selon son propre `align`, les autres selon celui du container ; V8 signale
+  un bloc `fitContent` dont l'`align` diffère de celui de sa pile (bouton centré sous un texte à gauche). `align`
+  absent : « left » ; réglages mobile non mesurés. Au 01/10/2026, 5 des 87 modèles du catalogue ont ce décalage
+  (`group-type-b`, `-k`, `-m`, `-s`, `marque-type-d`) : question posée au frontend (défaut à corriger ou choix voulu).
+- **Consignes du 3e verdict du frontend (01/10/2026)** : un bloc `fitContent` prend l'`align` de son container ; un
+  défaut de contraste se corrige par la couleur, jamais en retirant un contenu lié (les prix des services avaient
+  disparu) ; quand une donnée de remplacement est affichée, les titres écrits à la main décrivent le contenu réel
+  (« Nos réalisations », pas « Témoignages ») ; en page, une famille sans donnée listée a quand même un contenu
+  (services, coordonnées) et n'est pas remplacée par une autre famille. P1 rejoué sous le réglage de production :
+  un essai, V1 à V8 réussies, prix liés, 0,11 $ avec le cache chaud (`comparaison-page-p1-sonnet55-final-20261001.json`).
+- **Seconds essais sur Sonnet 5.5** (P1, 01/10/2026) : 3 essais sur 6 ont demandé une seconde génération complète
+  (0,36 $ au lieu de 0,27 $ à cache froid), pour `fontFamily: null`, `dataType` à null sur une famille qui a des
+  données, puis `fontFamily` sur un bloc `form`. Piste non engagée : retirer sans nouvel essai les clés que le contrat
+  refuse sans ambiguïté (valeur null, propriété sans effet sur ce type de bloc).
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

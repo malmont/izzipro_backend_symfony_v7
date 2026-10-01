@@ -86,12 +86,16 @@ final class LandingAiComposer
         return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia) {
             $operations = is_array($input->operations ?? null) ? $input->operations : [];
             $applied = $this->applier->apply($composition, $operations);
+            $existing = [];
             if (!$applied['errors']) {
                 $this->logRepairs($this->repair->repair($applied['composition']));
                 $existing = array_values(array_filter(array_map(fn ($b) => is_object($b) && is_string($b->id ?? null) ? $b->id : null, is_array($composition->blocks ?? null) ? $composition->blocks : [])));
                 $this->logBackgrounds($this->repair->transparentContainers($applied['composition'], $existing));
             }
-            $errors = $applied['errors'] ?: $this->checker->check($applied['composition'], $componentKey, $allowedMedia);
+            $errors = $applied['errors'] ?: [
+                ...$this->checker->check($applied['composition'], $componentKey, $allowedMedia),
+                ...$this->checker->missingBackgrounds($applied['composition'], $existing),
+            ];
             if ($errors) {
                 return [null, $errors];
             }
@@ -202,7 +206,7 @@ final class LandingAiComposer
         // chemins relatifs à la composition ; en page, préfixés par sections[i].composition
         $errors = array_map(
             fn ($e) => ['path' => $prefix === '' ? $e['path'] : rtrim($prefix . 'composition.' . $e['path'], '.'), 'message' => $e['message']],
-            $this->checker->check($composition, $componentKey, $allowedMedia)
+            [...$this->checker->check($composition, $componentKey, $allowedMedia), ...$this->checker->missingBackgrounds($composition)]
         );
         $usesData = $this->data->familyUsesData($componentKey);
         $optional = $usesData && $this->data->dataOptional($componentKey);
