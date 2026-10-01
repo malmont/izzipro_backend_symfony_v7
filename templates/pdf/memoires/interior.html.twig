@@ -11,8 +11,9 @@
         }
 
         body {
-            font-family: 'DejaVu Serif', serif;
-            font-size: 11pt;
+            {# Police du livre : valeur du catalogue BookFontCatalog (constantes), d'où le filtre raw #}
+            font-family: {{ font_css|default("'DejaVu Serif', serif")|raw }};
+            font-size: {{ body_pt|default(11) }}pt;
             line-height: 1.65;
             color: #2c2c2c;
             background-color: #ffffff;
@@ -208,6 +209,18 @@
             margin: 9mm 0 5mm 0;
             page-break-after: avoid;
         }
+
+        /* Police des titres : celle du texte, ou une écriture manuscrite (catalogue BookFontCatalog, d'où le filtre raw) */
+        .half-title, .main-title, .chapter-title, .story-subtitle {
+            font-family: {{ title_font_css|default("'DejaVu Serif', serif")|raw }};
+        }
+        {% if script_titles|default(false) %}
+        /* Écriture manuscrite : pas de capitales ni d'interlettrage, corps plus grand, pas d'italique */
+        .half-title { text-transform: none; letter-spacing: 0; }
+        .main-title { letter-spacing: 0; }
+        .chapter-title { font-size: 30pt; }
+        .story-subtitle { font-size: 18pt; font-style: normal; }
+        {% endif %}
 
         /* Lettrine sur le premier paragraphe */
         .first-letter {

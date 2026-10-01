@@ -10,6 +10,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
+use App\MemoiresVivantes\Services\BookFontCatalog;
 
 class BookCrudController extends BaseTenantCrudController
 {
@@ -33,6 +35,7 @@ class BookCrudController extends BaseTenantCrudController
         yield TextField::new('subtitle', 'Sous-titre');
         yield TextField::new('type', 'Type (Individuel, Couple, Famille)');
         yield TextField::new('format', 'Format');
+        yield ChoiceField::new('font', 'Police du livre')->setChoices(array_column(BookFontCatalog::all(), 'code', 'label'))->setRequired(false)->hideOnIndex();
         yield TextareaField::new('clientAddress', 'Adresse du client (séances)')->hideOnIndex();
         yield AssociationField::new('user', 'Utilisateur')->hideOnForm();
         yield DateTimeField::new('createdAt', 'Créé le')->hideOnForm();

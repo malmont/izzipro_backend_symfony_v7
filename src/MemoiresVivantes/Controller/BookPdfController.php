@@ -39,7 +39,8 @@ class BookPdfController extends AbstractController
         }
 
         $author = BookPdfGeneratorService::normalizeAuthorName($request->query->all()['author'] ?? null);
-        $pdfBinary = $this->pdfService->generateInteriorBinary($book, $author);
+        // Police à l'essai (code du catalogue) ; absente ou inconnue : celle du livre
+        $pdfBinary = $this->pdfService->generateInteriorBinary($book, $author, self::fontParam($request->query->all()['font'] ?? null));
 
         return new Response($pdfBinary, 200, [
             'Content-Type' => 'application/pdf',
@@ -70,7 +71,7 @@ class BookPdfController extends AbstractController
             $color = '#' . $color;
         }
 
-        $pdfBinary = $this->pdfService->generateCoverBinary($book, $pages, $style, $author, $color ?: null);
+        $pdfBinary = $this->pdfService->generateCoverBinary($book, $pages, $style, $author, $color ?: null, self::fontParam($request->query->all()['font'] ?? null));
 
         return new Response($pdfBinary, 200, [
             'Content-Type' => 'application/pdf',
@@ -106,7 +107,7 @@ class BookPdfController extends AbstractController
             $color = '#' . $color;
         }
 
-        $result = $this->pdfService->generateAndSaveBookPdfs($book, $style, $author, $color ?: null);
+        $result = $this->pdfService->generateAndSaveBookPdfs($book, $style, $author, $color ?: null, self::fontParam($data['font'] ?? $request->query->all()['font'] ?? null));
 
         return $this->json([
             'success' => true,
@@ -116,6 +117,11 @@ class BookPdfController extends AbstractController
             'page_count' => $result['page_count'],
             'cover_geometry' => $result['cover_geometry'],
         ]);
+    }
+
+    private static function fontParam(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     /** Nom de fichier sûr pour l'en-tête (accents, guillemets et retours à la ligne d'un titre de livre) */

@@ -39,7 +39,8 @@
         body {
             margin: 0;
             padding: 0;
-            font-family: 'DejaVu Serif', serif;
+            {# Police du livre : valeur du catalogue BookFontCatalog (constantes), d'où le filtre raw #}
+            font-family: {{ font_css|default("'DejaVu Serif', serif")|raw }};
         }
 
         .abs { position: absolute; }
@@ -148,6 +149,8 @@
            (title_pt, calculé par BookPdfGeneratorService::fitFontSize) garantit que le mot le plus long tient. */
         .title {
             font-weight: bold;
+            {# Police des titres : valeur du catalogue BookFontCatalog (constantes), d'où le filtre raw #}
+            font-family: {{ title_font_css|default("'DejaVu Serif', serif")|raw }};
         }
     </style>
 </head>
@@ -201,7 +204,7 @@
                 {% set frame_top = top0 + 86 * mm %}
                 <div class="abs" style="top: 0; left: 0; width: {{ fw }}pt; height: {{ fh }}pt; background-color: #faf8f3;"></div>
                 <div class="abs" style="top: {{ top0 + 24 * mm }}pt; left: {{ pad }}pt; width: {{ vw - 2 * pad }}pt; text-align: center;">
-                    <div class="title" style="font-size: {{ title_pt.gallery }}pt; line-height: 1.15; letter-spacing: 1px; color: #1a1a1a; margin-bottom: 4mm;">{{ title }}</div>
+                    <div class="title" style="font-size: {{ title_pt.gallery }}pt; line-height: 1.15; {% if not script_titles|default(false) %}letter-spacing: 1px; {% endif %}color: #1a1a1a; margin-bottom: 4mm;">{{ title }}</div>
                     {% if subtitle %}
                         <div style="font-size: 12pt; font-style: italic; color: #b59449;">{{ subtitle }}</div>
                     {% endif %}
@@ -244,7 +247,7 @@
                 <div class="abs" style="top: {{ fy + 42 * mm }}pt; left: {{ fx + 17 * mm }}pt; width: {{ frame_w - 34 * mm }}pt; text-align: center;">
                     {# Ornement : losanges de la police DejaVu Sans (la Serif n'a pas ces caractères) #}
                     <div style="font-family: 'DejaVu Sans', sans-serif; font-size: 12pt; letter-spacing: 6px; color: {{ gold }}; margin-bottom: 20mm;">&#9670;&nbsp;&#9670;&nbsp;&#9670;</div>
-                    <div class="title" style="font-size: {{ title_pt.classic }}pt; line-height: 1.15; letter-spacing: 2px; text-transform: uppercase; color: {{ ink }}; margin-bottom: 8mm;">{{ title }}</div>
+                    <div class="title" style="font-size: {{ title_pt.classic }}pt; line-height: 1.15; {% if not script_titles|default(false) %}letter-spacing: 2px; text-transform: uppercase; {% endif %}color: {{ ink }}; margin-bottom: 8mm;">{{ title }}</div>
                     {% if subtitle %}
                         <div style="font-size: 14pt; font-style: italic; line-height: 1.5; color: {{ gold }};">{{ subtitle }}</div>
                     {% endif %}

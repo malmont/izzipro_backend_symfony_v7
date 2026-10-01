@@ -3,6 +3,7 @@
 namespace App\MemoiresVivantes\Dto;
 
 use App\MemoiresVivantes\Entity\Book;
+use App\MemoiresVivantes\Services\BookFontCatalog;
 use App\MemoiresVivantes\Services\MapsLink;
 
 class BookOutputDto
@@ -49,6 +50,8 @@ class BookOutputDto
     public ?string $paymentCurrency = 'eur';
     public ?string $payment_currency = 'eur';
     public ?array $author = null;
+    /** Police du livre : code du catalogue (GET /api/memoires/book-fonts) */
+    public string $font;
     public ?string $clientAddress = null;
     public ?string $client_address = null;
     /** Itinéraire Google Maps vers le client (propriétaire et administrateurs seulement) */
@@ -84,6 +87,7 @@ class BookOutputDto
         $this->payment_status = $book->getPaymentStatus();
         $this->paymentLinkUrl = $withPrivateDetails ? $book->getPaymentLinkUrl() : null;
         $this->payment_link_url = $this->paymentLinkUrl;
+        $this->font = BookFontCatalog::resolve($book->getFont());
         $this->clientAddress = $withPrivateDetails ? $book->getClientAddress() : null;
         $this->client_address = $this->clientAddress;
         $this->clientAddressMapsUrl = $withPrivateDetails ? MapsLink::directionsUrl($book->getClientAddress()) : null;

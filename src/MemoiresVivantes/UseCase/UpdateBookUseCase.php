@@ -5,6 +5,7 @@ namespace App\MemoiresVivantes\UseCase;
 use App\MemoiresVivantes\BookType\BookTypeResolver;
 use App\MemoiresVivantes\Dto\BookInputDto;
 use App\MemoiresVivantes\Entity\Book;
+use App\MemoiresVivantes\Services\BookFontCatalog;
 use App\Services\TenantEntityManagerProvider;
 
 class UpdateBookUseCase
@@ -31,6 +32,7 @@ class UpdateBookUseCase
         if ($dto->deathYear !== null) $book->setDeathYear($dto->deathYear);
         if ($dto->epigraph !== null) $book->setEpigraph($dto->epigraph);
         if ($dto->clientAddress !== null) $book->setClientAddress($dto->clientAddress);
+        if (BookFontCatalog::has($dto->font)) $book->setFont($dto->font);
         if ($dto->parentsDeceased !== null) $book->setParentsDeceased($dto->parentsDeceased);
 
         $em->flush();

@@ -181,6 +181,24 @@ class ChapterGenerationTest extends BookTypeApiTestCase
         $this->assertSame('', ChapterQuestionProvider::answerText(['answer' => "Danielle: \n Michel: "]), 'même sans les drapeaux couple');
     }
 
+    public function testAnAiCommentIsNeverAppendedToAChapter(): void
+    {
+        // Un chapitre finissant par « …du monde.* » (italique Markdown) était jugé inachevé ; l'IA répondait par un
+        // commentaire, « (aucune phrase n'est en cours…) », ajouté à la fin du chapitre
+        $this->assertTrue(AnthropicService::endsWithFullSentence("…il y avait tout l'amour du monde.*"));
+        $this->assertTrue(AnthropicService::endsWithFullSentence('Elle dit : « Reviens ! »'));
+        $this->assertTrue(AnthropicService::endsWithFullSentence('Une fin en gras.**'));
+        $this->assertFalse(AnthropicService::endsWithFullSentence('Une phrase coupée au milieu de'));
+
+        $this->assertTrue(AnthropicService::looksLikeCommentary("*(aucune phrase ou paragraphe n'est en cours — le texte se termine par un point.)*"));
+        $this->assertTrue(AnthropicService::looksLikeCommentary('Le texte est déjà complet.'));
+        $this->assertFalse(AnthropicService::looksLikeCommentary(' ses bras, et nous sommes rentrés à la maison.'));
+
+        $service = static::getContainer()->get(AnthropicService::class);
+        $this->assertSame("Un chapitre terminé.*", $service->checkAndComplete("Un chapitre terminé.*", true), 'aucun appel à l\'IA pour un texte terminé');
+        $this->assertSame([], FakeAnthropicService::$calls);
+    }
+
     public function testASilentRecordingIsNotTranscribedAsAnAnswer(): void
     {
         $this->assertTrue(TranscribeAudioUseCase::isSilence(''));

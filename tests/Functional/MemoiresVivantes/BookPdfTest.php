@@ -37,6 +37,13 @@ class BookPdfTest extends BookTypeApiTestCase
         }
     }
 
+    public function testAnUnclosedBoldMarkIsRemoved(): void
+    {
+        $blocks = (new ChapterTextFormatter())->blocks("Un paragraphe dont la marque n'est jamais refermée.**(suite)");
+
+        $this->assertSame("Un paragraphe dont la marque n'est jamais refermée.(suite)", $blocks[0]['dropCap'] . $blocks[0]['text']);
+    }
+
     public function testChapterTitlesLoseEmojisAndTheDuplicatedNumber(): void
     {
         $formatter = new ChapterTextFormatter();

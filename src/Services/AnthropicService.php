@@ -755,22 +755,42 @@ class AnthropicService
 
     public function checkAndComplete(string $text, bool $isLastPart, ?string $model = null): string
     {
-        $trimmed = trim($text);
-        if (empty($trimmed)) {
+        if (trim($text) === '' || self::endsWithFullSentence($text)) {
             return $text;
         }
 
-        $lastChar = substr($trimmed, -1);
-        if (!in_array($lastChar, ['.', '!', '?', '"', '\''])) {
-            $prompt = "Voici un texte inachevé :\n\"\"\"\n{$text}\n\"\"\"\n\n" .
-                      "Continue et termine uniquement la phrase en cours (ou le paragraphe en cours) pour qu'il se termine par un point. " .
-                      "Ne réécris pas le texte précédent, donne juste la suite manquante.";
-            
-            $suite = $this->callAnthropic($prompt, 300, null, $model);
-            return $text . $suite;
-        }
+        $prompt = "Voici un texte inachevé :\n\"\"\"\n{$text}\n\"\"\"\n\n" .
+                  "Continue et termine uniquement la phrase en cours (ou le paragraphe en cours) pour qu'il se termine par un point. " .
+                  "Ne réécris pas le texte précédent, donne juste la suite manquante. Si le texte est déjà terminé, réponds par une chaîne vide, sans aucun commentaire.";
 
-        return $text;
+        $suite = $this->callAnthropic($prompt, 300, null, $model);
+
+        // L'IA répond parfois par un commentaire (« aucune phrase n'est en cours… ») au lieu d'une suite : il ne doit
+        // jamais entrer dans le livre
+        return self::looksLikeCommentary($suite) ? $text : $text . $suite;
+    }
+
+    /**
+     * Le texte se termine-t-il par une phrase complète ? Les marques qui suivent la ponctuation finale (guillemets,
+     * parenthèse, italique ou gras Markdown) ne comptent pas : un chapitre finissant par « …du monde.* » est terminé.
+     */
+    public static function endsWithFullSentence(string $text): bool
+    {
+        $end = rtrim($text, " \t\n\r\0\x0B*_\"')]");
+        $end = (string) preg_replace('/[\s»”’]+$/u', '', $end);
+
+        return $end !== '' && preg_match('/[.!?…]$/u', $end) === 1;
+    }
+
+    /** La « suite » rendue par l'IA est-elle un commentaire sur le texte plutôt que la fin d'une phrase ? */
+    public static function looksLikeCommentary(string $suite): bool
+    {
+        $suite = trim($suite);
+
+        return $suite === ''
+            || mb_strlen($suite) > 600
+            || preg_match('/^[\s*_]*[(\[]/u', $suite) === 1
+            || preg_match('/aucune phrase|n\'est en cours|le texte (se termine|est (déjà )?(complet|terminé|achevé))|texte fourni|déjà (complet|terminé|achevé)|rien à (compléter|ajouter)|voici la suite|je (ne )?(peux|vois)/iu', $suite) === 1;
     }
 
     public function extractLastParagraphs(string $text, int $count): string

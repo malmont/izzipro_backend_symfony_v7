@@ -93,7 +93,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/videos` | PUBLIC_ACCESS | `Controller\VideoApiController\VideoApiController::list` |
 | POST | `/api/videos` | ROLE_ADMIN | `Controller\VideoApiController\VideoApiController::create` |
 
-## Mémoires Vivantes (75)
+## Mémoires Vivantes (76)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -123,6 +123,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/memoires/admin/users` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::create` |
 | GET | `/api/memoires/ai-models` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterController::getAiModels` |
 | POST | `/api/memoires/auth/activate` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\AccountActivationController::activate` |
+| GET | `/api/memoires/book-fonts` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookFontController::list` |
 | GET | `/api/memoires/book-types/{code}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookTypeController::get` |
 | GET | `/api/memoires/book-types` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookTypeController::list` |
 | POST | `/api/memoires/books/{bookId}/pdf/generate` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPdfController::generatePdfs` |

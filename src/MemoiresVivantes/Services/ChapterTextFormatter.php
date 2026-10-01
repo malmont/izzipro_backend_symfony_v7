@@ -131,6 +131,8 @@ class ChapterTextFormatter
         $text = preg_replace('/__(.+?)__/us', '$1', (string) $text);
         $text = preg_replace('/(?<![\p{L}\p{N}*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![\p{L}\p{N}*])/u', '$1', (string) $text);
         $text = preg_replace('/(?<![\p{L}\p{N}_])_(?!\s)([^_\n]+?)(?<!\s)_(?![\p{L}\p{N}_])/u', '$1', (string) $text);
+        // Marque de gras restée seule (jamais refermée)
+        $text = str_replace('**', '', (string) $text);
         // Marques de sous-titre restées dans une phrase
         $text = preg_replace('/={3,}/', '', (string) $text);
         // Titres Markdown en début de ligne

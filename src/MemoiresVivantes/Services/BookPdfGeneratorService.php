@@ -19,6 +19,7 @@ class BookPdfGeneratorService
     private const MM_PT = 2.8346;
     /** Corps en dessous duquel un titre n'est plus lisible : atteint seulement pour un mot démesuré */
     private const MIN_TITLE_PT = 7;
+    private const SCRIPT_TITLE_SCALE = 1.25;
 
     private ?\Dompdf\FontMetrics $fontMetrics = null;
 
@@ -26,8 +27,17 @@ class BookPdfGeneratorService
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly Environment $twig,
         private readonly string $projectDir,
-        private readonly ChapterTextFormatter $formatter = new ChapterTextFormatter()
-    ) {}
+        private readonly ChapterTextFormatter $formatter = new ChapterTextFormatter(),
+        private ?BookFontCatalog $fonts = null
+    ) {
+        $this->fonts ??= new BookFontCatalog($projectDir);
+    }
+
+    /** Police du rendu : celle demandée si elle est au catalogue (aperçu avant enregistrement), sinon celle du livre */
+    public function fontOf(Book $book, ?string $requested = null): string
+    {
+        return BookFontCatalog::has($requested) ? $requested : BookFontCatalog::resolve($book->getFont());
+    }
 
     /**
      * Calcule la largeur de la tranche (spine) en mm et en points selon le nombre de pages.
@@ -250,8 +260,9 @@ class BookPdfGeneratorService
     /**
      * Rendu HTML de l'intérieur.
      */
-    public function renderInteriorHtml(Book $book, ?string $customAuthorName = null): string
+    public function renderInteriorHtml(Book $book, ?string $customAuthorName = null, ?string $font = null): string
     {
+        $font = $this->fontOf($book, $font);
         $chaptersData = [];
         foreach ($book->getChapters() as $chapter) {
             $blocks = $this->formatter->blocks($this->cleanText($chapter->getContentFinal() ?: ($chapter->getContentGenerated() ?: '')));
@@ -275,8 +286,13 @@ class BookPdfGeneratorService
             'clean_subtitle' => $this->formatter->plain($book->getSubtitle()),
             'author_name' => $this->resolveAuthorName($book, $customAuthorName),
             // Largeur utile d'une page : 216,41 mm moins deux marges de 24 mm. Faux-titre en capitales (interlettrage 3 px)
-            'half_title_pt' => $this->fitFontSize($this->formatter->plain($book->getTitle()), (216.41 - 48) * self::MM_PT, 20, true, 2.25),
-            'main_title_pt' => $this->fitFontSize($this->formatter->plain($book->getTitle()), (216.41 - 48) * self::MM_PT, 32, false, 1.5),
+            'half_title_pt' => $this->fitFontSize($this->formatter->plain($book->getTitle()), (216.41 - 48) * self::MM_PT, 20, true, 2.25, $font),
+            'main_title_pt' => $this->fitFontSize($this->formatter->plain($book->getTitle()), (216.41 - 48) * self::MM_PT, 32, false, 1.5, $font),
+            // Valeur CSS issue du catalogue (constantes), jamais d'une saisie
+            'font_css' => BookFontCatalog::cssStack($font),
+            'body_pt' => BookFontCatalog::bodySize($font),
+            'title_font_css' => BookFontCatalog::titleCssStack($font),
+            'script_titles' => BookFontCatalog::hasScriptTitles($font),
             'chapters_data' => $chaptersData,
             'project_dir' => $this->projectDir,
             // Répertoire partagé où ChapterService enregistre les photos (l'ancien public/uploads n'existe plus)
@@ -287,8 +303,9 @@ class BookPdfGeneratorService
     /**
      * Rendu HTML de la couverture dépliée.
      */
-    public function renderCoverHtml(Book $book, int $pageCount = 64, string $coverStyle = 'biographic_split', ?string $customAuthorName = null, ?string $bgColor = null): string
+    public function renderCoverHtml(Book $book, int $pageCount = 64, string $coverStyle = 'biographic_split', ?string $customAuthorName = null, ?string $bgColor = null, ?string $font = null): string
     {
+        $font = $this->fontOf($book, $font);
         $dimensions = $this->calculateCoverDimensions($pageCount);
         $coverImagePath = null;
         $coverImageExists = false;
@@ -324,19 +341,23 @@ class BookPdfGeneratorService
             // Corps du titre ajusté au mot le plus long, mesuré avec la police : un mot n'est jamais coupé et un titre
             // ne déborde pas de sa colonne. Largeurs : celles des blocs de titre de cover.html.twig (mm = 2,8346 pt).
             'title_pt' => [
-                'biographic' => $this->fitFontSize($cleanTitle, $visibleWidth * 0.48 - 28 * self::MM_PT, 40),
-                'full' => $this->fitFontSize($cleanTitle, $visibleWidth - 50 * self::MM_PT, 44),
-                'gallery' => $this->fitFontSize($cleanTitle, $visibleWidth - 50 * self::MM_PT, 36, false, 0.75),
-                'banner' => $this->fitFontSize($cleanTitle, $visibleWidth - 50 * self::MM_PT, 38),
-                'classic' => $this->fitFontSize($cleanTitle, $visibleWidth - 70 * self::MM_PT, 40, true, 1.5),
+                'biographic' => $this->fitFontSize($cleanTitle, $visibleWidth * 0.48 - 28 * self::MM_PT, 40, false, 0.0, $font),
+                'full' => $this->fitFontSize($cleanTitle, $visibleWidth - 50 * self::MM_PT, 44, false, 0.0, $font),
+                'gallery' => $this->fitFontSize($cleanTitle, $visibleWidth - 50 * self::MM_PT, 36, false, 0.75, $font),
+                'banner' => $this->fitFontSize($cleanTitle, $visibleWidth - 50 * self::MM_PT, 38, false, 0.0, $font),
+                'classic' => $this->fitFontSize($cleanTitle, $visibleWidth - 70 * self::MM_PT, 40, true, 1.5, $font),
             ],
             // Tranche : titre et auteur sur une seule ligne (jamais coupée), réduite si elle dépasse la hauteur visible
             'spine_pt' => $this->fitLine(
                 mb_strtoupper($cleanTitle . ($authorName !== '' ? ' • ' . $authorName : '')),
                 $dimensions['cover_height_pt'] - 2 * $edge - 30 * self::MM_PT,
                 10.0,
-                2.25
+                2.25,
+                $font
             ),
+            'font_css' => BookFontCatalog::cssStack($font),
+            'title_font_css' => BookFontCatalog::titleCssStack($font),
+            'script_titles' => BookFontCatalog::hasScriptTitles($font),
             'project_dir' => $this->projectDir,
         ]));
     }
@@ -366,15 +387,21 @@ class BookPdfGeneratorService
 
     /**
      * Plus grand corps (en points entiers) pour que le mot le plus long du titre tienne dans la largeur donnée.
-     * La largeur est mesurée avec la police du PDF (DejaVu Serif gras), pas estimée : le titre ne passe à la ligne
+     * La largeur est mesurée avec la police du livre (en gras), pas estimée : le titre ne passe à la ligne
      * qu'entre deux mots, et un mot très long réduit le corps au lieu d'être coupé ou de déborder.
      *
      * @param bool  $uppercase       le gabarit affiche le titre en capitales
      * @param float $letterSpacingPt interlettrage du gabarit, en points (1 px CSS = 0,75 pt)
      */
-    public function fitFontSize(string $title, float $widthPt, int $maxPt, bool $uppercase = false, float $letterSpacingPt = 0.0): int
+    public function fitFontSize(string $title, float $widthPt, int $maxPt, bool $uppercase = false, float $letterSpacingPt = 0.0, ?string $fontCode = null): int
     {
         $title = trim($title);
+        // Titres manuscrits : ni capitales ni interlettrage, et un corps plus grand (la cursive paraît plus petite)
+        if (BookFontCatalog::hasScriptTitles($fontCode)) {
+            $uppercase = false;
+            $letterSpacingPt = 0.0;
+            $maxPt = (int) round($maxPt * self::SCRIPT_TITLE_SCALE);
+        }
         if ($uppercase) {
             $title = mb_strtoupper($title);
         }
@@ -386,7 +413,7 @@ class BookPdfGeneratorService
         }
 
         $metrics = $this->fontMetrics();
-        $font = $metrics->getFont('DejaVu Serif', 'bold');
+        $font = $metrics->getFont(BookFontCatalog::titleFamily($fontCode), 'bold');
         $size = $maxPt;
         foreach (preg_split('/\s+/u', $title) ?: [] as $word) {
             if ($word === '') {
@@ -404,10 +431,10 @@ class BookPdfGeneratorService
     }
 
     /** Plus grand corps (au demi-point) pour qu'une ligne entière, sans retour à la ligne, tienne dans la largeur donnée */
-    private function fitLine(string $text, float $widthPt, float $maxPt, float $letterSpacingPt = 0.0): float
+    private function fitLine(string $text, float $widthPt, float $maxPt, float $letterSpacingPt = 0.0, ?string $fontCode = null): float
     {
         $metrics = $this->fontMetrics();
-        $unitWidth = (float) $metrics->getTextWidth($text, $metrics->getFont('DejaVu Serif', 'normal'), 100.0) / 100.0;
+        $unitWidth = (float) $metrics->getTextWidth($text, $metrics->getFont(BookFontCatalog::family($fontCode), 'normal'), 100.0) / 100.0;
         if ($unitWidth <= 0) {
             return $maxPt;
         }
@@ -419,9 +446,7 @@ class BookPdfGeneratorService
     private function fontMetrics(): \Dompdf\FontMetrics
     {
         if ($this->fontMetrics === null) {
-            $options = new Options();
-            $options->set('isRemoteEnabled', false);
-            $this->fontMetrics = (new Dompdf($options))->getFontMetrics();
+            $this->fontMetrics = $this->fonts->newDompdf()->getFontMetrics();
         }
 
         return $this->fontMetrics;
@@ -430,19 +455,12 @@ class BookPdfGeneratorService
     /**
      * Génère et retourne le binaire PDF de l'intérieur.
      */
-    public function generateInteriorBinary(Book $book, ?string $customAuthorName = null): string
+    public function generateInteriorBinary(Book $book, ?string $customAuthorName = null, ?string $font = null): string
     {
-        $html = $this->renderInteriorHtml($book, $customAuthorName);
+        $font = $this->fontOf($book, $font);
+        $html = $this->renderInteriorHtml($book, $customAuthorName, $font);
 
-        $options = new Options();
-        // Aucune ressource distante : le texte des chapitres vient des utilisateurs (pas de requête serveur vers une URL injectée)
-        $options->set('isRemoteEnabled', false);
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('isFontSubsettingEnabled', true);
-        $options->set('defaultFont', 'DejaVu Serif');
-        $options->set('chroot', $this->projectDir);
-
-        $dompdf = new Dompdf($options);
+        $dompdf = $this->fonts->newDompdf($font);
         $dompdf->loadHtml($html, 'UTF-8');
         // Format A4 portrait + bleed (216.41mm x 303.28mm = 613.44pt x 859.68pt)
         $dompdf->setPaper([0, 0, 613.44, 859.68], 'portrait');
@@ -454,20 +472,13 @@ class BookPdfGeneratorService
     /**
      * Génère et retourne le binaire PDF de la couverture dépliée.
      */
-    public function generateCoverBinary(Book $book, int $pageCount = 64, string $coverStyle = 'biographic_split', ?string $authorName = null, ?string $bgColor = null): string
+    public function generateCoverBinary(Book $book, int $pageCount = 64, string $coverStyle = 'biographic_split', ?string $authorName = null, ?string $bgColor = null, ?string $font = null): string
     {
-        $html = $this->renderCoverHtml($book, $pageCount, $coverStyle, $authorName, $bgColor);
+        $font = $this->fontOf($book, $font);
+        $html = $this->renderCoverHtml($book, $pageCount, $coverStyle, $authorName, $bgColor, $font);
         $dims = $this->calculateCoverDimensions($pageCount);
 
-        $options = new Options();
-        // Aucune ressource distante : le texte des chapitres vient des utilisateurs (pas de requête serveur vers une URL injectée)
-        $options->set('isRemoteEnabled', false);
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('isFontSubsettingEnabled', true);
-        $options->set('defaultFont', 'DejaVu Serif');
-        $options->set('chroot', $this->projectDir);
-
-        $dompdf = new Dompdf($options);
+        $dompdf = $this->fonts->newDompdf($font);
         $dompdf->loadHtml($html, 'UTF-8');
         $dompdf->setPaper([0, 0, $dims['cover_width_pt'], $dims['cover_height_pt']]);
         $dompdf->render();
@@ -480,7 +491,7 @@ class BookPdfGeneratorService
      *
      * @return array{interior_path: string, cover_path: string, page_count: int}
      */
-    public function generateAndSaveBookPdfs(Book $book, string $coverStyle = 'biographic_split', ?string $authorName = null, ?string $bgColor = null): array
+    public function generateAndSaveBookPdfs(Book $book, string $coverStyle = 'biographic_split', ?string $authorName = null, ?string $bgColor = null, ?string $font = null): array
     {
         $bookDir = $this->projectDir . '/var/storage/public_bucket/uploads/memoires/books/' . $book->getId()->toRfc4122();
         if (!is_dir($bookDir)) {
@@ -488,7 +499,7 @@ class BookPdfGeneratorService
         }
 
         // 1. Génération de l'intérieur
-        $interiorBinary = $this->generateInteriorBinary($book, $authorName);
+        $interiorBinary = $this->generateInteriorBinary($book, $authorName, $font);
         $interiorPath = $bookDir . '/interior.pdf';
         file_put_contents($interiorPath, $interiorBinary);
 
@@ -501,7 +512,7 @@ class BookPdfGeneratorService
         $pageCount = max(24, $pageCount);
 
         // 3. Génération de la couverture avec la tranche adaptée au nombre de pages
-        $coverBinary = $this->generateCoverBinary($book, $pageCount, $coverStyle, $authorName, $bgColor);
+        $coverBinary = $this->generateCoverBinary($book, $pageCount, $coverStyle, $authorName, $bgColor, $font);
         $coverPath = $bookDir . '/cover.pdf';
         file_put_contents($coverPath, $coverBinary);
 

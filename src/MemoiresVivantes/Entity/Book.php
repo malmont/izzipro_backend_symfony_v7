@@ -78,6 +78,10 @@ class Book
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
     private bool $parentsDeceased = false;
 
+    /** Police de mise en page du livre : code du catalogue BookFontCatalog (null = police par défaut) */
+    #[ORM\Column(length: 40, nullable: true)]
+    private ?string $font = null;
+
     /** Adresse du client, où se tiennent les séances d'écriture : itinéraire du biographe (jamais montrée aux invités) */
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $clientAddress = null;
@@ -290,6 +294,17 @@ class Book
     public function setParentsDeceased(bool $parentsDeceased): static
     {
         $this->parentsDeceased = $parentsDeceased;
+        return $this;
+    }
+
+    public function getFont(): ?string
+    {
+        return $this->font;
+    }
+
+    public function setFont(?string $font): static
+    {
+        $this->font = $font;
         return $this;
     }
 

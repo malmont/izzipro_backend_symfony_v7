@@ -18,6 +18,8 @@ class BookInputDto
     public ?string $epigraph = null;
     public ?bool $parentsDeceased = null;
     public ?bool $parentsNotParticipating = null;
+    /** Code du catalogue des polices ; un code inconnu est ignoré par les use cases */
+    public ?string $font = null;
     /** null : champ absent (inchangé) ; chaîne vide : adresse effacée */
     public ?string $clientAddress = null;
 
@@ -37,6 +39,7 @@ class BookInputDto
         $this->birthYear = self::text($data['birthYear'] ?? $data['birth_year'] ?? null);
         $this->deathYear = self::text($data['deathYear'] ?? $data['death_year'] ?? null);
         $this->epigraph = self::text($data['epigraph'] ?? null);
+        $this->font = self::text($data['font'] ?? $data['fontFamily'] ?? null);
         $this->clientAddress = self::text($data['clientAddress'] ?? $data['client_address'] ?? null);
 
         $deceased = $data['parentsDeceased'] ?? $data['parents_deceased'] ?? $data['parentsNotParticipating'] ?? $data['parents_not_participating'] ?? null;

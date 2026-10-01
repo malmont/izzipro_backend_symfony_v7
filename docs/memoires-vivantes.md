@@ -37,6 +37,7 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Paiement du livre | `/books/{id}/payment-link`, `send-payment-link`, `payment-status` | `BookPaymentApiController` (Stripe Checkout du compte connecté du tenant) |
 | Impression | `/books/{id}/print/estimate`, `print/payment-intent`, `print/order`, `print/orders` ; `POST /api/webhooks/lulu` | `BookPrintApiController`, `LuluWebhookController` |
 | Types de livre (lecture) | `GET /book-types`, `/book-types/{code}`, `GET /questions`, `GET /ai-models` | `BookTypeController`, `QuestionController` |
+| Polices des livres | `GET /book-fonts` | `BookFontController` |
 | Administration | `/admin/book-types…`, `/admin/book-type-chapters…`, `/admin/book-type-roles…`, `/admin/questions…`, `/admin/users…` | `Controller/Admin/` (`#[IsGranted('ROLE_ADMIN')]`) |
 | Activation de compte | `POST /auth/activate` | `AccountActivationController` ; l'invitation (`POST /admin/users` sans mot de passe) envoie un e-mail avec le lien (`emails/memoires_account_invitation.html.twig`) |
 
@@ -111,6 +112,13 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
   `pdf/preview-cover` et dans `cover_geometry` de `pdf/generate`. Un seul gabarit quel que soit `format` : plat de
   658,28 pt (210 mm + rembordage 19,05 mm + fond perdu 3,175 mm), hauteur 967,89 pt, tranche
   `max(6,5 mm ; pages × 0,057 mm + 1,5 mm)` ; zone visible d'un plat : 595,28 × 841,89 pt.
+- **Polices** : catalogue court dans `Services/BookFontCatalog.php` (`GET /book-fonts`), fichiers et licences dans
+  `resources/fonts/memoires/`. Le livre porte un code (`mv_book.font`, champ `font` de l'API ; code inconnu ignoré) ;
+  les aperçus et `pdf/generate` acceptent un paramètre facultatif `font` pour essayer une police sans l'enregistrer.
+  Le catalogue enregistre les polices auprès de Dompdf (dossier inscriptible `var/dompdf-fonts`), fixe le corps du
+  texte par police (`bodyPt`) et le corps des titres se mesure avec la police choisie. Polices incorporées au PDF.
+  Catégorie `script` (écriture manuscrite) : la police ne s'applique qu'aux titres (`titleFamily` : couverture, pages de
+  titre, titres de chapitre, sous-titres), sans capitales ni interlettrage ; le texte courant reste en police de lecture.
 - Auteur : texte ou objet `author` du livre (`normalizeAuthorName`) ; à l'impression, jamais le destinataire du colis.
 - Vérifier un rendu : générer le PDF et le regarder (les tests ne contrôlent que le HTML produit).
 
