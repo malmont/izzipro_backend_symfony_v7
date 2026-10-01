@@ -126,7 +126,7 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     de la tâche existante (aucun crédit consommé).
   - **Erreurs passagères de l'API** (429, 529, 5xx) : jusqu'à 2 nouveaux essais du même appel (délai `Retry-After`,
     sinon 2 puis 4 s), dans le délai total ; les autres erreurs donnent 502 aussitôt.
-  - **Modèles** : `LANDING_AI_MODEL_EDIT` / `LANDING_AI_MODEL_PAGE` ; un modèle qui refuse l'appel d'outil forcé doit
+  - **Modèles** : `LANDING_AI_MODEL_EDIT` / `LANDING_AI_MODEL_PAGE` / `LANDING_AI_MODEL_IMAGES` ; un modèle qui refuse l'appel d'outil forcé doit
     figurer dans `LandingAiPromptBuilder::MODELS_WITHOUT_FORCED_TOOL` (Opus 5.5, Sonnet 5.5, Fable 5.1, Mythos 5.1).
   - **Plafond d'échecs** : 20 demandes échouées après un appel réel à l'IA, par site et sur 24 h glissantes ; au-delà,
     429 `Trop d'échecs` avec `Retry-After` (`LandingAiQuotaService::FAILED_REQUESTS_PER_DAY`). Les échecs libèrent
@@ -156,7 +156,8 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
   `INSERT INTO ai_credit_setting (monthly_credits) VALUES (200)` (ou `UPDATE` si la ligne existe). Coût : retouche 1,
   création 3, page ou images 10. Limite : 5 demandes par minute et par tenant.
 - Variables : `ANTHROPIC_API_KEY_LANDING` (clé dédiée), `LANDING_AI_MODEL_EDIT` (défaut `claude-sonnet-5`),
-  `LANDING_AI_MODEL_PAGE` (défaut `claude-opus-5-5` : mode page et requêtes avec images).
+  `LANDING_AI_MODEL_PAGE` (défaut `claude-opus-5-5` : mode page, avec ou sans images), `LANDING_AI_MODEL_IMAGES`
+  (retouches et créations avec images, relecture visuelle comprise ; vide = le modèle du mode page).
 - Tables par tenant : `ai_usage` (historique, supprimé après 90 jours, jamais de composition ni de réponse du modèle),
   `ai_credit_setting` et `ai_job` (tâches de fond) — `scripts/migrate_all_v2_landing_ai.sh` / migrations
   `Version20260928200000` et `Version20260929150000`.
@@ -209,8 +210,19 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
     `LANDING_AI_EDIT_EXAMPLES=1` ou `2` pour en remettre.
   - Mode page et relecture visuelle sur Claude Sonnet 5.5 au lieu d'Opus 5.5 (`LANDING_AI_MODEL_PAGE=claude-sonnet-5-5`) :
     page 0,16 $ au lieu de 0,31 à 0,44 $, P1 en 45 s au lieu de 58 à 140 s ; relecture 0,083 $ au lieu de 0,169 $ ;
-    toutes les vérifications réussies, mais P1 n'a pas placé le logo fourni. **Non adopté** tant que le frontend n'a
-    pas comparé le rendu (`comparaison-page-opus55-sonnet55-20261001.json`).
+    toutes les vérifications réussies, mais P1 n'a pas placé le logo fourni
+    (`comparaison-page-opus55-sonnet55-20261001.json`).
+  - Verdict du frontend (banc, 1440 et 390 px, 3 cas, un essai par modèle) : en **mode page**, Sonnet 5.5 est
+    acceptable (plus sobre, pas plus pauvre) après deux consignes, ajoutées au prompt le jour même : tout média fourni
+    est placé (il passe avant la donnée équivalente de l'entreprise, sinon un avertissement dit pourquoi) ; pas de
+    `minHeightVh` sans contenu centré (conteneur racine de même hauteur, `valign` center ou end) ni sans hauteur
+    mobile réduite (`mobileMinHeightVh`, `mobile.minHeight = 0`) ; en page, une ancre par section (« accueil » pour
+    le héros). P1 rejoué avec ces consignes : logo placé, hauteur conforme et ancres posées sur les deux modèles
+    (`comparaison-page-p1-consignes-20261001.json`) ; la vérification de P1 exige désormais le logo et la hauteur.
+    En **relecture visuelle**, Sonnet 5.5 est un peu plus pauvre (3 défauts corrigés sur 4) : **garder Opus 5.5**.
+    `LANDING_AI_MODEL_PAGE` réglait les deux à la fois : `LANDING_AI_MODEL_IMAGES` les sépare. Bascule du mode page
+    seul : `LANDING_AI_MODEL_PAGE=claude-sonnet-5-5` et `LANDING_AI_MODEL_IMAGES=claude-opus-5-5` dans `.env`, puis
+    redémarrage du worker de l'assistant.
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

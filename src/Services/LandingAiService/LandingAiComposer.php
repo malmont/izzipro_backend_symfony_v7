@@ -36,7 +36,9 @@ final class LandingAiComposer
         #[Autowire('%env(default:landing_ai.default_model_edit:LANDING_AI_MODEL_EDIT)%')]
         private readonly string $editModel,
         #[Autowire('%env(default:landing_ai.default_model_page:LANDING_AI_MODEL_PAGE)%')]
-        private readonly string $pageModel
+        private readonly string $pageModel,
+        #[Autowire('%env(default::LANDING_AI_MODEL_IMAGES)%')]
+        private readonly ?string $imagesModel = null
     ) {
     }
 
@@ -45,10 +47,16 @@ final class LandingAiComposer
         return $this->editModel;
     }
 
-    /** Modèle du mode page et de toute requête avec images */
+    /** Modèle du mode page (avec ou sans images) */
     public function pageModel(): string
     {
         return $this->pageModel;
+    }
+
+    /** Modèle des retouches et créations avec images (relecture visuelle comprise) : celui du mode page par défaut */
+    public function imagesModel(): string
+    {
+        return trim((string) $this->imagesModel) !== '' ? trim($this->imagesModel) : $this->pageModel;
     }
 
     /**
@@ -66,7 +74,7 @@ final class LandingAiComposer
      * Retouche : l'IA renvoie des opérations, appliquées par le serveur sur la composition actuelle.
      *
      * @param list<array> $media médias fournis par l'administrateur
-     * @param list<array{mediaType: string, data: string}> $images captures ou charte (modèle du mode page)
+     * @param list<array{mediaType: string, data: string}> $images captures ou charte (modèle des requêtes avec images)
      * @throws LandingAiException 502 (pas de composition valide, IA indisponible) ou 504 (délai)
      */
     public function edit(string $componentKey, object $composition, string $prompt, string $locale = 'fr', array $media = [], array $images = []): LandingAiEditResult
@@ -95,7 +103,7 @@ final class LandingAiComposer
      * celles du site ; la donnée indiquée par l'éditeur sert de valeur par défaut.
      *
      * @param list<array> $media médias fournis par l'administrateur
-     * @param list<array{mediaType: string, data: string}> $images captures ou charte (modèle du mode page)
+     * @param list<array{mediaType: string, data: string}> $images captures ou charte (modèle des requêtes avec images)
      * @throws LandingAiException 502 ou 504
      */
     public function create(string $componentKey, string $prompt, string $locale = 'fr', array $media = [], ?string $defaultDataType = null, array $images = []): LandingAiCreateResult
@@ -220,7 +228,7 @@ final class LandingAiComposer
     /** @param list<array> $images */
     private function model(array $images): string
     {
-        return $images ? $this->pageModel : $this->editModel;
+        return $images ? $this->imagesModel() : $this->editModel;
     }
 
     /**

@@ -98,9 +98,9 @@ class LandingAiEvalCommand extends Command
 
         $stored = $this->site->storedCompositions();
         $palette = $this->site->palette($stored);
-        $io->title(sprintf('Évaluation de l\'assistant IA : %d cas, modèles %s (edit, create) et %s (page, images), tenant %s', count($edit) + count($create) + count($page), $this->composer->editModel(), $this->composer->pageModel(), $tenant));
+        $io->title(sprintf('Évaluation de l\'assistant IA : %d cas, modèles %s (edit, create), %s (page) et %s (images), tenant %s', count($edit) + count($create) + count($page), $this->composer->editModel(), $this->composer->pageModel(), $this->composer->imagesModel(), $tenant));
 
-        $report = ['date' => date(DATE_ATOM), 'tenant' => $tenant, 'models' => ['edit' => $this->composer->editModel(), 'page' => $this->composer->pageModel()], 'tuning' => $this->tuning->describe(), 'cases' => []];
+        $report = ['date' => date(DATE_ATOM), 'tenant' => $tenant, 'models' => ['edit' => $this->composer->editModel(), 'page' => $this->composer->pageModel(), 'images' => $this->composer->imagesModel()], 'tuning' => $this->tuning->describe(), 'cases' => []];
         $io->writeln('Réglages : ' . json_encode($this->tuning->describe(), JSON_UNESCAPED_UNICODE));
         $rows = [];
         foreach ($edit as $case) {
@@ -316,7 +316,7 @@ class LandingAiEvalCommand extends Command
     {
         [$input, $output, $read] = self::PRICES[$usage['model'] ?? ''] ?? [0.0, 0.0, 0.0];
         $write = (int) ($usage['cacheWriteTokens'] ?? 0);
-        $writeFactor = $this->tuning->cacheTtl('page') !== null && ($usage['model'] ?? '') === $this->composer->pageModel() ? 2.0 : 1.25;
+        $writeFactor = $this->tuning->cacheTtl('page') !== null && in_array($usage['model'] ?? '', [$this->composer->pageModel(), $this->composer->imagesModel()], true) ? 2.0 : 1.25;
 
         return (((int) ($usage['inputTokens'] ?? 0) - $write) * $input
             + $write * $input * $writeFactor

@@ -292,21 +292,28 @@ final class LandingAiEvalCases
                     $colors = [];
                     $fonts = [];
                     $logo = false;
-                    foreach ($r->sections as $section) {
+                    $heights = [];
+                    foreach ($r->sections as $i => $section) {
                         $colors += $this->inspector->colors($section['composition']);
                         $fonts += $this->inspector->fonts($section['composition']);
                         $logo = $logo || str_contains(json_encode($section['composition'], JSON_UNESCAPED_SLASHES), self::P1_LOGO);
+                        if (($issue = $this->screenHeightIssue($section['composition'])) !== null) {
+                            $heights[] = sprintf('%s (%s)', $section['componentKey'], $issue);
+                        }
                     }
                     $offColors = array_values(array_filter(array_keys($colors), fn ($c) => !$this->charterColor($c, self::P1_COLORS)));
                     $offFonts = array_values(array_filter(array_keys($fonts), fn ($f) => stripos($f, self::P1_FONT) === false && !in_array(strtolower(trim($f)), ['inherit', 'sans-serif', 'serif'], true)));
-                    $ok = count($r->sections) === 4 && end($families) === 'Contact' && !$offColors && !$offFonts;
+                    // le logo fourni doit être placé (un logoUrl lié ailleurs ne le remplace pas)
+                    $ok = count($r->sections) === 4 && end($families) === 'Contact' && !$offColors && !$offFonts && $logo && !$heights;
 
                     return $this->result($ok, sprintf(
-                        'sections : %s ; couleurs hors charte : %s ; polices hors charte : %s ; logo : %s',
+                        'sections : %s ; couleurs hors charte : %s ; polices hors charte : %s ; logo fourni placé : %s ; hauteur d\'écran : %s ; ancres : %s',
                         implode(' > ', $families),
                         $offColors ? implode(', ', array_slice($offColors, 0, 4)) : 'aucune',
                         $offFonts ? implode(', ', $offFonts) : 'aucune',
-                        $logo ? 'oui' : 'non'
+                        $logo ? 'oui' : 'non',
+                        $heights ? implode(', ', $heights) : 'conforme',
+                        implode(', ', array_map(fn ($s) => is_string($s['composition']->anchor ?? null) ? $s['composition']->anchor : '(aucune)', $r->sections))
                     ));
                 },
             ],
@@ -469,6 +476,27 @@ final class LandingAiEvalCases
         }
 
         return null;
+    }
+
+    /**
+     * Section à hauteur d'écran (minHeightVh) : contenu centré (conteneur racine avec une hauteur minimale et valign
+     * « center » ou « end ») et hauteur mobile réduite (mobileMinHeightVh plus petit). Renvoie le défaut, ou null.
+     */
+    private function screenHeightIssue(object $composition): ?string
+    {
+        $height = $composition->minHeightVh ?? null;
+        if (!is_numeric($height)) {
+            return null;
+        }
+        $centered = $this->find($composition, fn ($b) => ($b->type ?? null) === 'container' && ($b->parentId ?? null) === null
+            && in_array($b->valign ?? null, ['center', 'end'], true) && (is_numeric($b->minHeightVh ?? null) || is_numeric($b->minHeight ?? null)));
+        $mobile = $composition->mobileMinHeightVh ?? null;
+
+        return match (true) {
+            $centered === null => sprintf('minHeightVh %s sans contenu centré', $height),
+            !is_numeric($mobile) || $mobile >= $height => sprintf('minHeightVh %s sans mobileMinHeightVh réduit', $height),
+            default => null,
+        };
     }
 
     /** @return list<string> chemins de liaison utilisés dans la composition (blocs et section) */

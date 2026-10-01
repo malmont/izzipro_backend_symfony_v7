@@ -480,7 +480,7 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame('Presentation', $history[0]['componentKey']);
     }
 
-    public function testEditWithAnImageUsesThePageModelAndCosts10(): void
+    public function testEditWithAnImageUsesTheImagesModelAndCosts10(): void
     {
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]);
 
@@ -488,9 +488,29 @@ class LandingAiComposeTest extends WebTestCase
 
         $this->assertSame('edit', $job->result->mode, 'une retouche avec image passe aussi en tâche de fond');
         $request = FakeLandingAiClient::$requests[0];
-        $this->assertSame(static::getContainer()->get(\App\Services\LandingAiService\LandingAiComposer::class)->pageModel(), $request['model']);
+        $composer = static::getContainer()->get(\App\Services\LandingAiService\LandingAiComposer::class);
+        $this->assertSame($composer->imagesModel(), $request['model']);
+        $this->assertSame($composer->pageModel(), $composer->imagesModel(), 'sans LANDING_AI_MODEL_IMAGES : modèle du mode page');
         $this->assertSame('image', $request['messages'][0]['content'][0]['type']);
         $this->assertSame(10, $job->result->credits->used);
+    }
+
+    public function testImagesModelSettingAppliesToImageRequestsButNotToPageMode(): void
+    {
+        $_ENV['LANDING_AI_MODEL_IMAGES'] = $_SERVER['LANDING_AI_MODEL_IMAGES'] = 'modele-des-images';
+        try {
+            FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]);
+            $this->composeInBackground(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre de la couleur de la capture.', 'images' => [$this->pngDataUrl()]]);
+            $this->assertSame('modele-des-images', FakeLandingAiClient::$requests[0]['model']);
+
+            FakeLandingAiClient::$requests = [];
+            FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Contact', 'dataType' => null, 'composition' => $this->preset('contact-type-a')]]);
+            $this->composeInBackground(['mode' => 'page', 'prompt' => 'Section contact, avec ma charte.', 'images' => [$this->pngDataUrl()]]);
+            $composer = static::getContainer()->get(\App\Services\LandingAiService\LandingAiComposer::class);
+            $this->assertSame($composer->pageModel(), FakeLandingAiClient::$requests[0]['model'], 'le mode page garde son modèle, même avec des images');
+        } finally {
+            unset($_ENV['LANDING_AI_MODEL_IMAGES'], $_SERVER['LANDING_AI_MODEL_IMAGES']);
+        }
     }
 
     public function testEditRefusesAnInvalidCompositionBeforeAnyAiCall(): void
