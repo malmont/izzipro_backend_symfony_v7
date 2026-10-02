@@ -16,11 +16,12 @@ use Symfony\Component\Routing\Annotation\Route;
 class SecureMediaDeliveryController extends AbstractController
 {
     /**
-     * Secondes pendant lesquelles le navigateur d'un visiteur garde une vidéo affichée dans une page (scène au
-     * défilement, fond de section) : sans cela, chaque visite la retélécharge en entier. Cache du navigateur seulement
-     * (« private » : jamais un cache partagé), borné par l'expiration du lien. Les documents restent en no-store.
+     * Secondes pendant lesquelles le navigateur d'un visiteur garde une vidéo ou une image affichée dans une page
+     * (scène au défilement, fond de section, image par mediaKey) : sans cela, chaque visite la retélécharge. Cache du
+     * navigateur seulement (« private » : jamais un cache partagé), borné par l'expiration du lien. Les documents et
+     * les téléchargements forcés (dont les SVG, jamais affichés) restent en no-store.
      */
-    public const VIDEO_MAX_AGE = 3600;
+    public const DISPLAYED_MEDIA_MAX_AGE = 3600;
 
     private string $privateStorageDir;
 
@@ -102,8 +103,9 @@ class SecureMediaDeliveryController extends AbstractController
         $response->headers->set('Pragma', 'no-cache');
         $response->headers->set('Expires', '0');
 
-        if (!$isDownload && $media->isVideo()) {
-            $maxAge = self::VIDEO_MAX_AGE;
+        $cacheable = !$isDownload && ($media->isVideo() || $media->isImage());
+        if ($cacheable) {
+            $maxAge = self::DISPLAYED_MEDIA_MAX_AGE;
             if ($media->getExpiresAt() !== null) {
                 $maxAge = max(0, min($maxAge, $media->getExpiresAt()->getTimestamp() - time()));
             }
@@ -121,8 +123,8 @@ class SecureMediaDeliveryController extends AbstractController
             $response->headers->set('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox");
         }
 
-        // Vidéo déjà en cache et inchangée : 304 sans renvoyer le fichier (Last-Modified posé par BinaryFileResponse)
-        if (!$isDownload && $media->isVideo()) {
+        // Média déjà en cache et inchangé : 304 sans renvoyer le fichier (Last-Modified posé par BinaryFileResponse)
+        if ($cacheable) {
             $response->isNotModified($request);
         }
 

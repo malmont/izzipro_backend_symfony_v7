@@ -90,6 +90,37 @@ class SharedMediaSecurityTest extends WebTestCase
         $this->assertGreaterThan(500, (int) $m[1]);
     }
 
+    public function testPrivateImageShownInAPageIsCachedButNotASvg(): void
+    {
+        $client = static::createClient();
+        $this->initStorageDirs();
+        $em = $this->getEntityManager();
+        $headers = ['HTTP_HOST' => MV_TEST_TENANT_HOST, 'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST];
+        $keys = [];
+        foreach (['png' => 'image/png', 'svg' => 'image/svg+xml'] as $extension => $mime) {
+            $filename = 'test_image_' . bin2hex(random_bytes(6)) . '.' . $extension;
+            file_put_contents($this->privateStorageDir . '/' . $filename, $extension === 'svg' ? '<svg xmlns="http://www.w3.org/2000/svg"/>' : 'fausse image');
+            $this->createdFiles[] = $this->privateStorageDir . '/' . $filename;
+            $keys[$extension] = bin2hex(random_bytes(32));
+            $em->persist((new SharedMedia())->setTitre('Image ' . $extension)->setFilename($filename)->setOriginalFilename('image.' . $extension)
+                ->setMediaType(SharedMedia::TYPE_IMAGE)->setMimeType($mime)->setFileSize(12)
+                ->setVisibility(SharedMedia::VISIBILITY_PRIVATE)->setAccessKey($keys[$extension]));
+        }
+        $em->flush();
+
+        $client->request('GET', '/media/secure/' . $keys['png'], [], [], $headers);
+        $response = $client->getResponse();
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString('max-age=3600', (string) $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString('private', (string) $response->headers->get('Cache-Control'));
+        $client->request('GET', '/media/secure/' . $keys['png'], [], [], $headers + ['HTTP_IF_MODIFIED_SINCE' => $response->headers->get('Last-Modified')]);
+        $this->assertSame(304, $client->getResponse()->getStatusCode());
+
+        $client->request('GET', '/media/secure/' . $keys['svg'], [], [], $headers);
+        $this->assertStringContainsString('attachment', (string) $client->getResponse()->headers->get('Content-Disposition'), 'un SVG n\'est jamais affiché');
+        $this->assertStringContainsString('no-store', (string) $client->getResponse()->headers->get('Cache-Control'));
+    }
+
     public function testPrivateMediaDeliveryWithValidKey(): void
     {
         $client = static::createClient();
