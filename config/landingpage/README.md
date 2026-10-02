@@ -242,11 +242,14 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
 - **V7, contraste** (`Eval/LandingAiContrastCheck`, création et page) : chaque titre, texte, bouton ou badge est mesuré
   sur son fond réel : pour un bouton ou un badge, le sien (blanc opaque s'il est absent) ; pour un titre ou un texte,
   le premier container parent qui dessine un fond opaque, puis la section. Seuils : 4,5:1, ou 3:1 à partir de 24 px. Fond image, vidéo, dégradé ou lié à une donnée : non mesuré.
-- **V8, alignement des blocs `fitContent`** (`Eval/LandingAiAlignCheck`, création et page) : dans un container en
-  pile, un bloc en `fitContent` se place selon son propre `align`, les autres selon celui du container ; V8 signale
-  un bloc `fitContent` dont l'`align` diffère de celui de sa pile (bouton centré sous un texte à gauche). `align`
-  absent : « left » ; réglages mobile non mesurés. Au 01/10/2026, 5 des 87 modèles du catalogue ont ce décalage
-  (`group-type-b`, `-k`, `-m`, `-s`, `marque-type-d`) : question posée au frontend (défaut à corriger ou choix voulu).
+- **V8, boutons et badges `fitContent` décalés** (`Eval/LandingAiAlignCheck`, création et page) : dans un container
+  en pile, un bloc en `fitContent` se place selon son propre `align`, les autres selon celui du container. V8 signale
+  un bouton ou un badge `fitContent` dont l'`align` diffère de celui de sa pile alors que les textes voisins la
+  suivent (bouton centré sous un titre et un texte à gauche). C'est un signalement à regarder, pas un refus : un
+  bouton, une icône ou une flèche décalés peuvent être voulus (`group-type-k`, `group-type-s`, `marque-type-d`,
+  `banner-type-l`, `carousel-offres`) ; `group-type-b` et `-m` étaient des défauts, corrigés par le frontend.
+  `align` absent : « left ». Mobile non mesuré, la règle y est autre : une pile avec `mobile.align` center ou right
+  place tous ses enfants ainsi ; le `mobile.align` d'un bloc ne change que l'alignement de son texte.
 - **Consignes du 3e verdict du frontend (01/10/2026)** : un bloc `fitContent` prend l'`align` de son container ; un
   défaut de contraste se corrige par la couleur, jamais en retirant un contenu lié (les prix des services avaient
   disparu) ; quand une donnée de remplacement est affichée, les titres écrits à la main décrivent le contenu réel
@@ -255,8 +258,12 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   un essai, V1 à V8 réussies, prix liés, 0,11 $ avec le cache chaud (`comparaison-page-p1-sonnet55-final-20261001.json`).
 - **Seconds essais sur Sonnet 5.5** (P1, 01/10/2026) : 3 essais sur 6 ont demandé une seconde génération complète
   (0,36 $ au lieu de 0,27 $ à cache froid), pour `fontFamily: null`, `dataType` à null sur une famille qui a des
-  données, puis `fontFamily` sur un bloc `form`. Piste non engagée : retirer sans nouvel essai les clés que le contrat
-  refuse sans ambiguïté (valeur null, propriété sans effet sur ce type de bloc).
+  données, puis `fontFamily` sur un bloc `form`. Depuis le 02/10/2026, `LandingAiOutputRepair::dropRefusedKeys`
+  retire sans nouvel essai, au premier niveau de la section et des blocs, une propriété à null que le contrat refuse
+  (le moteur de rendu la traite comme absente) et une propriété de style de texte (`STYLE_ONLY_PROPERTIES`) posée sur
+  un type de bloc qui ne l'utilise pas ; jamais dans `mobile`, où null a un sens. Toute autre propriété refusée reste
+  renvoyée au modèle. Pour le `dataType`, consigne : une famille qui a des données reçoit toujours une donnée de sa
+  liste, la plus proche à défaut, avec un titre fidèle au contenu affiché et un avertissement.
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

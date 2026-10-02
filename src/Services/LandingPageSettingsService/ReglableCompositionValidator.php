@@ -29,6 +29,10 @@ final class ReglableCompositionValidator
     /** Schéma imposé (contrôle d'une version candidate), sinon celui de la version active */
     private ?string $schemaFile = null;
 
+    /** Messages lus par LandingAiOutputRepair pour retirer une clé sans relancer le modèle */
+    public const NULL_REFUSED = 'valeur null refusée (omettre la clé pour la valeur par défaut)';
+    public const PROPERTY_NOT_FOR_TYPE = 'propriété non autorisée sur un bloc';
+
     public function __construct(private readonly LandingConfigStore $configStore)
     {
     }
@@ -282,7 +286,7 @@ final class ReglableCompositionValidator
             $type = $error->data()->value()->type ?? null;
             $errors[] = [
                 'path' => $this->join($path, (string) $forbidden[0]),
-                'message' => is_string($type) ? sprintf('propriété non autorisée sur un bloc « %s »', $type) : 'propriété non autorisée pour ce type de bloc',
+                'message' => is_string($type) ? sprintf(self::PROPERTY_NOT_FOR_TYPE . ' « %s »', $type) : 'propriété non autorisée pour ce type de bloc',
             ];
 
             return;
@@ -308,7 +312,7 @@ final class ReglableCompositionValidator
     {
         $args = $error->args();
         if ($error->data()->value() === null) {
-            return 'valeur null refusée (omettre la clé pour la valeur par défaut)';
+            return self::NULL_REFUSED;
         }
 
         return match ($error->keyword()) {

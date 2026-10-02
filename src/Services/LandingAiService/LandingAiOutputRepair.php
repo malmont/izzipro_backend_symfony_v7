@@ -13,11 +13,56 @@ use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
  * Fond des containers : le moteur de rendu donne un fond blanc opaque à un container sans « background ». Le modèle
  * l'omet parfois sur un fond coloré (01/10/2026 : titre blanc sur cadre blanc dans un héros bleu nuit, illisible).
  * Un container produit par l'IA sans « background » reçoit donc « transparent », sans nouvel essai.
+ *
+ * Clés refusées sans ambiguïté par le contrat (01/10/2026 : un essai de page sur deux relancé pour cela, soit une
+ * seconde génération complète) : une propriété à null, que le moteur de rendu traite comme absente, et une propriété
+ * de style de texte posée sur un type de bloc qui ne l'utilise pas (fontFamily sur un formulaire). Elles sont
+ * retirées avant la vérification. Seulement au premier niveau de la section et des blocs : dans « mobile », null a
+ * un sens (mobile.minHeight, mobile.align…).
  */
 final class LandingAiOutputRepair
 {
+    /**
+     * Propriétés de style de texte, sans contenu ni effet sur la structure : retirées d'un type qui ne les utilise pas.
+     * Le contrat décide des types (« Types : … » dans le schéma) : fontFamily reste donc sur un container, qui la
+     * transmet à ses enfants.
+     */
+    public const STYLE_ONLY_PROPERTIES = ['fontFamily', 'lineHeight', 'letterSpacing', 'textShadow', 'underline', 'underlineColor'];
+
     public function __construct(private readonly ReglableCompositionValidator $validator)
     {
+    }
+
+    /**
+     * Retire les clés de premier niveau (section, blocs) que le contrat refuse sans ambiguïté : valeur null, ou
+     * propriété de STYLE_ONLY_PROPERTIES sur un type de bloc qui ne l'utilise pas. Le reste est laissé à la vérification.
+     *
+     * @return list<string> chemins des clés retirées
+     */
+    public function dropRefusedKeys(object $composition): array
+    {
+        $removed = [];
+        foreach ($this->validator->validateComposition($composition) as $error) {
+            if (preg_match('/^blocks\[(\d+)\]\.([A-Za-z]\w*)$/', $error['path'], $m)) {
+                [$node, $key] = [$composition->blocks[(int) $m[1]] ?? null, $m[2]];
+            } elseif (preg_match('/^[A-Za-z]\w*$/', $error['path'])) {
+                [$node, $key] = [$composition, $error['path']];
+            } else {
+                continue;
+            }
+            if (!is_object($node) || !property_exists($node, $key)) {
+                continue;
+            }
+            $null = $error['message'] === ReglableCompositionValidator::NULL_REFUSED && $node->$key === null;
+            $unusedStyle = $node !== $composition && str_starts_with($error['message'], ReglableCompositionValidator::PROPERTY_NOT_FOR_TYPE)
+                && in_array($key, self::STYLE_ONLY_PROPERTIES, true);
+            if ($null || $unusedStyle) {
+                unset($node->$key);
+                $removed[] = $error['path'];
+            }
+        }
+
+        return $removed;
     }
 
     /** @return list<string> chemins des clés retirées */

@@ -85,21 +85,32 @@ final class LandingAiContrastCheckTest extends TestCase
         $this->assertSame([], $this->issues(['background' => 'linear-gradient(90deg, #fff, #000)'], $blocks), 'dégradé');
     }
 
-    public function testFitContentBlockMustFollowTheAlignOfItsStack(): void
+    public function testFitContentButtonShiftedFromItsStackAndItsTextsIsReported(): void
     {
         $composition = json_decode(json_encode(['schemaVersion' => 2, 'blocks' => [
+            // bouton centré sous un titre et un texte à gauche : signalé
             ['id' => 'pile', 'type' => 'container', 'parentId' => null, 'layout' => 'stack', 'align' => 'left'],
+            ['id' => 'titre', 'type' => 'title', 'parentId' => 'pile', 'align' => 'left'],
+            ['id' => 'texte', 'type' => 'text', 'parentId' => 'pile'], // align absent : left
             ['id' => 'bouton', 'type' => 'button', 'parentId' => 'pile', 'fitContent' => true, 'align' => 'center'],
-            ['id' => 'titre', 'type' => 'title', 'parentId' => 'pile', 'align' => 'center'], // sans fitContent : suit le parent
-            ['id' => 'centre', 'type' => 'container', 'parentId' => null, 'layout' => 'stack', 'align' => 'center'],
-            ['id' => 'badge', 'type' => 'badge', 'parentId' => 'centre', 'fitContent' => true], // align absent : left
-            ['id' => 'aligne', 'type' => 'button', 'parentId' => 'centre', 'fitContent' => true, 'align' => 'center'],
+            // textes centrés comme le bouton dans une pile à gauche : mise en page centrée, voulue
+            ['id' => 'centree', 'type' => 'container', 'parentId' => null, 'layout' => 'stack', 'align' => 'left'],
+            ['id' => 'titre-centre', 'type' => 'title', 'parentId' => 'centree', 'align' => 'center'],
+            ['id' => 'bouton-centre', 'type' => 'button', 'parentId' => 'centree', 'fitContent' => true, 'align' => 'center'],
+            // icône ou flèche décalée : choix de mise en page
+            ['id' => 'carte', 'type' => 'container', 'parentId' => null, 'layout' => 'stack', 'align' => 'left'],
+            ['id' => 'carte-titre', 'type' => 'title', 'parentId' => 'carte', 'align' => 'left'],
+            ['id' => 'fleche', 'type' => 'container', 'parentId' => 'carte', 'layout' => 'stack', 'fitContent' => true, 'align' => 'right'],
+            // pile sans texte, ou rangée : non mesuré
+            ['id' => 'seul', 'type' => 'container', 'parentId' => null, 'layout' => 'stack', 'align' => 'left'],
+            ['id' => 'bouton-seul', 'type' => 'button', 'parentId' => 'seul', 'fitContent' => true, 'align' => 'center'],
             ['id' => 'rangee', 'type' => 'container', 'parentId' => null, 'layout' => 'row', 'align' => 'left'],
-            ['id' => 'en-rangee', 'type' => 'button', 'parentId' => 'rangee', 'fitContent' => true, 'align' => 'center'], // pas une pile
+            ['id' => 'titre-rangee', 'type' => 'title', 'parentId' => 'rangee', 'align' => 'left'],
+            ['id' => 'en-rangee', 'type' => 'button', 'parentId' => 'rangee', 'fitContent' => true, 'align' => 'center'],
         ]]), false);
 
         $this->assertSame(
-            ['bouton : center (pile pile : left)', 'badge : left (pile centre : center)'],
+            ['bouton : center (pile pile et ses textes : left)'],
             (new LandingAiAlignCheck(new CompositionInspector()))->issues($composition)
         );
     }

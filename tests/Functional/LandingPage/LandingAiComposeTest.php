@@ -749,6 +749,41 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertCount(1, FakeLandingAiClient::$requests, 'un bloc de départ sans fond n\'est pas une erreur de l\'IA');
     }
 
+    public function testRefusedNullAndUnusedTextStyleAreDroppedWithoutAnotherAttempt(): void
+    {
+        $composition = $this->preset('contact-type-a');
+        $composition->blocks[1]->fontFamily = null;               // null au premier niveau : traité comme absent
+        $composition->blocks[3]->fontFamily = 'Montserrat';       // style de texte sans effet sur un formulaire
+        $composition->blocks[0]->fontFamily = 'Montserrat';       // container : permis par le contrat, transmis aux enfants
+        $composition->blocks[0]->mobile = (object) ['minHeight' => null]; // dans mobile, null a un sens : conservé
+        $composition->bgImage = null;
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($composition, null);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Contact', 'prompt' => 'Formulaire de contact.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertCount(1, FakeLandingAiClient::$requests, 'aucun nouvel essai');
+        $result = json_decode($response->getContent())->composition;
+        $this->assertObjectNotHasProperty('fontFamily', $result->blocks[1]);
+        $this->assertObjectNotHasProperty('fontFamily', $result->blocks[3]);
+        $this->assertSame('Montserrat', $result->blocks[0]->fontFamily, 'la police d\'un container n\'est jamais retirée');
+        $this->assertObjectNotHasProperty('bgImage', $result);
+        $this->assertTrue(property_exists($result->blocks[0]->mobile, 'minHeight') && $result->blocks[0]->mobile->minHeight === null, 'mobile.minHeight = null conservé');
+    }
+
+    public function testOtherPropertiesRefusedForABlockTypeAreStillSentBackToTheModel(): void
+    {
+        $wrong = $this->preset('contact-type-a');
+        $wrong->blocks[1]->valign = 'center'; // réservé aux containers : l'intention du modèle n'est pas un simple style de texte
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($wrong, null);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('contact-type-a'), null);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Contact', 'prompt' => 'Formulaire de contact.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertStringContainsString('blocks[1].valign', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+    }
+
     public function testSonnet55GetsAutomaticToolChoice(): void
     {
         $payload = static::getContainer()->get(\App\Services\LandingAiService\LandingAiPromptBuilder::class)

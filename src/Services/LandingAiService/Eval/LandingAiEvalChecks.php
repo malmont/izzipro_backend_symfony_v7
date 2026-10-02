@@ -105,7 +105,7 @@ final class LandingAiEvalChecks
             'V5' => ['ok' => !$invented, 'detail' => $invented ? 'chiffres absents des données : ' . implode(', ', array_slice($invented, 0, 5)) : '(chiffres uniquement ; noms propres non mesurés)'],
             'V6' => ['ok' => null, 'detail' => 'sans objet en création'],
             'V7' => ['ok' => !$weak, 'detail' => $weak ? 'contraste insuffisant : ' . implode(' ; ', array_slice($weak, 0, 4)) : ''],
-            'V8' => ['ok' => !$misaligned, 'detail' => $misaligned ? 'fitContent décalé de sa pile : ' . implode(' ; ', array_slice($misaligned, 0, 4)) : ''],
+            'V8' => ['ok' => !$misaligned, 'detail' => $misaligned ? 'bouton ou badge fitContent décalé de sa pile (à regarder, peut être voulu) : ' . implode(' ; ', array_slice($misaligned, 0, 4)) : ''],
         ];
     }
 
