@@ -14,6 +14,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
@@ -53,7 +54,10 @@ class SharedMediaCrudController extends BaseTenantCrudController
             ->setEntityLabelInSingular('Fichier Partagé')
             ->setEntityLabelInPlural('Médiathèque & Partage de Fichiers')
             ->setDefaultSort(['createdAt' => 'DESC'])
-            ->setSearchFields(['titre', 'originalFilename', 'description', 'accessKey']);
+            ->setSearchFields(['titre', 'originalFilename', 'description', 'accessKey'])
+            // Actions en ligne : la liste est plus large que l'écran (colonne du lien de partage), elle défile donc
+            // horizontalement et son cadre coupait le menu déroulant des actions (Modifier invisible)
+            ->showEntityActionsInlined();
     }
 
     public function configureActions(Actions $actions): Actions
@@ -63,10 +67,16 @@ class SharedMediaCrudController extends BaseTenantCrudController
             ->setCssClass('btn btn-outline-warning btn-sm')
             ->displayIf(fn (SharedMedia $media) => $media->isPrivate());
 
+        // Sur la liste : icônes seules (libellé en infobulle), pour ne pas élargir encore le tableau
+        $icon = fn (string $icon, string $title) => fn (Action $action) => $action->setIcon($icon)->setLabel(false)->setHtmlAttributes(['title' => $title]);
+
         return $actions
             ->add(Crud::PAGE_INDEX, Action::DETAIL)
             ->add(Crud::PAGE_INDEX, $regenerateKey)
-            ->add(Crud::PAGE_DETAIL, $regenerateKey);
+            ->add(Crud::PAGE_DETAIL, $regenerateKey)
+            ->update(Crud::PAGE_INDEX, Action::DETAIL, $icon('fas fa-eye', 'Consulter'))
+            ->update(Crud::PAGE_INDEX, Action::EDIT, $icon('fas fa-pen', 'Modifier'))
+            ->update(Crud::PAGE_INDEX, Action::DELETE, $icon('fas fa-trash', 'Supprimer'));
     }
 
     public function configureFields(string $pageName): iterable
@@ -125,8 +135,12 @@ class SharedMediaCrudController extends BaseTenantCrudController
             ->hideOnIndex();
 
         // 6. Colonnes informatives pour la Vue Liste (Index)
+        // Colonnes calculées : chacune s'appuie sur une propriété réelle et toujours renseignée de l'entité, la valeur
+        // affichée vient de formatValue. Sur une propriété inexistante (typeBadge, fileInfo…), EasyAdmin affiche
+        // « Inaccessible » et n'appelle pas formatValue.
         if ($isIndex) {
-            yield TextField::new('typeBadge', 'Type')
+            yield TextField::new('mediaType', 'Type')
+                ->setSortable(false)
                 ->onlyOnIndex()
                 ->formatValue(function ($val, SharedMedia $media) {
                     if ($media->isImage()) {
@@ -139,7 +153,8 @@ class SharedMediaCrudController extends BaseTenantCrudController
                     return '<span class="badge bg-secondary text-white"><i class="fas fa-file mr-1"></i>Document</span>';
                 });
 
-            yield TextField::new('fileInfo', 'Fichier & Taille')
+            yield TextField::new('filename', 'Fichier & Taille')
+                ->setSortable(false)
                 ->onlyOnIndex()
                 ->formatValue(function ($val, SharedMedia $media) {
                     $orig = htmlspecialchars($media->getOriginalFilename() ?: $media->getFilename(), ENT_QUOTES, 'UTF-8');
@@ -147,7 +162,8 @@ class SharedMediaCrudController extends BaseTenantCrudController
                     return sprintf('<div><strong>%s</strong></div><small class="text-muted">%s</small>', $orig, $size);
                 });
 
-            yield TextField::new('shareLink', 'Lien de Partage (1-Clic)')
+            yield TextField::new('visibility', 'Lien de Partage (1-Clic)')
+                ->setSortable(false)
                 ->onlyOnIndex()
                 ->formatValue(function ($val, SharedMedia $media) {
                     $request = $this->requestStack->getCurrentRequest();
@@ -173,7 +189,8 @@ class SharedMediaCrudController extends BaseTenantCrudController
                     ', $escapedUrl, $escapedUrl, $escapedUrl, $keyBadge);
                 });
 
-            yield TextField::new('downloadCount', 'Vues')
+            // nombre entier : un TextField le refuse (« can't be converted into a string »), la liste ne s'ouvrait plus
+            yield IntegerField::new('downloadCount', 'Vues')
                 ->onlyOnIndex()
                 ->formatValue(fn ($val) => sprintf('<span class="badge bg-light text-dark font-weight-bold"><i class="fas fa-eye text-muted mr-1"></i>%d</span>', (int) $val));
 
@@ -186,8 +203,8 @@ class SharedMediaCrudController extends BaseTenantCrudController
         if ($isDetail) {
             yield TextField::new('originalFilename', 'Nom d\'origine');
             yield TextField::new('mimeType', 'Type MIME');
-            yield TextField::new('formattedSize', 'Taille')->formatValue(fn ($val, SharedMedia $media) => $media->getFormattedFileSize());
-            yield TextField::new('downloadCount', 'Nombre de consultations');
+            yield TextField::new('mediaType', 'Taille')->formatValue(fn ($val, SharedMedia $media) => $media->getFormattedFileSize());
+            yield IntegerField::new('downloadCount', 'Nombre de consultations');
 
             yield TextField::new('accessKey', 'Clé d\'accès privée')
                 ->formatValue(function ($val, SharedMedia $media) {
@@ -197,7 +214,7 @@ class SharedMediaCrudController extends BaseTenantCrudController
                     return sprintf('<code>%s</code> <small class="text-muted">(Token sécurisé de 64 caractères)</small>', htmlspecialchars((string) $val, ENT_QUOTES, 'UTF-8'));
                 });
 
-            yield TextField::new('fullUrlDetail', 'Lien de partage complet')
+            yield TextField::new('visibility', 'Lien de partage complet')
                 ->formatValue(function ($val, SharedMedia $media) {
                     $request = $this->requestStack->getCurrentRequest();
                     $fallbackHost = $request ? $request->getSchemeAndHttpHost() : null;
@@ -215,7 +232,7 @@ class SharedMediaCrudController extends BaseTenantCrudController
                     ', $escapedUrl, $escapedUrl, $escapedUrl);
                 });
 
-            yield TextField::new('embedSnippets', 'Extraits de code pour intégration')
+            yield TextField::new('filename', 'Extraits de code pour intégration')
                 ->formatValue(function ($val, SharedMedia $media) {
                     $request = $this->requestStack->getCurrentRequest();
                     $fallbackHost = $request ? $request->getSchemeAndHttpHost() : null;
