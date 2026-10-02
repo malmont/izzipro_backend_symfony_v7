@@ -812,6 +812,42 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertStringContainsString('média absent de la liste autorisée', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
     }
 
+    public function testScrollSceneNeedsAVideoFileAndIsUniquePerSection(): void
+    {
+        $checker = static::getContainer()->get(\App\Services\LandingAiService\LandingAiCompositionChecker::class);
+        $scene = fn (array $video, string $id = 'scene') => [
+            ['id' => $id, 'type' => 'container', 'parentId' => null, 'layout' => 'scroll', 'scrollLength' => 4],
+            ['id' => "$id-video", 'parentId' => $id] + $video,
+            ['id' => "$id-etape", 'type' => 'text', 'parentId' => $id, 'stepAt' => 10],
+        ];
+        $errors = fn (array $blocks, array $skip = []) => array_column($checker->sceneErrors(json_decode(json_encode(['schemaVersion' => 2, 'blocks' => $blocks]), false), $skip), 'message');
+
+        $this->assertSame([], $errors($scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4'])));
+        $this->assertSame([], $errors($scene(['type' => 'video', 'mediaKey' => str_repeat('a', 64)])));
+        $this->assertSame([], $errors($scene(['type' => 'video', 'bindings' => ['url' => 'videoUrl']])));
+        $this->assertStringContainsString('premier enfant', $errors($scene(['type' => 'title', 'text' => 'Titre']))[0]);
+        $this->assertStringContainsString('sans fichier vidéo', $errors($scene(['type' => 'video']))[0]);
+        $this->assertStringContainsString('YouTube ou Vimeo', $errors($scene(['type' => 'video', 'url' => 'https://www.youtube.com/watch?v=abc']))[0]);
+
+        $two = [...$scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4']), ...$scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4'], 'autre')];
+        $this->assertStringContainsString('une seule scène', $errors($two)[0]);
+        $this->assertSame([], $errors($scene(['type' => 'video']), ['scene']), 'retouche : une scène déjà présente n\'est pas une erreur de l\'IA');
+    }
+
+    public function testScrollSceneRuleIsSentOnlyWhenTheContractKnowsTheLayout(): void
+    {
+        $with = json_decode('{"$defs":{"block":{"properties":{"layout":{"enum":["free","stack","row","grid","slides","scroll"]}}}}}');
+        $without = json_decode('{"$defs":{"block":{"properties":{"layout":{"enum":["free","stack","row","grid","slides"]}}}}}');
+        $builder = \App\Services\LandingAiService\LandingAiPromptBuilder::class;
+        $this->assertTrue($builder::supportsScrollScene($with));
+        $this->assertFalse($builder::supportsScrollScene($without));
+
+        $schema = json_decode(file_get_contents(static::getContainer()->get(\App\Services\LandingConfigService\LandingConfigStore::class)->path(\App\Services\LandingConfigService\LandingConfigStore::SCHEMA)));
+        $payload = static::getContainer()->get($builder)
+            ->editPayload('claude-sonnet-5', 'PresentationGroup', $this->preset('group-type-t'), 'Titre en noir.', 'fr', [], [], ['colors' => [], 'fonts' => []]);
+        $this->assertSame($builder::supportsScrollScene($schema), str_contains($payload['system'][0]['text'], 'Scène au défilement'), 'consigne présente si et seulement si le contrat actif connaît le layout');
+    }
+
     public function testSonnet55GetsAutomaticToolChoice(): void
     {
         $payload = static::getContainer()->get(\App\Services\LandingAiService\LandingAiPromptBuilder::class)

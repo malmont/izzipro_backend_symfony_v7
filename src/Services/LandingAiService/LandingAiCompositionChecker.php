@@ -47,6 +47,56 @@ final class LandingAiCompositionChecker
     }
 
     /**
+     * Scènes au défilement (containers layout « scroll ») produites par l'IA : le premier enfant doit être un bloc
+     * video qui lit un fichier (url, mediaKey ou liaison), jamais YouTube ni Vimeo, sinon la scène reste vide ; une
+     * seule scène par section. $skipIds : scènes déjà présentes dans la composition de départ (retouche).
+     *
+     * @param list<string> $skipIds
+     * @return list<array{path: string, message: string}>
+     */
+    public function sceneErrors(object $composition, array $skipIds = []): array
+    {
+        $blocks = is_array($composition->blocks ?? null) ? array_values(array_filter($composition->blocks, 'is_object')) : [];
+        $errors = [];
+        $scenes = 0;
+        foreach ($blocks as $i => $block) {
+            if (($block->type ?? null) !== 'container' || ($block->layout ?? null) !== 'scroll') {
+                continue;
+            }
+            $scenes++;
+            if (in_array($block->id ?? null, $skipIds, true)) {
+                continue;
+            }
+            if ($scenes > 1) {
+                $errors[] = ['path' => "blocks[$i].layout", 'message' => 'une seule scène au défilement (layout « scroll ») par page'];
+                continue;
+            }
+            $children = array_values(array_filter($blocks, fn ($b) => ($b->parentId ?? null) === ($block->id ?? null)));
+            $video = $children[0] ?? null;
+            $url = is_string($video?->url ?? null) ? $video->url : '';
+            $message = match (true) {
+                ($video?->type ?? null) !== 'video' => 'scène au défilement : le premier enfant du container doit être un bloc video',
+                preg_match('#(youtube\.com|youtu\.be|youtube-nocookie\.com|vimeo\.com)#i', $url) === 1 => 'scène au défilement : un fichier vidéo est requis, pas une adresse YouTube ou Vimeo ; sans fichier, pas de scène',
+                $url === '' && !is_string($video->mediaKey ?? null) && !is_string($video->bindings->url ?? null) => 'scène au défilement sans fichier vidéo : n\'en propose une que si une vidéo est fournie ou liée',
+                default => null,
+            };
+            if ($message !== null) {
+                $errors[] = ['path' => "blocks[$i].layout", 'message' => $message];
+            }
+        }
+
+        return $errors;
+    }
+
+    public function sceneCount(object $composition): int
+    {
+        return count(array_filter(
+            is_array($composition->blocks ?? null) ? $composition->blocks : [],
+            fn ($b) => is_object($b) && ($b->type ?? null) === 'container' && ($b->layout ?? null) === 'scroll'
+        ));
+    }
+
+    /**
      * Boutons et badges produits par l'IA sans « background » : le moteur de rendu les dessine sur fond blanc opaque,
      * ce qui est rarement voulu, et la couleur ne se devine pas : erreur renvoyée au modèle. $skipIds : blocs à ne pas
      * vérifier (en retouche, ceux de la composition de départ). Les containers sont complétés sans nouvel essai

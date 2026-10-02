@@ -301,6 +301,14 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   (`CompositionInspector::colorRoles`, `LandingAiSiteContext::palette`). Consigne : un fond de carte est une couleur
   déjà employée comme fond ; contraste insuffisant, on corrige d'abord le fond. C2 rejoué deux fois : V7 réussie.
   V7 reste une mesure du jeu d'essai, jamais un refus en production.
+- **Scène au défilement** (container `layout: scroll`, annoncée par le frontend le 02/10/2026 : premier enfant = bloc
+  video qui avance avec le défilement, autres enfants = étapes avec `stepAt`, `scrollLength` sur le container). Le
+  contrat (schéma synchronisé) la valide ; côté assistant :
+  - la consigne (une scène seulement si un fichier vidéo est fourni ou lié, jamais YouTube ni Vimeo, une par page, 3 à
+    5 étapes, section pleine largeur sans marge) n'est envoyée que si le contrat actif connaît le layout
+    (`LandingAiPromptBuilder::supportsScrollScene`), pour qu'un retour à une version antérieure reste sûr ;
+  - une scène produite par l'IA sans bloc video en premier enfant, sans fichier, avec YouTube ou Vimeo, ou en double
+    dans la page est renvoyée au modèle (`LandingAiCompositionChecker::sceneErrors`).
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

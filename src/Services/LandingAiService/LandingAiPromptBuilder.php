@@ -56,7 +56,17 @@ Règles :
 - Réponds uniquement en appelant l'outil demandé.
 TXT;
 
+    /**
+     * Scène au défilement (container layout « scroll », contrat du 02/10/2026) : consigne ajoutée seulement quand le
+     * contrat actif la connaît, pour qu'un retour à une version antérieure ne fasse pas produire un layout refusé.
+     */
+    private const SCROLL_SCENE_RULE = <<<'TXT'
+
+- Scène au défilement (container layout « scroll » : son premier enfant est un bloc video qui avance avec le défilement de la page, chaque autre enfant est une étape de texte affichée à son tour) : n'en propose une que si un fichier vidéo est fourni avec la demande ou lié à une donnée du site, jamais avec une adresse YouTube ou Vimeo ni une vidéo inventée. Une seule scène par page ; 3 à 5 étapes, chacune avec stepAt (0 à 100, croissant) ; scrollLength (1,5 à 12 hauteurs d'écran) sur le container ; section en pleine largeur, sans marge. Sans fichier vidéo : une section vidéo ordinaire, ou une autre mise en page.
+TXT;
+
     private ?string $schemaText = null;
+    private bool $scrollScene = false;
     /** Fichier chargé dans $schemaText */
     private ?string $schemaFrom = null;
 
@@ -276,8 +286,8 @@ TXT;
             'model' => $model,
             'max_tokens' => $maxTokens,
             'system' => [
-                ['type' => 'text', 'text' => self::SYSTEM],
-                ['type' => 'text', 'text' => "CONTRAT DES COMPOSITIONS (JSON Schema 2020-12, règles en plus : identifiants uniques, parentId = null ou id d'un bloc container, pas de boucle, 8 niveaux au plus, x + w ≤ 100, y + h ≤ 100) :\n" . $this->schema(), 'cache_control' => $cache],
+                ['type' => 'text', 'text' => $this->system($schema = $this->schema())],
+                ['type' => 'text', 'text' => "CONTRAT DES COMPOSITIONS (JSON Schema 2020-12, règles en plus : identifiants uniques, parentId = null ou id d'un bloc container, pas de boucle, 8 niveaux au plus, x + w ≤ 100, y + h ≤ 100) :\n" . $schema, 'cache_control' => $cache],
                 ['type' => 'text', 'text' => $familyContext, 'cache_control' => $cache],
             ],
             'tools' => [$tool],
@@ -383,11 +393,25 @@ TXT;
     {
         $path = $this->configStore->path(LandingConfigStore::SCHEMA);
         if ($this->schemaText === null || $this->schemaFrom !== $path) {
-            $this->schemaText = $this->json(json_decode(file_get_contents($path), false, 512, JSON_THROW_ON_ERROR));
+            $schema = json_decode(file_get_contents($path), false, 512, JSON_THROW_ON_ERROR);
+            $this->schemaText = $this->json($schema);
+            $this->scrollScene = self::supportsScrollScene($schema);
             $this->schemaFrom = $path;
         }
 
         return $this->schemaText;
+    }
+
+    /** Consignes, complétées par celles qui dépendent du contrat actif (à appeler après schema()) */
+    private function system(string $schema): string
+    {
+        return self::SYSTEM . ($this->scrollScene ? self::SCROLL_SCENE_RULE : '');
+    }
+
+    /** Le contrat accepte-t-il le layout « scroll » des containers ? */
+    public static function supportsScrollScene(object $schema): bool
+    {
+        return in_array('scroll', (array) ($schema->{'$defs'}->block->properties->layout->enum ?? []), true);
     }
 
     private function json(mixed $value): string
