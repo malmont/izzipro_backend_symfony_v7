@@ -22,6 +22,8 @@ final class LandingAiQuotaService
     public const TIMEZONE = 'America/Toronto';
     public const COSTS = ['edit' => 1, 'create' => 3, 'page' => 10];
     public const IMAGES_COST = 10;
+    /** Prompt de vidéo pour une scène au défilement (POST /api/landingpage-ai/video-prompt) */
+    public const VIDEO_PROMPT_COST = 1;
     public const RESERVATION_TTL_SECONDS = 300;
     public const JOB_RESERVATION_TTL_SECONDS = 2100;
     public const RETENTION_DAYS = 90;

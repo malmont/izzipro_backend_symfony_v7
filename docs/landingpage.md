@@ -14,6 +14,7 @@ Routes et rôles : `docs/endpoints.md`, section « Landing Page » ; données de
 | Lire / enregistrer les réglages du site | `GET` / `PUT /api/landingpage-settings` | public / `ROLE_ADMIN` |
 | Familles de sections et source de leurs données | `GET /api/components-config` | public |
 | Assistant IA (retouche, création, page, images) | `POST /api/landingpage-ai/compose` → 200, ou 202 `{ jobId }` | `ROLE_ADMIN` |
+| Assistant IA : prompt d'une vidéo pour une scène au défilement (1 crédit, synchrone) | `POST /api/landingpage-ai/video-prompt` | `ROLE_ADMIN` |
 | Résultat d'une tâche de fond | `GET /api/landingpage-ai/jobs/{jobId}` (même tenant, 1 h) | `ROLE_ADMIN` |
 | Crédits et historique | `GET /api/landingpage-ai/usage` | `ROLE_ADMIN` |
 | Synchronisation de la configuration | `GET /api/landingpage-config/status`, `POST …/sync`, `POST …/rollback` | `ROLE_SUPER_ADMIN` ou en-tête `X-Deploy-Token` |

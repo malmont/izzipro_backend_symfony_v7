@@ -3,11 +3,13 @@
 namespace App\Controller\LandingAiController;
 
 use App\Dto\LandingAiComposeInputDto;
+use App\Dto\LandingAiVideoPromptInputDto;
 use App\Services\LandingAiService\LandingAiComposeRunner;
 use App\Services\LandingAiService\LandingAiException;
 use App\UseCase\LandingAiUseCase\ComposeLandingSectionUseCase;
 use App\UseCase\LandingAiUseCase\GetLandingAiJobUseCase;
 use App\UseCase\LandingAiUseCase\GetLandingAiUsageUseCase;
+use App\UseCase\LandingAiUseCase\WriteLandingVideoPromptUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -22,7 +24,8 @@ class LandingAiController extends AbstractController
     public function __construct(
         private readonly ComposeLandingSectionUseCase $composeUseCase,
         private readonly GetLandingAiUsageUseCase $usageUseCase,
-        private readonly GetLandingAiJobUseCase $jobUseCase
+        private readonly GetLandingAiJobUseCase $jobUseCase,
+        private readonly WriteLandingVideoPromptUseCase $videoPromptUseCase
     ) {
     }
 
@@ -43,6 +46,28 @@ class LandingAiController extends AbstractController
 
             // 200 : proposition (edit, create) ; 202 : tâche de fond (page, images) à lire sur /jobs/{jobId}
             return new JsonResponse(LandingAiComposeRunner::encode($result->body), $result->status, $result->headers, true);
+        } catch (LandingAiException $e) {
+            return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
+        }
+    }
+
+    /** Prompt (en anglais) d'une vidéo pour une scène au défilement, d'après la description de l'administrateur : 1 crédit */
+    #[Route('/video-prompt', name: 'api_landingpage_ai_video_prompt', methods: ['POST'])]
+    public function videoPrompt(Request $request): JsonResponse
+    {
+        try {
+            if (strlen($request->getContent()) > LandingAiVideoPromptInputDto::MAX_BODY_BYTES) {
+                throw new LandingAiException(413, 'Requête trop volumineuse', 'Le corps de la requête est trop volumineux.');
+            }
+            try {
+                $body = json_decode($request->getContent(), false, 16, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                throw LandingAiException::badRequest('Corps JSON invalide.');
+            }
+
+            return new JsonResponse(LandingAiComposeRunner::encode(
+                $this->videoPromptUseCase->execute(LandingAiVideoPromptInputDto::fromRequestBody($body), $this->getUser()?->getUserIdentifier())
+            ), 200, [], true);
         } catch (LandingAiException $e) {
             return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
         }

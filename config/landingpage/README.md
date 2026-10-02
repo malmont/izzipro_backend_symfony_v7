@@ -326,6 +326,18 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
     nouvel essai (étapes réparties) ;
   - V7 mesure le texte d'une étape sur sa carte composée sur la pire image possible de la vidéo (blanc ou noir), et
     signale une carte à moins de 70 % d'opacité ou un texte posé directement sur la vidéo.
+- **Prompt de vidéo** (`POST /api/landingpage-ai/video-prompt`, 02/10/2026 ; `WriteLandingVideoPromptUseCase`,
+  `LandingAiVideoPromptWriter`) : l'administrateur décrit en français la vidéo d'une scène au défilement, la réponse
+  est un prompt en anglais pour un outil de génération de vidéo. Entrée `{ prompt (2 000 car.), format: landscape |
+  portrait | both, duration: 5 | 8 | 10, textSide: left | right | center, background: "#rrggbb", locale }` ; sortie
+  `{ prompt, promptMobile (si both), steps: [{ at, title, text }], notes: [], credits, usage }`. 1 crédit, synchrone,
+  modèle de la retouche, limite par minute commune à l'assistant ; un échec libère le crédit. Contraintes écrites
+  dans le prompt : un seul plan, fond uni de la couleur donnée, poses immobiles (une par étape), mouvement propre en
+  marche arrière, aucun texte lisible, côté du texte laissé vide, durée et format en toutes lettres. Les `at` sont
+  triés et ramenés entre 0 et 85 sans nouvel essai. Mesure : 0,02 $ et 8 à 13 s par demande. Historique : mode `video`.
+- **Version téléphone d'une scène** : un second bloc video dans un container `scroll` est la vidéo verticale (9:16),
+  affichée à la place de la première sur écran étroit ; deux blocs video au plus, chacun avec un fichier. L'assistant
+  ne l'ajoute que si deux vidéos sont fournies.
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

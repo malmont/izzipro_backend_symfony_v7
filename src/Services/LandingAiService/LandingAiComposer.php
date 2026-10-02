@@ -255,10 +255,11 @@ final class LandingAiComposer
     /**
      * Boucle commune : appel, lecture de l'outil, évaluation par $handle (résultat ou erreurs), nouvel essai avec
      * les erreurs renvoyées au modèle (3 essais au total). $long : délais de la page et des requêtes avec images.
+     * Publique pour les demandes qui ne produisent pas de composition (LandingAiVideoPromptWriter).
      *
      * @param callable(object, LandingAiUsageStats): array{0: mixed, 1: list<array{path: string, message: string}>} $handle
      */
-    private function run(array $payload, string $tool, bool $long, callable $handle): mixed
+    public function run(array $payload, string $tool, bool $long, callable $handle): mixed
     {
         $stats = new LandingAiUsageStats($payload['model']);
         $start = microtime(true);
@@ -286,7 +287,7 @@ final class LandingAiComposer
         }
 
         $stats->durationMs = $this->elapsedMs($start);
-        throw new LandingAiException(502, 'Proposition invalide', sprintf('L\'IA n\'a pas produit de composition valide après %d essais. Aucun crédit n\'a été consommé.', self::MAX_ATTEMPTS), array_slice($errors, 0, 40), [], $stats);
+        throw new LandingAiException(502, 'Proposition invalide', sprintf('L\'IA n\'a pas produit de proposition valide après %d essais. Aucun crédit n\'a été consommé.', self::MAX_ATTEMPTS), array_slice($errors, 0, 40), [], $stats);
     }
 
     private function summary(object $input): string

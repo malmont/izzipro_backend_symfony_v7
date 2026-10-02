@@ -49,7 +49,8 @@ final class LandingAiCompositionChecker
     /**
      * Scènes au défilement (containers layout « scroll ») produites par l'IA : le premier enfant doit être un bloc
      * video qui lit un fichier (url, mediaKey ou liaison), jamais YouTube ni Vimeo, sinon la scène reste vide ; un
-     * seul bloc video par scène (chaque autre enfant direct est une étape) ; une seule scène par section. $skipIds : scènes déjà présentes dans la composition de départ (retouche).
+     * second bloc video est la version téléphone (9:16), avec les mêmes exigences ; jamais plus de deux (chaque autre
+     * enfant direct est une étape) ; une seule scène par section. $skipIds : scènes déjà présentes dans la composition de départ (retouche).
      *
      * @param list<string> $skipIds
      * @return list<array{path: string, message: string}>
@@ -80,9 +81,17 @@ final class LandingAiCompositionChecker
                 $url === '' && !is_string($video->mediaKey ?? null) && !is_string($video->bindings->url ?? null) => 'scène au défilement sans fichier vidéo : n\'en propose une que si une vidéo est fournie ou liée',
                 default => null,
             };
-            $message ??= count(array_filter($children, fn ($b) => ($b->type ?? null) === 'video')) > 1
-                ? 'scène au défilement : un seul bloc video, en premier enfant ; les autres enfants sont des étapes'
-                : null;
+            $videos = array_values(array_filter($children, fn ($b) => ($b->type ?? null) === 'video'));
+            if ($message === null && count($videos) > 2) {
+                $message = 'scène au défilement : deux blocs video au plus (la vidéo, puis sa version téléphone) ; les autres enfants sont des étapes';
+            }
+            // version téléphone : un fichier elle aussi
+            $mobile = $videos[1] ?? null;
+            $mobileUrl = is_string($mobile?->url ?? null) ? $mobile->url : '';
+            if ($message === null && $mobile !== null && (preg_match('#(youtube\.com|youtu\.be|youtube-nocookie\.com|vimeo\.com)#i', $mobileUrl) === 1
+                || ($mobileUrl === '' && !is_string($mobile->mediaKey ?? null) && !is_string($mobile->bindings->url ?? null)))) {
+                $message = 'scène au défilement : la version téléphone (second bloc video) doit lire un fichier vidéo fourni ou lié, pas YouTube ni Vimeo';
+            }
             if ($message !== null) {
                 $errors[] = ['path' => "blocks[$i].layout", 'message' => $message];
             }

@@ -9,7 +9,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
   leurs propres vérifications : `#[IsGranted]` est signalé, les autres (voters, contrôles dans le code) sont dans les fiches.
 - Toutes les routes sont résolues pour le tenant de la requête (en-tête `X-Tenant-Host`, voir `docs/architecture.md`).
 
-## Landing Page (10)
+## Landing Page (11)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -17,6 +17,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/landingpage-ai/compose` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::compose` |
 | GET | `/api/landingpage-ai/jobs/{jobId}` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::job` |
 | GET | `/api/landingpage-ai/usage` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::usage` |
+| POST | `/api/landingpage-ai/video-prompt` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::videoPrompt` |
 | POST | `/api/landingpage-config/rollback` | PUBLIC_ACCESS | `Controller\LandingConfigController\LandingConfigController::rollback` |
 | GET | `/api/landingpage-config/status` | PUBLIC_ACCESS | `Controller\LandingConfigController\LandingConfigController::status` |
 | POST | `/api/landingpage-config/sync` | PUBLIC_ACCESS | `Controller\LandingConfigController\LandingConfigController::sync` |

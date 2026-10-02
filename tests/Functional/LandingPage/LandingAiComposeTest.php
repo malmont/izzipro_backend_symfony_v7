@@ -812,6 +812,87 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertStringContainsString('média absent de la liste autorisée', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
     }
 
+    public function testVideoPromptIsWrittenForOneCredit(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::videoPromptResponse([
+            'prompt' => 'A single continuous shot of a laptop assembling itself on a plain #0e1533 background.',
+            'promptMobile' => 'Vertical 9:16 version of the same scene.',
+            'steps' => [
+                ['at' => 100, 'title' => 'Accompagner', 'text' => 'Nous restons à vos côtés.'],
+                ['at' => 0, 'title' => '<b>Écouter</b>', 'text' => 'Nous comprenons votre projet.'],
+                ['at' => 40, 'title' => 'Concevoir', 'text' => 'Nous dessinons la solution.'],
+            ],
+            'notes' => ['Vérifiez que le fond reste uni.'],
+        ]);
+
+        $response = $this->videoPrompt(['prompt' => 'Un ordinateur portable qui s\'assemble pièce par pièce.', 'format' => 'both', 'duration' => 8, 'textSide' => 'left', 'background' => '#0E1533', 'locale' => 'fr']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent());
+        $this->assertStringContainsString('single continuous shot', $body->prompt);
+        $this->assertSame('Vertical 9:16 version of the same scene.', $body->promptMobile);
+        $this->assertSame([0, 40, 85], array_column($body->steps, 'at'), 'étapes triées, la dernière ramenée à 85');
+        $this->assertSame('Écouter', $body->steps[0]->title, 'texte brut, sans balises');
+        $this->assertSame(['Vérifiez que le fond reste uni.'], $body->notes);
+        $this->assertSame(1, $body->credits->used, 'un crédit');
+
+        $request = FakeLandingAiClient::$requests[0];
+        $this->assertSame(static::getContainer()->get(\App\Services\LandingAiService\LandingAiComposer::class)->editModel(), $request['model'], 'modèle de la retouche');
+        $this->assertSame(['type' => 'tool', 'name' => 'ecrire_prompt_video'], $request['tool_choice']);
+        $user = $request['messages'][0]['content'];
+        foreach (['Format : both', 'Durée : 8 secondes', 'Côté du texte : left', 'Couleur du fond : #0e1533', 'Un ordinateur portable'] as $expected) {
+            $this->assertStringContainsString($expected, $user);
+        }
+        $history = json_decode($this->get('/api/landingpage-ai/usage')->getContent(), true)['history'];
+        $this->assertSame(['video', 'Video', 'success', 1], [$history[0]['mode'], $history[0]['componentKey'], $history[0]['status'], $history[0]['credits']]);
+    }
+
+    public function testVideoPromptWithoutMobileVersionWhenTheFormatIsNotBoth(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::videoPromptResponse([
+            'prompt' => 'A slow rotation of a ceramic vase on a plain #ffffff background.', 'promptMobile' => 'ignored',
+            'steps' => [['at' => 0, 'title' => 'La matière', 'text' => ''], ['at' => 40, 'title' => 'La forme', 'text' => ''], ['at' => 80, 'title' => 'La finition', 'text' => '']],
+            'notes' => [],
+        ]);
+
+        $response = $this->videoPrompt(['prompt' => 'Un vase qui tourne lentement.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent());
+        $this->assertObjectNotHasProperty('promptMobile', $body);
+        $this->assertStringContainsString('Format : landscape', FakeLandingAiClient::$requests[0]['messages'][0]['content'], 'valeurs par défaut');
+    }
+
+    public function testVideoPromptRefusesAnInvalidRequestBeforeAnyAiCall(): void
+    {
+        foreach ([
+            [['prompt' => ''], 'prompt'],
+            [['prompt' => 'Un vase.', 'format' => 'carré'], 'format'],
+            [['prompt' => 'Un vase.', 'duration' => 7], 'duration'],
+            [['prompt' => 'Un vase.', 'textSide' => 'top'], 'textSide'],
+            [['prompt' => 'Un vase.', 'background' => 'bleu'], 'background'],
+        ] as [$body, $path]) {
+            $response = $this->videoPrompt($body);
+            $this->assertSame(400, $response->getStatusCode(), $path);
+            $this->assertSame($path, json_decode($response->getContent())->errors[0]->path);
+        }
+        $this->assertSame([], FakeLandingAiClient::$requests);
+        $this->assertSame(0, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM ai_usage'), 'aucune réservation');
+    }
+
+    public function testVideoPromptFailureReleasesTheCredit(): void
+    {
+        for ($i = 0; $i < 3; $i++) {
+            FakeLandingAiClient::$queue[] = FakeLandingAiClient::videoPromptResponse(['prompt' => '', 'promptMobile' => null, 'steps' => [], 'notes' => []]);
+        }
+
+        $response = $this->videoPrompt(['prompt' => 'Un vase qui tourne lentement.']);
+
+        $this->assertSame(502, $response->getStatusCode(), $response->getContent());
+        $this->assertSame(0, json_decode($this->get('/api/landingpage-ai/usage')->getContent())->credits->used);
+        $this->assertStringContainsString('prompt, promptMobile, les étapes', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+    }
+
     public function testScrollSceneNeedsAVideoFileAndIsUniquePerSection(): void
     {
         $checker = static::getContainer()->get(\App\Services\LandingAiService\LandingAiCompositionChecker::class);
@@ -829,8 +910,13 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertStringContainsString('sans fichier vidéo', $errors($scene(['type' => 'video']))[0]);
         $this->assertStringContainsString('YouTube ou Vimeo', $errors($scene(['type' => 'video', 'url' => 'https://www.youtube.com/watch?v=abc']))[0]);
 
-        $twoVideos = [...$scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4']), ['id' => 'scene-video-2', 'type' => 'video', 'parentId' => 'scene', 'url' => 'https://media.example.com/film.mp4']];
-        $this->assertStringContainsString('un seul bloc video', $errors($twoVideos)[0]);
+        // second bloc video : version téléphone (9:16), un fichier elle aussi ; jamais trois
+        $mobile = fn (array $video, string $id = 'scene-mobile') => ['id' => $id, 'type' => 'video', 'parentId' => 'scene'] + $video;
+        $withMobile = [...$scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4']), $mobile(['mediaKey' => str_repeat('b', 64)])];
+        $this->assertSame([], $errors($withMobile));
+        $this->assertStringContainsString('version téléphone', $errors([...$scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4']), $mobile(['url' => 'https://vimeo.com/123'])])[0]);
+        $this->assertStringContainsString('version téléphone', $errors([...$scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4']), $mobile([])])[0]);
+        $this->assertStringContainsString('deux blocs video au plus', $errors([...$withMobile, $mobile(['url' => 'https://media.example.com/film.mp4'], 'scene-video-3')])[0]);
 
         $two = [...$scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4']), ...$scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4'], 'autre')];
         $this->assertStringContainsString('une seule scène', $errors($two)[0]);
@@ -1138,6 +1224,11 @@ class LandingAiComposeTest extends WebTestCase
     private function compose(array $body): Response
     {
         return $this->request('POST', '/api/landingpage-ai/compose', json_encode($body, JSON_PRESERVE_ZERO_FRACTION));
+    }
+
+    private function videoPrompt(array $body): Response
+    {
+        return $this->request('POST', '/api/landingpage-ai/video-prompt', json_encode($body));
     }
 
     private function get(string $path): Response

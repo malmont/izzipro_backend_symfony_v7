@@ -61,6 +61,16 @@ class FakeLandingAiClient implements LandingAiClientInterface
         ], JSON_PRESERVE_ZERO_FRACTION), false);
     }
 
+    /** Réponse type : un appel de l'outil du prompt de vidéo */
+    public static function videoPromptResponse(array $input): object
+    {
+        return json_decode(json_encode([
+            'id' => 'msg_' . bin2hex(random_bytes(6)), 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-sonnet-5', 'stop_reason' => 'tool_use',
+            'content' => [['type' => 'tool_use', 'id' => 'toolu_' . bin2hex(random_bytes(6)), 'name' => 'ecrire_prompt_video', 'input' => $input]],
+            'usage' => ['input_tokens' => 900, 'output_tokens' => 400, 'cache_read_input_tokens' => 0, 'cache_creation_input_tokens' => 0],
+        ]), false);
+    }
+
     /**
      * Réponse type : un appel de l'outil de page
      *

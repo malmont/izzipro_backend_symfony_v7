@@ -14,6 +14,8 @@ final class LandingAiPromptBuilder
     public const EDIT_TOOL = 'retoucher_composition';
     public const CREATE_TOOL = 'creer_composition';
     public const PAGE_TOOL = 'composer_page';
+    /** Prompt de vidéo pour une scène au défilement (LandingAiVideoPromptWriter) */
+    public const VIDEO_PROMPT_TOOL = 'ecrire_prompt_video';
     public const MAX_TOKENS = 16000;
     public const PAGE_MAX_TOKENS = 32000;
     public const PAGE_MAX_SECTIONS = 12;
@@ -62,7 +64,7 @@ TXT;
      */
     private const SCROLL_SCENE_RULE = <<<'TXT'
 
-- Scène au défilement (container layout « scroll » : son premier enfant est un bloc video qui avance avec le défilement de la page, chaque autre enfant est une étape de texte affichée à son tour) : n'en propose une que si un fichier vidéo est fourni avec la demande ou lié à une donnée du site que la liste des données indique comme « fichier vidéo », jamais avec une vidéo YouTube ou Vimeo ni une vidéo inventée. Une seule scène par page, un seul bloc video par scène, en premier enfant. Sans fichier vidéo : une section vidéo ordinaire, ou une autre mise en page.
+- Scène au défilement (container layout « scroll » : son premier enfant est un bloc video qui avance avec le défilement de la page, chaque autre enfant est une étape de texte affichée à son tour) : n'en propose une que si un fichier vidéo est fourni avec la demande ou lié à une donnée du site que la liste des données indique comme « fichier vidéo », jamais avec une vidéo YouTube ou Vimeo ni une vidéo inventée. Une seule scène par page. Un bloc video en premier enfant ; un second bloc video est accepté seulement si deux vidéos sont fournies : c'est alors la version téléphone (verticale, 9:16), affichée à la place de la première sur écran étroit. Jamais plus de deux. Sans fichier vidéo : une section vidéo ordinaire, ou une autre mise en page.
   Étapes : 3 à 5. Chaque enfant direct de la scène est une étape : regroupe le titre, le texte et l'éventuel bouton d'une étape dans un container en pile (carte étroite, mobile.w 100, fond sombre opaque à 0,75 ou plus, jamais moins de 0,70, avec un texte clair, pour rester lisible quelle que soit l'image de la vidéo) ; ne pose pas un titre et un texte séparément à la racine de la scène, ils feraient deux étapes. Écris size sur chaque titre (26 à 32) et chaque texte (15 à 17) d'une étape : sans size, tous prennent 18 px et le titre ne se distingue plus. align et valign de la scène placent les étapes sur la vidéo. N'écris pas stepAt : absent, les étapes sont réparties ; écris-le seulement si la demande donne les moments (0 à 100, croissant, jamais plus de 85 pour la dernière étape, sinon elle n'apparaît qu'à la toute fin). scrollLength (1,5 à 12 hauteurs d'écran) est facultatif. Pas de repeat sur la scène.
   Section de la scène : fullWidth true, sans contentWidth, rootLayout « stack », rootPadding 0, rootGap 0, sans bgVideo ni minHeightVh. Container de la scène : parentId null, w 100, padding 0, radius 0, borderWidth 0, background écrit (couleur sombre ou « transparent »), sans aspectRatio ni hover.
 TXT;
@@ -125,6 +127,7 @@ TXT;
             . implode("\n", array_map(fn ($e) => sprintf('- %s : %s', $e['path'] !== '' ? $e['path'] : '(racine)', $e['message']), array_slice($errors, 0, 40)))
             . match ($tool) {
                 self::EDIT_TOOL => sprintf("\nCorrige et rappelle l'outil %s avec la liste COMPLÈTE des opérations, appliquée à la composition actuelle d'origine (les opérations précédentes sont ignorées).", $tool),
+                self::VIDEO_PROMPT_TOOL => sprintf("\nCorrige et rappelle l'outil %s avec le prompt, promptMobile, les étapes et les notes au complet.", $tool),
                 self::PAGE_TOOL => sprintf("\nCorrige et rappelle l'outil %s avec TOUTES les sections, chacune complète (componentKey, dataType, composition), y compris celles qui étaient déjà valides.", $tool),
                 default => sprintf("\nCorrige et rappelle l'outil %s avec la composition COMPLÈTE corrigée et le dataType.", $tool),
             };
