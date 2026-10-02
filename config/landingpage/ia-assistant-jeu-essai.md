@@ -48,6 +48,7 @@ Cas rejoués à chaque changement de prompt ou de modèle (conception : `ia-assi
 | P1 | charte : 2 couleurs, 1 police, logo | « Page d'accueil d'un cabinet de conseil : héros, services, témoignages, contact. » | 4 sections valides ; couleurs et police de la charte seulement | Page cohérente |
 | P2 | capture d'écran d'un site modèle | « Reproduis cette section. » | composition valide ; structure en rangées et colonnes proche de la capture | Ressemblance reconnaissable |
 | P3 | page générée en P1 (ou toute section) | auto-critique : bouton « 🔍 Relecture visuelle » (captures ordinateur et mobile envoyées en retouche avec images) | au moins une amélioration mesurable (contraste, espacement) sans casser V1 à V6 | Meilleure qu'avant |
+| P4 | aucune charte ni image | « Page d'accueil premium et vivante pour un studio de design : héros, services, réalisations, contact. Rendu moderne, avec des effets. » | 4 sections valides ; au moins une apparition (`animation`) par section, un `repeat.stagger` dans les listes, un `hover` sur les cartes ou les boutons ; palette du site | Page vivante sans être chargée |
 
 ## Mesures relevées à chaque passage
 

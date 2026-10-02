@@ -10354,6 +10354,7 @@
                 "textTransform": "none",
                 "objectFit": "cover",
                 "dividerWidth": 100,
+                "fitContent": true,
                 "layout": "stack",
                 "gap": 6
               },
@@ -23350,7 +23351,7 @@
           "id": "service-liste",
           "icon": "☰",
           "name": "Liste détaillée",
-          "description": "Une ligne par service : image à gauche (si le service en a une), titre, accroche, description et lien.",
+          "description": "Une ligne par service : image à gauche (si le service en a une), titre, accroche, prix, description et lien.",
           "composition": {
             "schemaVersion": 2,
             "layout": "free",
@@ -23708,6 +23709,36 @@
                 }
               },
               {
+                "id": "l-prix",
+                "type": "badge",
+                "parentId": "l-textes",
+                "x": 0,
+                "y": 0,
+                "w": 22,
+                "h": 8,
+                "text": "Prix",
+                "url": "",
+                "alt": "",
+                "size": 14,
+                "background": "rgba(37, 99, 235, 0.1)",
+                "color": "#2563eb",
+                "radius": 999,
+                "padding": 6,
+                "borderWidth": 0,
+                "borderColor": "#94a3b8",
+                "align": "left",
+                "fontWeight": "700",
+                "fontStyle": "normal",
+                "textTransform": "none",
+                "objectFit": "cover",
+                "dividerWidth": 100,
+                "fitContent": true,
+                "paddingX": 12,
+                "bindings": {
+                  "text": "item.price"
+                }
+              },
+              {
                 "id": "l-desc",
                 "type": "text",
                 "parentId": "l-textes",
@@ -24060,7 +24091,7 @@
                 "y": 0,
                 "w": 100,
                 "h": 18,
-                "text": "Sur devis",
+                "text": "Prix",
                 "url": "",
                 "alt": "",
                 "size": 32,
@@ -24076,10 +24107,37 @@
                 "textTransform": "none",
                 "objectFit": "cover",
                 "dividerWidth": 100,
-                "label": "Projets réalisés",
-                "bindingFallback": true,
                 "bindings": {
                   "text": "item.price"
+                }
+              },
+              {
+                "id": "s-accroche",
+                "type": "text",
+                "parentId": "s-carte",
+                "x": 0,
+                "y": 0,
+                "w": 100,
+                "h": 20,
+                "text": "",
+                "url": "",
+                "alt": "",
+                "size": 15,
+                "background": "transparent",
+                "color": "#7dd3fc",
+                "radius": 0,
+                "padding": 0,
+                "borderWidth": 0,
+                "borderColor": "#94a3b8",
+                "align": "left",
+                "fontWeight": "600",
+                "fontStyle": "normal",
+                "textTransform": "none",
+                "objectFit": "cover",
+                "dividerWidth": 100,
+                "hideEmpty": true,
+                "bindings": {
+                  "text": "item.subtitle"
                 }
               },
               {
