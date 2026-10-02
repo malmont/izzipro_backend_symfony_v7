@@ -23,6 +23,13 @@ class SharedMedia
     public const TYPE_AUDIO = 'audio';
     public const TYPE_OTHER = 'autre';
 
+    /** Préparation d'une vidéo pour une scène au défilement (réencodage en tâche de fond) */
+    public const SCROLL_PENDING = 'pending';
+    public const SCROLL_PROCESSING = 'processing';
+    public const SCROLL_DONE = 'done';
+    public const SCROLL_FAILED = 'failed';
+    public const SCROLL_TOO_LONG = 'too_long';
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -66,6 +73,14 @@ class SharedMedia
 
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
+
+    /** null : vidéo telle que téléversée ; sinon état de sa préparation pour le défilement (SCROLL_*) */
+    #[ORM\Column(length: 12, nullable: true)]
+    private ?string $scrollStatus = null;
+
+    /** Fichier d'origine, conservé à côté du fichier préparé (filename) pour pouvoir y revenir */
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $sourceFilename = null;
 
     public function __construct()
     {
@@ -182,6 +197,30 @@ class SharedMedia
     public function setExpiresAt(?\DateTimeImmutable $expiresAt): static
     {
         $this->expiresAt = $expiresAt;
+        return $this;
+    }
+
+    public function getScrollStatus(): ?string
+    {
+        return $this->scrollStatus;
+    }
+
+    public function setScrollStatus(?string $scrollStatus): static
+    {
+        $this->scrollStatus = $scrollStatus;
+
+        return $this;
+    }
+
+    public function getSourceFilename(): ?string
+    {
+        return $this->sourceFilename;
+    }
+
+    public function setSourceFilename(?string $sourceFilename): static
+    {
+        $this->sourceFilename = $sourceFilename;
+
         return $this;
     }
 

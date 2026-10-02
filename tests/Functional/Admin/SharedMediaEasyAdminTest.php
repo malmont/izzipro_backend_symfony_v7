@@ -4,6 +4,9 @@ namespace App\Tests\Functional\Admin;
 
 use App\Controller\Admin\SharedMediaCrudController;
 use App\Entity\User;
+use App\Message\PrepareScrollVideoMessage;
+use App\MessageHandler\PrepareScrollVideoHandler;
+use App\Tests\Fake\FakeScrollVideoEncoder;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -14,6 +17,8 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  */
 class SharedMediaEasyAdminTest extends WebTestCase
 {
+    private const KEY = 'cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34';
+
     private KernelBrowser $client;
 
     protected function setUp(): void
@@ -52,6 +57,95 @@ class SharedMediaEasyAdminTest extends WebTestCase
         $this->assertStringContainsString('/media/secure/' . $key, $html, 'lien de partage complet');
         $this->assertStringContainsString('&lt;video src=', $html, 'extrait de code pour une vidéo');
         $this->assertStringNotContainsString('Inaccessible', $html);
+    }
+
+    public function testVideoIsPreparedForScrollInTheBackgroundAndCanBeRestored(): void
+    {
+        FakeScrollVideoEncoder::reset();
+        [$id, $dir] = $this->privateVideo('film_aabbccdd00112233.mp4');
+        $this->loginAs(['ROLE_ADMIN']);
+
+        // bouton de la fiche : la demande part en tâche de fond, rien n'est encodé par le site
+        $this->admin('detail', $id);
+        $link = $this->client->getCrawler()->filter('a[href*="prepareScrollAction"]');
+        $this->assertCount(1, $link, 'bouton « Préparer pour le défilement » sur la fiche d\'une vidéo');
+        $this->client->request('GET', $link->attr('href'), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+        $messages = array_map(fn ($envelope) => $envelope->getMessage(), static::getContainer()->get('messenger.transport.media')->getSent());
+        $this->assertCount(1, $messages);
+        $this->assertSame([], FakeScrollVideoEncoder::$calls);
+        $this->assertSame('pending', $this->row($id)['scroll_status']);
+
+        // passage du worker : fichier préparé servi, original conservé, clé inchangée
+        static::getContainer()->get(PrepareScrollVideoHandler::class)($messages[0]);
+        $row = $this->row($id);
+        $this->assertSame('done', $row['scroll_status']);
+        $this->assertSame('film_aabbccdd00112233_scroll.mp4', $row['filename']);
+        $this->assertSame('film_aabbccdd00112233.mp4', $row['source_filename']);
+        $this->assertSame(self::KEY, $row['access_key']);
+        $this->assertSame(strlen(FakeScrollVideoEncoder::OUTPUT), (int) $row['file_size']);
+        $this->assertFileExists("$dir/film_aabbccdd00112233.mp4");
+        $this->assertStringEqualsFile("$dir/film_aabbccdd00112233_scroll.mp4", FakeScrollVideoEncoder::OUTPUT);
+
+        // retour à l'original
+        $this->admin('detail', $id);
+        $this->assertStringContainsString('Prête pour le défilement', $this->client->getResponse()->getContent());
+        $this->assertCount(0, $this->client->getCrawler()->filter('a[href*="prepareScrollAction"]'));
+        $this->client->request('GET', $this->client->getCrawler()->filter('a[href*="restoreScrollAction"]')->attr('href'), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $row = $this->row($id);
+        $this->assertNull($row['scroll_status']);
+        $this->assertSame('film_aabbccdd00112233.mp4', $row['filename']);
+        $this->assertNull($row['source_filename']);
+        $this->assertFileDoesNotExist("$dir/film_aabbccdd00112233_scroll.mp4");
+        @unlink("$dir/film_aabbccdd00112233.mp4");
+    }
+
+    public function testFailedEncodingKeepsTheOriginalVideo(): void
+    {
+        FakeScrollVideoEncoder::reset();
+        FakeScrollVideoEncoder::$fail = true;
+        [$id, $dir] = $this->privateVideo('film_ffeeddcc00112233.mp4');
+        $this->db()->executeStatement("UPDATE shared_media SET scroll_status = 'pending' WHERE id = $id");
+
+        static::getContainer()->get(PrepareScrollVideoHandler::class)(new PrepareScrollVideoMessage($id, MV_TEST_TENANT_CODE));
+
+        $row = $this->row($id);
+        $this->assertSame('failed', $row['scroll_status']);
+        $this->assertSame('film_ffeeddcc00112233.mp4', $row['filename'], 'la vidéo d\'origine reste servie');
+        $this->assertNull($row['source_filename']);
+        $this->assertFileDoesNotExist("$dir/film_ffeeddcc00112233_scroll.mp4");
+        @unlink("$dir/film_ffeeddcc00112233.mp4");
+        FakeScrollVideoEncoder::reset();
+    }
+
+    public function testPrepareLinkWithoutAValidTokenDoesNothing(): void
+    {
+        [$id] = $this->privateVideo('film_0000111122223333.mp4');
+        $this->loginAs(['ROLE_ADMIN']);
+
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query([
+            'crudAction' => 'prepareScrollAction', 'crudControllerFqcn' => SharedMediaCrudController::class, 'entityId' => $id, '_csrf' => 'faux',
+        ]), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+
+        $this->assertNull($this->row($id)['scroll_status']);
+        $this->assertSame([], static::getContainer()->get('messenger.transport.media')->getSent());
+        @unlink(static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/private_media/film_0000111122223333.mp4');
+    }
+
+    /** @return array{int, string} identifiant du média et dossier de son fichier */
+    private function privateVideo(string $filename): array
+    {
+        $dir = static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/private_media';
+        file_put_contents("$dir/$filename", 'video-d-origine');
+        $this->db()->executeStatement(sprintf("INSERT INTO shared_media (titre, filename, original_filename, media_type, mime_type, file_size, visibility, access_key, created_at)
+            VALUES ('Vidéo de test', '%s', 'film.mp4', 'video', 'video/mp4', 15, 'private', '%s', NOW())", $filename, self::KEY));
+
+        return [(int) $this->db()->fetchOne('SELECT id FROM shared_media ORDER BY id DESC LIMIT 1'), $dir];
+    }
+
+    private function row(int $id): array
+    {
+        return $this->db()->fetchAssociative('SELECT * FROM shared_media WHERE id = ?', [$id]);
     }
 
     private function admin(string $action, ?int $id = null): void

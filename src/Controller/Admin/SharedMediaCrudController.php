@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\SharedMedia;
 use App\Services\MediaUrlResolver;
+use App\Services\SharedMedia\ScrollVideoPreparer;
 use App\Services\SharedMedia\SharedMediaTypes;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\EntityManagerInterface;
@@ -13,11 +14,13 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\FileType;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -36,6 +39,7 @@ class SharedMediaCrudController extends BaseTenantCrudController
         private MediaUrlResolver $mediaUrlResolver,
         private RequestStack $requestStack,
         private AdminUrlGenerator $adminUrlGenerator,
+        private ScrollVideoPreparer $scrollVideo,
         string $projectDir
     ) {
         parent::__construct($emProvider);
@@ -67,6 +71,18 @@ class SharedMediaCrudController extends BaseTenantCrudController
             ->setCssClass('btn btn-outline-warning btn-sm')
             ->displayIf(fn (SharedMedia $media) => $media->isPrivate());
 
+        // Vidéo pour une scène au défilement : préparation en tâche de fond, retour au fichier d'origine
+        $prepareScroll = Action::new('prepareScroll', 'Préparer pour le défilement', 'fas fa-film')
+            ->linkToUrl(fn (SharedMedia $media) => $this->csrfActionUrl('prepareScrollAction', $media->getId()))
+            ->setCssClass('btn btn-outline-primary btn-sm')
+            ->setHtmlAttributes(['title' => 'Préparer la vidéo pour une scène au défilement (quelques minutes)'])
+            ->displayIf(fn (SharedMedia $media) => $this->scrollVideo->canRequest($media));
+        $restoreScroll = Action::new('restoreScroll', 'Revenir à la vidéo d\'origine', 'fas fa-undo')
+            ->linkToUrl(fn (SharedMedia $media) => $this->csrfActionUrl('restoreScrollAction', $media->getId()))
+            ->setCssClass('btn btn-outline-secondary btn-sm')
+            ->setHtmlAttributes(['title' => 'Revenir à la vidéo d\'origine'])
+            ->displayIf(fn (SharedMedia $media) => $media->getScrollStatus() === SharedMedia::SCROLL_DONE);
+
         // Sur la liste : icônes seules (libellé en infobulle), pour ne pas élargir encore le tableau
         $icon = fn (string $icon, string $title) => fn (Action $action) => $action->setIcon($icon)->setLabel(false)->setHtmlAttributes(['title' => $title]);
 
@@ -74,6 +90,8 @@ class SharedMediaCrudController extends BaseTenantCrudController
             ->add(Crud::PAGE_INDEX, Action::DETAIL)
             ->add(Crud::PAGE_INDEX, $regenerateKey)
             ->add(Crud::PAGE_DETAIL, $regenerateKey)
+            ->add(Crud::PAGE_DETAIL, $prepareScroll)
+            ->add(Crud::PAGE_DETAIL, $restoreScroll)
             ->update(Crud::PAGE_INDEX, Action::DETAIL, $icon('fas fa-eye', 'Consulter'))
             ->update(Crud::PAGE_INDEX, Action::EDIT, $icon('fas fa-pen', 'Modifier'))
             ->update(Crud::PAGE_INDEX, Action::DELETE, $icon('fas fa-trash', 'Supprimer'));
@@ -124,6 +142,16 @@ class SharedMediaCrudController extends BaseTenantCrudController
             ])
             ->onlyOnForms();
 
+        // 3 bis. Vidéo destinée à une scène au défilement : réencodage en tâche de fond après l'enregistrement
+        yield Field::new('prepareForScroll', 'Préparer pour le défilement')
+            ->setFormType(CheckboxType::class)
+            ->setFormTypeOptions([
+                'mapped' => false,
+                'required' => false,
+                'help' => 'Pour une vidéo utilisée dans une scène au défilement d\'une landing page : elle est réencodée en quelques minutes pour suivre le défilement sans à-coups (sans son, 1080p au plus, vidéos de 30 secondes au plus). Le lien et la clé ne changent pas ; la vidéo d\'origine est conservée. Sans effet sur un autre type de fichier.',
+            ])
+            ->onlyOnForms();
+
         // 4. Date d'expiration optionnelle pour les liens privés
         yield DateTimeField::new('expiresAt', 'Date d\'expiration (optionnel)')
             ->setHelp('Pour les fichiers privés : le lien deviendra automatiquement inactif après cette date.')
@@ -146,7 +174,7 @@ class SharedMediaCrudController extends BaseTenantCrudController
                     if ($media->isImage()) {
                         return '<span class="badge bg-info text-white"><i class="fas fa-image mr-1"></i>Image</span>';
                     } elseif ($media->isVideo()) {
-                        return '<span class="badge bg-danger text-white"><i class="fas fa-video mr-1"></i>Vidéo</span>';
+                        return '<span class="badge bg-danger text-white"><i class="fas fa-video mr-1"></i>Vidéo</span>' . $this->scrollBadge($media);
                     } elseif ($media->isPdf()) {
                         return '<span class="badge bg-danger text-white"><i class="fas fa-file-pdf mr-1"></i>PDF</span>';
                     }
@@ -202,6 +230,8 @@ class SharedMediaCrudController extends BaseTenantCrudController
         // 7. Vue Détail complète
         if ($isDetail) {
             yield TextField::new('originalFilename', 'Nom d\'origine');
+            yield TextField::new('titre', 'Scène au défilement')
+                ->formatValue(fn ($val, SharedMedia $media) => !$media->isVideo() ? '<span class="text-muted">Sans objet</span>' : ($this->scrollBadge($media) ?: '<span class="text-muted">Vidéo telle que téléversée (bouton « Préparer pour le défilement »)</span>'));
             yield TextField::new('mimeType', 'Type MIME');
             yield TextField::new('mediaType', 'Taille')->formatValue(fn ($val, SharedMedia $media) => $media->getFormattedFileSize());
             yield IntegerField::new('downloadCount', 'Nombre de consultations');
@@ -268,6 +298,7 @@ class SharedMediaCrudController extends BaseTenantCrudController
             $this->handleFileUpload($entityInstance);
         }
         parent::persistEntity($entityManager, $entityInstance);
+        $this->requestScrollIfAsked($entityInstance);
     }
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
@@ -277,6 +308,66 @@ class SharedMediaCrudController extends BaseTenantCrudController
             $entityInstance->setUpdatedAt(new \DateTimeImmutable());
         }
         parent::updateEntity($entityManager, $entityInstance);
+        $this->requestScrollIfAsked($entityInstance);
+    }
+
+    /** Case « Préparer pour le défilement » du formulaire : la tâche part une fois le média enregistré */
+    private function requestScrollIfAsked(mixed $media): void
+    {
+        $form = $this->getContext()?->getRequest()->request->all()['SharedMedia'] ?? [];
+        if (!$media instanceof SharedMedia || empty($form['prepareForScroll']) || !$media->isVideo()) {
+            return;
+        }
+        if ($this->scrollVideo->request($media)) {
+            $this->addFlash('info', 'Vidéo en cours de préparation pour le défilement : comptez quelques minutes. Le lien et la clé ne changent pas.');
+        }
+    }
+
+    private function scrollBadge(SharedMedia $media): string
+    {
+        return match ($media->getScrollStatus()) {
+            SharedMedia::SCROLL_PENDING, SharedMedia::SCROLL_PROCESSING => ' <span class="badge bg-warning text-dark" title="Réencodage en cours, quelques minutes"><i class="fas fa-spinner mr-1"></i>Défilement : en préparation</span>',
+            SharedMedia::SCROLL_DONE => ' <span class="badge bg-success text-white" title="Vidéo réencodée pour une scène au défilement ; l\'originale est conservée"><i class="fas fa-film mr-1"></i>Prête pour le défilement</span>',
+            SharedMedia::SCROLL_TOO_LONG => ' <span class="badge bg-secondary text-white" title="La préparation est réservée aux vidéos de 30 secondes au plus ; la vidéo d\'origine reste servie"><i class="fas fa-clock mr-1"></i>Défilement : plus de 30 s</span>',
+            SharedMedia::SCROLL_FAILED => ' <span class="badge bg-secondary text-white" title="La vidéo d\'origine reste servie"><i class="fas fa-exclamation-triangle mr-1"></i>Défilement : échec</span>',
+            default => '',
+        };
+    }
+
+    public function prepareScrollAction(AdminContext $context): RedirectResponse
+    {
+        $back = $context->getReferrer() ?: $this->adminUrlGenerator->setAction(Crud::PAGE_INDEX)->generateUrl();
+        if (!$this->isCsrfActionValid($context, 'prepareScrollAction')) {
+            $this->addFlash('danger', 'Lien invalide ou expiré : action annulée. Utilisez le bouton depuis la liste.');
+
+            return $this->redirect($back);
+        }
+        $media = $context->getEntity()->getInstance();
+        if ($media instanceof SharedMedia && $this->scrollVideo->request($media)) {
+            $this->addFlash('info', 'Vidéo en cours de préparation pour le défilement : comptez quelques minutes. Le lien et la clé ne changent pas.');
+        } else {
+            $this->addFlash('warning', 'Cette action ne s\'applique qu\'à une vidéo qui n\'est ni préparée ni en cours de préparation.');
+        }
+
+        return $this->redirect($back);
+    }
+
+    public function restoreScrollAction(AdminContext $context): RedirectResponse
+    {
+        $back = $context->getReferrer() ?: $this->adminUrlGenerator->setAction(Crud::PAGE_INDEX)->generateUrl();
+        if (!$this->isCsrfActionValid($context, 'restoreScrollAction')) {
+            $this->addFlash('danger', 'Lien invalide ou expiré : action annulée. Utilisez le bouton depuis la liste.');
+
+            return $this->redirect($back);
+        }
+        $media = $context->getEntity()->getInstance();
+        if ($media instanceof SharedMedia && $this->scrollVideo->restore($media)) {
+            $this->addFlash('success', 'La vidéo d\'origine est de nouveau servie. Le lien et la clé ne changent pas.');
+        } else {
+            $this->addFlash('warning', 'Aucune vidéo d\'origine à rétablir pour ce média.');
+        }
+
+        return $this->redirect($back);
     }
 
     public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
@@ -368,8 +459,9 @@ class SharedMediaCrudController extends BaseTenantCrudController
                 mkdir($targetDir, 0755, true);
             }
 
-            // Supprimer l'ancien fichier s'il existait
+            // Supprimer l'ancien fichier s'il existait (et sa vidéo d'origine, si elle avait été préparée)
             $this->removePhysicalFile($media);
+            $media->setSourceFilename(null)->setScrollStatus(null);
 
             // Déplacement sécurisé vers le répertoire cible
             $uploadedFile->move($targetDir, $newFilename);
@@ -386,29 +478,19 @@ class SharedMediaCrudController extends BaseTenantCrudController
      */
     private function syncStorageLocationOnVisibilityChange(SharedMedia $media): void
     {
-        $filename = basename((string) $media->getFilename());
-        $publicPath = $this->publicUploadDir . '/' . $filename;
-        $privatePath = $this->privateUploadDir . '/' . $filename;
+        [$from, $to] = $media->isPrivate() ? [$this->publicUploadDir, $this->privateUploadDir] : [$this->privateUploadDir, $this->publicUploadDir];
 
-        if ($media->isPrivate()) {
-            // Le média est devenu privé : s'il est dans le bucket public, on le déplace vers private_media
-            if (is_file($publicPath)) {
-                if (!is_dir($this->privateUploadDir)) {
-                    mkdir($this->privateUploadDir, 0755, true);
+        // Le fichier servi et, s'il existe, la vidéo d'origine d'une vidéo préparée pour le défilement
+        foreach (array_filter([basename((string) $media->getFilename()), basename((string) $media->getSourceFilename())]) as $filename) {
+            if (is_file($from . '/' . $filename)) {
+                if (!is_dir($to)) {
+                    mkdir($to, 0755, true);
                 }
-                rename($publicPath, $privatePath);
+                rename($from . '/' . $filename, $to . '/' . $filename);
             }
-            if (empty($media->getAccessKey())) {
-                $media->regenerateAccessKey();
-            }
-        } else {
-            // Le média est devenu public : s'il est dans private_media, on le déplace vers le bucket public
-            if (is_file($privatePath)) {
-                if (!is_dir($this->publicUploadDir)) {
-                    mkdir($this->publicUploadDir, 0755, true);
-                }
-                rename($privatePath, $publicPath);
-            }
+        }
+        if ($media->isPrivate() && empty($media->getAccessKey())) {
+            $media->regenerateAccessKey();
         }
     }
 
@@ -417,19 +499,12 @@ class SharedMediaCrudController extends BaseTenantCrudController
      */
     private function removePhysicalFile(SharedMedia $media): void
     {
-        $filename = basename((string) $media->getFilename());
-        if (empty($filename)) {
-            return;
-        }
-
-        $publicPath = $this->publicUploadDir . '/' . $filename;
-        if (is_file($publicPath)) {
-            @unlink($publicPath);
-        }
-
-        $privatePath = $this->privateUploadDir . '/' . $filename;
-        if (is_file($privatePath)) {
-            @unlink($privatePath);
+        foreach (array_filter([basename((string) $media->getFilename()), basename((string) $media->getSourceFilename())]) as $filename) {
+            foreach ([$this->publicUploadDir, $this->privateUploadDir] as $dir) {
+                if (is_file($dir . '/' . $filename)) {
+                    @unlink($dir . '/' . $filename);
+                }
+            }
         }
     }
 

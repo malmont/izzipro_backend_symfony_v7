@@ -21,3 +21,12 @@ services:
         arguments:
             $httpClient: '@App\Tests\Fake\FakeFrontendConfigHttpClient'
             $baseUrl: !php/const App\Tests\Fake\FakeFrontendConfigHttpClient::BASE_URL
+
+    # Médiathèque : aucun ffmpeg pendant les tests
+    App\Tests\Fake\FakeScrollVideoEncoder:
+        public: true
+    App\Services\SharedMedia\ScrollVideoEncoderInterface: '@App\Tests\Fake\FakeScrollVideoEncoder'
+    App\MessageHandler\PrepareScrollVideoHandler:
+        autowire: true
+        autoconfigure: true
+        public: true

@@ -164,7 +164,12 @@ Une file et un worker par projet, dans la base Redis 1 (`config/packages/messeng
 | `async` (`messages`) | `symfony_messenger_worker_v2` | chapitres Mémoires Vivantes |
 | `esg` (`messages_esg`) | `symfony_messenger_worker_esg_v2` | rapports Boussole ESG |
 | `landing_ai` (`messages_landing_ai`, sans relance) | `symfony_messenger_worker_landing_v2` | tâches de l'assistant IA |
+| `media` (`messages_media`, sans relance) | `symfony_messenger_worker_media_v2` | vidéos de la médiathèque préparées pour le défilement |
 | `failed` (`messages_failed`) | — | messages en échec (inspection) |
+
+Le worker `media` a sa propre image (`docker/worker-media/Dockerfile` : l'image de l'application plus **ffmpeg**) : c'est
+le seul conteneur qui encode des vidéos, le site n'encode jamais rien. Après une reconstruction de l'image de
+l'application : `docker compose build messenger_worker_media && docker compose up -d --no-deps messenger_worker_media`.
 
 - Chaque worker démarre par `docker/worker/consume.sh` : **cache Symfony propre** (`APP_CACHE_DIR`), reconstruit à chaque
   démarrage, `APP_DEBUG=0`. Sans cela, une reconstruction du cache web supprimait des fichiers utilisés par le worker.
@@ -191,6 +196,14 @@ Une file et un worker par projet, dans la base Redis 1 (`config/packages/messeng
 | Boussole ESG | `var/storage/esg/` (documents, rapports) | contrôleurs du module ESG |
 
 Médiathèque partagée : `/api/shared-media` (`SharedMediaApiController`). URL publiques : `Services/MediaUrlResolver`.
+
+**Vidéo préparée pour une scène au défilement** (administration : case du formulaire ou bouton de la fiche ;
+`Services/SharedMedia/ScrollVideoPreparer`). Une scène cale la vidéo sur la position du défilement : il faut des images
+complètes très rapprochées. La demande met le média en `scroll_status = pending` et envoie `PrepareScrollVideoMessage`
+au worker `media`, qui réencode (`FfmpegScrollVideoEncoder` : H.264, une image complète toutes les 5 images, sans
+images B ni son, 1080p au plus, vidéos de 30 s au plus). À la fin, **la même clé et la même adresse** servent le
+fichier préparé (`filename`), le fichier d'origine est conservé (`source_filename`) et peut être rétabli. États :
+`pending`, `processing`, `done`, `failed`, `too_long` ; en cas d'échec, la vidéo d'origine reste servie.
 
 ## E-mails
 
@@ -240,7 +253,7 @@ chaque requête.
 
 ## Déploiement et exploitation
 
-- Conteneurs : `symfony_app_v2` (PHP-FPM), `symfony_nginx_v2`, `symfony_db_v2`, `redis_cache_v2`, les 3 workers.
+- Conteneurs : `symfony_app_v2` (PHP-FPM), `symfony_nginx_v2`, `symfony_db_v2`, `redis_cache_v2`, les 4 workers.
 - Chaîne HTTP : Nginx Proxy Manager (hôtes `*.backend-strapi.online`) → `symfony_nginx_v2` → PHP-FPM.
   Certificats TLS valides pour `backend-strapi.online`, `v2.backend-strapi.online` et les sous-domaines de tenant ;
   **pas** pour `esgboost.v2.` et `lintendantprive.v2.backend-strapi.online` (déclarés dans NPM). Le relais `/api` du
@@ -261,6 +274,7 @@ chaque requête.
 | `php bin/console app:landingpage:check-reglable` | Contrôle toutes les compositions de landing page de tous les tenants |
 | `php bin/console app:landingpage-ai:eval --tenant=<tenant de test>` | Jeu d'essai de l'assistant IA (appels réels) |
 | `php bin/console app:tenant:migrate-all` | Migrations sur tous les tenants |
+| `php bin/console app:media:prepare-scroll <tenant> <id du média>` | Demande la préparation d'une vidéo de la médiathèque pour le défilement |
 | `php bin/console messenger:stop-workers` | Redémarre les workers (après vérification qu'aucune génération n'est en cours) |
 
 Commandes à lancer dans le conteneur : `docker exec -w /var/www symfony_app_v2 php bin/console …`.

@@ -76,7 +76,8 @@ class WorkerAdminTest extends WebTestCase
         $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?routeName=admin_workers', [], [], $server);
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
         $this->assertSame('idle', $crawler->filter('[data-worker="async"]')->attr('data-state'));
-        $this->assertCount(3, $crawler->filter('[data-worker]'));
+        $this->assertCount(4, $crawler->filter('[data-worker]'), 'chapitres, ESG, assistant IA, médiathèque');
+        $this->assertCount(1, $crawler->filter('[data-worker="media"]'));
         $this->assertCount(1, $crawler->filter('form[action$="/admin/workers/restart"]'));
     }
 

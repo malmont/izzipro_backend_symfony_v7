@@ -40,6 +40,14 @@ framework:
                     dbindex: 1
                 retry_strategy:
                     max_retries: 0
+            # Médiathèque (préparation des vidéos pour les scènes au défilement, par ffmpeg) : jamais relancé, le
+            # handler note lui-même l'échec sur le média
+            media:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%_media'
+                options:
+                    dbindex: 1
+                retry_strategy:
+                    max_retries: 0
             failed:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%_failed'
                 options:
@@ -49,3 +57,4 @@ framework:
             'App\MemoiresVivantes\Message\GenerateChapterMessage': async
             'App\ESG\Message\GenerateEsgReportMessage': esg
             'App\Message\LandingAiJobMessage': landing_ai
+            'App\Message\PrepareScrollVideoMessage': media

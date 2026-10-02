@@ -20,6 +20,7 @@ class WorkerMonitor
         'async' => ['label' => 'Mémoires Vivantes — chapitres', 'suffix' => ''],
         'esg' => ['label' => 'Boussole ESG — rapports', 'suffix' => '_esg'],
         'landing_ai' => ['label' => 'Assistant IA des landing pages', 'suffix' => '_landing_ai'],
+        'media' => ['label' => 'Médiathèque — vidéos pour le défilement', 'suffix' => '_media'],
     ];
 
     /** Secondes entre deux battements d'un worker au repos */
