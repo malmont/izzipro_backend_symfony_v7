@@ -263,6 +263,28 @@ final class LandingAiEvalCases
                 },
             ],
             [
+                // Scène au défilement (contrat du 02/10/2026) : la donnée vidéo du site de test est un fichier .mp4
+                'id' => 'C9', 'componentKey' => 'Video', 'media' => [],
+                'prompt' => 'Scène au défilement avec la vidéo du site : quatre étapes qui présentent notre méthode (écouter, concevoir, réaliser, accompagner).',
+                'check' => function (LandingAiCreateResult $r) {
+                    $c = $r->composition;
+                    $blocks = $this->inspector->blocks($c);
+                    $scenes = array_values(array_filter($blocks, fn ($b) => ($b->type ?? null) === 'container' && ($b->layout ?? null) === 'scroll'));
+                    $children = $scenes ? array_values(array_filter($blocks, fn ($b) => ($b->parentId ?? null) === $scenes[0]->id)) : [];
+                    $video = $children[0] ?? null;
+                    $steps = array_slice($children, 1);
+                    $source = ($video->type ?? null) === 'video' && (!empty($video->url) || !empty($video->mediaKey) || is_string($video->bindings->url ?? null));
+                    $cards = count(array_filter($steps, fn ($b) => ($b->type ?? null) === 'container'));
+                    $section = ($c->fullWidth ?? false) === true && !isset($c->contentWidth) && ($c->rootPadding ?? null) === 0 && empty($c->bgVideo);
+                    $ok = count($scenes) === 1 && $source && count($steps) >= 3 && count($steps) <= 5 && $cards === count($steps) && $section;
+
+                    return $this->result($ok, sprintf(
+                        'scènes : %d ; vidéo en premier enfant avec une source : %s ; étapes : %d dont %d en carte ; section pleine largeur sans marge : %s',
+                        count($scenes), $source ? 'oui' : 'non', count($steps), $cards, $section ? 'oui' : 'non'
+                    ));
+                },
+            ],
+            [
                 'id' => 'C8', 'componentKey' => 'PresentationGroup', 'media' => [], 'prompt' => 'Enregistre ce résultat comme modèle "Cartes premium".',
                 'skip' => 'sans objet côté backend : l\'enregistrement d\'un modèle personnel se fait dans l\'éditeur (reglablePresets, PUT des réglages) ; l\'endpoint n\'écrit jamais les réglages',
             ],

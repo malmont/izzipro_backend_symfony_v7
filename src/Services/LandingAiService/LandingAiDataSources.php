@@ -89,7 +89,13 @@ final class LandingAiDataSources
                 return ['id' => (string) $dto->id, 'title' => (string) ($dto->titre ?? ''), 'details' => $this->excerpt(sprintf('%d présentation(s) : %s', count($dto->presentations), implode(' ; ', $titles)))];
             }, $this->presentationGroups->findAllByLocale(self::LOCALE)),
             'BaniereStatique' => array_map(fn ($e) => $this->item(new BaniereStatiqueOutputDto($e, '', self::LOCALE), 'titre', 'texte'), $this->banieresStatiques->findAllByLocale(self::LOCALE)),
-            'Video' => array_map(fn ($e) => $this->item(new VideoOutputDto($e, '', self::LOCALE), 'titre', 'description'), $this->videos->getAllVideosByLocale(self::LOCALE)),
+            'Video' => array_map(function ($e) {
+                $dto = new VideoOutputDto($e, '', self::LOCALE);
+                $item = $this->item($dto, 'titre', 'description');
+
+                // nature de la vidéo : une scène au défilement exige un fichier, pas YouTube ni Vimeo
+                return ['details' => self::videoKind((string) ($dto->lienVideo ?? '')) . ' — ' . $item['details']] + $item;
+            }, $this->videos->getAllVideosByLocale(self::LOCALE)),
             'Embed' => array_map(fn ($e) => $this->item(new EmbedOutputDto($e), 'titre', 'embedUrl'), $this->embeds->findAllEmbeds()),
             'MultiLien' => array_map(fn ($e) => $this->item(new MultilienOutputDto($e, ''), 'titre', 'lien'), $this->multiliens->getAllMultiliens()),
             'Candidature' => array_map(fn ($e) => $this->item(new EmploiOutputDto($e, self::LOCALE), 'titre', 'description'), $this->emplois->getAllEmploisByLocale(self::LOCALE)),
@@ -113,6 +119,15 @@ final class LandingAiDataSources
     public function availableIds(string $componentKey): array
     {
         return array_column($this->available($componentKey), 'id');
+    }
+
+    public static function videoKind(string $link): string
+    {
+        return match (true) {
+            trim($link) === '' => 'aucune vidéo',
+            preg_match('#(youtube\.com|youtu\.be|youtube-nocookie\.com|vimeo\.com)#i', $link) === 1 => 'vidéo YouTube ou Vimeo',
+            default => 'fichier vidéo',
+        };
     }
 
     private function item(object $dto, string $titleField, string $detailsField): array

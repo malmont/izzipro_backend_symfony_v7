@@ -829,9 +829,21 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertStringContainsString('sans fichier vidéo', $errors($scene(['type' => 'video']))[0]);
         $this->assertStringContainsString('YouTube ou Vimeo', $errors($scene(['type' => 'video', 'url' => 'https://www.youtube.com/watch?v=abc']))[0]);
 
+        $twoVideos = [...$scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4']), ['id' => 'scene-video-2', 'type' => 'video', 'parentId' => 'scene', 'url' => 'https://media.example.com/film.mp4']];
+        $this->assertStringContainsString('un seul bloc video', $errors($twoVideos)[0]);
+
         $two = [...$scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4']), ...$scene(['type' => 'video', 'url' => 'https://media.example.com/film.mp4'], 'autre')];
         $this->assertStringContainsString('une seule scène', $errors($two)[0]);
         $this->assertSame([], $errors($scene(['type' => 'video']), ['scene']), 'retouche : une scène déjà présente n\'est pas une erreur de l\'IA');
+    }
+
+    public function testVideoDataTellsAFileFromAStreamingLink(): void
+    {
+        $kind = \App\Services\LandingAiService\LandingAiDataSources::videoKind(...);
+        $this->assertSame('fichier vidéo', $kind('/assets/uploads/videos/film.mp4'));
+        $this->assertSame('vidéo YouTube ou Vimeo', $kind('https://www.youtube.com/watch?v=abc'));
+        $this->assertSame('vidéo YouTube ou Vimeo', $kind('https://vimeo.com/123456'));
+        $this->assertSame('aucune vidéo', $kind(''));
     }
 
     public function testScrollSceneRuleIsSentOnlyWhenTheContractKnowsTheLayout(): void

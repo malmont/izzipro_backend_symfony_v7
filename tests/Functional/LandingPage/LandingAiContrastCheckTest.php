@@ -105,6 +105,23 @@ final class LandingAiContrastCheckTest extends TestCase
         );
     }
 
+    public function testStepOfAScrollSceneIsMeasuredOnItsOpaqueCardOnly(): void
+    {
+        $issues = $this->issues(['background' => '#ffffff'], [
+            ['id' => 'scene', 'type' => 'container', 'parentId' => null, 'layout' => 'scroll', 'background' => '#000000'],
+            ['id' => 'film', 'type' => 'video', 'parentId' => 'scene', 'url' => 'https://media.example.com/film.mp4'],
+            ['id' => 'sur-video', 'type' => 'title', 'parentId' => 'scene', 'color' => '#111111', 'size' => 40],          // posé sur la vidéo
+            ['id' => 'voile', 'type' => 'container', 'parentId' => 'scene', 'background' => 'rgba(0, 0, 0, 0.5)'],
+            ['id' => 'sur-voile', 'type' => 'text', 'parentId' => 'voile', 'color' => '#111111', 'size' => 16],           // carte translucide
+            ['id' => 'carte', 'type' => 'container', 'parentId' => 'scene', 'background' => '#0E1533'],
+            ['id' => 'lisible', 'type' => 'text', 'parentId' => 'carte', 'color' => '#ffffff', 'size' => 16],
+            ['id' => 'illisible', 'type' => 'text', 'parentId' => 'carte', 'color' => '#3E4A6B', 'size' => 16],
+        ]);
+
+        $this->assertCount(1, $issues, 'seul le texte sur une carte opaque est mesuré');
+        $this->assertStringStartsWith('illisible', $issues[0]);
+    }
+
     public function testLargeTextHasALowerThreshold(): void
     {
         // #767676 sur blanc : 4,54:1 ; #949494 : 3,03:1 (suffisant pour un grand titre seulement)

@@ -418,9 +418,10 @@
             "stack",
             "row",
             "grid",
-            "slides"
+            "slides",
+            "scroll"
           ],
-          "description": "Container : free = positions en %, stack / row / grid = mise en page en flux dans l’ordre du tableau, slides = diaporama (un enfant ou un élément de liste par diapositive)."
+          "description": "Container : free = positions en %, stack / row / grid = mise en page en flux dans l’ordre du tableau, slides = diaporama (un enfant ou un élément de liste par diapositive), scroll = scène au défilement (le premier enfant de type video avance avec le défilement de la page, chaque autre enfant est une étape de texte affichée à son tour ; la vidéo doit être un fichier ou un média du site, pas YouTube ni Vimeo)."
         },
         "gap": {
           "type": "number",
@@ -1068,6 +1069,18 @@
             "light"
           ],
           "description": "Diaporama : flèches sombres (défaut) ou claires. Types : container."
+        },
+        "scrollLength": {
+          "type": "number",
+          "minimum": 1.5,
+          "maximum": 12,
+          "description": "Scène au défilement (layout scroll) : durée de la scène en hauteurs d’écran de défilement. Absent : une hauteur d’écran par étape, plus une. Types : container."
+        },
+        "stepAt": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Étape d’une scène au défilement : moment où elle apparaît, en % du défilement de la scène (et donc de la vidéo). Absent : étapes réparties à intervalles égaux. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
         },
         "headingSize": {
           "type": "number",
@@ -2304,6 +2317,62 @@
             "not": {
               "required": [
                 "slideControls"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "scrollLength"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "products",
+                    "icon"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "stepAt"
               ]
             }
           }

@@ -308,7 +308,18 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
     5 étapes, section pleine largeur sans marge) n'est envoyée que si le contrat actif connaît le layout
     (`LandingAiPromptBuilder::supportsScrollScene`), pour qu'un retour à une version antérieure reste sûr ;
   - une scène produite par l'IA sans bloc video en premier enfant, sans fichier, avec YouTube ou Vimeo, ou en double
-    dans la page est renvoyée au modèle (`LandingAiCompositionChecker::sceneErrors`).
+    dans la page, ou avec deux blocs video, est renvoyée au modèle (`LandingAiCompositionChecker::sceneErrors`) ;
+  - la consigne reprend les précisions du frontend : chaque enfant direct de la scène est une étape, donc titre, texte
+    et bouton d'une étape sont regroupés dans une carte ; section `fullWidth` sans `contentWidth`, `rootPadding` 0,
+    `rootGap` 0, sans `bgVideo` ; `stepAt` et `scrollLength` facultatifs ; pas de `repeat` sur la scène ;
+  - V7 mesure le texte d'une étape sur le fond opaque de sa carte ; posé sur la vidéo ou sur une carte translucide,
+    il n'est pas mesuré.
+  - la liste des données de la famille Video dit pour chacune « fichier vidéo », « vidéo YouTube ou Vimeo » ou
+    « aucune vidéo » (`LandingAiDataSources::videoKind`) : sans cela, le modèle ne pouvait pas savoir si une scène
+    était possible ;
+  - cas **C9** du jeu d'essai (scène en quatre étapes avec la vidéo du site `demo`). Contrat 6e370ac307a8cc58 tiré le
+    02/10/2026 ; C9 joué deux fois : un essai, une scène, vidéo liée en premier enfant, 4 étapes en cartes, section
+    pleine largeur sans marge, 0,12 $ (`comparaison-scene-defilement-20261002.json`).
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

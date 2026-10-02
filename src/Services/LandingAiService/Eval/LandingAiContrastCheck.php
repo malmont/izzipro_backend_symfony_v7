@@ -11,6 +11,10 @@ use App\Services\LandingAiService\CompositionInspector;
  * dessine un fond opaque, puis la section ; les fonds semi-transparents sont superposés. Fond inconnu (image,
  * vidéo, dégradé, couleur liée à une donnée) : bloc non mesuré.
  *
+ * Scène au défilement (container layout « scroll ») : ses étapes sont posées sur une vidéo. Le texte d'une étape se
+ * mesure sur le fond opaque de sa carte ; posé sur la vidéo, directement ou à travers une carte translucide, il n'est
+ * pas mesuré.
+ *
  * Section en overlayTop (navbar superposée) : transparente, posée sur la première section de la page, dont le fond
  * n'est connu qu'en mode page ($under). Quand la page a défilé, la barre prend scrollBackground et ses textes
  * scrollColor (sinon la couleur de chaque bloc) : état mesuré si scrollBackground est opaque ou presque, sur le pire
@@ -99,6 +103,9 @@ final class LandingAiContrastCheck
         $node = $block;
         for ($depth = 0; $node !== null && $depth < self::MAX_DEPTH; $depth++) {
             $drawn = in_array($node->type ?? null, self::DRAWN_BACKGROUND_TYPES, true);
+            if (($node->type ?? null) === 'container' && ($node->layout ?? null) === 'scroll') {
+                return null; // aucune carte opaque entre le texte et la vidéo de la scène
+            }
             if ($drawn && (isset($node->bindings->background) || isset($node->bindings->bgImage) || !empty($node->bgImage))) {
                 return null;
             }

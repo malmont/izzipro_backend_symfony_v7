@@ -62,7 +62,9 @@ TXT;
      */
     private const SCROLL_SCENE_RULE = <<<'TXT'
 
-- Scène au défilement (container layout « scroll » : son premier enfant est un bloc video qui avance avec le défilement de la page, chaque autre enfant est une étape de texte affichée à son tour) : n'en propose une que si un fichier vidéo est fourni avec la demande ou lié à une donnée du site, jamais avec une adresse YouTube ou Vimeo ni une vidéo inventée. Une seule scène par page ; 3 à 5 étapes, chacune avec stepAt (0 à 100, croissant) ; scrollLength (1,5 à 12 hauteurs d'écran) sur le container ; section en pleine largeur, sans marge. Sans fichier vidéo : une section vidéo ordinaire, ou une autre mise en page.
+- Scène au défilement (container layout « scroll » : son premier enfant est un bloc video qui avance avec le défilement de la page, chaque autre enfant est une étape de texte affichée à son tour) : n'en propose une que si un fichier vidéo est fourni avec la demande ou lié à une donnée du site que la liste des données indique comme « fichier vidéo », jamais avec une vidéo YouTube ou Vimeo ni une vidéo inventée. Une seule scène par page, un seul bloc video par scène, en premier enfant. Sans fichier vidéo : une section vidéo ordinaire, ou une autre mise en page.
+  Étapes : 3 à 5. Chaque enfant direct de la scène est une étape : regroupe le titre, le texte et l'éventuel bouton d'une étape dans un container en pile (carte étroite, mobile.w 100, fond sombre opaque ou presque pour rester lisible sur la vidéo) ; ne pose pas un titre et un texte séparément à la racine de la scène, ils feraient deux étapes. align et valign de la scène placent les étapes sur la vidéo. stepAt (0 à 100, croissant) et scrollLength (1,5 à 12 hauteurs d'écran) sont facultatifs : absents, les étapes sont réparties. Pas de repeat sur la scène.
+  Section de la scène : fullWidth true, sans contentWidth, rootLayout « stack », rootPadding 0, rootGap 0, sans bgVideo ni minHeightVh. Container de la scène : parentId null, w 100, padding 0, radius 0, borderWidth 0, background écrit (couleur sombre ou « transparent »), sans aspectRatio ni hover.
 TXT;
 
     private ?string $schemaText = null;
