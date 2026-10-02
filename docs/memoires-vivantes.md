@@ -56,7 +56,7 @@ plus qu'un dernier repli : chaque site a son frontend.
 
 | Table | Entité | Contenu |
 |---|---|---|
-| `mv_book` | `Book` | livre (propriétaire, type, statut de paiement, adresse du client `client_address` : itinéraire Google Maps pour le biographe, `clientAddressMapsUrl` dans l'API, jamais montrée aux invités) ; identifiant UUID |
+| `mv_book` | `Book` | livre (propriétaire, type, statut de paiement, nombre de séances d'entretien `session_count` / `sessionCount` de 1 à 12, adresse du client `client_address` : itinéraire Google Maps pour le biographe, `clientAddressMapsUrl` dans l'API, jamais montrée aux invités) ; identifiant UUID |
 | `mv_chapter` | `Chapter` | réponses, texte généré, `generation_status` |
 | `mv_chapter_photo` | `ChapterPhoto` | photos d'un chapitre |
 | `mv_contributor` | `Contributor` | contributeurs (livres collectifs) |
@@ -100,6 +100,10 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
 - **Rédaction perdue** (`failIfLost`, appelé par `GET /chapters/{id}`, `/status`, `/generate` et l'écran Workers) :
   échec au bout de 2 min si la file est vide et que rien n'est en cours de traitement ; sinon 30 min en
   `generating_*`, 60 min en `pending` ou `part1_done`.
+- Seconde partie (consignes en base) : la première partie est redonnée **en entier** à l'IA quand elle est courte
+  (8 000 caractères), sinon ses trois derniers paragraphes ; si tout est traité et que les consignes interdisent toute
+  conclusion, l'IA répond `[RIEN À AJOUTER]` et le chapitre se termine sur la première partie
+  (`DatabasePromptEngine::isNothingToAdd`).
 - Le titre du chapitre répété par l'IA en première ligne est retiré à la rédaction, et à la mise en page pour les
   chapitres déjà rédigés (`ChapterTextFormatter::withoutRepeatedTitle`).
 - Appels à l'IA : 3 essais sur surcharge ou erreur passagère (429, 529, 5xx), bornés dans le temps (10 min).

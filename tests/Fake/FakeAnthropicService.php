@@ -17,6 +17,11 @@ class FakeAnthropicService extends AnthropicService
     {
         self::$calls[] = ['prompt' => $prompt, 'maxTokens' => $maxTokens, 'system' => $system, 'model' => $model];
 
+        // Réponses imposées par un test, dans l'ordre des appels
+        if (self::$completions !== []) {
+            return (string) array_shift(self::$completions);
+        }
+
         // Réponses fictives demandées par le bouton « Tester » : un tableau JSON, une réponse par question
         if (str_contains($prompt, 'tableau JSON de chaînes')) {
             preg_match_all('/^\d+\. /m', $prompt, $m);
@@ -29,6 +34,9 @@ class FakeAnthropicService extends AnthropicService
         // Extrait de test ou génération de chapitre
         return "===Un sous-titre de test===\n\nUn paragraphe généré par la fausse IA de test.";
     }
+
+    /** @var string[] réponses à rendre aux prochains appels de complete(), dans l'ordre (vide : réponses par défaut) */
+    public static array $completions = [];
 
     /** Réponse de « Améliorer ma réponse » ; chaîne vide = IA en erreur ou surchargée */
     public static string $improvedAnswer = 'Réponse améliorée par la fausse IA de test.';
@@ -43,6 +51,7 @@ class FakeAnthropicService extends AnthropicService
     public static function reset(): void
     {
         self::$calls = [];
+        self::$completions = [];
         self::$improvedAnswer = 'Réponse améliorée par la fausse IA de test.';
     }
 }

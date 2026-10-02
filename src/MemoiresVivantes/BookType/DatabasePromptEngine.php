@@ -36,6 +36,20 @@ class DatabasePromptEngine
 
     private const DEFAULT_TONE = 'intime et chaleureux';
 
+    /** Longueur (caractères) jusqu'à laquelle la première partie est redonnée en entier à l'IA pour écrire la seconde */
+    private const FULL_PART1_MAX_LENGTH = 8000;
+
+    /** Réponse convenue de l'IA quand la première partie a tout traité et qu'aucune conclusion n'est attendue */
+    public const NOTHING_TO_ADD = '[RIEN À AJOUTER]';
+
+    /** La seconde partie est-elle la réponse convenue « rien à ajouter » (à ne jamais enregistrer dans le chapitre) ? */
+    public static function isNothingToAdd(?string $text): bool
+    {
+        $text = trim((string) $text, " \t\n\r\0\x0B*_\"'.");
+
+        return $text !== '' && mb_strlen($text) < 40 && preg_match('/^\[?\s*rien [àa] ajouter\s*\]?$/iu', $text) === 1;
+    }
+
     public function __construct(
         private readonly AnthropicService $anthropic
     ) {}
@@ -97,16 +111,25 @@ class DatabasePromptEngine
                 "- Arrête-toi à la fin d'un paragraphe — jamais au milieu.\n" .
                 "- Une 2e partie suivra — ne conclus pas encore.";
         } else {
-            $lastParagraphs = $this->anthropic->extractLastParagraphs((string) $chapter->getContentPart1(), 3);
-            $sections[] = "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
-                "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUNE scène déjà traitée.";
+            // Première partie courte : transmise en entier. Avec ses seuls derniers paragraphes, l'IA ne sait pas ce
+            // qui a déjà été traité et recommençait un témoignage (chapitre court, modèle économique).
+            $part1 = trim((string) $chapter->getContentPart1());
+            if (mb_strlen($part1) <= self::FULL_PART1_MAX_LENGTH) {
+                $sections[] = "Voici la première partie, EN ENTIER (ne la répète PAS) :\n\"\"\"\n{$part1}\n\"\"\"\n\n" .
+                    "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUNE scène ni AUCUN témoignage déjà traité.";
+            } else {
+                $lastParagraphs = $this->anthropic->extractLastParagraphs($part1, 3);
+                $sections[] = "Voici la fin de la première partie (ne la répète PAS) :\n\"\"\"\n{$lastParagraphs}\n\"\"\"\n\n" .
+                    "IMPORTANT : tout ce qui précède a déjà été écrit. Ne répète, ne reformule, ne réécris AUCUNE scène déjà traitée.";
+            }
             $sections[] = "CONSIGNES TECHNIQUES — PARTIE 2/2 :\n" .
                 "- Respecte les consignes ci-dessus pour le fond, le style et le registre.\n" .
                 "- Continue UNIQUEMENT avec le matériau qui n'a pas encore été traité.\n" .
-                "- Si tout a déjà été traité, rédige uniquement la conclusion demandée par les consignes (ou un beau paragraphe de conclusion) et arrête-toi.\n" .
+                "- Si tout a déjà été traité : rédige uniquement la conclusion demandée par les consignes (ou, à défaut, un beau paragraphe de conclusion) et arrête-toi.\n" .
+                "- Seulement si les consignes interdisent toute conclusion et que tout a déjà été traité, réponds exactement et uniquement : " . self::NOTHING_TO_ADD . "\n" .
                 "- N'invente aucun élément non fourni.\n" .
                 "- Même style, sous-titres sous la forme exacte : ===Titre===\n" .
-                "- Termine par un paragraphe de conclusion terminé par un point complet.";
+                "- Termine par un paragraphe terminé par un point complet.";
         }
 
         return implode("\n\n", $sections);

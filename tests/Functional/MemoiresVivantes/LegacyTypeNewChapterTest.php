@@ -3,6 +3,7 @@
 namespace App\Tests\Functional\MemoiresVivantes;
 
 use App\MemoiresVivantes\BookType\BookTypeResolver;
+use App\MemoiresVivantes\BookType\DatabasePromptEngine;
 use App\MemoiresVivantes\Entity\Chapter;
 use App\MemoiresVivantes\Message\GenerateChapterHandler;
 use App\MemoiresVivantes\Message\GenerateChapterMessage;
@@ -57,6 +58,34 @@ class LegacyTypeNewChapterTest extends BookTypeApiTestCase
         $row = self::db()->query("SELECT generation_status, content_final FROM mv_chapter WHERE id = '{$newChapter['id']}'")->fetch();
         $this->assertSame('completed', $row['generation_status']);
         $this->assertStringContainsString('Un paragraphe généré par la fausse IA de test.', $row['content_final']);
+    }
+
+    public function testTheSecondPartKnowsWhatTheFirstOneAlreadyTold(): void
+    {
+        // Chapitre court : la seconde partie recommençait un témoignage, faute de connaître toute la première
+        $family = $this->typeByCode('famille');
+        $code = self::uniqueCode('anecdotes');
+        [, $updated] = $this->api('POST', "/admin/book-types/{$family['id']}/chapters", ['code' => $code, 'title' => 'Anecdotes', 'speaker' => 'contributors', 'promptRaw' => 'Une anecdote par paragraphe, sans conclusion.']);
+        [, $book] = $this->api('POST', '/books', ['title' => 'Famille de test', 'type' => 'famille'], 'client');
+        [, $chapter] = $this->api('POST', "/books/{$book['id']}/chapters", ['title' => 'Anecdotes', 'theme' => $code, 'position' => 7, 'answers' => [['index' => 0, 'question' => 'Une anecdote ?', 'answer' => 'La buanderie inondée.']]], 'client');
+
+        $handler = static::getContainer()->get(GenerateChapterHandler::class);
+        FakeAnthropicService::reset();
+        FakeAnthropicService::$completions = ["Premier paragraphe sur la buanderie.\n\nDeuxième paragraphe.\n\nTroisième.\n\nQuatrième et dernier paragraphe.", DatabasePromptEngine::NOTHING_TO_ADD];
+        $handler(new GenerateChapterMessage($chapter['id'], 1, MV_TEST_TENANT_CODE));
+        $handler(new GenerateChapterMessage($chapter['id'], 2, MV_TEST_TENANT_CODE));
+
+        $secondPrompt = FakeAnthropicService::$calls[1]['prompt'];
+        $this->assertStringContainsString('Premier paragraphe sur la buanderie.', $secondPrompt, 'toute la première partie est transmise, pas seulement sa fin');
+        $this->assertStringContainsString(DatabasePromptEngine::NOTHING_TO_ADD, $secondPrompt);
+        $row = self::db()->query("SELECT generation_status, content_final FROM mv_chapter WHERE id = '{$chapter['id']}'")->fetch();
+        $this->assertSame('completed', $row['generation_status']);
+        $this->assertSame("Premier paragraphe sur la buanderie.\n\nDeuxième paragraphe.\n\nTroisième.\n\nQuatrième et dernier paragraphe.", $row['content_final'], 'ni répétition ni marque « rien à ajouter » dans le chapitre');
+
+        $this->assertTrue(DatabasePromptEngine::isNothingToAdd(' [RIEN À AJOUTER]. '));
+        $this->assertTrue(DatabasePromptEngine::isNothingToAdd('**[Rien a ajouter]**'));
+        $this->assertFalse(DatabasePromptEngine::isNothingToAdd('Il ne reste rien à ajouter à cette histoire, sinon que nous en rions encore.'));
+        $this->assertFalse(DatabasePromptEngine::isNothingToAdd(''));
     }
 
     public function testTheChapterTitleRepeatedByTheAiIsRemoved(): void

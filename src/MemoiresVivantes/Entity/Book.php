@@ -82,6 +82,10 @@ class Book
     #[ORM\Column(length: 40, nullable: true)]
     private ?string $font = null;
 
+    /** Nombre de séances d'entretien prévu pour ce livre (planificateur de séances du frontend), 1 à 12 */
+    #[ORM\Column(type: Types::SMALLINT, nullable: true)]
+    private ?int $sessionCount = null;
+
     /** Adresse du client, où se tiennent les séances d'écriture : itinéraire du biographe (jamais montrée aux invités) */
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $clientAddress = null;
@@ -305,6 +309,17 @@ class Book
     public function setFont(?string $font): static
     {
         $this->font = $font;
+        return $this;
+    }
+
+    public function getSessionCount(): ?int
+    {
+        return $this->sessionCount;
+    }
+
+    public function setSessionCount(?int $sessionCount): static
+    {
+        $this->sessionCount = $sessionCount;
         return $this;
     }
 

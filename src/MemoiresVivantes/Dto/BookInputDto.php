@@ -20,6 +20,8 @@ class BookInputDto
     public ?bool $parentsNotParticipating = null;
     /** Code du catalogue des polices ; un code inconnu est ignoré par les use cases */
     public ?string $font = null;
+    /** Nombre de séances d'entretien (1 à 12) ; null : champ absent ou valeur hors limites, donc inchangé */
+    public ?int $sessionCount = null;
     /** null : champ absent (inchangé) ; chaîne vide : adresse effacée */
     public ?string $clientAddress = null;
 
@@ -40,6 +42,8 @@ class BookInputDto
         $this->deathYear = self::text($data['deathYear'] ?? $data['death_year'] ?? null);
         $this->epigraph = self::text($data['epigraph'] ?? null);
         $this->font = self::text($data['font'] ?? $data['fontFamily'] ?? null);
+        $sessions = $data['sessionCount'] ?? $data['session_count'] ?? null;
+        $this->sessionCount = is_numeric($sessions) && (int) $sessions >= 1 && (int) $sessions <= 12 ? (int) $sessions : null;
         $this->clientAddress = self::text($data['clientAddress'] ?? $data['client_address'] ?? null);
 
         $deceased = $data['parentsDeceased'] ?? $data['parents_deceased'] ?? $data['parentsNotParticipating'] ?? $data['parents_not_participating'] ?? null;

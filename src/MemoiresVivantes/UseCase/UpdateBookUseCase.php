@@ -33,6 +33,7 @@ class UpdateBookUseCase
         if ($dto->epigraph !== null) $book->setEpigraph($dto->epigraph);
         if ($dto->clientAddress !== null) $book->setClientAddress($dto->clientAddress);
         if (BookFontCatalog::has($dto->font)) $book->setFont($dto->font);
+        if ($dto->sessionCount !== null) $book->setSessionCount($dto->sessionCount);
         if ($dto->parentsDeceased !== null) $book->setParentsDeceased($dto->parentsDeceased);
 
         $em->flush();

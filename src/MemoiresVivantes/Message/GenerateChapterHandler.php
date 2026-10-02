@@ -149,10 +149,15 @@ class GenerateChapterHandler
                 }
 
                 $this->assertNotEmpty($text, 2);
-                $text = $this->anthropicService->checkAndComplete($text, true, $model);
+                if ($databaseType !== null && DatabasePromptEngine::isNothingToAdd($text)) {
+                    // La première partie a tout traité et les consignes n'attendent pas de conclusion : pas de seconde partie
+                    $text = '';
+                } else {
+                    $text = $this->anthropicService->checkAndComplete($text, true, $model);
+                }
 
                 $chapter->setContentPart2($text);
-                $fullContent = $chapter->getContentPart1() . "\n\n" . $text;
+                $fullContent = $text === '' ? (string) $chapter->getContentPart1() : $chapter->getContentPart1() . "\n\n" . $text;
                 $chapter->setContentGenerated($fullContent);
                 $chapter->setContentFinal($fullContent);
                 $chapter->setGenerationStatus('completed');

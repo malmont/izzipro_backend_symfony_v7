@@ -57,6 +57,8 @@ class BookOutputDto
     public ?array $typeInfo = null;
     /** Police du livre : code du catalogue (GET /api/memoires/book-fonts) */
     public string $font;
+    /** Nombre de séances d'entretien prévu pour le livre (1 à 12), null si jamais choisi */
+    public ?int $sessionCount = null;
     public ?string $clientAddress = null;
     public ?string $client_address = null;
     /** Itinéraire Google Maps vers le client (propriétaire et administrateurs seulement) */
@@ -96,6 +98,7 @@ class BookOutputDto
         $this->paymentLinkUrl = $withPrivateDetails ? $book->getPaymentLinkUrl() : null;
         $this->payment_link_url = $this->paymentLinkUrl;
         $this->font = BookFontCatalog::resolve($book->getFont());
+        $this->sessionCount = $book->getSessionCount();
         $this->clientAddress = $withPrivateDetails ? $book->getClientAddress() : null;
         $this->client_address = $this->clientAddress;
         $this->clientAddressMapsUrl = $withPrivateDetails ? MapsLink::directionsUrl($book->getClientAddress()) : null;

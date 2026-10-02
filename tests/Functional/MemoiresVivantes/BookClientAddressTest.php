@@ -31,6 +31,23 @@ class BookClientAddressTest extends BookTypeApiTestCase
         $this->assertNull(MapsLink::directionsUrl('   '));
     }
 
+    public function testTheNumberOfSessionsFollowsTheBook(): void
+    {
+        // Planificateur de séances : le nombre choisi n'était gardé que dans le navigateur
+        [, $book] = $this->api('POST', '/books', ['title' => 'Livre à séances', 'type' => 'individuel', 'sessionCount' => 5], 'client');
+        $this->assertSame(5, $book['sessionCount']);
+
+        [, $updated] = $this->api('PUT', "/books/{$book['id']}", ['sessionCount' => 8], 'client');
+        $this->assertSame(8, $updated['sessionCount']);
+        [, $untouched] = $this->api('PUT', "/books/{$book['id']}", ['title' => 'Titre seul'], 'client');
+        $this->assertSame(8, $untouched['sessionCount'], 'champ absent : inchangé');
+        [, $invalid] = $this->api('PUT', "/books/{$book['id']}", ['sessionCount' => 40], 'client');
+        $this->assertSame(8, $invalid['sessionCount'], 'hors de 1 à 12 : ignoré');
+
+        [, $none] = $this->api('POST', '/books', ['title' => 'Sans choix', 'type' => 'individuel'], 'client');
+        $this->assertNull($none['sessionCount']);
+    }
+
     public function testAGuestNeverSeesTheAddress(): void
     {
         [, $book] = $this->api('POST', '/books', ['title' => 'Livre privé', 'type' => 'famille', 'clientAddress' => '12 rue des Flamboyants'], 'client');
