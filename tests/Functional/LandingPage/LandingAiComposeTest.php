@@ -784,6 +784,34 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertStringContainsString('blocks[1].valign', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
     }
 
+    public function testInventedFallbackUrlOnABoundImageIsDroppedWithoutAnotherAttempt(): void
+    {
+        $composition = $this->preset('contact-type-a');
+        $composition->blocks[] = (object) ['id' => 'a-logo', 'type' => 'image', 'parentId' => null, 'url' => 'https://images.example.com/logo.png', 'bindings' => (object) ['url' => 'logoUrl']];
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($composition, null);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Contact', 'prompt' => 'Formulaire de contact avec le logo.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertCount(1, FakeLandingAiClient::$requests, 'aucun nouvel essai');
+        $logo = array_column(json_decode($response->getContent())->composition->blocks, null, 'id')['a-logo'];
+        $this->assertObjectNotHasProperty('url', $logo);
+        $this->assertSame('logoUrl', $logo->bindings->url);
+    }
+
+    public function testInventedUrlOnAnUnboundImageIsStillSentBackToTheModel(): void
+    {
+        $wrong = $this->preset('contact-type-a');
+        $wrong->blocks[] = (object) ['id' => 'a-photo', 'type' => 'image', 'parentId' => null, 'url' => 'https://images.example.com/photo.jpg'];
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($wrong, null);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('contact-type-a'), null);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Contact', 'prompt' => 'Formulaire de contact avec une photo.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertStringContainsString('média absent de la liste autorisée', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+    }
+
     public function testSonnet55GetsAutomaticToolChoice(): void
     {
         $payload = static::getContainer()->get(\App\Services\LandingAiService\LandingAiPromptBuilder::class)

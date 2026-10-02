@@ -284,6 +284,10 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   colonne « Coût estimé ($ US) » et le total du mois du site ne sont montrés qu'au super administrateur ; l'API du
   frontend ne l'expose pas. Repères du 02/10/2026 : retouche 0,02 $, création 0,05 $, page 0,10 $ (cache chaud) à
   0,28 $ (cache froid, un essai) et 0,36 $ (deux essais), relecture visuelle 0,17 $ (Opus 5.5).
+- **Média de repli inventé sur un bloc lié** (`LandingAiOutputRepair::dropInventedBoundMedia`, 02/10/2026) : sur P4, le
+  premier essai a été refusé pour trois images liées (`item.imageUrl`, `logoUrl`) portant en plus une URL d'exemple.
+  Sur une image, une vidéo ou une icône dont le média est lié, une `url` absente de la liste autorisée est retirée
+  sans nouvel essai : la donnée fournit le média. Sur un bloc non lié, un média inventé reste renvoyé au modèle.
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

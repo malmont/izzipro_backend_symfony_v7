@@ -81,6 +81,33 @@ final class LandingAiOutputRepair
     }
 
     /**
+     * Média de repli inventé sur un bloc dont le média est lié à une donnée (image, vidéo ou icône avec bindings.url) :
+     * le modèle écrit parfois une URL d'exemple à côté de la liaison (02/10/2026 : trois blocs sur une page, d'où une
+     * seconde génération complète). La donnée liée fournit le média : l'URL non autorisée est retirée, sans nouvel
+     * essai. Un média inventé sur un bloc non lié reste renvoyé au modèle.
+     *
+     * @param list<string> $allowedMedia
+     * @return list<string> chemins des URL retirées
+     */
+    public function dropInventedBoundMedia(object $composition, array $allowedMedia): array
+    {
+        $allowed = array_flip($allowedMedia);
+        $removed = [];
+        foreach (is_array($composition->blocks ?? null) ? $composition->blocks : [] as $i => $block) {
+            if (!is_object($block) || !in_array($block->type ?? null, ['image', 'video', 'icon'], true) || !is_string($block->bindings->url ?? null)) {
+                continue;
+            }
+            $url = $block->url ?? null;
+            if (is_string($url) && $url !== '' && !isset($allowed[$url])) {
+                unset($block->url);
+                $removed[] = "blocks[$i].url";
+            }
+        }
+
+        return $removed;
+    }
+
+    /**
      * Écrit background = « transparent » sur les containers qui n'en ont pas. $skipIds : blocs à laisser tels quels
      * (en retouche, ceux de la composition de départ : seuls les blocs ajoutés par l'IA sont complétés).
      *
