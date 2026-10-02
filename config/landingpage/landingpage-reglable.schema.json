@@ -260,9 +260,8 @@
       "properties": {
         "id": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 10000,
-          "description": "Identifiant unique dans la section."
+          "pattern": "^[A-Za-z0-9_-]{1,100}$",
+          "description": "Identifiant unique dans la section : lettres, chiffres, _ ou -, 100 caractères au plus."
         },
         "type": {
           "enum": [
@@ -319,7 +318,7 @@
         "text": {
           "type": "string",
           "maxLength": 10000,
-          "description": "Texte affiché. Balises autorisées : strong, em, u, s, br, p, ul, ol, li, a, span. Chiffre pour un bloc stat."
+          "description": "Texte affiché. Balises autorisées : p, div, span, strong, b, em, i, u, s, br, hr, ul, ol, li, blockquote, small, sub, sup, h2 à h6 (styles : italique, graisse, soulignement, couleur simple). Pas de lien <a> : un lien se fait avec un bouton (type button) ou le lien du bloc (link). Chiffre pour un bloc stat."
         },
         "url": {
           "$ref": "#/$defs/url",
@@ -337,7 +336,8 @@
           "description": "Taille du texte en px à la largeur de référence de la section."
         },
         "background": {
-          "$ref": "#/$defs/background"
+          "$ref": "#/$defs/background",
+          "description": "Fond dessiné seulement pour container, button et badge (ignoré ailleurs ; divider : dégradé seulement). Absent sur ces trois types : blanc opaque (#ffffff). Un container posé sur un fond coloré doit écrire « transparent », sinon il masque ce fond (texte clair illisible)."
         },
         "color": {
           "$ref": "#/$defs/color"
@@ -368,7 +368,8 @@
             "left",
             "center",
             "right"
-          ]
+          ],
+          "description": "Alignement du texte du bloc, et des enfants d’un container en pile ou en rangée. Dans une pile, un bloc en fitContent se place selon son propre align, les autres selon celui du parent : un bouton fitContent d’une pile alignée à gauche doit donc écrire « left » pour rester à gauche."
         },
         "fontWeight": {
           "enum": [
@@ -1221,7 +1222,7 @@
         },
         "fitContent": {
           "type": "boolean",
-          "description": "Types : button, badge, title, text, nav, language, admin, icon, container, image."
+          "description": "Largeur ajustée au contenu (w est ignoré). Dans une pile, le bloc se place alors selon son propre align et non celui du parent. Types : button, badge, title, text, nav, language, admin, icon, container, image."
         },
         "underline": {
           "type": "boolean",
