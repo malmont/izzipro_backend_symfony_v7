@@ -3,6 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\AiUsage;
+use App\Services\LandingAiService\LandingAiPricing;
 use App\Services\LandingAiService\LandingAiQuotaService;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\QueryBuilder;
@@ -20,7 +21,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 
 /**
  * Historique de l'assistant IA des landing pages du tenant, en lecture seule (l'historique ne se modifie pas).
- * Le total du mois est rappelé en tête de liste.
+ * Le total du mois est rappelé en tête de liste. Le coût estimé en dollars (par demande et total du mois) n'est
+ * montré qu'au super administrateur : les administrateurs d'un site voient leurs crédits, pas le coût de revient.
  */
 class AiUsageCrudController extends BaseTenantCrudController
 {
@@ -31,8 +33,11 @@ class AiUsageCrudController extends BaseTenantCrudController
         'En cours' => AiUsage::STATUS_RESERVED,
     ];
 
-    public function __construct(TenantEntityManagerProvider $emProvider, private readonly LandingAiQuotaService $quota)
-    {
+    public function __construct(
+        TenantEntityManagerProvider $emProvider,
+        private readonly LandingAiQuotaService $quota,
+        private readonly LandingAiPricing $pricing
+    ) {
         parent::__construct($emProvider);
     }
 
@@ -44,6 +49,15 @@ class AiUsageCrudController extends BaseTenantCrudController
     public function configureCrud(Crud $crud): Crud
     {
         $credits = $this->quota->credits();
+        $cost = '';
+        if ($this->isGranted('ROLE_SUPER_ADMIN')) {
+            $month = $this->quota->monthUsages();
+            $cost = sprintf(
+                ' Coût estimé du mois sur ce site : %s $ US pour %d demande(s) ayant appelé l\'IA, échecs compris (estimation d\'après les jetons ; la console Anthropic fait foi).',
+                number_format($this->pricing->total($month), 2, ',', ' '),
+                count($month)
+            );
+        }
 
         return parent::configureCrud($crud)
             ->setEntityLabelInSingular('Demande à l\'assistant IA')
@@ -53,7 +67,7 @@ class AiUsageCrudController extends BaseTenantCrudController
                 'Crédits du mois : %d utilisé(s) sur %d, %d restant(s) (renouvellement le %s). Les demandes échouées ou expirées ne consomment aucun crédit. Historique conservé 90 jours.',
                 $credits['used'], $credits['monthly'], $credits['remaining'],
                 (new \DateTimeImmutable($credits['resetAt']))->format('d/m/Y')
-            ))
+            ) . $cost)
             ->setPaginatorPageSize(50);
     }
 
@@ -75,7 +89,7 @@ class AiUsageCrudController extends BaseTenantCrudController
 
     public function configureFields(string $pageName): iterable
     {
-        return [
+        $fields = [
             DateTimeField::new('createdAt', 'Date')->setFormat('dd/MM/yyyy HH:mm:ss'),
             TextField::new('user', 'Utilisateur'),
             TextField::new('mode', 'Mode'),
@@ -94,9 +108,20 @@ class AiUsageCrudController extends BaseTenantCrudController
             TextField::new('model', 'Modèle')->onlyOnDetail(),
             IntegerField::new('inputTokens', 'Jetons en entrée')->onlyOnDetail(),
             IntegerField::new('cacheReadTokens', 'Jetons lus en cache')->onlyOnDetail(),
+            IntegerField::new('cacheWriteTokens', 'Jetons écrits en cache (compris dans l\'entrée)')->onlyOnDetail(),
             IntegerField::new('outputTokens', 'Jetons en sortie')->onlyOnDetail(),
             DateTimeField::new('completedAt', 'Terminée le')->setFormat('dd/MM/yyyy HH:mm:ss')->onlyOnDetail(),
             TextField::new('tenant', 'Site')->onlyOnDetail(),
         ];
+        if ($this->isGranted('ROLE_SUPER_ADMIN')) {
+            // champ calculé : s'appuie sur une propriété existante, la valeur affichée vient de formatValue
+            array_splice($fields, 6, 0, [
+                TextField::new('model', 'Coût estimé ($ US)')
+                    ->formatValue(fn ($value, AiUsage $usage) => $usage->getAttempts() > 0 ? number_format($this->pricing->usageCost($usage), 3, ',', ' ') : '—')
+                    ->setSortable(false),
+            ]);
+        }
+
+        return $fields;
     }
 }

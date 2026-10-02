@@ -44,7 +44,7 @@ au niveau d'un onglet ou d'une section est conservé sans contrôle.
 | Table | Base | Contenu |
 |---|---|---|
 | `landing_page_setting` | tenant | configuration JSON du site |
-| `ai_usage` | tenant | réservations et historique des crédits (90 jours ; jamais de composition ni de réponse du modèle) |
+| `ai_usage` | tenant | réservations et historique des crédits (90 jours ; jamais de composition ni de réponse du modèle) ; jetons par demande, d'où le coût estimé montré au super administrateur (`LandingAiPricing`) |
 | `ai_credit_setting` | tenant | crédits mensuels (100 par défaut) |
 | `ai_job` | tenant | tâches de fond (résultat 1 h, requête effacée au traitement) |
 | `landing_config_sync` | maître (`app_v2_db`) | historique des synchronisations |

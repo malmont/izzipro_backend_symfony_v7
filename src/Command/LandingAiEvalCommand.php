@@ -10,6 +10,7 @@ use App\Services\LandingAiService\LandingAiComposer;
 use App\Services\LandingAiService\LandingAiDataSources;
 use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiSiteContext;
+use App\Services\LandingAiService\LandingAiPricing;
 use App\Services\LandingAiService\LandingAiTuning;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
@@ -28,17 +29,6 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 class LandingAiEvalCommand extends Command
 {
     private const MODES = ['edit', 'create', 'page'];
-    /**
-     * Prix par million de jetons (USD, API Anthropic, relevés le 30/09/2026) : entrée, sortie, lecture du cache.
-     * Écriture du cache : 1,25 fois l'entrée (5 minutes), 2 fois (1 heure). À mettre à jour avec les tarifs.
-     */
-    private const PRICES = [
-        'claude-sonnet-5' => [2.0, 10.0, 0.20],
-        'claude-sonnet-5-5' => [2.0, 10.0, 0.20],
-        'claude-opus-5-5' => [4.0, 20.0, 0.20],
-        'claude-opus-5' => [5.0, 25.0, 0.50],
-        'claude-fable-5-1' => [10.0, 50.0, 0.25],
-    ];
     private const MODE_TITLES = ['edit' => 'Retouche (edit)', 'create' => 'Création (create)', 'page' => 'Page (page, images)', 'review' => 'Relecture visuelle (edit + captures)'];
 
     public function __construct(
@@ -51,6 +41,7 @@ class LandingAiEvalCommand extends Command
         private readonly LandingAiEvalCases $cases,
         private readonly LandingAiEvalChecks $checks,
         private readonly LandingAiTuning $tuning,
+        private readonly LandingAiPricing $pricing,
         #[Autowire('%kernel.project_dir%/var/landing-ai-eval')]
         private readonly string $reportDir,
         #[Autowire('%kernel.project_dir%/src/Services/LandingAiService/Eval/fixtures')]
@@ -314,14 +305,16 @@ class LandingAiEvalCommand extends Command
     /** Coût estimé d'une demande (USD), d'après les jetons et les prix du modèle ; 0 si le modèle est inconnu */
     private function cost(array $usage): float
     {
-        [$input, $output, $read] = self::PRICES[$usage['model'] ?? ''] ?? [0.0, 0.0, 0.0];
-        $write = (int) ($usage['cacheWriteTokens'] ?? 0);
-        $writeFactor = $this->tuning->cacheTtl('page') !== null && in_array($usage['model'] ?? '', [$this->composer->pageModel(), $this->composer->imagesModel()], true) ? 2.0 : 1.25;
+        $longCache = $this->tuning->cacheTtl('page') !== null && in_array($usage['model'] ?? '', [$this->composer->pageModel(), $this->composer->imagesModel()], true);
 
-        return (((int) ($usage['inputTokens'] ?? 0) - $write) * $input
-            + $write * $input * $writeFactor
-            + (int) ($usage['cacheReadTokens'] ?? 0) * $read
-            + (int) ($usage['outputTokens'] ?? 0) * $output) / 1000000;
+        return $this->pricing->cost(
+            $usage['model'] ?? null,
+            (int) ($usage['inputTokens'] ?? 0),
+            (int) ($usage['outputTokens'] ?? 0),
+            (int) ($usage['cacheReadTokens'] ?? 0),
+            (int) ($usage['cacheWriteTokens'] ?? 0),
+            $longCache
+        );
     }
 
     private function summarize(array $cases): array
@@ -329,7 +322,7 @@ class LandingAiEvalCommand extends Command
         $played = array_values(array_filter($cases, fn ($c) => $c['status'] !== 'skipped'));
         $ok = array_values(array_filter($played, fn ($c) => $c['status'] === 'ok'));
         $checks = [];
-        foreach (['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8'] as $v) {
+        foreach (['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9'] as $v) {
             $measured = array_filter($ok, fn ($c) => $c['checks'][$v]['ok'] !== null);
             $checks[$v] = [count(array_filter($measured, fn ($c) => $c['checks'][$v]['ok'])), count($measured)];
         }

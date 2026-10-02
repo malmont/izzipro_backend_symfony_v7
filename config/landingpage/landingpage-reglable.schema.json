@@ -403,7 +403,8 @@
             "cover",
             "contain",
             "fill"
-          ]
+          ],
+          "description": "Image ou vidéo dans son cadre (aspectRatio ou fixedHeight). cover (défaut) remplit le cadre en rognant ce qui dépasse ; contain montre le média entier, avec des marges. Logo, capture d’écran ou visuel contenant du texte : contain, ou un aspectRatio proche de celui du média."
         },
         "dividerWidth": {
           "type": "number",
@@ -1593,7 +1594,7 @@
             "typeC",
             "typeD"
           ],
-          "description": "Variante stylistique du formulaire (typeA, typeB, typeC, typeD). Types : form."
+          "description": "Variante stylistique du formulaire (typeA, typeB, typeC, typeD). Le formulaire de contact dessine déjà sa propre carte (fond blanc, bordure, arrondi, ombre) : le poser dans un container transparent sans marge interne, jamais dans une autre carte. Types : form."
         },
         "buttonBg": {
           "$ref": "#/$defs/background",

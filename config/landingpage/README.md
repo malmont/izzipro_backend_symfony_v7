@@ -264,6 +264,26 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   un type de bloc qui ne l'utilise pas ; jamais dans `mobile`, où null a un sens. Toute autre propriété refusée reste
   renvoyée au modèle. Pour le `dataType`, consigne : une famille qui a des données reçoit toujours une donnée de sa
   liste, la plus proche à défaut, avec un titre fidèle au contenu affiché et un avertissement.
+- **Essai réel du 02/10/2026** (page « Atelier Verde » sur `demo`, Sonnet 5.5, un essai, 87 s, 0,32 $ à cache froid) :
+  résultat jugé bon, trois défauts, chacun corrigé par une consigne et mesuré par **V9**
+  (`Eval/LandingAiLayoutCheck`, création et page) quand c'est mesurable :
+  - prix des services absents : une liste de services lie `item.subtitle` ET `item.price`, chacun dans un bloc text
+    avec `hideEmpty` (sur `demo`, le prix est dans `item.subtitle`) ; V9 signale une liste `services` sans l'une des deux ;
+  - images liées rognées : contenu inconnu, donc `objectFit: contain` ou un `aspectRatio` large (16/9, 16/10), « cover »
+    pour une photo fournie ou un fond ; non mesuré (11 modèles du catalogue sur 19 sont en « cover » à dessein) ;
+  - formulaire de contact en double cadre : le bloc form dessine déjà sa carte, son parent direct est un container
+    transparent sans marge interne, bordure ni ombre ; V9 le signale.
+  Sur le catalogue, V9 relève `service-liste` (sans `item.price`) et `service-sombre` (sans `item.subtitle`).
+- **Effets visuels** : le prompt n'en disait rien jusqu'au 02/10/2026. Consigne : quand la demande ne dit rien du style
+  ou veut un rendu premium, vivant ou moderne, utiliser avec mesure `animation` et `animationDelay`, `repeat.stagger`,
+  `hover`, `shadow`, `textGradient`, `bgGradient` ; style sobre demandé : rester sobre. Cas **P4** du jeu d'essai (page
+  premium et vivante, sans image) : au moins trois sortes d'effets, dont `animation` et `hover`.
+- **Coût estimé** (`LandingAiPricing`, prix par modèle relevés le 30/09/2026) : calculé d'après les jetons de chaque
+  demande, écriture du cache comprise (`ai_usage.cache_write_tokens`, depuis le 02/10/2026 ; 0 sur les demandes plus
+  anciennes, dont le coût est alors un peu sous-estimé). Dans l'administration (« Assistant IA : historique »), la
+  colonne « Coût estimé ($ US) » et le total du mois du site ne sont montrés qu'au super administrateur ; l'API du
+  frontend ne l'expose pas. Repères du 02/10/2026 : retouche 0,02 $, création 0,05 $, page 0,10 $ (cache chaud) à
+  0,28 $ (cache froid, un essai) et 0,36 $ (deux essais), relecture visuelle 0,17 $ (Opus 5.5).
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

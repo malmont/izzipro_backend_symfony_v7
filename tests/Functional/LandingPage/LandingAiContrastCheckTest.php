@@ -4,6 +4,7 @@ namespace App\Tests\Functional\LandingPage;
 
 use App\Services\LandingAiService\CompositionInspector;
 use App\Services\LandingAiService\Eval\LandingAiAlignCheck;
+use App\Services\LandingAiService\Eval\LandingAiLayoutCheck;
 use App\Services\LandingAiService\Eval\LandingAiContrastCheck;
 use PHPUnit\Framework\TestCase;
 
@@ -113,6 +114,29 @@ final class LandingAiContrastCheckTest extends TestCase
             ['bouton : center (pile pile et ses textes : left)'],
             (new LandingAiAlignCheck(new CompositionInspector()))->issues($composition)
         );
+    }
+
+    public function testContactFormInsideACardAndServiceListWithoutPricesAreReported(): void
+    {
+        $composition = json_decode(json_encode(['schemaVersion' => 2, 'blocks' => [
+            ['id' => 'carte', 'type' => 'container', 'parentId' => null, 'background' => '#ffffff', 'padding' => 28],
+            ['id' => 'formulaire', 'type' => 'form', 'parentId' => 'carte', 'formType' => 'contact'],
+            ['id' => 'liste', 'type' => 'container', 'parentId' => null, 'background' => 'transparent', 'repeat' => ['source' => 'services']],
+            ['id' => 'carte-service', 'type' => 'container', 'parentId' => 'liste', 'background' => '#ffffff', 'padding' => 20],
+            ['id' => 'nom', 'type' => 'title', 'parentId' => 'carte-service', 'bindings' => ['text' => 'item.title']],
+            ['id' => 'prix', 'type' => 'stat', 'parentId' => 'carte-service', 'bindings' => ['text' => 'item.price']],
+        ]]), false);
+        $check = new LandingAiLayoutCheck(new CompositionInspector());
+
+        $this->assertSame(
+            ['formulaire formulaire dans un double cadre (parent carte)', 'liste de services liste sans liaison item.subtitle'],
+            $check->issues($composition)
+        );
+
+        $composition->blocks[0]->background = 'transparent';
+        $composition->blocks[0]->padding = 0;
+        $composition->blocks[] = (object) ['id' => 'accroche', 'type' => 'text', 'parentId' => 'carte-service', 'bindings' => (object) ['text' => 'item.subtitle'], 'hideEmpty' => true];
+        $this->assertSame([], $check->issues($composition));
     }
 
     /** @return list<string> */

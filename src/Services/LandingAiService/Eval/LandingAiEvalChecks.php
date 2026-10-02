@@ -10,7 +10,7 @@ use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
 /**
  * Vérifications automatiques communes du jeu d'essai (config/landingpage/ia-assistant-jeu-essai.md) :
  * V1 contrat, V2 types de la famille, V3 médias autorisés, V4 liaisons conservées, V5 chiffres non inventés,
- * V6 blocs non visés identiques, V7 contraste des textes sur leur fond réel, V8 alignement des blocs fitContent (création et page). Chaque vérification renvoie ['ok' => bool, 'detail' => string].
+ * V6 blocs non visés identiques, V7 contraste des textes sur leur fond réel, V8 alignement des blocs fitContent, V9 mise en page (formulaire en double cadre, prix des services) (création et page). Chaque vérification renvoie ['ok' => bool, 'detail' => string].
  */
 final class LandingAiEvalChecks
 {
@@ -19,7 +19,8 @@ final class LandingAiEvalChecks
         private readonly LandingAiCatalogue $catalogue,
         private readonly CompositionInspector $inspector,
         private readonly LandingAiContrastCheck $contrast,
-        private readonly LandingAiAlignCheck $align
+        private readonly LandingAiAlignCheck $align,
+        private readonly LandingAiLayoutCheck $layout
     ) {
     }
 
@@ -74,7 +75,7 @@ final class LandingAiEvalChecks
         }
         $v6 = ['ok' => !$changed, 'detail' => $changed ? 'blocs non visés modifiés : ' . implode(', ', array_slice($changed, 0, 5)) : sprintf('%d bloc(s) visé(s)', count($result->touchedBlockIds))];
 
-        return ['V1' => $v1, 'V2' => $v2, 'V3' => $v3, 'V4' => $v4, 'V5' => $v5, 'V6' => $v6, 'V7' => ['ok' => null, 'detail' => 'sans objet en retouche (contraste de départ non maîtrisé)'], 'V8' => ['ok' => null, 'detail' => 'sans objet en retouche']];
+        return ['V1' => $v1, 'V2' => $v2, 'V3' => $v3, 'V4' => $v4, 'V5' => $v5, 'V6' => $v6, 'V7' => ['ok' => null, 'detail' => 'sans objet en retouche (contraste de départ non maîtrisé)'], 'V8' => ['ok' => null, 'detail' => 'sans objet en retouche'], 'V9' => ['ok' => null, 'detail' => 'sans objet en retouche']];
     }
 
     /**
@@ -96,6 +97,7 @@ final class LandingAiEvalChecks
         $invented = array_values(array_unique(array_filter($this->numbers($this->allTexts($composition)), fn ($n) => !isset($known[$n]))));
         $weak = $this->contrast->issues($composition);
         $misaligned = $this->align->issues($composition);
+        $layout = $this->layout->issues($composition);
 
         return [
             'V1' => ['ok' => !$errors, 'detail' => $errors ? count($errors) . ' erreur(s), ex. ' . $errors[0]['path'] . ' : ' . $errors[0]['message'] : ''],
@@ -106,6 +108,7 @@ final class LandingAiEvalChecks
             'V6' => ['ok' => null, 'detail' => 'sans objet en création'],
             'V7' => ['ok' => !$weak, 'detail' => $weak ? 'contraste insuffisant : ' . implode(' ; ', array_slice($weak, 0, 4)) : ''],
             'V8' => ['ok' => !$misaligned, 'detail' => $misaligned ? 'bouton ou badge fitContent décalé de sa pile (à regarder, peut être voulu) : ' . implode(' ; ', array_slice($misaligned, 0, 4)) : ''],
+            'V9' => ['ok' => !$layout, 'detail' => implode(' ; ', array_slice($layout, 0, 4))],
         ];
     }
 

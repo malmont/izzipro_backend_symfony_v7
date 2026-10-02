@@ -277,6 +277,7 @@ final class LandingAiEvalCases
      * Cas de l'étape 3 (page, images). Les images sont dans Eval/fixtures (P1 : charte 2 couleurs, 1 police, logo ;
      * P2 : capture d'une section services, 3 cartes en colonnes ; P3 : relecture visuelle, captures ordinateur et mobile
      * du rendu d'une section dégradée). P3 est une retouche (presetId, prepare) : vérifications V1 à V6 de la retouche.
+     * P4 : page sans image dont la demande veut un rendu premium et vivant ; mesure les effets utilisés.
      *
      * @return list<array{id: string, prompt: string, componentKey: ?string, media: list<array>, images: list<string>, skip?: string, check?: callable(LandingAiPageResult): array}>
      */
@@ -366,7 +367,45 @@ final class LandingAiEvalCases
                     ));
                 },
             ],
+            [
+                'id' => 'P4', 'componentKey' => null, 'images' => [], 'media' => [],
+                'prompt' => 'Page d\'accueil premium et vivante pour un studio de design : héros, services, réalisations, contact. Rendu moderne, avec des effets.',
+                'check' => function (LandingAiPageResult $r) {
+                    $effects = [];
+                    foreach ($r->sections as $section) {
+                        foreach ($this->effects($section['composition']) as $effect => $count) {
+                            $effects[$effect] = ($effects[$effect] ?? 0) + $count;
+                        }
+                    }
+                    ksort($effects);
+                    $ok = count($r->sections) === 4 && count($effects) >= 3 && isset($effects['animation'], $effects['hover']);
+
+                    return $this->result($ok, sprintf(
+                        'sections : %s ; effets : %s',
+                        implode(' > ', array_column($r->sections, 'componentKey')),
+                        $effects ? implode(', ', array_map(fn ($k, $v) => "$k × $v", array_keys($effects), $effects)) : 'aucun'
+                    ));
+                },
+            ],
         ];
+    }
+
+    /** @return array<string, int> effets du contrat utilisés dans la composition => nombre d'emplois */
+    private function effects(object $composition): array
+    {
+        $effects = !empty($composition->bgGradient) ? ['bgGradient' => 1] : [];
+        foreach ($this->inspector->blocks($composition) as $block) {
+            foreach (['animation', 'hover', 'shadow', 'textGradient', 'loop'] as $key) {
+                if (!empty($block->$key)) {
+                    $effects[$key] = ($effects[$key] ?? 0) + 1;
+                }
+            }
+            if (!empty($block->repeat->stagger)) {
+                $effects['stagger'] = ($effects['stagger'] ?? 0) + 1;
+            }
+        }
+
+        return $effects;
     }
 
     public const P3_WEAK_TEXT = '#C4C4C4';

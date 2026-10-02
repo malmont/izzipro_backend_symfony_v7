@@ -71,6 +71,10 @@ class AiUsage
     #[ORM\Column]
     private int $cacheReadTokens = 0;
 
+    /** Jetons écrits dans le cache (compris dans inputTokens, facturés plus cher) ; 0 avant le 02/10/2026 */
+    #[ORM\Column(options: ['default' => 0])]
+    private int $cacheWriteTokens = 0;
+
     #[ORM\Column(nullable: true)]
     private ?int $durationMs = null;
 
@@ -126,6 +130,8 @@ class AiUsage
     public function getCacheReadTokens(): int { return $this->cacheReadTokens; }
     public function setCacheReadTokens(int $cacheReadTokens): static { $this->cacheReadTokens = $cacheReadTokens; return $this; }
 
+    public function getCacheWriteTokens(): int { return $this->cacheWriteTokens; }
+    public function setCacheWriteTokens(int $cacheWriteTokens): static { $this->cacheWriteTokens = $cacheWriteTokens; return $this; }
     public function getDurationMs(): ?int { return $this->durationMs; }
     public function setDurationMs(?int $durationMs): static { $this->durationMs = $durationMs; return $this; }
 

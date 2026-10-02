@@ -135,6 +135,19 @@ final class LandingAiQuotaService
         ];
     }
 
+    /** Début du mois de facturation (fuseau TIMEZONE), exprimé dans le fuseau du serveur */
+    public function monthStart(): \DateTimeImmutable
+    {
+        return (new \DateTimeImmutable('first day of this month 00:00:00', new \DateTimeZone(self::TIMEZONE)))
+            ->setTimezone(new \DateTimeZone(date_default_timezone_get()));
+    }
+
+    /** @return AiUsage[] demandes du mois en cours ayant appelé l'IA, réussies ou non (toutes sont facturées) */
+    public function monthUsages(): array
+    {
+        return $this->usages()->findWithCallsSince($this->monthStart());
+    }
+
     /** @return list<array> les dernières demandes du tenant */
     public function history(int $limit = 50): array
     {
@@ -164,6 +177,7 @@ final class LandingAiQuotaService
                 ->setInputTokens($stats->inputTokens)
                 ->setOutputTokens($stats->outputTokens)
                 ->setCacheReadTokens($stats->cacheReadTokens)
+                ->setCacheWriteTokens($stats->cacheWriteTokens)
                 ->setDurationMs($stats->durationMs);
         }
         $em->flush();

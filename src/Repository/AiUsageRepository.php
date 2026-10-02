@@ -76,6 +76,16 @@ class AiUsageRepository extends EntityRepository
             ->execute();
     }
 
+    /** @return AiUsage[] demandes depuis $since ayant appelé l'IA au moins une fois */
+    public function findWithCallsSince(\DateTimeImmutable $since): array
+    {
+        return $this->createQueryBuilder('u')
+            ->where('u.createdAt >= :since AND u.attempts > 0')
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getResult();
+    }
+
     /** @return AiUsage[] */
     public function findLatest(int $limit): array
     {

@@ -43,6 +43,31 @@ class LandingAiEasyAdminTest extends WebTestCase
         $this->assertNotSame(200, $this->client->getResponse()->getStatusCode(), 'création désactivée');
     }
 
+    public function testEstimatedCostIsShownToTheSuperAdminOnly(): void
+    {
+        // 100 000 jetons d'entrée dont 80 000 écrits en cache, 10 000 lus, 5 000 en sortie, sur claude-sonnet-5-5 :
+        // (20 000 × 2 + 80 000 × 2 × 1,25 + 10 000 × 0,20 + 5 000 × 10) / 1 000 000 = 0,292 $
+        $this->db()->executeStatement("INSERT INTO ai_usage (tenant, created_at, mode, component_key, status, credits, attempts, model, input_tokens, cache_write_tokens, cache_read_tokens, output_tokens, prompt_excerpt)
+            VALUES ('mvtest', NOW(), 'page', '', 'success', 10, 1, 'claude-sonnet-5-5', 100000, 80000, 10000, 5000, 'Page payée'),
+                   ('mvtest', NOW(), 'edit', 'Contact', 'failed', 1, 1, 'claude-sonnet-5', 10000, 0, 0, 800, 'Retouche échouée après un appel'),
+                   ('mvtest', NOW(), 'edit', 'Contact', 'failed', 1, 0, NULL, 0, 0, 0, 0, 'Refusée avant tout appel')");
+
+        $this->loginAs(['ROLE_ADMIN']);
+        $this->admin(AiUsageCrudController::class);
+        $html = $this->client->getResponse()->getContent();
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertStringNotContainsString('Coût estimé', $html, 'l\'administrateur d\'un site voit ses crédits, pas le coût de revient');
+
+        $this->loginAs(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
+        $this->admin(AiUsageCrudController::class);
+        $html = $this->client->getResponse()->getContent();
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertStringContainsString('Coût estimé ($ US)', $html);
+        $this->assertStringContainsString('0,292', $html, 'page : écriture du cache à 1,25 fois l\'entrée');
+        $this->assertStringContainsString('0,028', $html, 'retouche échouée après un appel : payée quand même');
+        $this->assertStringContainsString('Coût estimé du mois sur ce site : 0,32 $ US pour 2 demande(s)', $html);
+    }
+
     public function testMonthlyCreditsCanBeSetOnceAndUpdated(): void
     {
         $this->loginAs(['ROLE_ADMIN']);
