@@ -86,7 +86,7 @@ final class LandingAiEvalChecks
      * @param list<string> $allowedMedia
      * @return array<string, array{ok: bool|null, detail: string}>
      */
-    public function commonCreate(object $composition, string $componentKey, array $allowedMedia, string $knownText): array
+    public function commonCreate(object $composition, string $componentKey, array $allowedMedia, string $knownText, ?object $under = null): array
     {
         $errors = $this->validator->validateComposition($composition);
         $tools = $this->catalogue->tools($componentKey);
@@ -95,7 +95,7 @@ final class LandingAiEvalChecks
         $badMedia = array_values(array_filter($this->inspector->mediaReferences($composition), fn ($r) => !isset($allowed[$r['value']])));
         $known = array_flip($this->numbers($knownText));
         $invented = array_values(array_unique(array_filter($this->numbers($this->allTexts($composition)), fn ($n) => !isset($known[$n]))));
-        $weak = $this->contrast->issues($composition);
+        $weak = $this->contrast->issues($composition, $under);
         $misaligned = $this->align->issues($composition);
         $layout = $this->layout->issues($composition);
 
@@ -123,7 +123,11 @@ final class LandingAiEvalChecks
     {
         $checks = [];
         foreach ($sections as $i => $section) {
-            foreach ($this->commonCreate($section['composition'], $section['componentKey'], $allowedMedia, $knownText) as $v => $check) {
+            // une barre superposée (overlayTop) se mesure sur la première section qui n'en est pas une
+            $under = ($section['composition']->overlayTop ?? false) === true
+                ? (array_values(array_filter($sections, fn ($s) => ($s['composition']->overlayTop ?? false) !== true))[0]['composition'] ?? null)
+                : null;
+            foreach ($this->commonCreate($section['composition'], $section['componentKey'], $allowedMedia, $knownText, $under) as $v => $check) {
                 if (!isset($checks[$v]) || ($checks[$v]['ok'] === true && $check['ok'] === false)) {
                     $checks[$v] = $check['ok'] === false ? ['ok' => false, 'detail' => sprintf('section %d (%s) : %s', $i + 1, $section['componentKey'], $check['detail'])] : $check;
                 }

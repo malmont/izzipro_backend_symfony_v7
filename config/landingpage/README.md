@@ -288,6 +288,13 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   premier essai a été refusé pour trois images liées (`item.imageUrl`, `logoUrl`) portant en plus une URL d'exemple.
   Sur une image, une vidéo ou une icône dont le média est lié, une `url` absente de la liste autorisée est retirée
   sans nouvel essai : la donnée fournit le média. Sur un bloc non lié, un média inventé reste renvoyé au modèle.
+- **V7 sur le catalogue** (02/10/2026) : 16 modèles sur 87 sous le seuil. Écarts connus et voulus, parce qu'ils
+  reproduisent un ancien composant : `presentation-type-d` et `-e`, `group-type-g`, `-k`, `-q`, `contact-type-b`,
+  `footer-type-a`, `video-type-a`, et les boutons blancs sur `#007bff` des bannières ; `service-cartes`,
+  `service-liste` et `carousel-offres` sont corrigés par le frontend. D'où la consigne : ne pas reprendre les couleurs
+  des modèles de référence, sauf si le site n'a encore aucune couleur. Barre superposée (`overlayTop`) : V7 la mesure
+  une fois la page défilée (`scrollColor`, sinon la couleur du bloc, sur `scrollBackground` opaque à 80 % au moins)
+  et, en mode page, au-dessus de la première section ; sinon elle n'est pas mesurée.
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

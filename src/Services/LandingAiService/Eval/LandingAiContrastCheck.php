@@ -10,6 +10,11 @@ use App\Services\LandingAiService\CompositionInspector;
  * n'est jamais dessiné. Fond réel : pour un bouton ou un badge, le sien ; sinon le premier container parent qui
  * dessine un fond opaque, puis la section ; les fonds semi-transparents sont superposés. Fond inconnu (image,
  * vidéo, dégradé, couleur liée à une donnée) : bloc non mesuré.
+ *
+ * Section en overlayTop (navbar superposée) : transparente, posée sur la première section de la page, dont le fond
+ * n'est connu qu'en mode page ($under). Quand la page a défilé, la barre prend scrollBackground et ses textes
+ * scrollColor (sinon la couleur de chaque bloc) : état mesuré si scrollBackground est opaque ou presque, sur le pire
+ * des fonds possibles derrière lui (blanc, noir). Sans l'un ni l'autre : non mesurée.
  */
 final class LandingAiContrastCheck
 {
@@ -21,13 +26,41 @@ final class LandingAiContrastCheck
     /** Types dont le fond est dessiné (absent : blanc opaque) */
     private const DRAWN_BACKGROUND_TYPES = ['container', 'button', 'badge'];
     private const MAX_DEPTH = 10;
+    /** Fond de défilement d'une barre superposée : mesuré s'il est opaque ou presque */
+    private const MIN_SCROLL_OPACITY = 0.8;
 
     public function __construct(private readonly CompositionInspector $inspector)
     {
     }
 
-    /** @return list<string> blocs sous le seuil : « id : rapport (couleur sur fond) » */
-    public function issues(object $composition): array
+    /**
+     * @param object|null $under section affichée sous une section en overlayTop (en page : la première section)
+     * @return list<string> blocs sous le seuil : « id : rapport (couleur sur fond) »
+     */
+    public function issues(object $composition, ?object $under = null): array
+    {
+        if (($composition->overlayTop ?? false) !== true) {
+            return array_values($this->measure($composition, $this->sectionBases($composition)));
+        }
+
+        // Barre superposée (navbar) : transparente sur la section du dessous, puis scrollBackground quand la page a défilé
+        $issues = $under !== null ? $this->measure($composition, $this->sectionBases($under), null, false, ' au-dessus de la première section') : [];
+        $scroll = $this->rgba($composition->scrollBackground ?? null);
+        if ($scroll !== null && $scroll[3] >= self::MIN_SCROLL_OPACITY) {
+            $bases = $scroll[3] >= 1.0 ? [array_slice($scroll, 0, 3)] : [$this->blend($scroll, [255, 255, 255]), $this->blend($scroll, [0, 0, 0])];
+            $issues += $this->measure($composition, $bases, $this->rgba($composition->scrollColor ?? null), true, ' une fois la page défilée');
+        }
+
+        return array_values($issues);
+    }
+
+    /**
+     * @param list<array{int, int, int}> $bases fonds possibles de la section (vide : inconnu, blocs posés dessus non mesurés)
+     * @param array{int, int, int, float}|null $textColor couleur imposée aux textes (scrollColor), sinon celle du bloc
+     * @param bool $sectionOnly ne mesurer que les blocs posés sur le fond de la section
+     * @return array<string, string> identifiant => défaut (le pire des fonds possibles)
+     */
+    private function measure(object $composition, array $bases, ?array $textColor = null, bool $sectionOnly = false, string $state = ''): array
     {
         $blocks = $this->inspector->blocksById($composition);
         $issues = [];
@@ -35,15 +68,18 @@ final class LandingAiContrastCheck
             if (!in_array($block->type ?? null, self::TEXT_TYPES, true) || isset($block->bindings->color)) {
                 continue;
             }
-            $color = $this->rgba($block->color ?? null);
-            $background = $this->background($block, $blocks, $composition);
-            if ($color === null || $background === null) {
-                continue;
-            }
-            $ratio = $this->ratio($this->blend($color, $background), $background);
-            $large = is_numeric($block->size ?? null) ? $block->size >= self::LARGE_SIZE : ($block->type ?? null) === 'title';
-            if ($ratio < ($large ? self::MIN_RATIO_LARGE : self::MIN_RATIO)) {
-                $issues[] = sprintf('%s : %.1f:1 (%s sur %s)', $id, $ratio, $block->color, sprintf('#%02x%02x%02x', ...$background));
+            foreach ($bases ?: [null] as $base) {
+                $found = $this->background($block, $blocks, $base);
+                $color = $found !== null && $found[1] && $textColor !== null ? $textColor : $this->rgba($block->color ?? null);
+                if ($found === null || $color === null || ($sectionOnly && !$found[1])) {
+                    continue;
+                }
+                $ratio = $this->ratio($this->blend($color, $found[0]), $found[0]);
+                $large = is_numeric($block->size ?? null) ? $block->size >= self::LARGE_SIZE : ($block->type ?? null) === 'title';
+                if ($ratio < ($large ? self::MIN_RATIO_LARGE : self::MIN_RATIO)) {
+                    $issues[$id] = sprintf('%s : %.1f:1 (%s sur %s%s)', $id, $ratio, $textColor !== null && $found[1] ? $composition->scrollColor : $block->color, sprintf('#%02x%02x%02x', ...$found[0]), $state);
+                    break;
+                }
             }
         }
 
@@ -51,12 +87,13 @@ final class LandingAiContrastCheck
     }
 
     /**
-     * Fond réel d'un bloc, ou null s'il est inconnu.
+     * Fond réel d'un bloc et s'il est celui de la section, ou null s'il est inconnu.
      *
      * @param array<string, object> $blocks
-     * @return array{int, int, int}|null
+     * @param array{int, int, int}|null $base fond de la section (null : inconnu)
+     * @return array{0: array{int, int, int}, 1: bool}|null
      */
-    private function background(object $block, array $blocks, object $composition): ?array
+    private function background(object $block, array $blocks, ?array $base): ?array
     {
         $layers = [];
         $node = $block;
@@ -73,28 +110,39 @@ final class LandingAiContrastCheck
                 }
                 $layers[] = $layer;
                 if ($layer[3] >= 1.0) {
-                    return $this->flatten($layers);
+                    return [$this->flatten($layers), false];
                 }
             }
             $node = is_string($node->parentId ?? null) ? ($blocks[$node->parentId] ?? null) : null;
         }
+        if ($base === null) {
+            return null;
+        }
+        $layers[] = [...$base, 1.0];
 
+        return [$this->flatten($layers), count($layers) === 1];
+    }
+
+    /**
+     * Fond d'une section : sa couleur (transparente ou absente : blanc ; semi-transparente : posée sur du blanc).
+     * Image, vidéo, dégradé ou couleur liée à une donnée : inconnu.
+     *
+     * @return list<array{int, int, int}> un fond, ou aucun s'il est inconnu
+     */
+    private function sectionBases(object $composition): array
+    {
         foreach (['bgImage', 'bgVideo', 'bgGradient'] as $key) {
             if (!empty($composition->$key) || isset($composition->bindings->$key)) {
-                return null;
+                return [];
             }
         }
         if (isset($composition->bindings->background)) {
-            return null;
+            return [];
         }
         $section = $composition->background ?? null;
         $layer = in_array($section, [null, '', 'transparent'], true) ? [255, 255, 255, 1.0] : $this->rgba($section);
-        if ($layer === null) {
-            return null;
-        }
-        $layers[] = $layer[3] >= 1.0 ? $layer : [...$this->blend($layer, [255, 255, 255]), 1.0];
 
-        return $this->flatten($layers);
+        return $layer === null ? [] : [$this->blend($layer, [255, 255, 255])];
     }
 
     /**

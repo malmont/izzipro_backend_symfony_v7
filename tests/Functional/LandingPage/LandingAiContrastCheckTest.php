@@ -64,6 +64,31 @@ final class LandingAiContrastCheckTest extends TestCase
         $this->assertCount(1, $issues, 'le fond écrit sur le titre n\'est pas dessiné : bleu nuit sur bleu nuit');
     }
 
+    public function testOverlayBarIsMeasuredOnceScrolledAndOverTheFirstSectionWhenKnown(): void
+    {
+        $bar = fn (array $section) => json_decode(json_encode(['schemaVersion' => 2, 'overlayTop' => true, 'background' => 'transparent'] + $section + ['blocks' => [
+            ['id' => 'nom', 'type' => 'title', 'parentId' => null, 'color' => '#ffffff', 'size' => 20],
+            ['id' => 'bouton', 'type' => 'button', 'parentId' => null, 'color' => '#ffffff', 'background' => '#1B2A4A', 'size' => 16],
+        ]]), false);
+        $check = new LandingAiContrastCheck(new CompositionInspector());
+        $hero = fn (string $background) => json_decode(json_encode(['schemaVersion' => 2, 'background' => $background, 'blocks' => []]), false);
+
+        $this->assertSame([], $check->issues($bar([])), 'sans scrollBackground ni section du dessous : non mesurée');
+        $this->assertSame([], $check->issues($bar(['scrollBackground' => 'rgba(7, 11, 30, 0.85)'])), 'blanc sur fond de défilement sombre');
+        $this->assertSame([], $check->issues($bar(['scrollBackground' => 'rgba(255, 255, 255, 0.28)'])), 'fond de défilement trop transparent : non mesuré');
+
+        $scrolled = $check->issues($bar(['scrollBackground' => '#ffffff']));
+        $this->assertCount(1, $scrolled, 'le bouton garde son propre fond');
+        $this->assertStringContainsString('nom : 1.0:1', $scrolled[0]);
+        $this->assertStringContainsString('une fois la page défilée', $scrolled[0]);
+        $this->assertSame([], $check->issues($bar(['scrollBackground' => '#ffffff', 'scrollColor' => '#0A2233'])), 'scrollColor remplace la couleur des textes');
+
+        $this->assertSame([], $check->issues($bar([]), $hero('#1B2A4A')), 'en page : blanc sur le héros bleu nuit');
+        $over = $check->issues($bar([]), $hero('#f5f5f5'));
+        $this->assertCount(1, $over);
+        $this->assertStringContainsString('au-dessus de la première section', $over[0]);
+    }
+
     public function testLargeTextHasALowerThreshold(): void
     {
         // #767676 sur blanc : 4,54:1 ; #949494 : 3,03:1 (suffisant pour un grand titre seulement)
