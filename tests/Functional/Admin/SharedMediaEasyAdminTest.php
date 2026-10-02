@@ -100,6 +100,19 @@ class SharedMediaEasyAdminTest extends WebTestCase
         @unlink("$dir/film_aabbccdd00112233.mp4");
     }
 
+    public function testFrameRateIsDoubledUpTo30FramesPerSecondWithAKeyFrameEvery210Milliseconds(): void
+    {
+        $plan = \App\Services\SharedMedia\FfmpegScrollVideoEncoder::plan(...);
+        $this->assertSame(['fps' => '48', 'gop' => 10], $plan('24/1'));
+        $this->assertSame(['fps' => '50', 'gop' => 10], $plan('25/1'));
+        $this->assertSame(['fps' => '60', 'gop' => 13], $plan('30/1'));
+        $this->assertSame(['fps' => '60000/1001', 'gop' => 12], $plan('30000/1001'), '29,97 i/s');
+        $this->assertSame(['fps' => null, 'gop' => 10], $plan('48/1'), 'déjà à 48 i/s : réencodage seul, sans interpolation');
+        $this->assertSame(['fps' => null, 'gop' => 13], $plan('60/1'));
+        $this->assertSame(['fps' => null, 'gop' => 5], $plan('0/0'), 'cadence illisible : pas d\'interpolation');
+        $this->assertSame(['fps' => null, 'gop' => 5], $plan(null));
+    }
+
     public function testFailedEncodingKeepsTheOriginalVideo(): void
     {
         FakeScrollVideoEncoder::reset();

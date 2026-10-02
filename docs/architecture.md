@@ -200,8 +200,9 @@ Médiathèque partagée : `/api/shared-media` (`SharedMediaApiController`). URL 
 **Vidéo préparée pour une scène au défilement** (administration : case du formulaire ou bouton de la fiche ;
 `Services/SharedMedia/ScrollVideoPreparer`). Une scène cale la vidéo sur la position du défilement : il faut des images
 complètes très rapprochées. La demande met le média en `scroll_status = pending` et envoie `PrepareScrollVideoMessage`
-au worker `media`, qui réencode (`FfmpegScrollVideoEncoder` : H.264, une image complète toutes les 5 images, sans
-images B ni son, 1080p au plus, vidéos de 30 s au plus). À la fin, **la même clé et la même adresse** servent le
+au worker `media`, qui réencode (`FfmpegScrollVideoEncoder` : H.264, sans images B ni son, 1080p au plus, vidéos de 30 s au plus ;
+une image complète toutes les 0,21 s pour un calage rapide ; cadence doublée par interpolation quand la source est à
+30 i/s ou moins, pour un défilement lent fluide, d'où un encodage de plusieurs minutes). À la fin, **la même clé et la même adresse** servent le
 fichier préparé (`filename`), le fichier d'origine est conservé (`source_filename`) et peut être rétabli. États :
 `pending`, `processing`, `done`, `failed`, `too_long` ; en cas d'échec, la vidéo d'origine reste servie.
 

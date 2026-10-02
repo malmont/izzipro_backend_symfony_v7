@@ -10,6 +10,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
@@ -31,7 +32,8 @@ class PrepareScrollVideoCommand extends Command
     {
         $this
             ->addArgument('tenant', InputArgument::REQUIRED, 'Code du site (table tenants)')
-            ->addArgument('media', InputArgument::REQUIRED, 'Identifiant du média partagé');
+            ->addArgument('media', InputArgument::REQUIRED, 'Identifiant du média partagé')
+            ->addOption('again', null, InputOption::VALUE_NONE, 'Vidéo déjà préparée : repartir de la vidéo d\'origine (après un changement des réglages d\'encodage)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -47,6 +49,9 @@ class PrepareScrollVideoCommand extends Command
         $this->emProvider->switchTenant((string) $tenant['dbname'], $code);
 
         $media = $this->emProvider->getEntityManager()->getRepository(SharedMedia::class)->find((int) $input->getArgument('media'));
+        if ($media instanceof SharedMedia && $input->getOption('again')) {
+            $this->preparer->restore($media);
+        }
         if (!$media instanceof SharedMedia || !$this->preparer->request($media)) {
             $io->error('Média introuvable, ou vidéo déjà préparée ou en cours de préparation.');
 

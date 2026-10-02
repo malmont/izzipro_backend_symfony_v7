@@ -148,7 +148,7 @@ class SharedMediaCrudController extends BaseTenantCrudController
             ->setFormTypeOptions([
                 'mapped' => false,
                 'required' => false,
-                'help' => 'Pour une vidéo utilisée dans une scène au défilement d\'une landing page : elle est réencodée en quelques minutes pour suivre le défilement sans à-coups (sans son, 1080p au plus, vidéos de 30 secondes au plus). Le lien et la clé ne changent pas ; la vidéo d\'origine est conservée. Sans effet sur un autre type de fichier.',
+                'help' => 'Pour une vidéo utilisée dans une scène au défilement d\'une landing page : elle est réencodée pour suivre le défilement sans à-coups (cadence doublée jusqu\'à 30 images par seconde, sans son, 1080p au plus, vidéos de 30 secondes au plus). Comptez plusieurs minutes : environ dix fois la durée de la vidéo, ou davantage. Le lien et la clé ne changent pas ; la vidéo d\'origine est conservée. Sans effet sur un autre type de fichier.',
             ])
             ->onlyOnForms();
 
