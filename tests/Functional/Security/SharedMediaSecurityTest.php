@@ -46,6 +46,50 @@ class SharedMediaSecurityTest extends WebTestCase
         return $provider->getEntityManager();
     }
 
+    public function testPrivateVideoIsCachedByTheBrowserOnlyAndRevalidated(): void
+    {
+        $client = static::createClient();
+        $this->initStorageDirs();
+        $em = $this->getEntityManager();
+        $filename = 'test_film_' . bin2hex(random_bytes(6)) . '.mp4';
+        file_put_contents($this->privateStorageDir . '/' . $filename, 'fausse vidéo');
+        $this->createdFiles[] = $this->privateStorageDir . '/' . $filename;
+        $accessKey = bin2hex(random_bytes(32));
+        $media = (new SharedMedia())->setTitre('Vidéo de page')->setFilename($filename)->setOriginalFilename('film.mp4')
+            ->setMediaType(SharedMedia::TYPE_VIDEO)->setMimeType('video/mp4')->setFileSize(12)
+            ->setVisibility(SharedMedia::VISIBILITY_PRIVATE)->setAccessKey($accessKey);
+        $em->persist($media);
+        $em->flush();
+        $headers = ['HTTP_HOST' => MV_TEST_TENANT_HOST, 'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST];
+
+        $client->request('GET', '/media/secure/' . $accessKey, [], [], $headers);
+        $response = $client->getResponse();
+        $this->assertSame(200, $response->getStatusCode());
+        $cache = (string) $response->headers->get('Cache-Control');
+        $this->assertStringContainsString('private', $cache);
+        $this->assertStringContainsString('max-age=3600', $cache);
+        $this->assertStringNotContainsString('no-store', $cache);
+        $this->assertStringNotContainsString('public', $cache, 'jamais un cache partagé');
+        $this->assertNotNull($response->headers->get('Last-Modified'));
+
+        // revalidation : 304 sans corps
+        $client->request('GET', '/media/secure/' . $accessKey, [], [], $headers + ['HTTP_IF_MODIFIED_SINCE' => $response->headers->get('Last-Modified')]);
+        $this->assertSame(304, $client->getResponse()->getStatusCode());
+
+        // téléchargement forcé : pas de cache
+        $client->request('GET', '/media/secure/' . $accessKey . '?download=1', [], [], $headers);
+        $this->assertStringContainsString('no-store', (string) $client->getResponse()->headers->get('Cache-Control'));
+
+        // lien qui expire dans 10 minutes : le cache ne dépasse pas l'expiration
+        $fresh = $this->getEntityManager();
+        $fresh->getRepository(SharedMedia::class)->find($media->getId())->setExpiresAt(new \DateTimeImmutable('+10 minutes'));
+        $fresh->flush();
+        $client->request('GET', '/media/secure/' . $accessKey, [], [], $headers);
+        preg_match('/max-age=(\d+)/', (string) $client->getResponse()->headers->get('Cache-Control'), $m);
+        $this->assertLessThanOrEqual(600, (int) $m[1]);
+        $this->assertGreaterThan(500, (int) $m[1]);
+    }
+
     public function testPrivateMediaDeliveryWithValidKey(): void
     {
         $client = static::createClient();

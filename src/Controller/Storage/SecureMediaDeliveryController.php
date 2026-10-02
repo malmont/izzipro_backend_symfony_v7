@@ -15,6 +15,13 @@ use Symfony\Component\Routing\Annotation\Route;
 
 class SecureMediaDeliveryController extends AbstractController
 {
+    /**
+     * Secondes pendant lesquelles le navigateur d'un visiteur garde une vidéo affichée dans une page (scène au
+     * défilement, fond de section) : sans cela, chaque visite la retélécharge en entier. Cache du navigateur seulement
+     * (« private » : jamais un cache partagé), borné par l'expiration du lien. Les documents restent en no-store.
+     */
+    public const VIDEO_MAX_AGE = 3600;
+
     private string $privateStorageDir;
 
     public function __construct(
@@ -95,6 +102,16 @@ class SecureMediaDeliveryController extends AbstractController
         $response->headers->set('Pragma', 'no-cache');
         $response->headers->set('Expires', '0');
 
+        if (!$isDownload && $media->isVideo()) {
+            $maxAge = self::VIDEO_MAX_AGE;
+            if ($media->getExpiresAt() !== null) {
+                $maxAge = max(0, min($maxAge, $media->getExpiresAt()->getTimestamp() - time()));
+            }
+            $response->headers->set('Cache-Control', sprintf('private, max-age=%d', $maxAge));
+            $response->headers->remove('Pragma');
+            $response->headers->remove('Expires');
+        }
+
         // Type servi d'après l'extension validée à l'envoi, jamais d'après le contenu (qui pourrait être text/html)
         $mimeType = SharedMediaTypes::servedMimeType($safeFilename);
         $response->headers->set('Content-Type', $mimeType);
@@ -102,6 +119,11 @@ class SecureMediaDeliveryController extends AbstractController
         if (!$isDownload && $mimeType !== 'application/pdf') {
             // Images, vidéos, texte : aucun script ni ressource externe (la visionneuse PDF de Chrome refuse le sandbox)
             $response->headers->set('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox");
+        }
+
+        // Vidéo déjà en cache et inchangée : 304 sans renvoyer le fichier (Last-Modified posé par BinaryFileResponse)
+        if (!$isDownload && $media->isVideo()) {
+            $response->isNotModified($request);
         }
 
         return $response;

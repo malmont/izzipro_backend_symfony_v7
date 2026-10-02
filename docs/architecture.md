@@ -205,6 +205,11 @@ images B ni son, 1080p au plus, vidéos de 30 s au plus). À la fin, **la même 
 fichier préparé (`filename`), le fichier d'origine est conservé (`source_filename`) et peut être rétabli. États :
 `pending`, `processing`, `done`, `failed`, `too_long` ; en cas d'échec, la vidéo d'origine reste servie.
 
+Cache des médias privés (`GET /media/secure/{clé}`) : `no-store` pour tout, sauf les **vidéos affichées** (pas en
+téléchargement), que le navigateur du visiteur garde une heure (`private, max-age=3600`, jamais un cache partagé, borné
+par l'expiration du lien) puis revalide (304). Mesure du 02/10/2026 pour 6,7 Mo : 0,09 s en direct, 0,11 à 0,15 s par
+le proxy, 0,3 à 0,4 s par le relais du frontend ; le débit ne vient donc pas de PHP ni de nginx.
+
 ## E-mails
 
 - Chaque site envoie par **son** serveur : table `email_configuration` du tenant (écran EasyAdmin « Email
