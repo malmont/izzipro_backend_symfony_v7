@@ -33,7 +33,7 @@ Règles :
 - Médias fournis avec la demande : place chacun dans la composition, à l'endroit que désignent la demande ou son libellé (logo, photo, fond…). Un média fourni passe avant la donnée équivalente de l'entreprise : un logo fourni est placé en bloc image, même si logoUrl est lié ailleurs. Si tu n'en places pas un, dis pourquoi dans warnings.
 - Hauteur d'écran (minHeightVh sur la section : héros, bannière) : seulement avec un contenu centré dans cette hauteur (le conteneur racine porte le même minHeightVh et valign « center » ou « end »), et toujours avec une hauteur mobile réduite : mobileMinHeightVh sur la section (plus petit que minHeightVh, 0 accepté) et mobile.minHeight = 0 sur ce conteneur. Sinon, pas de minHeightVh : le padding donne la hauteur.
 - Couleurs et polices : reprends celles de la palette du site (ou de la charte fournie, ou citées dans la demande), sans créer de nouvelle teinte (pas de nuance claire ou foncée dérivée d'une couleur) ; seuls le blanc, le noir et des gris neutres peuvent s'y ajouter. Ne reprends pas les couleurs des modèles de référence (certaines manquent de contraste) : ils montrent une mise en page, pas une palette ; elles ne servent que si le site n'a encore aucune couleur.
-- Contraste : tout texte a un contraste d'au moins 4,5:1 avec son fond réel (3:1 pour les grands titres). Une couleur claire ou moyenne de la palette ou de la charte (or, jaune, pastel) ne sert pas au texte sur fond clair : réserve-la aux traits, aux fonds, aux boutons et au texte sur fond foncé. Un défaut de contraste se corrige en changeant la couleur, jamais en supprimant un contenu ou une liaison (un prix lié reste affiché).
+- Contraste : tout texte a un contraste d'au moins 4,5:1 avec son fond réel (3:1 pour les grands titres). Une couleur claire ou moyenne de la palette ou de la charte (or, jaune, pastel) ne sert pas au texte sur fond clair : réserve-la aux traits, aux fonds, aux boutons et au texte sur fond foncé. Fond d'une carte ou d'un cadre : une couleur que le site emploie déjà comme fond (voir l'emploi des couleurs), jamais une couleur qu'il n'emploie que pour du texte. Quand un contraste est insuffisant, corrige d'abord le fond (un fond de la palette de la même famille, claire ou sombre) avant de toucher à la couleur du texte. Un défaut de contraste se corrige en changeant la couleur, jamais en supprimant un contenu ou une liaison (un prix lié reste affiché).
 - Fond des blocs : un container, un button ou un badge sans background est rendu sur fond blanc opaque (les autres types ne dessinent pas de fond). Chacun écrit donc son background : un container, « transparent » s'il n'a pas de fond propre (toujours, sur une section ou un parent coloré), sinon sa couleur ; un button ou un badge, sa couleur (« transparent » pour un bouton à contour).
 - Liste de services (famille Service, repeat.source « services ») : chaque carte lie item.subtitle (accroche, souvent le prix « à partir de ») ET item.price, chacun dans un bloc text avec hideEmpty: true, en plus du titre et de la description. Un prix lié ne se retire jamais.
 - Image liée à une donnée (item.imageUrl, imageUrl…) : son contenu est inconnu (capture d'écran, visuel avec du texte, logo) et « cover » le rogne. Écris objectFit « contain », ou un aspectRatio large (16/9 ou 16/10) ; garde « cover » pour une photo fournie ou une image de fond. N'écris pas d'url de repli sur un média lié : la donnée le fournit.
@@ -87,6 +87,7 @@ TXT;
             ] : []),
             '<donnees_du_site>',
             'Palette du site (couleur => nombre d\'utilisations) : ' . $this->json($palette['colors']),
+            $this->paletteRoles($palette),
             'Polices du site : ' . $this->json($palette['fonts']),
             'Médias autorisés (URL ou clés de 64 caractères) : ' . $this->json($allowedMedia),
             'Médias fournis avec la demande : ' . $this->json($media),
@@ -157,6 +158,7 @@ TXT;
             '',
             '<donnees_du_site>',
             'Palette du site (couleur => nombre d\'utilisations) : ' . $this->json($palette['colors']),
+            $this->paletteRoles($palette),
             'Polices du site : ' . $this->json($palette['fonts']),
             'Médias autorisés (URL ou clés de 64 caractères) : ' . $this->json($allowedMedia),
             'Médias fournis avec la demande : ' . $this->json($media),
@@ -194,6 +196,7 @@ TXT;
         $context = [
             '<donnees_du_site>',
             'Palette du site (couleur => nombre d\'utilisations) : ' . $this->json($palette['colors']),
+            $this->paletteRoles($palette),
             'Polices du site : ' . $this->json($palette['fonts']),
             'Médias autorisés (URL ou clés de 64 caractères) : ' . $this->json($allowedMedia),
             'Médias fournis avec la demande : ' . $this->json($media),
@@ -224,6 +227,17 @@ TXT;
         }
 
         return sprintf('%d image(s) jointe(s) par l\'administrateur au-dessus de ce texte (captures d\'écran ou charte graphique).', count($images));
+    }
+
+    /** Emploi des couleurs de la palette (fonds, textes) ; vide si le site n'a encore rien */
+    private function paletteRoles(array $palette): string
+    {
+        $backgrounds = array_keys($palette['backgrounds'] ?? []);
+        $texts = array_keys($palette['texts'] ?? []);
+
+        return $backgrounds || $texts
+            ? 'Emploi de ces couleurs sur le site, de la plus à la moins utilisée : fonds ' . $this->json($backgrounds) . ' ; textes ' . $this->json($texts)
+            : 'Emploi de ces couleurs sur le site : aucun pour l\'instant.';
     }
 
     private function familyContext(string $componentKey): string

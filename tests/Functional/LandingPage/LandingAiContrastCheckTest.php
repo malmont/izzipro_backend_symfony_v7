@@ -89,6 +89,22 @@ final class LandingAiContrastCheckTest extends TestCase
         $this->assertStringContainsString('au-dessus de la première section', $over[0]);
     }
 
+    public function testColorRolesSeparateBackgroundsFromTexts(): void
+    {
+        $composition = json_decode(json_encode(['schemaVersion' => 2, 'background' => '#0E1533', 'blocks' => [
+            ['id' => 'carte', 'type' => 'container', 'parentId' => null, 'background' => '#070B1E', 'color' => '#243b35'], // color d'un container : pas un texte
+            ['id' => 'titre', 'type' => 'title', 'parentId' => 'carte', 'color' => '#ffffff', 'background' => '#ff0000'],   // fond d'un titre : jamais dessiné
+            ['id' => 'texte', 'type' => 'text', 'parentId' => 'carte', 'color' => '#3E4A6B'],
+            ['id' => 'bouton', 'type' => 'button', 'parentId' => 'carte', 'color' => '#ffffff', 'background' => '#33C3FF'],
+            ['id' => 'contour', 'type' => 'button', 'parentId' => 'carte', 'color' => '#33C3FF', 'background' => 'transparent'],
+        ]]), false);
+
+        $this->assertSame(
+            ['backgrounds' => ['#0E1533' => 1, '#070B1E' => 1, '#33C3FF' => 1], 'texts' => ['#ffffff' => 2, '#3E4A6B' => 1, '#33C3FF' => 1]],
+            (new CompositionInspector())->colorRoles($composition)
+        );
+    }
+
     public function testLargeTextHasALowerThreshold(): void
     {
         // #767676 sur blanc : 4,54:1 ; #949494 : 3,03:1 (suffisant pour un grand titre seulement)

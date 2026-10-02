@@ -36,12 +36,19 @@ final class LandingAiSiteContext
 
     /**
      * @param list<object> $compositions
-     * @return array{colors: array<string, int>, fonts: array<string, int>}
+     * @return array{colors: array<string, int>, fonts: array<string, int>, backgrounds: array<string, int>, texts: array<string, int>}
      */
     public function palette(array $compositions): array
     {
-        $colors = $fonts = [];
+        $colors = $fonts = $backgrounds = $texts = [];
         foreach ($compositions as $composition) {
+            $roles = $this->inspector->colorRoles($composition);
+            foreach ($roles['backgrounds'] as $color => $n) {
+                $backgrounds[$color] = ($backgrounds[$color] ?? 0) + $n;
+            }
+            foreach ($roles['texts'] as $color => $n) {
+                $texts[$color] = ($texts[$color] ?? 0) + $n;
+            }
             foreach ($this->inspector->colors($composition) as $color => $n) {
                 $colors[$color] = ($colors[$color] ?? 0) + $n;
             }
@@ -51,10 +58,15 @@ final class LandingAiSiteContext
         }
         arsort($colors);
         arsort($fonts);
+        arsort($backgrounds);
+        arsort($texts);
 
         return [
             'colors' => array_slice($colors, 0, self::MAX_COLORS, true),
             'fonts' => array_slice($fonts, 0, self::MAX_FONTS, true),
+            // emploi des couleurs : une couleur de texte ne fait pas un fond de carte (contraste)
+            'backgrounds' => array_slice($backgrounds, 0, self::MAX_COLORS, true),
+            'texts' => array_slice($texts, 0, self::MAX_COLORS, true),
         ];
     }
 

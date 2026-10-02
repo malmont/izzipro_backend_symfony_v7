@@ -295,6 +295,12 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   des modèles de référence, sauf si le site n'a encore aucune couleur. Barre superposée (`overlayTop`) : V7 la mesure
   une fois la page défilée (`scrollColor`, sinon la couleur du bloc, sur `scrollBackground` opaque à 80 % au moins)
   et, en mode page, au-dessus de la première section ; sinon elle n'est pas mesurée.
+- **Emploi des couleurs de la palette** (02/10/2026) : C2 avait pris pour fond de carte `#3E4A6B`, que le site
+  n'emploie que pour du texte, d'où 4,3:1 avec des textes pourtant faits pour les fonds nuit. La demande indique
+  désormais, sous la palette, quelles couleurs le site emploie comme fonds et lesquelles comme textes
+  (`CompositionInspector::colorRoles`, `LandingAiSiteContext::palette`). Consigne : un fond de carte est une couleur
+  déjà employée comme fond ; contraste insuffisant, on corrige d'abord le fond. C2 rejoué deux fois : V7 réussie.
+  V7 reste une mesure du jeu d'essai, jamais un refus en production.
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.

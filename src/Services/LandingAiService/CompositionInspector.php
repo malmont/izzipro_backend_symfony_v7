@@ -64,6 +64,34 @@ final class CompositionInspector
         return $this->count($composition, self::COLOR_KEYS);
     }
 
+    /**
+     * Couleurs selon leur emploi : fonds dessinés (section, containers, boutons, badges) et textes (color des blocs
+     * qui affichent du texte). Dégradés et « transparent » exclus.
+     *
+     * @return array{backgrounds: array<string, int>, texts: array<string, int>}
+     */
+    public function colorRoles(object $composition): array
+    {
+        $roles = ['backgrounds' => [], 'texts' => []];
+        $add = function (string $role, mixed $value) use (&$roles) {
+            if (is_string($value) && $value !== '' && $value !== 'transparent' && !str_contains($value, 'gradient(')) {
+                $roles[$role][$value] = ($roles[$role][$value] ?? 0) + 1;
+            }
+        };
+        $add('backgrounds', $composition->background ?? null);
+        foreach ($this->blocks($composition) as $block) {
+            $type = $block->type ?? null;
+            if (in_array($type, ['container', 'button', 'badge'], true)) {
+                $add('backgrounds', $block->background ?? null);
+            }
+            if (in_array($type, ['title', 'text', 'button', 'badge', 'stat', 'nav', 'language'], true)) {
+                $add('texts', $block->color ?? null);
+            }
+        }
+
+        return $roles;
+    }
+
     /** @return array<string, int> police => nombre d'utilisations */
     public function fonts(object $composition): array
     {
