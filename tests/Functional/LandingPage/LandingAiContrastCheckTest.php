@@ -105,21 +105,27 @@ final class LandingAiContrastCheckTest extends TestCase
         );
     }
 
-    public function testStepOfAScrollSceneIsMeasuredOnItsOpaqueCardOnly(): void
+    public function testStepOfAScrollSceneIsMeasuredOnItsCardOverTheWorstVideoImage(): void
     {
         $issues = $this->issues(['background' => '#ffffff'], [
             ['id' => 'scene', 'type' => 'container', 'parentId' => null, 'layout' => 'scroll', 'background' => '#000000'],
             ['id' => 'film', 'type' => 'video', 'parentId' => 'scene', 'url' => 'https://media.example.com/film.mp4'],
-            ['id' => 'sur-video', 'type' => 'title', 'parentId' => 'scene', 'color' => '#111111', 'size' => 40],          // posé sur la vidéo
-            ['id' => 'voile', 'type' => 'container', 'parentId' => 'scene', 'background' => 'rgba(0, 0, 0, 0.5)'],
-            ['id' => 'sur-voile', 'type' => 'text', 'parentId' => 'voile', 'color' => '#111111', 'size' => 16],           // carte translucide
-            ['id' => 'carte', 'type' => 'container', 'parentId' => 'scene', 'background' => '#0E1533'],
-            ['id' => 'lisible', 'type' => 'text', 'parentId' => 'carte', 'color' => '#ffffff', 'size' => 16],
-            ['id' => 'illisible', 'type' => 'text', 'parentId' => 'carte', 'color' => '#3E4A6B', 'size' => 16],
+            ['id' => 'sur-video', 'type' => 'title', 'parentId' => 'scene', 'color' => '#ffffff', 'size' => 40],
+            ['id' => 'voile', 'type' => 'container', 'parentId' => 'scene', 'background' => 'rgba(14, 21, 48, 0.5)'],
+            ['id' => 'sur-voile', 'type' => 'text', 'parentId' => 'voile', 'color' => '#ffffff', 'size' => 16],
+            ['id' => 'carte', 'type' => 'container', 'parentId' => 'scene', 'background' => 'rgba(14, 21, 48, 0.78)'],
+            ['id' => 'titre', 'type' => 'title', 'parentId' => 'carte', 'color' => '#ffffff', 'size' => 28],
+            ['id' => 'texte', 'type' => 'text', 'parentId' => 'carte', 'color' => '#cbd5e1', 'size' => 16],          // 6,0:1 sur du blanc derrière la carte
+            ['id' => 'pale', 'type' => 'text', 'parentId' => 'carte', 'color' => '#3E4A6B', 'size' => 16],
+            ['id' => 'opaque', 'type' => 'container', 'parentId' => 'scene', 'background' => '#0E1533'],
+            ['id' => 'lisible', 'type' => 'text', 'parentId' => 'opaque', 'color' => '#ffffff', 'size' => 16],
+            ['id' => 'bouton', 'type' => 'button', 'parentId' => 'carte', 'color' => '#0E1533', 'background' => '#33C3FF', 'size' => 16],
         ]);
 
-        $this->assertCount(1, $issues, 'seul le texte sur une carte opaque est mesuré');
-        $this->assertStringStartsWith('illisible', $issues[0]);
+        $this->assertCount(3, $issues);
+        $this->assertStringContainsString('sur-video : texte posé directement sur la vidéo', $issues[0]);
+        $this->assertStringContainsString('sur-voile : carte d\'étape opaque à 50 % seulement', $issues[1]);
+        $this->assertStringStartsWith('pale : ', $issues[2]);
     }
 
     public function testLargeTextHasALowerThreshold(): void

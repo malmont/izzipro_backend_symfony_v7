@@ -837,6 +837,25 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame([], $errors($scene(['type' => 'video']), ['scene']), 'retouche : une scène déjà présente n\'est pas une erreur de l\'IA');
     }
 
+    public function testLateStepsOfAScrollSceneAreSpreadEvenly(): void
+    {
+        $repair = static::getContainer()->get(\App\Services\LandingAiService\LandingAiOutputRepair::class);
+        $scene = fn (array $moments) => json_decode(json_encode(['schemaVersion' => 2, 'blocks' => [
+            ['id' => 'scene', 'type' => 'container', 'parentId' => null, 'layout' => 'scroll'],
+            ['id' => 'film', 'type' => 'video', 'parentId' => 'scene'],
+            ...array_map(fn ($at, $i) => ['id' => "etape-$i", 'type' => 'container', 'parentId' => 'scene', 'stepAt' => $at], $moments, array_keys($moments)),
+        ]]), false);
+
+        $late = $scene([0, 33, 66, 100]);
+        $this->assertCount(4, $repair->dropLateSteps($late), 'une étape après 85 % : tous les stepAt de la scène sont retirés');
+        $this->assertSame([], array_filter($late->blocks, fn ($b) => property_exists($b, 'stepAt')));
+
+        $fine = $scene([0, 30, 60, 85]);
+        $this->assertSame([], $repair->dropLateSteps($fine));
+        $this->assertSame(85, $fine->blocks[5]->stepAt);
+        $this->assertSame([], $repair->dropLateSteps($scene([0, 50, 100]), ['scene']), 'retouche : scène de départ laissée telle quelle');
+    }
+
     public function testVideoDataTellsAFileFromAStreamingLink(): void
     {
         $kind = \App\Services\LandingAiService\LandingAiDataSources::videoKind(...);

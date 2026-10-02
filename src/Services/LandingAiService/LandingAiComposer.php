@@ -91,6 +91,7 @@ final class LandingAiComposer
                 $this->logRepairs([...$this->repair->repair($applied['composition']), ...$this->repair->dropRefusedKeys($applied['composition']), ...$this->repair->dropInventedBoundMedia($applied['composition'], $allowedMedia)]);
                 $existing = array_values(array_filter(array_map(fn ($b) => is_object($b) && is_string($b->id ?? null) ? $b->id : null, is_array($composition->blocks ?? null) ? $composition->blocks : [])));
                 $this->logBackgrounds($this->repair->transparentContainers($applied['composition'], $existing));
+                $this->logRepairs($this->repair->dropLateSteps($applied['composition'], $existing));
             }
             $errors = $applied['errors'] ?: [
                 ...$this->checker->check($applied['composition'], $componentKey, $allowedMedia),
@@ -200,7 +201,7 @@ final class LandingAiComposer
         if (!is_object($composition)) {
             return [null, [['path' => $prefix . 'composition', 'message' => 'composition complète attendue (objet schemaVersion 2)']]];
         }
-        $this->logRepairs([...$this->repair->repair($composition), ...$this->repair->dropRefusedKeys($composition), ...$this->repair->dropInventedBoundMedia($composition, $allowedMedia)]);
+        $this->logRepairs([...$this->repair->repair($composition), ...$this->repair->dropRefusedKeys($composition), ...$this->repair->dropInventedBoundMedia($composition, $allowedMedia), ...$this->repair->dropLateSteps($composition)]);
         $this->logBackgrounds($this->repair->transparentContainers($composition));
         $dataType = $input->dataType ?? null;
         $dataType = is_int($dataType) || is_string($dataType) ? (string) $dataType : null;
@@ -233,7 +234,7 @@ final class LandingAiComposer
     private function logRepairs(array $removed): void
     {
         if ($removed) {
-            $this->logger->info('Assistant IA : clés retirées sans nouvel essai (doublon, null, style sans effet, média de repli inventé)', ['keys' => array_slice($removed, 0, 10)]);
+            $this->logger->info('Assistant IA : clés retirées sans nouvel essai (doublon, null, style sans effet, média de repli inventé, stepAt tardif)', ['keys' => array_slice($removed, 0, 10)]);
         }
     }
 

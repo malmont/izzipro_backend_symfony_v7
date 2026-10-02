@@ -11,9 +11,10 @@ use App\Services\LandingAiService\CompositionInspector;
  * dessine un fond opaque, puis la section ; les fonds semi-transparents sont superposés. Fond inconnu (image,
  * vidéo, dégradé, couleur liée à une donnée) : bloc non mesuré.
  *
- * Scène au défilement (container layout « scroll ») : ses étapes sont posées sur une vidéo. Le texte d'une étape se
- * mesure sur le fond opaque de sa carte ; posé sur la vidéo, directement ou à travers une carte translucide, il n'est
- * pas mesuré.
+ * Scène au défilement (container layout « scroll ») : ses étapes sont posées sur une vidéo, dont l'image est
+ * inconnue. Le texte d'une étape se mesure sur sa carte composée sur le pire fond possible (du blanc sous une carte
+ * sombre, du noir sous une carte claire). Sont signalés : une carte translucide de moins de 70 % d'opacité, et un
+ * texte posé directement sur la vidéo.
  *
  * Section en overlayTop (navbar superposée) : transparente, posée sur la première section de la page, dont le fond
  * n'est connu qu'en mode page ($under). Quand la page a défilé, la barre prend scrollBackground et ses textes
@@ -32,6 +33,8 @@ final class LandingAiContrastCheck
     private const MAX_DEPTH = 10;
     /** Fond de défilement d'une barre superposée : mesuré s'il est opaque ou presque */
     private const MIN_SCROLL_OPACITY = 0.8;
+    /** Carte d'une étape de scène au défilement : opacité minimale pour rester lisible sur la vidéo */
+    public const MIN_STEP_CARD_OPACITY = 0.70;
 
     public function __construct(private readonly CompositionInspector $inspector)
     {
@@ -72,6 +75,14 @@ final class LandingAiContrastCheck
             if (!in_array($block->type ?? null, self::TEXT_TYPES, true) || isset($block->bindings->color)) {
                 continue;
             }
+            $scene = $this->sceneCard($block, $blocks);
+            if ($scene !== null) {
+                $issue = $this->sceneIssue($block, $scene);
+                if ($issue !== null) {
+                    $issues[$id] = "$id : $issue";
+                }
+                continue;
+            }
             foreach ($bases ?: [null] as $base) {
                 $found = $this->background($block, $blocks, $base);
                 $color = $found !== null && $found[1] && $textColor !== null ? $textColor : $this->rgba($block->color ?? null);
@@ -91,6 +102,68 @@ final class LandingAiContrastCheck
     }
 
     /**
+     * Bloc d'une étape de scène au défilement posé sur la vidéo : calques translucides de sa carte, du bloc vers la
+     * vidéo (vide : posé directement sur la vidéo). Null : hors d'une scène, ou sur un fond opaque (mesure ordinaire),
+     * ou fond inconnu.
+     *
+     * @param array<string, object> $blocks
+     * @return list<array{int, int, int, float}>|null
+     */
+    private function sceneCard(object $block, array $blocks): ?array
+    {
+        $layers = [];
+        $node = $block;
+        for ($depth = 0; $node !== null && $depth < self::MAX_DEPTH; $depth++) {
+            if (($node->type ?? null) === 'container' && ($node->layout ?? null) === 'scroll') {
+                return $layers;
+            }
+            if (in_array($node->type ?? null, self::DRAWN_BACKGROUND_TYPES, true)) {
+                if (isset($node->bindings->background) || isset($node->bindings->bgImage) || !empty($node->bgImage)) {
+                    return null;
+                }
+                $value = property_exists($node, 'background') ? $node->background : '#ffffff';
+                if ($value !== 'transparent' && $value !== '' && $value !== null) {
+                    $layer = $this->rgba($value);
+                    if ($layer === null || $layer[3] >= 1.0) {
+                        return null;
+                    }
+                    $layers[] = $layer;
+                }
+            }
+            $node = is_string($node->parentId ?? null) ? ($blocks[$node->parentId] ?? null) : null;
+        }
+
+        return null;
+    }
+
+    /** @param list<array{int, int, int, float}> $layers calques translucides entre le texte et la vidéo */
+    private function sceneIssue(object $block, array $layers): ?string
+    {
+        if ($layers === []) {
+            return 'texte posé directement sur la vidéo de la scène (non mesurable : le mettre dans une carte)';
+        }
+        $opacity = 1 - array_product(array_map(fn ($layer) => 1 - $layer[3], $layers));
+        if ($opacity < self::MIN_STEP_CARD_OPACITY - 1e-9) {
+            return sprintf('carte d\'étape opaque à %d %% seulement sur la vidéo (%d %% au moins)', round($opacity * 100), self::MIN_STEP_CARD_OPACITY * 100);
+        }
+        $color = $this->rgba($block->color ?? null);
+        if ($color === null) {
+            return null;
+        }
+        $large = is_numeric($block->size ?? null) ? $block->size >= self::LARGE_SIZE : ($block->type ?? null) === 'title';
+        $worst = null;
+        foreach ([[255, 255, 255], [0, 0, 0]] as $behind) {
+            $background = $this->flatten([...$layers, [...$behind, 1.0]]);
+            $ratio = $this->ratio($this->blend($color, $background), $background);
+            $worst = $worst === null || $ratio < $worst[0] ? [$ratio, $background] : $worst;
+        }
+
+        return $worst[0] < ($large ? self::MIN_RATIO_LARGE : self::MIN_RATIO)
+            ? sprintf('%.1f:1 (%s sur %s, pire image de la vidéo derrière la carte)', $worst[0], $block->color, sprintf('#%02x%02x%02x', ...$worst[1]))
+            : null;
+    }
+
+    /**
      * Fond réel d'un bloc et s'il est celui de la section, ou null s'il est inconnu.
      *
      * @param array<string, object> $blocks
@@ -103,9 +176,6 @@ final class LandingAiContrastCheck
         $node = $block;
         for ($depth = 0; $node !== null && $depth < self::MAX_DEPTH; $depth++) {
             $drawn = in_array($node->type ?? null, self::DRAWN_BACKGROUND_TYPES, true);
-            if (($node->type ?? null) === 'container' && ($node->layout ?? null) === 'scroll') {
-                return null; // aucune carte opaque entre le texte et la vidéo de la scène
-            }
             if ($drawn && (isset($node->bindings->background) || isset($node->bindings->bgImage) || !empty($node->bgImage))) {
                 return null;
             }

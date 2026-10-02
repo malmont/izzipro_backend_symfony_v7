@@ -107,6 +107,38 @@ final class LandingAiOutputRepair
         return $removed;
     }
 
+    /** Dernier moment acceptable pour une étape de scène au défilement : au-delà, elle n'apparaît qu'à la toute fin */
+    public const MAX_STEP_AT = 85;
+
+    /**
+     * Scène au défilement : une étape dont stepAt dépasse MAX_STEP_AT n'apparaît que lorsque la scène se décroche
+     * (02/10/2026 : stepAt 0, 33, 66, 100). Les stepAt de cette scène sont alors retirés : absents, les étapes sont
+     * réparties à intervalles égaux, sans nouvel essai. $skipIds : blocs de la composition de départ (retouche).
+     *
+     * @param list<string> $skipIds
+     * @return list<string> chemins des stepAt retirés
+     */
+    public function dropLateSteps(object $composition, array $skipIds = []): array
+    {
+        $blocks = is_array($composition->blocks ?? null) ? array_filter($composition->blocks, 'is_object') : [];
+        $removed = [];
+        foreach ($blocks as $scene) {
+            if (($scene->type ?? null) !== 'container' || ($scene->layout ?? null) !== 'scroll' || in_array($scene->id ?? null, $skipIds, true)) {
+                continue;
+            }
+            $steps = array_filter($blocks, fn ($b) => ($b->parentId ?? null) === ($scene->id ?? null) && is_numeric($b->stepAt ?? null));
+            if (!array_filter($steps, fn ($b) => $b->stepAt > self::MAX_STEP_AT)) {
+                continue;
+            }
+            foreach ($steps as $i => $step) {
+                unset($step->stepAt);
+                $removed[] = "blocks[$i].stepAt";
+            }
+        }
+
+        return $removed;
+    }
+
     /**
      * Écrit background = « transparent » sur les containers qui n'en ont pas. $skipIds : blocs à laisser tels quels
      * (en retouche, ceux de la composition de départ : seuls les blocs ajoutés par l'IA sont complétés).
