@@ -77,6 +77,53 @@ class ChapterTextFormatter
         return $blocks;
     }
 
+    /**
+     * Retire le titre du chapitre quand l'IA l'a répété en tête du texte (« # Avant l'entreprise », « ===Anecdotes
+     * en vrac=== »), avec les filets ou lignes vides qui le suivent : la mise en page affiche déjà ce titre.
+     */
+    public function withoutRepeatedTitle(?string $content, ?string $chapterTitle): string
+    {
+        $content = str_replace(["\r\n", "\r"], "\n", (string) $content);
+        $titles = array_filter([self::comparable($this->plain($chapterTitle)), self::comparable($this->chapterTitle($chapterTitle))]);
+        if ($titles === []) {
+            return $content;
+        }
+
+        $lines = explode("\n", $content);
+        $first = null;
+        foreach ($lines as $number => $line) {
+            if (trim($line) !== '') {
+                $first = $number;
+                break;
+            }
+        }
+        if ($first === null) {
+            return $content;
+        }
+
+        $candidate = $this->headingOf(trim($lines[$first])) ?? $this->inline(trim($lines[$first]));
+        if (!in_array(self::comparable($candidate), $titles, true)) {
+            return $content;
+        }
+
+        // Titre retiré, ainsi que les lignes vides et filets (---) qui le suivent
+        $rest = array_slice($lines, $first + 1);
+        while ($rest !== [] && (trim($rest[0]) === '' || preg_match('/^([-*_])\1{2,}$/', trim($rest[0])))) {
+            array_shift($rest);
+        }
+
+        return implode("\n", $rest);
+    }
+
+    /** Forme de comparaison d'un titre : minuscules, sans accents, ponctuation ni espaces */
+    private static function comparable(string $text): string
+    {
+        $text = mb_strtolower($text);
+        $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+
+        return (string) preg_replace('/[^a-z0-9]+/', '', $ascii !== false ? $ascii : $text);
+    }
+
     /** Le chapitre a-t-il un texte à imprimer ? */
     public function hasText(?string $content): bool
     {

@@ -10,6 +10,7 @@ use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantConnectionManager;
 use App\MemoiresVivantes\Entity\Chapter;
 use App\MemoiresVivantes\Services\ChapterGenerationService;
+use App\MemoiresVivantes\Services\ChapterTextFormatter;
 use App\MemoiresVivantes\Services\HommageAggregationService;
 use App\MemoiresVivantes\Services\FamilleAggregationService;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
@@ -29,6 +30,7 @@ class GenerateChapterHandler
         private readonly BookTypeResolver $bookTypeResolver,
         private readonly DatabasePromptEngine $promptEngine,
         private readonly ChapterGenerationService $generationService,
+        private readonly ChapterTextFormatter $textFormatter,
         private readonly MessageBusInterface $messageBus,
         private readonly LoggerInterface $logger
     ) {}
@@ -82,7 +84,7 @@ class GenerateChapterHandler
                 $tone = isset($message->tone) ? $message->tone : 'intime et chaleureux';
 
                 $bookType = $chapter->getBook()->getType();
-                $databaseType = $this->bookTypeResolver->findDatabasePromptType($chapter->getBook());
+                $databaseType = $this->bookTypeResolver->findPromptTypeForChapter($chapter);
                 if ($databaseType !== null) {
                     $text = $this->promptEngine->generate($chapter, $databaseType, 1, $tone, $model);
                 } elseif ($bookType === 'hommage') {
@@ -106,6 +108,9 @@ class GenerateChapterHandler
                 }
                 
                 $this->assertNotEmpty($text, 1);
+                // L'IA remet parfois le titre du chapitre en première ligne, malgré la consigne : la mise en page l'affiche déjà
+                $text = $this->textFormatter->withoutRepeatedTitle($text, $chapter->getTitle());
+                $this->assertNotEmpty($text, 1);
                 $text = $this->anthropicService->checkAndComplete($text, false, $model);
 
                 $chapter->setContentPart1($text);
@@ -120,7 +125,7 @@ class GenerateChapterHandler
                 $tone = isset($message->tone) ? $message->tone : 'intime et chaleureux';
 
                 $bookType = $chapter->getBook()->getType();
-                $databaseType = $this->bookTypeResolver->findDatabasePromptType($chapter->getBook());
+                $databaseType = $this->bookTypeResolver->findPromptTypeForChapter($chapter);
                 if ($databaseType !== null) {
                     $text = $this->promptEngine->generate($chapter, $databaseType, 2, $tone, $model);
                 } elseif ($bookType === 'hommage') {

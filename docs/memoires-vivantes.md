@@ -72,6 +72,11 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
   `BookType/` (`BookTypeAdminService`, `BookTypeResolver`, `DatabasePromptEngine`, `LegacyBookTypeCatalog`).
 - Types historiques (`individuel`, `couple`, `famille`, `hommage`) : prompts dans `Services/AnthropicService.php`
   (`promptSource = code`) ; nouveaux types : prompts en base (`promptSource = database`).
+- **Chapitre ajouté dans la console à un type historique** : le code ne le connaît pas, il est donc rédigé avec les
+  consignes en base (consigne du type + consigne du chapitre), comme pour un type configurable
+  (`BookTypeResolver::findPromptTypeForChapter`). Les chapitres d'origine gardent les consignes du code. Le bouton
+  « Tester » de la console utilise toujours les consignes en base : pour un chapitre d'origine d'un type historique,
+  il ne reflète pas la rédaction réelle.
 - Les réponses sont rattachées aux questions **par leur texte** : ne jamais renommer ni supprimer une question hors de
   `BookTypeAdminService` / `EventListener/MemoireQuestionAnswerSyncListener`.
 - Nouveaux tenants : les types et questions par défaut viennent de la base modèle `gmasuite`, publiés depuis
@@ -95,6 +100,8 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
 - **Rédaction perdue** (`failIfLost`, appelé par `GET /chapters/{id}`, `/status`, `/generate` et l'écran Workers) :
   échec au bout de 2 min si la file est vide et que rien n'est en cours de traitement ; sinon 30 min en
   `generating_*`, 60 min en `pending` ou `part1_done`.
+- Le titre du chapitre répété par l'IA en première ligne est retiré à la rédaction, et à la mise en page pour les
+  chapitres déjà rédigés (`ChapterTextFormatter::withoutRepeatedTitle`).
 - Appels à l'IA : 3 essais sur surcharge ou erreur passagère (429, 529, 5xx), bornés dans le temps (10 min).
 - Texte envoyé à l'IA pour une réponse : `ChapterQuestionProvider::answerText` (version améliorée si elle existe et
   n'a pas été écartée, sinon réponse saisie). Livres « couple » : le frontend envoie les deux voix dans un seul texte

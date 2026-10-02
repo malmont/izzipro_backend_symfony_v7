@@ -265,7 +265,8 @@ class BookPdfGeneratorService
         $font = $this->fontOf($book, $font);
         $chaptersData = [];
         foreach ($book->getChapters() as $chapter) {
-            $blocks = $this->formatter->blocks($this->cleanText($chapter->getContentFinal() ?: ($chapter->getContentGenerated() ?: '')));
+            // Titre répété en tête par l'IA (chapitres rédigés avant qu'il soit retiré à la rédaction) : pas deux fois dans le livre
+            $blocks = $this->formatter->blocks($this->formatter->withoutRepeatedTitle($this->cleanText($chapter->getContentFinal() ?: ($chapter->getContentGenerated() ?: '')), $chapter->getTitle()));
             $photoPages = $this->resolveChapterPhotoPages($chapter);
             // Chapitre pas encore rédigé et sans photo : ni page vide dans le livre, ni ligne au sommaire
             if ($blocks === [] && $photoPages === []) {

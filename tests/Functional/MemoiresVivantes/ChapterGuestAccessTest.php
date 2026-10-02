@@ -74,6 +74,32 @@ class ChapterGuestAccessTest extends BookTypeApiTestCase
         $this->assertEqualsCanonicalizing(['Léa', 'Marc'], $this->contributorNames());
     }
 
+    public function testTheChapterShareLinkCanOpenEachContributorInTurn(): void
+    {
+        // Écran « un onglet par contributeur » ouvert par le lien de partage du chapitre (sans contributeur signé)
+        $this->contribute($this->lea, 'Réponse de Léa');
+        $this->contribute($this->marc, 'Réponse de Marc');
+        $this->client->getHistory()->clear();
+        $link = $this->signed();
+
+        [$status, $asMarc] = $this->api('GET', "/chapters/{$this->chapterId}?$link&contributorId={$this->marc['id']}", null, null);
+        $this->assertSame(200, $status);
+        $this->assertSame($this->marc['id'], $asMarc['currentContributor']['id']);
+        $this->assertSame(['Marc'], array_column($asMarc['contributorAnswers'], 'contributorName'), 'seul le témoignage du contributeur demandé');
+
+        // L'enregistrement fait pour Marc ne touche pas à Léa
+        [$status] = $this->api('PUT', "/chapters/{$this->chapterId}?$link&contributorId={$this->marc['id']}", ['contributorAnswers' => [$this->entry($this->marc, 'Marc, corrigé')]], null);
+        $this->assertSame(200, $status);
+        $stored = (string) self::db()->query("SELECT contributor_answers FROM mv_chapter WHERE id = '{$this->chapterId}'")->fetchColumn();
+        $this->assertStringContainsString('Marc, corrig', $stored);
+        $this->assertStringContainsString('ponse de L', $stored);
+
+        // Un identifiant qui n'est pas un contributeur du livre : le lien reste un simple lien de partage
+        [$status, $unknown] = $this->api('GET', "/chapters/{$this->chapterId}?$link&contributorId=00000000-0000-4000-8000-000000000000", null, null);
+        $this->assertSame(200, $status);
+        $this->assertNull($unknown['currentContributor']);
+    }
+
     public function testARemovedContributorLosesTheirLink(): void
     {
         $link = $this->signed($this->marc['id']);

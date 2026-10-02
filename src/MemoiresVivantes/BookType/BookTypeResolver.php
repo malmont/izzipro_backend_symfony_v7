@@ -4,6 +4,7 @@ namespace App\MemoiresVivantes\BookType;
 
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\BookType;
+use App\MemoiresVivantes\Entity\Chapter;
 use App\Services\TenantEntityManagerProvider;
 
 /**
@@ -41,6 +42,33 @@ class BookTypeResolver
         $type = $this->find($book?->getType());
 
         return $type !== null && $type->getPromptSource() === BookType::PROMPT_SOURCE_DATABASE ? $type : null;
+    }
+
+    /**
+     * Type dont les consignes en base servent à rédiger CE chapitre, null s'il relève des consignes du code.
+     *
+     * Un type « consignes en base » : toujours. Un type historique (« consignes dans le code ») : seulement pour un
+     * chapitre ajouté dans la console, que le code ne connaît pas. Sans cela, un tel chapitre était rédigé avec la
+     * consigne du dernier chapitre d'origine, et celle saisie dans la console n'était jamais lue.
+     */
+    public function findPromptTypeForChapter(Chapter $chapter): ?BookType
+    {
+        $type = $this->find($chapter->getBook()?->getType());
+        if ($type === null) {
+            return null;
+        }
+        if ($type->getPromptSource() === BookType::PROMPT_SOURCE_DATABASE) {
+            return $type;
+        }
+
+        $theme = (string) $chapter->getTheme();
+        foreach (LegacyBookTypeCatalog::all() as $legacy) {
+            if ($legacy['code'] === $type->getCode() && in_array($theme, array_column($legacy['chapters'], 'code'), true)) {
+                return null;
+            }
+        }
+
+        return $type->getChapter($theme) !== null ? $type : null;
     }
 
     /**

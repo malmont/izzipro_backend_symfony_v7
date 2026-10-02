@@ -86,7 +86,7 @@ class ChapterGenerationService
         $book = $chapter->getBook();
         $theme = $chapter->getTheme();
 
-        $databaseType = $this->bookTypeResolver->findDatabasePromptType($book);
+        $databaseType = $this->bookTypeResolver->findPromptTypeForChapter($chapter);
         if ($databaseType !== null) {
             if ($databaseType->getChapter((string) $theme)?->isSynthesis()) {
                 $check = $this->promptEngine->checkCanGenerate($chapter, $databaseType);
