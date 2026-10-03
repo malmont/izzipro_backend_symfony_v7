@@ -83,9 +83,17 @@ final class LandingAiComposer
         $allowedMedia = $this->site->allowedMedia([...$stored, $composition], $media, $prompt);
         $payload = $this->prompts->editPayload($this->model($images), $componentKey, $composition, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $images);
 
-        return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia) {
+        $removalAsked = self::asksRemoval($prompt);
+
+        return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia, $removalAsked) {
             $operations = is_array($input->operations ?? null) ? $input->operations : [];
             $applied = $this->applier->apply($composition, $operations);
+            if (!$applied['errors'] && !$removalAsked && ($lost = $this->lostBlocks($composition, $applied['composition'])) !== []) {
+                return [null, [['path' => 'operations', 'message' => sprintf(
+                    'la demande ne demande aucune suppression, mais ces blocs disparaîtraient (avec leurs textes et leurs liaisons) : %s. Pour déplacer un bloc, utilise l\'opération move ; si la demande est déjà satisfaite, ne fais aucune opération',
+                    implode(', ', array_slice($lost, 0, 12)) . (count($lost) > 12 ? sprintf(' et %d autres', count($lost) - 12) : '')
+                )]]];
+            }
             $existing = [];
             if (!$applied['errors']) {
                 $this->logRepairs([...$this->repair->repair($applied['composition']), ...$this->repair->dropRefusedKeys($applied['composition']), ...$this->repair->dropInventedBoundMedia($applied['composition'], $allowedMedia)]);
@@ -236,6 +244,24 @@ final class LandingAiComposer
         if ($removed) {
             $this->logger->info('Assistant IA : clés retirées sans nouvel essai (doublon, null, style sans effet, média de repli inventé, stepAt tardif)', ['keys' => array_slice($removed, 0, 10)]);
         }
+    }
+
+    /**
+     * La demande parle-t-elle de supprimer ? Sinon, une retouche qui fait disparaître des blocs est renvoyée au
+     * modèle (03/10/2026 : « mets la vidéo à droite du titre » a donné un seul « remove » du container du héros, et la
+     * proposition vidait la section).
+     */
+    public static function asksRemoval(string $prompt): bool
+    {
+        return preg_match('/\b(supprim|retir|enl[eè]v|effac|[oô]te[rsz]?\b|vire[rsz]?\b|enlev|delete|remove|sans\s+(le|la|les|l\'))/iu', $prompt) === 1;
+    }
+
+    /** @return list<string> identifiants présents avant la retouche et absents après */
+    private function lostBlocks(object $before, object $after): array
+    {
+        $ids = fn (object $c) => array_values(array_filter(array_map(fn ($b) => is_object($b) ? ($b->id ?? null) : null, is_array($c->blocks ?? null) ? $c->blocks : []), 'is_string'));
+
+        return array_values(array_diff($ids($before), $ids($after)));
     }
 
     /** @param list<string> $ids */

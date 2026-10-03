@@ -45,7 +45,7 @@ Règles :
 - Donnée de remplacement : une famille qui a des données reçoit toujours un dataType de sa liste (null seulement si la donnée est facultative). Quand la donnée demandée n'existe pas sur le site (pas de groupe de témoignages…), choisis la plus proche ; les titres et textes écrits à la main décrivent alors le contenu réellement affiché (« Nos réalisations », pas « Témoignages »), et warnings le signale.
 - HTML des textes : seulement p, div, span, strong, b, em, i, u, s, br, hr, ul, ol, li, blockquote, small, sub, sup, h2 à h6, sans attribut sauf style (font-style, font-weight, text-decoration, color) ; jamais de lien <a> dans un texte : un lien est un bloc button.
 - Textes de base en français. Ne remplis translations que si la demande le demande explicitement (traduction, version anglaise…), sans modifier les textes de base.
-- En retouche : ne touche qu'à ce que la demande vise ; garde les identifiants des blocs ; conserve les liaisons existantes sauf demande contraire.
+- En retouche : ne touche qu'à ce que la demande vise ; garde les identifiants des blocs ; conserve les liaisons existantes sauf demande contraire. Pour déplacer un bloc (changer son ordre ou son container), utilise l'opération move, jamais remove puis add. Ne supprime un bloc que si la demande le demande. Si la demande est déjà satisfaite par la composition actuelle, ne fais aucune opération et dis-le dans summary.
 - En création : compose une section complète en t'inspirant des modèles de la famille ; choisis la donnée affichée (dataType) parmi les données du site listées, la plus pertinente pour la demande (celle indiquée par l'éditeur par défaut, sauf si la demande en désigne clairement une autre), et lie les contenus à cette donnée ; dataType = null si la famille n'utilise pas de donnée. Ne reprends pas les textes, chiffres ou noms propres des modèles : ce sont des exemples de mise en page, pas des faits sur ce site. Utilise les données de l'entreprise que la famille peut lier (sectionFields et boundTools du catalogue : logo, nom, accroche, e-mail, téléphone, adresse…) : place-les dans la section par des liaisons plutôt que de les omettre, sauf si la demande les exclut.
 - En page : compose une section par partie demandée, dans l'ordre de la page. Chaque section appartient à une famille du catalogue (componentKey), n'utilise que ses types de blocs et suit les règles de création (dataType compris). Garde une cohérence visuelle d'une section à l'autre (couleurs, polices, espacements, arrondis). Donne à chaque section une ancre (anchor) courte et distincte : « accueil » pour le héros, puis « services », « contact »…
 - Charte graphique fournie en image : utilise seulement ses couleurs et ses polices (plus le blanc, le noir et des gris neutres), au lieu de la palette du site.
@@ -315,7 +315,9 @@ TXT;
             'description' => "Retouche la composition actuelle par une liste d'opérations appliquées dans l'ordre par le serveur. Les blocs non visés restent identiques. "
                 . "Opérations : {\"op\":\"update\",\"id\":\"<bloc>\",\"set\":{propriétés à écrire},\"unset\":[propriétés à retirer]} ; "
                 . "{\"op\":\"add\",\"block\":{bloc complet},\"after\":\"<id du bloc précédent>\" ou null pour la fin du tableau} ; "
-                . "{\"op\":\"remove\",\"id\":\"<bloc>\"} (retire aussi ses descendants) ; "
+                . "{\"op\":\"remove\",\"id\":\"<bloc>\"} (retire aussi ses descendants : seulement si la demande demande de supprimer) ; "
+                . "{\"op\":\"move\",\"id\":\"<bloc>\",\"parentId\":\"<container>\" ou null,\"after\":\"<id du bloc précédent>\" ou null} déplace un bloc et ses descendants "
+                . "(parentId absent : même parent ; after null : en fin de tableau ; l'ordre du tableau fait l'ordre d'affichage entre frères) ; "
                 . "{\"op\":\"section\",\"set\":{…},\"unset\":[…]} pour les propriétés de la section. L'identifiant d'un bloc ne se modifie pas. "
                 . "« set » FUSIONNE les objets imbriqués (mobile, repeat, bindings, translations, translations.<langue>) : n'écris que les clés à changer, "
                 . "ex. {\"mobile\":{\"align\":\"center\"}} garde mobile.w. Les tableaux (links, images, iconCycle, mediaCycle, backgroundCycle…) sont REMPLACÉS entiers : "
@@ -330,7 +332,8 @@ TXT;
                             'type' => 'object',
                             'required' => ['op'],
                             'properties' => [
-                                'op' => ['type' => 'string', 'enum' => ['update', 'add', 'remove', 'section']],
+                                'op' => ['type' => 'string', 'enum' => ['update', 'add', 'remove', 'move', 'section']],
+                                'parentId' => ['type' => ['string', 'null']],
                                 'id' => ['type' => 'string'],
                                 'set' => ['type' => 'object'],
                                 'unset' => ['type' => 'array', 'items' => ['type' => 'string']],

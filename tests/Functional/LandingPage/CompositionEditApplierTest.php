@@ -101,6 +101,32 @@ class CompositionEditApplierTest extends TestCase
         }
     }
 
+    public function testMoveKeepsTheBlockAndItsDescendants(): void
+    {
+        // la liste (et son bouton) passe après le menu, sans être recréée
+        $result = $this->apply([['op' => 'move', 'id' => 'liste', 'after' => 'menu']]);
+        $this->assertSame([], $result['errors']);
+        $this->assertSame(['bouton', 'menu', 'liste'], array_column($result['composition']->blocks, 'id'));
+        $this->assertSame('liste', $this->block($result['composition'], 'bouton')->parentId, 'le descendant suit par son parentId');
+        $this->assertSame(80, $this->block($result['composition'], 'liste')->mobile->w, 'contenu du bloc intact');
+
+        // changement de parent, puis à la racine en tête
+        $result = $this->apply([['op' => 'move', 'id' => 'menu', 'parentId' => 'liste', 'after' => 'bouton']]);
+        $this->assertSame([], $result['errors']);
+        $this->assertSame('liste', $this->block($result['composition'], 'menu')->parentId);
+        $result = $this->apply([['op' => 'move', 'id' => 'bouton', 'parentId' => null]]);
+        $this->assertNull($this->block($result['composition'], 'bouton')->parentId);
+        $this->assertSame('bouton', end($result['composition']->blocks)->id, 'after absent : en fin de tableau');
+    }
+
+    public function testInvalidMovesAreRefused(): void
+    {
+        $this->assertSame('operations[0].parentId', $this->apply([['op' => 'move', 'id' => 'liste', 'parentId' => 'bouton']])['errors'][0]['path'], 'parent qui n\'est pas un container');
+        $this->assertStringContainsString('descendants', $this->apply([['op' => 'move', 'id' => 'liste', 'parentId' => 'liste']])['errors'][0]['message']);
+        $this->assertSame('operations[0].id', $this->apply([['op' => 'move', 'id' => 'absent']])['errors'][0]['path']);
+        $this->assertSame('operations[0].after', $this->apply([['op' => 'move', 'id' => 'menu', 'after' => 'absent']])['errors'][0]['path']);
+    }
+
     public function testOriginalCompositionIsNeverModified(): void
     {
         $original = $this->composition();

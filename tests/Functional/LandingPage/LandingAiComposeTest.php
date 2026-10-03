@@ -812,6 +812,37 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertStringContainsString('média absent de la liste autorisée', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
     }
 
+    public function testEditThatDeletesBlocksWithoutBeingAskedIsSentBackToTheModel(): void
+    {
+        $composition = $this->preset('group-type-t');
+        $container = array_values(array_filter($composition->blocks, fn ($b) => $b->type === 'container' && ($b->parentId ?? null) === null))[0];
+        // 03/10/2026 : « mets la vidéo à droite du titre » → un seul remove du container, la section se vidait
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'remove', 'id' => $container->id]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $composition, 'prompt' => 'Mets le titre à droite des cartes.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $retry = FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'];
+        $this->assertStringContainsString('ne demande aucune suppression', $retry);
+        $this->assertStringContainsString($container->id, $retry);
+        $this->assertStringContainsString('move', $retry);
+        $this->assertCount(count($composition->blocks), json_decode($response->getContent())->composition->blocks, 'aucun bloc perdu');
+    }
+
+    public function testRequestedDeletionIsAccepted(): void
+    {
+        $composition = $this->preset('group-type-t');
+        $leaf = array_values(array_filter($composition->blocks, fn ($b) => $b->type !== 'container'))[0];
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'remove', 'id' => $leaf->id]]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $composition, 'prompt' => 'Supprime ce bloc.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertCount(1, FakeLandingAiClient::$requests);
+        $this->assertCount(count($composition->blocks) - 1, json_decode($response->getContent())->composition->blocks);
+    }
+
     public function testVideoPromptIsWrittenForOneCredit(): void
     {
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::videoPromptResponse([

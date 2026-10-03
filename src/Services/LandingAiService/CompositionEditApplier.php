@@ -9,6 +9,8 @@ namespace App\Services\LandingAiService;
  *   { "op": "update", "id": "b1", "set": {…}, "unset": ["shadow"] }
  *   { "op": "add", "block": {…}, "after": "b0" | null }     null ou absent : à la fin du tableau
  *   { "op": "remove", "id": "b3" }                            retire aussi les descendants
+ *   { "op": "move", "id": "b3", "parentId": "c1" | null, "after": "b0" | null }
+ *                                                             déplace un bloc avec ses descendants, sans les recréer
  *   { "op": "section", "set": {…}, "unset": […] }
  *
  * « set » fusionne récursivement les objets simples (mobile, repeat, bindings, translations,
@@ -45,8 +47,9 @@ final class CompositionEditApplier
                 'update' => $this->update($result, $operation, $touched),
                 'add' => $this->add($result, $operation, $touched),
                 'remove' => $this->remove($result, $operation, $touched),
+                'move' => $this->move($result, $operation, $touched),
                 'section' => $this->section($result, $operation),
-                default => 'op inconnue (attendu : update, add, remove, section)',
+                default => 'op inconnue (attendu : update, add, remove, move, section)',
             };
             if ($error !== null) {
                 $errors[] = ['path' => is_array($error) ? "$path.{$error[0]}" : $path, 'message' => is_array($error) ? $error[1] : $error];
@@ -112,6 +115,52 @@ final class CompositionEditApplier
         } while ($added);
         $composition->blocks = array_values(array_filter($composition->blocks, fn ($b) => !is_object($b) || !isset($removed[$b->id ?? null])));
         array_push($touched, ...array_keys($removed));
+
+        return null;
+    }
+
+    /**
+     * Déplace un bloc (ses descendants le suivent par leur parentId) : nouveau parent facultatif (« parentId » absent :
+     * inchangé ; null : racine ; sinon un container qui n'est pas un de ses descendants), puis place le bloc juste
+     * après « after » dans le tableau (null ou absent : à la fin). L'ordre du tableau fait l'ordre d'affichage entre
+     * frères. Avant cette opération, l'IA déplaçait un bloc par « remove » puis « add » de tout son contenu : coûteux,
+     * et le 03/10/2026 seul le « remove » est arrivé, ce qui vidait la section.
+     */
+    private function move(object $composition, object $operation, array &$touched): string|array|null
+    {
+        $id = $operation->id ?? null;
+        $index = $this->indexOf($composition, $id);
+        if ($index === null) {
+            return ['id', sprintf('bloc « %s » introuvable dans la composition actuelle', (string) $id)];
+        }
+        $block = $composition->blocks[$index];
+        if (property_exists($operation, 'parentId')) {
+            $parent = $operation->parentId;
+            if ($parent !== null) {
+                $parentIndex = $this->indexOf($composition, $parent);
+                if ($parentIndex === null || ($composition->blocks[$parentIndex]->type ?? null) !== 'container') {
+                    return ['parentId', sprintf('« %s » n\'est pas un bloc container de la composition', is_string($parent) ? $parent : json_encode($parent))];
+                }
+                for ($node = $parent, $depth = 0; is_string($node) && $depth < 20; $depth++) {
+                    if ($node === $id) {
+                        return ['parentId', 'un bloc ne peut pas entrer dans un de ses descendants'];
+                    }
+                    $node = $composition->blocks[$this->indexOf($composition, $node) ?? -1]->parentId ?? null;
+                }
+            }
+            $block->parentId = $parent;
+        }
+        $after = $operation->after ?? null;
+        if ($after === $id) {
+            return ['after', 'un bloc ne peut pas être placé après lui-même'];
+        }
+        if ($after !== null && $this->indexOf($composition, $after) === null) {
+            return ['after', sprintf('bloc « %s » introuvable', is_string($after) ? $after : json_encode($after))];
+        }
+        array_splice($composition->blocks, $index, 1);
+        $position = $after !== null ? $this->indexOf($composition, $after) + 1 : count($composition->blocks);
+        array_splice($composition->blocks, $position, 0, [$block]);
+        $touched[] = $id;
 
         return null;
     }

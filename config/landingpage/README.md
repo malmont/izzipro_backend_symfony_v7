@@ -338,6 +338,14 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
 - **Version téléphone d'une scène** : un second bloc video dans un container `scroll` est la vidéo verticale (9:16),
   affichée à la place de la première sur écran étroit ; deux blocs video au plus, chacun avec un fichier. L'assistant
   ne l'ajoute que si deux vidéos sont fournies.
+- **Déplacer sans supprimer** (03/10/2026) : sur arkanoa-media, « mets la vidéo à droite du titre » a donné une
+  proposition faite d'un seul `remove` du container du héros, qui vidait la section dans l'aperçu (rien n'a été
+  enregistré). Le modèle n'avait que `remove` puis `add` pour déplacer un bloc. Depuis : opération `move`
+  (`{op: move, id, parentId?, after?}`, le bloc garde son contenu et ses descendants), consigne « déplacer = move,
+  supprimer seulement si la demande le demande, demande déjà satisfaite = aucune opération », et garde-fou : une
+  retouche qui fait disparaître des blocs alors que la demande ne parle pas de supprimer
+  (`LandingAiComposer::asksRemoval`) est renvoyée au modèle. Rejoué sur la même section de `demo` : un `move`, un
+  essai, 3 s, aucun bloc perdu.
 - **Réparation des sorties** (`LandingAiOutputRepair`) : le modèle écrit parfois `"dividerWidth100": 100` en double de
   `"dividerWidth": 100` (8 refus sur 9 en création le 30/09). Une clé inconnue « propriété connue + nombre » dont la
   valeur est ce nombre est retirée avant la vérification, sans nouvel essai ; toute autre clé inconnue reste une erreur.
