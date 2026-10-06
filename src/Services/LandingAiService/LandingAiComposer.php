@@ -105,6 +105,7 @@ final class LandingAiComposer
                 ...$this->checker->check($applied['composition'], $componentKey, $allowedMedia),
                 ...$this->checker->missingBackgrounds($applied['composition'], $existing),
                 ...$this->checker->sceneErrors($applied['composition'], $existing),
+                ...$this->checker->addedLinks($applied['composition'], $composition),
             ];
             if ($errors) {
                 return [null, $errors];
@@ -220,7 +221,7 @@ final class LandingAiComposer
         // chemins relatifs à la composition ; en page, préfixés par sections[i].composition
         $errors = array_map(
             fn ($e) => ['path' => $prefix === '' ? $e['path'] : rtrim($prefix . 'composition.' . $e['path'], '.'), 'message' => $e['message']],
-            [...$this->checker->check($composition, $componentKey, $allowedMedia), ...$this->checker->missingBackgrounds($composition), ...$this->checker->sceneErrors($composition)]
+            [...$this->checker->check($composition, $componentKey, $allowedMedia), ...$this->checker->missingBackgrounds($composition), ...$this->checker->sceneErrors($composition), ...$this->checker->addedLinks($composition)]
         );
         $usesData = $this->data->familyUsesData($componentKey);
         $optional = $usesData && $this->data->dataOptional($componentKey);

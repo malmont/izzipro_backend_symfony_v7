@@ -5,6 +5,7 @@ namespace App\Controller\Admin;
 use App\Entity\SharedMedia;
 use App\Services\MediaUrlResolver;
 use App\Services\SharedMedia\ScrollVideoPreparer;
+use App\Services\SharedMedia\SharedMediaStorage;
 use App\Services\SharedMedia\SharedMediaTypes;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\EntityManagerInterface;
@@ -31,20 +32,15 @@ class SharedMediaCrudController extends BaseTenantCrudController
 {
     use CsrfProtectedActionTrait;
 
-    private string $publicUploadDir;
-    private string $privateUploadDir;
-
     public function __construct(
         TenantEntityManagerProvider $emProvider,
         private MediaUrlResolver $mediaUrlResolver,
         private RequestStack $requestStack,
         private AdminUrlGenerator $adminUrlGenerator,
         private ScrollVideoPreparer $scrollVideo,
-        string $projectDir
+        private SharedMediaStorage $storage
     ) {
         parent::__construct($emProvider);
-        $this->publicUploadDir = rtrim($projectDir, '/') . '/var/storage/public_bucket/assets/uploads/shared';
-        $this->privateUploadDir = rtrim($projectDir, '/') . '/var/storage/private_media';
     }
 
     public static function getEntityFqcn(): string
@@ -373,7 +369,7 @@ class SharedMediaCrudController extends BaseTenantCrudController
     public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         if ($entityInstance instanceof SharedMedia) {
-            $this->removePhysicalFile($entityInstance);
+            $this->storage->remove($entityInstance);
         }
         parent::deleteEntity($entityManager, $entityInstance);
     }
@@ -411,116 +407,20 @@ class SharedMediaCrudController extends BaseTenantCrudController
         return $this->redirect($context->getReferrer() ?: $this->adminUrlGenerator->setAction(Crud::PAGE_INDEX)->generateUrl());
     }
 
-    /**
-     * Traite l'upload, la validation et le stockage sécurisé du fichier.
-     */
+    /** Fichier téléversé par le formulaire, ou bascule public / privé d'un fichier existant */
     private function handleFileUpload(SharedMedia $media): void
     {
         $request = $this->getContext()?->getRequest();
         if (!$request) {
             return;
         }
-
-        $files = $request->files->all();
-        $formData = $files['SharedMedia'] ?? [];
         /** @var UploadedFile|null $uploadedFile */
-        $uploadedFile = $formData['mediaFile'] ?? null;
+        $uploadedFile = $request->files->all()['SharedMedia']['mediaFile'] ?? null;
 
-        // 1. Déploiement d'un nouveau fichier téléversé
         if ($uploadedFile instanceof UploadedFile && $uploadedFile->isValid()) {
-            $originalName = $uploadedFile->getClientOriginalName();
-            $extension = strtolower($uploadedFile->getClientOriginalExtension() ?: (string) $uploadedFile->guessExtension());
-
-            // Sécurité (en plus de la contrainte du formulaire) : extension autorisée ET type réel cohérent
-            if (!SharedMediaTypes::isAllowed($extension, $uploadedFile->getMimeType())) {
-                throw new \InvalidArgumentException(sprintf('Le fichier ".%s" (%s) n\'est pas autorisé.', $extension, $uploadedFile->getMimeType()));
-            }
-
-            // Détection du mediaType
-            $mediaType = $this->detectMediaType($extension, $uploadedFile->getMimeType());
-            $media->setMediaType($mediaType);
-            $media->setOriginalFilename($originalName);
-            // Type normalisé d'après l'extension validée (jamais le type détecté, qui pourrait être text/html)
-            $media->setMimeType(SharedMediaTypes::servedMimeType('fichier.' . $extension));
-            $media->setFileSize($uploadedFile->getSize());
-
-            // Si c'est privé et sans clé, on la génère
-            if ($media->isPrivate() && empty($media->getAccessKey())) {
-                $media->regenerateAccessKey();
-            }
-
-            // Génération d'un nom unique sécurisé (anti-path traversal)
-            $safeBase = preg_replace('/[^a-zA-Z0-9_-]/', '_', pathinfo($originalName, PATHINFO_FILENAME));
-            $safeBase = substr($safeBase ?: 'file', 0, 30);
-            $newFilename = sprintf('%s_%s.%s', $safeBase, bin2hex(random_bytes(8)), $extension);
-
-            $targetDir = $media->isPrivate() ? $this->privateUploadDir : $this->publicUploadDir;
-            if (!is_dir($targetDir)) {
-                mkdir($targetDir, 0755, true);
-            }
-
-            // Supprimer l'ancien fichier s'il existait (et sa vidéo d'origine, si elle avait été préparée)
-            $this->removePhysicalFile($media);
-            $media->setSourceFilename(null)->setScrollStatus(null);
-
-            // Déplacement sécurisé vers le répertoire cible
-            $uploadedFile->move($targetDir, $newFilename);
-            $media->setFilename($newFilename);
-
+            $this->storage->store($media, $uploadedFile);
         } elseif ($media->getId() !== null && $media->getFilename()) {
-            // 2. Gestion du basculement Public <-> Privé d'un fichier existant sans ré-upload
-            $this->syncStorageLocationOnVisibilityChange($media);
+            $this->storage->syncVisibility($media);
         }
-    }
-
-    /**
-     * Déplace le fichier physique si la visibilité (Public / Privé) a été modifiée.
-     */
-    private function syncStorageLocationOnVisibilityChange(SharedMedia $media): void
-    {
-        [$from, $to] = $media->isPrivate() ? [$this->publicUploadDir, $this->privateUploadDir] : [$this->privateUploadDir, $this->publicUploadDir];
-
-        // Le fichier servi et, s'il existe, la vidéo d'origine d'une vidéo préparée pour le défilement
-        foreach (array_filter([basename((string) $media->getFilename()), basename((string) $media->getSourceFilename())]) as $filename) {
-            if (is_file($from . '/' . $filename)) {
-                if (!is_dir($to)) {
-                    mkdir($to, 0755, true);
-                }
-                rename($from . '/' . $filename, $to . '/' . $filename);
-            }
-        }
-        if ($media->isPrivate() && empty($media->getAccessKey())) {
-            $media->regenerateAccessKey();
-        }
-    }
-
-    /**
-     * Supprime le fichier physique du disque lors d'un remplacement ou suppression.
-     */
-    private function removePhysicalFile(SharedMedia $media): void
-    {
-        foreach (array_filter([basename((string) $media->getFilename()), basename((string) $media->getSourceFilename())]) as $filename) {
-            foreach ([$this->publicUploadDir, $this->privateUploadDir] as $dir) {
-                if (is_file($dir . '/' . $filename)) {
-                    @unlink($dir . '/' . $filename);
-                }
-            }
-        }
-    }
-
-    private function detectMediaType(string $extension, ?string $mimeType): string
-    {
-        $imageExts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'];
-        $videoExts = ['mp4', 'webm', 'mov'];
-
-        if (in_array($extension, $imageExts, true) || str_starts_with((string) $mimeType, 'image/')) {
-            return SharedMedia::TYPE_IMAGE;
-        }
-
-        if (in_array($extension, $videoExts, true) || str_starts_with((string) $mimeType, 'video/')) {
-            return SharedMedia::TYPE_VIDEO;
-        }
-
-        return SharedMedia::TYPE_DOCUMENT;
     }
 }

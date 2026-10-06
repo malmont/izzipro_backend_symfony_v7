@@ -195,7 +195,10 @@ l'application : `docker compose build messenger_worker_media && docker compose u
 | Privé, par clé | `var/storage/private_media/` | `GET /media/secure/{clé de 64 caractères}` (`SecureMediaDeliveryController`) |
 | Boussole ESG | `var/storage/esg/` (documents, rapports) | contrôleurs du module ESG |
 
-Médiathèque partagée : `/api/shared-media` (`SharedMediaApiController`). URL publiques : `Services/MediaUrlResolver`.
+Médiathèque partagée : `/api/shared-media` (`SharedMediaApiController`) en lecture ; `POST /api/media`
+(`MediaApiController`, ROLE_ADMIN) pour téléverser depuis l'éditeur des landing pages. Fichiers : `Services/SharedMedia/
+SharedMediaStorage` (contrôle de l'extension et du type réel, stockage public ou privé), commun à EasyAdmin et à l'API.
+URL publiques : `Services/MediaUrlResolver`.
 
 **Vidéo préparée pour une scène au défilement** (administration : case du formulaire ou bouton de la fiche ;
 `Services/SharedMedia/ScrollVideoPreparer`). Une scène cale la vidéo sur la position du défilement : il faut des images

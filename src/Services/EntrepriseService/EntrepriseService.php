@@ -140,8 +140,14 @@ class EntrepriseService
             $entreprise->setGoogleSiteVerification($data['googleSiteVerification']);
         }
 
-        // Translations if provided
-        $translation = $entreprise->getTranslation($locale);
+        // Traductions : celle de la langue demandée exactement. getTranslation() se replie sur le français : écrire
+        // l'anglais d'un site qui n'avait que le français écrasait jusqu'au 06/10/2026 les textes français.
+        $translation = null;
+        foreach ($entreprise->getTranslations() as $candidate) {
+            if ($candidate->getLanguage() === $locale) {
+                $translation = $candidate;
+            }
+        }
         if (!$translation && (isset($data['conditionOfUse']) || isset($data['LegalNotice']) || isset($data['privacyPolicy']) || isset($data['apropos']))) {
             $translation = new EntrepriseTranslation();
             $translation->setLanguage($locale);

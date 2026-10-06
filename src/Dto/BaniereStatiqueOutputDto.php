@@ -19,7 +19,7 @@ class BaniereStatiqueOutputDto
         $this->titre = $translation?->getTitre() ?? $entity->getTitre();
         $this->texte = $translation?->getTexte() ?? $entity->getTexte();
         $this->texteBouton = $translation?->getTexteBouton() ?? $entity->getTexteBouton();
-         $this->imageDeFondUrl = $entity->getImageDeFond() ? $baseImageUrl . '/' . $entity->getImageDeFond() : null;
+         $this->imageDeFondUrl = \App\Services\MediaUrlResolver::joinStored($entity->getImageDeFond(), $baseImageUrl);
         $this->colorBackground = $entity->getColorBackground(); 
     }
 }

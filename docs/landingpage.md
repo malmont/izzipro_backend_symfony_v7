@@ -18,11 +18,60 @@ Routes et rôles : `docs/endpoints.md`, section « Landing Page » ; données de
 | Résultat d'une tâche de fond | `GET /api/landingpage-ai/jobs/{jobId}` (même tenant, 1 h) | `ROLE_ADMIN` |
 | Crédits et historique | `GET /api/landingpage-ai/usage` | `ROLE_ADMIN` |
 | Synchronisation de la configuration | `GET /api/landingpage-config/status`, `POST …/sync`, `POST …/rollback` | `ROLE_SUPER_ADMIN` ou en-tête `X-Deploy-Token` |
+| Modifier le contenu d'une section (champs envoyés seulement) | `PATCH /api/{presentations, presentation-groups, baniere-statiques, bannieres, videos, service-offers}/{id}?locale=` | `ROLE_ADMIN` |
+| Téléverser une image ou une vidéo dans la médiathèque | `POST /api/media` (multipart) → 201 `{ id, key, url, type, mimeType, size, title, scrollStatus }` | `ROLE_ADMIN` |
 
 Le PUT enregistre le document tel quel et le GET le restitue à l'identique : seuls sont contrôlés les compositions
 (`reglableConfig`, contrat et HTML des textes) et le nom facultatif d'une section (`tabs[].sections[].name` : texte de
 60 caractères au plus, sans `<` ni `>` ; absent, `null` ou vide = pas de nom). Tout autre champ ajouté par le frontend
 au niveau d'un onglet ou d'une section est conservé sans contrôle.
+
+## Modifier les contenus depuis l'éditeur
+
+Depuis le 06/10/2026, l'éditeur modifie les contenus jusque-là gérés dans EasyAdmin (`LandingContentController`,
+`PatchLandingContentUseCase`, `Services/LandingContentService/` : `LandingContentSpec` pour la liste blanche,
+`LandingContentEditor` pour le contrôle et l'écriture). Les GET, POST, PUT et DELETE existants ne changent pas.
+
+| Ressource | Champs modifiables (traduits en gras) |
+|---|---|
+| `presentations` | **`titre`**, **`texte`**, **`texteBouton`**, **`lienBouton`**, `image` |
+| `presentation-groups` | **`titre`**, `texte` |
+| `baniere-statiques` | **`titre`**, **`texte`**, **`texteBouton`**, `imageDeFond`, `colorBackground` |
+| `bannieres` | **`titre`**, **`texte`**, `imageDeFond` |
+| `videos` | **`titre`**, **`description`**, **`texteBouton`**, **`lienBouton`**, `imageDeFond`, `lienVideo` |
+| `service-offers` | **`titre`**, **`titreCommentaire`**, **`descriptions`**, `logo`, `photoService` |
+
+- Corps : objet JSON des seuls champs à changer ; valeur texte, ou `null` / `""` pour vider (sauf `titre`, obligatoire).
+  Champ inconnu ou refusé : 422 `{ error, errors: [{ path, message }] }`, et rien n'est écrit.
+- Textes : liste blanche HTML des compositions réglables (`RichTextPolicy`), liens compris ; titre et bouton : 255
+  caractères au plus.
+
+**Liens dans les textes** (06/10/2026, la sécurité d'abord) : `<a href="…">…</a>` est permis dans tous les textes
+(compositions et contenus), avec `href` pour SEUL attribut, entre guillemets. L'adresse est lue comme le navigateur la
+lit (entités HTML décodées) et doit être `https://…`, `http://…`, `mailto:…`, `tel:…`, un chemin du site (`/…`, pas
+`//…`) ou une ancre (`#…`), sans espace ni caractère de contrôle, 2 000 caractères au plus : `javascript:`, `data:`,
+`vbscript:` et leurs déguisements (`&#106;avascript:`, tabulation codée) sont refusés. `target`, `rel`, `style` et
+tout autre attribut sur `<a>` sont refusés : le frontend pose `target` et `rel="noopener noreferrer"` à l'affichage
+et revérifie l'adresse. L'assistant IA n'ajoute jamais de lien (une adresse nouvelle est renvoyée au modèle) mais
+conserve ceux de l'administrateur. Même règle d'adresse pour `lienBouton` (`RichTextPolicy::urlProblem`).
+- Liens (`lienBouton`) : `https://`, `http://`, `mailto:`, `tel:`, chemin du site (`/…`) ou ancre (`#…`).
+- Images et vidéo : clé de la médiathèque du site (64 caractères hexadécimaux, du bon type), enregistrée sous la forme
+  `/media/secure/{clé}`, ou URL `https://`. Les DTO de lecture rendent ces valeurs en URL complète
+  (`MediaUrlResolver::joinStored`) ; un nom de fichier téléversé par l'administration reste servi comme avant.
+- `colorBackground` : `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb(…)`, `rgba(…)` ou `transparent`.
+- Langue (`?locale=`, défaut `fr`, mêmes règles qu'en lecture) : un champ traduit est écrit dans la traduction de cette
+  langue, créée au besoin (son titre part du titre de base) ; en `fr`, le champ de base est aussi mis à jour. Les
+  champs non traduits sont communs à toutes les langues.
+- Réponse 200 : l'objet tel que le GET de la ressource le renvoie dans cette langue ; le cache des GET est invalidé
+  (une présentation invalide aussi les groupes). Un objet d'un autre site est dans une autre base : 404, jamais 403.
+- `POST /api/media` (`MediaApiController`, `UploadMediaUseCase`, `Services/SharedMedia/SharedMediaStorage`, commun
+  avec la médiathèque d'EasyAdmin) : champs `file`, `title` et `prepareForScroll` ; images et vidéos seulement (415
+  sinon, contenu contrôlé comme dans l'administration), 100 Mo au plus (413). Le média est privé, servi par
+  `/media/secure/{clé}` ; avec `prepareForScroll`, une vidéo est préparée pour le défilement en tâche de fond.
+- `PUT /api/entreprise/{id}` : `LegalNotice`, `conditionOfUse`, `privacyPolicy` et `apropos` sont écrits dans la
+  traduction de la langue demandée (exactement : jusqu'au 06/10/2026, écrire l'anglais d'un site qui n'avait que le
+  français écrasait le français) ; `adress` (texte libre) est commun ; il n'y a pas de champ « slogan ». Ces textes
+  ne sont pas contrôlés par la liste blanche HTML.
 
 ## Code
 
@@ -86,7 +135,7 @@ Rapport complet transmis au frontend ; corrections par lots (tests à chaque lot
 | 2 | Demande identique pendant une tâche en cours : payée deux fois | corrigé le 30/09 (409 avec le `jobId` existant) |
 | 2 | Aucune reprise sur 429, 529 et 5xx de l'API | corrigé le 30/09 (2 nouveaux essais, `AnthropicApiException`) |
 | 2 | `claude-sonnet-5-5` absent de `MODELS_WITHOUT_FORCED_TOOL` | corrigé le 30/09 |
-| 3 | Balises HTML des textes non contrôlées côté backend | corrigé le 30/09 (`RichTextPolicy` : liste du frontend, sans `<a>`, `style` limité) |
+| 3 | Balises HTML des textes non contrôlées côté backend | corrigé le 30/09 (`RichTextPolicy` : liste du frontend, `style` limité) ; liens `<a href>` sûrs permis depuis le 06/10 |
 | 3 | 400 au lieu de 413 JSON pour un corps trop volumineux | corrigé le 30/09 (Symfony et nginx) |
 | 3 | CORS de `/media/secure` limité à une liste de domaines codée en dur dans nginx | corrigé le 30/09 : `*` sans cookies (la clé est la seule autorisation), valable pour tout nouveau domaine |
 | 3 | Jeton JWT sans `tenant_code` accepté sur un site ; synchronisation activée malgré une base illisible ; pas de limite sur `X-Deploy-Token` ; limite des images ; nettoyage des tâches | corrigé le 30/09 |

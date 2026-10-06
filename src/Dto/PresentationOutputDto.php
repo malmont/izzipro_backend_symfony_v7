@@ -21,7 +21,7 @@ class PresentationOutputDto
         $this->texte = $translation?->getTexte() ?? $entity->getTexte();
         $this->texteBouton = $translation?->getTexteBouton() ?? $entity->getTexteBouton();
 
-        $this->image = $entity->getImage() ? rtrim($baseImageUrl, '/') . '/' . $entity->getImage() : null;
+        $this->image = \App\Services\MediaUrlResolver::joinStored($entity->getImage(), $baseImageUrl);
         $this->lienBouton = $entity->getLienBouton();
     }
 }

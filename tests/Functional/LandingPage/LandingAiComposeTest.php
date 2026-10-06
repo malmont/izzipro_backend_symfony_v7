@@ -567,8 +567,21 @@ class LandingAiComposeTest extends WebTestCase
         $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Ajoute un lien.']);
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
-        $this->assertStringContainsString('balise <a> non autorisée', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+        $this->assertStringContainsString('lien <a> ajouté', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'], 'les textes acceptent des liens, mais l\'IA n\'en ajoute pas');
         $this->assertStringContainsString('jamais de lien <a>', FakeLandingAiClient::$requests[0]['system'][0]['text']);
+    }
+
+    public function testLinkAlreadyPlacedByTheAdminIsKeptByAnEdit(): void
+    {
+        $composition = $this->preset('group-type-t');
+        $text = array_values(array_filter($composition->blocks, fn ($b) => $b->type === 'text'))[0];
+        $text->text = '<p>Voir <a href="https://exemple.com">notre site</a></p>';
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => $text->id, 'set' => ['color' => '#000000']]]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $composition, 'prompt' => 'Texte en noir.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertCount(1, FakeLandingAiClient::$requests, 'lien de l\'administrateur : pas une erreur de l\'IA');
     }
 
     public function testSecondBackgroundRequestWhileOneIsPendingGets409WithTheExistingJob(): void

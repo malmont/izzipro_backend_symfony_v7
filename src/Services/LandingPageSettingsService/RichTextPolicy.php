@@ -11,12 +11,22 @@ namespace App\Services\LandingPageSettingsService;
  *   </balise>   <balise>   <balise/>   <balise style="…">   (style entre guillemets, sans < ni >)
  * On ne cherche donc pas à reconnaître les balises dangereuses : ce qui n'est pas reconnu comme permis est refusé
  * (un analyseur tolérant se contourne, ex. <img src=x" onerror=…>, que le navigateur exécute).
+ *
+ * Liens (depuis le 06/10/2026) : <a href="…">…</a>, avec href pour SEUL attribut (ni target, ni rel, ni style, ni
+ * gestionnaire d'évènement). L'adresse, lue comme le navigateur la lit (entités HTML décodées), doit être https://,
+ * http://, mailto:, tel:, un chemin du site (/…) ou une ancre (#…), sans espace ni caractère de contrôle : ce qui
+ * ferme la porte à javascript:, data:, vbscript: et à leurs déguisements (« jav&#x09;ascript: », « &#106;avascript: »).
+ * Le frontend pose target et rel (noopener noreferrer) à l'affichage et revérifie l'adresse.
  */
 final class RichTextPolicy
 {
     public const TAGS = ['p', 'div', 'span', 'strong', 'b', 'em', 'i', 'u', 's', 'br', 'hr', 'ul', 'ol', 'li', 'blockquote',
         'small', 'sub', 'sup', 'h2', 'h3', 'h4', 'h5', 'h6'];
     public const STYLE_PROPERTIES = ['font-style', 'font-weight', 'text-decoration', 'color'];
+    /** Adresse permise pour un lien (texte) ou un bouton : décodée, sans espace ni caractère de contrôle */
+    public const URL_PATTERN = '#^(https?://[^\s<>"\'\\\\\x00-\x1f\x7f]+|mailto:[^\s<>"\'\\\\\x00-\x1f\x7f]+|tel:\+?[0-9][0-9 ().-]*|/(?![/\\\\])[^\s<>"\'\\\\\x00-\x1f\x7f]*|\#[\w-]*)$#iu';
+    public const URL_MAX_LENGTH = 2000;
+    private const ANCHOR_FORM = '#\G<a\s+href\s*=\s*(?<href>"[^"<>]*"|\'[^\'<>]*\')\s*>#i';
 
     private const STYLE_VALUES = [
         'font-style' => '/^(normal|italic|oblique)$/i',
@@ -36,6 +46,13 @@ final class RichTextPolicy
         $offset = 0;
         while (preg_match(self::TAG_START, $text, $start, PREG_OFFSET_CAPTURE, $offset)) {
             $position = $start[0][1];
+            if (preg_match(self::ANCHOR_FORM, $text, $anchor, 0, $position)) {
+                $offset = $position + strlen($anchor[0]);
+                if (($problem = self::urlProblem(html_entity_decode(substr($anchor['href'], 1, -1), ENT_QUOTES | ENT_HTML5, 'UTF-8'))) !== null) {
+                    $problems[] = '<a> : ' . $problem;
+                }
+                continue;
+            }
             if (!preg_match(self::ALLOWED_FORM, $text, $tag, 0, $position)) {
                 $problems[] = self::describe(substr($text, $position, 300));
                 $offset = $position + 1;
@@ -44,7 +61,9 @@ final class RichTextPolicy
             $offset = $position + strlen($tag[0]);
             $name = strtolower($tag['name']);
             $style = $tag['style'] ?? '';
-            if (!in_array($name, self::TAGS, true)) {
+            if ($name === 'a' && $tag['closing'] === '') {
+                $problems[] = '<a> : href obligatoire et seul attribut permis (<a href="…">)';
+            } elseif (!in_array($name, self::TAGS, true) && $name !== 'a') {
                 $problems[] = self::notAllowed($name);
             } elseif ($style !== '' && $tag['closing'] !== '') {
                 $problems[] = sprintf('</%s> : une balise fermante ne porte pas d\'attribut', $name);
@@ -63,6 +82,9 @@ final class RichTextPolicy
             return 'commentaire, déclaration ou balise illisible non autorisé (« < » suivi de « ! », « ? » ou « / »)';
         }
         $name = strtolower($m[1]);
+        if ($name === 'a') {
+            return '<a> : seul l\'attribut href est permis, entre guillemets (<a href="https://…">) ; target et rel sont posés à l\'affichage';
+        }
         if (!in_array($name, self::TAGS, true)) {
             return self::notAllowed($name);
         }
@@ -78,7 +100,17 @@ final class RichTextPolicy
 
     private static function notAllowed(string $name): string
     {
-        return sprintf('balise <%s> non autorisée (autorisées : %s)', $name, implode(', ', self::TAGS));
+        return sprintf('balise <%s> non autorisée (autorisées : %s, a)', $name, implode(', ', self::TAGS));
+    }
+
+    /** Problème d'une adresse de lien ou de bouton (déjà décodée), ou null si elle est permise */
+    public static function urlProblem(string $url): ?string
+    {
+        if ($url === '' || mb_strlen($url) > self::URL_MAX_LENGTH || preg_match(self::URL_PATTERN, $url) !== 1) {
+            return 'adresse non autorisée (https://…, http://…, mailto:…, tel:…, /chemin ou #ancre, sans espace)';
+        }
+
+        return null;
     }
 
     /** @return list<string> */

@@ -22,11 +22,7 @@ class ServiceOfferOutputDto
         $this->titreCommentaire = $serviceOffer->getTitreCommentaire();
         $this->descriptions = $serviceOffer->getDescriptions();
 
-        $this->logoUrl = $serviceOffer->getLogo()
-            ? rtrim($baseImageUrl, '/') . '/' . $serviceOffer->getLogo()
-            : null;
-        $this->photoServiceUrl = $serviceOffer->getPhotoService()
-            ? rtrim($baseImageUrl, '/') . '/' . $serviceOffer->getPhotoService()
-            : null;
+        $this->logoUrl = \App\Services\MediaUrlResolver::joinStored($serviceOffer->getLogo(), $baseImageUrl);
+        $this->photoServiceUrl = \App\Services\MediaUrlResolver::joinStored($serviceOffer->getPhotoService(), $baseImageUrl);
     }
 }

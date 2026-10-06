@@ -52,14 +52,7 @@ class VideoOutputDto
         $this->url = $finalLien;
         $this->embedUrl = $this->buildEmbedUrl($finalLien);
 
-        $imageDeFond = $video->getImageDeFond();
-        if ($imageDeFond) {
-            $this->imageDeFondUrl = str_starts_with($imageDeFond, 'http')
-                ? $imageDeFond
-                : rtrim($baseImageUrl, '/') . '/' . ltrim($imageDeFond, '/');
-        } else {
-            $this->imageDeFondUrl = null;
-        }
+        $this->imageDeFondUrl = \App\Services\MediaUrlResolver::joinStored($video->getImageDeFond(), $baseImageUrl);
         $this->image_de_fond_url = $this->imageDeFondUrl;
     }
 

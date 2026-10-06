@@ -46,6 +46,31 @@ class MediaUrlResolver
         return !empty($base) ? $base . '/' . $cleanSubpath : '/' . $cleanSubpath;
     }
 
+    /**
+     * URL d'une image ou d'une vidéo enregistrée dans un champ de contenu (présentation, bannière, vidéo, service) :
+     * un nom de fichier (téléversé par l'administration, dans $baseUrl), une URL absolue (https://…, telle quelle) ou
+     * un média de la médiathèque par sa clé (« /media/secure/{clé} », écrit par l'éditeur des landing pages, servi par
+     * l'hôte de $baseUrl).
+     */
+    public static function joinStored(?string $stored, string $baseUrl): ?string
+    {
+        if ($stored === null || $stored === '') {
+            return null;
+        }
+        if (str_starts_with($stored, 'http://') || str_starts_with($stored, 'https://')) {
+            return $stored;
+        }
+        if (str_starts_with($stored, '/media/secure/')) {
+            $scheme = parse_url($baseUrl, PHP_URL_SCHEME);
+            $host = parse_url($baseUrl, PHP_URL_HOST);
+            $port = parse_url($baseUrl, PHP_URL_PORT);
+
+            return $host ? sprintf('%s://%s%s%s', $scheme ?: 'https', $host, $port ? ':' . $port : '', $stored) : $stored;
+        }
+
+        return rtrim($baseUrl, '/') . '/' . ltrim($stored, '/');
+    }
+
     // --- Base URLs par type d'asset ---
 
     public function getProductsBaseUrl(?string $fallbackHost = null): string

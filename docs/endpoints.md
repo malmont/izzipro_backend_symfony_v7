@@ -216,7 +216,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (134)
+## Boutique et commun (136)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -283,6 +283,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::createFournisseur` |
 | GET | `/api/frais/total` | ROLE_ADMIN | `Controller\StatistiqueDashboard\FraisController::getTotalFrais` |
 | GET | `/api/homeslider` | PUBLIC_ACCESS | `Controller\HomeSliderController\HomeSliderController::getHomeSlider` |
+| POST | `/api/media` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::upload` |
 | DELETE | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::deleteNoteDeFrais` |
 | PUT | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::updateNoteDeFrais` |
 | POST | `/api/order/cancel/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\OrderController\OrderController::cancelOrder` |
@@ -327,6 +328,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/type-fournisseurs` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\TypeFournisseurController\TypeFournisseurController::list` |
 | GET | `/api/type-note-de-frais` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\TypeNoteDeFraisController\TypeNoteDeFraisController::list` |
 | GET | `/api/vehicles/carousel` | PUBLIC_ACCESS | `Controller\Api\VehicleApiController::getCarouselVehicles` |
+| PATCH | `/api/{resource}/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::patch` |
 | ANY | `/cart/add/{id}` | aucune règle | `Controller\Cart\CartController::addToCart` |
 | ANY | `/cart/delete-all/{id}` | aucune règle | `Controller\Cart\CartController::deleteAllCart` |
 | ANY | `/cart/delete/{id}` | aucune règle | `Controller\Cart\CartController::deleteFromCart` |

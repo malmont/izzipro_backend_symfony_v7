@@ -109,6 +109,38 @@ final class LandingAiCompositionChecker
     }
 
     /**
+     * Liens écrits par l'IA : les textes acceptent des liens <a href> depuis le 06/10/2026, mais l'assistant n'en
+     * ajoute jamais (une adresse inventée mènerait le visiteur n'importe où). Une adresse de lien absente de la
+     * composition de départ est renvoyée au modèle ; les liens déjà posés par l'administrateur sont conservés.
+     *
+     * @return list<array{path: string, message: string}>
+     */
+    public function addedLinks(object $composition, ?object $before = null): array
+    {
+        $known = $before !== null ? array_flip($this->linkTargets($before)) : [];
+        $added = array_values(array_unique(array_filter($this->linkTargets($composition), fn ($href) => !isset($known[$href]))));
+
+        return $added ? [['path' => 'blocks', 'message' => sprintf(
+            'lien <a> ajouté dans un texte (%s) : n\'ajoute jamais de lien dans un texte ; un lien est un bloc button',
+            implode(', ', array_slice($added, 0, 3))
+        )]] : [];
+    }
+
+    /** @return list<string> adresses des liens <a href> de tous les textes de la composition */
+    private function linkTargets(object $composition): array
+    {
+        $targets = [];
+        $values = json_decode(json_encode($composition), true) ?? [];
+        array_walk_recursive($values, function ($value) use (&$targets) {
+            if (is_string($value) && preg_match_all('#<a\s+href\s*=\s*("[^"]*"|\'[^\']*\')#i', $value, $m)) {
+                array_push($targets, ...array_map(fn ($quoted) => substr($quoted, 1, -1), $m[1]));
+            }
+        });
+
+        return $targets;
+    }
+
+    /**
      * Boutons et badges produits par l'IA sans « background » : le moteur de rendu les dessine sur fond blanc opaque,
      * ce qui est rarement voulu, et la couleur ne se devine pas : erreur renvoyée au modèle. $skipIds : blocs à ne pas
      * vérifier (en retouche, ceux de la composition de départ). Les containers sont complétés sans nouvel essai

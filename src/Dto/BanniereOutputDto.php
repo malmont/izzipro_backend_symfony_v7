@@ -16,8 +16,6 @@ class BanniereOutputDto
         $this->id = $banniere->getId();
         $this->titre = $translation?->getTitre() ?? $banniere->getTitre();
         $this->texte = $translation?->getTexte() ?? $banniere->getTexte();
-        $this->imageDeFondUrl = $banniere->getImageDeFond()
-            ? rtrim($baseImageUrl, '/') . '/' . $banniere->getImageDeFond()
-            : null;
+        $this->imageDeFondUrl = \App\Services\MediaUrlResolver::joinStored($banniere->getImageDeFond(), $baseImageUrl);
     }
 }

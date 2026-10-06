@@ -118,7 +118,11 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     liens…) : liste blanche identique à RichText du frontend (`RichTextPolicy`, grammaire stricte : tout ce qui
     ressemble à une balise et n'a pas exactement une forme permise est refusé) : p, div, span, strong, b, em, i, u,
     s, br, hr, ul, ol, li, blockquote, small, sub, sup, h2 à h6 ; aucun attribut sauf `style` (font-style, font-weight,
-    text-decoration, color) ; pas de `<a>`. Refus 422 au PUT des réglages, et nouvel essai de l'IA si elle en produit.
+    text-decoration, color). Depuis le 06/10/2026, liens `<a href="…">` avec `href` pour seul attribut et une adresse
+    sûre (https, http, mailto, tel, /chemin, #ancre ; lue entités décodées, sans espace ni caractère de contrôle) ;
+    `target` et `rel` sont posés par le frontend à l'affichage. Refus 422 au PUT des réglages. L'IA n'ajoute jamais de
+    lien : une adresse absente de la composition de départ est renvoyée au modèle (`addedLinks`), les liens posés par
+    l'administrateur sont conservés.
   - **Corps trop volumineux** : 413 `{ error, message }` (Symfony au-delà de ~26 Mo, nginx au-delà de 200 Mo). Image :
     5 000 000 caractères base64 au plus.
   - **Une tâche de fond à la fois par utilisateur** : une nouvelle demande page ou images pendant qu'une tâche du même

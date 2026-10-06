@@ -82,7 +82,15 @@ class ReglableCompositionValidatorTest extends KernelTestCase
         yield 'url javascript' => [fn ($c) => $c->blocks[2]->url = 'javascript:alert(1)', 'blocks[2].url', 'format'];
         yield 'clé de liaison inconnue' => [fn ($c) => $c->blocks[2]->bindings->color = 'item.color', 'blocks[2].bindings.color', 'propriété inconnue'];
         // HTML des textes : liste blanche identique à RichText du frontend (30/09/2026)
-        yield 'lien dans un texte' => [fn ($c) => $c->blocks[1]->text = 'Voir <a href="https://exemple.com">ici</a>', 'blocks[1].text', 'balise <a> non autorisée'];
+        // Liens permis depuis le 06/10/2026 : href seul, adresse sûre (voir testAllowedLinksAreAccepted)
+        yield 'lien javascript' => [fn ($c) => $c->blocks[1]->text = 'Voir <a href="javascript:alert(1)">ici</a>', 'blocks[1].text', 'adresse non autorisée'];
+        yield 'lien javascript déguisé en entités' => [fn ($c) => $c->blocks[1]->text = '<a href="&#106;avascript:alert(1)">x</a>', 'blocks[1].text', 'adresse non autorisée'];
+        yield 'lien javascript coupé par une tabulation' => [fn ($c) => $c->blocks[1]->text = '<a href="jav&#x09;ascript:alert(1)">x</a>', 'blocks[1].text', 'adresse non autorisée'];
+        yield 'lien data' => [fn ($c) => $c->blocks[1]->text = '<a href="data:text/html;base64,PHNjcmlwdD4=">x</a>', 'blocks[1].text', 'adresse non autorisée'];
+        yield 'lien vers un autre domaine sans protocole' => [fn ($c) => $c->blocks[1]->text = '<a href="//evil.example">x</a>', 'blocks[1].text', 'adresse non autorisée'];
+        yield 'lien avec target' => [fn ($c) => $c->blocks[1]->text = '<a href="https://exemple.com" target="_blank">x</a>', 'blocks[1].text', 'seul l\'attribut href'];
+        yield 'lien avec gestionnaire d\'événement' => [fn ($c) => $c->blocks[1]->text = '<a href="https://exemple.com" onclick="alert(1)">x</a>', 'blocks[1].text', 'seul l\'attribut href'];
+        yield 'lien sans adresse' => [fn ($c) => $c->blocks[1]->text = '<a>x</a>', 'blocks[1].text', 'href obligatoire'];
         yield 'script dans un texte' => [fn ($c) => $c->blocks[1]->text = '<script>alert(1)</script>', 'blocks[1].text', 'balise <script> non autorisée'];
         yield 'gestionnaire d\'événement' => [fn ($c) => $c->blocks[1]->text = '<p onclick="alert(1)">x</p>', 'blocks[1].text', 'attribut « onclick » non autorisé'];
         yield 'style hors liste' => [fn ($c) => $c->blocks[1]->text = '<span style="background:url(x)">x</span>', 'blocks[1].text', 'style « background » non autorisé'];
@@ -95,7 +103,7 @@ class ReglableCompositionValidatorTest extends KernelTestCase
         yield 'balise non fermée' => [fn ($c) => $c->blocks[1]->text = 'Texte <strong', 'blocks[1].text', 'mal formée ou non fermée'];
         yield 'commentaire HTML' => [fn ($c) => $c->blocks[1]->text = '<!-- x --><p>a</p>', 'blocks[1].text', 'commentaire'];
         yield 'légende d\'image' => [fn ($c) => $c->blocks[0]->images = [(object) ['url' => '/uploads/a.webp', 'caption' => '<script>x</script>']], 'blocks[0].images[0].caption', 'balise <script> non autorisée'];
-        yield 'titre de lien d\'une traduction' => [fn ($c) => $c->blocks[1]->translations->en->links = ['<a href="x">y</a>'], 'blocks[1].translations.en.links[0]', 'balise <a> non autorisée'];
+        yield 'titre de lien d\'une traduction' => [fn ($c) => $c->blocks[1]->translations->en->links = ['<a href="x">y</a>'], 'blocks[1].translations.en.links[0]', 'adresse non autorisée'];
         yield 'HTML dans un champ secondaire' => [fn ($c) => $c->blocks[2]->offer = '<iframe src="x"></iframe>', 'blocks[2].offer', 'balise <iframe> non autorisée'];
     }
 
@@ -104,6 +112,15 @@ class ReglableCompositionValidatorTest extends KernelTestCase
         $composition = $this->composition();
         $composition->blocks[1]->text = '<h2>Titre</h2><p style="color:#243b35; font-weight:bold">Texte <strong>fort</strong>, <em>penché</em>, '
             . '<span style="text-decoration: underline">souligné</span></p><ul><li>Un</li><li>Deux</li></ul><br/><hr>5 &lt; 6 et 5 < 6';
+
+        $this->assertSame([], $this->validator()->validateComposition($composition));
+    }
+
+    public function testAllowedLinksAreAccepted(): void
+    {
+        $composition = $this->composition();
+        $composition->blocks[1]->text = '<p>Voir <a href="https://exemple.com/page?a=1&amp;b=2">le site</a>, <a href="mailto:contact@exemple.com">écrire</a>, '
+            . "<a href='tel:+1 514 555-0000'>appeler</a>, <a href=\"/contact\">contact</a> ou <a href=\"#services\">services</a>.</p>";
 
         $this->assertSame([], $this->validator()->validateComposition($composition));
     }
