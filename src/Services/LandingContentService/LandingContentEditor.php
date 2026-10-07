@@ -99,6 +99,26 @@ final class LandingContentEditor
         $em->flush();
     }
 
+    /**
+     * Valeurs des champs telles que le GET de la ressource les lit dans cette langue (traduction, puis valeur de
+     * base) : état avant / après pour le journal des écritures.
+     *
+     * @param list<string> $fields
+     * @return array<string, ?string>
+     */
+    public function snapshot(string $resource, object $entity, array $fields, string $locale): array
+    {
+        $spec = LandingContentSpec::RESOURCES[$resource]['fields'];
+        $translation = method_exists($entity, 'getTranslation') ? $entity->getTranslation($locale) : null;
+        $values = [];
+        foreach ($fields as $field) {
+            $getter = 'get' . ucfirst($field);
+            $values[$field] = ($spec[$field][1] && $translation !== null ? $translation->$getter() : null) ?? $entity->$getter();
+        }
+
+        return $values;
+    }
+
     /** Traduction exacte de la langue (sans repli sur une autre), créée au besoin */
     private function translation(object $entity, string $class, string $locale): object
     {

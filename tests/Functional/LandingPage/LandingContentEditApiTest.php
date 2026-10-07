@@ -28,7 +28,7 @@ class LandingContentEditApiTest extends WebTestCase
     protected function setUp(): void
     {
         $this->client = static::createClient();
-        foreach (['presentation_translation', 'presentation_group_presentation', 'presentation', 'video_translation', 'video', 'shared_media'] as $table) {
+        foreach (['presentation_translation', 'presentation_group_presentation', 'presentation', 'presentation_group_translation', 'presentation_group', 'video_translation', 'video', 'shared_media', 'content_audit_log'] as $table) {
             $this->db()->executeStatement("DELETE FROM $table");
         }
         $this->db()->executeStatement("INSERT INTO shared_media (titre, filename, media_type, mime_type, visibility, access_key, created_at) VALUES
@@ -164,6 +164,188 @@ class LandingContentEditApiTest extends WebTestCase
         $this->assertSame('pending', $body->scrollStatus);
         $this->assertCount(1, static::getContainer()->get('messenger.transport.media')->getSent());
         $this->files[] = static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/private_media/' . $this->db()->fetchOne('SELECT filename FROM shared_media WHERE access_key = ?', [$body->key]);
+    }
+
+    public function testMediaLibraryIsListedFilteredAndPaged(): void
+    {
+        $this->db()->executeStatement("INSERT INTO shared_media (titre, filename, media_type, mime_type, visibility, created_at) VALUES
+            ('Brochure', 'brochure.pdf', 'document', 'application/pdf', 'public', NOW()),
+            ('Logo public', 'logo_public_0123456789.png', 'image', 'image/png', 'public', NOW() + INTERVAL '1 minute')");
+        $this->db()->executeStatement("INSERT INTO shared_media (titre, filename, media_type, mime_type, visibility, access_key, expires_at, created_at) VALUES
+            ('Expiré', 'vieux.jpg', 'image', 'image/jpeg', 'private', '" . str_repeat('9', 64) . "', NOW() - INTERVAL '1 day', NOW())");
+
+        $all = json_decode($this->request('GET', '/api/media')->getContent(), true);
+        $this->assertSame(['items', 'total', 'page', 'limit'], array_keys($all));
+        $this->assertSame([3, 1, 40], [$all['total'], $all['page'], $all['limit']], 'images et vidéos, ni document ni lien expiré');
+        $this->assertSame('Logo public', $all['items'][0]['title'], 'du plus récent au plus ancien');
+        $this->assertNull($all['items'][0]['key'], 'média public : pas de clé, url directe');
+        $this->assertSame(['id', 'key', 'url', 'type', 'mimeType', 'size', 'title', 'createdAt', 'width', 'height', 'duration', 'scrollStatus', 'visibility'], array_keys($all['items'][0]));
+        $photo = array_values(array_filter($all['items'], fn ($i) => $i['title'] === 'Photo'))[0];
+        $this->assertSame(self::IMAGE_KEY, $photo['key']);
+        $this->assertSame('https://' . MV_TEST_TENANT_HOST . '/media/secure/' . self::IMAGE_KEY, $photo['url']);
+
+        $videos = json_decode($this->request('GET', '/api/media?type=video')->getContent(), true);
+        $this->assertSame(['Film'], array_column($videos['items'], 'title'));
+        $this->assertSame(['Photo'], array_column(json_decode($this->request('GET', '/api/media?q=PHO')->getContent(), true)['items'], 'title'), 'titre, sans casse');
+        $page2 = json_decode($this->request('GET', '/api/media?limit=2&page=2')->getContent(), true);
+        $this->assertSame([3, 2, 2, 1], [$page2['total'], $page2['page'], $page2['limit'], count($page2['items'])]);
+
+        foreach (['type=document', 'page=0', 'limit=101', 'limit=abc'] as $query) {
+            $this->assertSame(400, $this->request('GET', "/api/media?$query")->getStatusCode(), $query);
+        }
+        $this->session = $this->login(['ROLE_USER_INTERNET']);
+        $this->assertSame(403, $this->request('GET', '/api/media')->getStatusCode());
+    }
+
+    public function testMediaIsRenamedAndOnlyDeletedWhenNoLongerUsed(): void
+    {
+        $photo = (int) $this->db()->fetchOne('SELECT id FROM shared_media WHERE access_key = ?', [self::IMAGE_KEY]);
+        $renamed = $this->request('PATCH', "/api/media/$photo", json_encode(['title' => 'Portrait de l\'équipe']));
+        $this->assertSame(200, $renamed->getStatusCode(), $renamed->getContent());
+        $this->assertSame('Portrait de l\'équipe', json_decode($renamed->getContent())->title);
+        $this->assertSame(422, $this->request('PATCH', "/api/media/$photo", json_encode(['title' => '<b>x</b>']))->getStatusCode());
+        $this->assertSame(400, $this->request('PATCH', "/api/media/$photo", json_encode(['title' => 'x', 'key' => 'y']))->getStatusCode());
+
+        // utilisé par une présentation et par les réglages publiés : 409 avec les endroits
+        $id = $this->presentation('Équipe', []);
+        $this->db()->executeStatement('UPDATE presentation SET image = ? WHERE id = ?', ['/media/secure/' . self::IMAGE_KEY, $id]);
+        $settings = $this->db()->fetchOne('SELECT configuration::text FROM landing_page_setting ORDER BY id LIMIT 1');
+        $this->db()->executeStatement("UPDATE landing_page_setting SET configuration = ?::json WHERE id = (SELECT MIN(id) FROM landing_page_setting)",
+            [json_encode(['tabs' => [['name' => 'Accueil', 'sections' => [['reglableConfig' => ['blocks' => [['id' => 'b', 'type' => 'image', 'mediaKey' => self::IMAGE_KEY]]]]]]]])]);
+        try {
+            $response = $this->request('DELETE', "/api/media/$photo");
+            $this->assertSame(409, $response->getStatusCode(), $response->getContent());
+            $usages = json_decode($response->getContent(), true)['usages'];
+            $this->assertContains("Présentation n° $id « Équipe » : image", $usages);
+            $this->assertContains('Réglages publiés : tabs[0].sections[0].reglableConfig.blocks[0].mediaKey (onglet « Accueil »)', $usages);
+            $this->assertNotFalse($this->db()->fetchOne('SELECT id FROM shared_media WHERE id = ?', [$photo]));
+        } finally {
+            $this->db()->executeStatement('UPDATE landing_page_setting SET configuration = ?::json WHERE id = (SELECT MIN(id) FROM landing_page_setting)', [$settings ?: '{}']);
+        }
+
+        // plus utilisé : supprimé, fichier compris
+        $file = static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/private_media/film.mp4';
+        file_put_contents($file, 'x');
+        $this->files[] = $file;
+        $film = (int) $this->db()->fetchOne('SELECT id FROM shared_media WHERE access_key = ?', [self::VIDEO_KEY]);
+        $this->assertSame(204, $this->request('DELETE', "/api/media/$film")->getStatusCode());
+        $this->assertFalse($this->db()->fetchOne('SELECT id FROM shared_media WHERE id = ?', [$film]));
+        $this->assertFileDoesNotExist($file);
+        $this->assertSame(404, $this->request('DELETE', "/api/media/$film")->getStatusCode());
+    }
+
+    public function testGroupPresentationsAreAddedOrderedAndRemoved(): void
+    {
+        $this->db()->executeStatement("INSERT INTO presentation_group (id, titre) VALUES (nextval('presentation_group_id_seq'), 'Services'), (nextval('presentation_group_id_seq'), 'Autre groupe')");
+        [$group, $other] = array_map('intval', $this->db()->fetchFirstColumn('SELECT id FROM presentation_group ORDER BY id'));
+        $a = $this->presentation('A', []);
+        $b = $this->presentation('B', []);
+        foreach ([[$group, $a], [$group, $b], [$other, $b]] as [$g, $p]) {
+            $this->db()->executeStatement('INSERT INTO presentation_group_presentation (presentation_group_id, presentation_id) VALUES (?, ?)', [$g, $p]);
+        }
+
+        // ajout après A, avec sa traduction
+        $response = $this->request('POST', "/api/presentation-groups/$group/presentations?locale=fr", json_encode(['titre' => 'Nouvelle', 'texte' => '<p>Texte</p>', 'after' => $a]));
+        $this->assertSame(201, $response->getStatusCode(), $response->getContent());
+        $titles = fn ($r) => array_column(json_decode($r->getContent(), true)['presentations'], 'titre');
+        $this->assertSame(['A', 'Nouvelle', 'B'], $titles($response));
+        $new = (int) $this->db()->fetchOne("SELECT id FROM presentation WHERE titre = 'Nouvelle'");
+        $this->assertSame('<p>Texte</p>', $this->translation($new, 'fr')['texte']);
+        $this->assertSame(422, $this->request('POST', "/api/presentation-groups/$group/presentations", json_encode(['texte' => 'sans titre']))->getStatusCode());
+        $this->assertSame(422, $this->request('POST', "/api/presentation-groups/$group/presentations", json_encode(['titre' => 'X', 'after' => 999999]))->getStatusCode());
+
+        // ordre : toutes les présentations du groupe, une fois chacune
+        $response = $this->request('PUT', "/api/presentation-groups/$group/presentations/order", json_encode(['order' => [$b, $new, $a]]));
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertSame(['B', 'Nouvelle', 'A'], $titles($response));
+        $this->assertSame(['B', 'Nouvelle', 'A'], $titles($this->request('GET', "/api/presentation-groups/$group")), 'lecture publique dans le même ordre');
+        $this->assertSame(422, $this->request('PUT', "/api/presentation-groups/$group/presentations/order", json_encode(['order' => [$b, $a]]))->getStatusCode(), 'il en manque une');
+        $this->assertSame(400, $this->request('PUT', "/api/presentation-groups/$group/presentations/order", json_encode(['order' => 'b,a']))->getStatusCode());
+
+        // retrait : A n'appartient à aucun autre groupe (supprimée), B est partagée (seulement détachée)
+        $this->assertSame(['B', 'Nouvelle'], $titles($this->request('DELETE', "/api/presentation-groups/$group/presentations/$a")));
+        $this->assertFalse($this->db()->fetchOne('SELECT id FROM presentation WHERE id = ?', [$a]));
+        $this->assertSame(['Nouvelle'], $titles($this->request('DELETE', "/api/presentation-groups/$group/presentations/$b")));
+        $this->assertSame($b, (int) $this->db()->fetchOne('SELECT id FROM presentation WHERE id = ?', [$b]), 'encore dans l\'autre groupe');
+        $this->assertSame(404, $this->request('DELETE', "/api/presentation-groups/$group/presentations/$b")->getStatusCode());
+        $this->assertSame(404, $this->request('POST', '/api/presentation-groups/999999/presentations', json_encode(['titre' => 'X']))->getStatusCode());
+
+        $this->session = $this->login(['ROLE_USER_INTERNET']);
+        $this->assertSame(403, $this->request('POST', "/api/presentation-groups/$group/presentations", json_encode(['titre' => 'Pirate']))->getStatusCode());
+    }
+
+    public function testCompanyLegalTextsAreFilteredButUnchangedLegacyTextIsTolerated(): void
+    {
+        $id = (int) $this->db()->fetchOne('SELECT MIN(id) FROM entreprise');
+        $legacy = '<p className="x">Ancien texte <a href="https://x.y" target="_blank">lien</a></p>';
+        $this->db()->executeStatement('DELETE FROM entreprise_translation WHERE entreprise_id = ?', [$id]);
+        $this->db()->executeStatement("INSERT INTO entreprise_translation (id, entreprise_id, language, legal_notice) VALUES (nextval('entreprise_translation_id_seq'), ?, 'fr', ?)", [$id, $legacy]);
+
+        $refused = $this->request('PUT', "/api/entreprise/$id?locale=fr", json_encode(['privacyPolicy' => '<p style="color:red" onclick="x">a</p>', 'apropos' => '<a href="javascript:alert(1)">x</a>']));
+        $this->assertSame(422, $refused->getStatusCode(), $refused->getContent());
+        $this->assertEqualsCanonicalizing(['privacyPolicy', 'apropos'], array_unique(array_column(json_decode($refused->getContent(), true)['errors'], 'path')));
+        $this->assertNull($this->db()->fetchOne('SELECT privacy_policy FROM entreprise_translation WHERE entreprise_id = ?', [$id]), 'rien n\'est écrit');
+
+        $ok = $this->request('PUT', "/api/entreprise/$id?locale=fr", json_encode([
+            'LegalNotice' => $legacy, // renvoyé tel quel : toléré
+            'conditionOfUse' => '<h2>Conditions</h2><table><tr><th colspan="2">A</th></tr><tr><td>1</td><td>2</td></tr></table><p><a href="mailto:a@b.c">écrire</a></p>',
+        ]));
+        $this->assertSame(200, $ok->getStatusCode(), $ok->getContent());
+        $this->assertSame(422, $this->request('PUT', "/api/entreprise/$id?locale=fr", json_encode(['LegalNotice' => $legacy . ' modifié']))->getStatusCode(), 'modifié : contrôlé');
+    }
+
+    public function testEditsAreJournaledAndCanBeRestored(): void
+    {
+        $id = $this->presentation('Titre d\'origine', ['fr' => 'Titre d\'origine']);
+        $this->assertSame(200, $this->patch("/api/presentations/$id?locale=fr", ['titre' => 'Titre erroné', 'texteBouton' => 'Écrire'])->getStatusCode());
+
+        $list = json_decode($this->request('GET', "/api/landingpage-audit?resource=presentations&resourceId=$id")->getContent(), true);
+        $this->assertSame(1, $list['total']);
+        $entry = $list['items'][0];
+        $this->assertSame(['presentations', (string) $id, 'update', 'fr', ['titre', 'texteBouton'], true], [$entry['resource'], $entry['resourceId'], $entry['action'], $entry['locale'], $entry['fields'], $entry['restorable']]);
+        $this->assertStringStartsWith('landing-content-', $entry['user']);
+        $detail = json_decode($this->request('GET', '/api/landingpage-audit/' . $entry['id'])->getContent(), true);
+        $this->assertSame(['titre' => 'Titre d\'origine', 'texteBouton' => null], $detail['before']);
+        $this->assertSame(['titre' => 'Titre erroné', 'texteBouton' => 'Écrire'], $detail['after']);
+
+        // retour en arrière, lui-même journalisé
+        $restored = $this->request('POST', '/api/landingpage-audit/' . $entry['id'] . '/restore');
+        $this->assertSame(200, $restored->getStatusCode(), $restored->getContent());
+        $body = json_decode($restored->getContent(), true);
+        $this->assertSame('Titre d\'origine', $body['result']['titre']);
+        $this->assertSame(['restore', $entry['id']], [$body['entry']['action'], $body['entry']['restoredFrom']]);
+        $this->assertSame('Titre d\'origine', $this->db()->fetchOne('SELECT titre FROM presentation WHERE id = ?', [$id]));
+
+        // la ressource a changé depuis : refus, sauf confirmation
+        $this->assertSame(409, $this->request('POST', '/api/landingpage-audit/' . $entry['id'] . '/restore')->getStatusCode());
+        $this->assertSame(200, $this->request('POST', '/api/landingpage-audit/' . $body['entry']['id'] . '/restore')->getStatusCode(), 'annuler le retour en arrière');
+        $this->assertSame('Titre erroné', $this->db()->fetchOne('SELECT titre FROM presentation WHERE id = ?', [$id]));
+    }
+
+    public function testSettingsAndMediaWritesAreJournaled(): void
+    {
+        $settings = $this->db()->fetchOne('SELECT configuration::text FROM landing_page_setting ORDER BY id LIMIT 1');
+        try {
+            $this->assertSame(200, $this->request('PUT', '/api/landingpage-settings', json_encode(['configuration' => ['tabs' => [['name' => 'Accueil', 'sections' => []]]]]))->getStatusCode());
+            $entry = json_decode($this->request('GET', '/api/landingpage-audit?resource=landingpage-settings')->getContent(), true)['items'][0];
+            $this->assertSame(['update', true], [$entry['action'], $entry['restorable']]);
+            $this->assertContains('tabs', $entry['fields']);
+            $this->assertSame(200, $this->request('POST', '/api/landingpage-audit/' . $entry['id'] . '/restore')->getStatusCode());
+            $this->assertEquals(json_decode((string) $settings, true), json_decode($this->db()->fetchOne('SELECT configuration::text FROM landing_page_setting ORDER BY id LIMIT 1'), true), 'réglages rétablis');
+        } finally {
+            $this->db()->executeStatement('UPDATE landing_page_setting SET configuration = ?::json WHERE id = (SELECT MIN(id) FROM landing_page_setting)', [$settings ?: '{}']);
+        }
+
+        $upload = json_decode($this->upload('photo.png', $this->png())->getContent());
+        $this->files[] = static::getContainer()->getParameter('kernel.project_dir') . '/var/storage/private_media/' . $this->db()->fetchOne('SELECT filename FROM shared_media WHERE id = ?', [$upload->id]);
+        $entry = json_decode($this->request('GET', '/api/landingpage-audit?resource=media')->getContent(), true)['items'][0];
+        $this->assertSame(['upload', false], [$entry['action'], $entry['restorable']]);
+        $this->assertSame(409, $this->request('POST', '/api/landingpage-audit/' . $entry['id'] . '/restore')->getStatusCode(), 'un téléversement ne s\'annule pas');
+
+        $this->assertSame(400, $this->request('GET', '/api/landingpage-audit?limit=500')->getStatusCode());
+        $this->assertSame(404, $this->request('GET', '/api/landingpage-audit/999999')->getStatusCode());
+        $this->session = $this->login(['ROLE_USER_INTERNET']);
+        $this->assertSame(403, $this->request('GET', '/api/landingpage-audit')->getStatusCode());
     }
 
     public function testCompanyPutInEnglishNoLongerOverwritesTheFrenchLegalTexts(): void

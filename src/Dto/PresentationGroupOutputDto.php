@@ -17,7 +17,8 @@ class PresentationGroupOutputDto
         $this->id = $entity->getId();
         $this->titre = $translation?->getTitre() ?? $entity->getTitre();
 
-        foreach ($entity->getPresentations() as $presentation) {
+        // ordre choisi dans l'éditeur des landing pages (ordre de la base sinon)
+        foreach ($entity->getOrderedPresentations() as $presentation) {
             $this->presentations[] = new PresentationOutputDto($presentation, $baseImageUrl, $locale);
         }
     }

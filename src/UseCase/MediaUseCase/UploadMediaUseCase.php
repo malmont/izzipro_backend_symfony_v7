@@ -4,6 +4,7 @@ namespace App\UseCase\MediaUseCase;
 
 use App\Dto\MediaUploadOutputDto;
 use App\Entity\SharedMedia;
+use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\SharedMedia\ScrollVideoPreparer;
 use App\Services\SharedMedia\SharedMediaStorage;
 use App\Services\TenantEntityManagerProvider;
@@ -23,7 +24,8 @@ class UploadMediaUseCase
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly SharedMediaStorage $storage,
-        private readonly ScrollVideoPreparer $scrollVideo
+        private readonly ScrollVideoPreparer $scrollVideo,
+        private readonly ContentAuditRecorder $audit
     ) {
     }
 
@@ -63,6 +65,9 @@ class UploadMediaUseCase
             $this->scrollVideo->request($media);
         }
 
-        return MediaUploadOutputDto::fromEntity($media, $host);
+        $output = MediaUploadOutputDto::fromEntity($media, $host);
+        $this->audit->record('media', $media->getId(), 'upload', null, ['title' => $output->title, 'key' => $output->key, 'type' => $output->type, 'size' => $output->size]);
+
+        return $output;
     }
 }

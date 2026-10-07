@@ -2,6 +2,7 @@
 
 namespace App\Services\EntrepriseService;
 
+use App\Services\LandingPageSettingsService\LegalTextPolicy;
 use App\Entity\Entreprise;
 use App\Dto\EntrepriseDto;
 use App\Repository\EntrepriseRepository;
@@ -64,6 +65,87 @@ class EntrepriseService
         return $dto;
     }
 
+    /** Clés du PUT => lecture de leur valeur (fiche ou traduction exacte de la langue) */
+    private const SNAPSHOT_GETTERS = [
+        'name' => 'getName', 'email' => 'getEmail', 'tel' => 'getTel', 'website' => 'getWebsite', 'ein' => 'getEin',
+        'tvaIntracommunautaire' => 'getTvaIntracommunautaire', 'adress' => 'getAdress', 'facebookPixelId' => 'getFacebookPixelId',
+        'logo' => 'getLogo', 'faviconUrl' => 'getFaviconFilename', 'faviconFilename' => 'getFaviconFilename',
+        'isBoutiqueActive' => 'isBoutiqueActive', 'isLandingPageActive' => 'isLandingPageActive',
+        'isBoussoleEsgActive' => 'isBoussoleEsgActive', 'isMemoireVivanteActive' => 'isMemoireVivanteActive',
+        'metaTitle' => 'getMetaTitle', 'metaDescription' => 'getMetaDescription', 'seoKeywords' => 'getSeoKeywords',
+        'ogImage' => 'getOgImage', 'googleSiteVerification' => 'getGoogleSiteVerification',
+    ];
+    private const TRANSLATION_GETTERS = ['LegalNotice' => 'getLegalNotice', 'conditionOfUse' => 'getConditionOfUse', 'privacyPolicy' => 'getPrivacyPolicy', 'apropos' => 'getApropos'];
+
+    /**
+     * Valeurs actuelles des clés reconnues par le PUT (journal des écritures). null si la fiche n'existe pas.
+     *
+     * @param list<string> $keys
+     * @return array<string, mixed>|null
+     */
+    public function snapshot(int $id, array $keys, string $locale): ?array
+    {
+        $entreprise = $this->emProvider->getEntityManager()->getRepository(Entreprise::class)->find($id);
+        if (!$entreprise instanceof Entreprise) {
+            return null;
+        }
+        $translation = null;
+        foreach ($entreprise->getTranslations() as $candidate) {
+            if ($candidate->getLanguage() === $locale) {
+                $translation = $candidate;
+            }
+        }
+        $values = [];
+        foreach ($keys as $key) {
+            if (isset(self::SNAPSHOT_GETTERS[$key])) {
+                $values[$key] = $entreprise->{self::SNAPSHOT_GETTERS[$key]}();
+            } elseif (isset(self::TRANSLATION_GETTERS[$key])) {
+                $values[$key] = $translation?->{self::TRANSLATION_GETTERS[$key]}();
+            }
+        }
+
+        return $values;
+    }
+
+    /**
+     * Textes longs affichés à tous les visiteurs (mentions légales…) : HTML contrôlé par LegalTextPolicy avant toute
+     * écriture. Un texte envoyé tel qu'il est déjà enregistré n'est pas contrôlé, pour qu'un site dont les anciens
+     * textes ne passent pas (inventaire : app:entreprise:check-legal-texts) puisse encore enregistrer le reste de sa
+     * fiche ; tout texte nouveau ou modifié doit passer.
+     *
+     * @param array<string, mixed> $data
+     * @throws EntrepriseValidationException 422
+     */
+    private function checkLegalTexts(Entreprise $entreprise, array $data, string $locale): void
+    {
+        $current = null;
+        foreach ($entreprise->getTranslations() as $candidate) {
+            if ($candidate->getLanguage() === $locale) {
+                $current = $candidate;
+            }
+        }
+        $getters = ['LegalNotice' => 'getLegalNotice', 'conditionOfUse' => 'getConditionOfUse', 'privacyPolicy' => 'getPrivacyPolicy', 'apropos' => 'getApropos'];
+        $errors = [];
+        foreach (LegalTextPolicy::FIELDS as $field) {
+            if (!array_key_exists($field, $data) || $data[$field] === null || $data[$field] === '') {
+                continue;
+            }
+            if (!is_string($data[$field])) {
+                $errors[] = ['path' => $field, 'message' => 'texte attendu'];
+                continue;
+            }
+            if ($current !== null && $data[$field] === $current->{$getters[$field]}()) {
+                continue;
+            }
+            foreach (LegalTextPolicy::problems($data[$field]) as $problem) {
+                $errors[] = ['path' => $field, 'message' => $problem];
+            }
+        }
+        if ($errors) {
+            throw new EntrepriseValidationException($errors);
+        }
+    }
+
     /**
      * @param array<string, mixed> $data
      */
@@ -76,6 +158,7 @@ class EntrepriseService
         if (!$entreprise) {
             return null;
         }
+        $this->checkLegalTexts($entreprise, $data, $locale);
 
         if (array_key_exists('name', $data)) {
             $entreprise->setName($data['name']);

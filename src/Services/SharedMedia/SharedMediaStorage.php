@@ -92,6 +92,12 @@ final class SharedMediaStorage
         }
     }
 
+    /** @return list<string> dossiers de la médiathèque : public, privé */
+    public function directories(): array
+    {
+        return [$this->publicDir, $this->privateDir];
+    }
+
     public static function mediaType(string $extension, ?string $mimeType): string
     {
         return match (true) {

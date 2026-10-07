@@ -283,6 +283,7 @@ chaque requête.
 | `php bin/console app:landingpage:check-reglable` | Contrôle toutes les compositions de landing page de tous les tenants |
 | `php bin/console app:landingpage-ai:eval --tenant=<tenant de test>` | Jeu d'essai de l'assistant IA (appels réels) |
 | `php bin/console app:tenant:migrate-all` | Migrations sur tous les tenants |
+| `php bin/console app:entreprise:check-legal-texts` | Inventaire des textes légaux de chaque site que le filtrage HTML refuserait (lecture seule) |
 | `php bin/console app:media:prepare-scroll <tenant> <id du média>` | Demande la préparation d'une vidéo de la médiathèque pour le défilement |
 | `php bin/console messenger:stop-workers` | Redémarre les workers (après vérification qu'aucune génération n'est en cours) |
 

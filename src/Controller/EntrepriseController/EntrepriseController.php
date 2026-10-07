@@ -75,7 +75,11 @@ class EntrepriseController extends AbstractController
             ?? $request->getSchemeAndHttpHost();
         $locale = $request->get('locale', 'fr');
 
-        $entrepriseDto = $this->updateEntrepriseUseCase->execute($id, $data, $host, $locale);
+        try {
+            $entrepriseDto = $this->updateEntrepriseUseCase->execute($id, $data, $host, $locale);
+        } catch (\App\Services\EntrepriseService\EntrepriseValidationException $e) {
+            return $this->json(['error' => $e->getMessage(), 'errors' => array_slice($e->errors, 0, 50)], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        }
         if (!$entrepriseDto) {
             return $this->json(['error' => 'Entreprise not found'], JsonResponse::HTTP_NOT_FOUND);
         }

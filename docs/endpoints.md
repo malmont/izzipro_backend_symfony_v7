@@ -9,7 +9,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
   leurs propres vérifications : `#[IsGranted]` est signalé, les autres (voters, contrôles dans le code) sont dans les fiches.
 - Toutes les routes sont résolues pour le tenant de la requête (en-tête `X-Tenant-Host`, voir `docs/architecture.md`).
 
-## Landing Page (16)
+## Landing Page (19)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -18,6 +18,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/landingpage-ai/jobs/{jobId}` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::job` |
 | GET | `/api/landingpage-ai/usage` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::usage` |
 | POST | `/api/landingpage-ai/video-prompt` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::videoPrompt` |
+| POST | `/api/landingpage-audit/{id}/restore` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ContentAuditController\ContentAuditController::restore` |
+| GET | `/api/landingpage-audit/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ContentAuditController\ContentAuditController::getOne` |
+| GET | `/api/landingpage-audit` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ContentAuditController\ContentAuditController::list` |
 | POST | `/api/landingpage-config/rollback` | PUBLIC_ACCESS | `Controller\LandingConfigController\LandingConfigController::rollback` |
 | GET | `/api/landingpage-config/status` | PUBLIC_ACCESS | `Controller\LandingConfigController\LandingConfigController::status` |
 | POST | `/api/landingpage-config/sync` | PUBLIC_ACCESS | `Controller\LandingConfigController\LandingConfigController::sync` |
@@ -30,7 +33,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/landingpage-site-models` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::create` |
 | GET | `/api/landingpage` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getLandingPageProducts` |
 
-## Contenus des sites (64)
+## Contenus des sites (67)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -74,6 +77,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/multiliens` | ROLE_ADMIN | `Controller\MultilienApiController\MultilienApiController::create` |
 | POST | `/api/newsletter/subscribe` | PUBLIC_ACCESS | `Controller\NewsletterApiController\NewsletterApiController::subscribe` |
 | GET | `/api/newsletter` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\NewsletterApiController\NewsletterApiController::list` |
+| PUT | `/api/presentation-groups/{id}/presentations/order` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::reorder` |
+| DELETE | `/api/presentation-groups/{id}/presentations/{presentationId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::removePresentation` |
+| POST | `/api/presentation-groups/{id}/presentations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::addPresentation` |
 | GET | `/api/presentation-groups/{id}` | PUBLIC_ACCESS | `Controller\PresentationGroupApiController\PresentationGroupApiController::getOne` |
 | GET | `/api/presentation-groups` | PUBLIC_ACCESS | `Controller\PresentationGroupApiController\PresentationGroupApiController::list` |
 | GET | `/api/presentations/{id}` | PUBLIC_ACCESS | `Controller\PresentationApiController\PresentationApiController::getOne` |
@@ -221,7 +227,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (136)
+## Boutique et commun (139)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -288,6 +294,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::createFournisseur` |
 | GET | `/api/frais/total` | ROLE_ADMIN | `Controller\StatistiqueDashboard\FraisController::getTotalFrais` |
 | GET | `/api/homeslider` | PUBLIC_ACCESS | `Controller\HomeSliderController\HomeSliderController::getHomeSlider` |
+| DELETE | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::delete` |
+| PATCH | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::rename` |
+| GET | `/api/media` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::list` |
 | POST | `/api/media` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::upload` |
 | DELETE | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::deleteNoteDeFrais` |
 | PUT | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::updateNoteDeFrais` |

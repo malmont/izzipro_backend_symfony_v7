@@ -84,6 +84,10 @@ security:
         - { path: ^/api/landingpage-ai(/|$), roles: ROLE_ADMIN }
         # 🔹 Bibliothèque de modèles de site (lecture comprise) : administrateurs du tenant. Avant la règle publique « landingpage ».
         - { path: ^/api/landingpage-site-models(/|$), roles: ROLE_ADMIN }
+        # 🔹 Journal des écritures de l'éditeur (lecture et retour en arrière) : administrateurs du tenant.
+        - { path: ^/api/landingpage-audit(/|$), roles: ROLE_ADMIN }
+        # 🔹 Médiathèque de l'éditeur des landing pages (liste, téléversement, renommage, suppression) : administrateurs.
+        - { path: ^/api/media(/|$), roles: ROLE_ADMIN }
         # 🔹 Synchronisation de la configuration des landing pages : ROLE_SUPER_ADMIN ou jeton de déploiement
         #    (X-Deploy-Token), vérifiés par LandingConfigController. Avant la règle publique « landingpage ».
         - { path: ^/api/landingpage-config(/|$), roles: PUBLIC_ACCESS }

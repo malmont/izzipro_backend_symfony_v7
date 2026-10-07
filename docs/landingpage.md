@@ -21,11 +21,48 @@ Routes et rôles : `docs/endpoints.md`, section « Landing Page » ; données de
 | Bibliothèque de modèles de site (propre au site) | `GET`, `POST /api/landingpage-site-models` ; `GET`, `PUT`, `DELETE …/{id}` | `ROLE_ADMIN` |
 | Modifier le contenu d'une section (champs envoyés seulement) | `PATCH /api/{presentations, presentation-groups, baniere-statiques, bannieres, videos, service-offers}/{id}?locale=` | `ROLE_ADMIN` |
 | Téléverser une image ou une vidéo dans la médiathèque | `POST /api/media` (multipart) → 201 `{ id, key, url, type, mimeType, size, title, scrollStatus }` | `ROLE_ADMIN` |
+| Composer un groupe de présentations | `POST /api/presentation-groups/{id}/presentations`, `DELETE …/presentations/{pid}`, `PUT …/presentations/order` | `ROLE_ADMIN` |
+| Journal des écritures, retour en arrière | `GET /api/landingpage-audit`, `GET …/{id}`, `POST …/{id}/restore` | `ROLE_ADMIN` |
+| Parcourir, renommer, supprimer les médias | `GET /api/media?type=&page=&limit=&q=` ; `PATCH`, `DELETE /api/media/{id}` | `ROLE_ADMIN` |
 
 Le PUT enregistre le document tel quel et le GET le restitue à l'identique : seuls sont contrôlés les compositions
 (`reglableConfig`, contrat et HTML des textes) et le nom facultatif d'une section (`tabs[].sections[].name` : texte de
 60 caractères au plus, sans `<` ni `>` ; absent, `null` ou vide = pas de nom). Tout autre champ ajouté par le frontend
 au niveau d'un onglet ou d'une section est conservé sans contrôle.
+
+## Groupes de présentations
+
+Depuis le 07/10/2026 (`PresentationGroupEditor`, `ManagePresentationGroupUseCase`) : `POST …/{id}/presentations`
+crée une présentation (champs de `PATCH /api/presentations`, `titre` obligatoire, `after` : identifiant après lequel
+la placer, ou fin) et l'ajoute au groupe, 60 au plus ; `DELETE …/presentations/{pid}` la retire du groupe et la
+supprime si elle n'appartient plus à aucun groupe (sinon seulement détachée) ; `PUT …/presentations/order`
+`{ order: [ids] }` (toutes les présentations du groupe, une fois chacune). Réponse : le groupe tel que son GET le
+renvoie. L'ordre est gardé dans `presentation_group.presentation_order` (liste JSON, script
+`migrate_all_v2_presentation_order.sh`) et suivi par toutes les lectures du groupe ; sans ordre : ordre de la base.
+
+## Journal des écritures
+
+Depuis le 07/10/2026 (`ContentAuditRecorder`, table `content_audit_log` par tenant, script
+`migrate_all_v2_content_audit.sh`, 180 jours) : chaque écriture de l'éditeur est inscrite avec l'utilisateur, le
+site, la ressource, l'action, la langue, les champs modifiés et l'état avant / après (JSON) : `PATCH` des contenus,
+groupes de présentations (ajout, retrait, ordre), `PUT /api/entreprise` (clés envoyées qui ont changé),
+`PUT /api/landingpage-settings` (configuration complète), modèles de site (création, modification, suppression),
+médiathèque (téléversement, renommage, suppression). Lecture : `GET /api/landingpage-audit?resource=&resourceId=&page=&limit=`
+(résumés, plus récents d'abord) et `GET …/{id}` (avec `before` et `after`). Retour en arrière :
+`POST …/{id}/restore` (`ContentAuditRestorer`), journalisé à son tour (`action: restore`, `restoredFrom`) donc
+annulable ; refusé (409) si la ressource a changé depuis cette écriture, sauf `?force=1` ; impossible pour un
+téléversement, un ajout ou un retrait de présentation, une suppression de média (`restorable: false`). Une
+suppression de modèle de site se rétablit en le recréant (nouvel identifiant).
+
+## Fiche entreprise : HTML des textes longs
+
+`LegalNotice`, `conditionOfUse`, `privacyPolicy`, `apropos` passent par `LegalTextPolicy` (07/10/2026) : p, br, h1 à
+h6, strong, b, em, i, u, s, small, sub, sup, span, div, hr, blockquote, ul, ol, li, table, thead, tbody, tfoot, tr,
+th, td, caption, a ; aucun attribut sauf `href` sur `<a>` (règle de `RichTextPolicy`) et `colspan`, `rowspan`
+(nombres) sur `td` et `th`. Refus 422 `{ error, errors: [{ path, message }] }` sans rien écrire. Un texte renvoyé tel
+qu'il est déjà enregistré n'est pas contrôlé : un site dont les anciens textes ne passent pas peut encore enregistrer
+le reste de sa fiche. Inventaire : `php bin/console app:entreprise:check-legal-texts` (au 07/10/2026 : seuls les 6
+textes de Kara & B, avec `className`, `target`, `rel`).
 
 ## Modèles de site
 
@@ -88,6 +125,17 @@ conserve ceux de l'administrateur. Même règle d'adresse pour `lienBouton` (`Ri
   avec la médiathèque d'EasyAdmin) : champs `file`, `title` et `prepareForScroll` ; images et vidéos seulement (415
   sinon, contenu contrôlé comme dans l'administration), 100 Mo au plus (413). Le média est privé, servi par
   `/media/secure/{clé}` ; avec `prepareForScroll`, une vidéo est préparée pour le défilement en tâche de fond.
+- `GET /api/media` (`ListMediaUseCase`, `SharedMediaRepository::searchForEditor`) : images et vidéos du site, liens
+  expirés exclus, du plus récent au plus ancien ; `type` (image, video), `page` (dès 1), `limit` (1 à 100, 40 par
+  défaut), `q` (titre, contient, sans casse) ; 400 si un paramètre est invalide. Réponse `{ items, total, page, limit }`,
+  chaque élément `{ id, key, url, type, mimeType, size, title, createdAt, width, height, duration, scrollStatus,
+  visibility }` : `key` est `null` pour un média public (téléversé public dans l'administration), dont `url` est
+  l'adresse directe du fichier ; `width` et `height` sont lus dans l'en-tête des images ; `duration` reste `null` (pas
+  de ffprobe dans le conteneur du site) ; pas de vignette.
+- `PATCH /api/media/{id}` `{ title }` (1 à 255 caractères, sans `<` ni `>`) → 200 l'élément ; `DELETE /api/media/{id}`
+  → 204, ou 409 `{ error, usages }` tant que le média sert encore : réglages publiés et modèles de site (chemin dans
+  la configuration et nom de l'onglet), contenus de section (images, vidéo). Recherche par la clé (privé) ou le nom de
+  fichier (public) : `SharedMediaLibrary`. La suppression depuis EasyAdmin ne fait pas cette vérification.
 - `PUT /api/entreprise/{id}` : `LegalNotice`, `conditionOfUse`, `privacyPolicy` et `apropos` sont écrits dans la
   traduction de la langue demandée (exactement : jusqu'au 06/10/2026, écrire l'anglais d'un site qui n'avait que le
   français écrasait le français) ; `adress` (texte libre) est commun ; il n'y a pas de champ « slogan ». Ces textes

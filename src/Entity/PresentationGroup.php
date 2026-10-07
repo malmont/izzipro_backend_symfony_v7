@@ -40,6 +40,13 @@ class PresentationGroup implements TranslatableInterface
     )]
     private Collection $translations;
 
+    /**
+     * Ordre d'affichage des présentations choisi depuis l'éditeur des landing pages : liste JSON d'identifiants.
+     * null : ordre de la base. Une présentation absente de la liste vient après, par identifiant.
+     */
+    #[ORM\Column(name: 'presentation_order', type: \Doctrine\DBAL\Types\Types::TEXT, nullable: true)]
+    private ?string $presentationOrder = null;
+
     public function __construct()
     {
         $this->presentations = new ArrayCollection();
@@ -69,6 +76,32 @@ class PresentationGroup implements TranslatableInterface
     public function getPresentations(): Collection
     {
         return $this->presentations;
+    }
+
+    /** @return list<Presentation> dans l'ordre choisi (getPresentationOrder) */
+    public function getOrderedPresentations(): array
+    {
+        $order = array_flip($this->getPresentationOrder());
+        $presentations = $this->presentations->toArray();
+        usort($presentations, fn (Presentation $a, Presentation $b) => [$order[$a->getId()] ?? PHP_INT_MAX, $a->getId()] <=> [$order[$b->getId()] ?? PHP_INT_MAX, $b->getId()]);
+
+        return array_values($presentations);
+    }
+
+    /** @return list<int> */
+    public function getPresentationOrder(): array
+    {
+        $order = $this->presentationOrder !== null ? json_decode($this->presentationOrder, true) : null;
+
+        return is_array($order) ? array_values(array_filter($order, 'is_int')) : [];
+    }
+
+    /** @param list<int>|null $order */
+    public function setPresentationOrder(?array $order): static
+    {
+        $this->presentationOrder = $order === null ? null : json_encode(array_values($order));
+
+        return $this;
     }
 
     public function addPresentation(Presentation $presentation): static
