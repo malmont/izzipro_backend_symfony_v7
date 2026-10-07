@@ -18,6 +18,7 @@ Routes et rôles : `docs/endpoints.md`, section « Landing Page » ; données de
 | Résultat d'une tâche de fond | `GET /api/landingpage-ai/jobs/{jobId}` (même tenant, 1 h) | `ROLE_ADMIN` |
 | Crédits et historique | `GET /api/landingpage-ai/usage` | `ROLE_ADMIN` |
 | Synchronisation de la configuration | `GET /api/landingpage-config/status`, `POST …/sync`, `POST …/rollback` | `ROLE_SUPER_ADMIN` ou en-tête `X-Deploy-Token` |
+| Bibliothèque de modèles de site (propre au site) | `GET`, `POST /api/landingpage-site-models` ; `GET`, `PUT`, `DELETE …/{id}` | `ROLE_ADMIN` |
 | Modifier le contenu d'une section (champs envoyés seulement) | `PATCH /api/{presentations, presentation-groups, baniere-statiques, bannieres, videos, service-offers}/{id}?locale=` | `ROLE_ADMIN` |
 | Téléverser une image ou une vidéo dans la médiathèque | `POST /api/media` (multipart) → 201 `{ id, key, url, type, mimeType, size, title, scrollStatus }` | `ROLE_ADMIN` |
 
@@ -25,6 +26,25 @@ Le PUT enregistre le document tel quel et le GET le restitue à l'identique : se
 (`reglableConfig`, contrat et HTML des textes) et le nom facultatif d'une section (`tabs[].sections[].name` : texte de
 60 caractères au plus, sans `<` ni `>` ; absent, `null` ou vide = pas de nom). Tout autre champ ajouté par le frontend
 au niveau d'un onglet ou d'une section est conservé sans contrôle.
+
+## Modèles de site
+
+Depuis le 07/10/2026, l'administrateur enregistre des configurations complètes comme modèles, sans toucher aux réglages
+publiés (`LandingSiteModelController`, use cases `LandingSiteModelUseCase/`, `Services/LandingSiteModelService/`,
+entité `LandingSiteModel`, table `landing_site_model` par tenant ; script `scripts/migrate_all_v2_landing_site_models.sh`,
+migration `Version20261007100000`).
+
+- `GET /api/landingpage-site-models` : résumés `{ id, name, description, createdAt, updatedAt, tabs, sections }`, du plus
+  récemment modifié au plus ancien ; `GET …/{id}` : `{ id, name, description, createdAt, updatedAt, configuration }`,
+  configuration restituée telle qu'enregistrée (JSON brut : `{}` et `1.0` conservés).
+- `POST` `{ name, description?, configuration }` → 201 résumé ; `PUT …/{id}` : champs à changer parmi les trois → 200
+  résumé ; `DELETE …/{id}` → 204. Un modèle d'un autre site est dans une autre base : 404.
+- `name` : 1 à 80 caractères, sans `<` ni `>` ; `description` : 300 caractères au plus, ou `null`. `configuration` :
+  objet, contrôlé comme le corps de `PUT /api/landingpage-settings` (`validateConfiguration` : compositions des
+  onglets, navbar, footer et `reglablePresets` selon le schéma synchronisé et `RichTextPolicy`, noms de section).
+  Champ inconnu ou refusé : 422 `{ error, errors: [{ path, message }] }`, chemins de la configuration préfixés par
+  `configuration.`. Configuration de plus de 2 Mo (`MAX_CONFIGURATION_BYTES`, encodée) : 413. 30 modèles au plus par
+  site (`MAX_MODELS`) : 422 au-delà.
 
 ## Modifier les contenus depuis l'éditeur
 

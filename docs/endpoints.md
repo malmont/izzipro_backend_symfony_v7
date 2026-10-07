@@ -9,7 +9,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
   leurs propres vérifications : `#[IsGranted]` est signalé, les autres (voters, contrôles dans le code) sont dans les fiches.
 - Toutes les routes sont résolues pour le tenant de la requête (en-tête `X-Tenant-Host`, voir `docs/architecture.md`).
 
-## Landing Page (11)
+## Landing Page (16)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -23,6 +23,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/landingpage-config/sync` | PUBLIC_ACCESS | `Controller\LandingConfigController\LandingConfigController::sync` |
 | GET | `/api/landingpage-settings` | PUBLIC_ACCESS | `Controller\LandingPageSettingsController\LandingPageSettingsController::getSettings` |
 | PUT | `/api/landingpage-settings` | ROLE_ADMIN | `Controller\LandingPageSettingsController\LandingPageSettingsController::updateSettings` |
+| DELETE | `/api/landingpage-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::delete` |
+| GET | `/api/landingpage-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::getOne` |
+| PUT | `/api/landingpage-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::update` |
+| GET | `/api/landingpage-site-models` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::list` |
+| POST | `/api/landingpage-site-models` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::create` |
 | GET | `/api/landingpage` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getLandingPageProducts` |
 
 ## Contenus des sites (64)
