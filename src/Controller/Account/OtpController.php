@@ -44,6 +44,7 @@ class OtpController extends AbstractController
         }
         
         $error = null;
+        $em = $this->tenantEmProvider->getEntityManager();
         if ($request->isMethod('POST')) {
             // Vérification du token CSRF
             $submittedToken = $request->request->get('_csrf_token');
@@ -55,7 +56,6 @@ class OtpController extends AbstractController
                     $error = 'Format de code OTP invalide.';
                 } else {
                     // Récupérer l'utilisateur et son code OTP
-                    $em = $this->tenantEmProvider->getEntityManager();
                     $user = $em->getRepository(User::class)->find($pendingUserId);
                     if (!$user) {
                         return $this->redirectToRoute('app_login');

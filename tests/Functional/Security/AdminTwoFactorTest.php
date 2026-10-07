@@ -46,6 +46,31 @@ class AdminTwoFactorTest extends WebTestCase
         $this->assertArrayNotHasKey('otp_required', $this->login($customer), 'client : pas de code');
     }
 
+    public function testAdministrationStaysOnTheCodePageUntilTheCodeIsValidated(): void
+    {
+        $email = $this->user(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
+        $this->db()->executeStatement('UPDATE "user" SET otp_enabled = true WHERE email = ?', [$email]);
+        $user = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager()->getRepository(User::class)->findOneBy(['email' => $email]);
+        $this->client->loginUser($user, 'main'); // mot de passe accepté, code pas encore saisi
+        $server = ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST];
+
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin', [], [], $server);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode(), 'pas d\'administration sans le code');
+        $this->assertStringEndsWith('/account/otp', (string) $this->client->getResponse()->headers->get('Location'));
+
+        $page = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/account/otp', [], [], $server);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'la page du code s\'affiche (erreur 500 jusqu\'au 07/10/2026)');
+
+        $this->db()->executeStatement("INSERT INTO otp_code (id, user_otp_id, code, expiration) VALUES (nextval('otp_code_id_seq'), (SELECT id FROM \"user\" WHERE email = ?), '424242', NOW() + INTERVAL '5 minutes')", [$email]);
+        $token = $page->filter('input[name="_csrf_token"]')->attr('value');
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/account/otp', ['otp' => '424242', '_csrf_token' => $token], [], $server);
+        $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+        $this->assertStringEndsWith('/admin', (string) $this->client->getResponse()->headers->get('Location'));
+
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin', [], [], $server);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'code validé : administration ouverte');
+    }
+
     private function login(string $email): array
     {
         $this->client->getCookieJar()->clear();
