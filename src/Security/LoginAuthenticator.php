@@ -39,7 +39,8 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
         UrlGeneratorInterface $urlGenerator,
         TenantEntityManagerProvider $tenantEmProvider,
         RequestStack $requestStack,
-        OtpService $otpService
+        OtpService $otpService,
+        private readonly TwoFactorPolicy $twoFactor
     ) {
         $this->urlGenerator     = $urlGenerator;
         $this->tenantEmProvider = $tenantEmProvider;
@@ -88,7 +89,7 @@ class LoginAuthenticator extends AbstractLoginFormAuthenticator
         $user = $token->getUser();
 
         // 1) Si OTP activé et non validé en session -> générer + rediriger vers le formulaire OTP
-        if ($user->isOtpEnabled() && !$session->get('otp_validated')) {
+        if ($this->twoFactor->required($user) && !$session->get('otp_validated')) {
             $this->otpService->generateAndSendOtp($user, $request);
             $session->set('pending_otp_user', $user->getId());
             $session->remove('otp_validated');

@@ -249,6 +249,7 @@ Dans `.env` (non versionné ; **ne jamais écrire de valeur dans la doc**). Un `
 | Authentification | `JWT_SECRET_KEY`, `JWT_PUBLIC_KEY`, `JWT_PASSPHRASE`, `WEB_ACCESS_TOKEN_TTL`, `WEB_SESSION_IDLE_TTL` |
 | Tenants | `APP_SETUP_TOKEN`, `TENANT_CREATION_SECRET_KEY` |
 | E-mail | `MAILER_DSN` |
+| Sécurité | `ADMIN_OTP_REQUIRED` (facultative, `1` : code par e-mail imposé à la connexion de tout administrateur, `Security/TwoFactorPolicy` ; à n'activer qu'une fois l'adresse de chaque administrateur joignable et l'écran du code prêt dans l'éditeur) |
 | IA | `ANTHROPIC_API_KEY` (Mémoires Vivantes), `ANTHROPIC_API_KEY_LANDING`, `LANDING_AI_MODEL_EDIT`, `LANDING_AI_MODEL_PAGE`, `LANDING_AI_MODEL_IMAGES`, `LANDING_AI_EFFORT_EDIT` / `_CREATE` / `_PAGE` / `_IMAGES`, `LANDING_AI_CACHE_TTL_PAGE` (facultatives, voir `config/landingpage/README.md`), `OPENAI_API_KEY` (transcription) |
 | Traduction | `DEEPL_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_SECRET_KEY` |
 | Paiement, livraison | `STRIPE_SECRET_KEY`, `STRIPE_PUBLIC_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET`, `SQUARE_SECRET_KEY`, `EASYPOST_SECRET_KEY` |

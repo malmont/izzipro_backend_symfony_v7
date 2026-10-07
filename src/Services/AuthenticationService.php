@@ -24,6 +24,7 @@ class AuthenticationService
         private UserPasswordHasherInterface $passwordHasher,
         private OtpService $otpService,
         private TokenService $tokenService,
+        private \App\Security\TwoFactorPolicy $twoFactor,
     ) {}
 
     /**
@@ -69,7 +70,7 @@ class AuthenticationService
             }
         }
 
-        if ($user->isOtpEnabled()) {
+        if ($this->twoFactor->required($user)) {
             $this->otpService->generateAndSendOtp($user, $request);
             return new Response(
                 json_encode([
