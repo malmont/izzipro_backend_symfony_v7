@@ -18,7 +18,8 @@ final class LandingAiComposeRunner
     }
 
     /**
-     * @return array corps de la réponse : { mode, composition | sections, dataType?, summary, warnings, credits, usage }
+     * @return array corps de la réponse : { mode, composition | sections, dataType?, summary, warnings, contentChanges,
+     *               groupChanges, limits, credits, usage } (propositions jamais appliquées : LandingAiContentProposals)
      * @throws LandingAiException crédits déjà libérés
      */
     public function run(LandingAiComposeInputDto $dto, AiUsage $usage): array
@@ -27,7 +28,7 @@ final class LandingAiComposeRunner
             $result = match ($dto->mode) {
                 'create' => $this->composer->create((string) $dto->componentKey, $dto->prompt, $dto->locale, $dto->media, $dto->dataType !== null ? (string) $dto->dataType : null, $dto->images),
                 'page' => $this->composer->page($dto->prompt, $dto->locale, $dto->media, $dto->images, $dto->componentKey),
-                default => $this->composer->edit((string) $dto->componentKey, $dto->composition, $dto->prompt, $dto->locale, $dto->media, $dto->images),
+                default => $this->composer->edit((string) $dto->componentKey, $dto->composition, $dto->prompt, $dto->locale, $dto->media, $dto->images, $dto->dataType),
             };
         } catch (LandingAiException $e) {
             $this->quota->release($usage, $e->getStats());
@@ -48,6 +49,9 @@ final class LandingAiComposeRunner
         return $response + [
             'summary' => $result->summary,
             'warnings' => $result->warnings,
+            'contentChanges' => $result->proposals['contentChanges'],
+            'groupChanges' => $result->proposals['groupChanges'],
+            'limits' => $result->proposals['limits'],
             'credits' => $this->quota->credits(),
             'usage' => $result->stats->toArray(),
         ];

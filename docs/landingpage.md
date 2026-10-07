@@ -111,6 +111,10 @@ lit (entités HTML décodées) et doit être `https://…`, `http://…`, `mailt
 tout autre attribut sur `<a>` sont refusés : le frontend pose `target` et `rel="noopener noreferrer"` à l'affichage
 et revérifie l'adresse. L'assistant IA n'ajoute jamais de lien (une adresse nouvelle est renvoyée au modèle) mais
 conserve ceux de l'administrateur. Même règle d'adresse pour `lienBouton` (`RichTextPolicy::urlProblem`).
+
+**Assistant IA** (07/10/2026) : en retouche, l'assistant peut proposer des modifications de ces contenus
+(`contentChanges`) et de la composition d'un groupe (`groupChanges`), contrôlées comme ces routes mais jamais écrites
+par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détail : `config/landingpage/README.md`).
 - Liens (`lienBouton`) : `https://`, `http://`, `mailto:`, `tel:`, chemin du site (`/…`) ou ancre (`#…`).
 - Images et vidéo : clé de la médiathèque du site (64 caractères hexadécimaux, du bon type), enregistrée sous la forme
   `/media/secure/{clé}`, ou URL `https://`. Les DTO de lecture rendent ces valeurs en URL complète
@@ -148,7 +152,7 @@ conserve ceux de l'administrateur. Même règle d'adresse pour `lienBouton` (`Ri
 | Réglages | `Controller/LandingPageSettingsController/`, entité `LandingPageSetting` (une ligne JSON par tenant) |
 | Validation (422 `{ path, message }`) | `Services/LandingPageSettingsService/ReglableCompositionValidator.php` (JSON Schema opis + règles entre blocs), `RichTextPolicy.php` (HTML permis dans les textes), `ReglableCompositionScanner.php` (toutes les bases) |
 | Familles (`components-config`) | `Services/LandingPagesService/ComponentsConfigProvider.php` (source unique : endpoint et assistant) |
-| Assistant : moteur | `Services/LandingAiService/` : `LandingAiComposer` (appel, vérifications, 3 essais), `LandingAiPromptBuilder` (prompt système, outils, cache), `LandingAiCatalogue`, `LandingAiDataSources` (valeurs de `dataType`), `CompositionEditApplier` (opérations de retouche), `LandingAiCompositionChecker`, `AnthropicLandingAiClient` |
+| Assistant : moteur | `Services/LandingAiService/` : `LandingAiComposer` (appel, vérifications, 3 essais), `LandingAiPromptBuilder` (prompt système, outils, cache), `LandingAiCatalogue`, `LandingAiDataSources` (valeurs de `dataType`), `CompositionEditApplier` (opérations de retouche), `LandingAiCompositionChecker`, `AnthropicLandingAiClient`, `LandingAiContentContext` (médiathèque, contenus modifiables de la donnée affichée), `LandingAiContentProposals` (contrôle de `contentChanges`, `groupChanges`, `limits`, jamais appliqués) |
 | Assistant : réglages, réparation | `LandingAiTuning` (effort par nature de demande, durée du cache), `LandingAiOutputRepair` (clés en double du modèle) |
 | Assistant : quota, tâches | `LandingAiQuotaService` (réservation atomique, `pg_advisory_xact_lock`), `LandingAiJobService`, `LandingAiComposeRunner` |
 | Assistant : cas d'usage, HTTP | `UseCase/LandingAiUseCase/` (`ComposeLandingSection`, `RunLandingAiJob`, `GetLandingAiJob`, `GetLandingAiUsage`), `Controller/LandingAiController/`, DTO `LandingAiComposeInputDto` / `OutputDto` |

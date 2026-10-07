@@ -86,7 +86,7 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
 ### Fonctionnement (étapes 1 à 3 : retouche, création, page et images)
 
 - `POST /api/landingpage-ai/compose` (ROLE_ADMIN du tenant) :
-  - **edit** `{ mode: "edit", componentKey, composition, prompt, locale?, media? }` : l'IA renvoie des opérations
+  - **edit** `{ mode: "edit", componentKey, composition, prompt, locale?, media?, dataType? }` : l'IA renvoie des opérations
     (`update`, `add`, `remove`, `section`) appliquées par le serveur sur la composition envoyée. `set` **fusionne**
     récursivement les objets imbriqués (mobile, repeat, bindings, translations…) et **remplace** les tableaux (links,
     images, iconCycle…) ; `unset` accepte des chemins pointés (`"mobile.w"`, `"bindings.offer"`).
@@ -111,6 +111,25 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     2 captures JPEG du rendu actuel de la section (ordinateur 1280 px, puis mobile 390 px). L'IA corrige les défauts
     visibles (contraste, espacements, alignements, textes coupés, mobile via `mobile.*`) par des opérations, sans toucher
     aux textes, liaisons et médias. Cas P3 de l'évaluation (`Eval/fixtures/p3-*.jpg`).
+  - **Médiathèque, propositions de contenu et limites** (07/10/2026, `LandingAiContentContext`,
+    `LandingAiContentProposals`) :
+    - Tous les modes reçoivent les 40 derniers médias de la médiathèque (titre, type, clé ou adresse), autorisés dans
+      la composition : l'administrateur peut désigner un média par son titre (« mets la photo de l'atelier »).
+    - Retouche avec `dataType` (identifiant de la donnée affichée) pour Presentation, PresentationGroup,
+      BaniereStatique et Video : l'IA reçoit les champs modifiables de cette donnée (et, pour un groupe, ses
+      présentations dans l'ordre) et peut **proposer**, sans rien écrire : `contentChanges: [{ resource, id, fields }]`
+      (corps prêt pour `PATCH /api/{resource}/{id}?locale=`) et `groupChanges: [{ groupId, add: [{ fields, after }],
+      remove: [ids], order: [ids] | null }]` (routes du groupe : supprimer, ajouter avec `after` (null = fin), puis
+      `order` = présentations gardées dans le nouvel ordre, les nouvelles placées par `after`). Seules la donnée de la
+      section et ses présentations peuvent être visées ; les valeurs passent `LandingContentEditor::validate` (mêmes
+      règles que PATCH) et une proposition refusée est renvoyée au modèle comme une composition invalide. Les médias
+      restent sous la forme reçue (clé ou adresse). L'éditeur les montre, l'administrateur valide, les routes
+      (journalisées) écrivent.
+    - Tous les modes : `limits: [{ request, reason, howTo }]` (6 au plus, texte brut) : parties de la demande que
+      l'assistant ne peut pas faire, pourquoi et comment l'administrateur peut les faire (guide dans le prompt
+      système : structure du site, médiathèque, fiche entreprise, données des autres sections, autres modules,
+      annulation). Une entrée sans `howTo` est ignorée.
+    - Réponse : `contentChanges`, `groupChanges` et `limits` toujours présents (tableaux vides par défaut).
   - **Avant tout appel à l'IA** (30/09/2026) : en retouche, la composition reçue est limitée à 200 Ko (400) et doit
     déjà passer le contrat, les types de la famille et les médias (422 `Composition invalide`, sans crédit ni limite
     par minute consommés). Une composition invalide faisait échouer les 3 essais, payés, avec les crédits libérés.

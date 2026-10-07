@@ -33,6 +33,8 @@ final class LandingAiComposer
         private readonly LoggerInterface $logger,
         private readonly LandingAiCatalogue $catalogue,
         private readonly LandingAiOutputRepair $repair,
+        private readonly LandingAiContentContext $content,
+        private readonly LandingAiContentProposals $proposals,
         #[Autowire('%env(default:landing_ai.default_model_edit:LANDING_AI_MODEL_EDIT)%')]
         private readonly string $editModel,
         #[Autowire('%env(default:landing_ai.default_model_page:LANDING_AI_MODEL_PAGE)%')]
@@ -77,15 +79,17 @@ final class LandingAiComposer
      * @param list<array{mediaType: string, data: string}> $images captures ou charte (modèle des requêtes avec images)
      * @throws LandingAiException 502 (pas de composition valide, IA indisponible) ou 504 (délai)
      */
-    public function edit(string $componentKey, object $composition, string $prompt, string $locale = 'fr', array $media = [], array $images = []): LandingAiEditResult
+    public function edit(string $componentKey, object $composition, string $prompt, string $locale = 'fr', array $media = [], array $images = [], string|int|null $dataType = null): LandingAiEditResult
     {
         $stored = $this->site->storedCompositions();
-        $allowedMedia = $this->site->allowedMedia([...$stored, $composition], $media, $prompt);
-        $payload = $this->prompts->editPayload($this->model($images), $componentKey, $composition, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $images);
+        $library = $this->content->mediaLibrary();
+        $allowedMedia = $this->withLibrary($this->site->allowedMedia([...$stored, $composition], $media, $prompt), $library);
+        $editable = $this->content->editableContent($componentKey, $dataType, $locale);
+        $payload = $this->prompts->editPayload($this->model($images), $componentKey, $composition, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $images, $library, $editable);
 
         $removalAsked = self::asksRemoval($prompt);
 
-        return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia, $removalAsked) {
+        return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia, $removalAsked, $editable) {
             $operations = is_array($input->operations ?? null) ? $input->operations : [];
             $applied = $this->applier->apply($composition, $operations);
             if (!$applied['errors'] && !$removalAsked && ($lost = $this->lostBlocks($composition, $applied['composition'])) !== []) {
@@ -107,11 +111,16 @@ final class LandingAiComposer
                 ...$this->checker->sceneErrors($applied['composition'], $existing),
                 ...$this->checker->addedLinks($applied['composition'], $composition),
             ];
+            [$proposals, $proposalErrors] = $this->proposals->check($input, $editable);
+            array_push($errors, ...$proposalErrors);
             if ($errors) {
                 return [null, $errors];
             }
 
-            return [new LandingAiEditResult($applied['composition'], $this->summary($input), $this->warnings($input->warnings ?? []), $applied['touched'], $operations, $stats), []];
+            $result = new LandingAiEditResult($applied['composition'], $this->summary($input), $this->warnings($input->warnings ?? []), $applied['touched'], $operations, $stats);
+            $result->proposals = $proposals;
+
+            return [$result, []];
         });
     }
 
@@ -130,8 +139,9 @@ final class LandingAiComposer
         $optional = $usesData && $this->data->dataOptional($componentKey);
         $available = $usesData ? $this->data->available($componentKey) : [];
         $availableIds = array_column($available, 'id');
-        $allowedMedia = $this->site->allowedMedia([...$stored, ...$this->site->presetCompositions($componentKey)], $media, $prompt);
-        $payload = $this->prompts->createPayload($this->model($images), $componentKey, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $usesData, $optional, $available, $defaultDataType, $images);
+        $library = $this->content->mediaLibrary();
+        $allowedMedia = $this->withLibrary($this->site->allowedMedia([...$stored, ...$this->site->presetCompositions($componentKey)], $media, $prompt), $library);
+        $payload = $this->prompts->createPayload($this->model($images), $componentKey, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $usesData, $optional, $available, $defaultDataType, $images, $library);
         $availableIds = [$componentKey => $availableIds];
 
         return $this->run($payload, LandingAiPromptBuilder::CREATE_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds) {
@@ -140,7 +150,10 @@ final class LandingAiComposer
                 return [null, $errors];
             }
 
-            return [new LandingAiCreateResult($section['composition'], $section['dataType'], $this->summary($input), $this->warnings($input->warnings ?? []), $stats), []];
+            $result = new LandingAiCreateResult($section['composition'], $section['dataType'], $this->summary($input), $this->warnings($input->warnings ?? []), $stats);
+            $result->proposals['limits'] = $this->proposals->limits($input);
+
+            return [$result, []];
         });
     }
 
@@ -157,7 +170,8 @@ final class LandingAiComposer
         $stored = $this->site->storedCompositions();
         $families = $componentKey !== null ? [$componentKey] : $this->catalogue->componentKeys();
         $presets = array_merge(...array_map(fn ($key) => $this->site->presetCompositions($key), $families));
-        $allowedMedia = $this->site->allowedMedia([...$stored, ...$presets], $media, $prompt);
+        $library = $this->content->mediaLibrary();
+        $allowedMedia = $this->withLibrary($this->site->allowedMedia([...$stored, ...$presets], $media, $prompt), $library);
 
         $siteData = [];
         $availableIds = [];
@@ -167,7 +181,7 @@ final class LandingAiComposer
                 $availableIds[$family] = array_column($siteData[$family]['items'], 'id');
             }
         }
-        $payload = $this->prompts->pagePayload($this->pageModel, $componentKey, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $siteData, $images);
+        $payload = $this->prompts->pagePayload($this->pageModel, $componentKey, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $siteData, $images, $library);
 
         return $this->run($payload, LandingAiPromptBuilder::PAGE_TOOL, true, function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds) {
             $sections = is_array($input->sections ?? null) ? $input->sections : [];
@@ -194,8 +208,23 @@ final class LandingAiComposer
                 return [null, $errors];
             }
 
-            return [new LandingAiPageResult($valid, $this->summary($input), $this->warnings($input->warnings ?? []), $stats), []];
+            $result = new LandingAiPageResult($valid, $this->summary($input), $this->warnings($input->warnings ?? []), $stats);
+            $result->proposals['limits'] = $this->proposals->limits($input);
+
+            return [$result, []];
         });
+    }
+
+    /**
+     * Médias autorisés + ceux de la médiathèque (désignés au modèle par leur titre).
+     *
+     * @param list<string> $allowedMedia
+     * @param list<array{media: string}> $library
+     * @return list<string>
+     */
+    private function withLibrary(array $allowedMedia, array $library): array
+    {
+        return array_values(array_unique([...$allowedMedia, ...array_column($library, 'media')]));
     }
 
     /**

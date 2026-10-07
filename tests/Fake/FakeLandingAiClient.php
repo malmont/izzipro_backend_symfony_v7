@@ -24,7 +24,7 @@ class FakeLandingAiClient implements LandingAiClientInterface
     }
 
     /** Réponse type : un appel de l'outil de retouche avec ces opérations */
-    public static function editResponse(array|object $operations, string $summary = 'Modification effectuée.', array $warnings = [], array $usage = []): object
+    public static function editResponse(array|object $operations, string $summary = 'Modification effectuée.', array $warnings = [], array $usage = [], array $extra = []): object
     {
         return json_decode(json_encode([
             'id' => 'msg_' . bin2hex(random_bytes(6)),
@@ -36,14 +36,14 @@ class FakeLandingAiClient implements LandingAiClientInterface
                 'type' => 'tool_use',
                 'id' => 'toolu_' . bin2hex(random_bytes(6)),
                 'name' => 'retoucher_composition',
-                'input' => ['operations' => $operations, 'summary' => $summary, 'warnings' => $warnings],
+                'input' => ['operations' => $operations, 'summary' => $summary, 'warnings' => $warnings] + $extra,
             ]],
             'usage' => $usage + ['input_tokens' => 1200, 'output_tokens' => 150, 'cache_read_input_tokens' => 30000, 'cache_creation_input_tokens' => 0],
         ], JSON_PRESERVE_ZERO_FRACTION), false);
     }
 
     /** Réponse type : un appel de l'outil de création */
-    public static function createResponse(object|array $composition, string|int|null $dataType, string $summary = 'Section créée.', array $warnings = []): object
+    public static function createResponse(object|array $composition, string|int|null $dataType, string $summary = 'Section créée.', array $warnings = [], array $extra = []): object
     {
         return json_decode(json_encode([
             'id' => 'msg_' . bin2hex(random_bytes(6)),
@@ -55,7 +55,7 @@ class FakeLandingAiClient implements LandingAiClientInterface
                 'type' => 'tool_use',
                 'id' => 'toolu_' . bin2hex(random_bytes(6)),
                 'name' => 'creer_composition',
-                'input' => ['dataType' => $dataType, 'composition' => $composition, 'summary' => $summary, 'warnings' => $warnings],
+                'input' => ['dataType' => $dataType, 'composition' => $composition, 'summary' => $summary, 'warnings' => $warnings] + $extra,
             ]],
             'usage' => ['input_tokens' => 2500, 'output_tokens' => 3000, 'cache_read_input_tokens' => 30000, 'cache_creation_input_tokens' => 0],
         ], JSON_PRESERVE_ZERO_FRACTION), false);

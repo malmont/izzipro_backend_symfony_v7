@@ -304,6 +304,9 @@ docker exec -w /var/www -e SYMFONY_DEPRECATIONS_HELPER=disabled symfony_app_v2 p
 - Dossiers : `tests/Functional/LandingPage`, `MemoiresVivantes`, `Security`.
 - Limite de connexions par IP relevée en test seulement (`when@test` dans `config/packages/rate_limiter.yaml`) : toute
   la suite se connecte depuis la même IP.
+- Les variables du conteneur (`env_file`) priment sur `.env.test` : `phpunit.xml.dist` force `ADMIN_OTP_REQUIRED=0` et
+  `LANDING_AI_MODEL_IMAGES` vide, sinon le réglage de production fait échouer les connexions et les modèles attendus.
+  Y ajouter toute nouvelle variable de production qui change un comportement testé.
 
 ## Modules (fiches)
 

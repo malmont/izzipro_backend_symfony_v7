@@ -22,7 +22,7 @@ class AdminTwoFactorTest extends WebTestCase
 
     protected function tearDown(): void
     {
-        unset($_ENV['ADMIN_OTP_REQUIRED'], $_SERVER['ADMIN_OTP_REQUIRED']);
+        $_ENV['ADMIN_OTP_REQUIRED'] = $_SERVER['ADMIN_OTP_REQUIRED'] = '0';
         parent::tearDown();
     }
 
@@ -31,7 +31,7 @@ class AdminTwoFactorTest extends WebTestCase
         $admin = $this->user(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
         $customer = $this->user(['ROLE_USER_INTERNET']);
 
-        $this->assertArrayNotHasKey('otp_required', $this->login($admin), 'réglage absent : connexion directe');
+        $this->assertArrayNotHasKey('otp_required', $this->login($admin), 'réglage à 0 : connexion directe');
 
         $_ENV['ADMIN_OTP_REQUIRED'] = $_SERVER['ADMIN_OTP_REQUIRED'] = '1';
         $body = $this->login($admin);

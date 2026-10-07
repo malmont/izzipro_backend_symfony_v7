@@ -1146,6 +1146,138 @@ class LandingAiComposeTest extends WebTestCase
      *
      * @return object { jobId, status, result? , error? }
      */
+    public function testEditProposesContentAndGroupChangesWithoutWritingThem(): void
+    {
+        [$group, $a, $b, $outside] = $this->groupWithPresentations();
+        $key = $this->libraryImage('Photo de l\'atelier');
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([], 'Je propose un nouveau titre et une nouvelle présentation.', ['Ajout d\'un onglet : hors de portée.'], [], [
+            'contentChanges' => [['resource' => 'presentations', 'id' => $a, 'fields' => ['titre' => 'Nos <strong>ateliers</strong>', 'image' => $key]]],
+            'groupChanges' => [['groupId' => $group, 'add' => [['fields' => ['titre' => 'Formation', 'texte' => '<p>Sessions sur mesure.</p>'], 'after' => $a]], 'remove' => [], 'order' => [$b, $a]]],
+            'limits' => [
+                ['request' => 'Ajoute un onglet <b>Blog</b>', 'reason' => 'La structure du site ne se change pas depuis une section.', 'howTo' => 'Dans l\'éditeur, liste des sections &amp; onglets.'],
+                ['request' => 'sans mode d\'emploi', 'reason' => 'ignorée'],
+            ],
+        ]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'dataType' => $group, 'composition' => $this->preset('group-type-s'), 'prompt' => 'Renomme la première présentation, mets la photo de l\'atelier et ajoute une présentation Formation.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent(), true);
+        $this->assertSame([['resource' => 'presentations', 'id' => $a, 'fields' => ['titre' => 'Nos <strong>ateliers</strong>', 'image' => $key]]], $body['contentChanges'], 'média gardé sous la forme envoyée (clé), comme PATCH l\'attend');
+        $this->assertSame([['groupId' => $group, 'add' => [['fields' => ['titre' => 'Formation', 'texte' => '<p>Sessions sur mesure.</p>'], 'after' => $a]], 'remove' => [], 'order' => [$b, $a]]], $body['groupChanges']);
+        $this->assertSame([['request' => 'Ajoute un onglet Blog', 'reason' => 'La structure du site ne se change pas depuis une section.', 'howTo' => 'Dans l\'éditeur, liste des sections & onglets.']], $body['limits'], 'texte brut ; entrée sans howTo ignorée');
+
+        // contexte donné au modèle : médiathèque par titre, contenus modifiables du groupe, guide des limites
+        $request = FakeLandingAiClient::$requests[0];
+        $content = $request['messages'][0]['content'];
+        $this->assertStringContainsString('Photo de l\'atelier', $content);
+        $this->assertStringContainsString($key, $content);
+        $this->assertStringContainsString('Contenus modifiables', $content);
+        $this->assertStringContainsString('Présentation A', $content);
+        $this->assertStringNotContainsString('Présentation hors groupe', $content);
+        $this->assertStringContainsString('Administration > Entreprise', $request['system'][0]['text']);
+        $properties = $request['tools'][0]['input_schema']['properties'];
+        $this->assertArrayHasKey('contentChanges', $properties);
+        $this->assertArrayHasKey('groupChanges', $properties);
+        $this->assertArrayHasKey('limits', $properties);
+
+        // rien n'est écrit : l'éditeur fait valider l'administrateur puis appelle les routes de modification
+        $this->assertSame('Présentation A', $this->db()->fetchOne('SELECT titre FROM presentation WHERE id = ?', [$a]));
+        $this->assertSame(2, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM presentation_group_presentation WHERE presentation_group_id = ?', [$group]));
+        $this->assertFalse($this->db()->fetchOne("SELECT id FROM presentation WHERE titre = 'Formation'"));
+        $this->assertSame(0, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM content_audit_log'));
+    }
+
+    public function testInvalidProposalsAreSentBackForCorrection(): void
+    {
+        [$group, $a, $b, $outside] = $this->groupWithPresentations();
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([], 'Proposition.', [], [], [
+            'contentChanges' => [
+                ['resource' => 'presentations', 'id' => $outside, 'fields' => ['titre' => 'Hors section']],
+                ['resource' => 'presentations', 'id' => $a, 'fields' => ['texte' => '<script>alert(1)</script>']],
+            ],
+            'groupChanges' => [['groupId' => $group, 'remove' => [$b], 'order' => [$a, $b], 'add' => [['fields' => ['texte' => 'sans titre']]]]],
+        ]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([], 'Proposition corrigée.', [], [], [
+            'contentChanges' => [['resource' => 'presentations', 'id' => $a, 'fields' => ['texte' => '<p>Bonjour</p>']]],
+        ]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'dataType' => (string) $group, 'composition' => $this->preset('group-type-s'), 'prompt' => 'Change le texte.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertCount(2, FakeLandingAiClient::$requests);
+        $retry = json_encode(FakeLandingAiClient::$requests[1]['messages'][2], JSON_UNESCAPED_UNICODE);
+        foreach (['contentChanges[0]', 'contentChanges[1].fields.texte', 'groupChanges[0].order', 'groupChanges[0].add[0].fields'] as $path) {
+            $this->assertStringContainsString($path, $retry);
+        }
+        $body = json_decode($response->getContent(), true);
+        $this->assertSame([['resource' => 'presentations', 'id' => $a, 'fields' => ['texte' => '<p>Bonjour</p>']]], $body['contentChanges']);
+        $this->assertSame([], $body['groupChanges']);
+        $this->assertSame([], $body['limits']);
+    }
+
+    public function testWithoutEditableContentNoProposalIsAccepted(): void
+    {
+        [, $a] = $this->groupWithPresentations();
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([], 'Proposition.', [], [], [
+            'contentChanges' => [['resource' => 'presentations', 'id' => $a, 'fields' => ['titre' => 'X']]],
+        ]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([], 'Rien à proposer.');
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Change le titre.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertStringContainsString('Contenus modifiables : aucun', FakeLandingAiClient::$requests[0]['messages'][0]['content'], 'sans dataType : rien à proposer');
+        $this->assertCount(2, FakeLandingAiClient::$requests);
+        $this->assertSame([], json_decode($response->getContent(), true)['contentChanges']);
+    }
+
+    public function testCreateReturnsWhatTheAssistantCannotDoAndHow(): void
+    {
+        $composition = $this->preset('group-type-s');
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($composition, $this->availableIds('PresentationGroup')[0] ?? null, 'Section créée.', [], [
+            'limits' => [['request' => 'Change le numéro de téléphone', 'reason' => 'Il vient de la fiche entreprise.', 'howTo' => 'Administration > Entreprise.']],
+            'contentChanges' => [['resource' => 'presentations', 'id' => 1, 'fields' => ['titre' => 'ignoré en création']]],
+        ]);
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'PresentationGroup', 'prompt' => 'Une section de services, et change le numéro de téléphone.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent(), true);
+        $this->assertSame([['request' => 'Change le numéro de téléphone', 'reason' => 'Il vient de la fiche entreprise.', 'howTo' => 'Administration > Entreprise.']], $body['limits']);
+        $this->assertSame([], $body['contentChanges'], 'propositions de contenu : retouche seulement');
+        $this->assertArrayHasKey('limits', FakeLandingAiClient::$requests[0]['tools'][0]['input_schema']['properties']);
+        $this->assertArrayNotHasKey('contentChanges', FakeLandingAiClient::$requests[0]['tools'][0]['input_schema']['properties']);
+    }
+
+    /** @return array{int, int, int, int} groupe, ses deux présentations (dans l'ordre), une présentation hors du groupe */
+    private function groupWithPresentations(): array
+    {
+        $db = $this->db();
+        $group = (int) $db->fetchOne("INSERT INTO presentation_group (id, titre) VALUES (nextval('presentation_group_id_seq'), 'Groupe IA') RETURNING id");
+        [$a, $b, $outside] = array_map(
+            fn ($titre) => (int) $db->fetchOne("INSERT INTO presentation (id, titre) VALUES (nextval('presentation_id_seq'), ?) RETURNING id", [$titre]),
+            ['Présentation A', 'Présentation B', 'Présentation hors groupe']
+        );
+        foreach ([$a, $b] as $presentation) {
+            $db->executeStatement('INSERT INTO presentation_group_presentation (presentation_group_id, presentation_id) VALUES (?, ?)', [$group, $presentation]);
+        }
+        $db->executeStatement('UPDATE presentation_group SET presentation_order = ? WHERE id = ?', [json_encode([$a, $b]), $group]);
+        $db->executeStatement('DELETE FROM content_audit_log');
+
+        return [$group, $a, $b, $outside];
+    }
+
+    /** Image privée de la médiathèque (clé d'accès) */
+    private function libraryImage(string $titre): string
+    {
+        $key = bin2hex(random_bytes(32));
+        $this->db()->executeStatement("INSERT INTO shared_media (titre, filename, original_filename, media_type, mime_type, file_size, visibility, access_key, created_at)
+            VALUES (?, 'atelier.jpg', 'atelier.jpg', 'image', 'image/jpeg', 10, 'private', ?, NOW())", [$titre, $key]);
+
+        return $key;
+    }
+
     private function composeInBackground(array $body): object
     {
         $response = $this->compose($body);
