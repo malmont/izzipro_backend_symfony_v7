@@ -128,7 +128,9 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     - Tous les modes : `limits: [{ request, reason, howTo }]` (6 au plus, texte brut) : parties de la demande que
       l'assistant ne peut pas faire, pourquoi et comment l'administrateur peut les faire (guide dans le prompt
       système : structure du site, médiathèque, fiche entreprise, données des autres sections, autres modules,
-      annulation). Une entrée sans `howTo` est ignorée.
+      annulation). Une entrée sans `howTo` est ignorée. Les chemins de l'éditeur sont cités tels quels depuis
+      `src/Services/LandingAiService/libelles-editeur.md` (liste fournie par le frontend, reprise de son
+      `docs/ia-libelles-editeur.md` : la remplacer quand il la renvoie ; elle fait partie des consignes en cache).
     - Réponse : `contentChanges`, `groupChanges` et `limits` toujours présents (tableaux vides par défaut).
   - **Avant tout appel à l'IA** (30/09/2026) : en retouche, la composition reçue est limitée à 200 Ko (400) et doit
     déjà passer le contrat, les types de la famille et les médias (422 `Composition invalide`, sans crédit ni limite

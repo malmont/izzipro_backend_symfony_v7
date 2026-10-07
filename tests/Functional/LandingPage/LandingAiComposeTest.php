@@ -1176,6 +1176,8 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertStringContainsString('Présentation A', $content);
         $this->assertStringNotContainsString('Présentation hors groupe', $content);
         $this->assertStringContainsString('Administration > Entreprise', $request['system'][0]['text']);
+        $this->assertStringContainsString('<libelles_editeur>', $request['system'][0]['text']);
+        $this->assertStringContainsString('Panneau → « ＋ Ajouter une section »', $request['system'][0]['text'], 'libellés exacts de l\'éditeur');
         $properties = $request['tools'][0]['input_schema']['properties'];
         $this->assertArrayHasKey('contentChanges', $properties);
         $this->assertArrayHasKey('groupChanges', $properties);

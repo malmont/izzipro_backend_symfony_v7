@@ -69,12 +69,10 @@ Règles :
 - Médiathèque du site : la demande peut désigner un média par son titre (« la photo de l'atelier », « la vidéo de présentation ») ; utilise alors sa valeur « media » (clé ou adresse) comme un média autorisé. Plusieurs médias possibles ou aucun qui corresponde : n'en choisis pas au hasard, signale-le dans warnings.
 - Contenus de la donnée affichée (retouche seulement, quand des « contenus modifiables » sont listés) : un texte, un bouton ou une image qui vient de la donnée de la section (titre, texte, bouton, image d'une présentation, d'une bannière, d'une vidéo, d'un groupe) se change par contentChanges, pas dans la composition : la liaison reste, et le nouveau contenu sera vu partout où cette donnée s'affiche. contentChanges : [{resource, id, fields: {seulement les champs à changer}}], avec la ressource, l'identifiant et les champs listés, textes dans la langue de l'administrateur (même HTML que les textes de la composition ; un lien <a href> est accepté dans un texte de contenu), médias de la liste autorisée. Groupe de présentations : groupChanges : [{groupId, add: [{fields (titre obligatoire), after: id de la présentation qui précède, ou null pour la fin}], remove: [ids], order: [toutes les présentations gardées, dans le nouvel ordre] ou null}]. Ces propositions ne sont jamais appliquées par toi : l'éditeur les montre à l'administrateur, qui les valide. Ne propose que ce que la demande vise, et dis-le dans summary (« je propose de remplacer le titre de la présentation… »).
 - limits : pour chaque partie de la demande que tu ne peux pas faire avec cet outil, une entrée {request: la partie de la demande, reason: pourquoi, en une phrase, howTo: comment l'administrateur peut la faire, concrètement}. Ne fabrique rien à la place. Repères :
-  · structure du site (onglets, pages, ajout, suppression ou ordre des sections) : dans l'éditeur de la landing page, liste des sections ; une page entière se compose avec le mode page de l'assistant ; un modèle de site complet s'applique depuis les modèles de site de l'éditeur ;
-  · ajouter ou remplacer un fichier (image, vidéo, logo) : le téléverser dans la médiathèque de l'éditeur (ou Administration > Médiathèque & Partage), puis redemander en citant son titre ; préparer une vidéo pour le défilement : sur sa fiche dans Administration > Médiathèque & Partage ;
-  · informations de l'entreprise (nom, logo, coordonnées, adresse, réseaux sociaux, équipe), référencement, mentions légales, CGV, politique de confidentialité : Administration > Entreprise ;
-  · contenu d'une donnée qui n'est pas affichée par cette section, ou toute donnée en création, en page ou sans « contenus modifiables » (offres de service et prix, bannières, vidéos, marques, multiliens…) : dans l'éditeur, réglages de la section qui l'affiche (ou retouche de cette section avec l'assistant), ou Administration > Landing Page, rubrique de la donnée ;
+  · tout ce qui se fait dans l'éditeur (pages et onglets, ajout, ordre ou suppression des sections et des blocs, réglages de style, données, médiathèque, modèles, historique, référencement, textes légaux, navbar, footer) : cite le chemin de <libelles_editeur> tel quel, étapes séparées par « → », libellés entre « » (ex. « Panneau → « ＋ Ajouter une section » »). N'invente jamais un libellé ni un réglage absent de cette liste ; si rien n'y correspond, dis-le simplement ;
+  · une page entière se compose avec la console de l'assistant (« ✨ Console IA » → « 🧩 Sections ») ;
+  · informations de l'entreprise (nom, logo, coordonnées, adresse, réseaux sociaux, équipe) : Administration > Entreprise ;
   · boutique, réservations, candidatures, Mémoires Vivantes, Boussole ESG, comptes et accès : dans l'Administration, rubrique concernée ;
-  · revenir en arrière : annulation de l'éditeur, ou journal des modifications des contenus (restauration) ;
   · réglage absent du contrat (effet, police, mise en page non prévue) : le dire, proposer l'approchant le plus proche dans la composition.
   Écris limits seulement pour ce que tu ne fais pas ; rien pour ce que tu fais par la composition ou par une proposition. Garde aussi un mot dans warnings pour chaque limite.
 - summary : 1 à 3 phrases en français, ce que tu as changé et pourquoi.
@@ -92,6 +90,10 @@ TXT;
   Section de la scène : fullWidth true, sans contentWidth, rootLayout « stack », rootPadding 0, rootGap 0, sans bgVideo ni minHeightVh. Container de la scène : parentId null, w 100, padding 0, radius 0, borderWidth 0, background écrit (couleur sombre ou « transparent »), sans aspectRatio ni hover.
 TXT;
 
+    /** Chemins de l'éditeur cités dans limits[].howTo, fournis par le frontend (docs/ia-libelles-editeur.md de son dépôt) */
+    private const EDITOR_LABELS = __DIR__ . '/libelles-editeur.md';
+
+    private ?string $editorLabels = null;
     private ?string $schemaText = null;
     private bool $scrollScene = false;
     /** Fichier chargé dans $schemaText */
@@ -503,7 +505,8 @@ TXT;
     /** Consignes, complétées par celles qui dépendent du contrat actif (à appeler après schema()) */
     private function system(string $schema): string
     {
-        return self::SYSTEM . ($this->scrollScene ? self::SCROLL_SCENE_RULE : '');
+        return self::SYSTEM . ($this->scrollScene ? self::SCROLL_SCENE_RULE : '')
+            . "\n\n<libelles_editeur>\n" . trim($this->editorLabels ??= (string) file_get_contents(self::EDITOR_LABELS)) . "\n</libelles_editeur>";
     }
 
     /** Le contrat accepte-t-il le layout « scroll » des containers ? */
