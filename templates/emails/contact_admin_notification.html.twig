@@ -21,6 +21,24 @@
         <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ contact.phone }}</td>
     </tr>
     {% endif %}
+    {% if contact.companyName %}
+    <tr>
+        <td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #eee;">Entreprise :</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ contact.companyName }}</td>
+    </tr>
+    {% endif %}
+    {% if contact.jobFunction %}
+    <tr>
+        <td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #eee;">Fonction :</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ contact.jobFunction }}</td>
+    </tr>
+    {% endif %}
+    {% if contact.industry %}
+    <tr>
+        <td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #eee;">Secteur :</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ industryLabel ?? contact.industry }}</td>
+    </tr>
+    {% endif %}
     {% if contact.subject %}
     <tr>
         <td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #eee;">Sujet :</td>

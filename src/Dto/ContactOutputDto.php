@@ -8,11 +8,14 @@ class ContactOutputDto
     public int $id;
     public string $name;
     public string $email;
-    public string $phone;
+    public ?string $phone;
     public string $subject;
     public string $Content;
     public string $createdAt;
     public ?bool $isRead;
+    public ?string $industry;
+    public ?string $companyName;
+    public ?string $jobFunction;
 
     public function __construct(Contact $contact)
     {
@@ -24,5 +27,8 @@ class ContactOutputDto
         $this->Content = $contact->getContent();
         $this->createdAt = $contact->getCreatedAt()->format('Y-m-d H:i:s');
         $this->isRead = $contact->isIsRead();
+        $this->industry = $contact->getIndustry();
+        $this->companyName = $contact->getCompanyName();
+        $this->jobFunction = $contact->getJobFunction();
     }
 }

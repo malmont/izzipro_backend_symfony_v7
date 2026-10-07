@@ -7,6 +7,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
+use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 
@@ -39,12 +40,16 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
         #[Autowire(service: 'limiter.password_reset_account')] private readonly RateLimiterFactory $resetAccount,
         #[Autowire(service: 'limiter.password_reset_ip')] private readonly RateLimiterFactory $resetIp,
         #[Autowire(service: 'limiter.public_form_ip')] private readonly RateLimiterFactory $publicFormIp,
+        #[Autowire(service: 'limiter.public_form_attempts_ip')] private readonly RateLimiterFactory $publicFormAttemptsIp,
     ) {}
 
     public static function getSubscribedEvents(): array
     {
         // Avant le pare-feu (priorité 8) : un essai de connexion bloqué n'atteint pas l'authentification
-        return [KernelEvents::REQUEST => ['onKernelRequest', 20]];
+        return [
+            KernelEvents::REQUEST => ['onKernelRequest', 20],
+            KernelEvents::RESPONSE => ['onKernelResponse', 0],
+        ];
     }
 
     public function onKernelRequest(RequestEvent $event): void
@@ -69,18 +74,22 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
                 [$this->resetAccount, $this->accountKey($request, ['email'])],
                 [$this->resetIp, $ip],
             ],
+            // envois acceptés : vérifiés ici sans être comptés (comptés à la réponse 2xx) ; tentatives : comptées
             in_array($path, self::PUBLIC_FORMS, true) => [
-                [$this->publicFormIp, $request->getHost() . '|' . $ip],
+                [$this->publicFormIp, $this->publicFormKey($request), 0],
+                [$this->publicFormAttemptsIp, $this->publicFormKey($request)],
             ],
             default => [],
         };
 
-        foreach ($checks as [$factory, $key]) {
+        foreach ($checks as $check) {
+            [$factory, $key] = $check;
+            $tokens = $check[2] ?? 1;
             if ($key === null) {
                 continue;
             }
-            $limit = $factory->create($key)->consume();
-            if (!$limit->isAccepted()) {
+            $limit = $factory->create($key)->consume($tokens);
+            if (!$limit->isAccepted() || ($tokens === 0 && $limit->getRemainingTokens() === 0)) {
                 $retryAfter = max(1, $limit->getRetryAfter()->getTimestamp() - time());
                 $event->setResponse(new JsonResponse(
                     ['error' => sprintf('Trop de tentatives. Réessayez dans %d minute(s).', (int) ceil($retryAfter / 60))],
@@ -90,6 +99,21 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
                 return;
             }
         }
+    }
+
+    /** Un envoi de formulaire public accepté (2xx) compte dans la limite des envois */
+    public function onKernelResponse(ResponseEvent $event): void
+    {
+        $request = $event->getRequest();
+        if ($event->isMainRequest() && $request->getMethod() === 'POST' && $event->getResponse()->isSuccessful()
+            && in_array(rtrim($request->getPathInfo(), '/'), self::PUBLIC_FORMS, true)) {
+            $this->publicFormIp->create($this->publicFormKey($request))->consume();
+        }
+    }
+
+    private function publicFormKey(Request $request): string
+    {
+        return $request->getHost() . '|' . ($request->getClientIp() ?? 'unknown');
     }
 
     /**

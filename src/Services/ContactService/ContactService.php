@@ -26,6 +26,28 @@ class ContactService
         return $tenantEm->getRepository(Contact::class)->find($id);
     }
 
+    /**
+     * Message du formulaire public. Sans sujet, « Demande de contact – <nom de l'entreprise ou du site> ».
+     */
+    public function createFromForm(\App\Dto\ContactCreateInputDto $dto, string $siteName): Contact
+    {
+        $contact = (new Contact())
+            ->setName((string) $dto->name)
+            ->setEmail((string) $dto->email)
+            ->setPhone($dto->phone)
+            ->setSubject($dto->subject ?? mb_substr('Demande de contact – ' . $siteName, 0, 255))
+            ->setContent((string) $dto->message)
+            ->setIsRead(false)
+            ->setIndustry($dto->industry)
+            ->setCompanyName($dto->companyName)
+            ->setJobFunction($dto->jobFunction);
+        $em = $this->emProvider->getEntityManager();
+        $em->persist($contact);
+        $em->flush();
+
+        return $contact;
+    }
+
     public function createContact(ContactInputDto $dto): Contact
     {
         $tenantEm = $this->emProvider->getEntityManager();

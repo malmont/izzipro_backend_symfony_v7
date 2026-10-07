@@ -95,7 +95,7 @@ Ce que contient `gmasuite` devient la valeur par défaut des nouveaux clients (`
 | JWT lu depuis le cookie | `EventListener/JWTFromCookieListener` (si pas d'en-tête `Authorization`) ; durées : `WEB_ACCESS_TOKEN_TTL`, `WEB_SESSION_IDLE_TTL` ; le jeton porte `tenant_code` et n'est valable que sur ce site ; un jeton sans `tenant_code` (émis hors de tout site) est refusé sur un site (`JWTDecodedListener`) |
 | CSRF | `EventListener/CsrfValidationListener` : sur `/api/*` hors GET, si le cookie d'auth du tenant est présent, en-tête `X-XSRF-TOKEN` = cookie `XSRF-TOKEN_<tenant>` |
 | Rôles | `ROLE_ADMIN` (administrateur du site), `ROLE_SUPER_ADMIN` (propriétaire de la plateforme, testé explicitement : pas de `role_hierarchy` ; ni attribuable ni retirable par un admin de site : `Security/RoleAssignmentPolicy`, appliquée par l'écran EasyAdmin des utilisateurs et par `/api/memoires/admin/users` (compte super admin : ni modifiable ni supprimable par un admin de site) ; sinon en SQL. Détenu par le seul compte du propriétaire, dans toutes les bases, `gmasuite` comprise, donc aussi dans chaque nouveau site), `ROLE_USER_INTERNET` (nécessaire à la connexion web), `ROLE_USER_POS`, rôles Boussole (`ROLE_COMPANY`, `ROLE_CONSULTANT`) |
-| Limites de débit | `config/packages/rate_limiter.yaml` (connexion, OTP, mot de passe, formulaires publics par IP, assistant IA par tenant) ; `EventSubscriber/PublicEndpointRateLimitSubscriber` |
+| Limites de débit | `config/packages/rate_limiter.yaml` (connexion, OTP, mot de passe, formulaires publics par IP, assistant IA par tenant) ; `EventSubscriber/PublicEndpointRateLimitSubscriber`. Formulaires publics (site + IP) : 10 envois **acceptés** (2xx) par 10 minutes glissantes, comptés à la réponse (un refus 422 ne compte pas), et 60 tentatives par 10 minutes ; un 429 ne rallonge pas le blocage |
 
 **`access_control` : la première règle qui correspond l'emporte.** L'ordre compte : une règle précise (ex.
 `^/api/landingpage-ai`) doit précéder la règle publique générale qui contient `landingpage`. Le rôle exigé par chaque
@@ -301,7 +301,7 @@ docker exec -w /var/www -e SYMFONY_DEPRECATIONS_HELPER=disabled symfony_app_v2 p
   supprimer ce modèle), Redis base 2, Messenger en mémoire, e-mails vers `null://`.
 - Services simulés (`config/services_test.yaml`) : `FakeAnthropicService`, `FakeLandingAiClient`,
   `FakeFrontendConfigHttpClient`. Aucun appel réel ; test réel optionnel : `LANDING_AI_REAL_TEST=1`.
-- Dossiers : `tests/Functional/LandingPage`, `MemoiresVivantes`, `Security`.
+- Dossiers : `tests/Functional/LandingPage`, `MemoiresVivantes`, `Security`, `Contact`, `Admin`, `Email`, `Worker`.
 - Limite de connexions par IP relevée en test seulement (`when@test` dans `config/packages/rate_limiter.yaml`) : toute
   la suite se connecte depuis la même IP.
 - Les variables du conteneur (`env_file`) priment sur `.env.test` : `phpunit.xml.dist` force `ADMIN_OTP_REQUIRED=0` et

@@ -62,11 +62,22 @@ class ContactApiController extends AbstractController
         return $this->json(new ContactOutputDto($contact));
     }
 
+    /**
+     * Formulaire de contact public. Champs : ContactCreateInputDto ; refus 422
+     * { message: "Formulaire incomplet", errors: [{ field, message }] }.
+     */
     #[Route('', name: 'api_contact_create', methods: ['POST'])]
     #[Route('/create', name: 'api_contact_create_alias', methods: ['POST'])]
-    public function create(Request $request, #[MapRequestPayload] ContactInputDto $dto): JsonResponse
+    public function create(Request $request): JsonResponse
     {
-        $contact = $this->createContactUseCase->execute($dto);
+        try {
+            $contact = $this->createContactUseCase->execute(
+                json_decode($request->getContent(), true),
+                (string) ($request->headers->get('X-Tenant-Host') ?: $request->getHost())
+            );
+        } catch (\App\UseCase\ContactUseCase\ContactFormException $e) {
+            return $this->json(['message' => $e->getMessage(), 'errors' => $e->errors], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
 
         if ($this->contactMailerService) {
             $locale = $request->getLocale() ?: 'fr';

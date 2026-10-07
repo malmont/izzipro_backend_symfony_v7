@@ -30,10 +30,17 @@ framework:
             limit: 20
             interval: '1 hour'
             lock_factory: null
-        # Formulaires publics (contact, newsletter, candidature, inscription, réservation...) : anti-spam
+        # Formulaires publics (contact, newsletter, candidature, inscription, réservation...) : anti-spam.
+        # public_form_ip compte les envois ACCEPTÉS (réponse 2xx) : un refus 422 corrigé par le visiteur ne compte pas.
         public_form_ip:
             policy: sliding_window
             limit: 10
+            interval: '10 minutes'
+            lock_factory: null
+        # Toutes les tentatives (refus compris) : borne les envois en rafale
+        public_form_attempts_ip:
+            policy: sliding_window
+            limit: 60
             interval: '10 minutes'
             lock_factory: null
         # Assistant IA des landing pages : 5 demandes par minute et par tenant

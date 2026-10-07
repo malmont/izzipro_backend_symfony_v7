@@ -64,6 +64,32 @@ qu'il est déjà enregistré n'est pas contrôlé : un site dont les anciens tex
 le reste de sa fiche. Inventaire : `php bin/console app:entreprise:check-legal-texts` (au 07/10/2026 : seuls les 6
 textes de Kara & B, avec `className`, `target`, `rel`).
 
+## Formulaire de contact
+
+`POST /api/contacts/create` (ou `POST /api/contacts`), public (07/10/2026 : `ContactApiController::create`,
+`CreateContactUseCase`, `ContactCreateInputDto`, `ContactService::createFromForm`). Jusque-là tout envoi était refusé :
+`phone` et `subject` étaient exigés et le message attendu sous le nom `Content`.
+
+| Champ | Règle |
+|---|---|
+| `name` | obligatoire, 2 à 255 caractères |
+| `email` | obligatoire, adresse valide, 255 au plus |
+| `message` | obligatoire, 10 000 caractères au plus (`Content`, ancien nom, encore accepté) |
+| `phone` | facultatif ; sinon 5 à 30 caractères, chiffres, espaces et `+ ( ) . -` |
+| `subject` | facultatif, 255 au plus ; absent : « Demande de contact – <nom de l'entreprise> » |
+| `industry` | facultatif : `tourisme`, `btp`, `agroalimentaire` ou `autre` (casse ignorée) |
+| `companyName`, `jobFunction` | facultatifs, 255 au plus |
+
+- Champ vide ou blanc = absent ; tout autre champ (`acceptPolicy`, `isRead`…) est ignoré.
+- 201 : le contact (`ContactOutputDto`, message sous `Content`). 422 :
+  `{ "message": "Formulaire incomplet", "errors": [{ "field", "message" }] }`, messages en français, une erreur par champ.
+- E-mails : à l'entreprise (secteur, entreprise et fonction compris, réponse directe au visiteur) et confirmation au
+  visiteur, par la configuration d'envoi du site. Site sans configuration : l'e-mail à l'entreprise part par le serveur
+  de la plateforme (`EmailSenderService::sendPlatformEmail`), la confirmation au visiteur n'est pas envoyée.
+- Limite : voir `docs/architecture.md` (10 envois acceptés par 10 minutes, site + IP ; les refus ne comptent pas).
+- Colonnes `industry`, `company_name`, `job_function`, `phone` facultatif : `scripts/migrate_all_v2_contact_fields.sh`,
+  migration `Version20261007160000`.
+
 ## Modèles de site
 
 Depuis le 07/10/2026, l'administrateur enregistre des configurations complètes comme modèles, sans toucher aux réglages

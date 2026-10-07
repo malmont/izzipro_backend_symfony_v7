@@ -133,7 +133,7 @@ class EmailSenderService
      * avec pour expéditeur le compte qui s'y authentifie. Sert quand le site n'a pas de configuration d'envoi : sans
      * cela, le code ne partait pas et l'administrateur ne pouvait plus se connecter.
      */
-    public function sendPlatformEmail(string $to, string $subject, string $template, array $context): bool
+    public function sendPlatformEmail(string $to, string $subject, string $template, array $context, ?string $replyTo = null): bool
     {
         $from = $this->platformSender();
         if ($from === null) {
@@ -142,11 +142,15 @@ class EmailSenderService
             return false;
         }
         try {
-            $this->mailer->send((new Email())
+            $email = (new Email())
                 ->from(new \Symfony\Component\Mime\Address($from, 'Arkanoa'))
                 ->to($to)
                 ->subject($subject)
-                ->html($this->twig->render($template, $context + ['fromName' => 'Arkanoa', 'signature' => '', 'logoUrl' => null, 'domain' => ''])));
+                ->html($this->twig->render($template, $context + ['fromName' => 'Arkanoa', 'signature' => '', 'logoUrl' => null, 'domain' => '']));
+            if ($replyTo !== null) {
+                $email->replyTo($replyTo);
+            }
+            $this->mailer->send($email);
 
             return true;
         } catch (\Throwable $e) {

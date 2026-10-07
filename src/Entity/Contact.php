@@ -21,7 +21,7 @@ class Contact
     #[ORM\Column(length: 255)]
     private ?string $email = null;
 
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(length: 255, nullable: true)]
     private ?string $phone = null;
 
     #[ORM\Column(length: 255)]
@@ -35,6 +35,16 @@ class Contact
 
     #[ORM\Column(nullable: true)]
     private ?bool $isRead = null;
+
+    /** Secteur d'activité (formulaire de contact : ContactCreateInputDto::INDUSTRIES) */
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $industry = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $companyName = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $jobFunction = null;
 
     public function __construct()
     {
@@ -75,7 +85,7 @@ class Contact
         return $this->phone;
     }
 
-    public function setPhone(string $phone): self
+    public function setPhone(?string $phone): self
     {
         $this->phone = $phone;
 
@@ -126,6 +136,42 @@ class Contact
     public function setIsRead(?bool $isRead): self
     {
         $this->isRead = $isRead;
+
+        return $this;
+    }
+
+    public function getIndustry(): ?string
+    {
+        return $this->industry;
+    }
+
+    public function setIndustry(?string $industry): self
+    {
+        $this->industry = $industry;
+
+        return $this;
+    }
+
+    public function getCompanyName(): ?string
+    {
+        return $this->companyName;
+    }
+
+    public function setCompanyName(?string $companyName): self
+    {
+        $this->companyName = $companyName;
+
+        return $this;
+    }
+
+    public function getJobFunction(): ?string
+    {
+        return $this->jobFunction;
+    }
+
+    public function setJobFunction(?string $jobFunction): self
+    {
+        $this->jobFunction = $jobFunction;
 
         return $this;
     }

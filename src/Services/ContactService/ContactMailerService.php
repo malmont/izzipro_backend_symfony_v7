@@ -27,7 +27,8 @@ class ContactMailerService
         EmailConfigurationService $emailConfigService,
         LoggerInterface $logger,
         TenantEntityManagerProvider $emProvider,
-        TenantMailerFactory $tenantMailerFactory
+        TenantMailerFactory $tenantMailerFactory,
+        private readonly ?\App\Services\EmailConfigurationService\EmailSenderService $emailSender = null
     ) {
         $this->mailer = $mailer;
         $this->twig = $twig;
@@ -51,9 +52,15 @@ class ContactMailerService
 
             $emailConfig = $this->emailConfigService->findOneByLocale($locale);
             $emailConfigTranslation = $emailConfig ? $emailConfig->getTranslation($locale) : null;
+            $subject = sprintf('Nouvelle demande de contact de %s', $contact->getName());
+            $industryLabel = \App\Dto\ContactCreateInputDto::INDUSTRY_LABELS[$contact->getIndustry()] ?? $contact->getIndustry();
 
             if (!$emailConfig || !$emailConfigTranslation) {
-                $this->logger->warning('EmailConfiguration introuvable pour la locale ' . $locale . '. E-mail admin de contact non envoyé.');
+                // site sans configuration d'envoi : la demande part quand même, par le serveur de la plateforme
+                $sent = $this->emailSender?->sendPlatformEmail($toEmail, $subject, 'emails/contact_admin_notification.html.twig', ['contact' => $contact, 'industryLabel' => $industryLabel], $contact->getEmail());
+                if (!$sent) {
+                    $this->logger->warning('EmailConfiguration introuvable pour la locale ' . $locale . '. E-mail admin de contact non envoyé.');
+                }
                 return;
             }
 
@@ -62,6 +69,7 @@ class ContactMailerService
             
             $emailContent = $this->twig->render('emails/contact_admin_notification.html.twig', [
                 'contact'   => $contact,
+                'industryLabel' => $industryLabel,
                 'fromName'  => $fromName,
                 'signature' => $emailConfigTranslation->getSignature(),
                 'logoUrl'   => $emailConfig->getLogo(),
@@ -72,7 +80,7 @@ class ContactMailerService
                 ->from(sprintf('%s <%s>', $fromName, $fromEmail))
                 ->to($toEmail)
                 ->replyTo($contact->getEmail())
-                ->subject(sprintf('Nouvelle demande de contact de %s', $contact->getName()))
+                ->subject($subject)
                 ->html($emailContent);
 
             $mailer = $this->tenantMailerFactory->createMailer($emailConfig);
