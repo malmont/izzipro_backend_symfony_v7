@@ -17,7 +17,7 @@ Cas rejoués à chaque changement de prompt ou de modèle (conception : `ia-assi
 
 | # | Départ | Demande | Vérifications propres | Critère humain |
 |---|---|---|---|---|
-| R1 | groupe T (Arkanoa) | « Rends la section plus aérée. » | `rootGap` et `gap` des conteneurs augmentés ; aucun texte modifié | Plus d'air, même hiérarchie |
+| R1 | groupe U (Approche en étapes) | « Rends la section plus aérée. » | `rootGap` et `gap` des conteneurs augmentés ; aucun texte modifié | Plus d'air, même hiérarchie |
 | R2 | groupe V | « Cartes des formules sur 2 colonnes. » | liste `columns` = 2 ; `mobile.columns` inchangé | Grille correcte |
 | R3 | présentation J (Mémoires Vivantes) | « Passe aux couleurs vert sapin et or de la marque. » | couleurs uniquement parmi celles du site ; textes et liaisons inchangés | Cohérent avec le site |
 | R4 | footer D (`footer/footer-type-d`, colonne « Navigation » : `d-nav-titre`) | « Sur mobile, centre tout et masque la colonne Navigation. » | `mobile.align` = center ; colonne `mobile.hidden` ; grand écran inchangé | Mobile propre |
@@ -36,7 +36,7 @@ Cas rejoués à chaque changement de prompt ou de modèle (conception : `ia-assi
 | C2 | Groupe (Mémoires Vivantes) | « Section qui présente mes forfaits. » | `dataType` choisi parmi les groupes du site (donnée par défaut) ; liaisons `item.*` | Bonne donnée choisie |
 | C3 | Présentation (L'Intendant) | « Héros avec cette vidéo : https://…/intro.mp4, titre et bouton de contact. » | vidéo avec exactement cette URL, en bloc vidéo **ou** en fond de section (`bgVideo`, comme le modèle « héros vidéo ») ; bouton `#contact` ou `action` = contact | Héros crédible |
 | C4 | Présentation (ESG Boost) | « Section À propos avec la photo de l'équipe » + clé de média fournie | bloc image `mediaKey` = la clé fournie | Mise en page soignée |
-| C5 | Groupe (Arkanoa) | « Comme la section Tarifs, mais pour le Branding. » | structure proche du modèle V ; nouveaux textes ; aucun prix inventé | Cohérent |
+| C5 | Groupe (Arkanoa) | « Comme la section Tarifs, mais pour le Branding. » | structure proche du modèle R (formules) ; nouveaux textes ; aucun prix inventé | Cohérent |
 | C6 | Contact | « Formulaire de contact avec coordonnées à gauche. » | bloc `form` ; liaisons email et téléphone | Utile |
 | C7 | Navbar | « Barre transparente sur le héros, menu burger sur mobile. » | `overlayTop` ; `navMobile` burger ; liens liés aux onglets du site | Correct |
 | C8 | Groupe | « Enregistre ce résultat comme modèle "Cartes premium". » | action de l'éditeur, sans objet pour le backend : bouton « 💾 Enregistrer comme modèle » de la proposition (modèle personnel de la bonne famille, composition valide) | — |

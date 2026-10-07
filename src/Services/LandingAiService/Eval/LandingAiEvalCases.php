@@ -9,7 +9,9 @@ use App\Services\LandingAiService\LandingAiPageResult;
 
 /**
  * Cas de l'étape 1 (retouche) du jeu d'essai, avec leurs vérifications propres quand elles sont mesurables.
- * Les compositions de départ sont les modèles du catalogue (« groupe T » = presentation-group/group-type-t…).
+ * Les compositions de départ sont les modèles du catalogue (« groupe S » = presentation-group/group-type-s…). Le 07/10/2026,
+ * group-type-t et group-type-v ont quitté le catalogue (textes d'un client) : R1 passe sur group-type-s, R2 sur
+ * group-type-r (formules en liste répétée), R10 sur group-type-o (sans image de fond).
  * Corrections du 28/09/2026 (frontend) : R4 part de footer-type-d, R9 de video-type-a.
  * Une vérification renvoie ['ok' => true|false|null, 'detail' => string] ; null = non mesurable sur ce départ.
  */
@@ -28,7 +30,7 @@ final class LandingAiEvalCases
     {
         return [
             [
-                'id' => 'R1', 'presetId' => 'group-type-t', 'prompt' => 'Rends la section plus aérée.',
+                'id' => 'R1', 'presetId' => 'group-type-s', 'prompt' => 'Rends la section plus aérée.',
                 'check' => function (object $before, object $after) {
                     $gapUp = ($after->rootGap ?? 0) > ($before->rootGap ?? 0);
                     foreach ($this->pairs($before, $after) as [$b, $a]) {
@@ -42,7 +44,7 @@ final class LandingAiEvalCases
                 },
             ],
             [
-                'id' => 'R2', 'presetId' => 'group-type-v', 'prompt' => 'Cartes des formules sur 2 colonnes.',
+                'id' => 'R2', 'presetId' => 'group-type-r', 'prompt' => 'Cartes des formules sur 2 colonnes.',
                 'check' => function (object $before, object $after) {
                     $list = $this->find($after, fn ($b) => is_object($b->repeat ?? null));
                     $beforeList = $list ? ($this->inspector->blocksById($before)[$list->id] ?? null) : null;
@@ -143,7 +145,7 @@ final class LandingAiEvalCases
                 },
             ],
             [
-                'id' => 'R10', 'presetId' => 'group-type-v', 'prompt' => 'Ajoute un filtre sombre sur l\'image de fond.',
+                'id' => 'R10', 'presetId' => 'group-type-o', 'prompt' => 'Ajoute un filtre sombre sur l\'image de fond.',
                 'check' => function (object $before, object $after, LandingAiEditResult $r) {
                     $inventedImage = ($after->bgImage ?? '') !== ($before->bgImage ?? '');
 

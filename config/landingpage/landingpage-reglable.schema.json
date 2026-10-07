@@ -318,7 +318,7 @@
         "text": {
           "type": "string",
           "maxLength": 10000,
-          "description": "Texte affiché. Balises autorisées : p, div, span, strong, b, em, i, u, s, br, hr, ul, ol, li, blockquote, small, sub, sup, h2 à h6 (styles : italique, graisse, soulignement, couleur simple). Pas de lien <a> : un lien se fait avec un bouton (type button) ou le lien du bloc (link). Chiffre pour un bloc stat."
+          "description": "Texte affiché. Balises autorisées : p, div, span, strong, b, em, i, u, s, br, hr, ul, ol, li, blockquote, small, sub, sup, h2 à h6 (styles : italique, graisse, soulignement, couleur simple). Lien dans le texte : <a href=\"…\">…</a>, href seul attribut (pas de target, rel, style…), adresse https://, http://, mailto:, tel:, /chemin du site ou #ancre (2 000 caractères au plus) ; un appel à l’action reste un bouton (type button) ou le lien du bloc (link). Chiffre pour un bloc stat."
         },
         "url": {
           "$ref": "#/$defs/url",
@@ -421,7 +421,7 @@
             "slides",
             "scroll"
           ],
-          "description": "Container : free = positions en %, stack / row / grid = mise en page en flux dans l’ordre du tableau, slides = diaporama (un enfant ou un élément de liste par diapositive), scroll = scène au défilement (le premier enfant de type video avance avec le défilement de la page, chaque autre enfant est une étape de texte affichée à son tour ; la vidéo doit être un fichier ou un média du site, pas YouTube ni Vimeo)."
+          "description": "Container : free = positions en %, stack / row / grid = mise en page en flux dans l’ordre du tableau, slides = diaporama (un enfant ou un élément de liste par diapositive), scroll = scène au défilement (le premier enfant de type video avance avec le défilement de la page ; un second enfant de type video, facultatif, est sa version pour téléphone, verticale 9:16, affichée à sa place sur écran étroit ; chaque autre enfant est une étape de texte affichée à son tour ; les vidéos sont des fichiers ou des médias du site, pas YouTube ni Vimeo)."
         },
         "gap": {
           "type": "number",
@@ -639,7 +639,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Rangée : alignement vertical des enfants sur mobile."
+              "description": "Rangée : alignement vertical des enfants sur mobile. Scène au défilement : placement des étapes sur mobile (absent : en bas, pour laisser voir la vidéo)."
             },
             "padding": {
               "anyOf": [

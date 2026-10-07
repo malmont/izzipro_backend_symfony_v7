@@ -38,10 +38,10 @@ class LandingAiComposeTest extends WebTestCase
     public function testEditAppliesOperationsAndLeavesOtherBlocksIdentical(): void
     {
         $settingsBefore = $this->get('/api/landingpage-settings')->getContent();
-        $before = $this->preset('group-type-t');
+        $before = $this->preset('group-type-s');
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([
-            ['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#1B5FE6', 'translations' => new \stdClass()], 'unset' => ['letterSpacing']],
-            ['op' => 'add', 'after' => 't-titre', 'block' => ['id' => 't-sous-titre', 'type' => 'text', 'parentId' => null, 'text' => 'Nos offres', 'lineHeight' => 1.0]],
+            ['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#1B5FE6', 'translations' => new \stdClass()], 'unset' => ['letterSpacing']],
+            ['op' => 'add', 'after' => 's-titre', 'block' => ['id' => 's-sous-titre', 'type' => 'text', 'parentId' => null, 'text' => 'Nos offres', 'lineHeight' => 1.0]],
             ['op' => 'section', 'set' => ['rootGap' => 64]],
         ], 'Titre recoloré, sous-titre ajouté.');
 
@@ -50,16 +50,16 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $body = json_decode($response->getContent(), false);
         $after = $this->blocksById($body->composition);
-        $this->assertSame('#1B5FE6', $after['t-titre']->color);
-        $this->assertFalse(property_exists($after['t-titre'], 'letterSpacing'));
-        $this->assertEquals(new \stdClass(), $after['t-titre']->translations, '{} reste un objet');
-        $this->assertEquals((object) ['text' => 'title'], $after['t-titre']->bindings, 'liaisons non visées conservées');
+        $this->assertSame('#1B5FE6', $after['s-titre']->color);
+        $this->assertFalse(property_exists($after['s-titre'], 'letterSpacing'));
+        $this->assertEquals(new \stdClass(), $after['s-titre']->translations, '{} reste un objet');
+        $this->assertEquals((object) ['text' => 'title'], $after['s-titre']->bindings, 'liaisons non visées conservées');
         $this->assertStringContainsString('"lineHeight":1.0', $response->getContent(), '1.0 reste un décimal');
         $this->assertSame(64, $body->composition->rootGap);
         $ids = array_column(array_map(fn ($b) => (array) $b, $body->composition->blocks), 'id');
-        $this->assertSame(array_search('t-titre', $ids) + 1, array_search('t-sous-titre', $ids), 'bloc inséré après t-titre');
+        $this->assertSame(array_search('s-titre', $ids) + 1, array_search('s-sous-titre', $ids), 'bloc inséré après s-titre');
         foreach ($this->blocksById($before) as $id => $block) {
-            if ($id !== 't-titre') {
+            if ($id !== 's-titre') {
                 $this->assertSame(json_encode($block), json_encode($after[$id]), "bloc $id strictement identique");
             }
         }
@@ -84,25 +84,25 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testRemoveAlsoRemovesDescendants(): void
     {
-        $before = $this->preset('group-type-t');
-        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'remove', 'id' => 't-web']]);
+        $before = $this->preset('group-type-s');
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'remove', 'id' => 's-liste']]);
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $before, 'prompt' => 'Retire l\'onglet Développement Web.']);
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $before, 'prompt' => 'Retire la liste des piliers.']);
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $after = $this->blocksById(json_decode($response->getContent(), false)->composition);
-        foreach (['t-web', 't-web-1', 't-web-1-titre', 't-web-4-texte'] as $id) {
+        foreach (['s-liste', 's-pilier', 's-pastille', 's-icone', 's-item-texte'] as $id) {
             $this->assertArrayNotHasKey($id, $after, "$id retiré");
         }
-        $this->assertArrayHasKey('t-app', $after);
+        $this->assertArrayHasKey('s-entete', $after);
     }
 
     public function testInvalidThenValidSucceedsOnSecondAttemptWithErrorsSentBack(): void
     {
-        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['fontColor' => '#000000']]]);
-        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['fontColor' => '#000000']]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]]);
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre en noir.']);
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre en noir.']);
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $this->assertSame(2, json_decode($response->getContent())->usage->attempts);
@@ -120,7 +120,7 @@ class LandingAiComposeTest extends WebTestCase
             FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 'inconnu', 'set' => ['color' => '#000000']]]);
         }
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre en noir.']);
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre en noir.']);
 
         $this->assertSame(502, $response->getStatusCode(), $response->getContent());
         $body = json_decode($response->getContent(), true);
@@ -136,7 +136,7 @@ class LandingAiComposeTest extends WebTestCase
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'section', 'set' => ['bgImage' => 'https://images.example.com/inventee.jpg']]]);
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([], 'Aucune image disponible.', ['Aucune image de fond fournie : filtre non ajouté.']);
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Ajoute une image de fond.']);
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Ajoute une image de fond.']);
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $this->assertStringContainsString('bgImage', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
@@ -148,7 +148,7 @@ class LandingAiComposeTest extends WebTestCase
         $key = str_repeat('ab', 32);
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'section', 'set' => ['bgImage' => 'https://cdn.example.com/equipe.jpg']]]);
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Mets cette photo en fond.',
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Mets cette photo en fond.',
             'media' => [['kind' => 'image', 'url' => 'https://cdn.example.com/equipe.jpg', 'mediaKey' => null, 'label' => 'équipe'], ['kind' => 'image', 'url' => null, 'mediaKey' => $key]]]);
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
@@ -172,7 +172,7 @@ class LandingAiComposeTest extends WebTestCase
         $this->db()->executeStatement('INSERT INTO ai_credit_setting (monthly_credits) VALUES (1)');
         $this->db()->executeStatement("INSERT INTO ai_usage (tenant, created_at, mode, component_key, status, credits) VALUES ('mvtest', NOW(), 'edit', 'PresentationGroup', 'success', 1)");
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre en noir.']);
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre en noir.']);
 
         $this->assertSame(402, $response->getStatusCode(), $response->getContent());
         $this->assertSame([], FakeLandingAiClient::$requests);
@@ -184,7 +184,7 @@ class LandingAiComposeTest extends WebTestCase
         $this->db()->executeStatement("INSERT INTO ai_usage (tenant, created_at, reserved_until, mode, component_key, status, credits) VALUES ('mvtest', NOW() - INTERVAL '6 minutes', NOW() - INTERVAL '1 minute', 'edit', 'PresentationGroup', 'reserved', 1)");
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([]);
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Rien à changer.']);
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Rien à changer.']);
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $this->assertSame('expired', $this->db()->fetchOne("SELECT status FROM ai_usage WHERE created_at < NOW() - INTERVAL '5 minutes'"));
@@ -194,11 +194,11 @@ class LandingAiComposeTest extends WebTestCase
     {
         for ($i = 1; $i <= 5; $i++) {
             FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([]);
-            $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => "Demande $i"]);
+            $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => "Demande $i"]);
             $this->assertSame(200, $response->getStatusCode(), "demande $i : " . $response->getContent());
         }
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Demande 6']);
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Demande 6']);
 
         $this->assertSame(429, $response->getStatusCode(), $response->getContent());
         $this->assertGreaterThan(0, (int) $response->headers->get('Retry-After'));
@@ -209,7 +209,7 @@ class LandingAiComposeTest extends WebTestCase
     {
         $this->session = $this->login(['ROLE_USER_INTERNET']);
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre en noir.']);
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre en noir.']);
 
         $this->assertSame(403, $response->getStatusCode());
         $this->assertSame(403, $this->get('/api/landingpage-ai/usage')->getStatusCode());
@@ -270,7 +270,7 @@ class LandingAiComposeTest extends WebTestCase
     public function testUsageEndpointReturnsCreditsAndHistory(): void
     {
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([]);
-        $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Une demande.']);
+        $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Une demande.']);
 
         $response = $this->get('/api/landingpage-ai/usage');
 
@@ -482,9 +482,9 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testEditWithAnImageUsesTheImagesModelAndCosts10(): void
     {
-        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]]);
 
-        $job = $this->composeInBackground(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre de la couleur de la capture.', 'images' => [$this->pngDataUrl()]]);
+        $job = $this->composeInBackground(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre de la couleur de la capture.', 'images' => [$this->pngDataUrl()]]);
 
         $this->assertSame('edit', $job->result->mode, 'une retouche avec image passe aussi en tâche de fond');
         $request = FakeLandingAiClient::$requests[0];
@@ -500,8 +500,8 @@ class LandingAiComposeTest extends WebTestCase
         $before = $_ENV['LANDING_AI_MODEL_IMAGES'] ?? '';
         $_ENV['LANDING_AI_MODEL_IMAGES'] = $_SERVER['LANDING_AI_MODEL_IMAGES'] = 'modele-des-images';
         try {
-            FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]);
-            $this->composeInBackground(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre de la couleur de la capture.', 'images' => [$this->pngDataUrl()]]);
+            FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]]);
+            $this->composeInBackground(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre de la couleur de la capture.', 'images' => [$this->pngDataUrl()]]);
             $this->assertSame('modele-des-images', FakeLandingAiClient::$requests[0]['model']);
 
             FakeLandingAiClient::$requests = [];
@@ -516,7 +516,7 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testEditRefusesAnInvalidCompositionBeforeAnyAiCall(): void
     {
-        $composition = $this->preset('group-type-t');
+        $composition = $this->preset('group-type-s');
         $composition->blocks[0]->x = 150; // x + w > 100 : composition déjà invalide
 
         $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $composition, 'prompt' => 'Titre en noir.']);
@@ -533,7 +533,7 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testEditRefusesAnOversizedComposition(): void
     {
-        $composition = $this->preset('group-type-t');
+        $composition = $this->preset('group-type-s');
         $composition->translations = (object) ['en' => (object) ['bourrage' => str_repeat('x', 210000)]];
 
         $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $composition, 'prompt' => 'Titre en noir.']);
@@ -561,10 +561,10 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testProposalWithALinkInATextIsSentBackForCorrection(): void
     {
-        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['text' => 'Voir <a href="https://exemple.com">ici</a>']]]);
-        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['text' => 'Voir <strong>ici</strong>']]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['text' => 'Voir <a href="https://exemple.com">ici</a>']]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['text' => 'Voir <strong>ici</strong>']]]);
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Ajoute un lien.']);
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Ajoute un lien.']);
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $this->assertStringContainsString('lien <a> ajouté', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'], 'les textes acceptent des liens, mais l\'IA n\'en ajoute pas');
@@ -573,7 +573,7 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testLinkAlreadyPlacedByTheAdminIsKeptByAnEdit(): void
     {
-        $composition = $this->preset('group-type-t');
+        $composition = $this->preset('group-type-s');
         $text = array_values(array_filter($composition->blocks, fn ($b) => $b->type === 'text'))[0];
         $text->text = '<p>Voir <a href="https://exemple.com">notre site</a></p>';
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => $text->id, 'set' => ['color' => '#000000']]]);
@@ -608,10 +608,10 @@ class LandingAiComposeTest extends WebTestCase
         FakeLandingAiClient::$queue = [
             new \App\Services\AnthropicApiException(529, 'overloaded_error', 0),
             new \App\Services\AnthropicApiException(429, 'rate_limit_error', 0),
-            FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]),
+            FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]]),
         ];
 
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre en noir.']);
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre en noir.']);
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $this->assertCount(3, FakeLandingAiClient::$requests);
@@ -622,7 +622,7 @@ class LandingAiComposeTest extends WebTestCase
     {
         $overloaded = fn () => new \App\Services\AnthropicApiException(529, 'overloaded_error', 0);
         FakeLandingAiClient::$queue = [$overloaded(), $overloaded(), $overloaded()];
-        $body = ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre en noir.'];
+        $body = ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre en noir.'];
 
         $this->assertSame(502, $this->compose($body)->getStatusCode());
         $this->assertCount(1 + \App\Services\LandingAiService\LandingAiComposer::TRANSIENT_RETRIES, FakeLandingAiClient::$requests);
@@ -636,7 +636,7 @@ class LandingAiComposeTest extends WebTestCase
     public function testTuningIsOffByDefaultAndSetsEffortAndCacheTtlWhenConfigured(): void
     {
         $container = static::getContainer();
-        $args = ['PresentationGroup', $this->preset('group-type-t'), 'Titre en noir.', 'fr', [], [], ['colors' => [], 'fonts' => []]];
+        $args = ['PresentationGroup', $this->preset('group-type-s'), 'Titre en noir.', 'fr', [], [], ['colors' => [], 'fonts' => []]];
         $image = [['mediaType' => 'image/png', 'data' => substr($this->pngDataUrl(), 22)]];
 
         $default = $container->get(\App\Services\LandingAiService\LandingAiPromptBuilder::class)->editPayload('claude-sonnet-5', ...$args);
@@ -718,16 +718,16 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testEditOnlyCompletesTheBackgroundOfAddedContainers(): void
     {
-        $composition = $this->preset('group-type-t');
+        $composition = $this->preset('group-type-s');
         $index = array_key_first(array_filter($composition->blocks, fn ($b) => $b->type === 'container'));
         unset($composition->blocks[$index]->background);
-        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'add', 'block' => ['id' => 't-cadre', 'type' => 'container', 'parentId' => null]]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'add', 'block' => ['id' => 's-cadre', 'type' => 'container', 'parentId' => null]]]);
 
         $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $composition, 'prompt' => 'Ajoute un cadre vide en bas.']);
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $blocks = array_column(json_decode($response->getContent())->composition->blocks, null, 'id');
-        $this->assertSame('transparent', $blocks['t-cadre']->background, 'container ajouté par l\'IA');
+        $this->assertSame('transparent', $blocks['s-cadre']->background, 'container ajouté par l\'IA');
         $this->assertObjectNotHasProperty('background', $blocks[$composition->blocks[$index]->id], 'bloc de départ non visé : inchangé');
     }
 
@@ -827,7 +827,7 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testEditThatDeletesBlocksWithoutBeingAskedIsSentBackToTheModel(): void
     {
-        $composition = $this->preset('group-type-t');
+        $composition = $this->preset('group-type-s');
         $container = array_values(array_filter($composition->blocks, fn ($b) => $b->type === 'container' && ($b->parentId ?? null) === null))[0];
         // 03/10/2026 : « mets la vidéo à droite du titre » → un seul remove du container, la section se vidait
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'remove', 'id' => $container->id]]);
@@ -845,7 +845,7 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testRequestedDeletionIsAccepted(): void
     {
-        $composition = $this->preset('group-type-t');
+        $composition = $this->preset('group-type-s');
         $leaf = array_values(array_filter($composition->blocks, fn ($b) => $b->type !== 'container'))[0];
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'remove', 'id' => $leaf->id]]);
 
@@ -1005,14 +1005,14 @@ class LandingAiComposeTest extends WebTestCase
 
         $schema = json_decode(file_get_contents(static::getContainer()->get(\App\Services\LandingConfigService\LandingConfigStore::class)->path(\App\Services\LandingConfigService\LandingConfigStore::SCHEMA)));
         $payload = static::getContainer()->get($builder)
-            ->editPayload('claude-sonnet-5', 'PresentationGroup', $this->preset('group-type-t'), 'Titre en noir.', 'fr', [], [], ['colors' => [], 'fonts' => []]);
+            ->editPayload('claude-sonnet-5', 'PresentationGroup', $this->preset('group-type-s'), 'Titre en noir.', 'fr', [], [], ['colors' => [], 'fonts' => []]);
         $this->assertSame($builder::supportsScrollScene($schema), str_contains($payload['system'][0]['text'], 'Scène au défilement'), 'consigne présente si et seulement si le contrat actif connaît le layout');
     }
 
     public function testSonnet55GetsAutomaticToolChoice(): void
     {
         $payload = static::getContainer()->get(\App\Services\LandingAiService\LandingAiPromptBuilder::class)
-            ->editPayload('claude-sonnet-5-5', 'PresentationGroup', $this->preset('group-type-t'), 'Titre en noir.', 'fr', [], [], ['colors' => [], 'fonts' => []]);
+            ->editPayload('claude-sonnet-5-5', 'PresentationGroup', $this->preset('group-type-s'), 'Titre en noir.', 'fr', [], [], ['colors' => [], 'fonts' => []]);
 
         $this->assertSame(['type' => 'auto'], $payload['tool_choice']);
     }
@@ -1026,8 +1026,8 @@ class LandingAiComposeTest extends WebTestCase
         for ($i = 0; $i < \App\Services\LandingAiService\LandingAiQuotaService::FAILED_REQUESTS_PER_DAY - 1; $i++) {
             $this->db()->executeStatement(sprintf($insert, 3));
         }
-        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]]);
-        $body = ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Titre en noir.'];
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]]);
+        $body = ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre en noir.'];
         $this->assertSame(200, $this->compose($body)->getStatusCode(), 'sous le plafond');
 
         $this->db()->executeStatement(sprintf($insert, 3));
@@ -1041,10 +1041,10 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testVisualReviewSendsBothCapturesAsTheCurrentRendering(): void
     {
-        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 't-titre', 'set' => ['color' => '#000000']]], 'Contraste du titre renforcé.');
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]], 'Contraste du titre renforcé.');
         $jpeg = $this->jpegDataUrl();
 
-        $job = $this->composeInBackground(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-t'), 'prompt' => 'Relecture visuelle : surtout le mobile.', 'images' => [$jpeg, $jpeg]]);
+        $job = $this->composeInBackground(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Relecture visuelle : surtout le mobile.', 'images' => [$jpeg, $jpeg]]);
 
         $this->assertSame('done', $job->status);
         $this->assertSame(10, $job->result->credits->used);
@@ -1239,7 +1239,7 @@ class LandingAiComposeTest extends WebTestCase
             $container->get('logger'),
             'claude-sonnet-5'
         );
-        $before = $this->preset('group-type-t');
+        $before = $this->preset('group-type-s');
 
         $result = $composer->edit('PresentationGroup', $before, 'Rends la section plus aérée.');
 
