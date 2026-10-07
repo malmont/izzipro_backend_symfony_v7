@@ -45,14 +45,19 @@ final class FrontendConfigFetcher
                 $errors[] = ['path' => "files.$file", 'message' => 'empreinte sha256 (64 caractères hexadécimaux) attendue'];
             }
         }
-        foreach (array_diff(array_keys($files), LandingConfigStore::FILES) as $unknown) {
+        foreach (array_intersect(LandingConfigStore::OPTIONAL_FILES, array_keys($files)) as $file) {
+            if (!is_string($files[$file]) || !preg_match('/^[A-Fa-f0-9]{64}$/', $files[$file])) {
+                $errors[] = ['path' => "files.$file", 'message' => 'empreinte sha256 (64 caractères hexadécimaux) attendue'];
+            }
+        }
+        foreach (array_diff(array_keys($files), LandingConfigStore::KNOWN_FILES) as $unknown) {
             $errors[] = ['path' => "files.$unknown", 'message' => 'fichier inconnu'];
         }
         if (!is_array($data) || $errors) {
             throw new LandingConfigException(422, 'Manifeste invalide', 'Le manifeste publié par le frontend est invalide.', $errors ?: [['path' => '', 'message' => 'objet JSON attendu']]);
         }
 
-        return ['version' => $version, 'files' => array_map('strtolower', array_intersect_key($files, array_flip(LandingConfigStore::FILES)))];
+        return ['version' => $version, 'files' => array_map('strtolower', array_intersect_key($files, array_flip(LandingConfigStore::KNOWN_FILES)))];
     }
 
     /**

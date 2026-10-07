@@ -17,6 +17,9 @@ use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
  */
 class SyncLandingConfigUseCase
 {
+    /** Libellés de l'éditeur : ajoutés aux consignes de l'assistant, taille bornée */
+    public const MAX_EDITOR_LABELS_BYTES = 40000;
+
     public function __construct(
         private readonly LandingConfigStore $store,
         private readonly FrontendConfigFetcher $fetcher,
@@ -111,6 +114,10 @@ class SyncLandingConfigUseCase
         $catalogue = json_decode($contents[LandingConfigStore::CATALOGUE]);
         if (!is_array($catalogue->families ?? null) || $catalogue->families === []) {
             $errors[] = ['path' => LandingConfigStore::CATALOGUE, 'message' => 'catalogue JSON avec une liste « families » attendu'];
+        }
+        $labels = $contents[LandingConfigStore::EDITOR_LABELS] ?? null;
+        if ($labels !== null && (trim($labels) === '' || strlen($labels) > self::MAX_EDITOR_LABELS_BYTES || !mb_check_encoding($labels, 'UTF-8'))) {
+            $errors[] = ['path' => LandingConfigStore::EDITOR_LABELS, 'message' => sprintf('texte UTF-8 non vide de %d octets au plus attendu (lu par l\'assistant à chaque demande)', self::MAX_EDITOR_LABELS_BYTES)];
         }
         if ($errors) {
             throw new LandingConfigException(422, 'Fichier invalide', 'Un fichier publié par le frontend est inutilisable : rien n\'a été activé.', $errors);

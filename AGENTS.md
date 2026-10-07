@@ -13,7 +13,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Mémoires Vivantes | `docs/memoires-vivantes.md` |
 | Boussole ESG | `docs/boussole-esg.md` ; code `src/ESG/` |
 | Boutique (produits, commandes, paiement, livraison ; aucune en production) | fiche à écrire ; routes dans `docs/endpoints.md` ; côté frontend `src/components/Boutique/README.md` |
-| Contrats partagés avec le frontend (schéma, catalogue IA, jeu d'essai) | `config/landingpage/` (synchronisés, ne pas modifier à la main) |
+| Contrats partagés avec le frontend (schéma, catalogue IA, jeu d'essai, libellés de l'éditeur) | `config/landingpage/` (synchronisés, ne pas modifier à la main) |
 | Côté frontend | `AGENTS.md` et `docs/architecture.md` du dépôt `Izzipro_next` |
 
 ## Règles non négociables

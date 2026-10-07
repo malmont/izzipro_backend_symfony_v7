@@ -90,10 +90,10 @@ TXT;
   Section de la scène : fullWidth true, sans contentWidth, rootLayout « stack », rootPadding 0, rootGap 0, sans bgVideo ni minHeightVh. Container de la scène : parentId null, w 100, padding 0, radius 0, borderWidth 0, background écrit (couleur sombre ou « transparent »), sans aspectRatio ni hover.
 TXT;
 
-    /** Chemins de l'éditeur cités dans limits[].howTo, fournis par le frontend (docs/ia-libelles-editeur.md de son dépôt) */
-    private const EDITOR_LABELS = __DIR__ . '/libelles-editeur.md';
-
+    /** Chemins de l'éditeur cités dans limits[].howTo (LandingConfigStore::EDITOR_LABELS, publié par le frontend) */
     private ?string $editorLabels = null;
+    /** Fichier chargé dans $editorLabels */
+    private ?string $editorLabelsFrom = null;
     private ?string $schemaText = null;
     private bool $scrollScene = false;
     /** Fichier chargé dans $schemaText */
@@ -505,8 +505,14 @@ TXT;
     /** Consignes, complétées par celles qui dépendent du contrat actif (à appeler après schema()) */
     private function system(string $schema): string
     {
+        $path = $this->configStore->path(LandingConfigStore::EDITOR_LABELS);
+        if ($this->editorLabelsFrom !== $path) {
+            $this->editorLabels = is_file($path) ? trim((string) file_get_contents($path)) : '';
+            $this->editorLabelsFrom = $path;
+        }
+
         return self::SYSTEM . ($this->scrollScene ? self::SCROLL_SCENE_RULE : '')
-            . "\n\n<libelles_editeur>\n" . trim($this->editorLabels ??= (string) file_get_contents(self::EDITOR_LABELS)) . "\n</libelles_editeur>";
+            . ($this->editorLabels !== '' ? "\n\n<libelles_editeur>\n" . $this->editorLabels . "\n</libelles_editeur>" : '');
     }
 
     /** Le contrat accepte-t-il le layout « scroll » des containers ? */

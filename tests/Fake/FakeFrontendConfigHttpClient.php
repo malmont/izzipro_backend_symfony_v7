@@ -41,6 +41,10 @@ class FakeFrontendConfigHttpClient extends MockHttpClient
         foreach (['landingpage-reglable.schema.json', 'landingpage-ia-catalogue.json', 'ia-assistant-jeu-essai.md'] as $name) {
             $contents[$name] = $files[$name] ?? file_get_contents("$dir/$name");
         }
+        // fichier facultatif : publié seulement s'il est donné
+        if (isset($files['ia-libelles-editeur.md'])) {
+            $contents['ia-libelles-editeur.md'] = $files['ia-libelles-editeur.md'];
+        }
         self::$published = $contents + ['manifest.json' => json_encode([
             'version' => $version,
             'files' => array_merge(array_map(fn ($c) => hash('sha256', $c), $contents), $hashes),

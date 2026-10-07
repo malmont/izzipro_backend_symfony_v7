@@ -61,7 +61,10 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
 
 - Le frontend publie sous `FRONTEND_CONFIG_URL` (ex. `https://<frontend>/reglable-config/`) : `manifest.json`
   `{ "version", "files": { "<nom>": "<sha256>" } }` et les 3 fichiers `landingpage-reglable.schema.json`,
-  `landingpage-ia-catalogue.json`, `ia-assistant-jeu-essai.md`.
+  `landingpage-ia-catalogue.json`, `ia-assistant-jeu-essai.md`, plus un fichier **facultatif** (07/10/2026)
+  `ia-libelles-editeur.md` : libellés exacts de l'éditeur, ajoutés aux consignes de l'assistant (`limits[].howTo`),
+  texte UTF-8 de 40 000 octets au plus (422 sinon). Absent du manifeste : la copie de ce dossier sert
+  (`LandingConfigStore::path`). Tout autre nom est refusé (422 `fichier inconnu`).
 - `GET /api/landingpage-config/status` → `{ active: { id, version, files }, available: { version, files } | null,
   availableError, upToDate, previous, history }` (20 dernières actions).
 - `POST /api/landingpage-config/sync` : télécharge depuis `FRONTEND_CONFIG_URL` **uniquement** (le corps de la requête est
@@ -129,8 +132,8 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
       l'assistant ne peut pas faire, pourquoi et comment l'administrateur peut les faire (guide dans le prompt
       système : structure du site, médiathèque, fiche entreprise, données des autres sections, autres modules,
       annulation). Une entrée sans `howTo` est ignorée. Les chemins de l'éditeur sont cités tels quels depuis
-      `src/Services/LandingAiService/libelles-editeur.md` (liste fournie par le frontend, reprise de son
-      `docs/ia-libelles-editeur.md` : la remplacer quand il la renvoie ; elle fait partie des consignes en cache).
+      `ia-libelles-editeur.md`, synchronisé avec les autres fichiers (voir plus haut) ; il fait partie des consignes
+      en cache.
     - Réponse : `contentChanges`, `groupChanges` et `limits` toujours présents (tableaux vides par défaut).
   - **Avant tout appel à l'IA** (30/09/2026) : en retouche, la composition reçue est limitée à 200 Ko (400) et doit
     déjà passer le contrat, les types de la famille et les médias (422 `Composition invalide`, sans crédit ni limite

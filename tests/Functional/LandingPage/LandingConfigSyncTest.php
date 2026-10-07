@@ -72,6 +72,37 @@ class LandingConfigSyncTest extends WebTestCase
         $this->assertSame('up_to_date', $again->result);
     }
 
+    public function testEditorLabelsAreSyncedAsAnOptionalFile(): void
+    {
+        $store = static::getContainer()->get(LandingConfigStore::class);
+        $system = fn () => static::getContainer()->get(\App\Services\LandingAiService\LandingAiPromptBuilder::class)
+            ->createPayload('claude-sonnet-5', 'Contact', 'Une section contact.', 'fr', [], [], ['colors' => [], 'fonts' => []], false, false, [], null)['system'][0]['text'];
+        $bundled = $store->path(LandingConfigStore::EDITOR_LABELS);
+        $this->assertStringContainsString('Section → « 🗂 Calques »', $system(), 'copie du dépôt sans version installée');
+
+        // manifeste sans le fichier facultatif : accepté, la copie du dépôt sert
+        FakeFrontendConfigHttpClient::publish('2026.10.07-1');
+        $this->assertSame(200, $this->call('POST', '/api/landingpage-config/sync', self::TOKEN)->getStatusCode());
+        $this->assertSame($bundled, $store->path(LandingConfigStore::EDITOR_LABELS));
+
+        // publié par le frontend : version suivante, lue par l'assistant sans redémarrage
+        FakeFrontendConfigHttpClient::publish('2026.10.07-2', [LandingConfigStore::EDITOR_LABELS => "Ajouter une section : Panneau → « Nouveau libellé »\n"]);
+        $response = $this->call('POST', '/api/landingpage-config/sync', self::TOKEN);
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertSame('activated', json_decode($response->getContent())->result);
+        $this->assertStringContainsString('/versions/2026.10.07-2-', $store->path(LandingConfigStore::EDITOR_LABELS));
+        $this->assertStringContainsString('Panneau → « Nouveau libellé »', $system());
+        $this->assertStringNotContainsString('🗂 Calques', $system());
+        $this->assertTrue($this->status()->upToDate);
+
+        // trop long (lu à chaque demande) : rien n'est activé
+        FakeFrontendConfigHttpClient::publish('2026.10.07-3', [LandingConfigStore::EDITOR_LABELS => str_repeat('x', 40001)]);
+        $response = $this->call('POST', '/api/landingpage-config/sync', self::TOKEN);
+        $this->assertSame(422, $response->getStatusCode(), $response->getContent());
+        $this->assertSame(LandingConfigStore::EDITOR_LABELS, json_decode($response->getContent())->errors[0]->path);
+        $this->assertStringContainsString('/versions/2026.10.07-2-', $store->path(LandingConfigStore::EDITOR_LABELS));
+    }
+
     public function testNewSchemaIsUsedByTheValidatorWithoutRestart(): void
     {
         $validator = static::getContainer()->get(ReglableCompositionValidator::class);
