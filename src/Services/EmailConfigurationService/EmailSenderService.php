@@ -24,7 +24,9 @@ class EmailSenderService
         EmailConfigurationService $emailConfigService,
         EmailLogoHelper $emailLogoHelper,
         LoggerInterface $logger,
-        TenantMailerFactory $tenantMailerFactory
+        TenantMailerFactory $tenantMailerFactory,
+        #[\Symfony\Component\DependencyInjection\Attribute\Autowire('%env(default::MAILER_DSN)%')]
+        private readonly ?string $platformDsn = null
     ) {
         $this->tenantMailerFactory = $tenantMailerFactory;
         $this->mailer = $mailer;
@@ -124,5 +126,45 @@ class EmailSenderService
 
             return false;
         }
+    }
+
+    /**
+     * E-mail de la plateforme (code de connexion d'un administrateur) : par le serveur global (MAILER_DSN, .env),
+     * avec pour expéditeur le compte qui s'y authentifie. Sert quand le site n'a pas de configuration d'envoi : sans
+     * cela, le code ne partait pas et l'administrateur ne pouvait plus se connecter.
+     */
+    public function sendPlatformEmail(string $to, string $subject, string $template, array $context): bool
+    {
+        $from = $this->platformSender();
+        if ($from === null) {
+            $this->logger->error('E-mail de la plateforme impossible : pas de compte expéditeur dans MAILER_DSN.');
+
+            return false;
+        }
+        try {
+            $this->mailer->send((new Email())
+                ->from(new \Symfony\Component\Mime\Address($from, 'Arkanoa'))
+                ->to($to)
+                ->subject($subject)
+                ->html($this->twig->render($template, $context + ['fromName' => 'Arkanoa', 'signature' => '', 'logoUrl' => null, 'domain' => ''])));
+
+            return true;
+        } catch (\Throwable $e) {
+            $this->logger->error('Erreur lors de l\'envoi d\'un e-mail de la plateforme : ' . $e->getMessage());
+
+            return false;
+        }
+    }
+
+    /** Adresse du compte SMTP du serveur global, ou null si MAILER_DSN n'en a pas */
+    private function platformSender(): ?string
+    {
+        try {
+            $user = \Symfony\Component\Mailer\Transport\Dsn::fromString((string) $this->platformDsn)->getUser();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_string($user) && filter_var($user, FILTER_VALIDATE_EMAIL) ? $user : null;
     }
 }

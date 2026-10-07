@@ -71,6 +71,30 @@ class AdminTwoFactorTest extends WebTestCase
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'code validé : administration ouverte');
     }
 
+    public function testCodeIsSentByThePlatformWhenTheSiteHasNoMailConfiguration(): void
+    {
+        $email = $this->user(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
+        $this->db()->executeStatement('UPDATE "user" SET otp_enabled = true WHERE email = ?', [$email]);
+        $configurations = $this->db()->fetchAllAssociative('SELECT * FROM email_configuration');
+        $this->db()->executeStatement('DELETE FROM email_configuration_translation');
+        $this->db()->executeStatement('DELETE FROM email_configuration');
+        $_ENV['MAILER_DSN'] = $_SERVER['MAILER_DSN'] = 'null://plateforme%40example.invalid:x@default';
+        try {
+            $this->assertTrue($this->login($email)['otp_required'] ?? false);
+            $this->assertEmailCount(1);
+            $message = $this->getMailerMessage();
+            $this->assertSame('plateforme@example.invalid', $message->getFrom()[0]->getAddress(), 'expéditeur : le compte du serveur de la plateforme');
+            $this->assertSame($email, $message->getTo()[0]->getAddress());
+            $code = $this->db()->fetchOne('SELECT code FROM otp_code WHERE user_otp_id = (SELECT id FROM "user" WHERE email = ?) ORDER BY id DESC LIMIT 1', [$email]);
+            $this->assertStringContainsString((string) $code, $message->getHtmlBody());
+        } finally {
+            unset($_ENV['MAILER_DSN'], $_SERVER['MAILER_DSN']);
+            foreach ($configurations as $row) {
+                $this->db()->insert('email_configuration', $row);
+            }
+        }
+    }
+
     private function login(string $email): array
     {
         $this->client->getCookieJar()->clear();

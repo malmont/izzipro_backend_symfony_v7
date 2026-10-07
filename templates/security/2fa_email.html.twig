@@ -19,7 +19,7 @@
   
   {% if signature %}
     <p>{{ signature|raw }}</p>
-  {% else %}
+  {% elseif entreprise %}
     <p>
       Pour toute question, contactez-nous :<br>
       Email : {{ entreprise.email }}<br>

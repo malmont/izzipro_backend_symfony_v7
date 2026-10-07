@@ -73,18 +73,17 @@ class OtpService
         $baseUrl = $request->getSchemeAndHttpHost();
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
 
-        $this->emailSenderService->sendTemplatedEmail(
-            $userManaged->getEmail(),
-            'Votre code OTP',
-            'security/2fa_email.html.twig',
-            [
-                'code'       => $otp,
-                'lifetime'   => 300,
-                'entreprise' => $entreprise,
-                'domain'     => '',
-            ],
-            $locale,
-            $baseUrl
-        );
+        $context = [
+            'code'       => $otp,
+            'lifetime'   => 300,
+            'entreprise' => $entreprise,
+            'domain'     => '',
+        ];
+        // Serveur d'envoi du site ; à défaut (site sans configuration d'envoi, ou envoi en échec), serveur de la
+        // plateforme : sans code, l'administrateur ne pourrait plus se connecter
+        $sent = $this->emailSenderService->sendTemplatedEmail($userManaged->getEmail(), 'Votre code OTP', 'security/2fa_email.html.twig', $context, $locale, $baseUrl);
+        if (!$sent) {
+            $this->emailSenderService->sendPlatformEmail($userManaged->getEmail(), 'Votre code de connexion', 'security/2fa_email.html.twig', $context);
+        }
     }
 }
