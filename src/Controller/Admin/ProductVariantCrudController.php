@@ -69,6 +69,7 @@ class ProductVariantCrudController extends BaseTenantCrudController
                     'choice_label' => 'name',
                 ]),
             IntegerField::new('stockQuantity', 'Stock Quantity'),
+            IntegerField::new('price', 'Prix de la variante (cents)')->setHelp('Vide : prix du produit. 2 499 $ = 249900.')->hideOnIndex(),
             AssociationField::new('optionValues', 'Valeurs de cette variante')
                 ->setHelp('Sélectionnez la combinaison exacte de valeurs pour cette variante (ex: "Rouge" et "XL").')
                 ->setFormTypeOption('by_reference', false) 

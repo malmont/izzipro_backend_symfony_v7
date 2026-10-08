@@ -18,7 +18,7 @@ Routes et rôles : `docs/endpoints.md`, section « Landing Page » ; données de
 | Résultat d'une tâche de fond | `GET /api/landingpage-ai/jobs/{jobId}` (même tenant, 1 h) | `ROLE_ADMIN` |
 | Crédits et historique | `GET /api/landingpage-ai/usage` | `ROLE_ADMIN` |
 | Synchronisation de la configuration | `GET /api/landingpage-config/status`, `POST …/sync`, `POST …/rollback` | `ROLE_SUPER_ADMIN` ou en-tête `X-Deploy-Token` |
-| Bibliothèque de modèles de site (propre au site) | `GET`, `POST /api/landingpage-site-models` ; `GET`, `PUT`, `DELETE …/{id}` | `ROLE_ADMIN` |
+| Bibliothèque de modèles de site (propre au site ; boutique : `/api/boutique-site-models`, voir `docs/boutique.md`) | `GET`, `POST /api/landingpage-site-models` ; `GET`, `PUT`, `DELETE …/{id}` | `ROLE_ADMIN` |
 | Modifier le contenu d'une section (champs envoyés seulement) | `PATCH /api/{presentations, presentation-groups, baniere-statiques, bannieres, videos, service-offers}/{id}?locale=` | `ROLE_ADMIN` |
 | Téléverser une image ou une vidéo dans la médiathèque | `POST /api/media` (multipart) → 201 `{ id, key, url, type, mimeType, size, title, scrollStatus }` | `ROLE_ADMIN` |
 | Composer un groupe de présentations | `POST /api/presentation-groups/{id}/presentations`, `DELETE …/presentations/{pid}`, `PUT …/presentations/order` | `ROLE_ADMIN` |
@@ -47,7 +47,8 @@ Depuis le 07/10/2026 (`ContentAuditRecorder`, table `content_audit_log` par tena
 site, la ressource, l'action, la langue, les champs modifiés et l'état avant / après (JSON) : `PATCH` des contenus,
 groupes de présentations (ajout, retrait, ordre), `PUT /api/entreprise` (clés envoyées qui ont changé),
 `PUT /api/landingpage-settings` (configuration complète), modèles de site (création, modification, suppression),
-médiathèque (téléversement, renommage, suppression). Lecture : `GET /api/landingpage-audit?resource=&resourceId=&page=&limit=`
+médiathèque (téléversement, renommage, suppression), et depuis le 08/10/2026 les réglages et modèles de la boutique
+réglable (`boutique-settings`, `boutique-site-models` : `docs/boutique.md`). Lecture : `GET /api/landingpage-audit?resource=&resourceId=&page=&limit=`
 (résumés, plus récents d'abord) et `GET …/{id}` (avec `before` et `after`). Retour en arrière :
 `POST …/{id}/restore` (`ContentAuditRestorer`), journalisé à son tour (`action: restore`, `restoredFrom`) donc
 annulable ; refusé (409) si la ressource a changé depuis cette écriture, sauf `?force=1` ; impossible pour un
@@ -95,7 +96,9 @@ textes de Kara & B, avec `className`, `target`, `rel`).
 Depuis le 07/10/2026, l'administrateur enregistre des configurations complètes comme modèles, sans toucher aux réglages
 publiés (`LandingSiteModelController`, use cases `LandingSiteModelUseCase/`, `Services/LandingSiteModelService/`,
 entité `LandingSiteModel`, table `landing_site_model` par tenant ; script `scripts/migrate_all_v2_landing_site_models.sh`,
-migration `Version20261007100000`).
+migration `Version20261007100000`). Depuis le 08/10/2026, la route est `/api/{app}-site-models` : `landingpage` (ci-dessous)
+ou `boutique` (`docs/boutique.md`), chaque application ayant sa liste (colonne `app`, migration `Version20261008100000`)
+et ses règles de contrôle ; le journal distingue `landingpage-site-models` et `boutique-site-models`.
 
 - `GET /api/landingpage-site-models` : résumés `{ id, name, description, createdAt, updatedAt, tabs, sections }`, du plus
   récemment modifié au plus ancien ; `GET …/{id}` : `{ id, name, description, createdAt, updatedAt, configuration }`,
@@ -176,7 +179,7 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 | Sujet | Fichiers |
 |---|---|
 | Réglages | `Controller/LandingPageSettingsController/`, entité `LandingPageSetting` (une ligne JSON par tenant) |
-| Validation (422 `{ path, message }`) | `Services/LandingPageSettingsService/ReglableCompositionValidator.php` (JSON Schema opis + règles entre blocs), `RichTextPolicy.php` (HTML permis dans les textes), `ReglableCompositionScanner.php` (toutes les bases) |
+| Validation (422 `{ path, message }`) | `Services/LandingPageSettingsService/ReglableCompositionValidator.php` (JSON Schema opis + règles entre blocs), `RichTextPolicy.php` (HTML permis dans les textes), `ReglableCompositionScanner.php` (toutes les bases : réglages des landing pages et de la boutique, modèles de site) |
 | Familles (`components-config`) | `Services/LandingPagesService/ComponentsConfigProvider.php` (source unique : endpoint et assistant) |
 | Assistant : moteur | `Services/LandingAiService/` : `LandingAiComposer` (appel, vérifications, 3 essais), `LandingAiPromptBuilder` (prompt système, outils, cache), `LandingAiCatalogue`, `LandingAiDataSources` (valeurs de `dataType`), `CompositionEditApplier` (opérations de retouche), `LandingAiCompositionChecker`, `AnthropicLandingAiClient`, `LandingAiContentContext` (médiathèque, contenus modifiables de la donnée affichée), `LandingAiContentProposals` (contrôle de `contentChanges`, `groupChanges`, `limits`, jamais appliqués) |
 | Assistant : réglages, réparation | `LandingAiTuning` (effort par nature de demande, durée du cache), `LandingAiOutputRepair` (clés en double du modèle) |
@@ -200,10 +203,10 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 ## Fichiers de configuration partagés
 
 `config/landingpage/` : `landingpage-reglable.schema.json` (contrat), `landingpage-ia-catalogue.json` (familles, outils,
-modèles), `ia-assistant-jeu-essai.md` (cas d'évaluation), `ia-libelles-editeur.md` (facultatif : libellés de l'éditeur
-cités par l'assistant). **Ne pas les modifier à la main** : la version active vient
-de la synchronisation (`var/landingpage-config/`) ; ceux du dépôt sont la version de repli (tests, serveur neuf),
-recopiés depuis la dernière version synchronisée.
+modèles ; version 2 : familles `app: boutique`, `systemPages`), `ia-assistant-jeu-essai.md` (cas d'évaluation),
+`ia-libelles-editeur.md` (facultatif : libellés de l'éditeur cités par l'assistant). **Ne pas les modifier à la main** :
+la version active vient de la synchronisation (`var/landingpage-config/`) ; ceux du dépôt sont la version de repli
+(tests, serveur neuf), recopiés depuis la dernière version synchronisée (08/10/2026 : `528b8f8009eb1e0a`).
 
 ## Tester
 

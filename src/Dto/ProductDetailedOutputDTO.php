@@ -52,8 +52,20 @@ class ProductDetailedOutputDTO
     public ?array $categories = null;
     public ?array $specifications;
 
-    public function __construct(Product $product, string $host, string $locale = 'fr')
+    // --- Contrat de la boutique réglable (ProductCommerceDto, 08/10/2026) : modes explicites, cents, fiche véhicule ---
+    public string $kind;
+    public array $sale;
+    public array $rental;
+    public array $subscription;
+    public bool $customizable;
+    public array $pricing;
+    public ?array $vehicleDetails;
+
+    public function __construct(Product $product, string $host, string $locale = 'fr', string $currency = ProductCommerceDto::DEFAULT_CURRENCY)
     {
+        foreach (ProductCommerceDto::fields($product, $locale, $currency) as $field => $value) {
+            $this->$field = $value;
+        }
         $productTranslation = $product->getTranslation($locale);
         $this->id = $product->getId();
         $this->name = $productTranslation?->getName() ?? $product->getName();
@@ -143,39 +155,8 @@ class ProductDetailedOutputDTO
         ] : null;
         $this->specifications = $product->getSpecifications();
 
-        $this->variants = array_map(function (ProductVariant $variant) use ($locale) {
-            $color = $variant->getColor();
-            $size = $variant->getSize();
+        $this->variants = ProductCommerceDto::variants($product, $locale);
 
-                $options = array_map(function (ProductOptionValue $optionValue) use ($locale) {
-                    $parentOption = $optionValue->getProductOption();
-                    return [
-                        'value_id'      => $optionValue->getId(),
-                        'value'         => $optionValue->getTranslation($locale)?->getValue() ?? $optionValue->getValue(),
-                        'option_name'   => $parentOption ? ($parentOption->getTranslation($locale)?->getName() ?? $parentOption->getName()) : null,
-                        'option_id'     => $parentOption ? $parentOption->getId() : null,
-                        'option_code'   => $parentOption ? $parentOption->getCode() : null,
-                        'image_preview' => $optionValue->getImagePreview(),
-                        'price_delta'   => $optionValue->getPriceDelta(),
-                    ];
-                }, $variant->getOptionValues()->toArray());
-
-            return [
-                'id' => $variant->getId(),
-                'color' => $color ? [
-                    'id'       => $color->getId(),
-                    'name'     => $color->getTranslation($locale)?->getName() ?? $color->getName(),
-                    'codeHexa' => $color->getCodeHexa(),
-                ] : null,
-                'size' => $size ? [
-                    'id'   => $size->getId(),
-                    'name' => $size->getTranslation($locale)?->getName() ?? $size->getName(),
-                ] : null,
-                'stockQuantity' => $variant->getStockQuantity(),
-                'options' => $options, 
-            ];
-        }, $product->getVariants()->toArray());
-    
         $categoriesCollection = $product->getCategory();
         if ($categoriesCollection && !$categoriesCollection->isEmpty()) {
             

@@ -9,7 +9,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
   leurs propres vérifications : `#[IsGranted]` est signalé, les autres (voters, contrôles dans le code) sont dans les fiches.
 - Toutes les routes sont résolues pour le tenant de la requête (en-tête `X-Tenant-Host`, voir `docs/architecture.md`).
 
-## Landing Page (19)
+## Landing Page (14)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -26,11 +26,6 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/landingpage-config/sync` | PUBLIC_ACCESS | `Controller\LandingConfigController\LandingConfigController::sync` |
 | GET | `/api/landingpage-settings` | PUBLIC_ACCESS | `Controller\LandingPageSettingsController\LandingPageSettingsController::getSettings` |
 | PUT | `/api/landingpage-settings` | ROLE_ADMIN | `Controller\LandingPageSettingsController\LandingPageSettingsController::updateSettings` |
-| DELETE | `/api/landingpage-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::delete` |
-| GET | `/api/landingpage-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::getOne` |
-| PUT | `/api/landingpage-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::update` |
-| GET | `/api/landingpage-site-models` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::list` |
-| POST | `/api/landingpage-site-models` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::create` |
 | GET | `/api/landingpage` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getLandingPageProducts` |
 
 ## Contenus des sites (67)
@@ -227,7 +222,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (139)
+## Boutique et commun (146)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -254,6 +249,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/adresses/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::editAdress` |
 | GET | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
 | POST | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::createAdress` |
+| GET | `/api/boutique-settings` | PUBLIC_ACCESS | `Controller\BoutiqueSettingsController\BoutiqueSettingsController::getSettings` |
+| PUT | `/api/boutique-settings` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\BoutiqueSettingsController\BoutiqueSettingsController::updateSettings` |
 | POST | `/api/caisse/cashfunddeposit` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundDeposit` |
 | POST | `/api/caisse/cashfundwithdraw` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundWithdraw` |
 | POST | `/api/caisse/close` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::closeCaisse` |
@@ -342,7 +339,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/type-fournisseurs` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\TypeFournisseurController\TypeFournisseurController::list` |
 | GET | `/api/type-note-de-frais` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\TypeNoteDeFraisController\TypeNoteDeFraisController::list` |
 | GET | `/api/vehicles/carousel` | PUBLIC_ACCESS | `Controller\Api\VehicleApiController::getCarouselVehicles` |
-| PATCH | `/api/{resource}/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::patch` |
+| DELETE | `/api/{app}-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::delete` |
+| GET | `/api/{app}-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::getOne` |
+| PUT | `/api/{app}-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::update` |
+| GET | `/api/{app}-site-models` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::list` |
+| POST | `/api/{app}-site-models` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::create` |
+| PATCH | `/api/{resource}/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::patch` |
 | ANY | `/cart/add/{id}` | aucune règle | `Controller\Cart\CartController::addToCart` |
 | ANY | `/cart/delete-all/{id}` | aucune règle | `Controller\Cart\CartController::deleteAllCart` |
 | ANY | `/cart/delete/{id}` | aucune règle | `Controller\Cart\CartController::deleteFromCart` |

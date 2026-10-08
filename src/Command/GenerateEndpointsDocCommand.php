@@ -151,6 +151,9 @@ class GenerateEndpointsDocCommand extends Command
     {
         $path = preg_replace_callback('/\{(\w+)[^}]*\}/', function (array $m) use ($route) {
             $requirement = $route->getRequirement($m[1]);
+            if ($requirement !== null && preg_match('/^[\w-]+(\|[\w-]+)*$/', $requirement)) {
+                return explode('|', $requirement)[0]; // liste de valeurs (ex. landingpage|boutique) : la première
+            }
 
             return $requirement !== null && preg_match('#^(' . $requirement . ')$#', '1') ? '1' : 'x';
         }, $route->getPath());

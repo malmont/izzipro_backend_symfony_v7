@@ -10,18 +10,21 @@ use Doctrine\ORM\EntityRepository;
  */
 class LandingSiteModelRepository extends EntityRepository
 {
-    /** @return LandingSiteModel[] du plus récent au plus ancien */
-    public function findLatestFirst(): array
+    /** @return LandingSiteModel[] modèles d'une application, du plus récent au plus ancien */
+    public function findLatestFirst(string $app): array
     {
         return $this->createQueryBuilder('m')
+            ->andWhere('m.app = :app')->setParameter('app', $app)
             ->orderBy('m.updatedAt', 'DESC')
             ->addOrderBy('m.id', 'DESC')
             ->getQuery()
             ->getResult();
     }
 
-    public function countAll(): int
+    public function countAll(string $app): int
     {
-        return (int) $this->createQueryBuilder('m')->select('COUNT(m.id)')->getQuery()->getSingleScalarResult();
+        return (int) $this->createQueryBuilder('m')->select('COUNT(m.id)')
+            ->andWhere('m.app = :app')->setParameter('app', $app)
+            ->getQuery()->getSingleScalarResult();
     }
 }

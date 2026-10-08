@@ -92,6 +92,10 @@ final class LandingAiComposer
         return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia, $removalAsked, $editable) {
             $operations = is_array($input->operations ?? null) ? $input->operations : [];
             $applied = $this->applier->apply($composition, $operations);
+            // Boutique : un bloc obligatoire d'une page système ne disparaît jamais, même si la demande le demande
+            if (!$applied['errors'] && ($lostRequired = $this->checker->lostRequiredBlocks($composition, $applied['composition'])) !== []) {
+                return [null, $lostRequired];
+            }
             if (!$applied['errors'] && !$removalAsked && ($lost = $this->lostBlocks($composition, $applied['composition'])) !== []) {
                 return [null, [['path' => 'operations', 'message' => sprintf(
                     'la demande ne demande aucune suppression, mais ces blocs disparaîtraient (avec leurs textes et leurs liaisons) : %s. Pour déplacer un bloc, utilise l\'opération move ; si la demande est déjà satisfaite, ne fais aucune opération',

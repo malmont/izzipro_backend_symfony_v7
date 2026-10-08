@@ -32,7 +32,7 @@ class BookingSetupRequest
         $config = $product->getBookingConfiguration();
 
         // 1. Déterminer si activé via le MODE du produit
-        $dto->enableBooking = ($product->getMode() === ProductMode::BOOKING);
+        $dto->enableBooking = $product->isRentalEnabled();
 
         // 2. Remplir les valeurs si une config existe déjà
         if ($config) {

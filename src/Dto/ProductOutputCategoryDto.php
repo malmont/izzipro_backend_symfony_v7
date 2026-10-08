@@ -45,9 +45,20 @@ class ProductOutputCategoryDto
     public ?array $category;
     public ?array $categories = null;
 
+    // --- Contrat de la boutique réglable (ProductCommerceDto, 08/10/2026) : modes explicites, cents, fiche véhicule ---
+    public string $kind;
+    public array $sale;
+    public array $rental;
+    public array $subscription;
+    public bool $customizable;
+    public array $pricing;
+    public ?array $vehicleDetails;
 
-    public function __construct(Product $product, string $host, string $locale = 'fr')
+    public function __construct(Product $product, string $host, string $locale = 'fr', string $currency = ProductCommerceDto::DEFAULT_CURRENCY)
     {
+        foreach (ProductCommerceDto::fields($product, $locale, $currency) as $field => $value) {
+            $this->$field = $value;
+        }
         $productTranslation = $product->getTranslation($locale);
         $this->id = $product->getId();
         $this->name = $productTranslation?->getName() ?? $product->getName(); 
@@ -146,36 +157,7 @@ class ProductOutputCategoryDto
             $this->style = null;
         }
 
-        $this->variants = array_map(function (ProductVariant $variant) use ($locale){
-            $color = $variant->getColor();
-            $size = $variant->getSize();
-            
-            $options = array_map(function (ProductOptionValue $optionValue) use ($locale){
-                $parentOption = $optionValue->getProductOption();
-                return [
-                    'value_id'    => $optionValue->getId(),
-                    'value'       => $optionValue->getTranslation($locale)?->getValue(),
-                    'option_name' => $parentOption ? $parentOption->getName() : null,
-                    'option_id'   => $parentOption ? $parentOption->getId() : null,
-                    'option_code' => $parentOption ? $parentOption->getCode() : null,
-                ];
-            }, $variant->getOptionValues()->toArray());
-
-            return [
-                'id' => $variant->getId(),
-                'color' => $color ? [
-                    'id'       => $color->getId(),
-                    'name' => $color->getTranslation($locale)?->getName() ?? $color->getName(),
-                    'codeHexa' => $color->getCodeHexa(),
-                ] : null,
-                'size' => $size ? [
-                    'id'   => $size->getId(),
-                    'name' => $size->getTranslation($locale)?->getName(),
-                ] : null,
-                'stockQuantity' => $variant->getStockQuantity(),
-                'options' => $options, 
-            ];
-        }, $product->getVariants()->toArray());
+        $this->variants = ProductCommerceDto::variants($product, $locale);
 
         $this->category = array_map(function ($category) use ($host, $locale) {
             return [

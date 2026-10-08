@@ -5,7 +5,8 @@
 Ne jamais le modifier à la main côté backend : le frontend est la référence.
 
 Utilisé par `App\Services\LandingPageSettingsService\ReglableCompositionValidator` (bibliothèque
-`opis/json-schema` 2.x) à chaque PUT de `/api/landingpage-settings`, sur :
+`opis/json-schema` 2.x) à chaque PUT de `/api/landingpage-settings` et de `/api/boutique-settings` (boutique
+réglable, `docs/boutique.md` : mêmes compositions, plus les pages système, la charte et le commerce), sur :
 
 - `tabs[].sections[].reglableConfig` des sections `componentTypeKey = "typeReglable"` ;
 - `navbar.reglableConfig`, `footer.reglableConfig` ;
@@ -54,9 +55,10 @@ par exemple `tabs[0].sections[2].reglableConfig.blocks[3].fontColor`. Rien n'est
 ### Synchronisation depuis le frontend (remplace les copies manuelles)
 
 Les fichiers de ce dossier ne servent plus que de **version de repli** (`bundled`) : serveur sans synchronisation
-(nouvelle installation) et tests. Ce sont des copies de la dernière version synchronisée et validée (29/09/2026 :
-`a966c990f8a0934f`, première synchronisation réelle) ; les recopier depuis `var/landingpage-config/versions/<id>/`
-quand le frontend change de version. La version active est lue dans `var/landingpage-config/` (`LandingConfigStore`)
+(nouvelle installation) et tests. Ce sont des copies de la dernière version synchronisée et validée (08/10/2026 :
+`528b8f8009eb1e0a`, catalogue version 2 avec les familles de la boutique et `systemPages` ; première synchronisation
+réelle le 29/09/2026 : `a966c990f8a0934f`) ; les recopier depuis `var/landingpage-config/versions/<id>/` quand le
+frontend change de version (les tests de la boutique exigent un catalogue avec `systemPages`). La version active est lue dans `var/landingpage-config/` (`LandingConfigStore`)
 par le validateur, le catalogue et le constructeur de prompts, sans redémarrage (worker compris).
 
 - Le frontend publie sous `FRONTEND_CONFIG_URL` (ex. `https://<frontend>/reglable-config/`) : `manifest.json`
@@ -69,7 +71,9 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
   availableError, upToDate, previous, history }` (20 dernières actions).
 - `POST /api/landingpage-config/sync` : télécharge depuis `FRONTEND_CONFIG_URL` **uniquement** (le corps de la requête est
   ignoré), vérifie chaque sha256 (422 sinon), vérifie que le schéma et le catalogue sont utilisables (422), puis contrôle
-  avec le nouveau schéma **toutes les compositions de tous les tenants et tous les modèles du catalogue** : une seule
+  avec le nouveau schéma **toutes les compositions de tous les tenants** (réglages des landing pages, réglages de la
+  boutique `boutique.…` et modèles de site des deux applications `<app>-site-models[id].…`, depuis le 08/10/2026)
+  **et tous les modèles du catalogue** : une seule
   refusée → 409 avec la liste (`errors`, `refusedCount`), rien n'est activé. Sinon activation atomique ; l'ancienne
   version devient `previous`. Même version déjà active → `up_to_date`.
 - `POST /api/landingpage-config/rollback` : revient à la version précédente (même contrôle : 409 si une composition
@@ -354,6 +358,15 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
     nouvel essai (étapes réparties) ;
   - V7 mesure le texte d'une étape sur sa carte composée sur la pire image possible de la vidéo (blanc ou noir), et
     signale une carte à moins de 70 % d'opacité ou un texte posé directement sur la vidéo.
+- **Boutique réglable** (08/10/2026, catalogue version 2 : familles `app: boutique`, `systemPages`) : les `componentKey`
+  de la boutique (`ProductPage`, `Checkout`, `CartPage`…) passent par les mêmes routes et le même quota, sans rien
+  déclarer (catalogue synchronisé). Consigne `COMMERCE_RULE` (`LandingAiPromptBuilder`, ajoutée quand le contrat
+  connaît la propriété `mode` des containers) : les blocs du commerce lisent les données de la page, l'IA ne règle
+  que leur apparence et n'invente jamais une donnée de produit. Garde-fou en retouche
+  (`LandingAiCompositionChecker::lostRequiredBlocks`) : un bloc d'un type exigé par une page système (`stripePayment`,
+  `cartLines`, `loginForm`…) ou un container portant `mode`, présent au départ, doit rester (même type, même mode),
+  **même si la demande le demande** : la proposition est renvoyée au modèle. Les créations et le mode page ne sont pas
+  rattachés à une page système : c'est le PUT des réglages (`docs/boutique.md`) qui exige les blocs obligatoires.
 - **Prompt de vidéo** (`POST /api/landingpage-ai/video-prompt`, 02/10/2026 ; `WriteLandingVideoPromptUseCase`,
   `LandingAiVideoPromptWriter`) : l'administrateur décrit en français la vidéo d'une scène au défilement, la réponse
   est un prompt en anglais pour un outil de génération de vidéo. Entrée `{ prompt (2 000 car.), format: landscape |

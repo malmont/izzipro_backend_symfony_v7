@@ -4,13 +4,15 @@ namespace App\Services\LandingSiteModelService;
 
 use App\Entity\LandingSiteModel;
 use App\Repository\LandingSiteModelRepository;
+use App\Services\BoutiqueSettingsService\BoutiqueConfigurationValidator;
 use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
 use App\Services\TenantEntityManagerProvider;
 
 /**
- * Bibliothèque de modèles de site des landing pages, propre au site courant (base du tenant) : contrôle des champs,
- * de la configuration (mêmes règles que PUT /api/landingpage-settings), des limites, puis enregistrement. Ne lit ni
- * n'écrit jamais les réglages publiés du site.
+ * Bibliothèque de modèles de site, propre au site courant (base du tenant) et à une application (« app » :
+ * landingpage ou boutique, chacune avec sa route et sa liste) : contrôle des champs, de la configuration (mêmes règles
+ * que le PUT des réglages de l'application), des limites, puis enregistrement. Ne lit ni n'écrit jamais les réglages
+ * publiés du site. Un modèle demandé sous l'autre application est introuvable (404).
  */
 final class LandingSiteModelService
 {
@@ -23,36 +25,43 @@ final class LandingSiteModelService
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
-        private readonly ReglableCompositionValidator $validator
+        private readonly ReglableCompositionValidator $validator,
+        private readonly BoutiqueConfigurationValidator $boutiqueValidator
     ) {
     }
 
     /** @return LandingSiteModel[] */
-    public function all(): array
+    public function all(string $app): array
     {
-        return $this->models()->findLatestFirst();
+        return $this->models()->findLatestFirst(self::app($app));
     }
 
     /** @throws LandingSiteModelException 404 */
-    public function get(int $id): LandingSiteModel
+    public function get(int $id, string $app): LandingSiteModel
     {
-        return $this->models()->find($id) ?? throw new LandingSiteModelException(404, 'Modèle introuvable sur ce site.');
+        $model = $this->models()->find($id);
+        if ($model === null || $model->getApp() !== self::app($app)) {
+            throw new LandingSiteModelException(404, 'Modèle introuvable sur ce site.');
+        }
+
+        return $model;
     }
 
     /** @throws LandingSiteModelException */
-    public function create(mixed $body, ?string $user): LandingSiteModel
+    public function create(string $app, mixed $body, ?string $user): LandingSiteModel
     {
+        $app = self::app($app);
         $body = $this->body($body);
         foreach (self::FIELDS as $field) {
             if ($field !== 'description' && !property_exists($body, $field)) {
                 throw new LandingSiteModelException(422, 'Champ obligatoire manquant : ' . $field, [['path' => $field, 'message' => 'champ obligatoire']]);
             }
         }
-        if ($this->models()->countAll() >= self::MAX_MODELS) {
+        if ($this->models()->countAll($app) >= self::MAX_MODELS) {
             throw new LandingSiteModelException(422, sprintf('%d modèles au plus par site : supprimez-en un avant d\'en enregistrer un autre.', self::MAX_MODELS),
                 [['path' => '', 'message' => sprintf('%d modèles au plus par site', self::MAX_MODELS)]]);
         }
-        $model = (new LandingSiteModel())->setCreatedBy($user);
+        $model = (new LandingSiteModel())->setApp($app)->setCreatedBy($user);
         $this->apply($model, $body);
         $em = $this->emProvider->getEntityManager();
         $em->persist($model);
@@ -62,9 +71,9 @@ final class LandingSiteModelService
     }
 
     /** @throws LandingSiteModelException */
-    public function update(int $id, mixed $body): LandingSiteModel
+    public function update(int $id, string $app, mixed $body): LandingSiteModel
     {
-        $model = $this->get($id);
+        $model = $this->get($id, $app);
         $body = $this->body($body);
         if (get_object_vars($body) === []) {
             throw new LandingSiteModelException(422, 'Aucun champ à modifier (name, description, configuration).', [['path' => '', 'message' => 'au moins un champ attendu']]);
@@ -77,10 +86,10 @@ final class LandingSiteModelService
     }
 
     /** @throws LandingSiteModelException 404 */
-    public function delete(int $id): void
+    public function delete(int $id, string $app): void
     {
         $em = $this->emProvider->getEntityManager();
-        $em->remove($this->get($id));
+        $em->remove($this->get($id, $app));
         $em->flush();
     }
 
@@ -118,8 +127,12 @@ final class LandingSiteModelService
                 if (strlen($json) > self::MAX_CONFIGURATION_BYTES) {
                     throw new LandingSiteModelException(413, sprintf('Configuration trop volumineuse : %d Mo au plus.', self::MAX_CONFIGURATION_BYTES / 1048576));
                 }
-                foreach ($this->validator->validateConfiguration($configuration) as $error) {
-                    $errors[] = ['path' => 'configuration.' . $error['path'], 'message' => $error['message']];
+                // Mêmes règles que le PUT des réglages de l'application : un modèle enregistré doit pouvoir être rechargé
+                $configurationErrors = $model->getApp() === LandingSiteModel::APP_BOUTIQUE
+                    ? $this->boutiqueValidator->validateConfiguration($configuration)
+                    : $this->validator->validateConfiguration($configuration);
+                foreach ($configurationErrors as $error) {
+                    $errors[] = ['path' => rtrim('configuration.' . $error['path'], '.'), 'message' => $error['message']];
                 }
             }
         }
@@ -146,6 +159,18 @@ final class LandingSiteModelService
         $sections = array_sum(array_map(fn ($tab) => is_object($tab) && is_array($tab->sections ?? null) ? count($tab->sections) : 0, $tabs));
 
         return [count($tabs), $sections];
+    }
+
+    /** Application d'après la ressource du journal (« landingpage-site-models », « boutique-site-models ») */
+    public static function appFromResource(string $resource): string
+    {
+        return self::app((string) preg_replace('/-site-models$/', '', $resource));
+    }
+
+    /** @throws \InvalidArgumentException application inconnue (les routes n'en laissent passer aucune autre) */
+    private static function app(string $app): string
+    {
+        return in_array($app, LandingSiteModel::APPS, true) ? $app : throw new \InvalidArgumentException("Application inconnue : $app");
     }
 
     private function body(mixed $body): object

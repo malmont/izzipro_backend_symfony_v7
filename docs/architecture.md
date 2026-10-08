@@ -79,7 +79,8 @@ Ce que contient `gmasuite` devient la valeur par défaut des nouveaux clients (`
      (modèle des tests : sans elle, les tests échouent), et affiche ✅/❌ par base. Scripts existants (hors dépôt,
      `scripts/` est ignoré par git) : `migrate_all_v2_memoires.sh`, `…_book_types.sh`, `…_book_payment_fields.sh`,
      `…_book_print_order.sh`, `…_reservation.sh`, `…_reservation_biographer.sh`, `…_payments_unique_stripe.sh`,
-     `…_shared_media.sh`, `…_video_fields.sh`, `…_landing_ai.sh`, `migrate_v2_reservation_steps.sh`.
+     `…_shared_media.sh`, `…_video_fields.sh`, `…_landing_ai.sh`, `…_landing_site_models.sh`, `…_content_audit.sh`,
+     `…_contact_fields.sh`, `…_boutique_settings.sh`, `…_product_modes.sh`, `migrate_v2_reservation_steps.sh`.
   - Les scripts lisent la liste des bases dans `app_v2_db` (comme l'application) depuis le 30/09/2026.
   - La base modèle `gmasuite` est dans `tenants` : un nouveau tenant hérite donc du schéma à jour.
 - Tables de plateforme (pas dans les bases tenant) : dans `app_v2_db`, via `TenantConnectionManager::getPdoMaster()`

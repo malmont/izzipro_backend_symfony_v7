@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
-/** Journal des écritures de l'éditeur des landing pages (ROLE_ADMIN, propre au site) */
+/** Journal des écritures des éditeurs (landing pages et boutique ; ROLE_ADMIN, propre au site) */
 #[Route('/api/landingpage-audit')]
 #[IsGranted('ROLE_ADMIN')]
 class ContentAuditController extends AbstractController
@@ -19,7 +19,7 @@ class ContentAuditController extends AbstractController
     {
     }
 
-    /** ?resource=presentations|…|entreprise|landingpage-settings|landingpage-site-models|media, resourceId, page, limit */
+    /** ?resource=presentations|…|entreprise|landingpage-settings|boutique-settings|landingpage-site-models|boutique-site-models|media, resourceId, page, limit */
     #[Route('', name: 'api_content_audit_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {

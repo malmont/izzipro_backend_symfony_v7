@@ -73,7 +73,7 @@ class EntrepriseService
         'isBoutiqueActive' => 'isBoutiqueActive', 'isLandingPageActive' => 'isLandingPageActive',
         'isBoussoleEsgActive' => 'isBoussoleEsgActive', 'isMemoireVivanteActive' => 'isMemoireVivanteActive',
         'metaTitle' => 'getMetaTitle', 'metaDescription' => 'getMetaDescription', 'seoKeywords' => 'getSeoKeywords',
-        'ogImage' => 'getOgImage', 'googleSiteVerification' => 'getGoogleSiteVerification',
+        'ogImage' => 'getOgImage', 'googleSiteVerification' => 'getGoogleSiteVerification', 'currency' => 'getCurrency',
     ];
     private const TRANSLATION_GETTERS = ['LegalNotice' => 'getLegalNotice', 'conditionOfUse' => 'getConditionOfUse', 'privacyPolicy' => 'getPrivacyPolicy', 'apropos' => 'getApropos'];
 
@@ -183,6 +183,13 @@ class EntrepriseService
         }
         if (array_key_exists('facebookPixelId', $data)) {
             $entreprise->setFacebookPixelId($data['facebookPixelId']);
+        }
+        if (array_key_exists('currency', $data)) {
+            // Devise du site : code ISO 4217 (3 lettres), lu par toute la boutique
+            if (!is_string($data['currency']) || !preg_match('/^[A-Za-z]{3}$/', $data['currency'])) {
+                throw new EntrepriseValidationException([['path' => 'currency', 'message' => 'code de devise ISO 4217 attendu (3 lettres, ex. CAD)']]);
+            }
+            $entreprise->setCurrency(strtoupper($data['currency']));
         }
         if (array_key_exists('logo', $data)) {
             $entreprise->setLogo($data['logo']);

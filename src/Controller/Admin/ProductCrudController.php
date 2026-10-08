@@ -79,16 +79,12 @@ class ProductCrudController extends BaseTenantCrudController
         yield DateTimeField::new('specialPriceFrom', 'Promotion du')->setColumns('col-md-4')->hideOnIndex();
         yield DateTimeField::new('specialPriceTo', 'Promotion au')->setColumns('col-md-4')->hideOnIndex();
         yield IntegerField::new('quantity', 'Quantité')->onlyOnIndex();
-        yield ChoiceField::new('mode', 'Type de Vente')
-            ->setChoices([
-                'Vente Classique (Retail)' => ProductMode::RETAIL,
-                'Location / Réservation' => ProductMode::BOOKING,
-            ])
-            ->renderAsBadges([
-                ProductMode::RETAIL->value => 'success',
-                ProductMode::BOOKING->value => 'warning',
-            ])
-            ->setColumns('col-md-6');
+        // Modes de la boutique réglable (08/10/2026) : un produit peut cumuler vente et location
+        yield FormField::addPanel('Modes de vente')->setHelp('Un produit peut se vendre et se louer à la fois. La location se règle dans « Configuration de location ».');
+        yield BooleanField::new('saleEnabled', 'Vente')->setColumns('col-md-3');
+        yield BooleanField::new('rentalEnabled', 'Location / réservation')->setColumns('col-md-3');
+        yield BooleanField::new('subscriptionEnabled', 'Abonnement')->setColumns('col-md-3');
+        yield BooleanField::new('customizable', 'Personnalisable')->setColumns('col-md-3')->setHelp('Bouton « Personnaliser » (options à combinaisons).');
 
         yield FormField::addTab('Organisation & Média');
         yield FormField::addPanel('Catégorisation');

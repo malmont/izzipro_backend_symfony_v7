@@ -27,6 +27,7 @@ class LandingSiteModelApiTest extends WebTestCase
         foreach ([[MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE], [MV_TEST_TENANT2_HOST, MV_TEST_TENANT2_DB, MV_TEST_TENANT2_CODE]] as $tenant) {
             $this->tenant = $tenant;
             $this->db()->executeStatement('DELETE FROM landing_site_model');
+            $this->db()->executeStatement("DELETE FROM content_audit_log WHERE resource LIKE '%-site-models'");
         }
         $this->tenant = [MV_TEST_TENANT_HOST, MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE];
         $this->session = $this->login(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
@@ -114,6 +115,36 @@ class LandingSiteModelApiTest extends WebTestCase
         $this->assertSame(401, $this->request('GET', '/api/landingpage-site-models')->getStatusCode());
         $this->assertSame(401, $this->request('POST', '/api/landingpage-site-models', json_encode(['name' => 'Anonyme', 'configuration' => $this->configuration()]))->getStatusCode());
         $this->assertSame('Site 1', $this->db()->fetchOne('SELECT name FROM landing_site_model WHERE id = ?', [$id]));
+    }
+
+    public function testBoutiqueModelsHaveTheirOwnListAndFollowTheBoutiqueRules(): void
+    {
+        $landing = json_decode($this->request('POST', '/api/landingpage-site-models', json_encode(['name' => 'Landing', 'configuration' => $this->configuration()]))->getContent())->id;
+        $checkout = json_decode(json_encode(static::getContainer()->get(LandingAiCatalogue::class)->preset('checkout-type-a')[1]['composition']), true);
+        $boutique = ['tabs' => [['id' => 'sys-checkout', 'system' => 'checkout', 'isVisible' => false, 'sections' => [
+            ['id' => 'sk', 'componentKey' => 'Checkout', 'componentTypeKey' => 'typeReglable', 'reglableConfig' => $checkout],
+        ]]], 'commerce' => ['currency' => 'CAD']];
+
+        $created = $this->request('POST', '/api/boutique-site-models', json_encode(['name' => 'Boutique été', 'configuration' => $boutique]));
+        $this->assertSame(201, $created->getStatusCode(), $created->getContent());
+        $id = json_decode($created->getContent())->id;
+
+        $this->assertSame([$id], array_column(json_decode($this->request('GET', '/api/boutique-site-models')->getContent(), true), 'id'), 'liste de la boutique');
+        $this->assertSame([$landing], array_column(json_decode($this->request('GET', '/api/landingpage-site-models')->getContent(), true), 'id'), 'liste de la landing page');
+        $this->assertSame(404, $this->request('GET', "/api/landingpage-site-models/$id")->getStatusCode(), 'modèle de l\'autre application');
+        $this->assertSame(404, $this->request('DELETE', "/api/boutique-site-models/$landing")->getStatusCode());
+        $this->assertSame(200, $this->request('GET', "/api/boutique-site-models/$id")->getStatusCode());
+        $this->assertSame(404, $this->request('GET', '/api/autre-site-models')->getStatusCode());
+
+        // Règles de la boutique : la page de paiement doit garder son bloc de paiement
+        $boutique['tabs'][0]['sections'][0]['reglableConfig']['blocks'] = array_values(array_filter($checkout['blocks'], fn ($b) => $b['type'] !== 'stripePayment'));
+        $refused = $this->request('PUT', "/api/boutique-site-models/$id", json_encode(['configuration' => $boutique]));
+        $this->assertSame(422, $refused->getStatusCode(), $refused->getContent());
+        $this->assertContains('configuration.tabs[0].sections', array_column(json_decode($refused->getContent(), true)['errors'], 'path'));
+
+        $journal = json_decode($this->request('GET', '/api/landingpage-audit?resource=boutique-site-models')->getContent(), true);
+        $this->assertSame(1, $journal['total']);
+        $this->assertSame((string) $id, $journal['items'][0]['resourceId']);
     }
 
     /** Configuration de 2 onglets et 3 sections, dont une réglable valide (modèle du catalogue) */

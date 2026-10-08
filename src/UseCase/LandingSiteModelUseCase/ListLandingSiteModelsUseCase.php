@@ -5,7 +5,7 @@ namespace App\UseCase\LandingSiteModelUseCase;
 use App\Dto\LandingSiteModelSummaryDto;
 use App\Services\LandingSiteModelService\LandingSiteModelService;
 
-/** GET /api/landingpage-site-models : résumés, du plus récent au plus ancien */
+/** GET /api/{app}-site-models : résumés des modèles de l'application, du plus récent au plus ancien */
 class ListLandingSiteModelsUseCase
 {
     public function __construct(private readonly LandingSiteModelService $models)
@@ -13,8 +13,8 @@ class ListLandingSiteModelsUseCase
     }
 
     /** @return list<LandingSiteModelSummaryDto> */
-    public function execute(): array
+    public function execute(string $app): array
     {
-        return array_map(fn ($model) => LandingSiteModelSummaryDto::fromEntity($model), $this->models->all());
+        return array_map(fn ($model) => LandingSiteModelSummaryDto::fromEntity($model), $this->models->all($app));
     }
 }

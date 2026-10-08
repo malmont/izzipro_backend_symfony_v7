@@ -35,6 +35,8 @@ class EntrepriseDto
     public ?string $seoKeywords = null;
     public ?string $ogImage = null;
     public ?string $googleSiteVerification = null;
+    /** Devise du site (ISO 4217) : tous les montants de la boutique sont dans cette devise (08/10/2026) */
+    public string $currency = 'CAD';
     /** @var SocialNetworkDto[] */
     public array $socialNetworks = [];
 
@@ -51,6 +53,7 @@ class EntrepriseDto
         $dto->ein = $entreprise->getEin();
         $dto->tvaIntracommunautaire = $entreprise->getTvaIntracommunautaire();
         $dto->facebookPixelId = $entreprise->getFacebookPixelId();
+        $dto->currency = $entreprise->getCurrency();
         $dto->isBoutiqueActive = $entreprise->isBoutiqueActive() ?? true;
         $dto->isLandingPageActive = $entreprise->isLandingPageActive() ?? true;
         $dto->isBoussoleEsgActive = $entreprise->isBoussoleEsgActive() ?? false;

@@ -90,12 +90,22 @@ TXT;
   Section de la scène : fullWidth true, sans contentWidth, rootLayout « stack », rootPadding 0, rootGap 0, sans bgVideo ni minHeightVh. Container de la scène : parentId null, w 100, padding 0, radius 0, borderWidth 0, background écrit (couleur sombre ou « transparent »), sans aspectRatio ni hover.
 TXT;
 
+    /**
+     * Blocs du commerce (boutique réglable, contrat du 08/10/2026 : propriété « mode » des containers) : consigne ajoutée
+     * seulement quand le contrat actif les connaît.
+     */
+    private const COMMERCE_RULE = <<<'TXT'
+
+- Blocs du commerce (boutique : sélecteur de mode, prix, options, quantité, ajout au panier, galerie, stock, calendrier de réservation, lignes et totaux du panier, paiement, confirmation, compte, formulaires de connexion, d'inscription, d'adresse, de financement, d'infolettre…, décrits dans le schéma) : ils lisent eux-mêmes les données de la page (produit, panier, commande, compte). Tu ne règles que leur apparence et leurs options (mode d'un container : sale, rental ou subscription ; optionStyle, galleryStyle, showRegular, showShipping, showTaxes, badgeStyle, libellés du sélecteur…). N'invente jamais un nom de produit, un prix, un stock, une date ou une donnée de commande dans un bloc du commerce ni à côté de lui : les textes libres restent dans des blocs title, text ou button. En retouche, un bloc obligatoire d'une page système (paiement sur la page de paiement, lignes et totaux du panier, groupe de mode sur la fiche produit, liste des produits du catalogue, formulaires de connexion et d'inscription…) ne se supprime jamais, même si la demande le demande : dis-le dans warnings et limits.
+TXT;
+
     /** Chemins de l'éditeur cités dans limits[].howTo (LandingConfigStore::EDITOR_LABELS, publié par le frontend) */
     private ?string $editorLabels = null;
     /** Fichier chargé dans $editorLabels */
     private ?string $editorLabelsFrom = null;
     private ?string $schemaText = null;
     private bool $scrollScene = false;
+    private bool $commerce = false;
     /** Fichier chargé dans $schemaText */
     private ?string $schemaFrom = null;
 
@@ -496,6 +506,7 @@ TXT;
             $schema = json_decode(file_get_contents($path), false, 512, JSON_THROW_ON_ERROR);
             $this->schemaText = $this->json($schema);
             $this->scrollScene = self::supportsScrollScene($schema);
+            $this->commerce = self::supportsCommerce($schema);
             $this->schemaFrom = $path;
         }
 
@@ -511,7 +522,7 @@ TXT;
             $this->editorLabelsFrom = $path;
         }
 
-        return self::SYSTEM . ($this->scrollScene ? self::SCROLL_SCENE_RULE : '')
+        return self::SYSTEM . ($this->scrollScene ? self::SCROLL_SCENE_RULE : '') . ($this->commerce ? self::COMMERCE_RULE : '')
             . ($this->editorLabels !== '' ? "\n\n<libelles_editeur>\n" . $this->editorLabels . "\n</libelles_editeur>" : '');
     }
 
@@ -519,6 +530,12 @@ TXT;
     public static function supportsScrollScene(object $schema): bool
     {
         return in_array('scroll', (array) ($schema->{'$defs'}->block->properties->layout->enum ?? []), true);
+    }
+
+    /** Le contrat connaît-il les blocs du commerce (groupe de mode d'un container) ? */
+    public static function supportsCommerce(object $schema): bool
+    {
+        return isset($schema->{'$defs'}->block->properties->mode);
     }
 
     private function json(mixed $value): string

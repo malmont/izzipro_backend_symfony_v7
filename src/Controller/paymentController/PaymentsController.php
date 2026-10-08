@@ -2,6 +2,7 @@
 
 namespace App\Controller\paymentController;
 
+use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\UseCase\PaymentUseCase\CreatePaymentUseCase;
 use App\UseCase\PaymentUseCase\GetPaymentsByOrderSourceUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -122,8 +123,9 @@ class PaymentsController extends AbstractController
      * Récupère la clé publique Stripe et (si pertinent) l'ID du compte connecté.
      */
     #[Route('/api/stripe-config', name: 'get_stripe_config', methods: ['GET'])]
-    public function getStripeConfig(TenantEntityManagerProvider $emProvider): JsonResponse
+    public function getStripeConfig(TenantEntityManagerProvider $emProvider, TenantCurrencyProvider $currencyProvider): JsonResponse
     {
+        $currency = $currencyProvider->code(); // devise du site (fiche entreprise), celle de tous les montants
         $publicKey = $_ENV['STRIPE_PUBLIC_KEY'] ?? null;
         if (!$publicKey) {
             return $this->json(['error' => 'Clé publique Stripe non configurée sur le serveur.'], 500);
@@ -140,7 +142,8 @@ class PaymentsController extends AbstractController
 
             return $this->json([
                 'publicKey' => $publicKey,
-                'stripeAccountId' => null
+                'stripeAccountId' => null,
+                'currency' => $currency,
             ]);
         }
 
@@ -153,7 +156,8 @@ class PaymentsController extends AbstractController
 
         return $this->json([
             'publicKey' => $publicKey,
-            'stripeAccountId' => $stripeConfig->getAccountId()
+            'stripeAccountId' => $stripeConfig->getAccountId(),
+            'currency' => $currency,
         ]);
     }
 

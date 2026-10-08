@@ -6,6 +6,8 @@ use App\Dto\LandingSiteModelSummaryDto;
 use App\Dto\PresentationGroupOutputDto;
 use App\Entity\ContentAuditLog;
 use App\Entity\SharedMedia;
+use App\Services\BoutiqueSettingsService\BoutiqueConfigurationValidator;
+use App\Services\BoutiqueSettingsService\BoutiqueSettingsService;
 use App\Services\EntrepriseService\EntrepriseService;
 use App\Services\EntrepriseService\EntrepriseValidationException;
 use App\Services\LandingContentService\LandingContentEditor;
@@ -22,17 +24,20 @@ use App\UseCase\LandingContentUseCase\LandingContentException;
 
 /**
  * Retour à l'état d'avant d'une écriture du journal. Possible pour : modification d'un contenu de section, de la
- * fiche entreprise, des réglages publiés ou d'un modèle de site, suppression d'un modèle de site (recréé, nouvel
- * identifiant), renommage d'un média, ordre d'un groupe de présentations, et un retour en arrière lui-même. Pas pour
- * un téléversement, un ajout ou un retrait de présentation, ni la suppression d'un média (fichier effacé).
+ * fiche entreprise, des réglages publiés (landing page ou boutique) ou d'un modèle de site, suppression d'un modèle de
+ * site (recréé, nouvel identifiant), renommage d'un média, ordre d'un groupe de présentations, et un retour en arrière
+ * lui-même. Pas pour un téléversement, un ajout ou un retrait de présentation, ni la suppression d'un média (fichier
+ * effacé).
  *
  * Sécurité : si la ressource a été modifiée depuis cette écriture (son état actuel n'est plus l'état « après »), le
  * retour est refusé (409) sauf demande explicite ($force), pour ne pas écraser sans le voir un travail plus récent.
  */
 final class ContentAuditRestorer
 {
+    /** action => true (toujours), ou liste des ressources pour lesquelles l'action se rétablit */
     public const RESTORABLE = [
-        'update' => true, 'restore' => true, 'rename' => true, 'reorder' => true, 'delete' => 'landingpage-site-models',
+        'update' => true, 'restore' => true, 'rename' => true, 'reorder' => true,
+        'delete' => ['landingpage-site-models', 'boutique-site-models'],
     ];
 
     public function __construct(
@@ -41,6 +46,8 @@ final class ContentAuditRestorer
         private readonly EntrepriseService $entreprises,
         private readonly LandingPageSettingsService $settings,
         private readonly ReglableCompositionValidator $validator,
+        private readonly BoutiqueSettingsService $boutiqueSettings,
+        private readonly BoutiqueConfigurationValidator $boutiqueValidator,
         private readonly LandingSiteModelService $models,
         private readonly SharedMediaLibrary $media,
         private readonly MediaUrlResolver $urls,
@@ -52,7 +59,7 @@ final class ContentAuditRestorer
     {
         $rule = self::RESTORABLE[$entry->getAction()] ?? false;
 
-        return ($rule === true || $rule === $entry->getResource()) && $entry->getBefore() !== null;
+        return ($rule === true || (is_array($rule) && in_array($entry->getResource(), $rule, true))) && $entry->getBefore() !== null;
     }
 
     /**
@@ -77,7 +84,8 @@ final class ContentAuditRestorer
                 $resource === 'presentation-groups' => $this->order((int) $id, $before, $after, $locale, $force, $host),
                 $resource === 'entreprise' => $this->entreprise((int) $id, (array) $before, (array) $after, $locale, $force, $host),
                 $resource === 'landingpage-settings' => $this->settings($entry->getBefore(), $entry->getAfter(), $force),
-                $resource === 'landingpage-site-models' => $this->siteModel($entry, $before, $force),
+                $resource === 'boutique-settings' => $this->boutiqueSettings($entry->getBefore(), $entry->getAfter(), $force),
+                str_ends_with($resource, '-site-models') => $this->siteModel($entry, $before, $force),
                 $resource === 'media' => $this->mediaTitle((int) $id, $before, $after, $force, $host),
                 default => throw new ContentAuditException(409, 'Ressource sans retour en arrière.'),
             };
@@ -140,19 +148,35 @@ final class ContentAuditRestorer
         return ['resourceId' => $setting->getId(), 'before' => $current, 'after' => $before, 'result' => null];
     }
 
+    private function boutiqueSettings(?string $before, ?string $after, bool $force): array
+    {
+        $setting = $this->boutiqueSettings->findOrCreateSettings();
+        $current = $this->boutiqueSettings->getRawConfiguration($setting);
+        $this->guard(json_decode((string) $current, true), json_decode((string) $after, true), $force);
+        $configuration = json_decode((string) $before, false, 512, JSON_BIGINT_AS_STRING);
+        $errors = $this->boutiqueValidator->validateConfiguration($configuration);
+        if ($errors) {
+            throw new ContentAuditException(422, 'Ces réglages ne passent plus les contrôles actuels : ' . $errors[0]['path'] . ' : ' . $errors[0]['message'], array_slice($errors, 0, 50));
+        }
+        $this->boutiqueSettings->updateSettings($setting, get_object_vars($configuration));
+
+        return ['resourceId' => $setting->getId(), 'before' => $current, 'after' => $before, 'result' => null];
+    }
+
     private function siteModel(ContentAuditLog $entry, mixed $before, bool $force): array
     {
+        $app = LandingSiteModelService::appFromResource($entry->getResource());
         $fields = (object) ['name' => $before->name ?? '', 'description' => $before->description ?? null, 'configuration' => $before->configuration ?? new \stdClass()];
         if ($entry->getAction() === 'delete') {
-            $model = $this->models->create($fields, $entry->getUser());
+            $model = $this->models->create($app, $fields, $entry->getUser());
 
             return ['resourceId' => $model->getId(), 'before' => null, 'after' => LandingSiteModelSummaryDto::fullJson($model), 'result' => LandingSiteModelSummaryDto::fromEntity($model)];
         }
         $id = (int) $entry->getResourceId();
-        $current = LandingSiteModelSummaryDto::fullJson($this->models->get($id));
+        $current = LandingSiteModelSummaryDto::fullJson($this->models->get($id, $app));
         $strip = fn ($json) => array_diff_key((array) json_decode((string) $json, true), ['updatedAt' => 1, 'createdAt' => 1]);
         $this->guard($strip($current), $strip($entry->getAfter()), $force);
-        $model = $this->models->update($id, $fields);
+        $model = $this->models->update($id, $app, $fields);
 
         return ['resourceId' => $id, 'before' => $current, 'after' => LandingSiteModelSummaryDto::fullJson($model), 'result' => LandingSiteModelSummaryDto::fromEntity($model)];
     }

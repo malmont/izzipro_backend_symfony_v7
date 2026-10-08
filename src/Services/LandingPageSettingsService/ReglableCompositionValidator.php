@@ -138,6 +138,18 @@ final class ReglableCompositionValidator
         return is_object($properties) ? array_keys(get_object_vars($properties)) : [];
     }
 
+    /**
+     * Types de blocs du contrat actif ($defs.block.properties.type.enum).
+     *
+     * @return list<string>
+     */
+    public function blockTypes(): array
+    {
+        $enum = $this->schema()->{'$defs'}->block->properties->type->enum ?? null;
+
+        return is_array($enum) ? array_values(array_filter($enum, 'is_string')) : [];
+    }
+
     /** @return list<array{path: string, message: string}> */
     public function validateComposition(mixed $composition, string $prefix = ''): array
     {

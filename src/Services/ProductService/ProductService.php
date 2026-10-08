@@ -8,6 +8,7 @@ use App\Entity\Categories;
 use App\Entity\Style;
 use App\Dto\ProductInputDTO;
 use App\Dto\ProductDetailedOutputDTO;
+use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\EntityRetrieverService;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpFoundation\Request;
@@ -23,7 +24,8 @@ class ProductService
 
     public function __construct(
         TenantEntityManagerProvider $emProvider,
-        EntityRetrieverService $entityRetrieverService
+        EntityRetrieverService $entityRetrieverService,
+        private readonly TenantCurrencyProvider $currency
     ) {
         $em = $emProvider->getEntityManager();
         $this->repository = $em->getRepository(Product::class);
@@ -34,7 +36,7 @@ class ProductService
     public function getProductsByCommande(Commande $commande, string $host): array
     {
         $products = $commande->getProducts();
-        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host), $products->toArray());
+        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, 'fr', $this->currency->code()), $products->toArray());
     }
 
     public function createProductByCommande(Commande $commande, ProductInputDTO $inputDTO, Request $request, string $uploadDir): Product
@@ -89,7 +91,7 @@ class ProductService
         if (!$product) {
             throw new NotFoundHttpException('Product not found for ID: ' . $id);
         }
-        return new ProductDetailedOutputDTO($product, $host, $locale);
+        return new ProductDetailedOutputDTO($product, $host, $locale, $this->currency->code());
     }
 
     public function getProductBySlug(string $slug, string $host, string $locale = 'fr'): ProductDetailedOutputDTO
@@ -99,7 +101,7 @@ class ProductService
         if (!$product) {
             throw new NotFoundHttpException('Product not found for slug: ' . $slug);
         }
-        return new ProductDetailedOutputDTO($product, $host, $locale);
+        return new ProductDetailedOutputDTO($product, $host, $locale, $this->currency->code());
     }
 
     public function getAllProducts(string $host, string $locale = 'fr'): array
@@ -109,9 +111,9 @@ class ProductService
         $specialOffers = $this->repository->findTranslatedByCriteria($locale, ['isspecialoffer' => true, 'isWeb' => true]);
 
         return [
-            'bestsellers'   => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale), $bestsellers),
-            'newArrivals'   => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale), $newArrivals),
-            'specialOffers' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale), $specialOffers),
+            'bestsellers'   => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale, $this->currency->code()), $bestsellers),
+            'newArrivals'   => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale, $this->currency->code()), $newArrivals),
+            'specialOffers' => array_map(fn($p) => new ProductDetailedOutputDTO($p, $host, $locale, $this->currency->code()), $specialOffers),
         ];
     }
 
@@ -130,12 +132,12 @@ class ProductService
         }
         $criteria[$dbFieldMap[$offer]] = true;
         $products = $this->repository->findTranslatedByCriteria($locale, $criteria);
-        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale), $products);
+        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale, $this->currency->code()), $products);
     }
 
     public function getLandingPageProducts(string $host, string $locale = 'fr'): array
     {
         $products = $this->repository->findTranslatedByCriteria($locale, ['isLandingPage' => true]);
-        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale), $products);
+        return array_map(fn($product) => new ProductDetailedOutputDTO($product, $host, $locale, $this->currency->code()), $products);
     }
 }

@@ -113,6 +113,10 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $googleSiteVerification = null;
 
+    /** Devise du site (ISO 4217, une seule par site) : tous les montants de la boutique (08/10/2026) */
+    #[ORM\Column(type: 'string', length: 3, options: ['default' => 'CAD'])]
+    private string $currency = 'CAD';
+
     public function __construct()
     {
         $this->translations = new ArrayCollection();
@@ -521,6 +525,18 @@ class Entreprise implements TranslatableInterface
     public function setGoogleSiteVerification(?string $googleSiteVerification): static
     {
         $this->googleSiteVerification = $googleSiteVerification;
+
+        return $this;
+    }
+
+    public function getCurrency(): string
+    {
+        return $this->currency;
+    }
+
+    public function setCurrency(string $currency): static
+    {
+        $this->currency = $currency;
 
         return $this;
     }

@@ -3,6 +3,7 @@
 namespace App\Controller\CategoriesControlleur;
 
 use App\Dto\ProductOutputCategoryDto;
+use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\UseCase\CategoriesUseCase\GetProductsByCategoryUseCase;
 use App\UseCase\CategoriesUseCase\CountProductsByCategoryUseCase;
 use App\UseCase\CategoriesUseCase\GetCategoriesUseCase;
@@ -22,6 +23,7 @@ class CategoryController extends AbstractController
         private readonly CountProductsByCategoryUseCase $countProductsByCategoryUseCase,
         private readonly GetCategoriesUseCase $getCategoriesUseCase,
         private readonly TenantCacheService $cache,
+        private readonly TenantCurrencyProvider $currency,
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {
     }
@@ -74,10 +76,8 @@ class CategoryController extends AbstractController
                     $isWeb,
                     $isPos,
                 );
-                $dtos = array_map(function ($product) use ($host, $locale) {
-                    $dto = new ProductOutputCategoryDto($product, $host, $locale);
-                    return $dto;
-                }, $products);
+                $currency = $this->currency->code();
+                $dtos = array_map(fn ($product) => new ProductOutputCategoryDto($product, $host, $locale, $currency), $products);
 
                 $total = $this->countProductsByCategoryUseCase->execute($locale, $categoryIds, $keyword, $isWeb, $isPos);
 

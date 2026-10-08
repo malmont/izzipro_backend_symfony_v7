@@ -131,6 +131,26 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame(3, $usage['history'][0]['attempts']);
     }
 
+    public function testRequiredBlockOfASystemPageCannotBeRemovedEvenWhenAsked(): void
+    {
+        $checkout = $this->preset('checkout-type-a');
+        $payment = array_values(array_filter($checkout->blocks, fn ($b) => $b->type === 'stripePayment'))[0];
+        $title = array_values(array_filter($checkout->blocks, fn ($b) => $b->type === 'title'))[0];
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'remove', 'id' => $payment->id]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => $title->id, 'set' => ['color' => '#000000']]]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'Checkout', 'composition' => $checkout, 'prompt' => 'Supprime le bloc de paiement.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent());
+        $this->assertSame(2, $body->usage->attempts, 'la suppression du paiement est renvoyée au modèle');
+        $this->assertArrayHasKey($payment->id, $this->blocksById($body->composition), 'le bloc de paiement reste');
+        $error = FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'];
+        $this->assertStringContainsString($payment->id, $error);
+        $this->assertStringContainsString('obligatoire sur cette page de la boutique', $error);
+        $this->assertStringContainsString('Blocs du commerce', FakeLandingAiClient::$requests[0]['system'][0]['text'] ?? json_encode(FakeLandingAiClient::$requests[0]['system']), 'consigne du commerce dans le prompt système');
+    }
+
     public function testUnauthorizedMediaTriggersAnotherAttempt(): void
     {
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'section', 'set' => ['bgImage' => 'https://images.example.com/inventee.jpg']]]);

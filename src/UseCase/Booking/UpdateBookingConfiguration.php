@@ -37,12 +37,8 @@ class UpdateBookingConfiguration
         $config->setMinDuration($dto->minDuration);
         $config->setBufferTime($dto->bufferTime ?? 30);
 
-        // 3. Appliquer la logique métier "Product Mode"
-        if ($dto->enableBooking) {
-            $product->setMode(ProductMode::BOOKING);
-        } else {
-            $product->setMode(ProductMode::RETAIL);
-        }
+        // 3. Mode location du produit (la vente, l'abonnement et la personnalisation ne changent pas)
+        $product->setRentalEnabled($dto->enableBooking);
 
         // 4. Persistance sur la bonne base de données
         $em->persist($config);

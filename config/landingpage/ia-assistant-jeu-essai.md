@@ -17,8 +17,8 @@ Cas rejoués à chaque changement de prompt ou de modèle (conception : `ia-assi
 
 | # | Départ | Demande | Vérifications propres | Critère humain |
 |---|---|---|---|---|
-| R1 | groupe U (Approche en étapes) | « Rends la section plus aérée. » | `rootGap` et `gap` des conteneurs augmentés ; aucun texte modifié | Plus d'air, même hiérarchie |
-| R2 | groupe V | « Cartes des formules sur 2 colonnes. » | liste `columns` = 2 ; `mobile.columns` inchangé | Grille correcte |
+| R1 | groupe S (`group-type-s`, Piliers) | « Rends la section plus aérée. » | `rootGap` et `gap` des conteneurs augmentés ; aucun texte modifié | Plus d'air, même hiérarchie |
+| R2 | groupe R (`group-type-r`, Formules sélectionnables) | « Cartes des formules sur 2 colonnes. » | liste `columns` = 2 ; `mobile.columns` inchangé | Grille correcte |
 | R3 | présentation J (Mémoires Vivantes) | « Passe aux couleurs vert sapin et or de la marque. » | couleurs uniquement parmi celles du site ; textes et liaisons inchangés | Cohérent avec le site |
 | R4 | footer D (`footer/footer-type-d`, colonne « Navigation » : `d-nav-titre`) | « Sur mobile, centre tout et masque la colonne Navigation. » | `mobile.align` = center ; colonne `mobile.hidden` ; grand écran inchangé | Mobile propre |
 | R5 | navbar G | « Mets le bouton Démarrer un projet en dégradé. » | bouton : `background` dégradé valide ; autres blocs identiques | Lisible |
@@ -26,7 +26,7 @@ Cas rejoués à chaque changement de prompt ou de modèle (conception : `ia-assi
 | R7 | présentation I | « Traduis tous les textes en anglais. » | chaque texte non lié a `translations.en` ; textes de base inchangés | Traduction naturelle |
 | R8 | groupe R (Mémoires Vivantes) | « Ajoute une animation d'apparition échelonnée aux cartes. » | `repeat.stagger` > 0 ou `animation` sur la carte ; valeurs du contrat | Effet discret |
 | R9 | vidéo A (`video/video-type-a`, badge `a-badge` « ✦ Immersion Visuelle ») | « Supprime le badge et agrandis le titre. » | bloc badge retiré ; `size` du titre augmenté ; aucun enfant orphelin | Correct |
-| R10 | groupe V | « Ajoute un filtre sombre sur l'image de fond. » (sans image de fond) | aucune image inventée ; réponse qui explique qu'il n'y a pas d'image | Refus clair et utile |
+| R10 | groupe O (`group-type-o`, Forfaits en cartes alternées) | « Ajoute un filtre sombre sur l'image de fond. » (sans image de fond) | aucune image inventée ; réponse qui explique qu'il n'y a pas d'image | Refus clair et utile |
 
 ## Étape 2 : créer
 

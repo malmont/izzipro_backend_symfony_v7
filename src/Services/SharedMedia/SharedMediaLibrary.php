@@ -3,6 +3,7 @@
 namespace App\Services\SharedMedia;
 
 use App\Dto\MediaItemOutputDto;
+use App\Entity\BoutiqueSetting;
 use App\Entity\LandingPageSetting;
 use App\Entity\LandingSiteModel;
 use App\Entity\SharedMedia;
@@ -76,16 +77,18 @@ final class SharedMediaLibrary
         $connection = $this->emProvider->getEntityManager()->getConnection();
         $usages = [];
 
-        $settings = $this->emProvider->getEntityManager()->getClassMetadata(LandingPageSetting::class)->getTableName();
-        foreach ($connection->fetchFirstColumn("SELECT configuration::text FROM $settings") as $json) {
-            foreach ($this->paths(json_decode((string) $json, false), $needle) as $path) {
-                $usages[] = 'Réglages publiés : ' . $path;
+        foreach ([LandingPageSetting::class => 'Réglages publiés : ', BoutiqueSetting::class => 'Réglages publiés de la boutique : '] as $class => $label) {
+            $settings = $this->emProvider->getEntityManager()->getClassMetadata($class)->getTableName();
+            foreach ($connection->fetchFirstColumn("SELECT configuration::text FROM $settings") as $json) {
+                foreach ($this->paths(json_decode((string) $json, false), $needle) as $path) {
+                    $usages[] = $label . $path;
+                }
             }
         }
         $models = $this->emProvider->getEntityManager()->getClassMetadata(LandingSiteModel::class)->getTableName();
-        foreach ($connection->fetchAllAssociative("SELECT id, name, configuration FROM $models WHERE configuration LIKE ?", ['%' . $needle . '%']) as $row) {
+        foreach ($connection->fetchAllAssociative("SELECT id, app, name, configuration FROM $models WHERE configuration LIKE ?", ['%' . $needle . '%']) as $row) {
             foreach ($this->paths(json_decode($row['configuration'], false), $needle) as $path) {
-                $usages[] = sprintf('Modèle de site « %s » : %s', $row['name'], $path);
+                $usages[] = sprintf('Modèle de site%s « %s » : %s', $row['app'] === LandingSiteModel::APP_BOUTIQUE ? ' de la boutique' : '', $row['name'], $path);
             }
         }
         foreach (self::CONTENT_COLUMNS as $table => [$label, $columns]) {

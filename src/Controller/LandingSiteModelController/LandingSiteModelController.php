@@ -15,10 +15,11 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
- * Bibliothèque de modèles de site de l'éditeur des landing pages (ROLE_ADMIN, propre au site). Un modèle d'un autre
- * site est dans une autre base : 404.
+ * Bibliothèque de modèles de site (ROLE_ADMIN, propre au site), une par application :
+ * /api/landingpage-site-models (éditeur des landing pages) et /api/boutique-site-models (éditeur de la boutique).
+ * Un modèle d'un autre site est dans une autre base, un modèle de l'autre application est hors de la liste : 404.
  */
-#[Route('/api/landingpage-site-models')]
+#[Route('/api/{app}-site-models', requirements: ['app' => 'landingpage|boutique'])]
 #[IsGranted('ROLE_ADMIN')]
 class LandingSiteModelController extends AbstractController
 {
@@ -33,34 +34,34 @@ class LandingSiteModelController extends AbstractController
     }
 
     #[Route('', name: 'api_landing_site_models_list', methods: ['GET'])]
-    public function list(): JsonResponse
+    public function list(string $app): JsonResponse
     {
-        return $this->json($this->listUseCase->execute());
+        return $this->json($this->listUseCase->execute($app));
     }
 
     #[Route('/{id}', name: 'api_landing_site_models_get', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function getOne(int $id): JsonResponse
+    public function getOne(string $app, int $id): JsonResponse
     {
-        return $this->handle(fn () => new JsonResponse($this->getUseCase->execute($id), 200, [], true));
+        return $this->handle(fn () => new JsonResponse($this->getUseCase->execute($id, $app), 200, [], true));
     }
 
     #[Route('', name: 'api_landing_site_models_create', methods: ['POST'])]
-    public function create(Request $request): JsonResponse
+    public function create(string $app, Request $request): JsonResponse
     {
-        return $this->handle(fn () => $this->json($this->saveUseCase->create($this->body($request), $this->getUser()?->getUserIdentifier()), 201));
+        return $this->handle(fn () => $this->json($this->saveUseCase->create($app, $this->body($request), $this->getUser()?->getUserIdentifier()), 201));
     }
 
     #[Route('/{id}', name: 'api_landing_site_models_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
-    public function update(int $id, Request $request): JsonResponse
+    public function update(string $app, int $id, Request $request): JsonResponse
     {
-        return $this->handle(fn () => $this->json($this->saveUseCase->update($id, $this->body($request))));
+        return $this->handle(fn () => $this->json($this->saveUseCase->update($id, $app, $this->body($request))));
     }
 
     #[Route('/{id}', name: 'api_landing_site_models_delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
-    public function delete(int $id): JsonResponse
+    public function delete(string $app, int $id): JsonResponse
     {
-        return $this->handle(function () use ($id) {
-            $this->saveUseCase->delete($id);
+        return $this->handle(function () use ($app, $id) {
+            $this->saveUseCase->delete($id, $app);
 
             return new JsonResponse(null, Response::HTTP_NO_CONTENT);
         });

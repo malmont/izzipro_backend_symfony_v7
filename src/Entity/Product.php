@@ -163,9 +163,27 @@ class Product implements TranslatableInterface
     #[Groups(['product:read'])]
     private ?bool $isPreOrder = false;
 
+    /**
+     * Ancien mode unique (retail ou booking), gardé en lecture pour l'existant et dérivé des modes explicites
+     * ci-dessous : booking quand la location est le seul mode, retail sinon.
+     */
     #[Groups(['vehicle_product:read', 'product:read'])]
     #[ORM\Column(type: 'string', length: 20, enumType: ProductMode::class, options: ['default' => 'retail'])]
     private ProductMode $mode = ProductMode::RETAIL;
+
+    // Modes explicites de la boutique réglable (08/10/2026) : un produit peut en cumuler plusieurs (vente et location)
+    #[ORM\Column(name: 'sale_enabled', options: ['default' => true])]
+    private bool $saleEnabled = true;
+
+    #[ORM\Column(name: 'rental_enabled', options: ['default' => false])]
+    private bool $rentalEnabled = false;
+
+    #[ORM\Column(name: 'subscription_enabled', options: ['default' => false])]
+    private bool $subscriptionEnabled = false;
+
+    /** Bouton « Personnaliser » : options à combinaisons (/api/customization/config/{variantId}) */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $customizable = false;
 
     #[Groups(['vehicle_product:read', 'product:read'])]
     #[ORM\OneToOne(mappedBy: 'product', cascade: ['persist', 'remove'])]
@@ -829,10 +847,75 @@ class Product implements TranslatableInterface
         return $this->mode;
     }
 
+    /** Ancien mode unique : booking = location seule, retail = vente seule (les autres modes ne changent pas) */
     public function setMode(ProductMode $mode): self
     {
-        $this->mode = $mode;
+        $this->saleEnabled = $mode === ProductMode::RETAIL;
+        $this->rentalEnabled = $mode === ProductMode::BOOKING;
+        $this->syncMode();
+
         return $this;
+    }
+
+    public function isSaleEnabled(): bool
+    {
+        return $this->saleEnabled;
+    }
+
+    public function setSaleEnabled(bool $saleEnabled): self
+    {
+        $this->saleEnabled = $saleEnabled;
+        $this->syncMode();
+
+        return $this;
+    }
+
+    public function isRentalEnabled(): bool
+    {
+        return $this->rentalEnabled;
+    }
+
+    public function setRentalEnabled(bool $rentalEnabled): self
+    {
+        $this->rentalEnabled = $rentalEnabled;
+        $this->syncMode();
+
+        return $this;
+    }
+
+    public function isSubscriptionEnabled(): bool
+    {
+        return $this->subscriptionEnabled;
+    }
+
+    public function setSubscriptionEnabled(bool $subscriptionEnabled): self
+    {
+        $this->subscriptionEnabled = $subscriptionEnabled;
+
+        return $this;
+    }
+
+    public function isCustomizable(): bool
+    {
+        return $this->customizable;
+    }
+
+    public function setCustomizable(bool $customizable): self
+    {
+        $this->customizable = $customizable;
+
+        return $this;
+    }
+
+    /** Fiche à afficher : « vehicle » pour un VehicleProduct, « standard » sinon */
+    public function getKind(): string
+    {
+        return $this instanceof VehicleProduct ? 'vehicle' : 'standard';
+    }
+
+    private function syncMode(): void
+    {
+        $this->mode = $this->rentalEnabled && !$this->saleEnabled ? ProductMode::BOOKING : ProductMode::RETAIL;
     }
 
     /**
@@ -865,9 +948,10 @@ class Product implements TranslatableInterface
         return $this;
     }
 
+    /** Le produit se loue (réservation) ; il peut aussi se vendre */
     public function isBookable(): bool
     {
-        return $this->mode === ProductMode::BOOKING;
+        return $this->rentalEnabled;
     }
 
     public function getBookingConfiguration(): ?BookingConfiguration

@@ -49,6 +49,28 @@ final class LandingAiCatalogue
         return array_values($this->family($componentKey)['tools'] ?? []);
     }
 
+    /**
+     * Pages système de la boutique (catalogue version 2, clé « systemPages ») : adresse fixe et blocs obligatoires.
+     * Vide avec un catalogue qui ne les publie pas : le contrôle des pages système n'est alors pas fait.
+     *
+     * @return array<string, array{route: string, title: array, required: list<string>}> clé de page => description
+     */
+    public function systemPages(): array
+    {
+        $pages = [];
+        foreach (is_array($this->load()['systemPages'] ?? null) ? $this->load()['systemPages'] : [] as $page) {
+            if (is_string($page['key'] ?? null)) {
+                $pages[$page['key']] = [
+                    'route' => (string) ($page['route'] ?? ''),
+                    'title' => is_array($page['title'] ?? null) ? $page['title'] : [],
+                    'required' => array_values(array_filter($page['required'] ?? [], 'is_string')),
+                ];
+            }
+        }
+
+        return $pages;
+    }
+
     /** Modèle par identifiant, toutes familles confondues : [famille, modèle] ou null */
     public function preset(string $presetId): ?array
     {

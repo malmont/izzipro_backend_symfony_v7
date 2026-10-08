@@ -281,7 +281,50 @@
             "language",
             "admin",
             "products",
-            "icon"
+            "icon",
+            "modeSwitch",
+            "price",
+            "optionPicker",
+            "quantity",
+            "addToCart",
+            "gallery",
+            "stock",
+            "rentalPack",
+            "bookingCalendar",
+            "deposit",
+            "techSpecs",
+            "share",
+            "customizeButton",
+            "optionGroups",
+            "customPreview",
+            "customPrice",
+            "customAddToCart",
+            "categoryPicker",
+            "pagination",
+            "cartLines",
+            "cartTotals",
+            "checkoutButton",
+            "cartBadge",
+            "checkoutIdentity",
+            "checkoutAddress",
+            "checkoutLicense",
+            "checkoutShipping",
+            "checkoutSummary",
+            "stripePayment",
+            "orderConfirmation",
+            "accountMenu",
+            "orderList",
+            "addressList",
+            "carrierList",
+            "profileForm",
+            "addressForm",
+            "orderDetail",
+            "newsletterForm",
+            "financingForm",
+            "loginForm",
+            "registerForm",
+            "passwordResetForm",
+            "resendVerificationForm"
           ]
         },
         "parentId": {
@@ -449,7 +492,11 @@
                 "banners",
                 "marques",
                 "services",
-                "links"
+                "links",
+                "products",
+                "slides",
+                "cards",
+                "categories"
               ]
             },
             "id": {
@@ -894,13 +941,13 @@
           "type": "number",
           "minimum": 0.8,
           "maximum": 3,
-          "description": "Interligne (multiplicateur). Types : title, text, button, badge, stat, nav, language."
+          "description": "Interligne (multiplicateur). Types : title, text, button, badge, stat, nav, language, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "letterSpacing": {
           "type": "number",
           "minimum": -0.1,
           "maximum": 1,
-          "description": "Espacement des lettres en em. Types : title, text, button, badge, stat, nav, language."
+          "description": "Espacement des lettres en em. Types : title, text, button, badge, stat, nav, language, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "fontFamily": {
           "enum": [
@@ -919,7 +966,7 @@
             "Georgia",
             "Système"
           ],
-          "description": "Police chargée par le site. Types : title, text, button, badge, stat, nav, language, container."
+          "description": "Police chargée par le site. Types : title, text, button, badge, stat, nav, language, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, loginForm, registerForm, passwordResetForm, resendVerificationForm, container."
         },
         "shadow": {
           "enum": [
@@ -928,13 +975,13 @@
             "lg",
             "glow"
           ],
-          "description": "Ombre prédéfinie. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Ombre prédéfinie. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "opacity": {
           "type": "number",
           "minimum": 0,
           "maximum": 99,
-          "description": "Opacité en %, absente = 100. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Opacité en %, absente = 100. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "hover": {
           "enum": [
@@ -947,7 +994,7 @@
             "rise",
             "grow"
           ],
-          "description": "Effet au survol (hors édition). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Effet au survol (hors édition). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "animation": {
           "enum": [
@@ -958,35 +1005,35 @@
             "from-right",
             "zoom"
           ],
-          "description": "Apparition quand le bloc entre dans l’écran (une fois) : fondu, montée, arrivée par la gauche / la droite, zoom. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Apparition quand le bloc entre dans l’écran (une fois) : fondu, montée, arrivée par la gauche / la droite, zoom. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "animationDelay": {
           "type": "number",
           "minimum": 0,
           "maximum": 1.5,
-          "description": "Délai avant l’apparition, en secondes, pour enchaîner les blocs. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Délai avant l’apparition, en secondes, pour enchaîner les blocs. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "animationDuration": {
           "type": "number",
           "minimum": 0.1,
           "maximum": 3,
-          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "animationDistance": {
           "type": "number",
           "minimum": 0,
           "maximum": 200,
-          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "link": {
           "$ref": "#/$defs/url",
-          "description": "Rend tout le bloc cliquable (image, carte…). Types : container, title, text, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Rend tout le bloc cliquable (image, carte…). Types : container, title, text, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "blur": {
           "type": "number",
           "minimum": 0,
           "maximum": 120,
-          "description": "Flou en px (halos décoratifs). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Flou en px (halos décoratifs). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "loop": {
           "enum": [
@@ -994,13 +1041,13 @@
             "marquee",
             "spin"
           ],
-          "description": "Mouvement continu : float = le contenu flotte doucement (logo, icône). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Mouvement continu : float = le contenu flotte doucement (logo, icône). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "rotate": {
           "type": "number",
           "minimum": -30,
           "maximum": 30,
-          "description": "Rotation en degrés. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Rotation en degrés. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "textShadow": {
           "enum": [
@@ -1008,7 +1055,7 @@
             "md",
             "lg"
           ],
-          "description": "Ombre portée du texte (texte posé sur une photo). Types : title, text, button, badge, stat, nav, language."
+          "description": "Ombre portée du texte (texte posé sur une photo). Types : title, text, button, badge, stat, nav, language, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "textGradient": {
           "$ref": "#/$defs/gradient",
@@ -1080,7 +1127,7 @@
           "type": "number",
           "minimum": 0,
           "maximum": 100,
-          "description": "Étape d’une scène au défilement : moment où elle apparaît, en % du défilement de la scène (et donc de la vidéo). Absent : étapes réparties à intervalles égaux. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Étape d’une scène au défilement : moment où elle apparaît, en % du défilement de la scène (et donc de la vidéo). Absent : étapes réparties à intervalles égaux. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "headingSize": {
           "type": "number",
@@ -1236,15 +1283,15 @@
         },
         "fitContent": {
           "type": "boolean",
-          "description": "Largeur ajustée au contenu (w est ignoré). Dans une pile, le bloc se place alors selon son propre align et non celui du parent. Types : button, badge, title, text, nav, language, admin, icon, container, image."
+          "description": "Largeur ajustée au contenu (w est ignoré). Dans une pile, le bloc se place alors selon son propre align et non celui du parent. Types : button, badge, title, text, nav, language, admin, icon, container, image, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "underline": {
           "type": "boolean",
-          "description": "Texte souligné (lien d’un pied de page…). Types : title, text, button, badge, stat, nav, language."
+          "description": "Texte souligné (lien d’un pied de page…). Types : title, text, button, badge, stat, nav, language, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "underlineColor": {
           "$ref": "#/$defs/color",
-          "description": "Couleur du soulignement (sinon celle du texte). Types : title, text, button, badge, stat, nav, language."
+          "description": "Couleur du soulignement (sinon celle du texte). Types : title, text, button, badge, stat, nav, language, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "trailingIcon": {
           "enum": [
@@ -1290,23 +1337,23 @@
           "type": "number",
           "minimum": 0,
           "maximum": 2000,
-          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "fixedHeight": {
           "type": "number",
           "minimum": 8,
           "maximum": 1200,
-          "description": "Hauteur fixe en px dans une pile, une rangée ou une grille (logo, vignette), aussi sur mobile. Une image s’y ajuste selon objectFit. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Hauteur fixe en px dans une pile, une rangée ou une grille (logo, vignette), aussi sur mobile. Une image s’y ajuste selon objectFit. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "paddingX": {
           "type": "number",
           "minimum": 0,
           "maximum": 160,
-          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "pushEnd": {
           "type": "boolean",
-          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon."
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, products, icon, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "bindingFallback": {
           "type": "boolean",
@@ -1331,11 +1378,11 @@
         },
         "accent": {
           "$ref": "#/$defs/color",
-          "description": "Couleur de l’onglet actif, de la carte choisie et du filtre actif. Types : container."
+          "description": "Couleur de l’onglet actif, de la carte choisie et du filtre actif. Types : container, modeSwitch, optionPicker, optionGroups, quantity, rentalPack, bookingCalendar, categoryPicker, pagination, gallery, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "accentBackground": {
           "$ref": "#/$defs/background",
-          "description": "Types : container."
+          "description": "Types : container, modeSwitch, optionPicker, optionGroups, quantity, rentalPack, bookingCalendar, categoryPicker, pagination, gallery, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "tabsStyle": {
           "enum": [
@@ -1384,7 +1431,7 @@
         "label": {
           "type": "string",
           "maxLength": 10000,
-          "description": "Libellé sous le chiffre (text contient le chiffre). Types : stat."
+          "description": "Libellé sous le chiffre (text contient le chiffre). Types : stat, price, customPrice, addressForm, orderDetail, quantity, rentalPack, deposit, stock, cartLines, cartTotals, checkoutSummary, checkoutShipping, checkoutAddress, checkoutIdentity, checkoutLicense, orderConfirmation, orderList, addressList, carrierList, profileForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "poster": {
           "$ref": "#/$defs/url",
@@ -1407,7 +1454,7 @@
         "placeholder": {
           "type": "string",
           "maxLength": 10000,
-          "description": "Formulaire newsletter : texte du champ e-mail. Types : form."
+          "description": "Formulaire newsletter : texte du champ e-mail. Types : form, newsletterForm."
         },
         "navDirection": {
           "enum": [
@@ -1443,6 +1490,86 @@
           "minimum": 0,
           "maximum": 30,
           "description": "Menu : marge intérieure horizontale des liens, en px (verticale : moitié). Types : nav."
+        },
+        "navStyle": {
+          "enum": [
+            "text",
+            "underline",
+            "pill",
+            "solid",
+            "outline"
+          ],
+          "description": "Menu : style des liens. text (couleurs seules), underline (trait navUnderline sous le lien actif et au survol), pill (fond activeBackground sur le lien actif), solid (fond linkBackground sur chaque lien), outline (bordure linkBorder sur chaque lien). Absent : trait si navUnderline, pastille si activeBackground. Types : nav."
+        },
+        "hoverBackground": {
+          "$ref": "#/$defs/background",
+          "description": "Menu : fond d’un lien au survol (couleur ou dégradé). Types : nav."
+        },
+        "linkBackground": {
+          "$ref": "#/$defs/background",
+          "description": "Menu (style solid) : fond de chaque lien. Types : nav."
+        },
+        "linkBorder": {
+          "$ref": "#/$defs/color",
+          "description": "Menu (style outline) : couleur de la bordure de chaque lien. Types : nav."
+        },
+        "linkRadius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 40,
+          "description": "Menu : arrondi des liens (pastille, bouton), en px (absent : 8). Types : nav."
+        },
+        "navOrder": {
+          "type": "array",
+          "maxItems": 60,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[\\w-]{1,60}$"
+          },
+          "description": "Menu : ordre des liens. Clés « tab-<id> » pour les onglets du site et identifiants des liens de navItems. Une clé absente garde sa place par défaut (onglets puis liens ajoutés), à la suite. Types : nav."
+        },
+        "navItems": {
+          "type": "array",
+          "maxItems": 12,
+          "description": "Menu : liens ajoutés hors onglets (ancre #contact, page /…, adresse https, mailto, tel). title : texte français, titleEn : texte anglais, newTab : ouvrir dans un nouvel onglet. Types : nav.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title",
+              "url"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[\\w-]{1,40}$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "^[^<>]*\\S[^<>]*$",
+                "description": "Texte du lien (français)."
+              },
+              "titleEn": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "^[^<>]*\\S[^<>]*$",
+                "description": "Texte du lien en anglais."
+              },
+              "url": {
+                "$ref": "#/$defs/url",
+                "description": "Ancre (#contact), page (/…), https, mailto ou tel."
+              },
+              "newTab": {
+                "type": "boolean",
+                "description": "Ouvrir dans un nouvel onglet."
+              }
+            }
+          }
         },
         "navMobile": {
           "enum": [
@@ -1616,6 +1743,119 @@
         "buttonColor": {
           "$ref": "#/$defs/color",
           "description": "Couleur du texte du bouton d’envoi du formulaire. Types : form."
+        },
+        "mode": {
+          "enum": [
+            "sale",
+            "rental",
+            "subscription"
+          ],
+          "description": "Boutique : groupe d’un mode de vente (sale = achat, rental = location, subscription = abonnement). Ses blocs ne s’affichent que si le produit propose ce mode, et pour le mode choisi quand la page a un bloc modeSwitch. Types : container."
+        },
+        "modeHint": {
+          "type": "boolean",
+          "description": "Boutique : ruban « mode » affiché sur le groupe en édition seulement. Types : container."
+        },
+        "showRegular": {
+          "type": "boolean",
+          "description": "Prix : affiche le prix régulier barré quand une promotion s’applique. Types : price."
+        },
+        "showUnit": {
+          "type": "boolean",
+          "description": "Prix : affiche l’unité de vente après le prix. Types : price."
+        },
+        "optionStyle": {
+          "enum": [
+            "pills",
+            "select",
+            "swatches",
+            "cards"
+          ],
+          "description": "Options d’un produit : pastilles (défaut), liste déroulante ou pastilles de couleur ; groupes d’options de la personnalisation : cartes (défaut) ou pastilles. Types : optionPicker, optionGroups."
+        },
+        "galleryStyle": {
+          "enum": [
+            "thumbs",
+            "grid",
+            "slides"
+          ],
+          "description": "Galerie : grande image et vignettes (défaut), grille, ou diaporama. Types : gallery."
+        },
+        "thumbPosition": {
+          "enum": [
+            "bottom",
+            "left"
+          ],
+          "description": "Galerie : vignettes sous l’image (défaut) ou à gauche. Types : gallery."
+        },
+        "stockStyle": {
+          "enum": [
+            "badge",
+            "text"
+          ],
+          "description": "Stock : pastille (défaut) ou texte simple. Types : stock."
+        },
+        "packStyle": {
+          "enum": [
+            "select",
+            "cards"
+          ],
+          "description": "Pack tarifaire d’une location : liste déroulante (défaut) ou cartes. Types : rentalPack."
+        },
+        "switchStyle": {
+          "enum": [
+            "tabs",
+            "pills",
+            "segmented"
+          ],
+          "description": "Sélecteur de mode (achat, location, abonnement) : onglets (défaut), pastilles ou segments. Types : modeSwitch."
+        },
+        "saleLabel": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Sélecteur de mode : libellé de l’achat (défaut « Acheter »). Types : modeSwitch."
+        },
+        "rentalLabel": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Sélecteur de mode : libellé de la location (défaut « Louer »). Types : modeSwitch."
+        },
+        "subscriptionLabel": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Sélecteur de mode : libellé de l’abonnement (défaut « S’abonner »). Types : modeSwitch."
+        },
+        "pickerStyle": {
+          "enum": [
+            "pills",
+            "select",
+            "cards"
+          ],
+          "description": "Catégories du catalogue : pastilles (défaut), liste déroulante ou cartes. Types : categoryPicker."
+        },
+        "showImages": {
+          "type": "boolean",
+          "description": "Lignes du panier ou récapitulatif : vignettes des produits ; groupes d’options : icônes des options ; détail de commande : vignettes des articles. Types : cartLines, checkoutSummary, optionGroups, orderDetail."
+        },
+        "showDelta": {
+          "type": "boolean",
+          "description": "Groupes d’options (personnalisation) : supplément de prix affiché sur chaque option. Types : optionGroups."
+        },
+        "showShipping": {
+          "type": "boolean",
+          "description": "Totaux du panier : ligne « Livraison ». Types : cartTotals."
+        },
+        "showTaxes": {
+          "type": "boolean",
+          "description": "Totaux du panier : ligne « Taxes ». Types : cartTotals."
+        },
+        "badgeStyle": {
+          "enum": [
+            "icon",
+            "pill",
+            "text"
+          ],
+          "description": "Badge du panier (navbar) : icône avec compteur (défaut), pastille, ou texte « Panier (n) ». Types : cartBadge."
         }
       },
       "allOf": [
@@ -1631,7 +1871,48 @@
                     "badge",
                     "stat",
                     "nav",
-                    "language"
+                    "language",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "financingForm",
+                    "newsletterForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -1657,7 +1938,48 @@
                     "badge",
                     "stat",
                     "nav",
-                    "language"
+                    "language",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "financingForm",
+                    "newsletterForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -1684,6 +2006,47 @@
                     "stat",
                     "nav",
                     "language",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "financingForm",
+                    "newsletterForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm",
                     "container"
                   ]
                 }
@@ -1720,7 +2083,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -1756,7 +2162,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -1792,7 +2241,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -1828,7 +2320,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -1864,7 +2399,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -1900,7 +2478,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -1936,7 +2557,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -1971,7 +2635,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -2007,7 +2714,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -2043,7 +2793,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -2079,7 +2872,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -2105,7 +2941,48 @@
                     "badge",
                     "stat",
                     "nav",
-                    "language"
+                    "language",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "financingForm",
+                    "newsletterForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -2363,7 +3240,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -2878,7 +3798,48 @@
                     "admin",
                     "icon",
                     "container",
-                    "image"
+                    "image",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "financingForm",
+                    "newsletterForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -2904,7 +3865,48 @@
                     "badge",
                     "stat",
                     "nav",
-                    "language"
+                    "language",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "financingForm",
+                    "newsletterForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -2930,7 +3932,48 @@
                     "badge",
                     "stat",
                     "nav",
-                    "language"
+                    "language",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "financingForm",
+                    "newsletterForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -3027,7 +4070,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -3063,7 +4149,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -3099,7 +4228,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -3135,7 +4307,50 @@
                     "language",
                     "admin",
                     "products",
-                    "icon"
+                    "icon",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -3260,7 +4475,40 @@
               "type": {
                 "not": {
                   "enum": [
-                    "container"
+                    "container",
+                    "modeSwitch",
+                    "optionPicker",
+                    "optionGroups",
+                    "quantity",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "categoryPicker",
+                    "pagination",
+                    "gallery",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "financingForm",
+                    "newsletterForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -3280,7 +4528,40 @@
               "type": {
                 "not": {
                   "enum": [
-                    "container"
+                    "container",
+                    "modeSwitch",
+                    "optionPicker",
+                    "optionGroups",
+                    "quantity",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "categoryPicker",
+                    "pagination",
+                    "gallery",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "financingForm",
+                    "newsletterForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -3425,7 +4706,31 @@
               "type": {
                 "not": {
                   "enum": [
-                    "stat"
+                    "stat",
+                    "price",
+                    "customPrice",
+                    "addressForm",
+                    "orderDetail",
+                    "quantity",
+                    "rentalPack",
+                    "deposit",
+                    "stock",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutSummary",
+                    "checkoutShipping",
+                    "checkoutAddress",
+                    "checkoutIdentity",
+                    "checkoutLicense",
+                    "orderConfirmation",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "resendVerificationForm"
                   ]
                 }
               }
@@ -3505,7 +4810,8 @@
               "type": {
                 "not": {
                   "enum": [
-                    "form"
+                    "form",
+                    "newsletterForm"
                   ]
                 }
               }
@@ -3656,6 +4962,146 @@
             "not": {
               "required": [
                 "linkPadding"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "hoverBackground"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "linkBackground"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "linkBorder"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "linkRadius"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navOrder"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navItems"
               ]
             }
           }
@@ -3980,6 +5426,390 @@
             "not": {
               "required": [
                 "buttonColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "mode"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "modeHint"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "price"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "showRegular"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "price"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "showUnit"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "optionPicker",
+                    "optionGroups"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "optionStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "gallery"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "galleryStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "gallery"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "thumbPosition"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "stock"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "stockStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "rentalPack"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "packStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "modeSwitch"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "switchStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "modeSwitch"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "saleLabel"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "modeSwitch"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "rentalLabel"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "modeSwitch"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "subscriptionLabel"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "categoryPicker"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "pickerStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "cartLines",
+                    "checkoutSummary",
+                    "optionGroups",
+                    "orderDetail"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "showImages"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "optionGroups"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "showDelta"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "cartTotals"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "showShipping"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "cartTotals"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "showTaxes"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "cartBadge"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "badgeStyle"
               ]
             }
           }

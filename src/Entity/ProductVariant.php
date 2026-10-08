@@ -32,6 +32,10 @@ class ProductVariant
     #[ORM\Column]
     private int $stockQuantity = 0;
 
+    /** Prix de cette variante en cents, null = prix du produit (boutique réglable, 08/10/2026) */
+    #[ORM\Column(nullable: true)]
+    private ?int $price = null;
+
     /**
      * @var Collection<int, OrderItems>
      */
@@ -111,6 +115,18 @@ class ProductVariant
     public function setProduct(?Product $product): static
     {
         $this->product = $product;
+
+        return $this;
+    }
+
+    public function getPrice(): ?int
+    {
+        return $this->price;
+    }
+
+    public function setPrice(?int $price): static
+    {
+        $this->price = $price;
 
         return $this;
     }

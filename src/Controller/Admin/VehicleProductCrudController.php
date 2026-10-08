@@ -9,6 +9,7 @@ use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\FormField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
@@ -48,15 +49,8 @@ class VehicleProductCrudController extends BaseTenantCrudController
                 IntegerField::new('year', 'Année'),
                 NumberField::new('price', 'Prix ($)'),
                 IntegerField::new('quantity', 'Stock'),
-                ChoiceField::new('mode', 'Commercialisation')
-                    ->setChoices([
-                        'Vente Sèche' => ProductMode::RETAIL,
-                        'Location / Réservation' => ProductMode::BOOKING,
-                    ])
-                    ->renderAsBadges([
-                        ProductMode::RETAIL->value => 'success',
-                        ProductMode::BOOKING->value => 'warning',
-                    ]),
+                BooleanField::new('saleEnabled', 'Vente')->renderAsSwitch(false),
+                BooleanField::new('rentalEnabled', 'Location')->renderAsSwitch(false),
                 AssociationField::new('bookingConfiguration', 'Config. Location'),
             ];
         }
@@ -110,16 +104,11 @@ class VehicleProductCrudController extends BaseTenantCrudController
 
             IntegerField::new('quantity', 'Quantité en Stock (Ex: 1)'),
 
-            ChoiceField::new('mode', 'Mode de Commercialisation')
-                ->setChoices([
-                    'Vente Sèche (Achat Direct)' => ProductMode::RETAIL,
-                    'Location / Réservation' => ProductMode::BOOKING,
-                ])
-                ->renderAsBadges([
-                    ProductMode::RETAIL->value => 'success',
-                    ProductMode::BOOKING->value => 'warning',
-                ])
-                ->setColumns('col-md-6'),
+            // Modes de la boutique réglable (08/10/2026) : un véhicule peut se vendre et se louer à la fois
+            BooleanField::new('saleEnabled', 'Vente (achat direct)')->setColumns('col-md-3'),
+            BooleanField::new('rentalEnabled', 'Location / réservation')->setColumns('col-md-3'),
+            BooleanField::new('subscriptionEnabled', 'Abonnement')->setColumns('col-md-3'),
+            BooleanField::new('customizable', 'Personnalisable')->setColumns('col-md-3'),
 
             AssociationField::new('bookingConfiguration', 'Configuration de Location (Si Loué)')
                 ->setFormTypeOptions(['em' => $tenantEm])

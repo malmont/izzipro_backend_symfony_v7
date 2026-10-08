@@ -47,6 +47,46 @@ final class LandingAiCompositionChecker
     }
 
     /**
+     * Retouche d'une page système de la boutique : un bloc obligatoire (type exigé par une page du catalogue
+     * « systemPages » : stripePayment, cartLines, loginForm… ; ou groupe de mode : container portant « mode ») présent
+     * au départ doit rester présent, du même type et avec son mode, quelle que soit la demande. Sans ces blocs, la page
+     * ne fonctionne plus (paiement impossible, panier vide) ; l'administrateur ne peut pas les retirer non plus.
+     *
+     * @return list<array{path: string, message: string}>
+     */
+    public function lostRequiredBlocks(object $before, object $after): array
+    {
+        $required = [];
+        foreach ($this->catalogue->systemPages() as $page) {
+            array_push($required, ...$page['required']);
+        }
+        $required = array_flip($required);
+        $isRequired = fn (object $block) => (is_string($block->type ?? null) && isset($required[$block->type])) || (($block->type ?? null) === 'container' && is_string($block->mode ?? null));
+
+        $afterById = [];
+        foreach (is_array($after->blocks ?? null) ? $after->blocks : [] as $block) {
+            if (is_object($block) && is_string($block->id ?? null)) {
+                $afterById[$block->id] = $block;
+            }
+        }
+        $errors = [];
+        foreach (is_array($before->blocks ?? null) ? $before->blocks : [] as $block) {
+            if (!is_object($block) || !is_string($block->id ?? null) || !$isRequired($block)) {
+                continue;
+            }
+            $kept = $afterById[$block->id] ?? null;
+            if ($kept === null || ($kept->type ?? null) !== $block->type || (isset($block->mode) && ($kept->mode ?? null) !== $block->mode)) {
+                $errors[] = ['path' => 'operations', 'message' => sprintf(
+                    'le bloc « %s » (%s) est obligatoire sur cette page de la boutique : il doit rester dans la composition, avec son type%s ; ne le supprime pas, explique dans warnings et limits pourquoi',
+                    $block->id, $block->type . (isset($block->mode) ? ', mode ' . $block->mode : ''), isset($block->mode) ? ' et son mode' : ''
+                )];
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
      * Scènes au défilement (containers layout « scroll ») produites par l'IA : le premier enfant doit être un bloc
      * video qui lit un fichier (url, mediaKey ou liaison), jamais YouTube ni Vimeo, sinon la scène reste vide ; un
      * second bloc video est la version téléphone (9:16), avec les mêmes exigences ; jamais plus de deux (chaque autre

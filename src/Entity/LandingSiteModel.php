@@ -7,19 +7,29 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
- * Modèle de site enregistré par l'administrateur depuis l'éditeur des landing pages : une configuration complète
- * (même forme que les réglages publiés), conservée à part. N'a aucun effet sur les réglages publiés du site.
- * La configuration est gardée en JSON brut : un {} reste {} et l'ordre des clés est conservé.
+ * Modèle de site enregistré par l'administrateur depuis l'éditeur des landing pages ou celui de la boutique (« app ») :
+ * une configuration complète (même forme que les réglages publiés de cette application), conservée à part. N'a aucun
+ * effet sur les réglages publiés du site. La configuration est gardée en JSON brut : un {} reste {} et l'ordre des
+ * clés est conservé.
  */
 #[ORM\Entity(repositoryClass: LandingSiteModelRepository::class)]
 #[ORM\Table(name: 'landing_site_model')]
 #[ORM\Index(columns: ['updated_at'], name: 'idx_landing_site_model_updated_at')]
+#[ORM\Index(columns: ['app'], name: 'idx_landing_site_model_app')]
 class LandingSiteModel
 {
+    public const APP_LANDINGPAGE = 'landingpage';
+    public const APP_BOUTIQUE = 'boutique';
+    public const APPS = [self::APP_LANDINGPAGE, self::APP_BOUTIQUE];
+
     #[ORM\Id]
     #[ORM\GeneratedValue(strategy: 'IDENTITY')]
     #[ORM\Column]
     private ?int $id = null;
+
+    /** Application dont le modèle reprend les réglages : landingpage ou boutique */
+    #[ORM\Column(length: 20)]
+    private string $app = self::APP_LANDINGPAGE;
 
     #[ORM\Column(length: 80)]
     private string $name = '';
@@ -51,6 +61,8 @@ class LandingSiteModel
     }
 
     public function getId(): ?int { return $this->id; }
+    public function getApp(): string { return $this->app; }
+    public function setApp(string $app): static { $this->app = $app; return $this; }
     public function getName(): string { return $this->name; }
     public function setName(string $name): static { $this->name = $name; return $this; }
     public function getDescription(): ?string { return $this->description; }

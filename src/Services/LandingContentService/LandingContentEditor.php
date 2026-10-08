@@ -21,7 +21,8 @@ use App\Services\TenantEntityManagerProvider;
 final class LandingContentEditor
 {
     private const MEDIA_KEY = '/^[a-f0-9]{64}$/';
-    private const COLOR = '/^(transparent|#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(?:,\s*(?:0|1|0?\.\d+)\s*)?\))$/';
+    /** Couleur CSS acceptée dans les contenus et la charte de la boutique (BoutiqueConfigurationValidator) */
+    public const COLOR = '/^(transparent|#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(?:,\s*(?:0|1|0?\.\d+)\s*)?\))$/';
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider)
     {
