@@ -3,6 +3,7 @@
 namespace App\Dto;
 
 use App\Entity\Product;
+use App\Services\MediaUrlResolver;
 use App\Entity\ProductVariant;
 use App\Entity\ProductOptionValue;
 use App\Enum\ProductMode; 
@@ -75,15 +76,8 @@ class ProductOutputCategoryDto
         $this->specialPriceFrom = $product->getSpecialPriceFrom()?->format('Y-m-d H:i:s');
         $this->specialPriceTo = $product->getSpecialPriceTo()?->format('Y-m-d H:i:s');
         
-        $imagePath = $product->getImage();
-        if (empty($imagePath)) {
-            $this->image = null;
-        } elseif (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
-            $this->image = $imagePath;
-        } else {
-            $cleanedHost = rtrim($host, '/');
-            $this->image = $cleanedHost . '/assets/uploads/products/' . $imagePath;
-        }
+        // Nom de fichier téléversé, URL, ou clé de la médiathèque (/media/secure/…) posée depuis l'éditeur
+        $this->image = MediaUrlResolver::joinStored($product->getImage(), rtrim($host, '/') . '/assets/uploads/products');
         
         $this->quantity = $product->getQuantity();
         
@@ -98,14 +92,7 @@ class ProductOutputCategoryDto
  
         $this->mode = $product->getMode()->value;
 
-        $this->pictures = array_map(function ($picture) use ($host) {
-            $path = $picture->getImageUrl();
-            $cleanedHost = rtrim($host, '/');
-            return [
-                'id' => $picture->getId(),
-                'url' => str_starts_with($path, 'http') ? $path : $cleanedHost . '/assets/uploads/products/' . $path,
-            ];
-        }, $product->getPictures()->toArray());
+        $this->pictures = array_values(array_map(fn ($picture) => ['id' => $picture->getId(), 'url' => MediaUrlResolver::joinStored($picture->getImageUrl(), rtrim($host, '/') . '/assets/uploads/products')], $product->getPictures()->toArray()));
 
         if ($product->isBookable() && $config = $product->getBookingConfiguration()) {
 
@@ -167,9 +154,7 @@ class ProductOutputCategoryDto
                 'isRentalCategory' => $category->isRentalCategory(),
                 'syncWeb'     => $category->isSyncWeb(),
                 'isVisible'   => $category->isVisible(),
-                'image'       => $category->getImage() 
-                    ? $host . '/assets/uploads/categories/' . $category->getImage() 
-                    : null,
+                'image'       => MediaUrlResolver::joinStored($category->getImage(), rtrim($host, '/') . '/assets/uploads/categories'),
             ];
         }, $product->getCategory()->toArray());
         

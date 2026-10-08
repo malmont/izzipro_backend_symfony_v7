@@ -8,6 +8,7 @@ use App\Entity\ContentAuditLog;
 use App\Entity\SharedMedia;
 use App\Services\BoutiqueSettingsService\BoutiqueConfigurationValidator;
 use App\Services\BoutiqueSettingsService\BoutiqueSettingsService;
+use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\EntrepriseService\EntrepriseService;
 use App\Services\EntrepriseService\EntrepriseValidationException;
 use App\Services\LandingContentService\LandingContentEditor;
@@ -51,7 +52,8 @@ final class ContentAuditRestorer
         private readonly LandingSiteModelService $models,
         private readonly SharedMediaLibrary $media,
         private readonly MediaUrlResolver $urls,
-        private readonly TenantCacheService $cache
+        private readonly TenantCacheService $cache,
+        private readonly TenantCurrencyProvider $currency
     ) {
     }
 
@@ -105,9 +107,8 @@ final class ContentAuditRestorer
         $values = array_filter($before, fn ($value, $field) => isset(LandingContentSpec::RESOURCES[$resource]['fields'][$field]) && ($value !== null || !in_array($field, $required, true)), ARRAY_FILTER_USE_BOTH);
         $this->contentEditor->apply($resource, $entity, $values, $locale);
         $this->cache->invalidateTags(array_map(fn ($tag) => sprintf($tag, $id), LandingContentSpec::RESOURCES[$resource]['tags']));
-        $base = LandingContentSpec::RESOURCES[$resource]['images'] === 'email-logos' ? $this->urls->getEmailLogosBaseUrl($host) : $this->urls->getSliderBaseUrl($host);
 
-        return ['resourceId' => $id, 'before' => $current, 'after' => $values, 'result' => LandingContentSpec::output($resource, $entity, $base, $locale)];
+        return ['resourceId' => $id, 'before' => $current, 'after' => $values, 'result' => LandingContentSpec::output($resource, $entity, $locale, $this->urls, $host, $this->currency->code())];
     }
 
     private function order(int $id, mixed $before, mixed $after, string $locale, bool $force, string $host): array

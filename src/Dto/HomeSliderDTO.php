@@ -2,6 +2,7 @@
 namespace App\Dto;
 
 use App\Entity\HomeSlider;
+use App\Services\MediaUrlResolver;
 
 class HomeSliderDTO
 {
@@ -35,15 +36,7 @@ class HomeSliderDTO
     {
         $translation = $homeSlider->getTranslation($locale);
 
-        $imagePath = $homeSlider->getImage();
-        if (str_starts_with((string)$imagePath, 'http')) {
-            $image = $imagePath;
-        } else if ($imagePath) {
-            $cleanedHost = rtrim($host, '/');
-            $image = $cleanedHost . '/assets/uploads/slider/' . $imagePath;
-        } else {
-            $image = null;
-        }
+        $image = MediaUrlResolver::joinStored($homeSlider->getImage(), rtrim($host, '/') . '/assets/uploads/slider');
 
         return new self(
             $homeSlider->getId(),
@@ -51,7 +44,7 @@ class HomeSliderDTO
             $image,
             $translation?->getDescription() ?? $homeSlider->getDescription(),
             $translation?->getButtonMessage() ?? $homeSlider->getButtonMessage(),
-            $homeSlider->getButtonUrl(),
+            $translation?->getButtonUrl() ?? $homeSlider->getButtonUrl(),
             $homeSlider->isIsDiplayed(),
         );
     }

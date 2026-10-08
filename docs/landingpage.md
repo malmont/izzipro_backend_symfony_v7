@@ -126,6 +126,7 @@ Depuis le 06/10/2026, l'éditeur modifie les contenus jusque-là gérés dans Ea
 | `bannieres` | **`titre`**, **`texte`**, `imageDeFond` |
 | `videos` | **`titre`**, **`description`**, **`texteBouton`**, **`lienBouton`**, `imageDeFond`, `lienVideo` |
 | `service-offers` | **`titre`**, **`titreCommentaire`**, **`descriptions`**, `logo`, `photoService` |
+| `products`, `category`, `homeslider`, `explore-cards` | données de la boutique réglable (08/10/2026) : voir `docs/boutique.md` |
 
 - Corps : objet JSON des seuls champs à changer ; valeur texte, ou `null` / `""` pour vider (sauf `titre`, obligatoire).
   Champ inconnu ou refusé : 422 `{ error, errors: [{ path, message }] }`, et rien n'est écrit.

@@ -2,6 +2,7 @@
 namespace App\Dto;
 
 use App\Entity\Categories;
+use App\Services\MediaUrlResolver;
 
 class CategoryOutputDTO
 {
@@ -24,15 +25,7 @@ class CategoryOutputDTO
         $this->syncWeb = $category->isSyncWeb();
         $this->isVisible = $category->isVisible();
 
-        $imagePath = $category->getImage();
-        if (empty($imagePath)) {
-            $this->image = null;
-        } elseif (str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')) {
-            $this->image = $imagePath;
-        } else {
-            $cleanedHost = rtrim($host, '/');
-            $this->image = $cleanedHost . '/assets/uploads/categories/' . $imagePath;
-        }
+        $this->image = MediaUrlResolver::joinStored($category->getImage(), rtrim($host, '/') . '/assets/uploads/categories');
         
 
     }

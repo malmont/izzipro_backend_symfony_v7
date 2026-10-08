@@ -2,6 +2,7 @@
 
 namespace App\UseCase\LandingContentUseCase;
 
+use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\LandingContentService\LandingContentEditor;
 use App\Services\LandingContentService\LandingContentSpec;
@@ -20,7 +21,8 @@ class PatchLandingContentUseCase
         private readonly LandingContentEditor $editor,
         private readonly TenantCacheService $cache,
         private readonly MediaUrlResolver $mediaUrlResolver,
-        private readonly ContentAuditRecorder $audit
+        private readonly ContentAuditRecorder $audit,
+        private readonly TenantCurrencyProvider $currency
     ) {
     }
 
@@ -56,11 +58,7 @@ class PatchLandingContentUseCase
     private function output(string $resource, object $entity, string $locale, string $host): object
     {
 
-        $base = LandingContentSpec::RESOURCES[$resource]['images'] === 'email-logos'
-            ? $this->mediaUrlResolver->getEmailLogosBaseUrl($host)
-            : $this->mediaUrlResolver->getSliderBaseUrl($host);
-
-        return LandingContentSpec::output($resource, $entity, $base, $locale);
+        return LandingContentSpec::output($resource, $entity, $locale, $this->mediaUrlResolver, $host, $this->currency->code());
     }
 
     private function invalidate(string $resource, int $id): void

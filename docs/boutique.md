@@ -112,6 +112,27 @@ n'existait).
 Schéma : migration `Version20261008120000`, script `scripts/migrate_all_v2_product_modes.sh` (reprise de l'ancien
 mode une seule fois). Tests : `tests/Functional/Boutique/ProductContractApiTest.php`.
 
+## Modifier les données de la boutique depuis la page (08/10/2026, § 9)
+
+Mêmes routes, règles et journal que les contenus des landing pages (`docs/landingpage.md`, « Modifier les contenus
+depuis l'éditeur ») : `PATCH /api/{ressource}/{id}?locale=` (`ROLE_ADMIN`), corps = champs à changer seulement, 422
+`{ error, errors: [{ path, message }] }` sans rien écrire, réponse = l'objet tel que son GET le renvoie, écriture
+inscrite au journal (`GET /api/landingpage-audit?resource=products`…) et restaurable (`POST …/{id}/restore`).
+
+| Ressource | Champs (traduits en gras) |
+|---|---|
+| `products` | **`name`**, **`description`**, **`moreinformations`**, `price` (cents, obligatoire), `specialPrice` (cents ou null), `specialPriceFrom`, `specialPriceTo` (ISO 8601 ou null), `image`, `pictures` (liste de clés de la médiathèque ou d'URL https : remplace la galerie, 10 au plus) |
+| `category` | **`name`**, **`description`**, `image` |
+| `homeslider` | **`title`**, **`description`**, **`buttonMessage`**, **`buttonUrl`**, `image` (il n'existe pas de champ `imageMobile`) |
+| `explore-cards` | **`standardTitle`**, **`differentTitle`**, **`description`**, `link`, `imageUrl`, `videoUrl` (noms de l'API ; enregistrés dans `imagePath`, `videoPath`) |
+
+Une image venue de la médiathèque est enregistrée sous `/media/secure/{clé}` et rendue en URL complète par tous les
+DTO de la boutique (`MediaUrlResolver::joinStored`) ; un nom de fichier téléversé dans l'administration reste servi
+sous `/assets/uploads/<dossier>/`. Les caches des lectures publiques sont invalidés (étiquettes de
+`LandingContentSpec` + `CacheInvalidationSubscriber`). Code : `LandingContentSpec` (liste blanche, `localeField`,
+`titleField`, `aliases`), `LandingContentEditor` (natures `number`, `date`, `images` ajoutées). Tests :
+`tests/Functional/Boutique/BoutiqueContentEditApiTest.php`.
+
 ## Devis du panier et montants (08/10/2026, `CartQuoteCalculator`)
 
 Une seule source de vérité pour les montants, **en cents** : `Services/OrderService/CartQuoteCalculator` (DTO

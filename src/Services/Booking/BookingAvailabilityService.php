@@ -85,6 +85,11 @@ class BookingAvailabilityService
             default => 'P1D'
         };
 
+        // Grille horaire : seuls les créneaux des heures d'ouverture (ou du créneau du soir) sont renvoyés (08/10/2026)
+        $opening = in_array($granularity, ['hours', 'minutes_30', 'minutes_15'], true) && $config->getOpeningStart() !== null && $config->getOpeningEnd() !== null
+            ? array_values(array_filter([[$config->getOpeningStart(), $config->getOpeningEnd()], [$config->getEveningSlot()['start'] ?? null, $config->getEveningSlot()['end'] ?? null]], fn ($w) => $w[0] !== null && $w[1] !== null))
+            : null;
+
         $existingBookings = $this->getRepository()->findBookingsOverlapping($product, $start, $end);
 
         $period = new \DatePeriod($start, new \DateInterval($intervalSpec), $end);
@@ -113,6 +118,17 @@ class BookingAvailabilityService
                 }
             }
 
+            if ($opening !== null) {
+                $from = $slotStart->format('H:i');
+                $to = $slotEnd->format('H:i') === '00:00' ? '24:00' : $slotEnd->format('H:i');
+                $inside = false;
+                foreach ($opening as [$open, $close]) {
+                    $inside = $inside || ($from >= $open && $to <= $close);
+                }
+                if (!$inside) {
+                    continue;
+                }
+            }
             $remaining = $totalStock - $occupied;
             $results[] = [
                 'start' => $slotStart->format('Y-m-d H:i:s'),

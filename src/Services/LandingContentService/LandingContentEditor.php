@@ -2,13 +2,15 @@
 
 namespace App\Services\LandingContentService;
 
+use App\Entity\Product;
+use App\Entity\ProductPicture;
 use App\Entity\SharedMedia;
 use App\Services\LandingPageSettingsService\RichTextPolicy;
 use App\Services\TenantEntityManagerProvider;
 
 /**
- * Modification partielle d'un contenu de section (présentation, groupe, bannière, vidéo, service) depuis l'éditeur
- * des landing pages : contrôle de chaque champ envoyé (liste blanche de LandingContentSpec), puis écriture.
+ * Modification partielle d'un contenu (présentation, groupe, bannière, vidéo, service ; produit, catégorie,
+ * diapositive, carte « explorer » de la boutique) depuis les éditeurs : contrôle de chaque champ envoyé (liste blanche de LandingContentSpec), puis écriture.
  *
  * Langue (mêmes règles qu'en lecture) : un champ traduit est écrit dans la traduction de la langue demandée, créée au
  * besoin (son titre part alors du titre de base) ; en français, le champ de base est aussi mis à jour, pour que
@@ -47,17 +49,36 @@ final class LandingContentEditor
                 continue;
             }
             [$kind, , $max, $required] = $fields[$name];
-            if ($value !== null && !is_string($value)) {
+            if ($value === null || $value === '' || $value === []) {
+                if ($required) {
+                    $errors[] = ['path' => $name, 'message' => 'champ obligatoire : valeur attendue'];
+                } else {
+                    $values[$name] = $kind === LandingContentSpec::IMAGES ? [] : null;
+                }
+                continue;
+            }
+            if ($kind === LandingContentSpec::IMAGES) {
+                [$stored, $error] = $this->mediaList($value, $max);
+                $error === null ? $values[$name] = $stored : $errors[] = ['path' => $name, 'message' => $error];
+                continue;
+            }
+            if ($kind === LandingContentSpec::NUMBER) {
+                if (!is_int($value) && !is_float($value) && !(is_string($value) && is_numeric($value))) {
+                    $errors[] = ['path' => $name, 'message' => 'montant en cents (entier positif ou nul) attendu'];
+                } elseif ((float) $value < 0 || (float) $value > $max || round((float) $value) != (float) $value) {
+                    $errors[] = ['path' => $name, 'message' => sprintf('entier de 0 à %d attendu (cents)', $max)];
+                } else {
+                    $values[$name] = (int) round((float) $value);
+                }
+                continue;
+            }
+            if (!is_string($value)) {
                 $errors[] = ['path' => $name, 'message' => 'texte ou null attendu'];
                 continue;
             }
-            $value = $value === null ? null : trim($value);
-            if ($value === '' || $value === null) {
-                if ($required) {
-                    $errors[] = ['path' => $name, 'message' => 'champ obligatoire : texte non vide attendu'];
-                } else {
-                    $values[$name] = null;
-                }
+            $value = trim($value);
+            if ($value === '') {
+                $required ? $errors[] = ['path' => $name, 'message' => 'champ obligatoire : texte non vide attendu'] : $values[$name] = null;
                 continue;
             }
             [$stored, $error] = match ($kind) {
@@ -66,8 +87,9 @@ final class LandingContentEditor
                 LandingContentSpec::COLOR => [$value, preg_match(self::COLOR, $value) ? null : 'couleur attendue (#rrggbb, rgb(…), rgba(…) ou transparent)'],
                 LandingContentSpec::IMAGE => $this->media($value, SharedMedia::TYPE_IMAGE),
                 LandingContentSpec::VIDEO => $this->media($value, SharedMedia::TYPE_VIDEO),
+                LandingContentSpec::DATE => self::date($value),
             };
-            if ($error === null && mb_strlen((string) $stored) > $max) {
+            if ($error === null && $kind !== LandingContentSpec::DATE && mb_strlen((string) $stored) > $max) {
                 $error = sprintf('%d caractères au plus', $max);
             }
             $error === null ? $values[$name] = $stored : $errors[] = ['path' => $name, 'message' => $error];
@@ -76,19 +98,29 @@ final class LandingContentEditor
         return ['values' => $values, 'errors' => $errors];
     }
 
-    /** Écrit les valeurs contrôlées par validate() */
+    /** Écrit les valeurs contrôlées par validate() (ou rétablies depuis le journal : même forme que snapshot()) */
     public function apply(string $resource, object $entity, array $values, string $locale): void
     {
         $spec = LandingContentSpec::RESOURCES[$resource];
         $em = $this->emProvider->getEntityManager();
         $translation = null;
         foreach ($values as $name => $value) {
-            $setter = 'set' . ucfirst($name);
-            if (!$spec['fields'][$name][1]) {
+            [$kind, $translated] = $spec['fields'][$name];
+            if ($kind === LandingContentSpec::IMAGES) {
+                $this->replacePictures($entity, is_array($value) ? $value : []);
+                continue;
+            }
+            $setter = 'set' . ucfirst(LandingContentSpec::property($resource, $name));
+            $value = match ($kind) {
+                LandingContentSpec::DATE => $value === null ? null : new \DateTimeImmutable((string) $value),
+                LandingContentSpec::NUMBER => $value === null ? null : (float) $value,
+                default => $value,
+            };
+            if (!$translated) {
                 $entity->$setter($value);
                 continue;
             }
-            $translation ??= $this->translation($entity, $spec['translation'], $locale);
+            $translation ??= $this->translation($resource, $entity, $spec['translation'], $locale);
             $translation->$setter($value);
             if ($locale === 'fr') {
                 $entity->$setter($value);
@@ -98,6 +130,17 @@ final class LandingContentEditor
             $em->persist($translation);
         }
         $em->flush();
+    }
+
+    /** Galerie d'un produit : remplacée par la liste donnée (ProductPicture, orphelins supprimés) */
+    private function replacePictures(Product $product, array $paths): void
+    {
+        foreach ($product->getPictures()->toArray() as $picture) {
+            $product->removePicture($picture);
+        }
+        foreach ($paths as $path) {
+            $product->addPicture((new ProductPicture())->setImageUrl((string) $path));
+        }
     }
 
     /**
@@ -113,27 +156,72 @@ final class LandingContentEditor
         $translation = method_exists($entity, 'getTranslation') ? $entity->getTranslation($locale) : null;
         $values = [];
         foreach ($fields as $field) {
-            $getter = 'get' . ucfirst($field);
-            $values[$field] = ($spec[$field][1] && $translation !== null ? $translation->$getter() : null) ?? $entity->$getter();
+            if ($spec[$field][0] === LandingContentSpec::IMAGES) {
+                $values[$field] = array_values(array_map(fn ($p) => $p->getImageUrl(), $entity->getPictures()->toArray()));
+                continue;
+            }
+            $getter = 'get' . ucfirst(LandingContentSpec::property($resource, $field));
+            $value = ($spec[$field][1] && $translation !== null ? $translation->$getter() : null) ?? $entity->$getter();
+            $values[$field] = match (true) {
+                $value instanceof \DateTimeInterface => $value->format(\DateTimeInterface::ATOM),
+                $spec[$field][0] === LandingContentSpec::NUMBER && $value !== null => (int) round((float) $value),
+                default => $value,
+            };
         }
 
         return $values;
     }
 
     /** Traduction exacte de la langue (sans repli sur une autre), créée au besoin */
-    private function translation(object $entity, string $class, string $locale): object
+    private function translation(string $resource, object $entity, string $class, string $locale): object
     {
+        $localeGetter = 'get' . ucfirst(LandingContentSpec::localeField($resource));
         foreach ($entity->getTranslations() as $translation) {
-            if ($translation->getLanguage() === $locale) {
+            if ($translation->$localeGetter() === $locale) {
                 return $translation;
             }
         }
+        $title = ucfirst(LandingContentSpec::titleField($resource));
         $translation = new $class();
-        $translation->setLanguage($locale);
-        $translation->setTitre((string) $entity->getTitre());
+        $translation->{'set' . ucfirst(LandingContentSpec::localeField($resource))}($locale);
+        $translation->{"set$title"}((string) $entity->{"get$title"}());
         $entity->addTranslation($translation);
 
         return $translation;
+    }
+
+    /** @return array{0: ?string, 1: ?string} date ISO 8601 normalisée, erreur */
+    private static function date(string $value): array
+    {
+        try {
+            return [(new \DateTimeImmutable($value))->format(\DateTimeInterface::ATOM), null];
+        } catch (\Exception) {
+            return [null, 'date ISO 8601 attendue (ex. 2026-10-31T23:59:00-04:00)'];
+        }
+    }
+
+    /** @return array{0: ?list<string>, 1: ?string} chemins à enregistrer, erreur */
+    private function mediaList(mixed $value, int $max): array
+    {
+        if (!is_array($value) || array_keys($value) !== range(0, count($value) - 1)) {
+            return [null, 'liste de clés de la médiathèque ou d\'URL https attendue'];
+        }
+        if (count($value) > $max) {
+            return [null, sprintf('%d images au plus', $max)];
+        }
+        $stored = [];
+        foreach ($value as $i => $item) {
+            if (!is_string($item)) {
+                return [null, sprintf('[%d] : clé de la médiathèque ou URL https attendue', $i)];
+            }
+            [$path, $error] = $this->media(trim($item), SharedMedia::TYPE_IMAGE);
+            if ($error !== null) {
+                return [null, "[$i] : $error"];
+            }
+            $stored[] = $path;
+        }
+
+        return [$stored, null];
     }
 
     /** @return array{0: ?string, 1: ?string} valeur à enregistrer, erreur */

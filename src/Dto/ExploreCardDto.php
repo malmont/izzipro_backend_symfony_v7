@@ -3,6 +3,7 @@
 namespace App\Dto;
 
 use App\Entity\ExploreCard;
+use App\Services\MediaUrlResolver;
 
 class ExploreCardDto
 {
@@ -26,20 +27,13 @@ class ExploreCardDto
         $dto->isDifferent = $entity->getIsDifferent();
         $dto->link        = $entity->getLink();
 
-        $imagePath = $entity->getImagePath();
-        if (str_starts_with((string)$imagePath, 'http')) {
-            $image = $imagePath;
-        } else if ($imagePath) {
-            $cleanedHost = rtrim($host, '/');
-            $image = $cleanedHost . '/assets/uploads/explore/' . $imagePath;
-        } else {
-            $image = null;
-        }
-        $dto->imageUrl    = $image;
+        $dto->imageUrl    = MediaUrlResolver::joinStored($entity->getImagePath(), rtrim($host, '/') . '/assets/uploads/explore');
         
         $videoPath = $entity->getVideoPath();
         if (str_starts_with((string)$videoPath, 'http')) {
             $video = $videoPath;
+        } else if ($videoPath && str_starts_with($videoPath, '/media/secure/')) {
+            $video = MediaUrlResolver::joinStored($videoPath, rtrim($host, '/') . '/assets/uploads/explore'); // clé de la médiathèque
         } else if ($videoPath) {
             $cleanedHost = rtrim($host, '/');
             $cleanVideoPath = ltrim($videoPath, '/');
