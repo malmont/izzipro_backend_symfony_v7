@@ -81,7 +81,7 @@ class GetShippingSummaryForCart
             $summaries[] = new RateSummaryDto(
                 $b['carrier'],
                 $b['service'],
-                round($b['totalPrice'], 2),
+                (int) round($b['totalPrice'] * 100), // EasyPost rend des dollars : cents comme le reste de la boutique
                 $b['currency'],
                 $b['parcelCount'],
                 $b['estimatedDays']

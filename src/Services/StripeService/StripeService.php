@@ -24,7 +24,6 @@ class StripeService
     private LoggerInterface $logger;
     private \App\Services\EntityRetrieverService $entityRetrieverService;
     private \App\UseCase\OrderUseCase\CalculateTaxesUseCase $calculateTaxesUseCase;
-    private \App\Services\OrderService\RentalPriceCalculator $rentalPriceCalculator;
 
 
     public function __construct(
@@ -34,7 +33,7 @@ class StripeService
         LoggerInterface $logger,
         \App\Services\EntityRetrieverService $entityRetrieverService,
         \App\UseCase\OrderUseCase\CalculateTaxesUseCase $calculateTaxesUseCase,
-        \App\Services\OrderService\RentalPriceCalculator $rentalPriceCalculator
+        private readonly \App\Services\OrderService\CartQuoteCalculator $quotes
     ) {
         $this->stripeSecretKey = $stripeSecretKey;
         $this->emProvider = $emProvider;
@@ -42,7 +41,6 @@ class StripeService
         $this->logger = $logger;
         $this->entityRetrieverService = $entityRetrieverService;
         $this->calculateTaxesUseCase = $calculateTaxesUseCase;
-        $this->rentalPriceCalculator = $rentalPriceCalculator;
     }
 
     private function getEm(): EntityManagerInterface
@@ -280,76 +278,31 @@ class StripeService
         }
     }
 
-    public function createPaymentIntentFromItems(array $payload, float $priceShipping, string $currency = 'cad'): array
+    /**
+     * Intention de paiement d'un panier : montant = total du devis du serveur (CartQuoteCalculator : lignes, livraison,
+     * taxes ; caution exclue), devise du site. Le navigateur n'envoie aucun montant d'article ; priceShipping (cents)
+     * n'est lu que pour un transporteur EasyPost.
+     *
+     * @param array<string, mixed> $payload items[], carrierId?, priceShipping|shippingPrice?, booking? (ancien envoi global)
+     * @return array{success?: bool, clientSecret?: string, calculatedAmount?: int, quote?: array, error?: string, status?: int, errors?: array}
+     */
+    public function createPaymentIntentFromItems(array $payload, float $priceShipping = 0.0, ?string $currency = null): array
     {
-        $items = $payload['items'] ?? [];
-        if (empty($items)) {
-            return ['error' => 'Items requis', 'status' => 400];
+        if (!isset($payload['priceShipping']) && !isset($payload['shippingPrice']) && $priceShipping > 0) {
+            $payload['priceShipping'] = $priceShipping;
+        }
+        try {
+            $quote = $this->quotes->quote(\App\Dto\CartQuoteInputDto::fromArray($payload));
+        } catch (\App\Services\OrderService\CartQuoteException $e) {
+            return ['error' => $e->getMessage(), 'errors' => $e->errors, 'status' => $e->getStatusCode()];
         }
 
-        $globalBooking = $payload['booking'] ?? $payload['rental'] ?? null;
-        $itemsTotal = 0.0;
-
-        foreach ($items as $itemData) {
-            $productVariantId = $itemData['productVariantId'] ?? null;
-            $quantity = $itemData['quantity'] ?? 0;
-
-            if (!$productVariantId || $quantity <= 0) {
-                return ['error' => 'Invalid item data (ID ou quantité manquante)', 'status' => 400];
-            }
-
-            try {
-                $productVariant = $this->entityRetrieverService->findOrFail(
-                    \App\Entity\ProductVariant::class,
-                    $productVariantId,
-                    'Product variant not found'
-                );
-            } catch (\Exception $e) {
-                return ['error' => $e->getMessage(), 'status' => 400];
-            }
-
-            $product = $productVariant->getProduct();
-            
-            // Calcul du prix : location (RentalLineResolver, même règle que la commande) ou vente
-            $bookingData = $itemData['booking'] ?? $itemData['rental'] ?? $globalBooking;
-
-            if ($bookingData && \App\Services\OrderService\RentalLineResolver::isRental($product, ['booking' => $bookingData])) {
-                $unitPrice = $this->rentalPriceCalculator->calculate($product, $bookingData);
-                $this->logger->info("Calcul prix LOCATION pour produit {$product->getId()}: $unitPrice CAD", ['bookingData' => $bookingData]);
-            } else {
-                $unitPrice = $product->getPrice();
-                $this->logger->info("Calcul prix RETAIL pour produit {$product->getId()}: $unitPrice CAD", [
-                    'available_keys' => array_keys($itemData),
-                    'global_booking_present' => !empty($globalBooking)
-                ]);
-            }
-
-            if ($unitPrice === null) {
-                return ['error' => "Impossible de calculer le prix pour le produit {$product->getName()}", 'status' => 400];
-            }
-
-            $itemsTotal += $unitPrice * $quantity;
-        }
-
-        // Frais de livraison fournis par le navigateur : négatifs, ils faisaient baisser le montant payé
-        if ($priceShipping < 0) {
-            return ['error' => 'Frais de livraison invalides', 'status' => 400];
-        }
-        $subtotal = $itemsTotal + $priceShipping;
-
-        // Create a dummy order for tax calculation (NOT PERSISTED)
-        $dummyOrder = new \App\Entity\Order();
-
-        $totalTax = $this->calculateTaxesUseCase->execute($dummyOrder, $subtotal, false);
-        $totalAmount = $subtotal + $totalTax;
-
-        $amountInCents = (int) round($totalAmount);
-
+        $amountInCents = (int) $quote['total'];
         if ($amountInCents <= 0) {
             return ['error' => 'Montant invalide calculé', 'status' => 400];
         }
 
-        $clientSecret = $this->createPaymentIntent($amountInCents, $currency);
+        $clientSecret = $this->createPaymentIntent($amountInCents, strtolower($currency ?? $quote['currency']));
 
         if (!$clientSecret) {
             return ['error' => 'Impossible de créer l\'intention de paiement.', 'status' => 500];
@@ -358,7 +311,8 @@ class StripeService
         return [
             'success' => true,
             'clientSecret' => $clientSecret,
-            'calculatedAmount' => $totalAmount
+            'calculatedAmount' => $amountInCents,
+            'quote' => $quote,
         ];
     }
 

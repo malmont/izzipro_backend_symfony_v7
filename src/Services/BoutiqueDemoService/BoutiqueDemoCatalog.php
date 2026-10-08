@@ -35,9 +35,9 @@ final class BoutiqueDemoCatalog
      * @var list<array{id: int, fr: array{0: string, 1: string}, en: array{0: string, 1: string}, price: int}>
      */
     public const CARRIERS = [
-        ['id' => 1, 'fr' => ['Livraison standard', 'Postes Canada, 3 à 7 jours ouvrables'], 'en' => ['Standard shipping', 'Canada Post, 3 to 7 business days'], 'price' => 1500],
-        ['id' => 2, 'fr' => ['Livraison express', 'Messagerie, 1 à 2 jours ouvrables'], 'en' => ['Express shipping', 'Courier, 1 to 2 business days'], 'price' => 2900],
-        ['id' => 6, 'fr' => ['Livraison gratuite', 'Retrait en boutique ou livraison offerte'], 'en' => ['Free shipping', 'In-store pickup or free delivery'], 'price' => 0],
+        ['id' => 1, 'fr' => ['Livraison standard', 'Postes Canada, 3 à 7 jours ouvrables'], 'en' => ['Standard shipping', 'Canada Post, 3 to 7 business days'], 'price' => 1500, 'days' => '3 à 7 jours ouvrables'],
+        ['id' => 2, 'fr' => ['Livraison express', 'Messagerie, 1 à 2 jours ouvrables'], 'en' => ['Express shipping', 'Courier, 1 to 2 business days'], 'price' => 2900, 'days' => '1 à 2 jours ouvrables'],
+        ['id' => 6, 'fr' => ['Livraison gratuite', 'Retrait en boutique ou livraison offerte'], 'en' => ['Free shipping', 'In-store pickup or free delivery'], 'price' => 0, 'days' => 'Retrait sous 24 h'],
     ];
 
     /** clé => [fr, en, description fr, description en, location ?, couleur de l'image] */

@@ -28,6 +28,7 @@ class AnonymousWriteAccessTest extends WebTestCase
         '#^/(api/)?stripe/(webhook|create-intent)#' => 'Stripe (signature du webhook, intention de paiement)',
         '#^/api/(stripe-config|webhooks/)#' => 'webhooks externes (signature)',
         '#^/api/(order/create-guest|order/create$|payment)#' => 'tunnel de commande invité',
+        '#^/api/cart/quote$#' => 'devis du panier : lecture seule, rien n\'est réservé ni enregistré (le visiteur n\'est pas forcément connecté)',
         '#^/api/(contact/submit|contacts|candidatures|newsletter/subscribe|financement|booking|reservations)#' => 'formulaires publics (limite par IP)',
         '#^/api/(adresses|shipping|transporteurs|Carrier)#' => 'calculs d\'adresse et de livraison',
         '#^/api/memoires/#' => 'Mémoires Vivantes : lien de partage (UUID) et voters',

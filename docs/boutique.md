@@ -112,6 +112,43 @@ n'existait).
 Schéma : migration `Version20261008120000`, script `scripts/migrate_all_v2_product_modes.sh` (reprise de l'ancien
 mode une seule fois). Tests : `tests/Functional/Boutique/ProductContractApiTest.php`.
 
+## Devis du panier et montants (08/10/2026, `CartQuoteCalculator`)
+
+Une seule source de vérité pour les montants, **en cents** : `Services/OrderService/CartQuoteCalculator` (DTO
+`CartQuoteInputDto`), utilisé par `POST /api/cart/quote` (public, lecture seule : `CartQuoteController`,
+`QuoteCartUseCase`), par `POST /api/stripe/create-intent` (montant autorisé = `total` du devis) et par la création de
+commande (`ProcessOrderItemsUseCase` : prix des lignes et frais de livraison). Le navigateur n'envoie **aucun montant
+d'article**.
+
+- Entrée : `{ items: [{ productVariantId, quantity, booking?: { start, end, rateId?, durationType?, passengers? },
+  customizationId? }], carrierId?, shippingPrice? }`. Anciens noms encore lus : `priceShipping`, `rental`, `booking`
+  global du panier, `duration_type`, `rentalPackId`.
+- Sortie : `{ lines: [{ productVariantId, productId, name, kind: sale | rental, quantity, unitPrice, total,
+  customizationId?, booking?: { start, end, rateId, rateName, durationType, units, rate, passengers, passengerFee,
+  deposit } }], subtotal, shipping, taxes: [{ label, rate, amount }], deposit, total, currency, carrier: { id, name,
+  isFree } | null }`. `total` = articles + livraison + taxes ; la **caution** (`deposit`) est rapportée à part.
+- Vente : `unitPrice` = prix de la variante (`product_variant.price`) sinon prix effectif du produit (promotion en
+  cours) ; stock de la variante vérifié. Une ligne est une location si la location est activée et que la ligne porte
+  des dates, ou si le produit ne se vend pas (`RentalLineResolver`) ; un produit vendu et loué sans dates = achat.
+- Location : `unitPrice` = tarif × unités (+ `extraPassengerFee` × `passengers`). Tarif : forfait `rateId` (doit
+  appartenir aux catégories du produit) sinon le premier forfait des catégories ; `durationType` : `hour`, `halfDay`,
+  `day`, `week`, `month`, par défaut `hour` (grille horaire) ou `day` ; unités = durée arrondie au-dessus en longueurs
+  d'unité (heure 1 h, demi-journée 4 h, jour, semaine 7 j, mois 30 j). Règles de `booking_configuration`, 422
+  `errors[{ path, message }]` : `minDuration` / `maxDuration` (heures ou jours selon la grille), `minDaysStandard`,
+  `allowedDates`, `openingHours` ou `eveningSlot` (grille horaire), disponibilité (`remaining` dans l'erreur).
+- Livraison : 0 sans `carrierId` ; prix fixe du transporteur ; transporteur EasyPost (`carrierAccountId`) : tarif
+  choisi dans `shipping/summary`, envoyé en `shippingPrice`. `GET /api/Carrier` : `isFree`, `estimatedDays`
+  (colonne `carrier.estimated_days`, migration `Version20261008140000`, script
+  `scripts/migrate_all_v2_carrier_estimated_days.sh`). `shipping/summary[].totalPrice` est en cents.
+- Taxes : toutes celles de la table `tax` du site, sur articles + livraison (comme `TaxCalculationService`), quelle
+  que soit la province (à filtrer plus tard si besoin).
+- Statuts : 400 corps illisible, 404 variante ou transporteur inconnu, 422 règle non respectée ; rien n'est réservé.
+- `order/create` : `orderSource`, `typeOrder` et `paymentMethod` facultatifs (vente en ligne par défaut) ;
+  `carrierId` nullable. `order/create-guest` : 403 si `commerce.guestCheckout` est `false` dans les réglages de la
+  boutique (`BoutiqueSettingsService::isGuestCheckoutAllowed`). `GET /api/booking/check/{id}` : **409** avec
+  `remaining_stock` quand la quantité n'est pas disponible (200 auparavant).
+- Tests : `tests/Functional/Boutique/CartQuoteApiTest.php`.
+
 ## Boutique de démonstration (site `demo`, 08/10/2026)
 
 `php bin/console app:boutique:seed-demo [--customer-email=…] [--reset-password] [--otp]` (`SeedBoutiqueDemoCommand`,

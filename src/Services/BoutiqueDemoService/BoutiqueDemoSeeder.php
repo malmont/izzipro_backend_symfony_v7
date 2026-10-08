@@ -135,9 +135,10 @@ final class BoutiqueDemoSeeder
         $added = 0;
         foreach (BoutiqueDemoCatalog::CARRIERS as $carrier) {
             $inserted = $connection->executeStatement(
-                'INSERT INTO carrier (id, name, description, price, created_at) VALUES (?, ?, ?, ?, NOW()) ON CONFLICT (id) DO NOTHING',
-                [$carrier['id'], $carrier['fr'][0], $carrier['fr'][1], $carrier['price']]
+                'INSERT INTO carrier (id, name, description, price, estimated_days, created_at) VALUES (?, ?, ?, ?, ?, NOW()) ON CONFLICT (id) DO NOTHING',
+                [$carrier['id'], $carrier['fr'][0], $carrier['fr'][1], $carrier['price'], $carrier['days']]
             );
+            $connection->executeStatement('UPDATE carrier SET estimated_days = ? WHERE id = ? AND estimated_days IS NULL', [$carrier['days'], $carrier['id']]);
             if ($inserted) {
                 foreach (['fr', 'en'] as $language) {
                     $connection->executeStatement('INSERT INTO carrier_translation (carrier_id, language, name, description) VALUES (?, ?, ?, ?)',

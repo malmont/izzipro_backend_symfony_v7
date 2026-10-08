@@ -44,6 +44,15 @@ class BoutiqueSettingsService
         return is_string($raw) ? $raw : null;
     }
 
+    /** commerce.guestCheckout des réglages publiés ; permis tant que rien n'est réglé */
+    public function isGuestCheckoutAllowed(): bool
+    {
+        $setting = $this->emProvider->getEntityManager()->getRepository(BoutiqueSetting::class)->findOneBy([]);
+        $value = $setting?->getConfiguration()['commerce']['guestCheckout'] ?? null;
+
+        return $value !== false;
+    }
+
     public function updateSettings(BoutiqueSetting $setting, array $newConfig): void
     {
         $tenantEm = $this->emProvider->getEntityManager();

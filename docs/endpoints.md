@@ -222,7 +222,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (146)
+## Boutique et commun (147)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -260,6 +260,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/caisse/withdraw` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::withdraw` |
 | GET | `/api/caisse` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::getCaisse` |
 | GET | `/api/carrier/statistics` | ROLE_ADMIN | `Controller\StatistiqueDashboard\CarrierStatisticsController::getCarrierStatistics` |
+| POST | `/api/cart/quote` | PUBLIC_ACCESS | `Controller\CartController\CartQuoteController::quote` |
 | GET | `/api/category` | PUBLIC_ACCESS | `Controller\CategoriesControlleur\CategoryController::getCategories` |
 | GET | `/api/collections/{id}/commandes` | ROLE_ADMIN | `Controller\CommandeController\CommandeController::getCommandesByCollection` |
 | POST | `/api/collections/{id}/commandes` | ROLE_ADMIN | `Controller\CommandeController\CommandeController::createCommande` |

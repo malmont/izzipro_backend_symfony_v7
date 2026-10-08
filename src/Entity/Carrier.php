@@ -45,6 +45,10 @@ class Carrier implements TranslatableInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $carrierAccountId = null;
 
+    /** Délai de livraison affiché, texte libre (« 3 à 7 jours ouvrables ») ; boutique réglable, 08/10/2026 */
+    #[ORM\Column(name: 'estimated_days', length: 30, nullable: true)]
+    private ?string $estimatedDays = null;
+
     /**
      * @var Collection<int, CarrierTranslation>
      */
@@ -182,6 +186,24 @@ class Carrier implements TranslatableInterface
     {
         $this->carrierAccountId = $carrierAccountId;
         return $this;
+    }
+
+    public function getEstimatedDays(): ?string
+    {
+        return $this->estimatedDays;
+    }
+
+    public function setEstimatedDays(?string $estimatedDays): static
+    {
+        $this->estimatedDays = $estimatedDays;
+
+        return $this;
+    }
+
+    /** Transporteur gratuit (retrait, livraison offerte) */
+    public function isFree(): bool
+    {
+        return (float) $this->price <= 0.0;
     }
 
     /**

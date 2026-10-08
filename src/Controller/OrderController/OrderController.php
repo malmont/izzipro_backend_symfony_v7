@@ -27,6 +27,7 @@ use Psr\Log\LoggerInterface;
 use App\Services\OrderService\OrderMailerService;
 use App\Services\StripeService\StripeService;
 use App\Services\MediaUrlResolver;
+use App\Services\BoutiqueSettingsService\BoutiqueSettingsService;
 
 class OrderController extends AbstractController
 {
@@ -59,7 +60,8 @@ class OrderController extends AbstractController
         OrderMailerService $orderMailerService,
         StripeService $stripeService,
         TenantConnectionManager $tenantManager,
-        MediaUrlResolver $mediaUrlResolver
+        MediaUrlResolver $mediaUrlResolver,
+        private readonly BoutiqueSettingsService $boutiqueSettings
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -85,9 +87,13 @@ class OrderController extends AbstractController
 
         $data = json_decode($request->getContent(), true);
 
-        if (!isset($data['orderSource'], $data['paymentMethod'], $data['addressId'], $data['items'], $data['typeOrder'])) {
-            return $this->json(['error' => 'Missing required fields'], JsonResponse::HTTP_BAD_REQUEST);
+        if (!isset($data['addressId'], $data['items'])) {
+            return $this->json(['error' => 'Missing required fields (addressId, items)'], JsonResponse::HTTP_BAD_REQUEST);
         }
+        // orderSource, typeOrder et paymentMethod sont facultatifs depuis le 08/10/2026 : vente en ligne payée par Stripe
+        $data['orderSource'] ??= self::ORDER_SOURCE_ECOMMERCE;
+        $data['typeOrder'] ??= self::TYPE_ORDER_SALE;
+        $data['paymentMethod'] ??= self::PAYMENT_METHOD_ONLINE;
         // ---------------------------------------------------------------------
 
         $em = $this->emProvider->getEntityManager();
@@ -117,6 +123,7 @@ class OrderController extends AbstractController
                 return $this->json(['error' => 'Un paiement en ligne est requis pour cette commande.'], JsonResponse::HTTP_PAYMENT_REQUIRED);
             }
             $data['typeOrder'] = self::TYPE_ORDER_SALE;
+            $data['paymentMethod'] = self::PAYMENT_METHOD_ONLINE;
             if (!in_array((int) $data['orderSource'], [self::ORDER_SOURCE_ECOMMERCE, self::ORDER_SOURCE_MOBILE_APP], true)) {
                 $data['orderSource'] = self::ORDER_SOURCE_ECOMMERCE;
             }
@@ -180,7 +187,6 @@ class OrderController extends AbstractController
         if ($result instanceof Order) {
             $tenantEm = $this->emProvider->getEntityManager();
 
-            // on le crée/récupère maintenant, avant de tenter la synchronisation de la vente.
 
 
             // Auto-update user profile if license info is missing
@@ -248,7 +254,7 @@ class OrderController extends AbstractController
             return $this->json([
                 'success' => true,
                 'orderId' => $result->getId(),
-                'message' => 'Commande créée et synchronisée avec succès.'
+                'message' => 'Commande créée.'
             ], JsonResponse::HTTP_CREATED);
         }
         return $result;
@@ -258,6 +264,11 @@ class OrderController extends AbstractController
     public function createGuestOrder(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
+
+        // Réglage de la boutique réglable (commerce.guestCheckout) : la règle tient même sans le frontend
+        if (!$this->boutiqueSettings->isGuestCheckoutAllowed()) {
+            return $this->json(['error' => 'La commande sans compte est désactivée sur ce site.'], JsonResponse::HTTP_FORBIDDEN);
+        }
 
         if (!isset($data['guestInfo'], $data['items'], $data['shippingAddress'], $data['paymentIntentId'])) {
             return $this->json(['error' => 'Missing required guest fields'], JsonResponse::HTTP_BAD_REQUEST);
@@ -636,7 +647,7 @@ class OrderController extends AbstractController
             return $this->json([
                 'success' => true,
                 'orderId' => $result->getId(),
-                'message' => 'Commande créée et synchronisée avec succès.'
+                'message' => 'Commande créée.'
             ], JsonResponse::HTTP_CREATED);
         }
         return $result;

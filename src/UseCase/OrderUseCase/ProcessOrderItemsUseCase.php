@@ -2,85 +2,59 @@
 
 namespace App\UseCase\OrderUseCase;
 
+use App\Dto\CartQuoteInputDto;
 use App\Entity\Order;
 use App\Entity\ProductVariant;
 use App\Services\EntityRetrieverService;
+use App\Services\OrderService\CartQuoteCalculator;
+use App\Services\OrderService\CartQuoteException;
+use App\Services\OrderService\OrderItemService;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use App\Services\OrderService\OrderItemService;
-use App\Services\OrderService\RentalPriceCalculator;
-use Psr\Log\LoggerInterface;
-use App\Services\OrderService\RentalLineResolver;
 
+/**
+ * Lignes d'une commande : prix unitaires et frais de livraison pris dans le devis du serveur (CartQuoteCalculator :
+ * vente au prix de la variante ou du produit, location au tarif du forfait × durée, règles de réservation), stock des
+ * ventes décrémenté. Le navigateur n'impose aucun montant ; les anciens priceShipping ne servent qu'au tarif EasyPost.
+ */
 class ProcessOrderItemsUseCase
 {
-    private TenantEntityManagerProvider $emProvider;
-    private EntityRetrieverService $entityRetrieverService;
-    private OrderItemService $orderItemService;
-    private RentalPriceCalculator $rentalPriceCalculator;
-    private LoggerInterface $logger;
-
     public function __construct(
-        TenantEntityManagerProvider $emProvider,
-        EntityRetrieverService $entityRetrieverService,
-        OrderItemService $orderItemService,
-        RentalPriceCalculator $rentalPriceCalculator,
-        LoggerInterface $logger
+        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly EntityRetrieverService $entityRetrieverService,
+        private readonly OrderItemService $orderItemService,
+        private readonly CartQuoteCalculator $quotes
     ) {
-        $this->emProvider = $emProvider;
-        $this->entityRetrieverService = $entityRetrieverService;
-        $this->orderItemService = $orderItemService;
-        $this->rentalPriceCalculator = $rentalPriceCalculator;
-        $this->logger = $logger;
     }
 
-    public function execute(Order $order, array $items, UpdateStockAndInventoryUseCase $updateStockAndInventory, int $typeOrderId, ?float $priceShipping)
+    /**
+     * @param list<array<string, mixed>> $items
+     * @return float sous-total (articles + livraison, cents) ; négatif pour un retour (typeOrderId ≠ 1)
+     * @throws BadRequestHttpException devis refusé (stock, règle de réservation, article inconnu)
+     */
+    public function execute(Order $order, array $items, UpdateStockAndInventoryUseCase $updateStockAndInventory, int $typeOrderId, ?float $priceShipping, ?int $carrierId = null): float
     {
         $em = $this->emProvider->getEntityManager();
         $isCancel = $typeOrderId !== 1;
-        $subtotal = 0;
-        $order->setShippingCost($priceShipping);
-        $carrierPrice = $priceShipping ?? 0.0;
-        $subtotal += $carrierPrice;
 
-        foreach ($items as $itemData) {
-            $productVariant = $this->entityRetrieverService->findOrFail(ProductVariant::class, $itemData['productVariantId'], 'Product variant not found');
+        try {
+            $quote = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'carrierId' => $carrierId, 'shippingPrice' => $priceShipping]));
+        } catch (CartQuoteException $e) {
+            throw new BadRequestHttpException($e->getMessage(), $e);
+        }
 
-            $product = $productVariant->getProduct();
-            // Location (dates, prix du forfait, pas de stock de variante) ou vente : voir RentalLineResolver
-            $isBookable = RentalLineResolver::isRental($product, $itemData);
+        $order->setShippingCost((float) $quote['shipping']);
+        $subtotal = (float) $quote['shipping'];
 
-            if (!$isBookable) {
-                if ($productVariant->getStockQuantity() < $itemData['quantity'] && !$isCancel) {
-                    throw new BadRequestHttpException(sprintf(
-                        'Stock insuffisant pour le produit "%s" (Stock: %d, Demandé: %d)',
-                        $product->getName(),
-                        $productVariant->getStockQuantity(),
-                        $itemData['quantity']
-                    ));
-                }
+        foreach ($quote['lines'] as $i => $line) {
+            $itemData = $items[$i];
+            $productVariant = $this->entityRetrieverService->findOrFail(ProductVariant::class, $line['productVariantId'], 'Product variant not found');
 
-                $updateStockAndInventory->execute($productVariant, $itemData['quantity'], $isCancel);
+            if ($line['kind'] === 'sale') {
+                $updateStockAndInventory->execute($productVariant, $line['quantity'], $isCancel);
             }
 
-            $unitPrice = null;
-
-            if ($isBookable) {
-                // Determine duration and type for rental price calculation
-                // Support both 'booking' (standard) and 'rental' (legacy) keys
-                $rentalData = $itemData['booking'] ?? $itemData['rental'] ?? $itemData;
-                $unitPrice = $this->rentalPriceCalculator->calculate($product, $rentalData);
-
-                // if (isset($rentalData['price']) && (float)$rentalData['price'] !== (float)$unitPrice) {
-                //     throw new BadRequestHttpException(sprintf(
-                //         'Le prix soumis pour la location (%.2f) ne correspond pas au tarif en base de données (%.2f).',
-                //         (float)$rentalData['price'],
-                //         (float)$unitPrice
-                //     ));
-                // }
-            }
-
-            $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $itemData['quantity'], $unitPrice);
+            $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $line['quantity'], (float) $line['unitPrice']);
 
             if (isset($itemData['licenseNumber'])) {
                 $orderItem->setLicenseNumber($itemData['licenseNumber']);

@@ -92,8 +92,8 @@ class HandleBookingUseCase
                 $booking->setQuantity($quantity);
                 $booking->setStatus('PENDING_PAYMENT'); 
 
-                if (isset($bookingData['rentalPackId'])) {
-                    $booking->setRentalPackId((int) $bookingData['rentalPackId']);
+                if (isset($bookingData['rentalPackId']) || isset($bookingData['rateId'])) { // rateId : nom du contrat de la boutique réglable
+                    $booking->setRentalPackId((int) ($bookingData['rentalPackId'] ?? $bookingData['rateId']));
                 }
 
                 if (isset($orderItemsMap[$variantId]) && count($orderItemsMap[$variantId]) > 0) {

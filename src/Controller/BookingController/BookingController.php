@@ -45,8 +45,9 @@ class BookingController extends AbstractController
 
         try {
             $result = $useCase->execute($dto);
-            
-            return $this->json($result);
+
+            // Indisponible : 409 avec remaining_stock (boutique réglable, 08/10/2026 ; 200 auparavant)
+            return $this->json($result, $result['available'] ? 200 : 409);
             
         } catch (\Exception $e) {
             $code = $e->getCode() ?: 500;

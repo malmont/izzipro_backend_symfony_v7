@@ -6,7 +6,8 @@ class RateSummaryDto
 {
     public string $carrier;
     public string $service;
-    public float  $totalPrice;
+    /** Cents (boutique réglable, 08/10/2026 ; dollars auparavant) */
+    public int    $totalPrice;
     public string $currency;
     public int    $parcelCount;
     public int    $estimatedDays; 
@@ -14,7 +15,7 @@ class RateSummaryDto
     public function __construct(
         string $carrier,
         string $service,
-        float  $totalPrice,
+        int    $totalPrice,
         string $currency,
         int    $parcelCount,
         int    $estimatedDays    

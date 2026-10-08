@@ -75,7 +75,7 @@ class CreateOrderUseCase
                 throw new \Exception($order->getContent());
             }
             try {
-                $subtotal = $this->processOrderItemsUseCase->execute($order, $orderDTO->getItems(), $this->updateStockAndInventoryUseCase, $typeOrderId, $orderDTO->getPriceShipping());
+                $subtotal = $this->processOrderItemsUseCase->execute($order, $orderDTO->getItems(), $this->updateStockAndInventoryUseCase, $typeOrderId, $orderDTO->getPriceShipping(), $orderDTO->getCarrierId());
             } catch (BadRequestHttpException $e) {
                 throw new \Exception($e->getMessage());
             } catch (\Exception $e) {
