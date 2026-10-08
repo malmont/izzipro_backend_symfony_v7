@@ -10,6 +10,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use App\Services\OrderService\OrderItemService;
 use App\Services\OrderService\RentalPriceCalculator;
 use Psr\Log\LoggerInterface;
+use App\Services\OrderService\RentalLineResolver;
 
 class ProcessOrderItemsUseCase
 {
@@ -46,7 +47,8 @@ class ProcessOrderItemsUseCase
             $productVariant = $this->entityRetrieverService->findOrFail(ProductVariant::class, $itemData['productVariantId'], 'Product variant not found');
 
             $product = $productVariant->getProduct();
-            $isBookable = $product && method_exists($product, 'isBookable') && $product->isBookable();
+            // Location (dates, prix du forfait, pas de stock de variante) ou vente : voir RentalLineResolver
+            $isBookable = RentalLineResolver::isRental($product, $itemData);
 
             if (!$isBookable) {
                 if ($productVariant->getStockQuantity() < $itemData['quantity'] && !$isCancel) {

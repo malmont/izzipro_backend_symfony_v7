@@ -28,9 +28,9 @@ class ProductContractApiTest extends WebTestCase
     {
         $em = $this->em();
         $slug = 'kayak-' . bin2hex(random_bytes(3));
-        $product = (new Product())->setName('Kayak de mer')->setSlug($slug)->setPrice(1999.5)->setIsWeb(true)
+        $product = (new Product())->setName('Kayak de mer')->setSlug($slug)->setPrice(199950)->setIsWeb(true)
             ->setSaleEnabled(true)->setRentalEnabled(true)->setCustomizable(true)
-            ->setSpecialPrice(1450.0)->setSpecialPriceFrom(new \DateTimeImmutable('-1 day'))->setSpecialPriceTo(new \DateTimeImmutable('+1 day'));
+            ->setSpecialPrice(145000)->setSpecialPriceFrom(new \DateTimeImmutable('-1 day'))->setSpecialPriceTo(new \DateTimeImmutable('+1 day'));
         $variant = (new ProductVariant())->setStockQuantity(3)->setPrice(249900);
         $product->addVariant($variant);
         $config = (new BookingConfiguration())->setProduct($product)->setGranularity('hours')->setStockQuantity(4)->setMinDuration(2)->setBufferTime(15)
@@ -65,7 +65,7 @@ class ProductContractApiTest extends WebTestCase
         $this->assertSame(['currency' => 'EUR', 'regular' => 199950, 'amount' => 145000], array_intersect_key($body['pricing'], array_flip(['currency', 'regular', 'amount'])));
         $this->assertSame(145000, $body['pricing']['special']['amount']);
         $this->assertTrue($body['pricing']['special']['active']);
-        $this->assertSame(1999.5, $body['price'], 'ancien prix en dollars conservé (carrousel des landing pages)');
+        $this->assertSame(199950.0, (float) $body['price'], 'ancien champ price conservé (cents, carrousel des landing pages)');
 
         $rental = $body['rental'];
         $this->assertSame(['hours', 2, 8, 4, 15], [$rental['granularity'], $rental['minDuration'], $rental['maxDuration'], $rental['stockQuantity'], $rental['bufferTime']]);
@@ -89,7 +89,7 @@ class ProductContractApiTest extends WebTestCase
     {
         $em = $this->em();
         $slug = 'sea-doo-' . bin2hex(random_bytes(3));
-        $vehicle = (new VehicleProduct())->setName('Sea-Doo Spark')->setSlug($slug)->setPrice(8999.0)->setIsWeb(true)
+        $vehicle = (new VehicleProduct())->setName('Sea-Doo Spark')->setSlug($slug)->setPrice(899900)->setIsWeb(true)
             ->setBrand('Sea-Doo')->setModel('Spark')->setYear(2025)->setVehicleCondition('neuf');
         $vehicle->setMode(ProductMode::BOOKING);
         $em->persist($vehicle);

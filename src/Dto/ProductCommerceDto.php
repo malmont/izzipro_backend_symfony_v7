@@ -152,9 +152,12 @@ final class ProductCommerceDto
         ];
     }
 
-    /** Dollars (float stocké) → cents */
+    /**
+     * Montant stocké → cents entiers. Les prix (produit, promotion, forfaits de location, transporteurs) sont déjà
+     * stockés en cents dans des colonnes décimales (EasyAdmin : MoneyField storedAsCents) : seul l'arrondi est fait.
+     */
     public static function cents(?float $amount): int
     {
-        return (int) round(($amount ?? 0.0) * 100);
+        return (int) round($amount ?? 0.0);
     }
 }

@@ -5,7 +5,6 @@ namespace App\Services\Booking;
 
 use App\Entity\Product;
 use App\Entity\Booking;
-use App\Enum\ProductMode;
 use App\Services\TenantEntityManagerProvider;
 use DateTimeInterface;
 
@@ -23,20 +22,12 @@ class BookingAvailabilityService
 
     public function getRemainingStock(Product $product, DateTimeInterface $start, DateTimeInterface $end): int
     {
-        if ($product->getMode() !== ProductMode::BOOKING) {
+        if (!$product->isRentalEnabled()) {
             return $product->getQuantity();
         }
 
-        // --- SÉCURITÉ VÉHICULE ---
-        // On vérifie qu'un véhicule (ou VehicleProduct) est associé à ce produit.
-        $vehicleCount = $this->emProvider->getEntityManager()
-            ->getRepository(\App\Entity\Vehicle::class)
-            ->count(['product' => $product]);
-
-        if ($vehicleCount === 0 && !($product instanceof \App\Entity\VehicleProduct)) {
-            return 0;
-        }
-
+        // Tout produit dont la location est activée se réserve (08/10/2026) : il fallait jusque-là un ancien
+        // enregistrement Vehicle lié au produit, sinon le stock était nul. Le stock est celui de la configuration.
         $config = $product->getBookingConfiguration();
         if (!$config) {
             return 0;
@@ -78,18 +69,13 @@ class BookingAvailabilityService
 
     public function getAvailabilitiesForRange(Product $product, DateTimeInterface $start, DateTimeInterface $end): array
     {
-        // --- SÉCURITÉ VÉHICULE ---
-        $vehicleCount = $this->emProvider->getEntityManager()
-            ->getRepository(\App\Entity\Vehicle::class)
-            ->count(['product' => $product]);
-
         $config = $product->getBookingConfiguration();
         if (!$config) return [];
 
         $granularity = $config->getGranularity();
-        
-        // Si pas de véhicule, le stock effectif est de 0
-        $totalStock = ($vehicleCount > 0) ? $config->getStockQuantity() : 0;
+
+        // Stock de la configuration (plus d'ancien enregistrement Vehicle exigé, 08/10/2026)
+        $totalStock = (int) $config->getStockQuantity();
 
         $intervalSpec = match ($granularity) {
             'days' => 'P1D',

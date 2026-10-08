@@ -189,8 +189,8 @@ class BoutiqueSettingsApiTest extends WebTestCase
     }
 
     /**
-     * Configuration de la boutique : navbar et pied de page réglables, un onglet visible, deux pages système (panier,
-     * paiement) prises dans les modèles du catalogue, charte et commerce.
+     * Configuration de la boutique : navbar et pied de page réglables, un onglet visible (id numérique), deux pages
+     * système (panier, paiement ; id texte « sys-… ») prises dans les modèles du catalogue, charte et commerce.
      */
     private function configuration(): array
     {
@@ -202,7 +202,7 @@ class BoutiqueSettingsApiTest extends WebTestCase
             'navbar' => ['componentTypeKey' => 'typeReglable', 'reglableConfig' => $this->preset('navbar-type-c')],
             'footer' => ['componentTypeKey' => 'typeReglable', 'reglableConfig' => $this->preset('footer-type-e')],
             'tabs' => [
-                ['id' => 'accueil', 'title' => ['fr' => 'Accueil', 'en' => 'Home'], 'isVisible' => true, 'sections' => [
+                ['id' => 1, 'title' => ['fr' => 'Accueil', 'en' => 'Home'], 'isVisible' => true, 'sections' => [
                     ['id' => 's1', 'componentKey' => 'Features', 'componentTypeKey' => 'typeReglable', 'dataType' => null, 'reglableConfig' => $features],
                 ]],
                 ['id' => 'sys-cart', 'system' => 'cart', 'isVisible' => false, 'title' => ['fr' => 'Panier', 'en' => 'Cart'], 'sections' => [

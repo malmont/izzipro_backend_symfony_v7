@@ -47,7 +47,7 @@ class VehicleProductCrudController extends BaseTenantCrudController
                 TextField::new('brand', 'Marque'),
                 TextField::new('model', 'Modèle'),
                 IntegerField::new('year', 'Année'),
-                NumberField::new('price', 'Prix ($)'),
+                MoneyField::new('price', 'Prix ($)')->setCurrency('CAD')->setStoredAsCents(true),
                 IntegerField::new('quantity', 'Stock'),
                 BooleanField::new('saleEnabled', 'Vente')->renderAsSwitch(false),
                 BooleanField::new('rentalEnabled', 'Location')->renderAsSwitch(false),
@@ -99,7 +99,8 @@ class VehicleProductCrudController extends BaseTenantCrudController
             FormField::addTab('Prix & Commercialisation'),
             FormField::addPanel('Tarification & Commercialisation'),
 
-            NumberField::new('price', 'Prix de Vente / Tarif de Base ($)')
+            // Stocké en cents comme tous les prix (create-intent et la boutique le lisent ainsi)
+            MoneyField::new('price', 'Prix de Vente / Tarif de Base ($)')->setCurrency('CAD')->setStoredAsCents(true)
                 ->setHelp('Prix en dollars. Ex: 45000.00 $'),
 
             IntegerField::new('quantity', 'Quantité en Stock (Ex: 1)'),

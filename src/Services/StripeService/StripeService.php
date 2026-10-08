@@ -310,10 +310,10 @@ class StripeService
 
             $product = $productVariant->getProduct();
             
-            // Calcul du prix : Location si données de booking présentes, sinon Retail
+            // Calcul du prix : location (RentalLineResolver, même règle que la commande) ou vente
             $bookingData = $itemData['booking'] ?? $itemData['rental'] ?? $globalBooking;
 
-            if ($bookingData) {
+            if ($bookingData && \App\Services\OrderService\RentalLineResolver::isRental($product, ['booking' => $bookingData])) {
                 $unitPrice = $this->rentalPriceCalculator->calculate($product, $bookingData);
                 $this->logger->info("Calcul prix LOCATION pour produit {$product->getId()}: $unitPrice CAD", ['bookingData' => $bookingData]);
             } else {

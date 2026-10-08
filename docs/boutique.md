@@ -91,7 +91,7 @@ Essais réels : site `demo` uniquement.
 Toutes les routes qui renvoient un produit (`/api/products/by-slug/{slug}`, `/api/productsid/{id}`,
 `/api/products/{sélection}`, `/api/products/by-category`, `/api/products`, DTO `ProductDetailedOutputDTO`,
 `ProductOutputDTO`, `ProductOutputCategoryDto`) portent, en plus des anciens champs (`mode`, `price` en dollars,
-`bookingConfig`, `category`), gardés pour le carrousel des landing pages :
+`bookingConfig`, `category`, mêmes unités qu'avant), gardés pour le carrousel des landing pages :
 
 | Champ | Contenu |
 |---|---|
@@ -104,10 +104,52 @@ Toutes les routes qui renvoient un produit (`/api/products/by-slug/{slug}`, `/ap
 
 Devise (§ 7) : une seule par site, `entreprise.currency` (ISO 4217, défaut `CAD`), exposée par `GET /api/entreprise/{id}`
 (`currency`), modifiable par `PUT /api/entreprise/{id}` (3 lettres, journalisée) et renvoyée par `GET /api/stripe-config`
-(`currency`). `TenantCurrencyProvider` la lit pour `pricing.currency`. Les prix restent stockés en dollars (float)
-dans `product.price` et les forfaits ; la conversion en cents est faite à la sortie (`ProductCommerceDto::cents`).
+(`currency`). `TenantCurrencyProvider` la lit pour `pricing.currency`. Tous les prix sont stockés **en cents**
+(colonnes décimales : `product.price`, `special_price`, forfaits `rental_pack`, `carrier.price` ; EasyAdmin
+`MoneyField::setStoredAsCents`) ; `ProductCommerceDto::cents` ne fait qu'arrondir. Jusqu'au 08/10/2026, le prix d'un
+véhicule se saisissait en dollars (`NumberField`) alors que `create-intent` le lit en cents : corrigé (aucun véhicule
+n'existait).
 Schéma : migration `Version20261008120000`, script `scripts/migrate_all_v2_product_modes.sh` (reprise de l'ancien
 mode une seule fois). Tests : `tests/Functional/Boutique/ProductContractApiTest.php`.
+
+## Boutique de démonstration (site `demo`, 08/10/2026)
+
+`php bin/console app:boutique:seed-demo [--customer-email=…] [--reset-password] [--otp]` (`SeedBoutiqueDemoCommand`,
+`SeedBoutiqueDemoUseCase`, `Services/BoutiqueDemoService/` : `BoutiqueDemoCatalog` pour les données,
+`BoutiqueDemoSeeder`, `DemoImageGenerator`). Refusé sur tout autre site que `demo` (`ALLOWED_TENANTS`, base lue dans
+`tenants`). Rejouable : n'ajoute que ce qui manque (produits repérés par leur code `DEMO-…`), n'efface rien, vide les
+caches des lectures publiques. Le mot de passe du client n'est affiché qu'à sa création (ou avec `--reset-password`).
+
+| Cas (§ 10) | Produit (code) |
+|---|---|
+| vente simple, une variante | Casquette brodée (`DEMO-CASQUETTE`) |
+| variantes taille × couleur, prix de variante (XL), variante épuisée | T-shirt Horizon (`DEMO-TSHIRT`) |
+| promotion en cours / expirée ; unité de vente | Sweat Brise (`DEMO-SWEAT`) / Café en grains (`DEMO-CAFE`, kg) |
+| épuisé ; plusieurs photos | Veste (`DEMO-VESTE`) ; Sac de voyage (`DEMO-SAC`, 5 photos) |
+| personnalisable (combinaisons, `/customization/config/{variantId}`) | Gourde à graver (`DEMO-GOURDE`) |
+| location à l'heure, demi-journées | Kayak (`DEMO-KAYAK`) |
+| vente **et** location à la journée, caution | Planche à pagaie (`DEMO-PADDLE`) |
+| location jour / semaine / mois, caution, frais par passager | Ponton (`DEMO-PONTON`) |
+| dates autorisées et créneau du soir | Spectacle pyrotechnique (`DEMO-SPECTACLE`) |
+| véhicule à louer / à vendre | Sea-Doo (`DEMO-SEADOO`) / Remorque (`DEMO-REMORQUE`) |
+| abonnement (drapeau seulement : module § 11 à construire) | Panier bio (`DEMO-PANIER`) |
+
+Aussi : 6 catégories avec image (3 de location, forfaits `rental_pack` en cents), options `taille`, `couleur`,
+`gravure`, `bouchon`, 3 diapositives, 3 cartes « explorer », données de référence du tunnel (sources, types, statuts,
+moyens de paiement, mêmes identifiants que les autres sites), TPS 5 % et TVQ 9,975 %, transporteurs à prix fixe
+1 (15 $), 2 (29 $) et **6 (gratuit)**, client `client.demo@example.com` (domaine réservé : aucun courrier ne part) avec
+une adresse à Montréal. Images dessinées localement (`demo-boutique-*.jpg` dans le stockage public partagé).
+
+Paiement : clés Stripe de la plateforme en mode test ; compte connecté de `demo` (Express, test) : paiements
+acceptés, virements bloqués (pièce d'identité « liveness » demandée, sans effet sur les essais). Essai du 08/10/2026 :
+connexion du client → `create-intent` → carte `pm_card_visa` → `order/create` → capture : commande n° 1, 124,17 $
+(108 $ + taxes), stock décrémenté. `shipping/summary` (EasyPost) n'est pas disponible sur `demo` (aucune
+configuration EasyPost) : utiliser le prix fixe des transporteurs.
+
+Corrigé en chemin (08/10/2026) : le calendrier et la vérification de disponibilité exigeaient un ancien
+enregistrement `Vehicle` lié au produit (stock nul sinon) et se fiaient à l'ancien `mode` ; une ligne de commande d'un
+produit vendu **et** loué était toujours traitée comme une location. Règle commune désormais :
+`RentalLineResolver::isRental` (location activée et dates sur la ligne, ou produit qui ne se vend pas).
 
 ## Reste du module (fiche à compléter)
 

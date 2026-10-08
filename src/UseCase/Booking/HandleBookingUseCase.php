@@ -10,6 +10,7 @@ use App\Services\Booking\BookingAvailabilityService;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use App\Services\OrderService\RentalLineResolver;
 
 class HandleBookingUseCase
 {
@@ -56,7 +57,7 @@ class HandleBookingUseCase
 
             $product = $variant->getProduct();
 
-            if ($product && method_exists($product, 'isBookable') && $product->isBookable()) {
+            if (RentalLineResolver::isRental($product, $itemData)) {
                 
                 $bookingData = $itemData['booking'] ?? $itemData['rental'] ?? [];
 
