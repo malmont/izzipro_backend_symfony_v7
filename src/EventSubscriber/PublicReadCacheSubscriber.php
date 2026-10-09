@@ -32,6 +32,7 @@ final class PublicReadCacheSubscriber implements EventSubscriberInterface
         'get_categories' => 60,
         'get_home_slider' => 60,
         'api_explore_cards' => 60,
+        'api_features' => 60,
     ];
 
     private const STALE_WHILE_REVALIDATE = 600;

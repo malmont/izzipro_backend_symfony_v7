@@ -180,7 +180,7 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 | Sujet | Fichiers |
 |---|---|
 | Réglages | `Controller/LandingPageSettingsController/`, entité `LandingPageSetting` (une ligne JSON par tenant) |
-| Validation (422 `{ path, message }`) | `Services/LandingPageSettingsService/ReglableCompositionValidator.php` (JSON Schema opis + règles entre blocs), `RichTextPolicy.php` (HTML permis dans les textes), `ReglableCompositionScanner.php` (toutes les bases : réglages des landing pages et de la boutique, modèles de site) |
+| Validation (422 `{ path, message }`) | `Services/LandingPageSettingsService/ReglableCompositionValidator.php` (JSON Schema opis + règles entre blocs ; option `allowDefaults` désactivée : une validation n'insère jamais les valeurs `default` du schéma dans la composition, 09/10/2026), `RichTextPolicy.php` (HTML permis dans les textes), `ReglableCompositionScanner.php` (toutes les bases : réglages des landing pages et de la boutique, modèles de site) |
 | Familles (`components-config`) | `Services/LandingPagesService/ComponentsConfigProvider.php` (source unique : endpoint et assistant) |
 | Assistant : moteur | `Services/LandingAiService/` : `LandingAiComposer` (appel, vérifications, 3 essais), `LandingAiPromptBuilder` (prompt système, outils, cache), `LandingAiCatalogue`, `LandingAiDataSources` (valeurs de `dataType`), `CompositionEditApplier` (opérations de retouche), `LandingAiCompositionChecker`, `AnthropicLandingAiClient`, `LandingAiContentContext` (médiathèque, contenus modifiables de la donnée affichée), `LandingAiContentProposals` (contrôle de `contentChanges`, `groupChanges`, `limits`, jamais appliqués) |
 | Assistant : réglages, réparation | `LandingAiTuning` (effort par nature de demande, durée du cache), `LandingAiOutputRepair` (clés en double du modèle) |
@@ -207,7 +207,7 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 modèles ; version 2 : familles `app: boutique`, `systemPages`), `ia-assistant-jeu-essai.md` (cas d'évaluation),
 `ia-libelles-editeur.md` (facultatif : libellés de l'éditeur cités par l'assistant). **Ne pas les modifier à la main** :
 la version active vient de la synchronisation (`var/landingpage-config/`) ; ceux du dépôt sont la version de repli
-(tests, serveur neuf), recopiés depuis la dernière version synchronisée (09/10/2026 : `125211e22d26332a`, grille de formules `PlanGrid`, liste `plans`, `repeat.featuredBy`).
+(tests, serveur neuf), recopiés depuis la dernière version synchronisée (09/10/2026 : `7dcabc2067458f54`, liste `features` des atouts).
 
 ## Tester
 

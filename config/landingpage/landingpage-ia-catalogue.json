@@ -83,7 +83,8 @@
     "slides",
     "cards",
     "categories",
-    "plans"
+    "plans",
+    "features"
   ],
   "systemPages": [
     {
@@ -25079,8 +25080,7 @@
                 "fontStyle": "normal",
                 "textTransform": "none",
                 "objectFit": "cover",
-                "dividerWidth": 100,
-                "showImages": true
+                "dividerWidth": 100
               }
             ]
           }
@@ -28485,9 +28485,7 @@
                 "fontStyle": "normal",
                 "textTransform": "none",
                 "objectFit": "cover",
-                "dividerWidth": 100,
-                "showImages": true,
-                "showDelta": true
+                "dividerWidth": 100
               },
               {
                 "id": "a-panier",
@@ -28645,8 +28643,7 @@
                 "textTransform": "none",
                 "objectFit": "cover",
                 "dividerWidth": 100,
-                "optionStyle": "pills",
-                "showDelta": true
+                "optionStyle": "pills"
               },
               {
                 "id": "b-panier",
@@ -29811,7 +29808,7 @@
       "id": "boutique-features",
       "componentKey": "Features",
       "label": "Atouts (boutique)",
-      "dataLabel": null,
+      "dataLabel": "les atouts de la boutique",
       "tools": [
         "container",
         "title",
@@ -29828,7 +29825,30 @@
       ],
       "sectionFields": [],
       "boundTools": [],
-      "list": null,
+      "list": {
+        "source": "features",
+        "label": "liste d’atouts",
+        "defaultSourceLabel": "Tous les atouts de la boutique",
+        "itemTools": [
+          {
+            "id": "feature-title",
+            "label": "Titre de l’atout",
+            "type": "title",
+            "bindings": {
+              "text": "item.title"
+            }
+          },
+          {
+            "id": "feature-icon",
+            "label": "Icône de l’atout",
+            "type": "image",
+            "bindings": {
+              "url": "item.iconUrl",
+              "alt": "item.title"
+            }
+          }
+        ]
+      },
       "itemsPath": null,
       "backgroundBindings": null,
       "presets": [
@@ -30710,6 +30730,154 @@
               }
             ]
           }
+        },
+        {
+          "id": "features-type-c",
+          "icon": "C",
+          "name": "Type C · Atouts de la boutique (liste du site)",
+          "description": "Les atouts enregistrés de la boutique (icône et titre), en cartes de 4 colonnes (2 sur mobile) ; modifiables depuis la page : double-clic sur un atout",
+          "composition": {
+            "schemaVersion": 2,
+            "layout": "free",
+            "fullWidth": true,
+            "maxWidth": 1200,
+            "contentWidth": 1200,
+            "height": 200,
+            "rootLayout": "stack",
+            "rootGap": 20,
+            "rootPadding": 48,
+            "rootPaddingX": 24,
+            "background": "#f8fafc",
+            "mobile": {
+              "layout": "stack"
+            },
+            "anchor": "atouts",
+            "blocks": [
+              {
+                "id": "c-grille",
+                "type": "container",
+                "parentId": null,
+                "x": 0,
+                "y": 0,
+                "w": 100,
+                "h": 40,
+                "text": "",
+                "url": "",
+                "alt": "",
+                "size": 18,
+                "background": "transparent",
+                "color": "#243b35",
+                "radius": 0,
+                "padding": 0,
+                "borderWidth": 0,
+                "borderColor": "#94a3b8",
+                "align": "left",
+                "fontWeight": "normal",
+                "fontStyle": "normal",
+                "textTransform": "none",
+                "objectFit": "cover",
+                "dividerWidth": 100,
+                "layout": "grid",
+                "gap": 18,
+                "columns": 4,
+                "valign": "start",
+                "mobile": {
+                  "columns": 2
+                },
+                "repeat": {
+                  "source": "features",
+                  "id": "",
+                  "limit": 8
+                }
+              },
+              {
+                "id": "c-atout-1",
+                "type": "container",
+                "parentId": "c-grille",
+                "x": 5,
+                "y": 5,
+                "w": 35,
+                "h": 40,
+                "text": "",
+                "url": "",
+                "alt": "",
+                "size": 18,
+                "background": "#ffffff",
+                "color": "#243b35",
+                "radius": 16,
+                "padding": 18,
+                "borderWidth": 0,
+                "borderColor": "#94a3b8",
+                "align": "center",
+                "fontWeight": "normal",
+                "fontStyle": "normal",
+                "textTransform": "none",
+                "objectFit": "cover",
+                "dividerWidth": 100,
+                "layout": "stack",
+                "gap": 10
+              },
+              {
+                "id": "c-atout-2",
+                "type": "image",
+                "parentId": "c-atout-1",
+                "x": 0,
+                "y": 0,
+                "w": 30,
+                "h": 30,
+                "text": "",
+                "url": "",
+                "alt": "",
+                "size": 18,
+                "background": "transparent",
+                "color": "#243b35",
+                "radius": 0,
+                "padding": 0,
+                "borderWidth": 0,
+                "borderColor": "#94a3b8",
+                "align": "left",
+                "fontWeight": "normal",
+                "fontStyle": "normal",
+                "textTransform": "none",
+                "objectFit": "contain",
+                "dividerWidth": 100,
+                "fixedHeight": 48,
+                "bindings": {
+                  "url": "item.iconUrl",
+                  "alt": "item.title"
+                }
+              },
+              {
+                "id": "c-atout-3",
+                "type": "title",
+                "parentId": "c-atout-1",
+                "x": 0,
+                "y": 0,
+                "w": 100,
+                "h": 14,
+                "text": "Votre titre",
+                "url": "",
+                "alt": "",
+                "size": 15,
+                "background": "transparent",
+                "color": "#243b35",
+                "radius": 12,
+                "padding": 0,
+                "borderWidth": 0,
+                "borderColor": "#94a3b8",
+                "align": "center",
+                "fontWeight": "800",
+                "fontStyle": "normal",
+                "textTransform": "uppercase",
+                "objectFit": "cover",
+                "dividerWidth": 100,
+                "headingLevel": 3,
+                "bindings": {
+                  "text": "item.title"
+                }
+              }
+            ]
+          }
         }
       ]
     },
@@ -31579,6 +31747,14 @@
             "type": "badge",
             "bindings": {
               "text": "item.badgeLabel"
+            }
+          },
+          {
+            "id": "plan-product",
+            "label": "Nom du produit",
+            "type": "badge",
+            "bindings": {
+              "text": "item.productName"
             }
           },
           {

@@ -235,6 +235,19 @@ class BoutiqueSettingsApiTest extends WebTestCase
         $this->assertSame(200, $put->getStatusCode(), $put->getContent());
     }
 
+    public function testFeaturesListSectionIsAccepted(): void
+    {
+        // Contrat 7dcabc2067458f54 (09/10/2026) : atouts de l'accueil lus par une liste repeat.source « features »
+        $this->loginAsAdmin();
+        $grid = $this->preset('features-type-c');
+        $repeat = array_values(array_filter(array_column($grid['blocks'], 'repeat')))[0];
+        $this->assertSame('features', $repeat['source']);
+        $configuration = $this->configuration();
+        $configuration['tabs'][0]['sections'][] = ['id' => 's-atouts', 'componentKey' => 'Features', 'componentTypeKey' => 'typeReglable', 'dataType' => null, 'reglableConfig' => $grid];
+        $put = $this->request('PUT', $this->encode(['configuration' => $configuration]));
+        $this->assertSame(200, $put->getStatusCode(), $put->getContent());
+    }
+
     public function testMalformedBodiesAreRefused(): void
     {
         $this->loginAsAdmin();

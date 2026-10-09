@@ -155,6 +155,9 @@ final class ReglableCompositionValidator
     {
         $errors = [];
         $validator = new Validator(null, self::MAX_ERRORS, false);
+        // Une validation ne modifie jamais la composition : Opis insère sinon les valeurs « default » du schéma dans les
+        // objets validés (contrat du 09/10/2026 : showImages: true ajouté à tous les blocs, puis refusé hors de ses types)
+        $validator->parser()->setOption('allowDefaults', false);
         $result = $validator->validate($composition, $this->schema());
         if (!$result->isValid()) {
             $this->collectSchemaErrors($result->error(), $prefix, $errors);

@@ -507,7 +507,8 @@
                 "slides",
                 "cards",
                 "categories",
-                "plans"
+                "plans",
+                "features"
               ],
               "description": "Source des éléments. Boutique : products (id = sélection : bestsellers, newarrivals, specialoffers, isfeatured, isAccessory), plans (formules d’abonnement ; id vide = toutes, sinon l’identifiant d’un produit ; item.name, item.description, item.priceLabel, item.intervalLabel, item.priceLine, item.trialLabel, item.minimumTermsLabel, item.featuresHtml, item.badgeLabel, item.highlighted, item.subscribeUrl), slides, cards, categories."
             },
@@ -1454,7 +1455,7 @@
             "3/4",
             "2/3"
           ],
-          "description": "Proportions : la hauteur découle de la largeur, h est alors ignoré. Types : image, video, container, carousel."
+          "description": "Proportions : la hauteur découle de la largeur, h est alors ignoré. Types : image, video, container, carousel, customPreview."
         },
         "objectPosition": {
           "enum": [
@@ -1463,7 +1464,7 @@
             "left",
             "right"
           ],
-          "description": "Point focal de l’image ou de la vidéo, absent = centre. Types : image, video, carousel."
+          "description": "Point focal de l’image ou de la vidéo, absent = centre. Types : image, video, carousel, customPreview."
         },
         "headingLevel": {
           "type": "integer",
@@ -1917,18 +1918,22 @@
         },
         "showImages": {
           "type": "boolean",
+          "default": true,
           "description": "Lignes du panier ou récapitulatif : vignettes des produits ; groupes d’options : icônes des options ; détail de commande : vignettes des articles. Types : cartLines, checkoutSummary, optionGroups, orderDetail."
         },
         "showDelta": {
           "type": "boolean",
+          "default": true,
           "description": "Groupes d’options (personnalisation) : supplément de prix affiché sur chaque option. Types : optionGroups."
         },
         "showShipping": {
           "type": "boolean",
+          "default": true,
           "description": "Totaux du panier : ligne « Livraison ». Types : cartTotals."
         },
         "showTaxes": {
           "type": "boolean",
+          "default": true,
           "description": "Totaux du panier : ligne « Taxes ». Types : cartTotals."
         },
         "badgeStyle": {
@@ -5083,7 +5088,8 @@
                     "image",
                     "video",
                     "container",
-                    "carousel"
+                    "carousel",
+                    "customPreview"
                   ]
                 }
               }
@@ -5105,7 +5111,8 @@
                   "enum": [
                     "image",
                     "video",
-                    "carousel"
+                    "carousel",
+                    "customPreview"
                   ]
                 }
               }
