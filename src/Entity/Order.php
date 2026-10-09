@@ -98,6 +98,14 @@ class Order
     #[ORM\Column(name: 'tax_transaction_id', length: 64, nullable: true)]
     private ?string $taxTransactionId = null;
 
+    /** Abonnement dont cette commande est une échéance (facture Stripe stripe_invoice_id) ; boutique réglable, 09/10/2026 */
+    #[ORM\ManyToOne(targetEntity: Subscription::class)]
+    #[ORM\JoinColumn(name: 'subscription_id', nullable: true, onDelete: 'SET NULL')]
+    private ?Subscription $subscription = null;
+
+    #[ORM\Column(name: 'stripe_invoice_id', length: 64, nullable: true)]
+    private ?string $stripeInvoiceId = null;
+
     /** Calcul Stripe Tax de la commande en cours (non enregistré) : à transformer en transaction après le paiement */
     private ?string $pendingTaxCalculationId = null;
 
@@ -482,6 +490,30 @@ class Order
     public function setPendingTaxes(?array $taxes): static
     {
         $this->pendingTaxes = $taxes;
+
+        return $this;
+    }
+
+    public function getSubscription(): ?Subscription
+    {
+        return $this->subscription;
+    }
+
+    public function setSubscription(?Subscription $subscription): static
+    {
+        $this->subscription = $subscription;
+
+        return $this;
+    }
+
+    public function getStripeInvoiceId(): ?string
+    {
+        return $this->stripeInvoiceId;
+    }
+
+    public function setStripeInvoiceId(?string $stripeInvoiceId): static
+    {
+        $this->stripeInvoiceId = $stripeInvoiceId;
 
         return $this;
     }

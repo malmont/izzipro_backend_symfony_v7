@@ -42,6 +42,8 @@ use App\Entity\OrderTax;
 use App\Entity\OrderType;
 use App\Entity\AdminSettings;
 use App\Entity\BoutiqueSetting;
+use App\Entity\Subscription;
+use App\Entity\SubscriptionPlan;
 use App\Entity\Entreprise;
 use App\Entity\SocialNetwork;
 use App\Entity\PaymentType;
@@ -413,6 +415,8 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Home Slider', 'fas fa-images', HomeSlider::class);
         yield MenuItem::linkToCrud('Admin Settings', 'fas fa-cogs', AdminSettings::class);
         yield MenuItem::linkToCrud('Configuration boutique réglable', 'fas fa-store', BoutiqueSetting::class);
+        yield MenuItem::linkToCrud('Formules d\'abonnement', 'fas fa-sync-alt', SubscriptionPlan::class);
+        yield MenuItem::linkToCrud('Abonnements', 'fas fa-id-card', Subscription::class);
         yield MenuItem::linkToCrud('Features', 'fa fa-star', Feature::class);
         yield MenuItem::linkToCrud('Explore Cards', 'fa fa-th-large', ExploreCard::class);
 

@@ -30,3 +30,9 @@ services:
         autowire: true
         autoconfigure: true
         public: true
+
+    # Abonnements : Stripe Billing simulé (aucun appel réseau)
+    App\Tests\Fake\FakeSubscriptionStripeGateway:
+        autowire: true
+        public: true
+    App\Services\SubscriptionService\SubscriptionStripeGatewayInterface: '@App\Tests\Fake\FakeSubscriptionStripeGateway'

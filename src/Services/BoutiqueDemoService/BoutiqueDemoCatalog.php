@@ -225,6 +225,15 @@ final class BoutiqueDemoCatalog
         ];
     }
 
+    /** Formules d'abonnement de démonstration : code produit => [[noms fr/en, périodicité, N, prix cents, jours d'essai, engagement]] */
+    public const SUBSCRIPTION_PLANS = [
+        'PANIER' => [
+            [['fr' => 'Panier hebdomadaire', 'en' => 'Weekly basket'], 'week', 1, 3500, 0, 0],
+            [['fr' => 'Panier aux deux semaines', 'en' => 'Biweekly basket'], 'week', 2, 3900, 7, 0],
+            [['fr' => 'Panier mensuel', 'en' => 'Monthly basket'], 'month', 1, 12900, 14, 3],
+        ],
+    ];
+
     /** Diapositives de l'accueil : [titre fr, titre en, texte fr, texte en, bouton fr, bouton en, lien, couleur] */
     public const SLIDES = [
         ['Nouvelle collection Horizon', 'New Horizon collection', 'Des basiques en coton biologique, pensés pour durer.', 'Organic cotton basics, made to last.', 'Découvrir', 'Discover', '/catalogue', '#1d4ed8'],

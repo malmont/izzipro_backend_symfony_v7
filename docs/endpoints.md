@@ -222,7 +222,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (149)
+## Boutique et commun (159)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -315,6 +315,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/products/{id}/variants` | PUBLIC_ACCESS | `Controller\ProductVariantController\ProductVariantController::getProductVariants` |
 | POST | `/api/products/{id}/variants` | ROLE_ADMIN | `Controller\ProductVariantController\ProductVariantController::createProductVariant` |
 | DELETE | `/api/products/{id}` | ROLE_ADMIN | `Controller\ProductController\ProductController::deleteProduct` |
+| GET | `/api/products/{id}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductDetail` |
 | GET | `/api/products/{offer}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductsByOffer` |
 | GET | `/api/products` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getAllProducts` |
 | GET | `/api/productsid/{id}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductById` |
@@ -335,6 +336,15 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/stripe/create-intent` | PUBLIC_ACCESS | `Controller\paymentController\PaymentsController::createStripePaymentIntent` |
 | POST | `/api/stripe/webhook` | PUBLIC_ACCESS | `Controller\StripeController\StripeWebhookController::handleWebhook` |
 | GET | `/api/styles` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\StyleController\StyleController::getStyles` |
+| GET | `/api/subscription-plans` | PUBLIC_ACCESS | `Controller\SubscriptionController\SubscriptionController::plans` |
+| POST | `/api/subscriptions/portal-session` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::portal` |
+| POST | `/api/subscriptions/{id}/cancel` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::cancel` |
+| POST | `/api/subscriptions/{id}/change-plan` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::changePlan` |
+| POST | `/api/subscriptions/{id}/pause` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::pause` |
+| POST | `/api/subscriptions/{id}/resume` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::resume` |
+| GET | `/api/subscriptions/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::get` |
+| GET | `/api/subscriptions` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::list` |
+| POST | `/api/subscriptions` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::subscribe` |
 | GET | `/api/taxes/monthly` | ROLE_ADMIN | `Controller\StatistiqueDashboard\TaxController::getMonthlyTaxes` |
 | DELETE | `/api/transporteurs/{id}` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::deleteTransporteur` |
 | GET | `/api/transporteurs` | PUBLIC_ACCESS | `Controller\TransporteurController\TransporteurController::getTransporteurs` |

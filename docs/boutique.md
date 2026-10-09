@@ -218,6 +218,43 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
   rattachée à la ligne de commande).
 - Tests : `tests/Functional/Boutique/CustomerAccountApiTest.php`.
 
+## Abonnements (09/10/2026, § 11)
+
+Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionController/`, `UseCase/SubscriptionUseCase/`
+(`ListSubscriptionPlansUseCase`, `ManageSubscriptionUseCase`, `HandleSubscriptionWebhookUseCase`),
+`Services/SubscriptionService/` (`SubscriptionService`, `SubscriptionStripeGateway` derrière
+`SubscriptionStripeGatewayInterface` — `tests/Fake/FakeSubscriptionStripeGateway` en test —, `SubscriptionOrderFactory`,
+`SubscriptionMailer`), entités `SubscriptionPlan` et `Subscription`, DTO `SubscriptionPlanOutputDto`,
+`SubscriptionOutputDto`, EasyAdmin « Formules d'abonnement » et « Abonnements » (lecture). Schéma : tables
+`subscription_plan`, `subscription`, colonnes `order.subscription_id`, `order.stripe_invoice_id`,
+`user.stripe_customer_id` (migration `Version20261009130000`, script `scripts/migrate_all_v2_subscriptions.sh`).
+
+| Route | Accès | Contenu |
+|---|---|---|
+| `GET /api/subscription-plans?productId=&locale=` | public | formules actives `{ id, productId, name, interval (week\|month\|year), intervalCount, price (cents), currency, trialDays, minimumTerms, active }` |
+| `POST /api/subscriptions { planId, quantity?, addressId?, carrierId? }` | client connecté | 201 `{ subscriptionId, clientSecret, status, subscription }` ; abonnement Stripe créé en `default_incomplete`, première facture payée par le `clientSecret` (Payment Element) ; `trialDays` > 0 → `trialing` (carte enregistrée, `clientSecret` du SetupIntent) ; 403 si `commerce.subscriptionsEnabled` est `false` ; 404 formule ; 422 produit sans abonnement, quantité, adresse d'un autre client |
+| `GET /api/subscriptions`, `GET …/{id}` | client connecté | `{ id, plan, quantity, status, currentPeriodEnd, cancelAtPeriodEnd, address, carrier, createdAt, canceledAt, orders: [{ id, reference, date, total, status }] }` ; autre client : 404 |
+| `POST …/{id}/cancel { atPeriodEnd?: true }` | client | fin de période par défaut (`cancelAtPeriodEnd`), ou immédiate (`canceled`, courriel) |
+| `POST …/{id}/resume`, `…/{id}/pause` | client | reprise (annulation programmée levée, collecte reprise) ; pause (`pause_collection: void`, courriel) ; 409 si résilié ou pas actif |
+| `POST …/{id}/change-plan { planId }` | client | formule du même produit, prorata Stripe |
+| `POST /api/subscriptions/portal-session { returnUrl? }` | client | `{ url }` du portail client Stripe (carte, factures) |
+
+- Statuts : `incomplete`, `trialing`, `active`, `past_due`, `paused`, `canceled` (recopiés de Stripe :
+  `SubscriptionService::applyStripeState`).
+- Taxes : fournisseur `stripe` → `automatic_tax` de Stripe Billing ; `table` → taux de taxe Stripe créés d'après la table
+  du site pour l'adresse de l'abonnement (`default_tax_rates`) ; sans adresse, pas de taxe.
+- Webhooks (`POST /api/stripe/webhook`, `HandleSubscriptionWebhookUseCase::TYPES`) : le site vient des métadonnées
+  `tenant_code` posées à la souscription ; **signature exigée** (hors tests). `invoice.paid` → commande de l'échéance
+  (`SubscriptionOrderFactory` : première variante du produit, quantité, montants de la facture en cents, paiement
+  carte, stock décrémenté s'il suffit ; rejouable par `stripe_invoice_id`) + courriel de confirmation, statut `active` ;
+  `invoice.payment_failed` → `past_due` + courriel ; `customer.subscription.*` → état recopié, courriel de résiliation.
+  À déclarer dans Stripe : point de terminaison Connect (évènements des comptes connectés) sur
+  `https://v2.backend-strapi.online/api/stripe/webhook`, secret dans `STRIPE_CONNECT_WEBHOOK_SECRET`.
+- Prérequis par site : Stripe Billing et le portail client activés sur le compte connecté (tableau de bord Stripe) ; le
+  produit et le prix Stripe d'une formule sont créés à la première souscription (`stripe_product_id`, `stripe_price_id`).
+- Démo : trois formules sur « Panier bio de la semaine » (`BoutiqueDemoCatalog::SUBSCRIPTION_PLANS`).
+- Tests : `tests/Functional/Boutique/SubscriptionApiTest.php` (Stripe simulé : souscription, gestion, webhooks, refus).
+
 ## Boutique de démonstration (site `demo`, 08/10/2026)
 
 `php bin/console app:boutique:seed-demo [--customer-email=…] [--reset-password] [--otp]` (`SeedBoutiqueDemoCommand`,

@@ -494,4 +494,20 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->licenseExpirationDate = $licenseExpirationDate;
         return $this;
     }
+
+    /** Client Stripe sur le compte connecté du site (abonnements, boutique réglable 09/10/2026) */
+    #[ORM\Column(name: 'stripe_customer_id', length: 64, nullable: true)]
+    private ?string $stripeCustomerId = null;
+
+    public function getStripeCustomerId(): ?string
+    {
+        return $this->stripeCustomerId;
+    }
+
+    public function setStripeCustomerId(?string $stripeCustomerId): static
+    {
+        $this->stripeCustomerId = $stripeCustomerId;
+
+        return $this;
+    }
 }

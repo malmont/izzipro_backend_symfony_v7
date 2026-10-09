@@ -5,6 +5,8 @@ namespace App\Controller\StripeController;
 use App\MemoiresVivantes\UseCase\Payment\HandleBookCheckoutCompletedUseCase;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
+use App\UseCase\SubscriptionUseCase\HandleSubscriptionWebhookUseCase;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Psr\Log\LoggerInterface;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\Webhook;
@@ -20,7 +22,10 @@ class StripeWebhookController extends AbstractController
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly TenantConnectionManager $connectionManager,
         private readonly HandleBookCheckoutCompletedUseCase $handleBookCheckoutCompletedUseCase,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly HandleSubscriptionWebhookUseCase $subscriptionWebhookUseCase,
+        #[Autowire('%kernel.environment%')]
+        private readonly string $environment = 'prod'
     ) {}
 
     /**
@@ -79,6 +84,18 @@ class StripeWebhookController extends AbstractController
         }
 
         $this->logger->info(sprintf('[StripeWebhook] Événement reçu : %s', $eventType));
+
+
+        // Abonnements (Stripe Billing du compte connecté, boutique réglable 09/10/2026) : signature exigée (hors tests)
+        if (in_array($eventType, HandleSubscriptionWebhookUseCase::TYPES, true)) {
+            if (!is_object($event) && $this->environment !== 'test') {
+                $this->logger->error('[StripeWebhook] Évènement d\'abonnement sans signature vérifiée : ignoré');
+
+                return $this->json(['error' => 'Signature requise'], Response::HTTP_BAD_REQUEST);
+            }
+
+            return $this->json($this->subscriptionWebhookUseCase->execute($eventType, $eventData, $request->getSchemeAndHttpHost()));
+        }
 
         if ($eventType === 'checkout.session.completed') {
             $sessionId = $eventData['id'] ?? null;

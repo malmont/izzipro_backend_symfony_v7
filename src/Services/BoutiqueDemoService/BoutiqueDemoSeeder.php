@@ -25,6 +25,7 @@ use App\Entity\ProductVariant;
 use App\Entity\RentalPack;
 use App\Entity\RentalPackTranslation;
 use App\Entity\SaleUnit;
+use App\Entity\SubscriptionPlan;
 use App\Entity\Size;
 use App\Entity\SizeTranslation;
 use App\Entity\User;
@@ -78,6 +79,7 @@ final class BoutiqueDemoSeeder
         foreach (BoutiqueDemoCatalog::products() as $definition) {
             $this->product($definition, $categories, $values, $sizes, $colors, $saleUnit);
         }
+        $this->plans();
         $this->slides();
         $this->cards();
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
@@ -363,6 +365,24 @@ final class BoutiqueDemoSeeder
         $this->em()->persist($product);
         $this->em()->flush();
         $this->report[] = sprintf('Produit : %s (%s) — %s', $d['fr'][0], $code, $d['case']);
+    }
+
+    /** Formules d'abonnement des produits de démonstration (le prix Stripe se crée à la première souscription) */
+    private function plans(): void
+    {
+        $em = $this->em();
+        foreach (BoutiqueDemoCatalog::SUBSCRIPTION_PLANS as $code => $plans) {
+            $product = $em->getRepository(Product::class)->findOneBy(['code' => BoutiqueDemoCatalog::CODE_PREFIX . $code]);
+            if ($product === null || $em->getRepository(SubscriptionPlan::class)->count(['product' => $product]) > 0) {
+                continue;
+            }
+            foreach ($plans as [$names, $interval, $count, $price, $trial, $terms]) {
+                $em->persist((new SubscriptionPlan())->setProduct($product)->setNames($names)->setInterval($interval)->setIntervalCount($count)
+                    ->setPrice($price)->setCurrency('CAD')->setTrialDays($trial)->setMinimumTerms($terms)->setActive(true));
+            }
+            $this->report[] = sprintf('Formules d\'abonnement : %d pour %s', count($plans), $product->getName());
+        }
+        $em->flush();
     }
 
     private function slides(): void
