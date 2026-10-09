@@ -380,12 +380,25 @@ final class BoutiqueDemoSeeder
         $em = $this->em();
         foreach (BoutiqueDemoCatalog::SUBSCRIPTION_PLANS as $code => $plans) {
             $product = $em->getRepository(Product::class)->findOneBy(['code' => BoutiqueDemoCatalog::CODE_PREFIX . $code]);
-            if ($product === null || $em->getRepository(SubscriptionPlan::class)->count(['product' => $product]) > 0) {
+            if ($product === null) {
+                continue;
+            }
+            // Formules déjà créées : sous-titre, avantages, badge et mise en avant posés s'ils manquent
+            $existing = $em->getRepository(SubscriptionPlan::class)->findBy(['product' => $product]);
+            foreach ($existing as $plan) {
+                $extras = BoutiqueDemoCatalog::SUBSCRIPTION_PLAN_EXTRAS[$plan->getName('fr')] ?? null;
+                if ($extras !== null && $plan->getFeatures() === null) {
+                    $plan->setDescriptions($extras['descriptions'])->setFeatures($extras['features'])->setBadges($extras['badges'])->setHighlighted($extras['highlighted']);
+                }
+            }
+            if ($existing !== []) {
                 continue;
             }
             foreach ($plans as [$names, $interval, $count, $price, $trial, $terms]) {
+                $extras = BoutiqueDemoCatalog::SUBSCRIPTION_PLAN_EXTRAS[$names['fr']] ?? ['descriptions' => null, 'features' => null, 'badges' => null, 'highlighted' => false];
                 $em->persist((new SubscriptionPlan())->setProduct($product)->setNames($names)->setInterval($interval)->setIntervalCount($count)
-                    ->setPrice($price)->setCurrency('CAD')->setTrialDays($trial)->setMinimumTerms($terms)->setActive(true));
+                    ->setPrice($price)->setCurrency('CAD')->setTrialDays($trial)->setMinimumTerms($terms)->setActive(true)
+                    ->setDescriptions($extras['descriptions'])->setFeatures($extras['features'])->setBadges($extras['badges'])->setHighlighted($extras['highlighted']));
             }
             $this->report[] = sprintf('Formules d\'abonnement : %d pour %s', count($plans), $product->getName());
         }

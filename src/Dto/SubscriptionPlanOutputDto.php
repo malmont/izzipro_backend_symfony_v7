@@ -17,13 +17,21 @@ final class SubscriptionPlanOutputDto
         public readonly string $currency,
         public readonly int $trialDays,
         public readonly int $minimumTerms,
-        public readonly bool $active
+        public readonly bool $active,
+        /** @var list<string> avantages dans la langue demandée (texte en clair) */
+        public readonly array $features = [],
+        public readonly ?string $description = null,
+        public readonly bool $highlighted = false,
+        public readonly ?string $badge = null,
+        public readonly ?string $productName = null
     ) {
     }
 
     public static function fromEntity(SubscriptionPlan $plan, string $locale): self
     {
         return new self((int) $plan->getId(), (int) $plan->getProduct()?->getId(), $plan->getName($locale), $plan->getInterval(), $plan->getIntervalCount(),
-            $plan->getPrice(), $plan->getCurrency(), $plan->getTrialDays(), $plan->getMinimumTerms(), $plan->isActive());
+            $plan->getPrice(), $plan->getCurrency(), $plan->getTrialDays(), $plan->getMinimumTerms(), $plan->isActive(),
+            $plan->getFeatureList($locale), $plan->getDescription($locale), $plan->isHighlighted(), $plan->getBadge($locale),
+            $plan->getProduct()?->getTranslation($locale)?->getName() ?? $plan->getProduct()?->getName());
     }
 }

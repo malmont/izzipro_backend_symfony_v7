@@ -14,6 +14,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use Doctrine\ORM\EntityManagerInterface;
 
 /** Formules d'abonnement de la boutique réglable : le prix Stripe est créé à la première souscription */
 class SubscriptionPlanCrudController extends BaseTenantCrudController
@@ -51,6 +52,33 @@ class SubscriptionPlanCrudController extends BaseTenantCrudController
         yield IntegerField::new('trialDays', 'Jours d\'essai gratuit')->hideOnIndex();
         yield IntegerField::new('minimumTerms', 'Engagement minimal (périodes)')->hideOnIndex();
         yield BooleanField::new('active', 'Active');
+        yield BooleanField::new('highlighted', 'Recommandée (mise en avant)')->setHelp('Une seule par produit : cocher une formule décoche les autres du même produit.');
+        yield Field::new('descriptions', 'Sous-titre par langue (JSON)')->setFormType(JsonTextType::class)->hideOnIndex()
+            ->setHelp('{"fr": "Solution discount", "en": "Budget plan"} — texte en clair, 160 caractères au plus.');
+        yield Field::new('features', 'Avantages par langue (JSON)')->setFormType(JsonTextType::class)->hideOnIndex()
+            ->setHelp('{"fr": ["Livraison offerte", "Sans engagement"], "en": ["Free delivery", "No commitment"]} — 20 avantages au plus, 120 caractères chacun, texte en clair.');
+        yield Field::new('badges', 'Texte du badge par langue (JSON)')->setFormType(JsonTextType::class)->hideOnIndex()
+            ->setHelp('Facultatif, pour la formule recommandée : {"fr": "Le plus choisi", "en": "Most popular"}. Sans texte, le site affiche « Recommandé ».');
         yield TextField::new('stripePriceId', 'Prix Stripe')->onlyOnDetail();
+    }
+
+    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->normalize($entityInstance);
+        parent::persistEntity($entityManager, $entityInstance);
+        $this->emProvider->getEntityManager()->getRepository(SubscriptionPlan::class)->keepOnlyHighlighted($entityInstance);
+    }
+
+    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->normalize($entityInstance);
+        parent::updateEntity($entityManager, $entityInstance);
+        $this->emProvider->getEntityManager()->getRepository(SubscriptionPlan::class)->keepOnlyHighlighted($entityInstance);
+    }
+
+    /** Textes saisis dans le formulaire nettoyés comme par l'API (en clair, longueurs bornées) */
+    private function normalize(SubscriptionPlan $plan): void
+    {
+        $plan->setFeatures($plan->getFeatures())->setDescriptions($plan->getDescriptions())->setBadges($plan->getBadges());
     }
 }

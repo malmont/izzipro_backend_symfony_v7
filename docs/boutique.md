@@ -275,7 +275,7 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
 
 | Route | Accès | Contenu |
 |---|---|---|
-| `GET /api/subscription-plans?productId=&locale=` | public | formules actives `{ id, productId, name, interval (week\|month\|year), intervalCount, price (cents), currency, trialDays, minimumTerms, active }` |
+| `GET /api/subscription-plans?productId=&locale=` | public | formules actives (sans `productId` : toutes celles de la boutique, produits encore vendus par abonnement ; grille de formules `PlanGrid`) `{ id, productId, productName, name, interval (week\|month\|year), intervalCount, price (cents), currency, trialDays, minimumTerms, active, description (sous-titre), features (liste d'avantages, 20 au plus), highlighted (formule recommandée, une par produit), badge (texte du badge ou null) }`, textes en clair dans la langue demandée |
 | `POST /api/subscriptions { planId, quantity?, addressId?, carrierId? }` | client connecté | 201 `{ subscriptionId, clientSecret, status, subscription }` ; abonnement Stripe créé en `default_incomplete`, première facture payée par le `clientSecret` (Payment Element) ; `trialDays` > 0 → `trialing` (carte enregistrée, `clientSecret` du SetupIntent) ; 403 si `commerce.subscriptionsEnabled` est `false` ; 404 formule ; 422 produit sans abonnement, quantité, adresse d'un autre client |
 | `GET /api/subscriptions`, `GET …/{id}` | client connecté | `{ id, plan, quantity, status, currentPeriodEnd, cancelAtPeriodEnd, address, carrier, createdAt, canceledAt, orders: [{ id, reference, date, total, status }] }` ; autre client : 404 |
 | `POST …/{id}/cancel { atPeriodEnd?: true }` | client | fin de période par défaut (`cancelAtPeriodEnd`), ou immédiate (`canceled`, courriel) |
@@ -317,6 +317,11 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
   ni `tax` (lire `parent.subscription_details.subscription`, taxes = `total − subtotal`, intention dans `payments`) ;
   l'objet signé du SDK se convertit par `toArray()` (le transtypage `(array)` ne donne que ses propriétés internes).
 - Démo : trois formules sur « Panier bio de la semaine » (`BoutiqueDemoCatalog::SUBSCRIPTION_PLANS`).
+- Grille de formules (09/10/2026) : colonnes `subscription_plan.features`, `descriptions`, `badges` (JSON par langue) et
+  `highlighted` (migration `Version20261009210000`, script `scripts/migrate_all_v2_subscription_plan_grid.sh`), saisies
+  dans EasyAdmin « Formules d'abonnement » ; texte en clair (balises retirées), sous-titre 160 caractères, badge 40,
+  20 avantages de 120 caractères au plus ; cocher « Recommandée » décoche les autres formules du produit. Démo :
+  « Panier aux deux semaines » recommandée (`BoutiqueDemoCatalog::SUBSCRIPTION_PLAN_EXTRAS`).
 - Tests : `tests/Functional/Boutique/SubscriptionApiTest.php` (Stripe simulé : souscription, gestion, webhooks, refus).
 
 ## Avis clients (09/10/2026)

@@ -506,8 +506,10 @@
                 "products",
                 "slides",
                 "cards",
-                "categories"
-              ]
+                "categories",
+                "plans"
+              ],
+              "description": "Source des éléments. Boutique : products (id = sélection : bestsellers, newarrivals, specialoffers, isfeatured, isAccessory), plans (formules d’abonnement ; id vide = toutes, sinon l’identifiant d’un produit ; item.name, item.description, item.priceLabel, item.intervalLabel, item.priceLine, item.trialLabel, item.minimumTermsLabel, item.featuresHtml, item.badgeLabel, item.highlighted, item.subscribeUrl), slides, cards, categories."
             },
             "id": {
               "type": [
@@ -554,6 +556,12 @@
             "featuredColor": {
               "$ref": "#/$defs/color",
               "description": "Couleur du texte de la carte mise en avant."
+            },
+            "featuredBy": {
+              "type": "string",
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9_.]*$",
+              "description": "Mise en avant d’après les données : l’élément dont ce champ est rempli (ex. highlighted, formule recommandée) ; sans élément marqué, featured (position) s’applique."
             },
             "pickedColor": {
               "$ref": "#/$defs/color",

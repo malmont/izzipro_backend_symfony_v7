@@ -222,6 +222,19 @@ class BoutiqueSettingsApiTest extends WebTestCase
         $this->assertSame(422, $this->request('PUT', $this->encode(['configuration' => $configuration]))->getStatusCode(), 'valeur hors du schéma');
     }
 
+    public function testPlanGridSectionIsAccepted(): void
+    {
+        // Contrat 125211e22d26332a (09/10/2026) : grille de formules, liste « plans », carte mise en avant par un champ
+        $this->loginAsAdmin();
+        $grid = $this->preset('plans-type-a');
+        $repeat = array_values(array_filter(array_column($grid['blocks'], 'repeat')))[0];
+        $this->assertSame(['plans', 'highlighted'], [$repeat['source'], $repeat['featuredBy']]);
+        $configuration = $this->configuration();
+        $configuration['tabs'][0]['sections'][] = ['id' => 's-plans', 'componentKey' => 'PlanGrid', 'componentTypeKey' => 'typeReglable', 'dataType' => null, 'reglableConfig' => $grid];
+        $put = $this->request('PUT', $this->encode(['configuration' => $configuration]));
+        $this->assertSame(200, $put->getStatusCode(), $put->getContent());
+    }
+
     public function testMalformedBodiesAreRefused(): void
     {
         $this->loginAsAdmin();

@@ -234,6 +234,28 @@ final class BoutiqueDemoCatalog
         ],
     ];
 
+    /**
+     * Grille de formules (09/10/2026) : sous-titre, avantages, badge, formule recommandée, par nom français de la formule.
+     * Posés aussi sur les formules déjà créées s'ils manquent.
+     */
+    public const SUBSCRIPTION_PLAN_EXTRAS = [
+        'Panier hebdomadaire' => [
+            'descriptions' => ['fr' => 'Pour cuisiner frais chaque semaine', 'en' => 'Cook fresh every week'],
+            'features' => ['fr' => ['8 à 10 légumes de saison', 'Livraison chaque mardi', 'Sans engagement'], 'en' => ['8 to 10 seasonal vegetables', 'Delivered every Tuesday', 'No commitment']],
+            'badges' => null, 'highlighted' => false,
+        ],
+        'Panier aux deux semaines' => [
+            'descriptions' => ['fr' => 'Le juste milieu', 'en' => 'The happy medium'],
+            'features' => ['fr' => ['8 à 10 légumes de saison', 'Livraison un mardi sur deux', '7 jours d\'essai gratuit', 'Sans engagement'], 'en' => ['8 to 10 seasonal vegetables', 'Delivered every other Tuesday', '7-day free trial', 'No commitment']],
+            'badges' => ['fr' => 'Le plus choisi', 'en' => 'Most popular'], 'highlighted' => true,
+        ],
+        'Panier mensuel' => [
+            'descriptions' => ['fr' => 'Solution économique', 'en' => 'Budget plan'],
+            'features' => ['fr' => ['Grand panier de 15 produits', 'Livraison le premier mardi du mois', '14 jours d\'essai gratuit', 'Engagement de 3 mois'], 'en' => ['Large basket of 15 products', 'Delivered on the first Tuesday', '14-day free trial', '3-month commitment']],
+            'badges' => null, 'highlighted' => false,
+        ],
+    ];
+
     /** Diapositives de l'accueil : [titre fr, titre en, texte fr, texte en, bouton fr, bouton en, lien, couleur] */
     public const SLIDES = [
         ['Nouvelle collection Horizon', 'New Horizon collection', 'Des basiques en coton biologique, pensés pour durer.', 'Organic cotton basics, made to last.', 'Découvrir', 'Discover', '/catalogue', '#1d4ed8'],

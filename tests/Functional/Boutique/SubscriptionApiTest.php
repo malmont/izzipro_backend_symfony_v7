@@ -45,6 +45,31 @@ class SubscriptionApiTest extends WebTestCase
         $this->assertSame([], $this->json($this->request('GET', '/api/subscription-plans?productId=' . $this->productId('DEMO-CASQUETTE'))), 'produit sans formule');
     }
 
+    public function testPlanGridFieldsAndOneHighlightedPlanPerProduct(): void
+    {
+        // Grille de formules (09/10/2026) : sans productId, toutes les formules actives ; avantages, sous-titre, badge par langue
+        $all = $this->json($this->request('GET', '/api/subscription-plans'));
+        $basket = array_values(array_filter($all, fn ($p) => $p['productId'] === $this->productId('DEMO-PANIER')));
+        $this->assertCount(3, $basket);
+        $featured = array_values(array_filter($basket, fn ($p) => $p['highlighted']));
+        $this->assertCount(1, $featured, 'une seule formule recommandée');
+        $this->assertSame(['Le juste milieu', 'Le plus choisi'], [$featured[0]['description'], $featured[0]['badge']]);
+        $this->assertContains('Sans engagement', $featured[0]['features']);
+        $this->assertSame('Panier bio de la semaine', $featured[0]['productName']);
+        $en = $this->json($this->request('GET', '/api/subscription-plans?locale=en&productId=' . $this->productId('DEMO-PANIER')));
+        $this->assertSame('Most popular', array_values(array_filter($en, fn ($p) => $p['highlighted']))[0]['badge']);
+
+        // Texte en clair et bornes, une seule mise en avant par produit
+        $em = static::getContainer()->get(\App\Services\TenantEntityManagerProvider::class)->getEntityManager();
+        $plan = $em->getRepository(\App\Entity\SubscriptionPlan::class)->find($basket[0]['id']);
+        $plan->setFeatures(['fr' => array_merge(['<b>Gras</b> & net', ''], array_fill(0, 30, 'Avantage'))])->setDescriptions(['fr' => '<script>x</script>Court'])->setHighlighted(true);
+        $em->flush();
+        $em->getRepository(\App\Entity\SubscriptionPlan::class)->keepOnlyHighlighted($plan);
+        $this->assertSame(['Gras & net', 20, 'xCourt'], [$plan->getFeatureList()[0], count($plan->getFeatureList()), $plan->getDescription()]);
+        $highlighted = (int) $this->db->fetchOne('SELECT COUNT(*) FROM subscription_plan WHERE product_id = ? AND highlighted', [$this->productId('DEMO-PANIER')]);
+        $this->assertSame(1, $highlighted);
+    }
+
     public function testCustomerSubscribesManagesAndReceivesOrdersFromPaidInvoices(): void
     {
         $this->loginAs(['ROLE_USER_INTERNET']);
