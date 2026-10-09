@@ -100,7 +100,7 @@ class TestTenantSmtpCommand extends Command
 
         // 3. Envoi via le Mailer adapté
         try {
-            $mailer = $this->mailerFactory->createMailer($config);
+            $mailer = $this->mailerFactory->createDirectMailer($config); // sans file : l'erreur SMTP s'affiche ici
 
             $email = (new Email())
                 ->from(sprintf('%s <%s>', $fromName, $fromEmail))

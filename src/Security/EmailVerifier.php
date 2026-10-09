@@ -6,7 +6,7 @@ use App\Entity\User;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Mailer\MailerInterface;
+use App\Services\EmailConfigurationService\TenantMailerFactory;
 use Symfony\Component\Security\Core\User\UserInterface;
 use SymfonyCasts\Bundle\VerifyEmail\Exception\VerifyEmailExceptionInterface;
 use SymfonyCasts\Bundle\VerifyEmail\VerifyEmailHelperInterface;
@@ -15,15 +15,15 @@ class EmailVerifier
 {
     private TenantEntityManagerProvider $tenantEmProvider;
     private VerifyEmailHelperInterface $verifyEmailHelper;
-    private MailerInterface $mailer;
+    private TenantMailerFactory $mailers;
 
     public function __construct(
         VerifyEmailHelperInterface $verifyEmailHelper,
-        MailerInterface $mailer,
+        TenantMailerFactory $mailers,
         TenantEntityManagerProvider $tenantEmProvider
     ) {
         $this->verifyEmailHelper = $verifyEmailHelper;
-        $this->mailer = $mailer;
+        $this->mailers = $mailers;
         $this->tenantEmProvider = $tenantEmProvider;
     }
 
@@ -43,7 +43,7 @@ class EmailVerifier
 
         $email->context($context);
 
-        $this->mailer->send($email);
+        $this->mailers->createPlatformMailer()->send($email); // worker « email », serveur de la plateforme
     }
 
     /**

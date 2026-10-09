@@ -21,6 +21,7 @@ class WorkerMonitor
         'esg' => ['label' => 'Boussole ESG — rapports', 'suffix' => '_esg'],
         'landing_ai' => ['label' => 'Assistant IA des landing pages', 'suffix' => '_landing_ai'],
         'media' => ['label' => 'Médiathèque — vidéos pour le défilement', 'suffix' => '_media'],
+        'email' => ['label' => 'Courriels — tous les sites', 'suffix' => '_email'],
     ];
 
     /** Secondes entre deux battements d'un worker au repos */

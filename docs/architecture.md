@@ -166,11 +166,22 @@ Une file et un worker par projet, dans la base Redis 1 (`config/packages/messeng
 | `esg` (`messages_esg`) | `symfony_messenger_worker_esg_v2` | rapports Boussole ESG |
 | `landing_ai` (`messages_landing_ai`, sans relance) | `symfony_messenger_worker_landing_v2` | tâches de l'assistant IA |
 | `media` (`messages_media`, sans relance) | `symfony_messenger_worker_media_v2` | vidéos de la médiathèque préparées pour le défilement |
+| `email` (`messages_email`, relances 30 s / 2 min / 8 min) | `symfony_messenger_worker_email_v2` | courriels de tous les sites (09/10/2026) |
 | `failed` (`messages_failed`) | — | messages en échec (inspection) |
 
 Le worker `media` a sa propre image (`docker/worker-media/Dockerfile` : l'image de l'application plus **ffmpeg**) : c'est
 le seul conteneur qui encode des vidéos, le site n'encode jamais rien. Après une reconstruction de l'image de
 l'application : `docker compose build messenger_worker_media && docker compose up -d --no-deps messenger_worker_media`.
+
+**Courriels** (worker `email`, 09/10/2026) : tout envoi passe par `TenantMailerFactory` (`createMailer($config)` pour le
+serveur SMTP du site, `createPlatformMailer()` pour celui de la plateforme, `MAILER_DSN`), qui rend un `QueuedMailer` : le
+courriel est composé dans la requête (gabarit Twig rendu, langue et domaine du site), copié sans son contexte de gabarit,
+puis mis en file (`SendTenantEmailMessage` : e-mail, enveloppe, code et base du site, identifiant de la configuration
+d'envoi). **Aucun identifiant SMTP dans la file** : le worker (`SendTenantEmailHandler` → `TenantEmailDelivery`) relit la
+configuration dans la base du site, puis envoie ; une erreur SMTP relance le message, puis le range dans `failed`. File
+injoignable : envoi immédiat. Une réponse HTTP n'attend donc plus le serveur SMTP, et un appelant ne voit plus l'échec
+d'un envoi (journal `[Email]` et file `failed`). Exception : `app:test-tenant-smtp` envoie sans file
+(`createDirectMailer`). En test, le transport `email` est synchrone (`when@test`).
 
 - Chaque worker démarre par `docker/worker/consume.sh` : **cache Symfony propre** (`APP_CACHE_DIR`), reconstruit à chaque
   démarrage, `APP_DEBUG=0`. Sans cela, une reconstruction du cache web supprimait des fichiers utilisés par le worker.

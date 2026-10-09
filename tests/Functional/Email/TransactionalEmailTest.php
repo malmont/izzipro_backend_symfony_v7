@@ -194,6 +194,28 @@ class TransactionalEmailTest extends KernelTestCase
     }
 
     /** @return Email[] messages confiés au serveur d'envoi pendant le test */
+    public function testQueuedEmailIsRenderedAndCarriesNeitherTemplateContextNorSmtpSecrets(): void
+    {
+        // Le worker « email » reçoit un e-mail déjà composé : gabarit rendu dans la requête, données du gabarit
+        // (entités comprises) retirées, aucun identifiant SMTP (le worker relit la configuration du site)
+        $user = $this->em()->getRepository(User::class)->findOneBy([]);
+        $templated = (new \Symfony\Bridge\Twig\Mime\TemplatedEmail())->from('contact@mvtest.test')->to('client@example.invalid')->bcc('copie@example.invalid')
+            ->subject('Essai de file')->htmlTemplate('emails/financement_form.html.twig')
+            ->context(['user' => $user, 'fromName' => 'Test', 'logoUrl' => null, 'data' => array_fill_keys(['address', 'birthDate', 'creditScore', 'email', 'firstName', 'housingStatus',
+                'lastName', 'monthlyIncome', 'monthlyPayment', 'phone', 'timeAtResidence', 'vehicleType'], 'valeur-de-test')]);
+        static::getContainer()->get(\Symfony\Component\Mime\BodyRendererInterface::class)->render($templated);
+        $plain = \App\Services\EmailConfigurationService\QueuedMailer::plain($templated);
+        $message = new \App\Message\SendTenantEmailMessage($plain, \Symfony\Component\Mailer\Envelope::create($plain), MV_TEST_TENANT_CODE, MV_TEST_TENANT_DB, 42);
+
+        $copy = unserialize(serialize($message));
+        $this->assertNotInstanceOf(\Symfony\Bridge\Twig\Mime\TemplatedEmail::class, $copy->email);
+        $this->assertSame($templated->getHtmlBody(), $copy->email->getHtmlBody());
+        $this->assertStringContainsString('valeur-de-test', (string) $copy->email->getHtmlBody(), 'gabarit rendu avant la file');
+        $this->assertSame(['client@example.invalid', 'copie@example.invalid'], array_map(fn ($a) => $a->getAddress(), $copy->envelope->getRecipients()), 'copie cachée dans l\'enveloppe');
+        $this->assertStringNotContainsString('App\\Entity\\User', serialize($message), 'aucune entité dans la file');
+        $this->assertSame(42, $copy->configId);
+    }
+
     private function messages(): array
     {
         // Chaque e-mail produit deux événements (mise en file, puis envoi) : on ne garde que l'envoi

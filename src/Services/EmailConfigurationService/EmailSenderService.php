@@ -150,7 +150,7 @@ class EmailSenderService
             if ($replyTo !== null) {
                 $email->replyTo($replyTo);
             }
-            $this->mailer->send($email);
+            $this->tenantMailerFactory->createPlatformMailer()->send($email); // worker « email », serveur de la plateforme
 
             return true;
         } catch (\Throwable $e) {

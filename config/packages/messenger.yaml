@@ -48,6 +48,17 @@ framework:
                     dbindex: 1
                 retry_strategy:
                     max_retries: 0
+            # Courriels de tous les sites (09/10/2026) : la requête n'attend plus le serveur SMTP. Relances espacées
+            # (30 s, 2 min, 8 min) pour un serveur momentanément indisponible, puis file « failed »
+            email:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%_email'
+                options:
+                    dbindex: 1
+                retry_strategy:
+                    max_retries: 3
+                    delay: 30000
+                    multiplier: 4
+                    max_delay: 0
             failed:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%_failed'
                 options:
@@ -58,3 +69,12 @@ framework:
             'App\ESG\Message\GenerateEsgReportMessage': esg
             'App\Message\LandingAiJobMessage': landing_ai
             'App\Message\PrepareScrollVideoMessage': media
+            'App\Message\SendTenantEmailMessage': email
+
+# Tests : Messenger en mémoire (tests/bootstrap.php) ; les courriels partent tout de suite (vers null://) pour que les
+# tests lisent les messages envoyés
+when@test:
+    framework:
+        messenger:
+            transports:
+                email: 'sync://'
