@@ -38,7 +38,11 @@ class ProcessOrderItemsUseCase
         $isCancel = $typeOrderId !== 1;
 
         try {
-            $quote = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'carrierId' => $carrierId, 'shippingPrice' => $priceShipping]));
+            $address = $order->getShippingAdress();
+            $quote = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'carrierId' => $carrierId, 'shippingPrice' => $priceShipping,
+                'shippingAddress' => $address ? ['country' => $address->getCountry(), 'province' => $address->getProvince(), 'city' => $address->getCity(), 'postalCode' => $address->getCodepostal()] : null]));
+            $order->setPendingTaxCalculationId($quote['taxCalculationId']); // transaction Stripe Tax enregistrée après le paiement
+            $order->setPendingTaxes($quote['taxes']); // mêmes taxes que le devis et que le montant autorisé
         } catch (CartQuoteException $e) {
             throw new BadRequestHttpException($e->getMessage(), $e);
         }

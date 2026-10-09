@@ -161,14 +161,42 @@ d'article**.
   choisi dans `shipping/summary`, envoyé en `shippingPrice`. `GET /api/Carrier` : `isFree`, `estimatedDays`
   (colonne `carrier.estimated_days`, migration `Version20261008140000`, script
   `scripts/migrate_all_v2_carrier_estimated_days.sh`). `shipping/summary[].totalPrice` est en cents.
-- Taxes : toutes celles de la table `tax` du site, sur articles + livraison (comme `TaxCalculationService`), quelle
-  que soit la province (à filtrer plus tard si besoin).
+- Taxes : selon l'adresse de livraison (`shippingAddress`), voir « Taxes par région » ci-dessous ; sans adresse,
+  `taxes: []` et `taxStatus: address_required`.
 - Statuts : 400 corps illisible, 404 variante ou transporteur inconnu, 422 règle non respectée ; rien n'est réservé.
 - `order/create` : `orderSource`, `typeOrder` et `paymentMethod` facultatifs (vente en ligne par défaut) ;
   `carrierId` nullable. `order/create-guest` : 403 si `commerce.guestCheckout` est `false` dans les réglages de la
   boutique (`BoutiqueSettingsService::isGuestCheckoutAllowed`). `GET /api/booking/check/{id}` : **409** avec
   `remaining_stock` quand la quantité n'est pas disponible (200 auparavant).
 - Tests : `tests/Functional/Boutique/CartQuoteApiTest.php`.
+
+## Taxes par région (09/10/2026, `TaxEngine`)
+
+Le devis, `create-intent` et la commande calculent les taxes de la même façon, selon l'adresse de livraison
+(`shippingAddress { country, province|state, city, postalCode }` dans le devis et `create-intent` ; adresse de la
+commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique : `table` (défaut) ou `stripe`.
+
+- **Sans adresse** : `taxes: []`, `taxStatus: 'address_required'`, `total` hors taxes (le frontend affiche « taxes
+  calculées au paiement »). Avec adresse : `taxStatus` = `calculated`, `no_tax` (aucune taxe pour cette région) ou
+  `fallback_table` (Stripe demandé mais indisponible : table utilisée). Le devis renvoie aussi `taxProvider`,
+  `taxCalculationId` (Stripe) et `shippingAddress` normalisée (pays ISO, province en code : « Québec » → `QC`).
+- **`table`** : table `tax` du site (EasyAdmin « Taxes »), une taxe s'applique si `country` (ISO, vide = tous) et
+  `province` (« Toutes », ou codes séparés par des virgules : `QC` ; `ON,NB,NL,PE`) correspondent à l'adresse ; les
+  noms des provinces canadiennes sont acceptés. Taux sur articles + livraison. Table canadienne complète posée sur
+  `demo` (`BoutiqueDemoCatalog::TAXES` : TPS hors provinces à TVH, TVQ, TVH 13/14/15 %, TVP BC/MB/SK) ; **les sites
+  clients gardent leurs lignes** (Kara & B : TVQ à 10 % et TPS « Toutes », à corriger dans leur administration).
+- **`stripe`** : Stripe Tax (`Tax Calculations`) sur le compte connecté du site, une ligne par article (code fiscal
+  « bien physique » `txcd_99999999`, « service » `txcd_20030000` pour une location, livraison `txcd_92010001`),
+  montants par juridiction (`taxes[].jurisdiction`), calcul gardé 10 min pour un même panier et une même adresse. À la
+  commande payée, la transaction fiscale est enregistrée chez Stripe (`order.tax_transaction_id`, rapports de
+  déclaration du site). Prérequis par site : activer Stripe Tax dans le tableau de bord du compte connecté (siège,
+  inscriptions fiscales) ; sur `demo`, le compte est en `pending` (rien de saisi) tant que l'utilisateur ne l'a pas fait.
+  Coût : facturé par Stripe au compte connecté.
+- Commande : `TaxCalculationService` reprend les taxes du devis (`Order::pendingTaxes`) et crée une ligne `OrderTax`
+  par taxe (rattachée à la table pour `table`, sans rattachement pour Stripe) ; une commande de caisse ou un retour sans
+  devis est calculé sur son sous-total. Schéma : `tax.country`, `order.tax_transaction_id` (migration
+  `Version20261009110000`, script `scripts/migrate_all_v2_tax_regions.sh`).
+- Tests : `CartQuoteApiTest::testTaxesFollowTheShippingAddressRegion` (QC, ON, NB, FR, sans adresse, repli Stripe → table).
 
 ## Compte client (08/10/2026, § 8)
 

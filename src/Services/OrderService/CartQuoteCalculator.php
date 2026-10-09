@@ -8,7 +8,6 @@ use App\Entity\Carrier;
 use App\Entity\Product;
 use App\Entity\ProductVariant;
 use App\Entity\RentalPack;
-use App\Entity\Tax;
 use App\Services\Booking\BookingAvailabilityService;
 use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\TenantEntityManagerProvider;
@@ -27,8 +26,8 @@ use App\Services\TenantEntityManagerProvider;
  * passager ajoutés à la ligne ; caution rapportée à part, hors total.
  *
  * Livraison : 0 sans transporteur ; prix fixe du transporteur ; pour un transporteur EasyPost (carrierAccountId),
- * le tarif choisi envoyé par le navigateur (shippingPrice, cents). Taxes : toutes celles du site, sur articles +
- * livraison (TaxCalculationService fait de même à la commande).
+ * le tarif choisi envoyé par le navigateur (shippingPrice, cents). Taxes : TaxEngine selon l'adresse de livraison
+ * (table du site par région, ou Stripe Tax) ; sans adresse, aucune taxe et taxStatus address_required.
  */
 final class CartQuoteCalculator
 {
@@ -39,12 +38,13 @@ final class CartQuoteCalculator
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly BookingAvailabilityService $availability,
-        private readonly TenantCurrencyProvider $currency
+        private readonly TenantCurrencyProvider $currency,
+        private readonly TaxEngine $taxes
     ) {
     }
 
     /**
-     * @return array{lines: list<array<string, mixed>>, subtotal: int, shipping: int, taxes: list<array{label: string, rate: float, amount: int}>, deposit: int, total: int, currency: string, carrier: ?array{id: int, name: ?string, isFree: bool}}
+     * @return array{lines: list<array<string, mixed>>, subtotal: int, shipping: int, taxes: list<array{label: string, rate: float, amount: int, jurisdiction?: string}>, taxStatus: string, taxProvider: string, taxCalculationId: ?string, deposit: int, total: int, currency: string, shippingAddress: ?array, carrier: ?array{id: int, name: ?string, isFree: bool}}
      * @throws CartQuoteException
      */
     public function quote(CartQuoteInputDto $input): array
@@ -109,18 +109,17 @@ final class CartQuoteCalculator
         }
 
         [$shipping, $carrier] = $this->shipping($input);
-        $taxable = $subtotal + $shipping;
-        $taxes = [];
-        $taxTotal = 0.0;
-        foreach ($em->getRepository(Tax::class)->findAll() as $tax) {
-            $amount = $taxable * (float) $tax->getRate();
-            $taxTotal += $amount;
-            $taxes[] = ['label' => (string) $tax->getName(), 'rate' => (float) $tax->getRate(), 'amount' => (int) round($amount)];
-        }
+        $currency = $this->currency->code();
+        $tax = $this->taxes->compute($input->address, array_map(fn ($line, $i) => [
+            'amount' => (int) $line['unitPrice'], 'quantity' => (int) $line['quantity'], 'kind' => $line['kind'], 'reference' => sprintf('line-%d-variant-%d', $i, $line['productVariantId']),
+        ], $lines, array_keys($lines)), $shipping, $currency);
 
         return [
-            'lines' => $lines, 'subtotal' => $subtotal, 'shipping' => $shipping, 'taxes' => $taxes, 'deposit' => $deposit,
-            'total' => $taxable + (int) round($taxTotal), 'currency' => $this->currency->code(),
+            'lines' => $lines, 'subtotal' => $subtotal, 'shipping' => $shipping,
+            'taxes' => $tax['taxes'], 'taxStatus' => $tax['status'], 'taxProvider' => $tax['provider'],
+            'taxCalculationId' => $tax['calculationId'], 'deposit' => $deposit,
+            'total' => $subtotal + $shipping + $tax['total'], 'currency' => $currency,
+            'shippingAddress' => $input->address,
             'carrier' => $carrier ? ['id' => (int) $carrier->getId(), 'name' => $carrier->getName(), 'isFree' => $carrier->isFree()] : null,
         ];
     }

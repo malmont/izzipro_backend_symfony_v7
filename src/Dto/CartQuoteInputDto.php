@@ -3,19 +3,26 @@
 namespace App\Dto;
 
 use App\Services\OrderService\CartQuoteException;
+use App\Services\OrderService\TaxEngine;
 
 /**
  * Demande de devis d'un panier (POST /api/cart/quote, create-intent, order/create) :
  * items[] { productVariantId, quantity, booking?: { start, end, rateId?, durationType?, passengers? }, customizationId? },
- * carrierId?, shippingPrice? (cents : tarif choisi dans shipping/summary, lu seulement pour un transporteur EasyPost).
+ * carrierId?, shippingPrice? (cents : tarif choisi dans shipping/summary, lu seulement pour un transporteur EasyPost),
+ * shippingAddress? { country, province|state, city, postalCode } (taxes par région ; sans adresse : aucune taxe, taxStatus
+ * address_required).
  */
 final class CartQuoteInputDto
 {
-    /** @param list<array<string, mixed>> $items */
+    /**
+     * @param list<array<string, mixed>> $items
+     * @param array{country: string, province: ?string, city: ?string, postalCode: ?string}|null $address normalisée (TaxEngine::normalizeAddress)
+     */
     public function __construct(
         public readonly array $items,
         public readonly ?int $carrierId = null,
-        public readonly ?int $shippingPrice = null
+        public readonly ?int $shippingPrice = null,
+        public readonly ?array $address = null
     ) {
     }
 
@@ -47,6 +54,8 @@ final class CartQuoteInputDto
             throw new CartQuoteException(400, 'Frais de livraison invalides', [['path' => 'shippingPrice', 'message' => 'montant en cents, positif ou nul, attendu']]);
         }
 
-        return new self($lines, is_numeric($carrierId) && (int) $carrierId > 0 ? (int) $carrierId : null, $shipping !== null ? (int) round((float) $shipping) : null);
+        $address = is_array($data['shippingAddress'] ?? null) ? TaxEngine::normalizeAddress($data['shippingAddress']) : null;
+
+        return new self($lines, is_numeric($carrierId) && (int) $carrierId > 0 ? (int) $carrierId : null, $shipping !== null ? (int) round((float) $shipping) : null, $address);
     }
 }

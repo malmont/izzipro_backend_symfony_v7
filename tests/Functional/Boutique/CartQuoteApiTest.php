@@ -31,9 +31,7 @@ class CartQuoteApiTest extends WebTestCase
         $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         $this->db = $provider->getEntityManager()->getConnection();
         static::getContainer()->get(BoutiqueDemoSeeder::class)->seed('client-devis@example.invalid', false, false);
-        // Taxes connues pour les calculs : TPS 5 % et TVQ 9,975 % (la base de test en a déjà deux)
-        $this->db->executeStatement("UPDATE tax SET rate = 0.05 WHERE name = 'TPS'");
-        $this->db->executeStatement("UPDATE tax SET rate = 0.09975 WHERE name = 'TVQ'");
+        $this->db->executeStatement('DELETE FROM boutique_setting');
     }
 
     public function testSaleLinesUseVariantPriceActivePromotionCarrierAndTaxes(): void
@@ -44,7 +42,7 @@ class CartQuoteApiTest extends WebTestCase
 
         $quote = $this->quote(['items' => [
             ['productVariantId' => $xl, 'quantity' => 2], ['productVariantId' => $sweat, 'quantity' => 1], ['productVariantId' => $coffee, 'quantity' => 1],
-        ], 'carrierId' => 1, 'shippingPrice' => 99999]);
+        ], 'carrierId' => 1, 'shippingPrice' => 99999, 'shippingAddress' => ['country' => 'CA', 'province' => 'Québec', 'city' => 'Montréal', 'postalCode' => 'H2X 1Y4']]);
 
         $this->assertSame(200, $quote['status'], json_encode($quote['body']));
         $body = $quote['body'];
@@ -56,9 +54,11 @@ class CartQuoteApiTest extends WebTestCase
         $shipping = (int) round((float) $carrier['price']);
         $this->assertSame($shipping, $body['shipping'], 'prix fixe du transporteur : le montant du navigateur est ignoré');
         $taxable = 16500 + $shipping;
-        $this->assertSame([['label' => 'TPS', 'rate' => 0.05, 'amount' => (int) round($taxable * 0.05)], ['label' => 'TVQ', 'rate' => 0.09975, 'amount' => (int) round($taxable * 0.09975)]], $body['taxes']);
+        $this->assertSame([['label' => 'TPS', 'rate' => 0.05, 'amount' => (int) round($taxable * 0.05)], ['label' => 'TVQ', 'rate' => 0.09975, 'amount' => (int) round($taxable * 0.09975)]], array_map(fn ($t) => array_intersect_key($t, ['label' => 1, 'rate' => 1, 'amount' => 1]), $body['taxes']));
         $this->assertSame($taxable + (int) round($taxable * 0.14975), $body['total']);
         $this->assertSame([0, 'CAD', ['id' => 1, 'name' => $carrier['name'], 'isFree' => false]], [$body['deposit'], $body['currency'], $body['carrier']]);
+        $this->assertSame(['calculated', 'table'], [$body['taxStatus'], $body['taxProvider']]);
+        $this->assertSame(['country' => 'CA', 'province' => 'QC', 'city' => 'Montréal', 'postalCode' => 'H2X 1Y4'], $body['shippingAddress'], 'adresse normalisée (nom de province → code)');
 
         $free = $this->quote(['items' => [['productVariantId' => $xl, 'quantity' => 1]], 'carrierId' => 6])['body'];
         $this->assertSame([0, true], [$free['shipping'], $free['carrier']['isFree']]);
@@ -106,7 +106,7 @@ class CartQuoteApiTest extends WebTestCase
         $this->assertSame(422, $one['status']);
         $this->assertStringContainsString('2 jour(s) minimum', json_encode($one['body']['errors'], JSON_UNESCAPED_UNICODE));
 
-        $three = $this->quote(['items' => [['productVariantId' => $pontoon, 'quantity' => 1, 'booking' => ['start' => $start->format(DATE_ATOM), 'end' => $start->modify('+3 days')->format(DATE_ATOM), 'passengers' => 2]]]])['body'];
+        $three = $this->quote(['items' => [['productVariantId' => $pontoon, 'quantity' => 1, 'booking' => ['start' => $start->format(DATE_ATOM), 'end' => $start->modify('+3 days')->format(DATE_ATOM), 'passengers' => 2]]], 'shippingAddress' => ['country' => 'CA', 'province' => 'QC']])['body'];
         $this->assertSame(9500 * 3 + 5000, $three['lines'][0]['unitPrice']);
         $this->assertSame(150000, $three['deposit'], 'caution rapportée à part');
         $this->assertSame((int) round(($three['subtotal']) * 1.14975), $three['total'], 'la caution n\'entre pas dans le total');
@@ -125,6 +125,39 @@ class CartQuoteApiTest extends WebTestCase
         $this->assertSame(['sale', 69900], [$bought['lines'][0]['kind'], $bought['lines'][0]['unitPrice']]);
         $rented = $this->quote(['items' => [['productVariantId' => $paddle, 'quantity' => 1, 'booking' => ['start' => $start->format(DATE_ATOM), 'end' => $start->modify('+2 days')->format(DATE_ATOM)]]]])['body'];
         $this->assertSame(['rental', 9500 * 2, 20000], [$rented['lines'][0]['kind'], $rented['lines'][0]['unitPrice'], $rented['deposit']]);
+    }
+
+    public function testTaxesFollowTheShippingAddressRegion(): void
+    {
+        $cap = $this->variant('DEMO-CASQUETTE');
+        $items = [['productVariantId' => $cap, 'quantity' => 1]];
+        $price = (int) round((float) $this->db->fetchOne("SELECT price FROM product WHERE code = 'DEMO-CASQUETTE'"));
+
+        $none = $this->quote(['items' => $items])['body'];
+        $this->assertSame([[], 'address_required', $price], [$none['taxes'], $none['taxStatus'], $none['total']], 'sans adresse : aucune taxe, total hors taxes');
+
+        $quebec = $this->quote(['items' => $items, 'shippingAddress' => ['country' => 'CA', 'province' => 'QC']])['body'];
+        $this->assertSame(['TPS', 'TVQ'], array_column($quebec['taxes'], 'label'));
+        $this->assertSame($price + (int) round($price * 0.05) + (int) round($price * 0.09975), $quebec['total']);
+
+        $ontario = $this->quote(['items' => $items, 'shippingAddress' => ['country' => 'CA', 'state' => 'Ontario']])['body'];
+        $this->assertSame([['TVH', 0.13]], array_map(fn ($t) => [$t['label'], $t['rate']], $ontario['taxes']), 'TVH seule : pas de TPS en plus');
+
+        $atlantic = $this->quote(['items' => $items, 'shippingAddress' => ['country' => 'CA', 'province' => 'NB']])['body'];
+        $this->assertSame([0.15], array_column($atlantic['taxes'], 'rate'));
+
+        $france = $this->quote(['items' => $items, 'shippingAddress' => ['country' => 'FR', 'city' => 'Lyon', 'postalCode' => '69001']])['body'];
+        $this->assertSame([[], 'no_tax', $price], [$france['taxes'], $france['taxStatus'], $france['total']], 'hors Canada : la table ne connaît aucune taxe');
+
+        // Fournisseur Stripe réglé mais compte Stripe absent en test : repli sur la table, signalé
+        $this->db->executeStatement("INSERT INTO boutique_setting (configuration) VALUES ('{\"commerce\": {\"taxProvider\": \"stripe\"}}')");
+        try {
+            $fallback = $this->quote(['items' => $items, 'shippingAddress' => ['country' => 'CA', 'province' => 'QC']])['body'];
+        } finally {
+            $this->db->executeStatement('DELETE FROM boutique_setting');
+        }
+        $this->assertSame(['fallback_table', 'table'], [$fallback['taxStatus'], $fallback['taxProvider']]);
+        $this->assertSame($quebec['total'], $fallback['total']);
     }
 
     public function testBadRequestsAndUnknownItems(): void

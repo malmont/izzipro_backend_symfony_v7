@@ -24,8 +24,13 @@ class Tax
     #[ORM\Column(length: 255)]
     private ?string $type = null;
 
+    /** Région : « Toutes », ou codes séparés par des virgules (QC ; ON,NB,NL,PE,NS) ; les noms de provinces canadiennes sont acceptés */
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $province = null;
+
+    /** Pays ISO à 2 lettres (vide = tous) ; taxes par région, 09/10/2026 */
+    #[ORM\Column(length: 2, nullable: true, options: ['default' => 'CA'])]
+    private ?string $country = 'CA';
 
     /**
      * @var Collection<int, OrderTax>
@@ -117,6 +122,18 @@ class Tax
                 $orderTax->setTax(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getCountry(): ?string
+    {
+        return $this->country;
+    }
+
+    public function setCountry(?string $country): static
+    {
+        $this->country = $country !== null ? strtoupper(trim($country)) : null;
 
         return $this;
     }

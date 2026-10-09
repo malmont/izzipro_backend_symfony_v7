@@ -31,7 +31,8 @@ class TaxCrudController extends BaseTenantCrudController
             TextField::new('name', 'Name'),
             NumberField::new('rate', 'Rate')->setNumDecimals(2),
             TextField::new('type', 'Type'),
-            TextField::new('province', 'Province')->hideOnIndex(),
+            TextField::new('country', 'Pays (ISO, ex. CA ; vide = tous)')->setRequired(false),
+            TextField::new('province', 'Région')->setHelp('« Toutes », ou codes séparés par des virgules : QC ; ON,NB,NL,PE,NS')->hideOnIndex(),
             AssociationField::new('orderTaxes', 'Order Taxes')->hideOnForm()
         ];
     }

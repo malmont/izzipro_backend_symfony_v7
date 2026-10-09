@@ -120,12 +120,18 @@ final class BoutiqueDemoSeeder
             $connection->executeStatement("SELECT setval(pg_get_serial_sequence('$table', 'id'), GREATEST((SELECT MAX(id) FROM $table), 1))");
             $added && $this->report[] = sprintf('%s : %d ligne(s) ajoutée(s)', $table, $added);
         }
-        $added = 0;
-        foreach (BoutiqueDemoCatalog::TAXES as [$id, $name, $rate, $type, $province]) {
-            $added += $connection->executeStatement('INSERT INTO tax (id, name, rate, type, province) VALUES (?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING', [$id, $name, $rate, $type, $province]);
+        $changed = 0;
+        foreach (BoutiqueDemoCatalog::TAXES as [$id, $name, $rate, $type, $country, $province]) {
+            // Table de démonstration : remplacée à l'identique à chaque passage (régions en codes)
+            $changed += $connection->executeStatement(
+                'INSERT INTO tax (id, name, rate, type, country, province) VALUES (?, ?, ?, ?, ?, ?)
+                 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, rate = EXCLUDED.rate, type = EXCLUDED.type, country = EXCLUDED.country, province = EXCLUDED.province
+                 WHERE (tax.name, tax.rate, tax.type, tax.country, tax.province) IS DISTINCT FROM (EXCLUDED.name, EXCLUDED.rate, EXCLUDED.type, EXCLUDED.country, EXCLUDED.province)',
+                [$id, $name, $rate, $type, $country, $province]
+            );
         }
         $connection->executeStatement("SELECT setval(pg_get_serial_sequence('tax', 'id'), GREATEST((SELECT MAX(id) FROM tax), 1))");
-        $added && $this->report[] = "Taxes : $added ajoutée(s) (TPS 5 %, TVQ 9,975 %)";
+        $changed && $this->report[] = "Taxes : $changed ligne(s) écrite(s) (table canadienne par région)";
     }
 
     /** Transporteurs à prix fixe, avec leurs identifiants (6 = gratuit) */

@@ -94,6 +94,16 @@ class Order
     #[ORM\Column(name: 'guest_token', length: 64, nullable: true)]
     private ?string $guestToken = null;
 
+    /** Transaction fiscale Stripe Tax enregistrée pour cette commande (taxes par région, 09/10/2026) */
+    #[ORM\Column(name: 'tax_transaction_id', length: 64, nullable: true)]
+    private ?string $taxTransactionId = null;
+
+    /** Calcul Stripe Tax de la commande en cours (non enregistré) : à transformer en transaction après le paiement */
+    private ?string $pendingTaxCalculationId = null;
+
+    /** Taxes calculées par le devis de la commande en cours (non enregistré) : TaxCalculationService en fait les lignes OrderTax */
+    private ?array $pendingTaxes = null;
+
     public function __construct()
     {
         $this->orderItems = new ArrayCollection();
@@ -435,6 +445,43 @@ class Order
     public function setGuestToken(?string $guestToken): static
     {
         $this->guestToken = $guestToken;
+
+        return $this;
+    }
+
+    public function getTaxTransactionId(): ?string
+    {
+        return $this->taxTransactionId;
+    }
+
+    public function setTaxTransactionId(?string $taxTransactionId): static
+    {
+        $this->taxTransactionId = $taxTransactionId;
+
+        return $this;
+    }
+
+    public function getPendingTaxCalculationId(): ?string
+    {
+        return $this->pendingTaxCalculationId;
+    }
+
+    public function setPendingTaxCalculationId(?string $calculationId): static
+    {
+        $this->pendingTaxCalculationId = $calculationId;
+
+        return $this;
+    }
+
+    /** @return list<array{label: string, rate: float, amount: int, taxId?: int}>|null */
+    public function getPendingTaxes(): ?array
+    {
+        return $this->pendingTaxes;
+    }
+
+    public function setPendingTaxes(?array $taxes): static
+    {
+        $this->pendingTaxes = $taxes;
 
         return $this;
     }

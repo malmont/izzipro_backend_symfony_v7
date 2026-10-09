@@ -187,6 +187,9 @@ final class BoutiqueConfigurationValidator
         if (isset($commerce->currency) && (!is_string($commerce->currency) || !preg_match(self::CURRENCY_PATTERN, $commerce->currency))) {
             $errors[] = ['path' => 'commerce.currency', 'message' => 'code de devise ISO 4217 attendu (3 lettres majuscules, ex. CAD)'];
         }
+        if (isset($commerce->taxProvider) && !in_array($commerce->taxProvider, ['table', 'stripe'], true)) {
+            $errors[] = ['path' => 'commerce.taxProvider', 'message' => 'valeur attendue : table ou stripe'];
+        }
 
         return $errors;
     }

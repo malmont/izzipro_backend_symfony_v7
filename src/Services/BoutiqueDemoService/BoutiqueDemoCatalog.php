@@ -25,8 +25,19 @@ final class BoutiqueDemoCatalog
         'movement_type' => [[1, 'Entrant'], [2, 'Sortant'], [3, 'Return'], [4, 'Ajustement']],
     ];
 
-    /** [id, nom, taux, type, province] : TPS et TVQ du Québec */
-    public const TAXES = [[1, 'TPS', 0.05, 'Fédérale', 'Toutes'], [2, 'TVQ', 0.09975, 'provinciale', 'Québec']];
+    /**
+     * [id, nom, taux, type, pays, régions] : taxes canadiennes au 09/10/2026 (TPS 5 % hors provinces à TVH ; TVQ ; TVH
+     * 13 % ON, 14 % NS, 15 % NB, NL, PE ; TVP BC 7 %, SK 6 %, MB 7 %). Remplacées à chaque passage sur demo (données de démonstration).
+     */
+    public const TAXES = [
+        [1, 'TPS', 0.05, 'Fédérale', 'CA', 'QC,BC,AB,SK,MB,YT,NT,NU'],
+        [2, 'TVQ', 0.09975, 'provinciale', 'CA', 'QC'],
+        [3, 'TVH', 0.13, 'harmonisée', 'CA', 'ON'],
+        [4, 'TVH', 0.14, 'harmonisée', 'CA', 'NS'],
+        [5, 'TVH', 0.15, 'harmonisée', 'CA', 'NB,NL,PE'],
+        [6, 'TVP', 0.07, 'provinciale', 'CA', 'BC,MB'],
+        [7, 'TVP', 0.06, 'provinciale', 'CA', 'SK'],
+    ];
 
     /**
      * Transporteurs à prix fixe (sans compte EasyPost). L'identifiant 6 est le transporteur gratuit, que le frontend
