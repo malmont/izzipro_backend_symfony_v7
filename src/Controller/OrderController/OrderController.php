@@ -66,7 +66,8 @@ class OrderController extends AbstractController
         MediaUrlResolver $mediaUrlResolver,
         private readonly BoutiqueSettingsService $boutiqueSettings,
         private readonly GetCustomerOrderUseCase $getCustomerOrderUseCase,
-        private readonly GetOrderStatusesUseCase $getOrderStatusesUseCase
+        private readonly GetOrderStatusesUseCase $getOrderStatusesUseCase,
+        private readonly \App\UseCase\CheckoutUseCase\FinalizeCheckoutOrderUseCase $finalizeCheckout
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -91,6 +92,16 @@ class OrderController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+
+        // Paiement en ligne (client, ou personnel avec un paiement Stripe) : commande unique par paiement, idempotente,
+        // partagée avec le webhook (FinalizeCheckoutOrderUseCase, 09/10/2026). Sans paiement : réservé au personnel.
+        $hasPayment = !empty($data['paymentIntentId']) || !empty($data['payment']['stripePaymentId']);
+        if ($hasPayment || !($this->isGranted('ROLE_USER_POS') || $this->isGranted('ROLE_ADMIN'))) {
+            return $this->checkout(fn () => $this->finalizeCheckout->customer($user, $data, $this->locale($request), $request->getSchemeAndHttpHost()));
+        }
 
         if (!isset($data['addressId'], $data['items'])) {
             return $this->json(['error' => 'Missing required fields (addressId, items)'], JsonResponse::HTTP_BAD_REQUEST);
@@ -275,261 +286,32 @@ class OrderController extends AbstractController
             return $this->json(['error' => 'La commande sans compte est désactivée sur ce site.'], JsonResponse::HTTP_FORBIDDEN);
         }
 
-        if (!isset($data['guestInfo'], $data['items'], $data['shippingAddress'], $data['paymentIntentId'])) {
+        if (!is_array($data) || !isset($data['guestInfo'], $data['items'], $data['shippingAddress'], $data['paymentIntentId'])) {
             return $this->json(['error' => 'Missing required guest fields'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
-        $guestInfo = $data['guestInfo'];
-        $email = $guestInfo['email'] ?? null;
-        if (!$email) {
-            return $this->json(['error' => 'Email is required'], JsonResponse::HTTP_BAD_REQUEST);
-        }
-
-        // Validate driver's license only if it's a rental (at least one item has booking or rental info)
-        $hasRental = false;
-        if (isset($data['items']) && is_array($data['items'])) {
-            foreach ($data['items'] as $item) {
-                if (isset($item['booking']) || isset($item['rental'])) {
-                    $hasRental = true;
-                    break;
-                }
-            }
-        }
-
-        if ($hasRental) {
-            $licenseNumber = $guestInfo['licenseNumber'] ?? null;
-            $licenseExpirationDate = $guestInfo['licenseExpirationDate'] ?? null;
-            if (empty($licenseNumber) || empty($licenseExpirationDate)) {
-                return $this->json(['error' => 'License number and expiration date are required for rental orders.'], JsonResponse::HTTP_BAD_REQUEST);
-            }
-        }
-
-        // Extract first and last name with robust fallbacks
-        $firstName = $guestInfo['firstName'] ?? $data['shippingAddress']['firstname'] ?? null;
-        if (!$firstName && isset($data['shippingAddress']['fullname'])) {
-            $parts = explode(' ', $data['shippingAddress']['fullname'], 2);
-            $firstName = $parts[0] ?: 'Guest';
-        }
-        $firstName = $firstName ?? 'Guest';
-
-        $lastName = $guestInfo['lastName'] ?? $data['shippingAddress']['lastname'] ?? null;
-        if (!$lastName && isset($data['shippingAddress']['fullname'])) {
-            $parts = explode(' ', $data['shippingAddress']['fullname'], 2);
-            $lastName = $parts[1] ?? 'User';
-        }
-        $lastName = $lastName ?? 'User';
-
-        $tenantCode = $this->tenantManager->getCurrentTenantCode();
-        $em = $this->emProvider->getEntityManager();
-        $userRepo = $em->getRepository(User::class);
-        $user = $userRepo->findOneBy(['email' => $email]);
-        // Requête non authentifiée : un compte existant reçoit la commande mais son profil n'est jamais modifié
-        $isNewGuestUser = !$user;
-
-        if (!$user) {
-            $user = new User();
-            $user->setEmail($email);
-            $user->setFirstname($firstName);
-            $user->setLastname($lastName);
-            $user->setUsername($email);
-            $user->setPassword(bin2hex(random_bytes(10)));
-            $user->setIsVerified(true);
-            $user->setRoles(['ROLE_USER_INTERNET']);
-            
-            if (isset($guestInfo['licenseNumber'])) {
-                $user->setLicenseNumber($guestInfo['licenseNumber']);
-            }
-            if (isset($guestInfo['licenseExpirationDate']) && $guestInfo['licenseExpirationDate']) {
-                $user->setLicenseExpirationDate(new \DateTime($guestInfo['licenseExpirationDate']));
-            }
-
-            $em->persist($user);
-            $em->flush();
-        }
-
-        // Verify Stripe Payment and extract details
-        $paymentIntent = $this->stripeService->verifyPaymentIntent($data['paymentIntentId']);
-        if (!$paymentIntent) {
-            return $this->json(['error' => 'Payment verification failed or payment not completed'], JsonResponse::HTTP_PAYMENT_REQUIRED);
-        }
-        if ($this->isPaymentIntentAlreadyUsed($paymentIntent->id)) {
-            return $this->json(['error' => 'Ce paiement est déjà associé à une commande.'], JsonResponse::HTTP_CONFLICT);
-        }
-
-        $charge = $paymentIntent->charges->data[0] ?? null;
-        $paymentData = [
-            'stripePaymentId' => $paymentIntent->id,
-            'status' => $paymentIntent->status,
-            'receiptUrl' => $charge ? $charge->receipt_url : null,
-            'cardBrand' => $charge ? $charge->payment_method_details->card->brand : null,
-            'last4' => $charge ? $charge->payment_method_details->card->last4 : null,
-            'riskLevel' => $charge ? $charge->outcome->risk_level : null,
-        ];
-
-        // Handle Addresses
-        $shippingData = $data['shippingAddress'];
-        $billingData = $data['billingAddress'] ?? $shippingData;
-
-        $guestPhone = $guestInfo['phone'] ?? $data['shippingAddress']['contactNumber'] ?? null;
-        $shippingAddress = $this->createAddressFromData($shippingData, $user, $guestPhone);
-        $billingAddress = $this->createAddressFromData($billingData, $user, $guestPhone);
-
-        $em->persist($shippingAddress);
-        $em->persist($billingAddress);
-        $em->flush();
-
-        // Associate shippingAddress to user profile as primaryAddress (nouveau compte invité uniquement)
-        if ($isNewGuestUser) {
-            $user->setPrimaryAddress($shippingAddress);
-            $em->persist($user);
-            $em->flush();
-        }
-
-        $carrierId = $data['carrierId'] ?? null;
-
-        if (isset($data['priceShipping']) && (float) $data['priceShipping'] < 0) {
-            return $this->json(['error' => 'Frais de livraison invalides'], JsonResponse::HTTP_BAD_REQUEST);
-        }
-
-        // Commande en ligne d'un invité : source, moyen de paiement et type imposés par le serveur
-        // (le navigateur pouvait déclarer une commande de caisse ou de retour)
-        $dto = new CreateOrderDTO(
-            $user->getId(),
-            self::ORDER_SOURCE_ECOMMERCE,
-            self::PAYMENT_METHOD_ONLINE,
-            $shippingAddress->getId(),
-            $carrierId,
-            self::TYPE_ORDER_SALE,
-            $data['items'],
-            $data['priceShipping'] ?? null,
-            $paymentData['squarePaymentId'] ?? null,
-            $paymentData['squareOrderId'] ?? null,
-            $paymentData['squareReceiptUrl'] ?? null,
-            $paymentData['squareStatus'] ?? null,
-            $paymentData['squareCardBrand'] ?? null,
-            $paymentData['squareLast4'] ?? null,
-            $paymentData['squareRiskLevel'] ?? null,
-            $paymentData['stripePaymentId'] ?? null,
-            $paymentData['receiptUrl'] ?? null,
-            $paymentData['status'] ?? null,
-            $paymentData['cardBrand'] ?? null,
-            $paymentData['last4'] ?? null,
-            $paymentData['riskLevel'] ?? null,
-            $data['guestInfo']['licenseNumber'] ?? null,
-            $data['guestInfo']['licenseExpirationDate'] ?? null
-        );
-        $dto->setVerifiedPaymentAmount((int) $paymentIntent->amount);
-
-        $result = $this->createOrderUseCase->execute($dto, $user);
-
-        if (!$result instanceof Order) {
-            // Commande refusée (montant, stock...) : l'autorisation est annulée, le client n'est pas débité
-            $this->stripeService->cancelPaymentIntent($paymentIntent->id);
-        }
-
-        if ($result instanceof Order) {
-            // Auto-update user profile (nouveau compte invité uniquement)
-            if ($user && $isNewGuestUser) {
-                $hasChanged = false;
-                if (!$user->getLicenseNumber() && isset($data['guestInfo']['licenseNumber'])) {
-                    $user->setLicenseNumber($data['guestInfo']['licenseNumber']);
-                    $hasChanged = true;
-                }
-                if (!$user->getLicenseExpirationDate() && isset($data['guestInfo']['licenseExpirationDate'])) {
-                    $user->setLicenseExpirationDate(new \DateTime($data['guestInfo']['licenseExpirationDate']));
-                    $hasChanged = true;
-                }
-                if ($hasChanged) {
-                    $em->persist($user);
-                    $em->flush();
-                }
-            }
-
-            $em->refresh($result);
-            // Jeton d'accès de l'invité à sa commande (GET /api/orders/{id}?token=), renvoyé une seule fois ici
-            $result->setGuestToken(bin2hex(random_bytes(24)));
-            $em->flush();
-
-            // Capture Stripe Payment Intent
-            if (isset($data['paymentIntentId'])) {
-                error_log("[STRIPE ID] ID de transaction : " . $data['paymentIntentId']);
-                $this->logger->info("[CAPTURE DEBUG] Tentative de capture pour PaymentIntent ID: " . $data['paymentIntentId']);
-                $capturedIntent = $this->stripeService->capturePaymentIntent($data['paymentIntentId']);
-                if ($capturedIntent && $capturedIntent->status === 'succeeded') {
-                    $payments = $result->getPayments();
-                    if ($payments && !$payments->isEmpty()) {
-                        /** @var \App\Entity\Payments $payment */
-                        $payment = $payments->first();
-                        $payment->setStripeStatus('succeeded');
-                        $charge = $capturedIntent->charges->data[0] ?? null;
-                        if ($charge) {
-                            if ($charge->receipt_url) {
-                                $payment->setStripeReceiptUrl($charge->receipt_url);
-                            }
-                            if ($charge->payment_method_details?->card?->brand) {
-                                $payment->setStripeCardBrand($charge->payment_method_details->card->brand);
-                            }
-                            if ($charge->payment_method_details?->card?->last4) {
-                                $payment->setStripeLast4($charge->payment_method_details->card->last4);
-                            }
-                            if ($charge->outcome?->risk_level) {
-                                $payment->setStripeRiskLevel($charge->outcome->risk_level);
-                            }
-                        }
-                        $em->persist($payment);
-                        $em->flush();
-                    }
-                } else {
-                    $this->logger->error(sprintf("[createGuestOrder] Échec de la capture du paiement Stripe pour PaymentIntent ID: %s. Commande ID: %d.", $data['paymentIntentId'], $result->getId()));
-                }
-            }
-
-            try {
-                $locale = $request->query->get('locale', 'fr');
-                $domain = $this->mediaUrlResolver->getEmailLogosBaseUrl($request->getSchemeAndHttpHost()) . '/';
-                $this->orderMailerService->sendOrderConfirmation($result, $locale, $domain);
-                $this->orderMailerService->sendShippingNotification($result, $locale, $domain);
-            } catch (\Exception $e) {
-                $this->logger->error("Le service d'email Guest a échoué : " . $e->getMessage(), [
-                    'orderId' => $result->getId()
-                ]);
-            }
-            return $this->json([
-                'success' => true,
-                'orderId' => $result->getId(),
-                'guestToken' => $result->getGuestToken(),
-                'message' => 'Commande Guest créée avec succès.'
-            ], JsonResponse::HTTP_CREATED);
-        }
-
-        return $result;
+        // Commande unique par paiement, idempotente (même paiement et même e-mail : commande et jeton renvoyés), partagée
+        // avec le webhook ; client, adresses et permis gérés par CheckoutCustomerService (09/10/2026)
+        return $this->checkout(fn () => $this->finalizeCheckout->guest($data, $this->locale($request), $request->getSchemeAndHttpHost()));
     }
 
-    private function createAddressFromData(array $data, User $user, ?string $fallbackPhone = null): Adress
+    /** Réponse d'une commande payée en ligne : 201 créée, 200 déjà créée pour ce paiement, sinon l'erreur */
+    private function checkout(callable $finalize): JsonResponse
     {
-        $address = new Adress();
-        $address->setUserAdress($user);
+        try {
+            $result = $finalize();
 
-        // Robust name detection for Guest Checkout
-        $firstname = $data['firstname'] ?? $data['firstName'] ?? $user->getFirstname() ?? '';
-        $lastname = $data['lastname'] ?? $data['lastName'] ?? $user->getLastname() ?? '';
-        $address->setFirstname($firstname);
-        $address->setLastname($lastname);
-        $address->setFullname($data['fullname'] ?? trim($firstname . ' ' . $lastname));
-        
-        $address->setCompany($data['company'] ?? null);
-        $address->setAddress($data['addressLineOne'] ?? $data['address'] ?? $data['street'] ?? $data['street1'] ?? '');
-        $address->setComplement($data['addressLineTwo'] ?? $data['complement'] ?? $data['street2'] ?? null);
-        $address->setCity($data['city'] ?? '');
-        $address->setProvince($data['province'] ?? null);
-        $address->setCodepostal($data['zipCode'] ?? $data['zip'] ?? $data['postalCode'] ?? $data['postcode'] ?? $data['codepostal'] ?? '');
-        $address->setCountry($data['country'] ?? '');
+            return $this->json($result['body'], $result['created'] ? JsonResponse::HTTP_CREATED : JsonResponse::HTTP_OK);
+        } catch (\App\Services\CheckoutService\CheckoutException $e) {
+            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]), $e->getStatusCode());
+        }
+    }
 
-        // Phone fallback checks
-        $phone = $data['contactNumber'] ?? $data['phone'] ?? $data['phoneNumber'] ?? $data['telephone'] ?? $fallbackPhone ?? '';
-        $address->setPhone($phone);
+    private function locale(Request $request): string
+    {
+        $locale = (string) $request->query->get('locale', 'fr');
 
-        return $address;
+        return preg_match('/^[a-z]{2}$/', $locale) ? $locale : 'fr';
     }
 
     #[Route('/api/order/create-multi-payment', name: 'order_create_multi_payment', methods: ['POST'])]

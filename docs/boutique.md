@@ -173,6 +173,44 @@ d'article**.
   `remaining_stock` quand la quantité n'est pas disponible (200 auparavant).
 - Tests : `tests/Functional/Boutique/CartQuoteApiTest.php`.
 
+## Paiement d'un panier (09/10/2026, commande unique par paiement)
+
+Pratique standard : le serveur garde une **trace de chaque paiement en cours** (table `checkout_session`, une ligne par
+intent Stripe) et la commande naît **une seule fois par paiement**, du navigateur ou du webhook.
+
+- `POST /api/stripe/create-intent { items, carrierId?, shippingAddress?, priceShipping?, paymentIntentId?, order? }` →
+  `{ success, clientSecret, paymentIntentId, calculatedAmount, quote, reused }`. `paymentIntentId` : l'intent du même
+  panier est **repris** et remis au nouveau montant tant qu'il n'est pas payé (`reused: true`) ; sinon un nouvel intent.
+  `order` : **le corps que le navigateur enverra ensuite** à `order/create` (client : `addressId`, `carrierId`, `items`,
+  permis…) ou `order/create-guest` (invité : `guestInfo`, `shippingAddress`, `billingAddress?`, `carrierId`, `items`),
+  sans `paymentIntentId` ; gardé pour le webhook (renvoyé une fois suffit : un panier modifié garde le corps du premier
+  appel). Sans `shippingAddress`, les taxes viennent de l'adresse de `order`. Le client connecté est reconnu par son jeton
+  du site (`OptionalCustomerResolver` : la route reste hors du pare-feu JWT, un jeton expiré ne bloque pas un invité).
+- `POST /api/order/create` (client) et `/api/order/create-guest` (invité) : **idempotents**. Premier appel : 201
+  `{ success, orderId, guestToken? (invité), alreadyCreated: false }`. Appel suivant pour le même paiement : **200** et la
+  même commande (`alreadyCreated: true`), avec le `guestToken` pour l'invité **à la même adresse e-mail** ; paiement d'un
+  autre client ou autre e-mail : 409. Deux appels simultanés (navigateur et webhook) : réservation atomique de la trace
+  (`open` → `processing`), le second attend la commande (8 s au plus, sinon 409 « en cours »). Montant autorisé ≠ total
+  calculé (1 centime de tolérance), stock insuffisant : 400 et **autorisation annulée** (client non débité) ; donnée
+  invalide (adresse, transporteur) : l'autorisation reste, le navigateur peut corriger. Personnel sans paiement Stripe
+  (caisse) : ancien chemin, inchangé.
+- **Webhook** `payment_intent.amount_capturable_updated` (capture manuelle) et `payment_intent.succeeded` : site lu dans
+  les métadonnées de l'intent (`tenant_code`), signature exigée hors tests ; crée la commande si le navigateur ne l'a pas
+  fait et que `order` a été gardé (sinon ignoré : l'autorisation expire au bout de 7 jours). **À cocher dans Stripe** :
+  ces deux évènements sur l'écouteur « Comptes connectés » (et « Votre compte » pour un site interne).
+- Code : `Entity/CheckoutSession`, `Repository/CheckoutSessionRepository` (`claim`), `Services/CheckoutService/`
+  (`CheckoutPaymentGatewayInterface` + `StripeCheckoutPaymentGateway`, simulé en test par `FakeCheckoutPaymentGateway` ;
+  `CheckoutSessionService` ; `CheckoutCustomerService` : adresse du client, compte et adresses de l'invité),
+  `UseCase/CheckoutUseCase/` (`PrepareCheckoutUseCase`, `FinalizeCheckoutOrderUseCase`), `Security/OptionalCustomerResolver`.
+  Migration `Version20261009190000`, script `scripts/migrate_all_v2_checkout_sessions.sh`. Tests :
+  `tests/Functional/Boutique/CheckoutApiTest.php`. Vérifié en réel sur `demo` (Stripe test) : commandes 11 et 13
+  (client, appel répété), 12 (invité, créée par le webhook).
+- **Pays absent** (commandes invité 9 et 10 de demo, hors taxes) : une province canadienne (code ou nom) ou un code
+  postal canadien suffit à reconnaître le Canada (`TaxEngine::normalizeAddress`, adresse de l'invité).
+- **Abonnement en double** (`POST /api/subscriptions`) : un abonnement encore `incomplete` à la même formule et quantité
+  est **repris** (200, même `clientSecret`, `reused: true`) ; un incomplet d'une autre formule est annulé ; un abonnement
+  en cours (essai, actif, impayé, en pause) au même produit : **409**.
+
 ## Taxes par région (09/10/2026, `TaxEngine`)
 
 Le devis, `create-intent` et la commande calculent les taxes de la même façon, selon l'adresse de livraison

@@ -83,6 +83,28 @@ final class SubscriptionService
         }
         $shippingAmount = $carrier !== null && !$carrier->isFree() ? (int) round((float) $carrier->getPrice()) : 0;
 
+        // Double souscription (double clic, nouvel essai après une erreur, 09/10/2026) : un abonnement encore incomplet à
+        // la même formule et quantité est repris (même paiement à confirmer) ; un incomplet d'une autre formule est
+        // annulé ; un abonnement en cours (essai, actif, impayé, en pause) au même produit refuse la souscription.
+        foreach ($this->subscriptions()->findOpenForProduct($user, $plan->getProduct()) as $open) {
+            if ($open->getStatus() !== Subscription::STATUS_INCOMPLETE) {
+                throw new SubscriptionException(409, 'Vous êtes déjà abonné à ce produit : changez de formule ou résiliez depuis votre compte.',
+                    [['path' => 'planId', 'message' => sprintf('abonnement n° %d déjà en cours', $open->getId())]]);
+            }
+            $state = $open->getStripeSubscriptionId() ? $this->stripe->retrieve($open->getStripeSubscriptionId()) : null;
+            if ($state !== null && $state['status'] === 'incomplete' && $open->getPlan()?->getId() === $plan->getId() && $open->getQuantity() === $quantity && $state['clientSecret']) {
+                $this->applyStripeState($open, $state);
+                $em->flush();
+
+                return ['subscription' => $open, 'clientSecret' => $state['clientSecret'], 'reused' => true];
+            }
+            if ($state !== null && $state['status'] === 'incomplete') {
+                $this->applyStripeState($open, $this->stripe->cancel($open->getStripeSubscriptionId(), false));
+            }
+            $open->setStatus(Subscription::STATUS_CANCELED)->setCanceledAt($open->getCanceledAt() ?? new \DateTimeImmutable());
+            $em->flush();
+        }
+
         $customerId = $this->stripe->ensureCustomer($user, $address);
         [, $priceId] = $this->stripe->ensurePrice($plan);
         $shippingPriceId = $shippingAmount > 0 ? $this->stripe->ensureShippingPrice($carrier, $shippingAmount, $plan->getCurrency(), $plan->getInterval(), $plan->getIntervalCount()) : null;
@@ -104,7 +126,7 @@ final class SubscriptionService
         $this->applyStripeState($subscription, $state);
         $em->flush();
 
-        return ['subscription' => $subscription, 'clientSecret' => $state['clientSecret']];
+        return ['subscription' => $subscription, 'clientSecret' => $state['clientSecret'], 'reused' => false];
     }
 
     /** @throws SubscriptionException 404 */

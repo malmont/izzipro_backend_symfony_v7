@@ -228,6 +228,35 @@ class StripeService
     }
 
     /**
+     * Options Stripe du site courant : [] pour un site interne (compte de la plateforme), ['stripe_account' => …] pour un
+     * site connecté, null si le site n'a pas de compte Stripe actif (paiement impossible).
+     */
+    public function accountOptions(): ?array
+    {
+        $tenantCode = $this->connectionManager->getCurrentTenantCode();
+        if (!$tenantCode) {
+            return null;
+        }
+        if ($this->connectionManager->isTenantInternal($tenantCode)) {
+            return [];
+        }
+        $stripeConfig = $this->getStripeConfigForCurrentTenant();
+
+        return $stripeConfig && $stripeConfig->isActive() ? ['stripe_account' => $stripeConfig->getAccountId()] : null;
+    }
+
+    /** Commission de la plateforme sur un paiement d'un site connecté (1 %) */
+    public static function applicationFee(int $amount): int
+    {
+        return (int) (($amount * 1) / 100);
+    }
+
+    public function secretKey(): string
+    {
+        return $this->stripeSecretKey;
+    }
+
+    /**
      * ✅ C'EST LA MÉTHODE ENTIÈREMENT MISE À JOUR AVEC L'AIGUILLAGE
      */
     public function createPaymentIntent(int $amount, string $currency): ?string

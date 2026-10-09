@@ -24,6 +24,7 @@ class StripeWebhookController extends AbstractController
         private readonly HandleBookCheckoutCompletedUseCase $handleBookCheckoutCompletedUseCase,
         private readonly LoggerInterface $logger,
         private readonly HandleSubscriptionWebhookUseCase $subscriptionWebhookUseCase,
+        private readonly \App\UseCase\CheckoutUseCase\FinalizeCheckoutOrderUseCase $finalizeCheckout,
         #[Autowire('%kernel.environment%')]
         private readonly string $environment = 'prod'
     ) {}
@@ -96,6 +97,26 @@ class StripeWebhookController extends AbstractController
             }
 
             return $this->json($this->subscriptionWebhookUseCase->execute($eventType, $eventData, $request->getSchemeAndHttpHost()));
+        }
+
+        // Paiement d'un panier autorisé (capture manuelle : amount_capturable_updated ; capture automatique : succeeded) :
+        // la commande est créée si le navigateur ne l'a pas fait (onglet fermé juste après le paiement), 09/10/2026
+        if (in_array($eventType, ['payment_intent.amount_capturable_updated', 'payment_intent.succeeded'], true)) {
+            if (!is_object($event) && $this->environment !== 'test') {
+                $this->logger->error('[StripeWebhook] Paiement sans signature vérifiée : ignoré');
+
+                return $this->json(['error' => 'Signature requise'], Response::HTTP_BAD_REQUEST);
+            }
+            $tenantCode = $eventData['metadata']['tenant_code'] ?? $eventData['metadata']['store_code'] ?? null;
+            $tenant = is_string($tenantCode) ? $this->connectionManager->findTenantByCode($tenantCode) : null;
+            if (!$tenant || empty($tenant['dbname']) || !is_string($eventData['id'] ?? null)) {
+                return $this->json(['status' => 'ignored', 'detail' => 'paiement sans site connu (hors boutique)']);
+            }
+            $this->emProvider->switchTenant($tenant['dbname'], $tenantCode);
+            $result = $this->finalizeCheckout->fromWebhook($eventData['id']);
+            $this->logger->info(sprintf('[StripeWebhook] %s %s : %s (%s)', $eventType, $eventData['id'], $result['status'], $result['detail']));
+
+            return $this->json($result);
         }
 
         if ($eventType === 'checkout.session.completed') {

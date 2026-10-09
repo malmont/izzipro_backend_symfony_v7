@@ -20,7 +20,7 @@ class ManageSubscriptionUseCase
 
     /**
      * @param array<string, mixed> $body { planId, quantity?, addressId?, carrierId? }
-     * @return array{subscriptionId: int, clientSecret: ?string, status: string, subscription: SubscriptionOutputDto}
+     * @return array{subscriptionId: int, clientSecret: ?string, status: string, reused: bool, subscription: SubscriptionOutputDto}
      * @throws SubscriptionException
      */
     public function subscribe(User $user, array $body, string $locale): array
@@ -37,6 +37,7 @@ class ManageSubscriptionUseCase
 
         return [
             'subscriptionId' => (int) $result['subscription']->getId(), 'clientSecret' => $result['clientSecret'], 'status' => $result['subscription']->getStatus(),
+            'reused' => $result['reused'] ?? false,
             'subscription' => $this->service->toDto($result['subscription'], $locale),
         ];
     }

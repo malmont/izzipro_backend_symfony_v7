@@ -36,7 +36,9 @@ class PaymentsController extends AbstractController
         Security $security,
         TenantCacheService $cache,
         StripeService $stripeService,
-        TenantConnectionManager $connectionManager
+        TenantConnectionManager $connectionManager,
+        private readonly \App\UseCase\CheckoutUseCase\PrepareCheckoutUseCase $prepareCheckout,
+        private readonly \App\Security\OptionalCustomerResolver $customers
     ) {
         $this->getPaymentsByOrderSourceUseCase = $getPaymentsByOrderSourceUseCase;
         $this->createPaymentUseCase = $createPaymentUseCase;
@@ -105,17 +107,21 @@ class PaymentsController extends AbstractController
     #[Route('/api/stripe/create-intent', name: 'api_stripe_create_intent', methods: ['POST'])]
     public function createStripePaymentIntent(Request $request): JsonResponse
     {
+        // Un intent par panier jusqu'à la commande (paymentIntentId pour le réutiliser) ; « order » = corps de la commande
+        // à venir, gardé pour que le webhook la crée si le navigateur ne le fait pas (09/10/2026, PrepareCheckoutUseCase)
         $data = json_decode($request->getContent(), true);
-        $items = $data['items'] ?? [];
-        $priceShipping = $data['priceShipping'] ?? 0.0;
-
-        $result = $this->stripeService->createPaymentIntentFromItems($data, $priceShipping);
-
-        if (isset($result['error'])) {
-            return $this->json(['error' => $result['error']], $result['status'] ?? 500);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Corps JSON invalide'], 400);
         }
-
-        return $this->json($result);
+        // Route hors du pare-feu JWT (un jeton expiré ne doit pas bloquer un invité) : client reconnu s'il a un jeton valide
+        $user = $this->customers->resolve($request);
+        $locale = (string) $request->query->get('locale', $data['order']['locale'] ?? 'fr');
+        try {
+            return $this->json($this->prepareCheckout->execute($data, $user instanceof \App\Entity\User ? $user : null,
+                preg_match('/^[a-z]{2}$/', $locale) ? $locale : 'fr', $request->getSchemeAndHttpHost()));
+        } catch (\App\Services\CheckoutService\CheckoutException $e) {
+            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]), $e->getStatusCode());
+        }
     }
 
     /**

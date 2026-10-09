@@ -104,16 +104,22 @@ final class TaxEngine
     {
         $country = mb_strtoupper(trim((string) ($raw['country'] ?? '')));
         $country = match ($country) { 'CANADA' => 'CA', 'FRANCE' => 'FR', 'ÉTATS-UNIS', 'ETATS-UNIS', 'USA', 'UNITED STATES' => 'US', default => $country };
+        $province = mb_strtoupper(trim((string) ($raw['province'] ?? $raw['state'] ?? '')));
+        $province = self::PROVINCES[$province] ?? ($province !== '' ? $province : null);
+        $postalCode = isset($raw['postalCode']) || isset($raw['zip']) || isset($raw['codepostal']) ? (string) ($raw['postalCode'] ?? $raw['zip'] ?? $raw['codepostal']) : null;
+        // Pays absent (09/10/2026 : commandes invité sans pays, donc sans taxe) : une province canadienne (code ou nom)
+        // ou un code postal canadien (A1A 1A1) suffit à reconnaître le Canada
+        if ($country === '' && (in_array($province, self::PROVINCES, true) || preg_match('/^[ABCEGHJ-NPRSTVXY]\d[A-Z] ?\d[A-Z]\d$/i', trim((string) $postalCode)))) {
+            $country = 'CA';
+        }
         if (!preg_match('/^[A-Z]{2}$/', $country)) {
             return null;
         }
-        $province = mb_strtoupper(trim((string) ($raw['province'] ?? $raw['state'] ?? '')));
-        $province = self::PROVINCES[$province] ?? ($province !== '' ? $province : null);
 
         return [
             'country' => $country, 'province' => $province,
             'city' => isset($raw['city']) && $raw['city'] !== '' ? (string) $raw['city'] : null,
-            'postalCode' => isset($raw['postalCode']) || isset($raw['zip']) || isset($raw['codepostal']) ? (string) ($raw['postalCode'] ?? $raw['zip'] ?? $raw['codepostal']) : null,
+            'postalCode' => $postalCode,
         ];
     }
 

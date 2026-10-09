@@ -38,7 +38,11 @@ class SubscriptionController extends AbstractController
     #[IsGranted('ROLE_USER_INTERNET')]
     public function subscribe(Request $request): JsonResponse
     {
-        return $this->handle(fn () => $this->json($this->subscriptions->subscribe($this->customer(), $this->body($request), $this->locale($request)), 201));
+        return $this->handle(function () use ($request) {
+            $result = $this->subscriptions->subscribe($this->customer(), $this->body($request), $this->locale($request));
+
+            return $this->json($result, $result['reused'] ? 200 : 201); // 200 : abonnement incomplet repris (même paiement)
+        });
     }
 
     #[Route('/api/subscriptions', name: 'api_subscriptions_list', methods: ['GET'])]

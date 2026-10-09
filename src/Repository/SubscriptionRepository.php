@@ -18,6 +18,15 @@ class SubscriptionRepository extends EntityRepository
             ->orderBy('s.createdAt', 'DESC')->addOrderBy('s.id', 'DESC')->getQuery()->getResult();
     }
 
+    /** @return Subscription[] abonnements non résiliés d'un client à un produit (toutes formules) */
+    public function findOpenForProduct(User $user, \App\Entity\Product $product): array
+    {
+        return $this->createQueryBuilder('s')->join('s.plan', 'p')
+            ->andWhere('s.user = :user')->andWhere('p.product = :product')->andWhere('s.status <> :canceled')
+            ->setParameter('user', $user)->setParameter('product', $product)->setParameter('canceled', Subscription::STATUS_CANCELED)
+            ->orderBy('s.id', 'DESC')->getQuery()->getResult();
+    }
+
     public function findOneByStripeId(string $stripeSubscriptionId): ?Subscription
     {
         return $this->findOneBy(['stripeSubscriptionId' => $stripeSubscriptionId]);
