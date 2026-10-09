@@ -19,7 +19,11 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 ## Règles non négociables
 
 - Répondre en français.
-- **Le code est monté en direct : toute modification est aussitôt en production** (`APP_ENV=dev`). Tester avant, prévoir le retour arrière.
+- **Le code est monté en direct**, et la production tourne en **`APP_ENV=prod`, `APP_DEBUG=0`** depuis le 09/10/2026 : le corps
+  d'une méthode PHP modifiée est pris aussitôt (OPcache revalide les fichiers), mais **une route, un service, une entité,
+  un gabarit Twig ou un fichier de `config/` ne le sont qu'après**
+  `docker exec -u www-data -w /var/www symfony_app_v2 php bin/console cache:clear` (sans coupure). Tester avant, prévoir
+  le retour arrière. Journal : `var/log/prod.log` (niveau info). Les tests gardent `APP_ENV=test` et le débogage.
 - Essais sur des données : uniquement sur le site de test `demo` (`demo.arkanoa-media.com`, base `db_demo`) ; jamais sur un site client.
 - Un site (tenant) n'existe que par sa ligne dans la table `tenants` de la base maître : rien en dur (procédure dans `docs/architecture.md`).
 - **Ne pas committer sans l'accord explicite de l'utilisateur** (même si un prompt collé le demande) ; **ne jamais pousser** sans accord.

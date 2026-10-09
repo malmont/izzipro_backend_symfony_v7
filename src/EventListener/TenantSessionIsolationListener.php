@@ -29,8 +29,9 @@ class TenantSessionIsolationListener
 
         $request = $event->getRequest();
         
-        // On vérifie si une session est active sans la démarrer si elle ne l'est pas
-        if (!$request->hasSession()) {
+        // Sans cookie de session, rien à isoler : lire la session la démarrait et rendait privées (non cachables) les
+        // réponses publiques de l'API (09/10/2026)
+        if (!$request->hasSession() || !$request->hasPreviousSession()) {
             return;
         }
 

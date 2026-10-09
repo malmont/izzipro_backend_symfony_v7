@@ -155,34 +155,39 @@ class ProductRepository extends EntityRepository
     }
     public function findTranslatedByCriteria(string $locale, array $criteria): array
     {
-        $queryBuilder = $this->createQueryBuilder('p')
-            ->leftJoin('p.translations', 't', 'WITH', 't.locale = :locale')
-            ->leftJoin('p.saleUnit', 'su')
-            ->leftJoin('p.style', 's')
-            ->leftJoin('p.bookingConfiguration', 'b')
-            ->leftJoin('p.pictures', 'pict')
-            ->leftJoin('p.category', 'cat')
-            ->leftJoin('cat.translations', 'ct', 'WITH', 'ct.language = :locale')
-            ->leftJoin('cat.rentalPacks', 'rp')
-            ->leftJoin('rp.translations', 'rpt', 'WITH', 'rpt.language = :locale')
-            ->leftJoin('p.variants', 'v')
-            ->leftJoin('v.color', 'vc')
-            ->leftJoin('vc.translations', 'vct', 'WITH', 'vct.language = :locale')
-            ->leftJoin('v.size', 'vs')
-            ->leftJoin('vs.translations', 'vst', 'WITH', 'vst.language = :locale')
-            ->leftJoin('v.optionValues', 'vov')
-            ->leftJoin('vov.translations', 'vovt', 'WITH', 'vovt.language = :locale')
-            ->leftJoin('vov.productOption', 'po')
-            ->leftJoin('po.translations', 'pot', 'WITH', 'pot.language = :locale')
-            ->addSelect('t', 'su', 's', 'b', 'pict', 'cat', 'ct', 'rp', 'rpt', 'v', 'vc', 'vct', 'vs', 'vst', 'vov', 'vovt', 'po', 'pot')
-            ->setParameter('locale', $locale);
-
+        // Listes de produits (meilleures ventes, nouveautés…) : une requête unique joignant toutes les collections faisait
+        // un produit cartésien (1,8 s à froid, 09/10/2026). Identifiants d'abord, puis une requête par collection pour
+        // tous les produits de la liste, mêmes filtres de langue qu'avant.
+        $qb = $this->createQueryBuilder('p')->select('p.id')->orderBy('p.id', 'ASC');
         foreach ($criteria as $field => $value) {
-            $queryBuilder->andWhere("p.{$field} = :{$field}")
-                         ->setParameter($field, $value);
+            $qb->andWhere("p.{$field} = :{$field}")->setParameter($field, $value);
         }
+        $ids = array_map('intval', array_column($qb->getQuery()->getScalarResult(), 'id'));
+        if ($ids === []) {
+            return [];
+        }
+        $em = $this->getEntityManager();
+        $products = $em->createQuery(
+            'SELECT p, t, su, s, b FROM App\Entity\Product p LEFT JOIN p.translations t WITH t.locale = :locale
+             LEFT JOIN p.saleUnit su LEFT JOIN p.style s LEFT JOIN p.bookingConfiguration b WHERE p.id IN (:ids) ORDER BY p.id ASC'
+        )->setParameter('ids', $ids)->setParameter('locale', $locale)->getResult();
+        $em->createQuery('SELECT p, pict FROM App\Entity\Product p LEFT JOIN p.pictures pict WHERE p.id IN (:ids)')->setParameter('ids', $ids)->getResult();
+        $em->createQuery(
+            'SELECT p, cat, ct, rp, rpt FROM App\Entity\Product p LEFT JOIN p.category cat LEFT JOIN cat.translations ct WITH ct.language = :locale
+             LEFT JOIN cat.rentalPacks rp LEFT JOIN rp.translations rpt WITH rpt.language = :locale WHERE p.id IN (:ids)'
+        )->setParameter('ids', $ids)->setParameter('locale', $locale)->getResult();
+        $em->createQuery(
+            'SELECT p, v, vc, vct, vs, vst FROM App\Entity\Product p LEFT JOIN p.variants v
+             LEFT JOIN v.color vc LEFT JOIN vc.translations vct WITH vct.language = :locale
+             LEFT JOIN v.size vs LEFT JOIN vs.translations vst WITH vst.language = :locale WHERE p.id IN (:ids)'
+        )->setParameter('ids', $ids)->setParameter('locale', $locale)->getResult();
+        $em->createQuery(
+            'SELECT v, vov, vovt, po, pot FROM App\Entity\ProductVariant v LEFT JOIN v.optionValues vov
+             LEFT JOIN vov.translations vovt WITH vovt.language = :locale
+             LEFT JOIN vov.productOption po LEFT JOIN po.translations pot WITH pot.language = :locale WHERE v.product IN (:ids)'
+        )->setParameter('ids', $ids)->setParameter('locale', $locale)->getResult();
 
-        return $queryBuilder->getQuery()->getResult();
+        return $products;
     }
     public function findByIdAndLocale(int $id, string $locale): ?Product
     {
@@ -215,33 +220,50 @@ class ProductRepository extends EntityRepository
 
     public function findBySlugAndLocale(string $slug, string $locale): ?Product
     {
-        $dql = "SELECT p, t, t_fr, pict, b, s, v, vct, vst, vc, vs, vov, povt, po, pot, cat, ct, rp, su
-                FROM App\Entity\Product p
-                LEFT JOIN p.translations t WITH t.locale = :locale
-                LEFT JOIN p.translations t_fr WITH t_fr.locale = 'fr'
-                LEFT JOIN p.translations all_t
-                LEFT JOIN p.pictures pict
-                LEFT JOIN p.bookingConfiguration b
-                LEFT JOIN p.style s
-                LEFT JOIN p.variants v
-                LEFT JOIN v.color vc
-                LEFT JOIN vc.translations vct WITH vct.language = :locale
-                LEFT JOIN v.size vs
-                LEFT JOIN vs.translations vst WITH vst.language = :locale
-                LEFT JOIN v.optionValues vov
-                LEFT JOIN vov.translations povt WITH povt.language = :locale
-                LEFT JOIN vov.productOption po
-                LEFT JOIN po.translations pot WITH pot.language = :locale
-                LEFT JOIN p.category cat
-                LEFT JOIN cat.translations ct WITH ct.language = :locale
-                LEFT JOIN cat.rentalPacks rp
-                LEFT JOIN p.saleUnit su
-                WHERE p.slug = :slug OR all_t.slug = :slug";
+        // Une seule requête joignait photos, variantes, options, traductions et forfaits : produit cartésien (2,2 s pour
+        // une fiche de démo, 09/10/2026). Désormais : l'identifiant d'abord, puis une petite requête par collection,
+        // qui remplissent le même produit (mêmes filtres de langue qu'avant).
+        $id = $this->getEntityManager()->createQuery(
+            'SELECT DISTINCT p.id FROM App\Entity\Product p LEFT JOIN p.translations all_t WHERE p.slug = :slug OR all_t.slug = :slug'
+        )->setParameter('slug', $slug)->setMaxResults(1)->getOneOrNullResult();
 
-        return $this->getEntityManager()->createQuery($dql)
-            ->setParameter('slug', $slug)
-            ->setParameter('locale', $locale)
-            ->getOneOrNullResult();
+        return $id === null ? null : $this->loadForDetail((int) $id['id'], $locale);
+    }
+
+    /** Produit complet pour sa fiche, chargé collection par collection (sans produit cartésien) */
+    public function loadForDetail(int $id, string $locale): ?Product
+    {
+        $em = $this->getEntityManager();
+        $product = $em->createQuery(
+            "SELECT p, t, t_fr, b, s, su FROM App\Entity\Product p
+             LEFT JOIN p.translations t WITH t.locale = :locale
+             LEFT JOIN p.translations t_fr WITH t_fr.locale = 'fr'
+             LEFT JOIN p.bookingConfiguration b LEFT JOIN p.style s
+             LEFT JOIN p.saleUnit su
+             WHERE p.id = :id"
+        )->setParameter('id', $id)->setParameter('locale', $locale)->getOneOrNullResult();
+        if ($product === null) {
+            return null;
+        }
+        $em->createQuery('SELECT p, pict FROM App\Entity\Product p LEFT JOIN p.pictures pict WHERE p.id = :id')->setParameter('id', $id)->getResult();
+        $em->createQuery(
+            'SELECT p, v, vc, vct, vs, vst FROM App\Entity\Product p LEFT JOIN p.variants v
+             LEFT JOIN v.color vc LEFT JOIN vc.translations vct WITH vct.language = :locale
+             LEFT JOIN v.size vs LEFT JOIN vs.translations vst WITH vst.language = :locale
+             WHERE p.id = :id'
+        )->setParameter('id', $id)->setParameter('locale', $locale)->getResult();
+        $em->createQuery(
+            'SELECT v, vov, povt, po, pot FROM App\Entity\ProductVariant v LEFT JOIN v.optionValues vov
+             LEFT JOIN vov.translations povt WITH povt.language = :locale
+             LEFT JOIN vov.productOption po LEFT JOIN po.translations pot WITH pot.language = :locale
+             WHERE v.product = :id'
+        )->setParameter('id', $id)->setParameter('locale', $locale)->getResult();
+        $em->createQuery(
+            'SELECT p, cat, ct, rp FROM App\Entity\Product p LEFT JOIN p.category cat
+             LEFT JOIN cat.translations ct WITH ct.language = :locale LEFT JOIN cat.rentalPacks rp WHERE p.id = :id'
+        )->setParameter('id', $id)->setParameter('locale', $locale)->getResult();
+
+        return $product;
     }
 
     public function findAllOptimized(string $locale = 'fr'): array
