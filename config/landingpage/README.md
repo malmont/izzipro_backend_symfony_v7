@@ -370,7 +370,13 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   rattachés à une page système : c'est le PUT des réglages (`docs/boutique.md`) qui exige les blocs obligatoires.
   Jeu d'essai : cas **B1 à B6** (`LandingAiEvalCases`, étape 4 du jeu d'essai publié par le frontend) : B1, B2, B3, B5,
   B6 en retouche (`--mode=edit --case=B1`), B4 en mode page. B2 est joué sur `product-type-f` (achat et location) et
-  non sur `product-type-a`, qui n'a qu'un groupe d'achat.
+  non sur `product-type-a`, qui n'a qu'un groupe d'achat. Ajoutés le 09/10/2026 : **B7** (sélecteur de mode et
+  libellé de l'abonnement, `product-type-f`), **B8** (page de souscription : `subscriptionCheckout` gardé, `limits`),
+  **B9** (personnalisation : options en pastilles, suppléments, aperçu déplacé à droite). B9 a fait corriger la
+  consigne du `move` : `after: null` place le bloc en dernier, et un échange de deux frères se fait en un seul `move`
+  (le modèle en ajoutait un second qui annulait le premier). Même jour : R3 suit la règle « couleur nommée dans la
+  demande » (vert sapin et or admis hors palette, avec avertissement) et R5 se joue sur `presentation-type-c`
+  (`navbar-type-g` n'a plus de bouton « Démarrer un projet »). Retouche complète sur `demo` : 19 cas sur 19.
 - **Prompt de vidéo** (`POST /api/landingpage-ai/video-prompt`, 02/10/2026 ; `WriteLandingVideoPromptUseCase`,
   `LandingAiVideoPromptWriter`) : l'administrateur décrit en français la vidéo d'une scène au défilement, la réponse
   est un prompt en anglais pour un outil de génération de vidéo. Entrée `{ prompt (2 000 car.), format: landscape |

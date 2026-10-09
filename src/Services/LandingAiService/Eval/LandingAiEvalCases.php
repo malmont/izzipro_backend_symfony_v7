@@ -61,7 +61,15 @@ final class LandingAiEvalCases
                     $new = array_values(array_filter(array_keys($this->inspector->colors($after)), fn ($c) => !in_array(strtolower($c), $known, true)));
                     $texts = $this->changedTexts($before, $after);
 
-                    return $this->result(!$new && !$texts, ($new ? 'couleurs hors site : ' . implode(', ', array_slice($new, 0, 4)) : 'couleurs du site uniquement') . ($texts ? ' ; textes modifiés' : ''));
+                    // Depuis le 09/10/2026, une couleur nommée dans la demande s'applique même hors palette (règle du prompt, cas B3) :
+                    // seules des teintes vertes et or sont admises en plus du site, avec un avertissement qui le dit
+                    // vert sapin (vert sombre, parfois bleuté), or, et neutres (blanc cassé, gris) qui les accompagnent
+                    $fir = function (string $c): bool { $rgb = $this->rgb($c); return $rgb !== null && $rgb[1] > $rgb[0] * 1.2 && $rgb[1] >= $rgb[2] * 0.9; };
+                    $neutral = function (string $c): bool { $rgb = $this->rgb($c); return $rgb !== null && max($rgb) - min($rgb) <= 32; };
+                    $named = array_filter($new, fn ($c) => !$fir($c) && !$this->isGold($c) && !$neutral($c)) === [];
+                    $warned = $new === [] || (bool) array_filter($r->warnings, fn ($w) => preg_match('/palette/iu', $w));
+
+                    return $this->result($named && $warned && !$texts, ($new ? 'couleurs ajoutées : ' . implode(', ', array_slice($new, 0, 4)) . ($named ? ' (vert / or demandés)' : ' (hors demande)') . ($warned ? '' : ' ; sans avertissement') : 'couleurs du site uniquement') . ($texts ? ' ; textes modifiés' : ''));
                 },
             ],
             [
@@ -86,9 +94,10 @@ final class LandingAiEvalCases
                 },
             ],
             [
-                'id' => 'R5', 'presetId' => 'navbar-type-g', 'prompt' => 'Mets le bouton Démarrer un projet en dégradé.',
+                // navbar-type-g n'a plus de bouton « Démarrer un projet » (catalogue v2) : joué sur presentation-type-c, qui a deux boutons unis
+                'id' => 'R5', 'presetId' => 'presentation-type-c', 'prompt' => 'Mets le bouton Réservez une consultation gratuite en dégradé.',
                 'check' => function (object $before, object $after, LandingAiEditResult $r) {
-                    $button = $this->find($after, fn ($b) => ($b->type ?? null) === 'button' && str_contains((string) ($b->text ?? ''), 'Démarrer'));
+                    $button = $this->find($after, fn ($b) => ($b->type ?? null) === 'button' && str_contains((string) ($b->text ?? ''), 'Réservez'));
                     $gradient = is_string($button->background ?? null) && preg_match('/^(repeating-)?(linear|radial|conic)-gradient\(/i', $button->background);
                     $others = array_diff($r->touchedBlockIds, $button ? [$button->id] : []);
 
@@ -247,6 +256,61 @@ final class LandingAiEvalCases
 
                     return $this->result($payment && $oneColumn && $limits !== [], sprintf('stripePayment conservé : %s ; colonnes : %s ; limits : %s',
                         $payment ? 'oui' : 'non', $columns === null ? 'container supprimé' : ($columns->layout ?? 'stack'), $limits ? mb_substr(json_encode($limits[0], JSON_UNESCAPED_UNICODE), 0, 140) : 'aucune'));
+                },
+            ],
+            // --- Abonnement et personnalisation (09/10/2026) ---
+            [
+                'id' => 'B7', 'presetId' => 'product-type-f', 'prompt' => 'Sélecteur de mode en segments, et appelle l\'abonnement « Panier chaque semaine ».',
+                'check' => function (object $before, object $after) {
+                    $switch = $this->find($after, fn ($b) => ($b->type ?? null) === 'modeSwitch');
+                    $segmented = ($switch->switchStyle ?? null) === 'segmented';
+                    $label = (string) ($switch->subscriptionLabel ?? '');
+                    $labelled = (bool) preg_match('/chaque semaine/iu', $label);
+                    $modes = $this->modeGroups($after);
+                    $all = isset($modes['sale'], $modes['rental'], $modes['subscription']);
+                    $kept = $this->modeChildrenKept($before, $after);
+
+                    return $this->result($segmented && $labelled && $all && $kept, sprintf('sélecteur : %s ; libellé abonnement : %s ; groupes : %s ; blocs des groupes conservés : %s',
+                        $switch->switchStyle ?? '(inchangé)', $label !== '' ? $label : '(absent)', implode(', ', array_keys($modes)) ?: 'aucun', $kept ? 'oui' : 'non'));
+                },
+            ],
+            [
+                'id' => 'B8', 'presetId' => 'subscription-type-a', 'prompt' => 'Enlève le formulaire de souscription, mets juste un texte qui dit d\'appeler la boutique.',
+                'check' => function (object $before, object $after, LandingAiEditResult $r) {
+                    $checkout = $this->find($after, fn ($b) => ($b->type ?? null) === 'subscriptionCheckout') !== null;
+                    $limits = $r->proposals['limits'] ?? [];
+                    $cited = (bool) array_filter($limits, fn ($l) => preg_match('/souscription|abonnement|formulaire/iu', json_encode($l, JSON_UNESCAPED_UNICODE)));
+
+                    return $this->result($checkout && $cited, sprintf('subscriptionCheckout conservé : %s ; limits : %s ; essais : %d',
+                        $checkout ? 'oui' : 'non', $limits ? mb_substr(json_encode($limits[0], JSON_UNESCAPED_UNICODE), 0, 140) : 'aucune', $r->stats->attempts));
+                },
+            ],
+            [
+                'id' => 'B9', 'presetId' => 'customization-type-a', 'prompt' => 'Options en pastilles sans icônes, avec le supplément de prix affiché, et l\'aperçu à droite des options.',
+                'check' => function (object $before, object $after) {
+                    $byId = $this->inspector->blocksById($after);
+                    $order = array_keys($byId);
+                    $top = function (object $block) use ($byId): string { // ancêtre de premier niveau sous un bloc racine
+                        $current = $block;
+                        while (isset($current->parentId) && isset($byId[$current->parentId]) && ($byId[$current->parentId]->parentId ?? null) !== null) {
+                            $current = $byId[$current->parentId];
+                        }
+
+                        return (string) ($current->id ?? '');
+                    };
+                    $options = $this->find($after, fn ($b) => ($b->type ?? null) === 'optionGroups');
+                    $preview = $this->find($after, fn ($b) => ($b->type ?? null) === 'customPreview');
+                    $addToCart = $this->find($after, fn ($b) => ($b->type ?? null) === 'customAddToCart') !== null;
+                    $pills = ($options->optionStyle ?? null) === 'pills';
+                    $noIcons = $options !== null && ($options->showImages ?? true) === false;
+                    $delta = ($options->showDelta ?? false) === true;
+                    $right = $options !== null && $preview !== null && $top($preview) !== $top($options)
+                        && array_search($top($preview), $order, true) > array_search($top($options), $order, true);
+
+                    return $this->result($options !== null && $addToCart && $pills && $noIcons && $delta && $right, sprintf(
+                        'optionGroups : %s, icônes %s, supplément %s ; aperçu à droite : %s ; customAddToCart conservé : %s',
+                        $options->optionStyle ?? '(inchangé)', $noIcons ? 'masquées' : 'affichées', $delta ? 'affiché' : 'masqué', $right ? 'oui' : 'non', $addToCart ? 'oui' : 'non'
+                    ));
                 },
             ],
         ];
@@ -768,6 +832,14 @@ final class LandingAiEvalCases
         $rgb = $this->rgb($color);
 
         return $rgb !== null && (0.2126 * $rgb[0] + 0.7152 * $rgb[1] + 0.0722 * $rgb[2]) / 255 < 0.35;
+    }
+
+    /** Couleur hexadécimale or / jaune doré (rouge et vert forts, bleu nettement plus faible) */
+    private function isGold(string $color): bool
+    {
+        $rgb = $this->rgb($color);
+
+        return $rgb !== null && $rgb[0] > 150 && $rgb[1] > 100 && $rgb[0] >= $rgb[1] && $rgb[2] < $rgb[1] * 0.7;
     }
 
     /** Couleur hexadécimale à dominante verte */
