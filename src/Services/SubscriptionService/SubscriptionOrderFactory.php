@@ -56,6 +56,12 @@ final class SubscriptionOrderFactory
 
             return null;
         }
+        if ((int) ($invoice['total'] ?? 0) <= 0 && (int) ($invoice['amount_paid'] ?? 0) <= 0) {
+            // Facture à 0 : ouverture d'un essai, ou changement de formule sans montant dû ; rien n'est livré ni payé
+            $this->lastSkipReason = 'facture à 0 (essai ou changement de formule sans montant)';
+
+            return null;
+        }
         $user = $subscription->getUser();
         $address = $subscription->getAddress() ?? $user?->getPrimaryAddress();
         $plan = $subscription->getPlan();

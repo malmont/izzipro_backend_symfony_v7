@@ -254,7 +254,8 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
   de la formule (`metadata.role = plan`).
 - Webhooks (`POST /api/stripe/webhook`, `HandleSubscriptionWebhookUseCase::TYPES`) : le site vient des métadonnées
   `tenant_code` posées à la souscription ; **signature exigée** (hors tests). `invoice.paid` → commande de l'échéance
-  (`SubscriptionOrderFactory` : première variante du produit, quantité, montants de la facture en cents, paiement
+  (`SubscriptionOrderFactory` : aucune commande pour une facture à 0, ouverture d'un essai ou changement de
+  formule sans montant dû ; première variante du produit, quantité, montants de la facture en cents, paiement
   carte, stock décrémenté s'il suffit ; rejouable par `stripe_invoice_id`) + courriel de confirmation, statut `active` ;
   `invoice.payment_failed` → `past_due` + courriel ; `customer.subscription.*` → état recopié, courriel de résiliation.
   À déclarer dans Stripe : point de terminaison Connect (évènements des comptes connectés) sur
@@ -263,8 +264,11 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
 - Prérequis par site : les comptes connectés sont des comptes **Express**, sans réglage Billing, portail ni Tax dans
   leur tableau de bord : c'est la plateforme qui les configure par l'API (`StripeConnectSetupService`) : la
   configuration du portail client est créée à la première ouverture du portail, et
-  `php bin/console app:boutique:stripe-setup --tenant=<code> [--tax --registrations=CA,CA-QC]` la crée d'avance et
-  pose Stripe Tax (siège = adresse de la fiche entreprise, ou `--line1 --city --province --postal-code --country`).
+  `php bin/console app:boutique:stripe-setup --tenant=<code> [--profile] [--tax --registrations=CA,CA-QC]` la crée
+  d'avance et pose Stripe Tax (siège = adresse de la fiche entreprise, ou `--line1 --city --province --postal-code
+  --country`). `--profile` pose le profil public (nom de la fiche entreprise sur la page de paiement, le portail et les
+  reçus ; adresse du site, `--site-url` pour un domaine propre ; libellé de relevé bancaire en capitales sans accent).
+  Le nom affiché du tableau de bord Express n'est pas réglable par la plateforme.
   Billing est disponible d'office sur un compte Express ; le produit et le prix Stripe d'une formule sont créés à la
   première souscription (`stripe_product_id`, `stripe_price_id`).
 - Forme des objets Stripe (API 2025-03+, vérifiée en réel sur `demo` le 09/10/2026) : le secret de la première facture

@@ -377,6 +377,13 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   (le modèle en ajoutait un second qui annulait le premier). Même jour : R3 suit la règle « couleur nommée dans la
   demande » (vert sapin et or admis hors palette, avec avertissement) et R5 se joue sur `presentation-type-c`
   (`navbar-type-g` n'a plus de bouton « Démarrer un projet »). Retouche complète sur `demo` : 19 cas sur 19.
+  Contrat du 09/10/2026 (version `c2d4651045d33de7`) : le bloc `products` est retiré (refusé par le schéma, 422) ;
+  le carrousel de produits (`Carousel`, famille `boutique-products`) est une liste `repeat.source: products` dont
+  `repeat.id` est la sélection (`""`/`bestsellers`, `newarrivals`, `specialoffers`, `isfeatured`, `isAccessory`) ;
+  consigne ajoutée au prompt (sélections, champs `item.*`, `countdown` sur `item.promoEndsAt`, `rating` sur
+  `item.rating`). **B10** (promotions + compte à rebours dans chaque carte, `products-type-a`) : 2 sur 2 ; B4 lit
+  désormais la liste `products` (meilleures ventes) au lieu de `productFetch` : réussi. Retouche complète non rejouée
+  après ce changement (crédit de l'API épuisé le 09/10/2026 à 15 h 57).
 - **Prompt de vidéo** (`POST /api/landingpage-ai/video-prompt`, 02/10/2026 ; `WriteLandingVideoPromptUseCase`,
   `LandingAiVideoPromptWriter`) : l'administrateur décrit en français la vidéo d'une scène au défilement, la réponse
   est un prompt en anglais pour un outil de génération de vidéo. Entrée `{ prompt (2 000 car.), format: landscape |

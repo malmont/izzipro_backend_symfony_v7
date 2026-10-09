@@ -207,7 +207,7 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 modèles ; version 2 : familles `app: boutique`, `systemPages`), `ia-assistant-jeu-essai.md` (cas d'évaluation),
 `ia-libelles-editeur.md` (facultatif : libellés de l'éditeur cités par l'assistant). **Ne pas les modifier à la main** :
 la version active vient de la synchronisation (`var/landingpage-config/`) ; ceux du dépôt sont la version de repli
-(tests, serveur neuf), recopiés depuis la dernière version synchronisée (08/10/2026 : `528b8f8009eb1e0a`).
+(tests, serveur neuf), recopiés depuis la dernière version synchronisée (09/10/2026 : `c2d4651045d33de7`, carrousel de produits réglable, blocs `rating` et `countdown`).
 
 ## Tester
 

@@ -30,6 +30,37 @@ final class StripeConnectSetupService
         return $this->emProvider->getEntityManager()->getRepository(StripeConfig::class)->findOneBy(['isActive' => true])?->getAccountId();
     }
 
+    /**
+     * Profil public du compte connecté (page de paiement, portail, reçus, relevé bancaire) : nom de la fiche entreprise,
+     * adresse du site et libellé de relevé (5 à 22 caractères latins, en capitales). Le nom affiché du tableau de bord
+     * Express n'est pas modifiable par la plateforme : Stripe le tire du nom d'entreprise.
+     *
+     * @return array{name: string, url: ?string, statementDescriptor: string}
+     */
+    public function updatePublicProfile(string $name, ?string $url): array
+    {
+        $account = $this->accountId();
+        if ($account === null) {
+            throw new \RuntimeException('Aucun compte Stripe connecté actif sur ce site.');
+        }
+        $descriptor = self::statementDescriptor($name);
+        $this->client()->accounts->update($account, [
+            'business_profile' => array_filter(['name' => $name, 'url' => $url]),
+            'settings' => ['payments' => ['statement_descriptor' => $descriptor]],
+        ]);
+
+        return ['name' => $name, 'url' => $url, 'statementDescriptor' => $descriptor];
+    }
+
+    /** Libellé de relevé Stripe : latin sans accent, sans < > \ ' " *, 5 à 22 caractères, au moins une lettre */
+    public static function statementDescriptor(string $name): string
+    {
+        $ascii = strtoupper((string) (new \Symfony\Component\String\Slugger\AsciiSlugger('fr'))->slug($name, ' '));
+        $ascii = trim(substr((string) preg_replace('/\s+/', ' ', $ascii), 0, 22));
+
+        return strlen($ascii) >= 5 ? $ascii : trim($ascii . ' BOUTIQUE');
+    }
+
     /** Configuration du portail client (créée au besoin) ; null sans compte connecté */
     public function ensurePortalConfiguration(string $siteName): ?string
     {

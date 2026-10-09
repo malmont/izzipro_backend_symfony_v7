@@ -153,21 +153,21 @@ class LandingAiComposeTest extends WebTestCase
 
     public function testOneModeGroupCanBeRemovedButNotTheLastOne(): void
     {
-        $product = $this->preset('product-type-f'); // groupes de mode sale et rental
+        $product = $this->preset('product-type-f'); // groupes de mode sale, rental et subscription
         $groups = array_values(array_filter($product->blocks, fn ($b) => $b->type === 'container' && isset($b->mode)));
-        $this->assertCount(2, $groups);
+        $this->assertGreaterThanOrEqual(2, count($groups));
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'remove', 'id' => $groups[1]->id]]);
 
         $response = $this->compose(['mode' => 'edit', 'componentKey' => 'ProductPage', 'composition' => $product, 'prompt' => 'Enlève la partie location.']);
 
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $body = json_decode($response->getContent());
-        $this->assertSame(1, $body->usage->attempts, 'retirer un groupe de mode sur deux est permis');
+        $this->assertSame(1, $body->usage->attempts, 'retirer un groupe de mode quand il en reste d\'autres est permis');
         $this->assertArrayNotHasKey($groups[1]->id, $this->blocksById($body->composition));
 
-        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'remove', 'id' => $groups[0]->id], ['op' => 'remove', 'id' => $groups[1]->id]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse(array_map(fn ($g) => ['op' => 'remove', 'id' => $g->id], $groups));
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'remove', 'id' => $groups[1]->id]]);
-        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'ProductPage', 'composition' => $product, 'prompt' => 'Enlève les deux modes.']);
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'ProductPage', 'composition' => $product, 'prompt' => 'Enlève tous les modes.']);
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $this->assertSame(2, json_decode($response->getContent())->usage->attempts, 'retirer le dernier groupe de mode est renvoyé au modèle');
         $retry = FakeLandingAiClient::$requests[count(FakeLandingAiClient::$requests) - 1]; // dernier appel : second essai de la seconde demande

@@ -143,6 +143,22 @@ class BoutiqueSettingsApiTest extends WebTestCase
         $this->assertContains('tabs[0].sections[0].name', $paths);
     }
 
+    public function testRemovedProductsBlockIsRefusedAndTheReglableCarouselIsAccepted(): void
+    {
+        $this->loginAsAdmin();
+        // Contrat du 09/10/2026 : le bloc products (cartes codées en dur) est retiré au profit d'une liste répétée
+        $configuration = $this->configuration();
+        $configuration['tabs'][0]['sections'][0]['reglableConfig']['blocks'][] = ['id' => 'ancien-carrousel', 'type' => 'products', 'cardStyle' => 'A', 'productFetch' => 'typeBestsellers'];
+        $put = $this->request('PUT', $this->encode(['configuration' => $configuration]));
+        $this->assertSame(422, $put->getStatusCode(), $put->getContent());
+        $this->assertStringContainsString('tabs[0].sections[0].reglableConfig.blocks', implode(' ', array_column(json_decode($put->getContent(), true)['errors'], 'path')));
+
+        $configuration = $this->configuration();
+        $configuration['tabs'][0]['sections'][] = ['id' => 's2', 'componentKey' => 'Carousel', 'componentTypeKey' => 'typeReglable', 'dataType' => null, 'reglableConfig' => $this->preset('products-type-c')];
+        $put = $this->request('PUT', $this->encode(['configuration' => $configuration]));
+        $this->assertSame(200, $put->getStatusCode(), $put->getContent());
+    }
+
     public function testMalformedBodiesAreRefused(): void
     {
         $this->loginAsAdmin();

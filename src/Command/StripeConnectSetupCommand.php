@@ -15,7 +15,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(
     name: 'app:boutique:stripe-setup',
-    description: 'Prépare le compte Stripe connecté d\'un site (Express) : portail client et Stripe Tax (siège, inscriptions), par l\'API'
+    description: 'Prépare le compte Stripe connecté d\'un site (Express) : profil public, portail client et Stripe Tax (siège, inscriptions), par l\'API'
 )]
 class StripeConnectSetupCommand extends Command
 {
@@ -31,6 +31,8 @@ class StripeConnectSetupCommand extends Command
     {
         $this
             ->addOption('tenant', null, InputOption::VALUE_REQUIRED, 'Code du site (table tenants)')
+            ->addOption('profile', null, InputOption::VALUE_NONE, 'Pose aussi le profil public : nom de la fiche entreprise, adresse du site, libellé de relevé')
+            ->addOption('site-url', null, InputOption::VALUE_REQUIRED, 'Adresse publique du site pour --profile (défaut : https://<code>.arkanoa-media.com ; à passer pour un domaine propre)')
             ->addOption('tax', null, InputOption::VALUE_NONE, 'Configure aussi Stripe Tax (siège = adresse de la fiche entreprise, sauf options ci-dessous)')
             ->addOption('registrations', null, InputOption::VALUE_REQUIRED, 'Inscriptions fiscales, séparées par des virgules (CA, CA-QC, US-NY, FR…)', implode(',', StripeConnectSetupService::DEFAULT_REGISTRATIONS_CA))
             ->addOption('line1', null, InputOption::VALUE_REQUIRED, 'Siège : rue')
@@ -61,6 +63,12 @@ class StripeConnectSetupCommand extends Command
         try {
             $configuration = $this->setup->ensurePortalConfiguration($siteName);
             $io->writeln(sprintf(' ✓ Portail client : configuration <info>%s</info> (carte, factures, adresse, résiliation à la fin de la période)', $configuration));
+
+            if ($input->getOption('profile')) {
+                $url = $input->getOption('site-url') ?: ('https://' . $code . '.arkanoa-media.com');
+                $profile = $this->setup->updatePublicProfile($siteName, (string) $url);
+                $io->writeln(sprintf(' ✓ Profil public : <info>%s</info>, %s, relevé « %s »', $profile['name'], $profile['url'], $profile['statementDescriptor']));
+            }
 
             if ($input->getOption('tax')) {
                 $headOffice = $input->getOption('line1') ? [

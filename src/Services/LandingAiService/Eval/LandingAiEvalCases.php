@@ -258,6 +258,34 @@ final class LandingAiEvalCases
                         $payment ? 'oui' : 'non', $columns === null ? 'container supprimé' : ($columns->layout ?? 'stack'), $limits ? mb_substr(json_encode($limits[0], JSON_UNESCAPED_UNICODE), 0, 140) : 'aucune'));
                 },
             ],
+            // --- Carrousel de produits réglable (09/10/2026, famille boutique-products) ---
+            [
+                'id' => 'B10', 'presetId' => 'products-type-a', 'prompt' => 'Montre plutôt les promotions, avec un compte à rebours de fin de promo sur chaque carte.',
+                'check' => function (object $before, object $after) {
+                    $list = $this->find($after, fn ($b) => ($b->repeat->source ?? null) === 'products');
+                    $selection = $list->repeat->id ?? null;
+                    $byId = $this->inspector->blocksById($after);
+                    $inList = function (object $block) use ($byId, $list): bool {
+                        for ($current = $block; isset($current->parentId); $current = $byId[$current->parentId] ?? null) {
+                            if ($list !== null && $current->parentId === $list->id) {
+                                return true;
+                            }
+                            if (!isset($byId[$current->parentId])) {
+                                return false;
+                            }
+                        }
+
+                        return false;
+                    };
+                    $countdown = $this->find($after, fn ($b) => ($b->type ?? null) === 'countdown' && ($b->bindings->date ?? null) === 'item.promoEndsAt');
+                    $price = $this->find($after, fn ($b) => ($b->bindings->text ?? null) === 'item.priceLabel');
+                    $ok = $selection === 'specialoffers' && $countdown !== null && $inList($countdown) && $price !== null;
+
+                    return $this->result($ok, sprintf('sélection : %s ; compte à rebours lié dans la carte : %s ; prix lié conservé : %s',
+                        $selection === null ? '(liste absente)' : ($selection === '' ? '(meilleures ventes)' : $selection),
+                        $countdown === null ? 'non' : ($inList($countdown) ? 'oui' : 'hors de la carte'), $price ? 'oui' : 'non'));
+                },
+            ],
             // --- Abonnement et personnalisation (09/10/2026) ---
             [
                 'id' => 'B7', 'presetId' => 'product-type-f', 'prompt' => 'Sélecteur de mode en segments, et appelle l\'abonnement « Panier chaque semaine ».',
@@ -569,7 +597,8 @@ final class LandingAiEvalCases
                             if (is_string($block->repeat->source ?? null)) {
                                 $sources[$block->repeat->source] = true;
                             }
-                            if (($block->productFetch ?? null) === 'typeBestsellers' || ($section['composition']->productFetch ?? null) === 'typeBestsellers') {
+                            // Contrat du 09/10/2026 : liste répétée repeat.source products, repeat.id = sélection (vide = bestsellers)
+                            if (($block->repeat->source ?? null) === 'products' && in_array($block->repeat->id ?? '', ['', 'bestsellers'], true)) {
                                 $bestsellers = true;
                             }
                         }

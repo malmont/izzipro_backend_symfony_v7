@@ -88,6 +88,11 @@ class SubscriptionApiTest extends WebTestCase
         $this->webhook('invoice.paid', ['id' => 'in_test_1', 'subscription' => $stripeId, 'paid' => true, 'total' => 8048 + $shipping, 'amount_paid' => 8048 + $shipping, 'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]);
         $this->assertSame(1, count($this->json($this->request('GET', "/api/subscriptions/$id"))['orders']), 'facture rejouée : pas de seconde commande');
 
+        // Facture à 0 (essai, changement de formule sans montant) : pas de commande
+        $zero = $this->webhook('invoice.paid', ['id' => 'in_test_zero', 'subscription' => $stripeId, 'paid' => true, 'subtotal' => 0, 'total' => 0, 'amount_paid' => 0, 'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]);
+        $this->assertStringContainsString('facture à 0', json_decode($zero->getContent(), true)['detail'] ?? '', $zero->getContent());
+        $this->assertSame(1, count($this->json($this->request('GET', "/api/subscriptions/$id"))['orders']), 'facture à 0 : aucune commande');
+
         // Gestion : pause, reprise, changement de formule, annulation à la fin de la période, reprise, annulation immédiate
         $this->assertSame('paused', $this->json($this->request('POST', "/api/subscriptions/$id/pause"))['status']);
         $this->assertSame('active', $this->json($this->request('POST', "/api/subscriptions/$id/resume"))['status']);

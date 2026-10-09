@@ -50,6 +50,21 @@ Cas rejoués à chaque changement de prompt ou de modèle (conception : `ia-assi
 | P3 | page générée en P1 (ou toute section) | auto-critique : bouton « 🔍 Relecture visuelle » (captures ordinateur et mobile envoyées en retouche avec images) | au moins une amélioration mesurable (contraste, espacement) sans casser V1 à V6 | Meilleure qu'avant |
 | P4 | aucune charte ni image | « Page d'accueil premium et vivante pour un studio de design : héros, services, réalisations, contact. Rendu moderne, avec des effets. » | 4 sections valides ; au moins une apparition (`animation`) par section, un `repeat.stagger` dans les listes, un `hover` sur les cartes ou les boutons ; palette du site | Page vivante sans être chargée |
 
+## Étape 4 : boutique réglable (ajouté le 08/10/2026, à jouer sur `demo` une fois ses données prêtes)
+
+Mêmes vérifications V1 à V6. En plus, **V7** : les blocs obligatoires d'une page système (`systemPages.required` du catalogue : `stripePayment`, `cartLines`, `cartTotals`, `loginForm`, conteneur avec `mode`…) sont présents à l'arrivée ; **V8** : aucun bloc du commerce ne porte un prix, un stock ou un nom de produit en dur (ils lisent les données de la page). Requêtes envoyées avec `app: "boutique"`.
+
+| # | Départ | Demande | Vérifications propres | Critère humain |
+|---|---|---|---|---|
+| B1 | Fiche produit F (`ProductPage/product-type-f`, achat et location) | « Mets le prix en gros et la galerie en grille. » | `price.size` augmenté ; `gallery.galleryStyle` = grid ; les deux groupes `mode` (sale, rental) toujours présents avec leurs blocs (V7) | Lisible, rien d'inventé (V8) |
+| B2 | Fiche produit A (`product-type-a`) | « Enlève la partie location. » (le produit de la page n'offre que l'achat) | le groupe `mode: rental` est retiré, le groupe `mode: sale` reste ; `warnings` explique que la fiche garde au moins un mode | Compréhensible |
+| B3 | Panier A (`CartPage/cart-type-a`) | « Supprime le récapitulatif et mets le bouton Commander en vert. » | proposition refusée puis corrigée par l'IA : `cartTotals` conservé (V7), `checkoutButton.background` vert, `limits` cite « Totaux du panier » | L'assistant dit ce qu'il n'a pas pu faire |
+| B4 | Accueil (mode page, familles au choix) | « Page d'accueil : grand diaporama, nos catégories, meilleures ventes, pourquoi nous choisir, infolettre. » | sections `HomeSlider`, `CategoryList`, `Carousel` (`productFetch` = typeBestsellers), `Features`, `Newsletter`, dans cet ordre ; listes `slides` et `categories` liées | Cohérent, prêt à enregistrer |
+| B5 | Navbar boutique A (`navbar/boutique-navbar-type-a`) | « Barre sombre, panier et compte à gauche du logo. » | `cartBadge` et `accountMenu` présents, placés avant le logo ; fond sombre ; `nav` lié à `navLinks` conservé (V4) | Lisible sur mobile |
+| B6 | Paiement A (`Checkout/checkout-type-a`) | « Une seule colonne, et retire le paiement Stripe, on paiera par virement. » | `stripePayment` conservé (V7) ; disposition sur une colonne ; `limits` explique qu'un paiement par virement n'existe pas | Honnête |
+
+Cas suivants écrits et joués côté backend (commande d'évaluation, 19/19 réussis sur `demo` le 09/10/2026), non recopiés ici : **B7** fiche produit avec abonnement, **B8** page de souscription, **B9** personnalisation.
+
 ## Mesures relevées à chaque passage
 
 Taux de V1 à V6 réussies, nombre d'essais de correction, jetons (entrée, cache, sortie), durée, et coût estimé par mode. Ces mesures servent à ajuster les crédits (1 / 3 / 10) avant le lancement.
