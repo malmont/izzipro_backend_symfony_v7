@@ -52,11 +52,10 @@ monolog:
 when@prod:
     monolog:
         handlers:
-            # Production (APP_ENV=prod depuis le 09/10/2026) : fichier var/log/prod.log, niveau info (les messages
-            # [Email], [Checkout], [StripeWebhook]… restent lisibles) ; les requêtes SQL et les évènements (debug) ne
-            # sont plus écrits, ce qui coûtait à chaque requête.
+            # Ce handler va écraser tous les autres handlers définis plus haut,
+            # mais uniquement lorsque l'environnement est 'prod'.
             main:
                 type: stream
-                path: "%kernel.logs_dir%/%kernel.environment%.log"
-                level: info
-                channels: ["!event", "!doctrine"]
+                path: "php://stderr" # On envoie tout vers la sortie d'erreur du conteneur
+                level: debug      # On log tout pour le débogage
+                formatter: monolog.formatter.json

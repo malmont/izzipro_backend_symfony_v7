@@ -9,13 +9,9 @@ Ce qui est commun à tout le backend. Chaque module a sa fiche (voir « Modules 
   **plusieurs clients (tenants)**, chacun avec **sa propre base**.
 - Frontend : autre dépôt (Next.js, `Izzipro_next`) ; il appelle `/api/*` avec l'en-tête `X-Tenant-Host`. Sa doc :
   `AGENTS.md` et `docs/architecture.md` de ce dépôt-là.
-- ⚠️ **Le code est monté en direct dans les conteneurs** (`.:/var/www`). Depuis le 09/10/2026, la production tourne en
-  **`APP_ENV=prod`, `APP_DEBUG=0`** (`.env`, lu à la création des conteneurs ; le profiler collectait chaque requête) :
-  une méthode PHP modifiée est prise aussitôt (OPcache, `validate_timestamps`), mais routes, services, entités, gabarits
-  et `config/` demandent `docker exec -u www-data -w /var/www symfony_app_v2 php bin/console cache:clear` (reconstruction
-  dans un dossier à part puis échange, sans coupure). Les workers reconstruisent leur cache à chaque démarrage
-  (`messenger:stop-workers` ou recréation). Journal : `var/log/prod.log`, niveau info, sans SQL ni évènements. Retour
-  arrière : `APP_ENV=dev` dans `.env` puis `docker compose up -d --no-deps --force-recreate app` (et les workers).
+- ⚠️ **Le code est monté en direct dans les conteneurs** (`.:/var/www`) et le serveur tourne en `APP_ENV=dev`
+  (serveur de développement, débogage voulu : ne pas passer en `prod` sans l'accord du propriétaire) :
+  **toute modification de fichier est immédiatement en production**, y compris `config/`.
 - **Performances des lectures publiques** (09/10/2026) : compression gzip dans nginx (`docker/nginx/default.conf` ;
   rechargement : `docker exec symfony_nginx_v2 nginx -s reload`), cache HTTP (`EventSubscriber/PublicReadCacheSubscriber` :
   ETag et 304, `public, max-age=60` (300 pour `tenant/check`), `stale-while-revalidate=600`, `Vary: X-Tenant-Host,

@@ -36,8 +36,6 @@ $urlFor = fn (string $db) => sprintf('%s://%s:%s@%s:%d/%s?serverVersion=15&chars
 
 $overrides = [
     'APP_ENV' => 'test',
-    // Le serveur tourne en APP_DEBUG=0 (production, 09/10/2026) : les tests gardent le conteneur de test complet
-    'APP_DEBUG' => '1',
     // Doctrine ajoute le suffixe « _test » (when@test) : db_mv_contract + _test = base du tenant fictif
     'DATABASE_URL' => $urlFor('db_mv_contract'),
     'MASTER_DATABASE_URL' => $urlFor(MV_TEST_MASTER_DB),
