@@ -182,6 +182,11 @@ configuration dans la base du site, puis envoie ; une erreur SMTP relance le mes
 injoignable : envoi immédiat. Une réponse HTTP n'attend donc plus le serveur SMTP, et un appelant ne voit plus l'échec
 d'un envoi (journal `[Email]` et file `failed`). Exception : `app:test-tenant-smtp` envoie sans file
 (`createDirectMailer`). En test, le transport `email` est synchrone (`when@test`).
+Destinataires d'un domaine réservé (`example.com`, `*.invalid`, `*.test`… : comptes de démonstration et d'essai) :
+retirés, envoi abandonné s'il n'en reste aucun (hors tests). Refus définitif du serveur (5xx) : pas de relance, file
+`failed` aussitôt. Logo intégré aux courriels : copie allégée générée à 400 px de large
+(`EmailLogoHelper`, `email-400-<logo>.png` à côté de l'original ; 732 Ko → 42 Ko pour demo) ; les gabarits utilisent
+`logoUrl` tel quel (`cid:` ou adresse absolue), sans y coller le domaine.
 
 - Chaque worker démarre par `docker/worker/consume.sh` : **cache Symfony propre** (`APP_CACHE_DIR`), reconstruit à chaque
   démarrage, `APP_DEBUG=0`. Sans cela, une reconstruction du cache web supprimait des fichiers utilisés par le worker.

@@ -32,8 +32,53 @@ class EmailLogoHelper
         }
 
         $path = $this->projectDir . self::STORAGE_DIR . basename($logo);
+        if (!is_file($path) || !is_readable($path)) {
+            return null;
+        }
 
-        return is_file($path) && is_readable($path) ? $path : null;
+        return $this->emailSized($path) ?? $path;
+    }
+
+    /** Largeur du logo intégré aux courriels (affiché à 200 px au plus ; double densité pour les écrans Retina) */
+    private const EMAIL_WIDTH = 400;
+
+    /**
+     * Copie allégée du logo pour les courriels (09/10/2026) : chaque courriel embarquait l'original (732 Ko pour demo,
+     * soit près d'1 Mo par message). PNG redimensionné à 400 px de large, transparence gardée, régénéré quand
+     * l'original change. Sans GD, original trop petit ou format non pris en charge : null (l'original sert).
+     */
+    private function emailSized(string $path): ?string
+    {
+        if (!function_exists('imagecreatefromstring') || filesize($path) < 40 * 1024) {
+            return null;
+        }
+        $target = dirname($path) . '/email-' . self::EMAIL_WIDTH . '-' . pathinfo($path, PATHINFO_FILENAME) . '.png';
+        if (is_file($target) && filemtime($target) >= filemtime($path)) {
+            return $target;
+        }
+        try {
+            $size = @getimagesize($path);
+            $source = $size ? @imagecreatefromstring((string) file_get_contents($path)) : false;
+            if (!$source || $size[0] <= self::EMAIL_WIDTH) {
+                return null;
+            }
+            $height = (int) round($size[1] * self::EMAIL_WIDTH / $size[0]);
+            $resized = imagecreatetruecolor(self::EMAIL_WIDTH, $height);
+            imagealphablending($resized, false);
+            imagesavealpha($resized, true);
+            imagefill($resized, 0, 0, imagecolorallocatealpha($resized, 0, 0, 0, 127));
+            imagecopyresampled($resized, $source, 0, 0, 0, 0, self::EMAIL_WIDTH, $height, $size[0], $size[1]);
+            $temporary = $target . '.' . bin2hex(random_bytes(4));
+            if (!imagepng($resized, $temporary, 9) || !rename($temporary, $target)) {
+                @unlink($temporary);
+
+                return null;
+            }
+
+            return $target;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
