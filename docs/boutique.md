@@ -249,7 +249,8 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
   carte, stock décrémenté s'il suffit ; rejouable par `stripe_invoice_id`) + courriel de confirmation, statut `active` ;
   `invoice.payment_failed` → `past_due` + courriel ; `customer.subscription.*` → état recopié, courriel de résiliation.
   À déclarer dans Stripe : point de terminaison Connect (évènements des comptes connectés) sur
-  `https://v2.backend-strapi.online/api/stripe/webhook`, secret dans `STRIPE_CONNECT_WEBHOOK_SECRET`.
+  `https://backend-strapi.online/api/stripe/webhook` (même serveur que `v2.` : les deux écouteurs du tableau de bord,
+  « Votre compte » et « Comptes connectés », pointent déjà dessus), secret dans `STRIPE_CONNECT_WEBHOOK_SECRET`.
 - Prérequis par site : Stripe Billing et le portail client activés sur le compte connecté (tableau de bord Stripe) ; le
   produit et le prix Stripe d'une formule sont créés à la première souscription (`stripe_product_id`, `stripe_price_id`).
 - Démo : trois formules sur « Panier bio de la semaine » (`BoutiqueDemoCatalog::SUBSCRIPTION_PLANS`).
