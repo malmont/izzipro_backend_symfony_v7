@@ -75,7 +75,7 @@ class LandingContentController extends AbstractController
 
     // priority : passe avant le PATCH générique d'API Platform sur /api/products/{id} (merge-patch), qui n'applique aucune règle
     #[Route('/api/{resource}/{id}', name: 'api_landing_content_patch', methods: ['PATCH'], priority: 10,
-        requirements: ['resource' => 'presentations|presentation-groups|baniere-statiques|bannieres|videos|service-offers|products|category|homeslider|explore-cards', 'id' => '\d+'])]
+        requirements: ['resource' => 'presentations|presentation-groups|baniere-statiques|bannieres|videos|service-offers|products|category|homeslider|explore-cards|product-variants|customization-options|customization-values|customization-combinations|subscription-plans|features', 'id' => '\d+'])]
     public function patch(string $resource, int $id, Request $request): JsonResponse
     {
         try {
@@ -87,7 +87,9 @@ class LandingContentController extends AbstractController
             } catch (\JsonException) {
                 throw new LandingContentException(400, 'Corps JSON invalide.');
             }
-            $output = $this->patchUseCase->execute($resource, $id, $body, (string) $request->query->get('locale', 'fr'), $request->getSchemeAndHttpHost());
+            $variantId = $request->query->get('variantId');
+            $output = $this->patchUseCase->execute($resource, $id, $body, (string) $request->query->get('locale', 'fr'), $request->getSchemeAndHttpHost(),
+                is_numeric($variantId) ? (int) $variantId : null);
         } catch (LandingContentException $e) {
             return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]), $e->getStatusCode());
         }

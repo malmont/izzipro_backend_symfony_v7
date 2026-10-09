@@ -53,7 +53,9 @@ final class ContentAuditRestorer
         private readonly SharedMediaLibrary $media,
         private readonly MediaUrlResolver $urls,
         private readonly TenantCacheService $cache,
-        private readonly TenantCurrencyProvider $currency
+        private readonly TenantCurrencyProvider $currency,
+        private readonly \App\Services\LandingContentService\LandingContentOutput $outputs,
+        private readonly \App\Services\LandingContentService\BoutiqueCatalogEditor $catalog
     ) {
     }
 
@@ -84,6 +86,7 @@ final class ContentAuditRestorer
             return match (true) {
                 isset(LandingContentSpec::RESOURCES[$resource]) && $entry->getAction() !== 'reorder' => $this->content($resource, (int) $id, (array) $before, (array) $after, $locale, $force, $host),
                 $resource === 'presentation-groups' => $this->order((int) $id, $before, $after, $locale, $force, $host),
+                $resource === 'features' && $entry->getAction() === 'reorder' => $this->featureOrder($before, $after, $locale, $force, $host),
                 $resource === 'entreprise' => $this->entreprise((int) $id, (array) $before, (array) $after, $locale, $force, $host),
                 $resource === 'landingpage-settings' => $this->settings($entry->getBefore(), $entry->getAfter(), $force),
                 $resource === 'boutique-settings' => $this->boutiqueSettings($entry->getBefore(), $entry->getAfter(), $force),
@@ -108,7 +111,7 @@ final class ContentAuditRestorer
         $this->contentEditor->apply($resource, $entity, $values, $locale);
         $this->cache->invalidateTags(array_map(fn ($tag) => sprintf($tag, $id), LandingContentSpec::RESOURCES[$resource]['tags']));
 
-        return ['resourceId' => $id, 'before' => $current, 'after' => $values, 'result' => LandingContentSpec::output($resource, $entity, $locale, $this->urls, $host, $this->currency->code())];
+        return ['resourceId' => $id, 'before' => $current, 'after' => $values, 'result' => $this->outputs->output($resource, $entity, $locale, $host)];
     }
 
     private function order(int $id, mixed $before, mixed $after, string $locale, bool $force, string $host): array
@@ -121,6 +124,21 @@ final class ContentAuditRestorer
 
         return ['resourceId' => $id, 'before' => ['order' => $current], 'after' => ['order' => $before->order ?? []],
             'result' => new PresentationGroupOutputDto($group, $this->urls->getSliderBaseUrl($host), $locale)];
+    }
+
+    /** Ordre des atouts de l'accueil (09/10/2026) */
+    private function featureOrder(mixed $before, mixed $after, string $locale, bool $force, string $host): array
+    {
+        $current = $this->catalog->featureOrder();
+        $this->guard($current, $after->order ?? null, $force);
+        $this->catalog->reorderFeatures((object) ['order' => $before->order ?? []]);
+        $this->cache->invalidateTags(['features_all']);
+        foreach (['fr', 'en'] as $l) {
+            $this->cache->delete('features_all_' . $l);
+        }
+
+        return ['resourceId' => null, 'before' => ['order' => $current], 'after' => ['order' => $before->order ?? []],
+            'result' => array_map(fn (int $id) => $this->outputs->output('features', $this->catalog->find(\App\Entity\Feature::class, $id, 'Atout'), $locale, $host), $this->catalog->featureOrder())];
     }
 
     private function entreprise(int $id, array $before, array $after, string $locale, bool $force, string $host): array

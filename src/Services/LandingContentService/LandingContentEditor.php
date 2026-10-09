@@ -26,8 +26,10 @@ final class LandingContentEditor
     /** Couleur CSS acceptée dans les contenus et la charte de la boutique (BoutiqueConfigurationValidator) */
     public const COLOR = '/^(transparent|#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(?:,\s*(?:0|1|0?\.\d+)\s*)?\))$/';
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider)
-    {
+    public function __construct(
+        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly ?LandingContentHooks $hooks = null
+    ) {
     }
 
     public function find(string $resource, int $id): ?object
@@ -53,7 +55,53 @@ final class LandingContentEditor
                 if ($required) {
                     $errors[] = ['path' => $name, 'message' => 'champ obligatoire : valeur attendue'];
                 } else {
-                    $values[$name] = $kind === LandingContentSpec::IMAGES ? [] : null;
+                    $values[$name] = in_array($kind, [LandingContentSpec::IMAGES, LandingContentSpec::LOCALIZED_LINES], true) ? [] : null;
+                }
+                continue;
+            }
+            // Natures des données de la boutique (09/10/2026)
+            if (in_array($kind, [LandingContentSpec::INTEGER, LandingContentSpec::DOLLARS], true)) {
+                if (!is_int($value) && !(is_string($value) && ctype_digit($value))) {
+                    $errors[] = ['path' => $name, 'message' => $kind === LandingContentSpec::DOLLARS ? 'montant en cents (entier positif ou nul) attendu' : 'entier positif ou nul attendu'];
+                } elseif ((int) $value < 0 || (int) $value > $max) {
+                    $errors[] = ['path' => $name, 'message' => sprintf('entier de 0 à %d attendu', $max)];
+                } else {
+                    $values[$name] = (int) $value;
+                }
+                continue;
+            }
+            if ($kind === LandingContentSpec::BOOLEAN) {
+                is_bool($value) ? $values[$name] = $value : $errors[] = ['path' => $name, 'message' => 'true ou false attendu'];
+                continue;
+            }
+            if ($kind === LandingContentSpec::RELATION) {
+                [$class] = LandingContentSpec::relation($resource, $name);
+                if (!is_int($value) || $this->emProvider->getEntityManager()->getRepository($class)->find($value) === null) {
+                    $errors[] = ['path' => $name, 'message' => 'identifiant inconnu sur ce site'];
+                } else {
+                    $values[$name] = $value;
+                }
+                continue;
+            }
+            if ($kind === LandingContentSpec::LOCALIZED_LINES) {
+                $lineMax = $fields[$name][4] ?? 255;
+                if (!is_array($value) || array_keys($value) !== range(0, count($value) - 1)) {
+                    $errors[] = ['path' => $name, 'message' => 'liste de lignes de texte attendue'];
+                } elseif (count($value) > $max) {
+                    $errors[] = ['path' => $name, 'message' => sprintf('%d lignes au plus', $max)];
+                } else {
+                    $lines = [];
+                    foreach ($value as $i => $line) {
+                        $error = is_string($line) ? self::plainError(trim($line), $lineMax) : 'texte attendu';
+                        if ($error !== null) {
+                            $errors[] = ['path' => "$name[$i]", 'message' => $error];
+                            continue 2;
+                        }
+                        if (trim($line) !== '') {
+                            $lines[] = trim($line);
+                        }
+                    }
+                    $values[$name] = $lines;
                 }
                 continue;
             }
@@ -82,6 +130,7 @@ final class LandingContentEditor
                 continue;
             }
             [$stored, $error] = match ($kind) {
+                LandingContentSpec::PLAIN, LandingContentSpec::LOCALIZED => [$value, self::plainError($value, $max)],
                 LandingContentSpec::TEXT => [$value, RichTextPolicy::problems($value)[0] ?? null],
                 LandingContentSpec::LINK => [$value, self::linkError($value)],
                 LandingContentSpec::COLOR => [$value, preg_match(self::COLOR, $value) ? null : 'couleur attendue (#rrggbb, rgb(…), rgba(…) ou transparent)'],
@@ -103,6 +152,10 @@ final class LandingContentEditor
     {
         $spec = LandingContentSpec::RESOURCES[$resource];
         $em = $this->emProvider->getEntityManager();
+        // Règles propres à une ressource (unicité, mouvement de stock…) : peuvent refuser (422) ou retirer un champ écrit
+        if ($this->hooks !== null) {
+            $this->hooks->before($resource, $entity, $values, $locale);
+        }
         $translation = null;
         foreach ($values as $name => $value) {
             [$kind, $translated] = $spec['fields'][$name];
@@ -110,10 +163,31 @@ final class LandingContentEditor
                 $this->replacePictures($entity, is_array($value) ? $value : []);
                 continue;
             }
-            $setter = 'set' . ucfirst(LandingContentSpec::property($resource, $name));
+            $property = LandingContentSpec::property($resource, $name);
+            $setter = 'set' . ucfirst($property);
+            if ($kind === LandingContentSpec::RELATION) {
+                [$class, $relationProperty] = LandingContentSpec::relation($resource, $name);
+                $entity->{'set' . ucfirst($relationProperty)}($value === null ? null : $em->getRepository($class)->find((int) $value));
+                continue;
+            }
+            if (in_array($kind, [LandingContentSpec::LOCALIZED, LandingContentSpec::LOCALIZED_LINES], true)) {
+                // Texte par langue dans un champ JSON : seule la langue demandée change
+                $map = $entity->{'get' . ucfirst($property)}() ?? [];
+                if ($value === null || $value === []) {
+                    unset($map[$locale]);
+                } else {
+                    $map[$locale] = $value;
+                }
+                // les noms d'une formule sont une liste obligatoire (tableau) ; les autres champs JSON acceptent null
+                $entity->$setter($property === 'names' ? $map : ($map ?: null));
+                continue;
+            }
             $value = match ($kind) {
                 LandingContentSpec::DATE => $value === null ? null : new \DateTimeImmutable((string) $value),
-                LandingContentSpec::NUMBER => $value === null ? null : (float) $value,
+                LandingContentSpec::NUMBER => $value === null ? null : (self::intSetter($entity, $setter) ? (int) round((float) $value) : (float) $value),
+                LandingContentSpec::INTEGER => (int) $value,
+                LandingContentSpec::DOLLARS => $value === null ? null : round(((int) $value) / 100, 2),
+                LandingContentSpec::BOOLEAN => (bool) $value,
                 default => $value,
             };
             if (!$translated) {
@@ -130,6 +204,25 @@ final class LandingContentEditor
             $em->persist($translation);
         }
         $em->flush();
+        $this->hooks?->after($resource, $entity, $values);
+    }
+
+    /** Le setter attend-il un entier (prix d'une variante en cents) plutôt qu'un nombre décimal ? */
+    private static function intSetter(object $entity, string $setter): bool
+    {
+        $type = (new \ReflectionMethod($entity, $setter))->getParameters()[0]?->getType();
+
+        return $type instanceof \ReflectionNamedType && $type->getName() === 'int';
+    }
+
+    /** Une ligne de texte sans balise, de longueur bornée */
+    private static function plainError(string $value, int $max): ?string
+    {
+        if ($value !== strip_tags($value) || preg_match('/[\r\n]/', $value)) {
+            return 'une ligne de texte, sans balise';
+        }
+
+        return mb_strlen($value) > $max ? sprintf('%d caractères au plus', $max) : null;
     }
 
     /** Galerie d'un produit : remplacée par la liste donnée (ProductPicture, orphelins supprimés) */
@@ -160,11 +253,27 @@ final class LandingContentEditor
                 $values[$field] = array_values(array_map(fn ($p) => $p->getImageUrl(), $entity->getPictures()->toArray()));
                 continue;
             }
+            $kind = $spec[$field][0];
+            if ($kind === LandingContentSpec::RELATION) {
+                [, $relationProperty] = LandingContentSpec::relation($resource, $field);
+                $values[$field] = $entity->{'get' . ucfirst($relationProperty)}()?->getId();
+                continue;
+            }
             $getter = 'get' . ucfirst(LandingContentSpec::property($resource, $field));
+            if (in_array($kind, [LandingContentSpec::LOCALIZED, LandingContentSpec::LOCALIZED_LINES], true)) {
+                $values[$field] = ($entity->$getter() ?? [])[$locale] ?? ($kind === LandingContentSpec::LOCALIZED_LINES ? [] : null);
+                continue;
+            }
+            if ($kind === LandingContentSpec::BOOLEAN) {
+                $values[$field] = (bool) $entity->{'is' . ucfirst(LandingContentSpec::property($resource, $field))}();
+                continue;
+            }
             $value = ($spec[$field][1] && $translation !== null ? $translation->$getter() : null) ?? $entity->$getter();
             $values[$field] = match (true) {
                 $value instanceof \DateTimeInterface => $value->format(\DateTimeInterface::ATOM),
-                $spec[$field][0] === LandingContentSpec::NUMBER && $value !== null => (int) round((float) $value),
+                $kind === LandingContentSpec::NUMBER && $value !== null => (int) round((float) $value),
+                $kind === LandingContentSpec::INTEGER => (int) $value,
+                $kind === LandingContentSpec::DOLLARS => $value === null ? null : (int) round(((float) $value) * 100),
                 default => $value,
             };
         }

@@ -19,16 +19,8 @@ class FeatureDTO
         $dto->id    = $feature->getId();
         $dto->title = $translation?->getTitle() ?? $feature->getTitle();
         
-        $path = $feature->getIconpath();
-        if (str_starts_with((string)$path, 'http')) {
-            $image = $path;
-        } else if ($path) {
-            $cleanedHost = rtrim($host, '/');
-            $image = $cleanedHost . '/assets/uploads/icons/' . $path;
-        } else {
-            $image = null;
-        }
-        $dto->iconUrl = $image;
+        // Fichier téléversé (icons/), URL absolue ou média de la médiathèque (/media/secure/…, éditeur de la page)
+        $dto->iconUrl = \App\Services\MediaUrlResolver::joinStored($feature->getIconpath(), rtrim($host, '/') . '/assets/uploads/icons');
         
         return $dto;
     }

@@ -17,6 +17,7 @@ class FeatureRepository extends EntityRepository
             ->leftJoin('f.translations', 't', 'WITH', 't.language = :locale')
             ->addSelect('t')
             ->setParameter('locale', $locale)
+            ->orderBy('f.position', 'ASC')->addOrderBy('f.id', 'ASC') // ordre choisi dans l'éditeur (09/10/2026)
             ->getQuery()
             ->getResult();
     }

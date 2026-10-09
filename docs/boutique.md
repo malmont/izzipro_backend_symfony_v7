@@ -113,6 +113,40 @@ n'existait).
 Schéma : migration `Version20261008120000`, script `scripts/migrate_all_v2_product_modes.sh` (reprise de l'ancien
 mode une seule fois). Tests : `tests/Functional/Boutique/ProductContractApiTest.php`.
 
+## Données de la boutique éditées depuis la page (09/10/2026, suite du § 9)
+
+Même modèle que `PATCH /api/products/{id}` : ROLE_ADMIN du site, `?locale=` pour les champs traduits (en `fr`, la base
+aussi), corps = champs modifiés seulement, `null` ou `""` vide un champ facultatif, 200 = l'objet tel que sa lecture
+publique le renvoie, 404 hors du site, 422 `{ error, errors: [{ path, message }] }`, chaque écriture journalisée
+(`GET /api/landingpage-audit?resource=…`) ; les modifications (`update`) et l'ordre des atouts se rétablissent, les
+ajouts et suppressions non. Images : clé de la médiathèque ou URL https. Lignes de texte : sans balise.
+
+| Route | Champs et règles | Réponse |
+|---|---|---|
+| `PATCH /api/product-variants/{id}` | `stockQuantity` (entier 0 à 1 000 000, mouvement d'inventaire enregistré), `price` (cents, `null` = prix du produit), `colorId`, `sizeId` (422 si une autre variante du produit a ce couple) | la variante comme `variants[]` |
+| `POST /api/products/{id}/variants` | `colorId`, `sizeId`, `stockQuantity` (0 par défaut), `price` ; ancienne forme `color.id` / `size.id` acceptée | 201, la variante |
+| `DELETE /api/product-variants/{id}` | suppression réelle (pas d'état « désactivé » : stock 0 pour retirer de la vente) ; 409 si une commande ou un paiement en cours la contient ; historique de stock et combinaisons supprimés avec elle | 204 |
+| `GET /api/colors`, `GET /api/sizes` | existants | listes |
+| `POST /api/colors`, `POST /api/sizes` | `name*` (une ligne, 255), `codeHexa` (#rrggbb, couleurs) ; nom écrit aussi dans la langue demandée | 201 |
+| `PATCH /api/customization-options/{id}` | `name*` (traduit, 255) | configuration de `?variantId=`, sinon `{ id, code, name }` |
+| `PATCH /api/customization-values/{id}` | `name*` (traduit), `priceDelta` (cents ≥ 0 ; stocké en dollars), `icon` (image) | configuration de `?variantId=`, sinon la valeur |
+| `POST /api/customization-options/{id}/values` | `name*`, `priceDelta`, `icon` | 201, idem |
+| `DELETE /api/customization-values/{id}` | 409 si une combinaison ou une variante l'utilise (pas de retrait silencieux) | configuration de `?variantId=` ou 204 |
+| `PATCH /api/customization-combinations/{id}` | `image*`, `stock` (entier ≥ 0) | configuration de la variante |
+| `POST /api/product-variants/{id}/customization-combinations` | `optionIds*` (valeurs d'option, distinctes), `image*`, `stock` ; doublon 422 | 201, configuration |
+| `DELETE /api/customization-combinations/{id}` | | 200, configuration |
+| `PATCH /api/subscription-plans/{id}` | `name*` (255), `description` (160), `features` (20 lignes de 120), `badge` (40), `highlighted` (une seule par produit), par langue ; prix, périodicité, essai : 422 | la formule comme `GET /api/subscription-plans` |
+| `PATCH /api/features/{id}` | `title*` (traduit, 100 : limite de la colonne), `icon` | `{ id, title, iconUrl }` |
+| `POST /api/features` ; `DELETE /api/features/{id}` ; `PUT /api/features/order { order }` | 50 atouts au plus ; ordre = tous les atouts, une fois (`feature.position`, migration `Version20261009230000`) | 201 ; 204 ; la liste ordonnée |
+
+Code : `LandingContentSpec` (ressources et natures `integer`, `plain`, `relation`, `dollars`, `localized`,
+`localized-lines`, `boolean`), `LandingContentEditor`, `LandingContentHooks` (couple couleur + taille, mouvement de
+stock, formule recommandée), `LandingContentOutput` (réponses), `BoutiqueCatalogEditor` et
+`ManageBoutiqueCatalogUseCase` (créations, suppressions, ordre), `BoutiqueCatalogController`. Sécurité : écritures sur
+`product-variants`, `customization-*`, `colors`, `sizes`, `subscription-plans` réservées à ROLE_ADMIN (avant le
+09/10/2026, `DELETE /api/product-variants/{id}` était ouvert à tout client connecté) ; seule la liste
+`GET /api/subscription-plans` reste hors du pare-feu JWT. Tests : `tests/Functional/Boutique/BoutiqueCatalogEditApiTest.php`.
+
 ## Personnalisation : configuration et images (09/10/2026)
 
 `GET /api/customization/config/{variantId}` (`CustomizationFactoryService`) : adresses des images construites par

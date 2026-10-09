@@ -17,6 +17,17 @@ use App\Entity\BaniereStatiqueTranslation;
 use App\Entity\Banniere;
 use App\Entity\BanniereTranslation;
 use App\Entity\Categories;
+use App\Entity\Color;
+use App\Entity\Feature;
+use App\Entity\FeatureTranslation;
+use App\Entity\ProductCustomizationImage;
+use App\Entity\ProductOption;
+use App\Entity\ProductOptionTranslation;
+use App\Entity\ProductOptionValue;
+use App\Entity\ProductOptionValueTranslation;
+use App\Entity\ProductVariant;
+use App\Entity\Size;
+use App\Entity\SubscriptionPlan;
 use App\Entity\CategoriesTranslation;
 use App\Entity\ExploreCard;
 use App\Entity\ExploreCardTranslation;
@@ -46,6 +57,13 @@ use App\Services\MediaUrlResolver;
  * demandée (?locale=), sinon commun à toutes les langues. Clés facultatives : localeField (nom du champ de langue de la
  * traduction, « language » par défaut), titleField (champ copié dans une traduction créée, « titre » par défaut),
  * aliases (nom de l'API => propriété de l'entité).
+ *
+ * Données de la boutique éditables depuis la page (09/10/2026) : variantes, options, valeurs et combinaisons de
+ * personnalisation, textes des formules d'abonnement, atouts de l'accueil. Natures ajoutées : integer (entier positif
+ * ou nul : stock), plain (une ligne de texte, sans balise), relation (identifiant d'une entité : relations[champ] =
+ * [classe, propriété]), dollars (cents dans l'API, dollars en base : supplément d'option), localized (texte par langue
+ * dans un champ JSON de l'entité), localized-lines (liste de lignes par langue ; maximum = nombre de lignes,
+ * lineMax = longueur d'une ligne), boolean.
  */
 final class LandingContentSpec
 {
@@ -57,6 +75,16 @@ final class LandingContentSpec
     public const COLOR = 'color';
     public const NUMBER = 'number';
     public const DATE = 'date';
+    public const INTEGER = 'integer';
+    public const PLAIN = 'plain';
+    public const RELATION = 'relation';
+    public const DOLLARS = 'dollars';
+    public const LOCALIZED = 'localized';
+    public const LOCALIZED_LINES = 'localized-lines';
+    public const BOOLEAN = 'boolean';
+
+    /** Étiquettes de cache des listes de produits (une variante, un stock, une personnalisation y apparaissent) */
+    private const PRODUCT_TAGS = ['products_all', 'products_by_category', 'products_by_offer', 'products_command', 'product_variants'];
 
     /** Ressource => entité, traduction, base des images, champs [nature, traduit, maximum, obligatoire], étiquettes de cache */
     public const RESOURCES = [
@@ -147,7 +175,63 @@ final class LandingContentSpec
             ],
             'tags' => ['explore_cards_all'],
         ],
+        // Données de la boutique éditables depuis la page (09/10/2026)
+        'product-variants' => [
+            'entity' => ProductVariant::class, 'translation' => null, 'images' => 'products',
+            'relations' => ['colorId' => [Color::class, 'color'], 'sizeId' => [Size::class, 'size']],
+            'fields' => [
+                'stockQuantity' => [self::INTEGER, false, 1000000, true], 'price' => [self::NUMBER, false, 100000000, false],
+                'colorId' => [self::RELATION, false, 0, false], 'sizeId' => [self::RELATION, false, 0, false],
+            ],
+            'tags' => self::PRODUCT_TAGS,
+        ],
+        'customization-options' => [
+            'entity' => ProductOption::class, 'translation' => ProductOptionTranslation::class, 'images' => 'options', 'titleField' => 'name',
+            'fields' => ['name' => [self::PLAIN, true, 255, true]],
+            'tags' => self::PRODUCT_TAGS,
+        ],
+        'customization-values' => [
+            'entity' => ProductOptionValue::class, 'translation' => ProductOptionValueTranslation::class, 'images' => 'options', 'titleField' => 'value',
+            'aliases' => ['name' => 'value', 'icon' => 'imagePreview'],
+            'fields' => [
+                'name' => [self::PLAIN, true, 255, true], 'priceDelta' => [self::DOLLARS, false, 100000000, false],
+                'icon' => [self::IMAGE, false, 255, false],
+            ],
+            'tags' => self::PRODUCT_TAGS,
+        ],
+        'customization-combinations' => [
+            'entity' => ProductCustomizationImage::class, 'translation' => null, 'images' => 'customization',
+            'aliases' => ['image' => 'imagePath', 'stock' => 'numberOfPieces'],
+            'fields' => ['image' => [self::IMAGE, false, 255, true], 'stock' => [self::INTEGER, false, 1000000, true]],
+            'tags' => self::PRODUCT_TAGS,
+        ],
+        // Formules d'abonnement : textes seulement (prix, périodicité, essai : administration, liés à Stripe)
+        'subscription-plans' => [
+            'entity' => SubscriptionPlan::class, 'translation' => null, 'images' => 'products',
+            'aliases' => ['name' => 'names', 'description' => 'descriptions', 'badge' => 'badges'],
+            'fields' => [
+                'name' => [self::LOCALIZED, false, 255, true], 'description' => [self::LOCALIZED, false, SubscriptionPlan::DESCRIPTION_LENGTH, false],
+                'features' => [self::LOCALIZED_LINES, false, SubscriptionPlan::FEATURES_MAX, false, SubscriptionPlan::FEATURE_LENGTH],
+                'badge' => [self::LOCALIZED, false, SubscriptionPlan::BADGE_LENGTH, false], 'highlighted' => [self::BOOLEAN, false, 0, true],
+            ],
+            'tags' => [],
+        ],
+        'features' => [
+            'entity' => Feature::class, 'translation' => FeatureTranslation::class, 'images' => 'icons', 'titleField' => 'title',
+            'aliases' => ['icon' => 'iconpath'],
+            'fields' => ['title' => [self::PLAIN, true, 100, true], 'icon' => [self::IMAGE, false, 255, false]],
+            'tags' => ['features_all'],
+        ],
     ];
+
+    /** Ressources de la boutique dont la sortie est construite par LandingContentOutput (services) */
+    public const SERVICE_OUTPUT = ['product-variants', 'customization-options', 'customization-values', 'customization-combinations', 'subscription-plans', 'features'];
+
+    /** Relation d'un champ « relation » : [classe de l'entité liée, propriété] */
+    public static function relation(string $resource, string $field): array
+    {
+        return self::RESOURCES[$resource]['relations'][$field];
+    }
 
     /** Nom du champ de langue de la traduction */
     public static function localeField(string $resource): string

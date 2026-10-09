@@ -22,6 +22,13 @@ class Feature implements TranslatableInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $iconpath = null;
 
+    /** Ordre d'affichage des atouts (éditeur de la page, PUT /api/features/order ; 09/10/2026) */
+    #[ORM\Column(options: ['default' => 0])]
+    private int $position = 0;
+
+    public function getPosition(): int { return $this->position; }
+    public function setPosition(int $position): static { $this->position = $position; return $this; }
+
     /**
      * @var Collection<int, FeatureTranslation>
      */

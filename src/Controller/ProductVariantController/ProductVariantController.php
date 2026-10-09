@@ -50,19 +50,6 @@ class ProductVariantController extends AbstractController
         return $this->json($variants, JsonResponse::HTTP_OK);
     }
 
-    #[Route('/api/products/{id}/variants', name: 'create_product_variant', methods: ['POST'])]
-    public function createProductVariant(Product $product, Request $request): JsonResponse
-    {
-        $data = json_decode($request->getContent(), true);
-        $inputDTO = ProductVariantInputDTO::fromArray($data);
-        $variant = $this->createProductVariantUseCase->execute($product, $inputDTO);
-        return $this->json($variant, JsonResponse::HTTP_CREATED);
-    }
-
-    #[Route('/api/product-variants/{id}', name: 'delete_product_variant', methods: ['DELETE'])]
-    public function deleteProductVariant(ProductVariant $variant): JsonResponse
-    {
-        $this->deleteProductVariantUseCase->execute($variant);
-        return new JsonResponse(['success' => 'Product variant deleted'], JsonResponse::HTTP_NO_CONTENT);
-    }
+    // Création et suppression d'une variante : BoutiqueCatalogController (09/10/2026 : règles, journal, ROLE_ADMIN ;
+    // la suppression était ouverte à tout client connecté)
 }

@@ -22,14 +22,15 @@ class PatchLandingContentUseCase
         private readonly TenantCacheService $cache,
         private readonly MediaUrlResolver $mediaUrlResolver,
         private readonly ContentAuditRecorder $audit,
-        private readonly TenantCurrencyProvider $currency
+        private readonly TenantCurrencyProvider $currency,
+        private readonly \App\Services\LandingContentService\LandingContentOutput $outputs
     ) {
     }
 
     /**
      * @throws HttpException 400, 404 ou 422 (corps de 422 : errors[] avec path et message, voir LandingContentException)
      */
-    public function execute(string $resource, int $id, mixed $body, string $locale, string $host): object
+    public function execute(string $resource, int $id, mixed $body, string $locale, string $host, ?int $variantId = null): mixed
     {
         if (!preg_match('/^[a-z]{2}$/', $locale)) {
             throw new LandingContentException(400, 'Langue invalide (?locale=fr, en…).');
@@ -52,13 +53,7 @@ class PatchLandingContentUseCase
         $this->audit->record($resource, $id, 'update', $before, $after, array_keys($values), $locale);
         $this->invalidate($resource, $id);
 
-        return $this->output($resource, $entity, $locale, $host);
-    }
-
-    private function output(string $resource, object $entity, string $locale, string $host): object
-    {
-
-        return LandingContentSpec::output($resource, $entity, $locale, $this->mediaUrlResolver, $host, $this->currency->code());
+        return $this->outputs->output($resource, $entity, $locale, $host, $variantId);
     }
 
     private function invalidate(string $resource, int $id): void

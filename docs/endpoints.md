@@ -222,7 +222,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (165)
+## Boutique et commun (174)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -269,6 +269,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/collections/{id}` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::deleteCollection` |
 | GET | `/api/collections` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::getCollections` |
 | GET | `/api/colors` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ColorsController\ColorController::getColors` |
+| POST | `/api/colors` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createColor` |
 | DELETE | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::deleteFraisDePort` |
 | GET | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::getFraisDePort` |
 | POST | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::createFraisDePort` |
@@ -276,6 +277,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/commandes/{id}/products` | ROLE_ADMIN | `Controller\ProductController\ProductController::createProductByCommande` |
 | POST | `/api/createcollections` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::createCollection` |
 | GET | `/api/currencies` | PUBLIC_ACCESS | `App\Controller\CurrencyController\CurrencyController` |
+| DELETE | `/api/customization-combinations/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::deleteCombination` |
+| POST | `/api/customization-options/{id}/values` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::addValue` |
+| DELETE | `/api/customization-values/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::deleteValue` |
 | GET | `/api/customization/config/{variantId}` | PUBLIC_ACCESS | `App\Controller\ProductVariantController\CustomizationConfigController` |
 | POST | `/api/dashboard/collection/{id}/close` | ROLE_ADMIN | `Controller\DashboardListCollectionController\DashboardListCollectionController::closeCollection` |
 | GET | `/api/dashboard/collection/{id}` | ROLE_ADMIN | `Controller\DashboardListCollectionController\DashboardListCollectionController::dashboardCollection` |
@@ -286,7 +290,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/entreprise/{id}` | ROLE_ADMIN | `Controller\EntrepriseController\EntrepriseController::updateEntreprise` |
 | POST | `/api/entreprise` | ROLE_ADMIN | `Controller\EntrepriseController\EntrepriseController::create` |
 | GET | `/api/explore-cards` | PUBLIC_ACCESS | `App\Controller\ExploreCardController\ExploreCardController` |
+| PUT | `/api/features/order` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::reorderFeatures` |
+| DELETE | `/api/features/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::deleteFeature` |
 | GET | `/api/features` | PUBLIC_ACCESS | `App\Controller\FeatureController\FeatureController` |
+| POST | `/api/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createFeature` |
 | DELETE | `/api/fournisseurs/{id}` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::deleteFournisseur` |
 | GET | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::getAllFournisseurs` |
 | POST | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::createFournisseur` |
@@ -309,14 +316,15 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/payment` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::processPayment` |
 | GET | `/api/payments/statistics/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\PaymentsController::getPaymentStatistics` |
 | GET | `/api/payments` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::getPayments` |
-| DELETE | `/api/product-variants/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ProductVariantController\ProductVariantController::deleteProductVariant` |
+| POST | `/api/product-variants/{id}/customization-combinations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::addCombination` |
+| DELETE | `/api/product-variants/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::deleteVariant` |
 | GET | `/api/products/by-category` | PUBLIC_ACCESS | `Controller\CategoriesControlleur\CategoryController::getProductsByCategory` |
 | GET | `/api/products/by-slug/{slug}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductBySlug` |
 | GET | `/api/products/{id}/reviews/eligibility` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::eligibility` |
 | GET | `/api/products/{id}/reviews` | PUBLIC_ACCESS | `Controller\ReviewController\ReviewController::list` |
 | POST | `/api/products/{id}/reviews` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::submit` |
 | GET | `/api/products/{id}/variants` | PUBLIC_ACCESS | `Controller\ProductVariantController\ProductVariantController::getProductVariants` |
-| POST | `/api/products/{id}/variants` | ROLE_ADMIN | `Controller\ProductVariantController\ProductVariantController::createProductVariant` |
+| POST | `/api/products/{id}/variants` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createVariant` |
 | DELETE | `/api/products/{id}` | ROLE_ADMIN | `Controller\ProductController\ProductController::deleteProduct` |
 | GET | `/api/products/{id}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductDetail` |
 | GET | `/api/products/{offer}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductsByOffer` |
@@ -332,6 +340,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/shipping/rates` | PUBLIC_ACCESS | `Controller\ShippingController\ShippingController::rates` |
 | POST | `/api/shipping/summary` | PUBLIC_ACCESS | `Controller\ShippingController\ShippingController::summary` |
 | GET | `/api/sizes` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\SizesController\SizeController::getSizes` |
+| POST | `/api/sizes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createSize` |
 | GET | `/api/social-networks` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\SocialNetworkController\SocialNetworkController::list` |
 | GET | `/api/statistiques/chiffre-affaires/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\StatistiqueGeneraleController::getChiffreAffaires` |
 | GET | `/api/statistiques/nombre-commandes/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\StatistiqueGeneraleController::getOrderStatistics` |
