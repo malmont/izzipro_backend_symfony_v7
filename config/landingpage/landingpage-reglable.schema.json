@@ -1476,7 +1476,7 @@
         "label": {
           "type": "string",
           "maxLength": 10000,
-          "description": "Libellé sous le chiffre (text contient le chiffre). Types : stat, price, customPrice, addressForm, orderDetail, subscriptionList, myReviews, quantity, rentalPack, deposit, stock, cartLines, cartTotals, checkoutSummary, checkoutShipping, checkoutAddress, checkoutIdentity, checkoutLicense, orderConfirmation, orderList, addressList, carrierList, profileForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
+          "description": "Libellé sous le chiffre (text contient le chiffre). Types : stat, price, customPrice, addressForm, orderDetail, subscriptionList, myReviews, cartBadge, quantity, rentalPack, deposit, stock, cartLines, cartTotals, checkoutSummary, checkoutShipping, checkoutAddress, checkoutIdentity, checkoutLicense, orderConfirmation, orderList, addressList, carrierList, profileForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "poster": {
           "$ref": "#/$defs/url",
@@ -1927,9 +1927,41 @@
           "enum": [
             "icon",
             "pill",
-            "text"
+            "text",
+            "button",
+            "outline",
+            "dot",
+            "stacked",
+            "total"
           ],
-          "description": "Badge du panier (navbar) : icône avec compteur (défaut), pastille, ou texte « Panier (n) ». Types : cartBadge."
+          "description": "Badge du panier (navbar) : icon (icône et compteur, défaut), pill (pastille), text (« Panier (n) »), button (bouton plein à la couleur d’accent), outline (bouton contour), dot (icône et point quand le panier n’est pas vide), stacked (icône, libellé dessous), total (icône et sous-total). Types : cartBadge."
+        },
+        "cartIcon": {
+          "enum": [
+            "bag",
+            "cart",
+            "basket"
+          ],
+          "description": "Badge du panier : icône dessinée à la couleur du bloc, bag (sac, défaut), cart (chariot) ou basket (panier). Types : cartBadge."
+        },
+        "counterPosition": {
+          "enum": [
+            "corner",
+            "inline"
+          ],
+          "description": "Badge du panier : compteur en coin de l’icône (corner, défaut) ou à côté (inline). Types : cartBadge."
+        },
+        "badgeTotal": {
+          "type": "boolean",
+          "description": "Badge du panier : affiche aussi le sous-total du panier. Types : cartBadge."
+        },
+        "badgeBump": {
+          "type": "boolean",
+          "description": "Badge du panier : le compteur rebondit à chaque ajout au panier. Types : cartBadge."
+        },
+        "cartPreview": {
+          "type": "boolean",
+          "description": "Badge du panier : aperçu au survol (trois premiers articles, sous-total, « Voir le panier », « Commander ») ; sans effet sur écran tactile. Types : cartBadge."
         },
         "summaryStyle": {
           "enum": [
@@ -5152,6 +5184,7 @@
                     "orderDetail",
                     "subscriptionList",
                     "myReviews",
+                    "cartBadge",
                     "quantity",
                     "rentalPack",
                     "deposit",
@@ -6391,6 +6424,106 @@
             "not": {
               "required": [
                 "badgeStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "cartBadge"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "cartIcon"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "cartBadge"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "counterPosition"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "cartBadge"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "badgeTotal"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "cartBadge"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "badgeBump"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "cartBadge"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "cartPreview"
               ]
             }
           }

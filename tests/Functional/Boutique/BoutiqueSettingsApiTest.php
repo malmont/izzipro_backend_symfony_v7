@@ -180,6 +180,48 @@ class BoutiqueSettingsApiTest extends WebTestCase
         $this->assertSame(200, $put->getStatusCode(), $put->getContent());
     }
 
+    public function testSevenSystemPagesCanBeShownInTheMenuAndStayVisible(): void
+    {
+        // Contrat du 09/10/2026 : catalogue, panier, paiement, compte, financement, connexion et inscription peuvent
+        // figurer dans le menu (isVisible: true) ; le serveur garde la valeur telle quelle
+        $this->loginAsAdmin();
+        $configuration = $this->configuration();
+        foreach ($configuration['tabs'] as $i => $tab) {
+            if (in_array($tab['system'] ?? null, ['cart', 'checkout'], true)) {
+                $configuration['tabs'][$i]['isVisible'] = true;
+            }
+        }
+        $configuration['tabs'][] = ['id' => 'sys-catalogue', 'system' => 'catalogue', 'isVisible' => true, 'title' => ['fr' => 'Boutique', 'en' => 'Shop'], 'sections' => [
+            ['id' => 'sg', 'componentKey' => 'Catalogue', 'componentTypeKey' => 'typeReglable', 'dataType' => null, 'reglableConfig' => $this->preset('catalogue-type-a')],
+        ]];
+        $put = $this->request('PUT', $this->encode(['configuration' => $configuration]));
+        $this->assertSame(200, $put->getStatusCode(), $put->getContent());
+        $stored = json_decode($this->request('GET')->getContent(), true);
+        $visible = array_column(array_filter($stored['tabs'], fn ($t) => isset($t['system'])), 'isVisible', 'system');
+        $this->assertSame(['cart' => true, 'checkout' => true, 'catalogue' => true], $visible);
+    }
+
+    public function testEnrichedCartBadgeIsAccepted(): void
+    {
+        // Contrat f254aec13928f7c0 (09/10/2026) : nouveaux styles, icône, position du compteur, sous-total, rebond, aperçu
+        $this->loginAsAdmin();
+        $navbar = $this->preset('boutique-navbar-type-a');
+        foreach ($navbar['blocks'] as $i => $block) {
+            if ($block['type'] === 'cartBadge') {
+                $navbar['blocks'][$i] = array_merge($block, ['badgeStyle' => 'stacked', 'cartIcon' => 'basket', 'counterPosition' => 'inline',
+                    'badgeTotal' => true, 'badgeBump' => true, 'cartPreview' => true, 'label' => 'Mon panier', 'translations' => ['en' => ['label' => 'My cart']]]);
+            }
+        }
+        $configuration = $this->configuration();
+        $configuration['navbar']['reglableConfig'] = $navbar;
+        $put = $this->request('PUT', $this->encode(['configuration' => $configuration]));
+        $this->assertSame(200, $put->getStatusCode(), $put->getContent());
+
+        $navbar['blocks'][array_search('cartBadge', array_column($navbar['blocks'], 'type'), true)]['cartIcon'] = 'sac';
+        $configuration['navbar']['reglableConfig'] = $navbar;
+        $this->assertSame(422, $this->request('PUT', $this->encode(['configuration' => $configuration]))->getStatusCode(), 'valeur hors du schéma');
+    }
+
     public function testMalformedBodiesAreRefused(): void
     {
         $this->loginAsAdmin();
