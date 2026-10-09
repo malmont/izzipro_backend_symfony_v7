@@ -95,6 +95,7 @@ class ReviewApiTest extends WebTestCase
         $this->assertSame([null, 0], [$detail['rating'], $detail['reviewCount']]);
         $mine = $this->json($this->request('GET', '/api/reviews/mine'));
         $this->assertSame([$id, 'pending', $product], [$mine[0]['id'], $mine[0]['status'], $mine[0]['product']['id']]);
+        $this->assertSame($this->db->fetchOne('SELECT slug FROM product WHERE id = ?', [$product]), $mine[0]['product']['slug'], 'lien vers la fiche');
 
         $owner = $this->session;
         $this->loginAs(['ROLE_USER_INTERNET'], 'Autre', 'Client');
@@ -157,6 +158,12 @@ class ReviewApiTest extends WebTestCase
         $this->assertCount(1, $approve);
         $this->client->request('GET', $approve->attr('href'), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertSame('approved', $this->db->fetchOne('SELECT status FROM reviews_product WHERE id = ?', [$id]));
+        // Refuser : statut « refusé », puis le formulaire de l'avis s'ouvre pour saisir le motif
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query(['crudAction' => 'index', 'crudControllerFqcn' => ReviewCrudController::class]), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->client->request('GET', $this->client->getCrawler()->filter('a[href*="rejectReview"]')->attr('href'), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->assertSame('rejected', $this->db->fetchOne('SELECT status FROM reviews_product WHERE id = ?', [$id]));
+        $this->assertStringContainsString('crudAction=edit', (string) $this->client->getResponse()->headers->get('Location'));
+        static::getContainer()->get(ReviewModerationService::class)->approve($this->review($id));
         $row = $this->db->fetchAssociative('SELECT rating_average, rating_count FROM product WHERE id = ?', [$product]);
         $this->assertSame([3.0, 1], [(float) $row['rating_average'], (int) $row['rating_count']], 'moyenne recalculée à la publication');
 

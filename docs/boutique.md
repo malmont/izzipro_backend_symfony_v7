@@ -295,7 +295,7 @@ publique du commerçant**, nom affiché « Marie D. ». Moyenne et nombre tenus 
 | `GET /api/products/{id}/reviews?page=&perPage=(≤ 50)&sort=recent\|highest\|lowest&rating=1-5&locale=` | public | `{ enabled, summary: { average (0,1 près) \| null, count, distribution: {"5": n … "1": n} }, policy, verifiedOnly, items: [{ id, rating, title, body, author, verifiedPurchase, date, updatedAt (si modifié), locale, reply: { body, date } \| null }], page, perPage, total, pages, sort, rating }` ; avis désactivés : `enabled: false`, liste vide |
 | `GET /api/products/{id}/reviews/eligibility` | client connecté | `{ canReview, reason: null \| disabled \| already_reviewed \| not_purchased, verifiedPurchase, minLength, review (le sien, avec status) }` |
 | `POST /api/products/{id}/reviews { rating, title?, body }` | client connecté | 201 `{ status: pending \| approved, review }` ; 403 `reason` disabled / not_purchased ; 409 already_reviewed ; 422 champs ; 429 au-delà de 5 avis par heure |
-| `GET /api/reviews/mine` | client connecté | ses avis, avec `status`, `rejectionReason`, `product { id, name }` |
+| `GET /api/reviews/mine` | client connecté | ses avis, avec `status`, `rejectionReason`, `product { id, name, slug }` |
 | `PUT /api/reviews/{id}` (champs envoyés seulement) | auteur | `{ status, review }` ; repasse en modération si le site modère ; 404 pour l'avis d'un autre |
 | `DELETE /api/reviews/{id}` | auteur | 204 |
 
@@ -306,7 +306,8 @@ publique du commerçant**, nom affiché « Marie D. ». Moyenne et nombre tenus 
   `auto` (publié aussitôt, retrait possible), longueur minimale (20), politique affichée `{"fr": …, "en": …}`.
 - Modération : EasyAdmin « Avis clients » (catalogue), en attente d'abord, compteur dans le menu ; Publier / Refuser
   depuis la liste (liens protégés par CSRF), réponse publique et motif de refus (montré au seul auteur) dans le
-  formulaire ; filtre `?status=pending|approved|rejected`. Pas de création d'avis dans l'administration.
+  formulaire (après « Refuser », le formulaire de l'avis s'ouvre pour saisir le motif ; sans motif, `rejectionReason`
+  reste `null`) ; filtre `?status=pending|approved|rejected`. Pas de création d'avis dans l'administration.
 - Code : `Entity/ReviewsProduct` (table historique `reviews_product`, colonnes `note` = rating et `comment` = body),
   `Entity/ReviewSetting`, `Repository/ReviewsProductRepository`, `OrderRepository::findLatestPurchaseOf`,
   `Services/ReviewService/` (`ReviewService` : droit d'écrire, dépôt, modification ; `ReviewModerationService` ;

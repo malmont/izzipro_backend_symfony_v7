@@ -12,7 +12,7 @@ final class ReviewOutputDto
 {
     /**
      * @param ?array{body: string, date: ?string} $reply
-     * @param ?array{id: int, name: ?string} $product
+     * @param ?array{id: int, name: ?string, slug: ?string} $product
      */
     public function __construct(
         public readonly int $id,
@@ -49,7 +49,7 @@ final class ReviewOutputDto
             $review->getReply() !== null ? ['body' => $review->getReply(), 'date' => $review->getRepliedAt()?->format(\DateTimeInterface::ATOM)] : null,
             $forAuthor ? $review->getStatus() : null,
             $forAuthor ? $review->getRejectionReason() : null,
-            $forAuthor && $product !== null ? ['id' => (int) $product->getId(), 'name' => $product->getTranslation($locale)?->getName() ?? $product->getName()] : null
+            $forAuthor && $product !== null ? ['id' => (int) $product->getId(), 'name' => $product->getTranslation($locale)?->getName() ?? $product->getName(), 'slug' => $product->getSlug()] : null
         );
     }
 }

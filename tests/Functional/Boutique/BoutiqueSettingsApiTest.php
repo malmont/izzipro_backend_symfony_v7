@@ -159,6 +159,27 @@ class BoutiqueSettingsApiTest extends WebTestCase
         $this->assertSame(200, $put->getStatusCode(), $put->getContent());
     }
 
+    public function testReviewBlocksAreAcceptedOnProductAndAccountPages(): void
+    {
+        // Contrat a60eed8939573dcc (09/10/2026) : résumé, liste, formulaire des avis (fiche produit) et « Mes avis » (compte)
+        $this->loginAsAdmin();
+        $product = $this->preset('product-type-a');
+        $account = $this->preset('account-type-a');
+        $types = array_column(array_merge($product['blocks'], $account['blocks']), 'type');
+        foreach (['reviewSummary', 'reviewList', 'reviewForm', 'myReviews'] as $type) {
+            $this->assertContains($type, $types);
+        }
+        $configuration = $this->configuration();
+        $configuration['tabs'][] = ['id' => 'sys-product', 'system' => 'product', 'isVisible' => false, 'title' => ['fr' => 'Produit', 'en' => 'Product'], 'sections' => [
+            ['id' => 'sp', 'componentKey' => 'ProductPage', 'componentTypeKey' => 'typeReglable', 'dataType' => null, 'reglableConfig' => $product],
+        ]];
+        $configuration['tabs'][] = ['id' => 'sys-account', 'system' => 'account', 'isVisible' => false, 'title' => ['fr' => 'Compte', 'en' => 'Account'], 'sections' => [
+            ['id' => 'sa', 'componentKey' => 'AccountPage', 'componentTypeKey' => 'typeReglable', 'dataType' => null, 'reglableConfig' => $account],
+        ]];
+        $put = $this->request('PUT', $this->encode(['configuration' => $configuration]));
+        $this->assertSame(200, $put->getStatusCode(), $put->getContent());
+    }
+
     public function testMalformedBodiesAreRefused(): void
     {
         $this->loginAsAdmin();

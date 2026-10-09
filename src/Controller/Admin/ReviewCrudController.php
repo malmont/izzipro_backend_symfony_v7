@@ -127,10 +127,11 @@ class ReviewCrudController extends BaseTenantCrudController
 
     public function rejectReview(AdminContext $context): Response
     {
-        return $this->moderate($context, 'rejectReview', fn (ReviewsProduct $r) => $this->moderation->reject($r), 'Avis refusé. Vous pouvez préciser le motif (montré à l\'auteur) en modifiant l\'avis.');
+        // Après le refus, le formulaire de l'avis s'ouvre : le motif (montré au seul auteur) se saisit tout de suite
+        return $this->moderate($context, 'rejectReview', fn (ReviewsProduct $r) => $this->moderation->reject($r), 'Avis refusé. Indiquez le motif ci-dessous : l\'auteur le verra dans « Mes avis ».', Action::EDIT);
     }
 
-    private function moderate(AdminContext $context, string $action, callable $apply, string $message): Response
+    private function moderate(AdminContext $context, string $action, callable $apply, string $message, string $then = Action::INDEX): Response
     {
         $index = $this->container->get(AdminUrlGenerator::class)->unsetAll()->setController(self::class)->setAction(Action::INDEX)->generateUrl();
         if (!$this->isCsrfActionValid($context, $action)) {
@@ -142,6 +143,9 @@ class ReviewCrudController extends BaseTenantCrudController
         if ($review instanceof ReviewsProduct) {
             $apply($review);
             $this->addFlash('success', $message);
+            if ($then === Action::EDIT) {
+                return $this->redirect($this->container->get(AdminUrlGenerator::class)->unsetAll()->setController(self::class)->setAction(Action::EDIT)->setEntityId($review->getId())->generateUrl());
+            }
         }
 
         return $this->redirect($index);
