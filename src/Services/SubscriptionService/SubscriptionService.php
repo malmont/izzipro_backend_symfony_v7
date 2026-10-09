@@ -77,9 +77,15 @@ final class SubscriptionService
         if ($carrierId !== null && $carrier === null) {
             throw new SubscriptionException(422, 'carrierId : transporteur introuvable', [['path' => 'carrierId', 'message' => 'transporteur introuvable']]);
         }
+        if ($carrier?->getCarrierAccountId()) {
+            // Le tarif d'un transporteur EasyPost dépend des colis et de l'adresse : impossible à facturer d'avance à chaque échéance
+            throw new SubscriptionException(422, 'carrierId : un abonnement exige un transporteur à prix fixe ou gratuit', [['path' => 'carrierId', 'message' => 'transporteur à tarif variable (EasyPost) : choisissez un transporteur à prix fixe ou gratuit']]);
+        }
+        $shippingAmount = $carrier !== null && !$carrier->isFree() ? (int) round((float) $carrier->getPrice()) : 0;
 
         $customerId = $this->stripe->ensureCustomer($user, $address);
         [, $priceId] = $this->stripe->ensurePrice($plan);
+        $shippingPriceId = $shippingAmount > 0 ? $this->stripe->ensureShippingPrice($carrier, $shippingAmount, $plan->getCurrency(), $plan->getInterval(), $plan->getIntervalCount()) : null;
         $automaticTax = $this->taxes->provider() === TaxEngine::PROVIDER_STRIPE;
         $taxRateIds = [];
         if (!$automaticTax && $address !== null) {
@@ -87,13 +93,13 @@ final class SubscriptionService
             $taxRateIds = $normalized ? $this->stripe->taxRateIds(array_map(fn ($t) => ['label' => (string) $t->getName(), 'rate' => (float) $t->getRate()], $this->taxes->applicableTaxes($normalized))) : [];
         }
 
-        $subscription = (new Subscription())->setUser($user)->setPlan($plan)->setQuantity($quantity)->setAddress($address)->setCarrier($carrier)->setStripeCustomerId($customerId);
+        $subscription = (new Subscription())->setUser($user)->setPlan($plan)->setQuantity($quantity)->setAddress($address)->setCarrier($carrier)->setShippingAmount($shippingAmount)->setStripeCustomerId($customerId);
         $em->persist($subscription);
         $em->flush();
 
         $state = $this->stripe->create($customerId, $priceId, $quantity, $plan->getTrialDays(), [
             'tenant_code' => (string) $this->tenantProvider->getTenantCode(), 'subscription_id' => (string) $subscription->getId(), 'user_id' => (string) $user->getId(),
-        ], $taxRateIds, $automaticTax);
+        ], $taxRateIds, $automaticTax, $shippingPriceId);
         $subscription->setStripeSubscriptionId($state['id']);
         $this->applyStripeState($subscription, $state);
         $em->flush();

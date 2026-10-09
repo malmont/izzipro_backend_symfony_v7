@@ -214,8 +214,9 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
   sites : 1 Incomplete … 7 Annulation).
 - **`GET /api/ordersuser`** : montants en **cents entiers** (`totalAmount`, `subTotal`, `priceTax`, `priceShipping`,
   lignes `unitPrice`, `totalPrice`), `currency`, `statusId`, `carrier { id, name }`, lignes avec `productVariantId`,
-  `booking { start, end, status, rateId }` et `customizationId` (toujours `null` : la personnalisation n'est pas
-  rattachée à la ligne de commande).
+  `booking { start, end, status, rateId }` et `customizationId` (combinaison de `GET /api/customization/config/{variantId}`
+  envoyée dans l'article du devis et de la commande ; vérifiée contre la variante, 422 sinon ; colonne
+  `order_items.customization_id`, migration `Version20261009150000`).
 - Tests : `tests/Functional/Boutique/CustomerAccountApiTest.php`.
 
 ## Abonnements (09/10/2026, § 11)
@@ -227,7 +228,9 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
 `SubscriptionMailer`), entités `SubscriptionPlan` et `Subscription`, DTO `SubscriptionPlanOutputDto`,
 `SubscriptionOutputDto`, EasyAdmin « Formules d'abonnement » et « Abonnements » (lecture). Schéma : tables
 `subscription_plan`, `subscription`, colonnes `order.subscription_id`, `order.stripe_invoice_id`,
-`user.stripe_customer_id` (migration `Version20261009130000`, script `scripts/migrate_all_v2_subscriptions.sh`).
+`user.stripe_customer_id` (migration `Version20261009130000`, script `scripts/migrate_all_v2_subscriptions.sh`) ;
+`subscription.shipping_amount` et `order_items.customization_id` (migration `Version20261009150000`, script
+`scripts/migrate_all_v2_subscription_shipping_customization.sh`).
 
 | Route | Accès | Contenu |
 |---|---|---|
@@ -243,6 +246,12 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
   `SubscriptionService::applyStripeState`).
 - Taxes : fournisseur `stripe` → `automatic_tax` de Stripe Billing ; `table` → taux de taxe Stripe créés d'après la table
   du site pour l'adresse de l'abonnement (`default_tax_rates`) ; sans adresse, pas de taxe.
+- Livraison de chaque échéance : `carrierId` doit être un transporteur **à prix fixe ou gratuit** (un transporteur EasyPost,
+  au tarif variable, est refusé en 422). Son prix, figé à la souscription (`subscription.shipping_amount`, cents, exposé
+  `shippingAmount`), devient une seconde ligne récurrente de l'abonnement Stripe (prix « Livraison — <transporteur> »,
+  code fiscal livraison, même rythme que la formule) ; la commande de l'échéance porte `shipping_cost` = ce montant et
+  le prix unitaire des articles = (sous-total − livraison) / quantité. Le changement de formule ne touche que la ligne
+  de la formule (`metadata.role = plan`).
 - Webhooks (`POST /api/stripe/webhook`, `HandleSubscriptionWebhookUseCase::TYPES`) : le site vient des métadonnées
   `tenant_code` posées à la souscription ; **signature exigée** (hors tests). `invoice.paid` → commande de l'échéance
   (`SubscriptionOrderFactory` : première variante du produit, quantité, montants de la facture en cents, paiement

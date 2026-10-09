@@ -5,7 +5,7 @@ namespace App\Dto;
 use App\Entity\Order;
 use App\Entity\Subscription;
 
-/** Abonnement d'un client (GET /api/subscriptions, …/{id}) : statut, période, adresse, transporteur, commandes des échéances */
+/** Abonnement d'un client (GET /api/subscriptions, …/{id}) : statut, période, adresse, transporteur, livraison par échéance (cents), commandes des échéances */
 final class SubscriptionOutputDto
 {
     /**
@@ -20,6 +20,7 @@ final class SubscriptionOutputDto
         public readonly bool $cancelAtPeriodEnd,
         public readonly ?AdressOutputDTO $address,
         public readonly ?array $carrier,
+        public readonly int $shippingAmount,
         public readonly string $createdAt,
         public readonly ?string $canceledAt,
         public readonly array $orders
@@ -40,6 +41,7 @@ final class SubscriptionOutputDto
             $subscription->isCancelAtPeriodEnd(),
             $subscription->getAddress() ? new AdressOutputDTO($subscription->getAddress()) : null,
             $carrier ? ['id' => (int) $carrier->getId(), 'name' => $carrier->getTranslation($locale)?->getName() ?? $carrier->getName()] : null,
+            $subscription->getShippingAmount(),
             $subscription->getCreatedAt()->format(\DateTimeInterface::ATOM),
             $subscription->getCanceledAt()?->format(\DateTimeInterface::ATOM),
             array_map(fn (Order $o) => [

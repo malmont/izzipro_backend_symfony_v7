@@ -52,22 +52,26 @@ class SubscriptionApiTest extends WebTestCase
         $plans = $this->json($this->request('GET', "/api/subscription-plans?productId=$product"));
         $address = $this->address();
 
-        $created = $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plans[0]['id'], 'quantity' => 2, 'addressId' => $address, 'carrierId' => 6]));
+        $created = $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plans[0]['id'], 'quantity' => 2, 'addressId' => $address, 'carrierId' => 2]));
+        $this->assertSame(422, $created->getStatusCode(), 'transporteur EasyPost (tarif variable) refusé pour un abonnement');
+        $created = $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plans[0]['id'], 'quantity' => 2, 'addressId' => $address, 'carrierId' => 1]));
         $this->assertSame(201, $created->getStatusCode(), $created->getContent());
         $body = json_decode($created->getContent(), true);
         $this->assertSame('incomplete', $body['status']);
         $this->assertStringStartsWith('pi_test_secret_sub_test_', $body['clientSecret']);
-        $this->assertSame([2, 'incomplete', false, 6], [$body['subscription']['quantity'], $body['subscription']['status'], $body['subscription']['cancelAtPeriodEnd'], $body['subscription']['carrier']['id']]);
+        $shipping = (int) round((float) $this->db->fetchOne('SELECT price FROM carrier WHERE id = 1'));
+        $this->assertSame([2, 'incomplete', false, 1, $shipping], [$body['subscription']['quantity'], $body['subscription']['status'], $body['subscription']['cancelAtPeriodEnd'], $body['subscription']['carrier']['id'], $body['subscription']['shippingAmount']]);
         $create = FakeSubscriptionStripeGateway::$calls[array_search('create', array_column(FakeSubscriptionStripeGateway::$calls, 0), true)];
         $this->assertSame(MV_TEST_TENANT_CODE, $create[5]['tenant_code'], 'le site voyage dans les métadonnées Stripe');
         $this->assertSame(['txr_test_TPS', 'txr_test_TVQ'], $create[6], 'taux de taxe de la table pour l\'adresse (QC)');
         $this->assertFalse($create[7], 'fournisseur table : pas de taxe automatique Stripe');
+        $this->assertSame("price_test_shipping_1_$shipping", $create[8], 'la livraison à prix fixe est une seconde ligne récurrente');
         $id = $body['subscriptionId'];
 
         // Facture payée (webhook) : abonnement actif, commande créée avec les montants de la facture
         $stripeId = $this->db->fetchOne('SELECT stripe_subscription_id FROM subscription WHERE id = ?', [$id]);
         $periodEnd = (new \DateTimeImmutable('+7 days'))->getTimestamp();
-        $webhook = $this->webhook('invoice.paid', ['id' => 'in_test_1', 'subscription' => $stripeId, 'paid' => true, 'subtotal' => 7000, 'tax' => 1048, 'total' => 8048, 'amount_paid' => 8048,
+        $webhook = $this->webhook('invoice.paid', ['id' => 'in_test_1', 'subscription' => $stripeId, 'paid' => true, 'subtotal' => 7000 + $shipping, 'tax' => 1048, 'total' => 8048 + $shipping, 'amount_paid' => 8048 + $shipping,
             'payment_intent' => 'pi_test_invoice_1', 'lines' => ['data' => [['period' => ['end' => $periodEnd], 'metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]],
             'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]);
         $this->assertSame(200, $webhook->getStatusCode(), $webhook->getContent());
@@ -76,11 +80,12 @@ class SubscriptionApiTest extends WebTestCase
         $detail = $this->json($this->request('GET', "/api/subscriptions/$id"));
         $this->assertSame('active', $detail['status']);
         $this->assertSame(1, count($detail['orders']), json_encode($detail));
-        $this->assertSame(8048, $detail['orders'][0]['total']);
-        $order = $this->db->fetchAssociative('SELECT sub_total, total_tax, total_amount, stripe_invoice_id, subscription_id FROM "order" WHERE id = ?', [$detail['orders'][0]['id']]);
-        $this->assertSame([7000.0, 1048.0, 8048.0, 'in_test_1', $id], [(float) $order['sub_total'], (float) $order['total_tax'], (float) $order['total_amount'], $order['stripe_invoice_id'], (int) $order['subscription_id']]);
+        $this->assertSame(8048 + $shipping, $detail['orders'][0]['total']);
+        $order = $this->db->fetchAssociative('SELECT sub_total, total_tax, total_amount, shipping_cost, stripe_invoice_id, subscription_id FROM "order" WHERE id = ?', [$detail['orders'][0]['id']]);
+        $this->assertSame([7000.0 + $shipping, 1048.0, 8048.0 + $shipping, (float) $shipping, 'in_test_1', $id], [(float) $order['sub_total'], (float) $order['total_tax'], (float) $order['total_amount'], (float) $order['shipping_cost'], $order['stripe_invoice_id'], (int) $order['subscription_id']]);
+        $this->assertSame(3500.0, (float) $this->db->fetchOne('SELECT unit_price FROM order_items WHERE order_associated_id = ?', [$detail['orders'][0]['id']]), 'prix unitaire sans la livraison');
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM payments WHERE stripe_payment_id = ?', ['pi_test_invoice_1']));
-        $this->webhook('invoice.paid', ['id' => 'in_test_1', 'subscription' => $stripeId, 'paid' => true, 'total' => 8048, 'amount_paid' => 8048, 'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]);
+        $this->webhook('invoice.paid', ['id' => 'in_test_1', 'subscription' => $stripeId, 'paid' => true, 'total' => 8048 + $shipping, 'amount_paid' => 8048 + $shipping, 'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]);
         $this->assertSame(1, count($this->json($this->request('GET', "/api/subscriptions/$id"))['orders']), 'facture rejouée : pas de seconde commande');
 
         // Gestion : pause, reprise, changement de formule, annulation à la fin de la période, reprise, annulation immédiate

@@ -3,6 +3,7 @@
 namespace App\Services\SubscriptionService;
 
 use App\Entity\Adress;
+use App\Entity\Carrier;
 use App\Entity\StripeConfig;
 use App\Entity\SubscriptionPlan;
 use App\Entity\User;
@@ -88,11 +89,33 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         return $ids;
     }
 
-    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax): array
+    public function ensureShippingPrice(Carrier $carrier, int $amount, string $currency, string $interval, int $intervalCount): string
     {
+        $key = 'stripe_shipping_price_' . hash('sha256', implode('|', [$this->account() ?? 'platform', $carrier->getId(), $amount, strtolower($currency), $interval, $intervalCount]));
+
+        return $this->cache->get($key, function (ItemInterface $item) use ($carrier, $amount, $currency, $interval, $intervalCount) {
+            $item->expiresAfter(86400 * 30);
+            $product = $this->call(fn (StripeClient $c, array $o) => $c->products->create([
+                'name' => sprintf('Livraison — %s', $carrier->getName()), 'tax_code' => 'txcd_92010001', // code fiscal « livraison » de Stripe Tax
+                'metadata' => ['tenant_code' => (string) $this->tenantProvider->getTenantCode(), 'carrier_id' => (string) $carrier->getId()],
+            ], $o));
+
+            return $this->call(fn (StripeClient $c, array $o) => $c->prices->create([
+                'product' => $product->id, 'unit_amount' => $amount, 'currency' => strtolower($currency),
+                'recurring' => ['interval' => $interval, 'interval_count' => $intervalCount],
+            ], $o))->id;
+        });
+    }
+
+    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null): array
+    {
+        $items = [['price' => $priceId, 'quantity' => $quantity, 'metadata' => ['role' => 'plan']]];
+        if ($shippingPriceId !== null) {
+            $items[] = ['price' => $shippingPriceId, 'quantity' => 1, 'metadata' => ['role' => 'shipping']];
+        }
         $params = [
             'customer' => $customerId,
-            'items' => [['price' => $priceId, 'quantity' => $quantity]],
+            'items' => $items,
             'payment_behavior' => 'default_incomplete',
             'payment_settings' => ['save_default_payment_method' => 'on_subscription'],
             'metadata' => $metadata,
@@ -155,7 +178,16 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
     public static function normalize(StripeSubscription|array $s): array
     {
         $a = $s instanceof StripeSubscription ? $s->toArray() : $s;
-        $item = $a['items']['data'][0] ?? null;
+        // Ligne de la formule : celle marquée role=plan (la livraison est une seconde ligne), sinon la première
+        $items = $a['items']['data'] ?? [];
+        $item = null;
+        foreach ($items as $candidate) {
+            if (($candidate['metadata']['role'] ?? 'plan') === 'plan') {
+                $item = $candidate;
+                break;
+            }
+        }
+        $item ??= $items[0] ?? null;
 
         return [
             'id' => (string) ($a['id'] ?? ''),

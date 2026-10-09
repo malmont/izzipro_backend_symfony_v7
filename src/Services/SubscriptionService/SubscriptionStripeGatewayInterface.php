@@ -3,6 +3,7 @@
 namespace App\Services\SubscriptionService;
 
 use App\Entity\Adress;
+use App\Entity\Carrier;
 use App\Entity\SubscriptionPlan;
 use App\Entity\User;
 
@@ -27,11 +28,15 @@ interface SubscriptionStripeGatewayInterface
      */
     public function taxRateIds(array $taxes): array;
 
+    /** Prix Stripe récurrent de la livraison d'un transporteur à prix fixe (créé au besoin), au rythme de la formule */
+    public function ensureShippingPrice(Carrier $carrier, int $amount, string $currency, string $interval, int $intervalCount): string;
+
     /**
      * @param array<string, string> $metadata
      * @param list<string> $taxRateIds
+     * @param ?string $shippingPriceId seconde ligne récurrente (livraison), facturée à chaque échéance
      */
-    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax): array;
+    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null): array;
 
     public function retrieve(string $subscriptionId): array;
 

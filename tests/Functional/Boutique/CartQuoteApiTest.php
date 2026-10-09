@@ -172,6 +172,29 @@ class CartQuoteApiTest extends WebTestCase
         $this->assertSame(400, $this->client->getResponse()->getStatusCode());
     }
 
+    public function testCustomizationCombinationIsCheckedAndKeptOnTheOrderLine(): void
+    {
+        $variant = $this->variant('DEMO-GOURDE');
+        $combination = (int) $this->db->fetchOne('SELECT MIN(id) FROM product_customization_image WHERE product_variant_id = ?', [$variant]);
+        $this->assertGreaterThan(0, $combination, 'la gourde de la démo a des combinaisons');
+
+        $refused = $this->request('POST', '/api/cart/quote', json_encode(['items' => [['productVariantId' => $variant, 'quantity' => 1, 'customizationId' => 999999]]]));
+        $this->assertSame(422, $refused->getStatusCode());
+        $this->assertSame('items[0].customizationId', json_decode($refused->getContent(), true)['errors'][0]['path']);
+
+        $quote = $this->quote(['items' => [['productVariantId' => $variant, 'quantity' => 1, 'customizationId' => $combination]]]);
+        $this->assertSame(200, $quote['status'], json_encode($quote['body']));
+        $this->assertSame($combination, $quote['body']['lines'][0]['customizationId']);
+
+        $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
+        $created = $this->request('POST', '/api/order/create', json_encode(['addressId' => $this->address(), 'carrierId' => 6, 'items' => [['productVariantId' => $variant, 'quantity' => 1, 'customizationId' => $combination]]]));
+        $this->assertSame(201, $created->getStatusCode(), $created->getContent());
+        $orderId = (int) json_decode($created->getContent())->orderId;
+        $this->assertSame($combination, (int) $this->db->fetchOne('SELECT customization_id FROM order_items WHERE order_associated_id = ?', [$orderId]));
+        $order = json_decode($this->request('GET', "/api/orders/$orderId")->getContent(), true);
+        $this->assertSame($combination, $order['orderItems'][0]['customizationId']);
+    }
+
     public function testOrderCreationUsesTheServerQuote(): void
     {
         $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_INTERNET']); // membre du personnel : commande sans paiement Stripe

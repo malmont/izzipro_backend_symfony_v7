@@ -82,11 +82,13 @@ final class SubscriptionOrderFactory
         // API 2025-03+ : « tax » n'est plus rempli (total_taxes) ; les taxes sont la différence total − sous-total
         $tax = isset($invoice['tax']) ? (int) $invoice['tax'] : max(0, $total - $subtotal);
 
+        // La livraison est une ligne récurrente de la facture Stripe : son montant (figé à la souscription) sort du prix des articles
+        $shipping = min($subscription->getShippingAmount(), $subtotal);
         $order = $this->orders->createOrder($user, $source, $address, $subscription->getCarrier(), $status, $type);
         $order->setSubscription($subscription)->setStripeInvoiceId($invoiceId !== '' ? $invoiceId : null)
-            ->setSubTotal((float) $subtotal)->setTotalTax((float) $tax)->setTotalAmount((float) $total)->setShippingCost(0.0);
+            ->setSubTotal((float) $subtotal)->setTotalTax((float) $tax)->setTotalAmount((float) $total)->setShippingCost((float) $shipping);
         $em->persist($order);
-        $item = $this->items->createOrderItem($order, $variant, $quantity, (float) ($subtotal / $quantity));
+        $item = $this->items->createOrderItem($order, $variant, $quantity, (float) (($subtotal - $shipping) / $quantity));
         $em->persist($item);
         if ($tax > 0) {
             $orderTax = (new OrderTax())->setOrderTax($order)->setAmount((float) $tax);

@@ -24,6 +24,7 @@ class OrderItemDTO
     public ?string $productSaleUnit = null;
     
     public ?array $booking = null;
+    public ?int $customizationId = null;
 
     public array $options = [];
 
@@ -39,6 +40,7 @@ class OrderItemDTO
         
         $this->productId = $product->getId();
         $this->productVariantId = $variant->getId();
+        $this->customizationId = $orderItem->getCustomization()?->getId();
         $this->productVariantName = $product->getName();
         
         // Use the snapshot stored in the entity first, fall back to product if empty (for older orders)
@@ -87,7 +89,7 @@ class OrderItemDTO
             'totalPrice' => (int) round($this->totalPrice),
             'productId' => $this->productId,
             'productVariantId' => $this->productVariantId,
-            'customizationId' => null, // la personnalisation n'est pas rattachée à la ligne de commande (à venir)
+            'customizationId' => $this->customizationId, // combinaison de /api/customization/config choisie à la commande
             'productVariantName' => $this->productVariantName,
             'productSaleUnit' => $this->productSaleUnit,
             'productVariantColor' => $this->productVariantColor,

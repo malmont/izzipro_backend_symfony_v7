@@ -98,7 +98,12 @@ final class CartQuoteCalculator
                     continue;
                 }
                 $line['unitPrice'] = (int) round($variant->getPrice() ?? $product->getEffectivePrice());
-                $line['customizationId'] = is_numeric($item['customizationId'] ?? null) ? (int) $item['customizationId'] : null;
+                $customizationId = is_numeric($item['customizationId'] ?? null) ? (int) $item['customizationId'] : null;
+                if ($customizationId !== null && !$variant->getProductCustomizationImages()->exists(fn ($k, $c) => $c->getId() === $customizationId)) {
+                    $errors[] = ['path' => "$path.customizationId", 'message' => 'combinaison de personnalisation inconnue pour cette variante'];
+                    continue;
+                }
+                $line['customizationId'] = $customizationId;
             }
             $line['total'] = $line['unitPrice'] * $quantity;
             $subtotal += $line['total'];

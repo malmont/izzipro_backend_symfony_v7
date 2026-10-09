@@ -40,6 +40,11 @@ class OrderItems
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $saleUnit = null;
 
+    /** Combinaison de personnalisation choisie (GET /api/customization/config/{variantId}), gardée pour la fiche de commande */
+    #[ORM\ManyToOne(targetEntity: ProductCustomizationImage::class)]
+    #[ORM\JoinColumn(name: 'customization_id', nullable: true, onDelete: 'SET NULL')]
+    private ?ProductCustomizationImage $customization = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -162,6 +167,18 @@ class OrderItems
     public function setSaleUnit(?string $saleUnit): self
     {
         $this->saleUnit = $saleUnit;
+        return $this;
+    }
+
+    public function getCustomization(): ?ProductCustomizationImage
+    {
+        return $this->customization;
+    }
+
+    public function setCustomization(?ProductCustomizationImage $customization): static
+    {
+        $this->customization = $customization;
+
         return $this;
     }
 }

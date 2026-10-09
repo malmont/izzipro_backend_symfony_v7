@@ -58,6 +58,10 @@ class Subscription
     #[ORM\JoinColumn(name: 'carrier_id', nullable: true, onDelete: 'SET NULL')]
     private ?Carrier $carrier = null;
 
+    /** Livraison facturée à chaque échéance, en cents : prix fixe du transporteur à la souscription (0 sans transporteur ou gratuit) */
+    #[ORM\Column(name: 'shipping_amount', options: ['default' => 0])]
+    private int $shippingAmount = 0;
+
     #[ORM\Column(name: 'stripe_subscription_id', length: 64, nullable: true)]
     private ?string $stripeSubscriptionId = null;
 
@@ -98,6 +102,8 @@ class Subscription
     public function setAddress(?Adress $address): static { $this->address = $address; return $this; }
     public function getCarrier(): ?Carrier { return $this->carrier; }
     public function setCarrier(?Carrier $carrier): static { $this->carrier = $carrier; return $this; }
+    public function getShippingAmount(): int { return $this->shippingAmount; }
+    public function setShippingAmount(int $cents): static { $this->shippingAmount = max(0, $cents); return $this; }
     public function getStripeSubscriptionId(): ?string { return $this->stripeSubscriptionId; }
     public function setStripeSubscriptionId(?string $id): static { $this->stripeSubscriptionId = $id; return $this; }
     public function getStripeCustomerId(): ?string { return $this->stripeCustomerId; }

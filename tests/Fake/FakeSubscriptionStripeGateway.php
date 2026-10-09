@@ -3,6 +3,7 @@
 namespace App\Tests\Fake;
 
 use App\Entity\Adress;
+use App\Entity\Carrier;
 use App\Entity\SubscriptionPlan;
 use App\Entity\User;
 use App\Services\SubscriptionService\SubscriptionStripeGatewayInterface;
@@ -53,15 +54,22 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
         return array_map(fn ($t) => 'txr_test_' . preg_replace('/\W/', '', $t['label']), $taxes);
     }
 
-    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax): array
+    public function ensureShippingPrice(Carrier $carrier, int $amount, string $currency, string $interval, int $intervalCount): string
+    {
+        self::$calls[] = ['ensureShippingPrice', $carrier->getId(), $amount, $currency, $interval, $intervalCount];
+
+        return sprintf('price_test_shipping_%d_%d', $carrier->getId(), $amount);
+    }
+
+    public function create(string $customerId, string $priceId, int $quantity, int $trialDays, array $metadata, array $taxRateIds, bool $automaticTax, ?string $shippingPriceId = null): array
     {
         $id = 'sub_test_' . bin2hex(random_bytes(4)); // unique d'un test à l'autre (la base de test persiste)
         self::$subscriptions[$id] = [
             'id' => $id, 'status' => $trialDays > 0 ? 'trialing' : 'incomplete', 'currentPeriodEnd' => (new \DateTimeImmutable('+1 month'))->getTimestamp(),
             'cancelAtPeriodEnd' => false, 'paused' => false, 'clientSecret' => 'pi_test_secret_' . $id, 'itemId' => "si_test_{$id}", 'canceledAt' => null,
-            'priceId' => $priceId, 'quantity' => $quantity, 'customerId' => $customerId, 'metadata' => $metadata, 'taxRateIds' => $taxRateIds, 'automaticTax' => $automaticTax,
+            'priceId' => $priceId, 'quantity' => $quantity, 'customerId' => $customerId, 'metadata' => $metadata, 'taxRateIds' => $taxRateIds, 'automaticTax' => $automaticTax, 'shippingPriceId' => $shippingPriceId,
         ];
-        self::$calls[] = ['create', $id, $priceId, $quantity, $trialDays, $metadata, $taxRateIds, $automaticTax];
+        self::$calls[] = ['create', $id, $priceId, $quantity, $trialDays, $metadata, $taxRateIds, $automaticTax, $shippingPriceId];
 
         return self::$subscriptions[$id];
     }

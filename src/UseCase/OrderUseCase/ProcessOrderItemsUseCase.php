@@ -59,6 +59,9 @@ class ProcessOrderItemsUseCase
             }
 
             $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $line['quantity'], (float) $line['unitPrice']);
+            if (!empty($line['customizationId'])) { // combinaison vérifiée par le devis
+                $orderItem->setCustomization($em->getRepository(\App\Entity\ProductCustomizationImage::class)->find((int) $line['customizationId']));
+            }
 
             if (isset($itemData['licenseNumber'])) {
                 $orderItem->setLicenseNumber($itemData['licenseNumber']);
