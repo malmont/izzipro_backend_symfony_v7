@@ -99,11 +99,15 @@ final class CartQuoteCalculator
                 }
                 $line['unitPrice'] = (int) round($variant->getPrice() ?? $product->getEffectivePrice());
                 $customizationId = is_numeric($item['customizationId'] ?? null) ? (int) $item['customizationId'] : null;
-                if ($customizationId !== null && !$variant->getProductCustomizationImages()->exists(fn ($k, $c) => $c->getId() === $customizationId)) {
+                $combination = $customizationId !== null ? $variant->getProductCustomizationImages()->filter(fn ($c) => $c->getId() === $customizationId)->first() : null;
+                if ($customizationId !== null && !$combination) {
                     $errors[] = ['path' => "$path.customizationId", 'message' => 'combinaison de personnalisation inconnue pour cette variante'];
                     continue;
                 }
+                // Personnalisation : supplément des options de la combinaison ajouté au prix unitaire (devis, intent, ligne)
                 $line['customizationId'] = $customizationId;
+                $line['customizationPrice'] = $combination ? $combination->priceDeltaCents() : 0;
+                $line['unitPrice'] += $line['customizationPrice'];
             }
             $line['total'] = $line['unitPrice'] * $quantity;
             $subtotal += $line['total'];

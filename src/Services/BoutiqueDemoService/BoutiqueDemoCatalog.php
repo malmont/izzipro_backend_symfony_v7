@@ -247,4 +247,32 @@ final class BoutiqueDemoCatalog
         ['Sur l\'eau', 'On the water', 'Locations nautiques', 'Water rentals', 'Kayaks, planches et pontons à réserver en ligne.', 'Kayaks, boards and pontoons to book online.', '/catalogue', '#0369a1'],
         ['Cadeaux', 'Gifts', 'À personnaliser', 'Personalize it', 'Gourdes gravées et paniers offerts.', 'Engraved bottles and gift baskets.', '/catalogue', '#7c3aed'],
     ];
+
+    /**
+     * Avis de démonstration (09/10/2026), publiés : [code produit, prénom, nom, note, titre, texte, il y a N jours,
+     * réponse du commerçant ou null, langue]. Des notes basses comprises : un site honnête les montre aussi. Auteurs
+     * fictifs (comptes @example.invalid, sans achat : pas de badge « Achat vérifié ») ; le client de démonstration
+     * reçoit en plus un avis vérifié sur chaque produit qu'il a réellement commandé.
+     */
+    public const REVIEWS = [
+        ['CASQUETTE', 'Sophie', 'Lavoie', 5, 'Broderie impeccable', 'La broderie est nette et le tissu respire bien. Je la porte tous les jours au chalet.', 42, null, 'fr'],
+        ['CASQUETTE', 'Marc', 'Tremblay', 4, 'Taille un peu juste', "Belle finition, mais elle taille petit : prenez une taille au-dessus si vous hésitez.", 30, "Merci Marc ! Nous avons ajouté un guide des tailles sur la fiche.", 'fr'],
+        ['CASQUETTE', 'Julie', 'Roy', 2, 'Couleur différente', "Le bleu est plus foncé que sur la photo. La qualité est correcte, mais je suis déçue de la teinte.", 18, "Désolés Julie : nous avons refait les photos en lumière du jour. Écrivez-nous pour un échange sans frais.", 'fr'],
+        ['GOURDE', 'Nadia', 'Bouchard', 5, 'Gravure superbe', "Gravure précise de nos initiales, livrée en quatre jours. L'eau reste fraîche toute la journée.", 25, null, 'fr'],
+        ['GOURDE', 'Thomas', 'Gagnon', 4, null, "Garde le froid plus de 12 heures. Le bouchon est un peu dur à dévisser au début.", 12, null, 'fr'],
+        ['KAYAK', 'Étienne', 'Pelletier', 5, 'Sortie magique', "Kayak stable et léger, idéal pour une première sortie en mer. L'équipe nous a bien expliqué les consignes.", 35, "Merci Étienne, au plaisir de vous revoir cet été !", 'fr'],
+        ['KAYAK', 'Claire', 'Morin', 3, 'Bien, mais attente', "Le kayak était parfait, mais nous avons attendu 30 minutes au comptoir à l'heure du départ.", 9, null, 'fr'],
+        ['CAFE', 'Antoine', 'Côté', 5, 'Mon café du matin', "Arômes de chocolat et de fruits rouges, mouture parfaite pour mon espresso.", 50, null, 'fr'],
+        ['CAFE', 'Isabelle', 'Girard', 4, null, "Très bon café, un peu acide à mon goût en filtre, excellent en piston.", 21, null, 'fr'],
+        ['SWEAT', 'Lucas', 'Fortin', 4, 'Chaud et doux', "Coupe agréable, molleton épais. Les manches sont un peu longues.", 28, null, 'fr'],
+        ['SWEAT', 'Chloé', 'Bergeron', 1, 'Bouloches après lavage', "Après deux lavages à froid, des bouloches sont apparues sur les manches.", 7, "Chloé, merci du signalement : nous vous envoyons un remplacement et avons transmis le lot à notre fournisseur.", 'fr'],
+        ['PANIER', 'Mélanie', 'Caron', 5, 'Des légumes ultra frais', "Le panier arrive chaque mardi, toujours varié. La gestion de l'abonnement en ligne est simple.", 15, null, 'fr'],
+        ['SAC', 'Emily', 'Walker', 5, 'Great travel bag', "Fits perfectly in the cabin, sturdy zippers and lots of pockets. Used it for a two-week trip.", 20, "Thanks Emily, enjoy your next trip!", 'en'],
+    ];
+
+    /** Politique des avis affichée sous la liste (réglages du site de démonstration) */
+    public const REVIEW_POLICY = [
+        'fr' => "Avis vérifiés : seuls nos clients ayant commandé le produit peuvent écrire. Nous publions tous les avis, positifs comme négatifs ; nous retirons seulement les propos injurieux, les données personnelles et les avis hors sujet.",
+        'en' => "Verified reviews: only customers who ordered the product can write one. We publish every review, positive or negative; we only remove abusive language, personal data and off-topic reviews.",
+    ];
 }

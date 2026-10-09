@@ -61,6 +61,9 @@ class ProductDetailedOutputDTO
     public bool $customizable;
     public array $pricing;
     public ?array $vehicleDetails;
+    /** Avis publiés : moyenne de 0 à 5 arrondie à 0,1 (null sans avis) et nombre */
+    public ?float $rating;
+    public int $reviewCount;
 
     public function __construct(Product $product, string $host, string $locale = 'fr', string $currency = ProductCommerceDto::DEFAULT_CURRENCY)
     {

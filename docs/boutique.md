@@ -145,11 +145,14 @@ d'article**.
   customizationId? }], carrierId?, shippingPrice? }`. Anciens noms encore lus : `priceShipping`, `rental`, `booking`
   global du panier, `duration_type`, `rentalPackId`.
 - Sortie : `{ lines: [{ productVariantId, productId, name, kind: sale | rental, quantity, unitPrice, total,
-  customizationId?, booking?: { start, end, rateId, rateName, durationType, units, rate, passengers, passengerFee,
-  deposit } }], subtotal, shipping, taxes: [{ label, rate, amount }], deposit, total, currency, carrier: { id, name,
+  customizationId?, customizationPrice?, booking?: { start, end, rateId, rateName, durationType, units, rate, passengers,
+  passengerFee, deposit } }], subtotal, shipping, taxes: [{ label, rate, amount }], deposit, total, currency, carrier: { id, name,
   isFree } | null }`. `total` = articles + livraison + taxes ; la **caution** (`deposit`) est rapportée à part.
 - Vente : `unitPrice` = prix de la variante (`product_variant.price`) sinon prix effectif du produit (promotion en
-  cours) ; stock de la variante vérifié. Une ligne est une location si la location est activée et que la ligne porte
+  cours) ; stock de la variante vérifié. Personnalisation (`customizationId`, 09/10/2026) : la combinaison doit appartenir à la
+  variante (422 sinon) ; son supplément `customizationPrice` (somme des `price_delta` de ses options, en dollars en
+  base, `ProductCustomizationImage::priceDeltaCents`) s'ajoute à `unitPrice`, donc au devis, à l'intent Stripe, au prix
+  unitaire de la ligne de commande et aux taxes. Une ligne est une location si la location est activée et que la ligne porte
   des dates, ou si le produit ne se vend pas (`RentalLineResolver`) ; un produit vendu et loué sans dates = achat.
 - Location : `unitPrice` = tarif × unités (+ `extraPassengerFee` × `passengers`). Tarif : forfait `rateId` (doit
   appartenir aux catégories du produit) sinon le premier forfait des catégories ; `durationType` : `hour`, `halfDay`,
@@ -277,6 +280,45 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
   l'objet signé du SDK se convertit par `toArray()` (le transtypage `(array)` ne donne que ses propriétés internes).
 - Démo : trois formules sur « Panier bio de la semaine » (`BoutiqueDemoCatalog::SUBSCRIPTION_PLANS`).
 - Tests : `tests/Functional/Boutique/SubscriptionApiTest.php` (Stripe simulé : souscription, gestion, webhooks, refus).
+
+## Avis clients (09/10/2026)
+
+Pratique des grandes boutiques, ramenée à l'essentiel : **avis vérifiés** (par défaut, seul un client dont une commande
+payée et non annulée contient le produit peut écrire : statuts 2 à 6, vente, location ou échéance d'abonnement ; badge
+`verifiedPurchase`), **un avis par client et par produit** (note 1 à 5, titre facultatif 120 car., texte 2 000 car. en
+clair : balises retirées), **modération sur le contenu, jamais sur la note** (la loi interdit d'écarter les avis
+négatifs en France, dans l'UE et aux États-Unis ; la politique affichée dit comment les avis sont contrôlés), **réponse
+publique du commerçant**, nom affiché « Marie D. ». Moyenne et nombre tenus sur le produit à chaque publication.
+
+| Route | Accès | Réponse |
+|---|---|---|
+| `GET /api/products/{id}/reviews?page=&perPage=(≤ 50)&sort=recent\|highest\|lowest&rating=1-5&locale=` | public | `{ enabled, summary: { average (0,1 près) \| null, count, distribution: {"5": n … "1": n} }, policy, verifiedOnly, items: [{ id, rating, title, body, author, verifiedPurchase, date, updatedAt (si modifié), locale, reply: { body, date } \| null }], page, perPage, total, pages, sort, rating }` ; avis désactivés : `enabled: false`, liste vide |
+| `GET /api/products/{id}/reviews/eligibility` | client connecté | `{ canReview, reason: null \| disabled \| already_reviewed \| not_purchased, verifiedPurchase, minLength, review (le sien, avec status) }` |
+| `POST /api/products/{id}/reviews { rating, title?, body }` | client connecté | 201 `{ status: pending \| approved, review }` ; 403 `reason` disabled / not_purchased ; 409 already_reviewed ; 422 champs ; 429 au-delà de 5 avis par heure |
+| `GET /api/reviews/mine` | client connecté | ses avis, avec `status`, `rejectionReason`, `product { id, name }` |
+| `PUT /api/reviews/{id}` (champs envoyés seulement) | auteur | `{ status, review }` ; repasse en modération si le site modère ; 404 pour l'avis d'un autre |
+| `DELETE /api/reviews/{id}` | auteur | 204 |
+
+- Produits (`ProductCommerceDto`, les trois DTO produit) : `rating` (moyenne à 0,1 près, `null` sans avis publié) et
+  `reviewCount`, lus par le bloc Étoiles du front (`item.rating`).
+- Réglages par site (EasyAdmin « Réglages des avis », table `review_setting`, une ligne ; sans ligne : valeurs par
+  défaut) : avis activés, acheteurs vérifiés seulement (défaut), modération `manual` (défaut, avant publication) ou
+  `auto` (publié aussitôt, retrait possible), longueur minimale (20), politique affichée `{"fr": …, "en": …}`.
+- Modération : EasyAdmin « Avis clients » (catalogue), en attente d'abord, compteur dans le menu ; Publier / Refuser
+  depuis la liste (liens protégés par CSRF), réponse publique et motif de refus (montré au seul auteur) dans le
+  formulaire ; filtre `?status=pending|approved|rejected`. Pas de création d'avis dans l'administration.
+- Code : `Entity/ReviewsProduct` (table historique `reviews_product`, colonnes `note` = rating et `comment` = body),
+  `Entity/ReviewSetting`, `Repository/ReviewsProductRepository`, `OrderRepository::findLatestPurchaseOf`,
+  `Services/ReviewService/` (`ReviewService` : droit d'écrire, dépôt, modification ; `ReviewModerationService` ;
+  `ReviewAggregateService` : moyenne du produit et caches ; `ReviewSettingsProvider`), `UseCase/ReviewUseCase/`,
+  `Controller/ReviewController/ReviewController`, `Dto/ReviewInputDto`, `Dto/ReviewOutputDto`, EasyAdmin
+  `ReviewCrudController`, `ReviewSettingCrudController`. Limite `review_submit` (`rate_limiter.yaml`). Migration
+  `Version20261009170000`, script `scripts/migrate_all_v2_reviews.sh`.
+- Démo : 13 avis publiés (dont des notes basses, certaines avec réponse) d'auteurs fictifs `@example.invalid`, plus un
+  avis vérifié du client de démonstration sur les produits qu'il a commandés ; politique affichée
+  (`BoutiqueDemoCatalog::REVIEWS`, `REVIEW_POLICY`).
+- Tests : `tests/Functional/Boutique/ReviewApiTest.php`.
+- À venir (seconde version) : photos, votes « utile », signalement, courriel d'invitation après livraison.
 
 ## Boutique de démonstration (site `demo`, 08/10/2026)
 

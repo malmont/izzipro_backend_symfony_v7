@@ -222,7 +222,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (159)
+## Boutique et commun (165)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -312,6 +312,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/product-variants/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ProductVariantController\ProductVariantController::deleteProductVariant` |
 | GET | `/api/products/by-category` | PUBLIC_ACCESS | `Controller\CategoriesControlleur\CategoryController::getProductsByCategory` |
 | GET | `/api/products/by-slug/{slug}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductBySlug` |
+| GET | `/api/products/{id}/reviews/eligibility` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::eligibility` |
+| GET | `/api/products/{id}/reviews` | PUBLIC_ACCESS | `Controller\ReviewController\ReviewController::list` |
+| POST | `/api/products/{id}/reviews` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::submit` |
 | GET | `/api/products/{id}/variants` | PUBLIC_ACCESS | `Controller\ProductVariantController\ProductVariantController::getProductVariants` |
 | POST | `/api/products/{id}/variants` | ROLE_ADMIN | `Controller\ProductVariantController\ProductVariantController::createProductVariant` |
 | DELETE | `/api/products/{id}` | ROLE_ADMIN | `Controller\ProductController\ProductController::deleteProduct` |
@@ -321,6 +324,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/productsid/{id}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductById` |
 | GET | `/api/profile` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\Account\ProfileApiController::getProfile` |
 | PATCH, PUT | `/api/profile` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\Account\ProfileApiController::updateProfile` |
+| GET | `/api/reviews/mine` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::mine` |
+| DELETE | `/api/reviews/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::delete` |
+| PUT, PATCH | `/api/reviews/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::update` |
 | POST | `/api/shipping/buy` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ShippingController\ShippingController::buy` |
 | POST | `/api/shipping/parcels` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ShippingController\ShippingController::parcels` |
 | POST | `/api/shipping/rates` | PUBLIC_ACCESS | `Controller\ShippingController\ShippingController::rates` |

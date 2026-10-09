@@ -178,4 +178,17 @@ class OrderRepository extends EntityRepository
             ->leftJoin('oi.booking', 'bk')
             ->addSelect('oi', 'sa', 'os', 'st', 'stt', 'pv', 'p', 'psu', 'pvc', 'pvs', 'pvov', 'pvpo', 'bk');
     }
+
+    /**
+     * Dernière commande payée et non annulée d'un client contenant un produit (achat, location ou échéance
+     * d'abonnement) : preuve d'achat d'un avis. Statuts 2 à 6 : En cours … Livrée (1 Incomplete et 7 Annulation exclus).
+     */
+    public function findLatestPurchaseOf(\App\Entity\User $user, \App\Entity\Product $product): ?\App\Entity\Order
+    {
+        return $this->createQueryBuilder('o')
+            ->join('o.orderItems', 'i')->join('i.productVariant', 'v')
+            ->where('o.userId = :user')->andWhere('v.product = :product')->andWhere('IDENTITY(o.status) IN (:statuses)')
+            ->setParameter('user', $user)->setParameter('product', $product)->setParameter('statuses', [2, 3, 4, 5, 6])
+            ->orderBy('o.id', 'DESC')->setMaxResults(1)->getQuery()->getOneOrNullResult();
+    }
 }

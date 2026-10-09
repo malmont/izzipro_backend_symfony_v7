@@ -110,4 +110,18 @@ class ProductCustomizationImage
     {
         return 'Image #' . ($this->getId() ?? 'Nouvelle');
     }
+
+    /**
+     * Supplément de la combinaison en cents : somme des suppléments de ses options (stockés en dollars sur chaque
+     * valeur d'option). Même calcul pour la configuration affichée et pour le devis du panier.
+     */
+    public function priceDeltaCents(): int
+    {
+        $delta = 0.0;
+        foreach ($this->getOptionValues() as $value) {
+            $delta += (float) ($value->getPriceDelta() ?? 0.0);
+        }
+
+        return (int) round($delta * 100);
+    }
 }

@@ -181,6 +181,13 @@ class Product implements TranslatableInterface
     #[ORM\Column(name: 'subscription_enabled', options: ['default' => false])]
     private bool $subscriptionEnabled = false;
 
+    /** Moyenne des avis publiés (1 à 5, deux décimales), null sans avis ; tenue par ReviewAggregateService */
+    #[ORM\Column(name: 'rating_average', nullable: true)]
+    private ?float $ratingAverage = null;
+
+    #[ORM\Column(name: 'rating_count', options: ['default' => 0])]
+    private int $ratingCount = 0;
+
     /** Bouton « Personnaliser » : options à combinaisons (/api/customization/config/{variantId}) */
     #[ORM\Column(options: ['default' => false])]
     private bool $customizable = false;
@@ -887,6 +894,11 @@ class Product implements TranslatableInterface
     {
         return $this->subscriptionEnabled;
     }
+
+    public function getRatingAverage(): ?float { return $this->ratingAverage; }
+    public function setRatingAverage(?float $average): self { $this->ratingAverage = $average; return $this; }
+    public function getRatingCount(): int { return $this->ratingCount; }
+    public function setRatingCount(int $count): self { $this->ratingCount = max(0, $count); return $this; }
 
     public function setSubscriptionEnabled(bool $subscriptionEnabled): self
     {

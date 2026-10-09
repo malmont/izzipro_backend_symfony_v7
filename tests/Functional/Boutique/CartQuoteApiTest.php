@@ -175,22 +175,31 @@ class CartQuoteApiTest extends WebTestCase
     public function testCustomizationCombinationIsCheckedAndKeptOnTheOrderLine(): void
     {
         $variant = $this->variant('DEMO-GOURDE');
-        $combination = (int) $this->db->fetchOne('SELECT MIN(id) FROM product_customization_image WHERE product_variant_id = ?', [$variant]);
+        // combinaison avec le plus fort supplément d'options (la première peut n'en avoir aucun)
+        $combination = (int) $this->db->fetchOne('SELECT c.id FROM product_customization_image c LEFT JOIN product_customization_image_product_option_value x ON x.product_customization_image_id = c.id
+            LEFT JOIN product_option_value o ON o.id = x.product_option_value_id WHERE c.product_variant_id = ? GROUP BY c.id ORDER BY COALESCE(SUM(o.price_delta), 0) DESC, c.id LIMIT 1', [$variant]);
         $this->assertGreaterThan(0, $combination, 'la gourde de la démo a des combinaisons');
 
         $refused = $this->request('POST', '/api/cart/quote', json_encode(['items' => [['productVariantId' => $variant, 'quantity' => 1, 'customizationId' => 999999]]]));
         $this->assertSame(422, $refused->getStatusCode());
         $this->assertSame('items[0].customizationId', json_decode($refused->getContent(), true)['errors'][0]['path']);
 
-        $quote = $this->quote(['items' => [['productVariantId' => $variant, 'quantity' => 1, 'customizationId' => $combination]]]);
+        $quote = $this->quote(['items' => [['productVariantId' => $variant, 'quantity' => 2, 'customizationId' => $combination]]]);
         $this->assertSame(200, $quote['status'], json_encode($quote['body']));
         $this->assertSame($combination, $quote['body']['lines'][0]['customizationId']);
+        // Prix : variante (ou produit) + suppléments des options de la combinaison (dollars en base, cents dans le devis)
+        $base = (int) round((float) $this->db->fetchOne('SELECT COALESCE(v.price, p.price) FROM product_variant v JOIN product p ON p.id = v.product_id WHERE v.id = ?', [$variant]));
+        $delta = (int) round(100 * (float) $this->db->fetchOne('SELECT COALESCE(SUM(o.price_delta), 0) FROM product_customization_image_product_option_value x JOIN product_option_value o ON o.id = x.product_option_value_id WHERE x.product_customization_image_id = ?', [$combination]));
+        $this->assertGreaterThan(0, $delta, 'la combinaison de démonstration a un supplément');
+        $this->assertSame([$delta, $base + $delta, 2 * ($base + $delta)], [$quote['body']['lines'][0]['customizationPrice'], $quote['body']['lines'][0]['unitPrice'], $quote['body']['lines'][0]['total']]);
+        $this->assertSame(2 * ($base + $delta), $quote['body']['subtotal']);
 
         $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
         $created = $this->request('POST', '/api/order/create', json_encode(['addressId' => $this->address(), 'carrierId' => 6, 'items' => [['productVariantId' => $variant, 'quantity' => 1, 'customizationId' => $combination]]]));
         $this->assertSame(201, $created->getStatusCode(), $created->getContent());
         $orderId = (int) json_decode($created->getContent())->orderId;
         $this->assertSame($combination, (int) $this->db->fetchOne('SELECT customization_id FROM order_items WHERE order_associated_id = ?', [$orderId]));
+        $this->assertSame((float) ($base + $delta), (float) $this->db->fetchOne('SELECT unit_price FROM order_items WHERE order_associated_id = ?', [$orderId]), 'prix unitaire de la ligne avec le supplément');
         $order = json_decode($this->request('GET', "/api/orders/$orderId")->getContent(), true);
         $this->assertSame($combination, $order['orderItems'][0]['customizationId']);
     }

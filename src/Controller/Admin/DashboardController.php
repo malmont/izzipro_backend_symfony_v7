@@ -401,6 +401,22 @@ class DashboardController extends AbstractDashboardController
             ->addCssFile('assets/css/admin-arkanoa.css');
     }
 
+    /** « Avis clients », avec le nombre d'avis en attente de modération */
+    private function reviewsMenuItem(): \EasyCorp\Bundle\EasyAdminBundle\Config\Menu\CrudMenuItem
+    {
+        $item = MenuItem::linkToCrud('Avis clients', 'fas fa-star-half-alt', \App\Entity\ReviewsProduct::class)->setController(ReviewCrudController::class);
+        try {
+            $pending = $this->emProvider->getEntityManager()->getRepository(\App\Entity\ReviewsProduct::class)->countPending();
+            if ($pending > 0) {
+                $item->setBadge($pending, 'warning');
+            }
+        } catch (\Throwable) {
+            // tables pas encore migrées sur ce site : menu sans compteur
+        }
+
+        return $item;
+    }
+
     public function configureMenuItems(): iterable
     {
         yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
@@ -522,6 +538,8 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Catalogue & Véhicules');
         yield MenuItem::linkToCrud('Véhicules & Bateaux (Vente)', 'fas fa-ship', VehicleProduct::class)->setController(VehicleProductCrudController::class);
         yield MenuItem::linkToCrud('Produits & Accessoires', 'fas fa-shopping-cart', Product::class);
+        yield $this->reviewsMenuItem();
+        yield MenuItem::linkToCrud('Réglages des avis', 'fas fa-sliders-h', \App\Entity\ReviewSetting::class)->setController(ReviewSettingCrudController::class);
         yield MenuItem::linkToCrud('Variants de Produits', 'fas fa-boxes', ProductVariant::class)->setController(ProductVariantCrudController::class);
         yield MenuItem::linkToCrud('Colors', 'fas fa-palette', Color::class);
         yield MenuItem::linkToCrud('Styles', 'fas fa-brush', Style::class);

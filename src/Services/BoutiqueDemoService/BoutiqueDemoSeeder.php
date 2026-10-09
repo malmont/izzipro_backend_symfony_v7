@@ -30,6 +30,11 @@ use App\Entity\Size;
 use App\Entity\SizeTranslation;
 use App\Entity\User;
 use App\Entity\VehicleProduct;
+use App\Entity\Order;
+use App\Entity\ReviewSetting;
+use App\Entity\ReviewsProduct;
+use App\Services\ReviewService\ReviewAggregateService;
+use App\Services\ReviewService\ReviewService;
 use App\Services\TenantCacheService;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\EntityManagerInterface;
@@ -55,7 +60,8 @@ final class BoutiqueDemoSeeder
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly DemoImageGenerator $images,
         private readonly UserPasswordHasherInterface $hasher,
-        private readonly TenantCacheService $cache
+        private readonly TenantCacheService $cache,
+        private readonly ReviewAggregateService $reviewAggregates
     ) {
     }
 
@@ -90,6 +96,7 @@ final class BoutiqueDemoSeeder
         $em->flush();
         $password = $this->customer($customerEmail, $resetPassword, $otp);
         $em->flush();
+        $this->reviews($customerEmail);
         // Les lectures publiques gardent leur réponse en cache (jusqu'à 1 h) : une liste vide resterait servie. Certains
         // contrôleurs étiquettent sans le préfixe du site (CarrierControleur) : leurs clés sont aussi supprimées une à une.
         $this->cache->invalidateTags(self::CACHE_TAGS);
@@ -446,6 +453,65 @@ final class BoutiqueDemoSeeder
         }
 
         return $password;
+    }
+
+    /**
+     * Avis publiés de démonstration (rejouable : les avis des auteurs fictifs sont recréés) et réglages des avis du site
+     * (créés s'ils manquent : acheteurs vérifiés, modération avant publication, politique affichée).
+     */
+    private function reviews(string $customerEmail): void
+    {
+        $em = $this->em();
+        if ($em->getRepository(ReviewSetting::class)->current() === null) {
+            $em->persist((new ReviewSetting())->setPolicy(BoutiqueDemoCatalog::REVIEW_POLICY));
+            $this->report[] = 'Réglages des avis : acheteurs vérifiés, modération avant publication';
+        }
+        $products = [];
+        $count = 0;
+        foreach (BoutiqueDemoCatalog::REVIEWS as [$code, $first, $last, $rating, $title, $body, $daysAgo, $reply, $locale]) {
+            $product = $em->getRepository(Product::class)->findOneBy(['code' => 'DEMO-' . $code]);
+            if ($product === null) {
+                continue;
+            }
+            $slug = strtolower((string) (new \Symfony\Component\String\Slugger\AsciiSlugger('fr'))->slug($first . '-' . $last));
+            $email = "avis.demo.$slug@example.invalid";
+            $author = $em->getRepository(User::class)->findOneBy(['email' => $email]);
+            if ($author === null) {
+                $author = (new User())->setEmail($email)->setUsername($email)->setFirstname($first)->setLastname($last)
+                    ->setRoles(['ROLE_USER', 'ROLE_USER_INTERNET'])->setIsVerified(true);
+                $author->setPassword($this->hasher->hashPassword($author, bin2hex(random_bytes(16)))); // compte fictif : aucune connexion possible
+                $em->persist($author);
+            }
+            $review = $em->getRepository(ReviewsProduct::class)->findOneBy(['productReviews' => $product, 'userReview' => $author]) ?? new ReviewsProduct();
+            $created = new \DateTimeImmutable("-$daysAgo days 10:00");
+            $review->setProductReviews($product)->setUserReview($author)->setRating($rating)->setTitle($title)->setBody($body)
+                ->setAuthorName(ReviewService::authorName($author))->setLocale($locale)->setVerifiedPurchase(false)->setOrder(null)
+                ->setStatus(ReviewsProduct::STATUS_APPROVED)->setRejectionReason(null)->setCreatedAt($created)->setPublishedAt($created->modify('+1 day'))
+                ->setReply($reply)->setRepliedAt($reply !== null ? $created->modify('+2 days') : null);
+            $em->persist($review);
+            $products[$product->getId()] = $product;
+            $count++;
+        }
+        // Client de démonstration : un avis vérifié sur chaque produit qu'il a réellement commandé (commande payée)
+        $customer = $em->getRepository(User::class)->findOneBy(['email' => $customerEmail]);
+        $em->flush();
+        foreach ($customer ? $em->getRepository(Product::class)->findBy(['code' => array_map(fn ($c) => 'DEMO-' . $c, ['CASQUETTE', 'GOURDE', 'PADDLE', 'TSHIRT', 'KAYAK'])]) : [] as $product) {
+            $order = $em->getRepository(Order::class)->findLatestPurchaseOf($customer, $product);
+            if ($order === null || $em->getRepository(ReviewsProduct::class)->findOneByProductAndUser($product, $customer) !== null) {
+                continue;
+            }
+            $created = new \DateTimeImmutable('-2 days 18:00');
+            $em->persist((new ReviewsProduct())->setProductReviews($product)->setUserReview($customer)->setOrder($order)->setVerifiedPurchase(true)
+                ->setRating(5)->setTitle('Conforme à la description')->setBody('Commande reçue rapidement, produit conforme. Je recommande cette boutique.')
+                ->setAuthorName(ReviewService::authorName($customer))->setStatus(ReviewsProduct::STATUS_APPROVED)->setCreatedAt($created)->setPublishedAt($created->modify('+1 hour')));
+            $products[$product->getId()] = $product;
+            $count++;
+        }
+        $em->flush();
+        foreach ($products as $product) {
+            $this->reviewAggregates->refresh($product);
+        }
+        $this->report[] = sprintf('Avis publiés : %d sur %d produits', $count, count($products));
     }
 
     private function em(): EntityManagerInterface

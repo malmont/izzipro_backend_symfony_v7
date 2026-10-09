@@ -28,6 +28,8 @@ final class ProductCommerceDto
             'customizable' => $product->isCustomizable(),
             'pricing' => self::pricing($product, $currency),
             'vehicleDetails' => $product instanceof VehicleProduct ? self::vehicleDetails($product) : null,
+            'rating' => $product->getRatingCount() > 0 && $product->getRatingAverage() !== null ? round($product->getRatingAverage(), 1) : null,
+            'reviewCount' => $product->getRatingCount(),
         ];
     }
 

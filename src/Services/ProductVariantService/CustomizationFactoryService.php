@@ -44,7 +44,7 @@ class CustomizationFactoryService
         foreach ($variant->getProductCustomizationImages() as $customImage) {
             
             $currentCombinationOptionIds = [];
-            $combinationPriceDelta = 0.0;
+            $combinationPriceDelta = (float) $customImage->priceDeltaCents(); // même calcul que le devis du panier
 
             foreach ($customImage->getOptionValues() as $value) {
                 $group = $value->getProductOption();
@@ -54,7 +54,6 @@ class CustomizationFactoryService
                 $uniqueValues[$group->getId()][$value->getId()] = $value;
 
                 $currentCombinationOptionIds[] = $value->getId();
-                $combinationPriceDelta += ($value->getPriceDelta() ?? 0.0) * 100;
             }
 
             sort($currentCombinationOptionIds);

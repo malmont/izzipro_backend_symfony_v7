@@ -50,6 +50,13 @@ framework:
             interval: '1 minute'
             lock_factory: null
 
+        # Avis clients : dépôts par client connecté (09/10/2026)
+        review_submit:
+            policy: sliding_window
+            limit: 5
+            interval: '1 hour'
+            lock_factory: null
+
         # Synchronisation de la configuration des landing pages : essais de jeton de déploiement invalides par IP
         landing_config_token:
             policy: sliding_window
