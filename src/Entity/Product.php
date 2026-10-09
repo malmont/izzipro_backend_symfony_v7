@@ -907,9 +907,32 @@ class Product implements TranslatableInterface
         return $this;
     }
 
+    /**
+     * Case « Personnalisable » enregistrée (contrat du 08/10/2026). Le site ne la lit plus : voir hasCustomizationConfig,
+     * qui décide du bouton « Personnaliser » d'après les combinaisons réellement saisies.
+     */
     public function isCustomizable(): bool
     {
         return $this->customizable;
+    }
+
+    /**
+     * Personnalisation utilisable (09/10/2026) : au moins une variante a au moins une combinaison portant au moins une
+     * valeur d'option, ce que GET /api/customization/config/{variantId} affiche. Décide de `customizable` dans le contrat
+     * produit, quel que soit le nombre de variantes ; la case enregistrée ne compte plus (jamais cochée sur les sites
+     * existants, elle masquait la personnalisation de Kara & B).
+     */
+    public function hasCustomizationConfig(): bool
+    {
+        foreach ($this->getVariants() as $variant) {
+            foreach ($variant->getProductCustomizationImages() as $combination) {
+                if (!$combination->getOptionValues()->isEmpty()) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     public function setCustomizable(bool $customizable): self

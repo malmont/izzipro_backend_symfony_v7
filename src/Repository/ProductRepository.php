@@ -186,6 +186,8 @@ class ProductRepository extends EntityRepository
              LEFT JOIN vov.translations vovt WITH vovt.language = :locale
              LEFT JOIN vov.productOption po LEFT JOIN po.translations pot WITH pot.language = :locale WHERE v.product IN (:ids)'
         )->setParameter('ids', $ids)->setParameter('locale', $locale)->getResult();
+        $em->createQuery('SELECT v, ci, civ FROM App\Entity\ProductVariant v LEFT JOIN v.productCustomizationImages ci LEFT JOIN ci.optionValues civ WHERE v.product IN (:ids)')
+            ->setParameter('ids', $ids)->getResult();
 
         return $products;
     }
@@ -258,6 +260,9 @@ class ProductRepository extends EntityRepository
              LEFT JOIN vov.productOption po LEFT JOIN po.translations pot WITH pot.language = :locale
              WHERE v.product = :id'
         )->setParameter('id', $id)->setParameter('locale', $locale)->getResult();
+        // Combinaisons de personnalisation (champ customizable) : une requête au lieu d'une par variante
+        $em->createQuery('SELECT v, ci, civ FROM App\Entity\ProductVariant v LEFT JOIN v.productCustomizationImages ci LEFT JOIN ci.optionValues civ WHERE v.product = :id')
+            ->setParameter('id', $id)->getResult();
         $em->createQuery(
             'SELECT p, cat, ct, rp FROM App\Entity\Product p LEFT JOIN p.category cat
              LEFT JOIN cat.translations ct WITH ct.language = :locale LEFT JOIN cat.rentalPacks rp WHERE p.id = :id'

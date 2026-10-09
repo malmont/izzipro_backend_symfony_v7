@@ -17,6 +17,16 @@ use Symfony\Component\String\Slugger\AsciiSlugger;
 
 class ProductCustomizationImageType extends AbstractType
 {
+    /** Dossier des images de combinaison, le même que l'écran « Combinaisons » (avant le 09/10/2026 : products/, chemin relatif) */
+    private const UPLOAD_DIR = '/var/storage/public_bucket/assets/uploads/customization';
+
+    public function __construct(
+        #[\Symfony\Component\DependencyInjection\Attribute\Autowire('%kernel.project_dir%')]
+        private readonly string $projectDir = '',
+        private readonly ?\App\Services\ProductVariantService\CustomizationMediaResolver $media = null
+    ) {
+    }
+
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $tenantEm = $options['tenant_em'];
@@ -53,7 +63,8 @@ class ProductCustomizationImageType extends AbstractType
             $hasImage = $imageEntity && $imageEntity->getImagePath();
 
             if ($hasImage) {
-                $webPath = '/bucket-simulator/assets/uploads/products/' . $imageEntity->getImagePath();
+                // Aperçu depuis le dossier qui contient vraiment le fichier (customization/ ou ancien products/)
+                $webPath = '/bucket-simulator/assets/uploads/' . ($this->media?->combinationDir($imageEntity->getImagePath()) ?? 'customization') . '/' . basename((string) $imageEntity->getImagePath());
                 $previewHtml = sprintf('<div style="margin-bottom: 5px;"><img src="%s" style="max-height: 80px; border-radius: 4px;" /></div>', $webPath);
                 $helpMessage = $previewHtml . '<span class="text-success">Image actuelle conservée.</span>';
             }
@@ -83,10 +94,7 @@ class ProductCustomizationImageType extends AbstractType
                 $newFilename = $safeFilename.'-'.uniqid().'.'.$imageFile->guessExtension();
 
                 try {
-                    $imageFile->move(
-                        'var/storage/public_bucket/assets/uploads/products', 
-                        $newFilename
-                    );
+                    $imageFile->move(rtrim($this->projectDir, '/') . self::UPLOAD_DIR, $newFilename);
                 } catch (\Exception $e) {
                 }
 

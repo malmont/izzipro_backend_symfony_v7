@@ -7,6 +7,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
+#[\App\Validator\UniqueCustomizationCombination]
 #[ORM\Entity(repositoryClass: ProductCustomizationImageRepository::class)]
 class ProductCustomizationImage
 {

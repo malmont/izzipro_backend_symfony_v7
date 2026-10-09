@@ -96,7 +96,8 @@ Toutes les routes qui renvoient un produit (`/api/products/by-slug/{slug}`, `/ap
 | Champ | Contenu |
 |---|---|
 | `kind` | `standard` ou `vehicle` (un `VehicleProduct`, même table : les véhicules sont servis par `by-slug`) |
-| `sale.enabled`, `rental.enabled`, `subscription.enabled`, `customizable` | modes explicites, cumulables (colonnes `product.sale_enabled`, `rental_enabled`, `subscription_enabled`, `customizable` ; EasyAdmin « Modes de vente »). L'ancien `mode` est dérivé : `booking` = location seule, `retail` sinon ; `isBookable()` = location activée |
+| `sale.enabled`, `rental.enabled`, `subscription.enabled` | modes explicites, cumulables (colonnes `product.sale_enabled`, `rental_enabled`, `subscription_enabled` ; EasyAdmin « Modes de vente »). L'ancien `mode` est dérivé : `booking` = location seule, `retail` sinon ; `isBookable()` = location activée |
+| `customizable` | **calculé** (09/10/2026, `Product::hasCustomizationConfig`) : vrai dès qu'une variante du produit a au moins une combinaison de personnalisation portant au moins une valeur d'option (ce que `GET /api/customization/config/{variantId}` affiche), quel que soit le nombre de variantes ; même règle dans la fiche, les listes, les sélections et par catégorie. La case `product.customizable` ne compte plus et a quitté les formulaires EasyAdmin (jamais cochée sur les sites existants, elle masquait la personnalisation de Kara & B) ; combinaisons préchargées dans les requêtes de fiche et de liste |
 | `rental` (si activée) | `bookingConfig` complet, montants en **cents** : `granularity`, `minDuration`, `maxDuration`, `stockQuantity`, `bufferTime`, `rates[]` (`hourRate`…`monthRate`), `openingHours { start, end }`, `halfDays[]`, `allowedDates` (null = toutes), `eveningSlot`, `minDaysStandard`, `deposit`, `extraPassengerFee`, `arrivalLeadMinutes`, `cancellationPolicy`, `included[]`, `excluded[]`, `notes` (colonnes de `booking_configuration`, EasyAdmin « Configuration de location », panneau « Boutique réglable ») |
 | `pricing` | `{ currency, regular, special: { amount, from, to, active } | null, amount }` en cents ; `amount` = promotion en cours, sinon prix de vente |
 | `variants[]` | `price` en cents (null = prix du produit, colonne `product_variant.price`), `stockQuantity`, `options[] { code, name, value, … anciens noms }` |
@@ -111,6 +112,18 @@ véhicule se saisissait en dollars (`NumberField`) alors que `create-intent` le 
 n'existait).
 Schéma : migration `Version20261008120000`, script `scripts/migrate_all_v2_product_modes.sh` (reprise de l'ancien
 mode une seule fois). Tests : `tests/Functional/Boutique/ProductContractApiTest.php`.
+
+## Personnalisation : configuration et images (09/10/2026)
+
+`GET /api/customization/config/{variantId}` (`CustomizationFactoryService`) : adresses des images construites par
+`CustomizationMediaResolver` d'après le dossier qui contient réellement le fichier. Combinaisons : `customization/`
+(écran « Combinaisons »), puis `products/` (ancien formulaire de variante) ; icônes de valeur d'option : `options/`, puis
+`icons/`. Fichier introuvable : `null`, et le site affiche l'image du produit. Un seul résultat par ensemble de valeurs
+d'options : celui dont le fichier existe, sinon le plus ancien. Enregistrer un doublon (même variante, mêmes valeurs
+d'options) est refusé (`Validator/UniqueCustomizationCombination`, vérifié aussi dans le formulaire de variante grâce à
+`Assert\Valid`). Le formulaire de variante enregistre désormais dans `customization/` (chemin absolu ; avant : `products/`,
+chemin relatif). Les autres sérialisations (`ProductCommerceDto::variants`, `ProductVariantDTO`) exposent le nom de fichier
+de l'icône (`image_preview`), pas une adresse. Tests : `tests/Functional/Boutique/CustomizationConfigTest.php`.
 
 ## Modifier les données de la boutique depuis la page (08/10/2026, § 9)
 

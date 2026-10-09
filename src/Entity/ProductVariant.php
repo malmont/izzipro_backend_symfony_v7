@@ -57,6 +57,8 @@ class ProductVariant
     /**
      * @var Collection<int, ProductCustomizationImage>
      */
+    // Combinaisons validées avec la variante (unicité par ensemble d'options, 09/10/2026)
+    #[\Symfony\Component\Validator\Constraints\Valid]
     #[ORM\OneToMany(
         mappedBy: 'productVariant', 
         targetEntity: ProductCustomizationImage::class, 

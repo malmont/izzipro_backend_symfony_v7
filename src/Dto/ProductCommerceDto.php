@@ -25,7 +25,7 @@ final class ProductCommerceDto
             'sale' => ['enabled' => $product->isSaleEnabled()],
             'rental' => ['enabled' => $product->isRentalEnabled()] + ($product->isRentalEnabled() ? self::bookingConfig($product, $locale) : []),
             'subscription' => ['enabled' => $product->isSubscriptionEnabled()],
-            'customizable' => $product->isCustomizable(),
+            'customizable' => $product->hasCustomizationConfig(), // d'après les combinaisons saisies, pas la case
             'pricing' => self::pricing($product, $currency),
             'vehicleDetails' => $product instanceof VehicleProduct ? self::vehicleDetails($product) : null,
             'rating' => $product->getRatingCount() > 0 && $product->getRatingAverage() !== null ? round($product->getRatingAverage(), 1) : null,

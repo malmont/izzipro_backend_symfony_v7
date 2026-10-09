@@ -18,6 +18,14 @@ class CustomizationFactoryService
     private RequestStack $requestStack;
     private MediaUrlResolver $mediaUrlResolver;
 
+    private ?CustomizationMediaResolver $mediaResolver = null;
+
+    #[\Symfony\Contracts\Service\Attribute\Required]
+    public function setMediaResolver(CustomizationMediaResolver $mediaResolver): void
+    {
+        $this->mediaResolver = $mediaResolver;
+    }
+
     public function __construct(
         TenantEntityManagerProvider $emProvider,
         RequestStack $requestStack,
@@ -41,7 +49,22 @@ class CustomizationFactoryService
         $uniqueValues = [];
         $combinationsDtos = [];
 
+        // Deux combinaisons pour le même ensemble d'options (doublon) : une seule est rendue, celle dont le fichier existe,
+        // sinon la plus ancienne (09/10/2026 ; l'enregistrement de doublons est désormais refusé)
+        $kept = [];
         foreach ($variant->getProductCustomizationImages() as $customImage) {
+            $ids = array_map(fn ($v) => $v->getId(), $customImage->getOptionValues()->toArray());
+            sort($ids);
+            $key = implode(',', $ids);
+            $current = $kept[$key] ?? null;
+            $hasFile = $this->mediaResolver->combinationDir($customImage->getImagePath()) !== null;
+            if ($current === null || ($hasFile && $this->mediaResolver->combinationDir($current->getImagePath()) === null)
+                || ($hasFile === ($this->mediaResolver->combinationDir($current->getImagePath()) !== null) && $customImage->getId() < $current->getId())) {
+                $kept[$key] = $customImage;
+            }
+        }
+
+        foreach ($kept as $customImage) {
             
             $currentCombinationOptionIds = [];
             $combinationPriceDelta = (float) $customImage->priceDeltaCents(); // même calcul que le devis du panier
@@ -63,7 +86,7 @@ class CustomizationFactoryService
                 $basePrice,
                 $currentCombinationOptionIds,
                 $combinationPriceDelta,
-                $host
+                $this->mediaResolver->combinationUrl($customImage->getImagePath(), $rawHost)
             );
         }
 
@@ -75,7 +98,7 @@ class CustomizationFactoryService
             $groupValues = $uniqueValues[$groupId] ?? [];
             
             foreach ($groupValues as $val) {
-                $valuesDtos[] = CustomizationValueDto::fromEntity($val, $host);
+                $valuesDtos[] = CustomizationValueDto::fromEntity($val, $this->mediaResolver->optionIconUrl($val->getImagePreview(), $rawHost));
             }
             
             usort($valuesDtos, fn($a, $b) => strcmp($a->name, $b->name));

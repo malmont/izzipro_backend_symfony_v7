@@ -109,7 +109,7 @@ class VehicleProductCrudController extends BaseTenantCrudController
             BooleanField::new('saleEnabled', 'Vente (achat direct)')->setColumns('col-md-3'),
             BooleanField::new('rentalEnabled', 'Location / réservation')->setColumns('col-md-3'),
             BooleanField::new('subscriptionEnabled', 'Abonnement')->setColumns('col-md-3'),
-            BooleanField::new('customizable', 'Personnalisable')->setColumns('col-md-3'),
+            // « Personnalisable » : calculé d'après les combinaisons saisies (Product::hasCustomizationConfig), plus une case
 
             AssociationField::new('bookingConfiguration', 'Configuration de Location (Si Loué)')
                 ->setFormTypeOptions(['em' => $tenantEm])

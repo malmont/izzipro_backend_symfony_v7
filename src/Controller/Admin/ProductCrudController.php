@@ -84,7 +84,8 @@ class ProductCrudController extends BaseTenantCrudController
         yield BooleanField::new('saleEnabled', 'Vente')->setColumns('col-md-3');
         yield BooleanField::new('rentalEnabled', 'Location / réservation')->setColumns('col-md-3');
         yield BooleanField::new('subscriptionEnabled', 'Abonnement')->setColumns('col-md-3');
-        yield BooleanField::new('customizable', 'Personnalisable')->setColumns('col-md-3')->setHelp('Bouton « Personnaliser » (options à combinaisons).');
+        // « Personnalisable » n'est plus une case (09/10/2026) : le bouton « Personnaliser » paraît dès qu'une variante a des
+        // combinaisons saisies (Combinaisons de personnalisation), comme le calcule Product::hasCustomizationConfig
 
         yield FormField::addTab('Organisation & Média');
         yield FormField::addPanel('Catégorisation');

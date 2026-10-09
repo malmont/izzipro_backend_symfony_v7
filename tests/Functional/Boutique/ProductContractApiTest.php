@@ -60,7 +60,7 @@ class ProductContractApiTest extends WebTestCase
         $this->assertSame(['enabled' => true], $body['sale']);
         $this->assertTrue($body['rental']['enabled']);
         $this->assertSame(['enabled' => false], $body['subscription']);
-        $this->assertTrue($body['customizable']);
+        $this->assertFalse($body['customizable'], 'case cochée sans aucune combinaison : pas de bouton Personnaliser (09/10/2026)');
         $this->assertNull($body['vehicleDetails']);
         $this->assertSame(['currency' => 'EUR', 'regular' => 199950, 'amount' => 145000], array_intersect_key($body['pricing'], array_flip(['currency', 'regular', 'amount'])));
         $this->assertSame(145000, $body['pricing']['special']['amount']);
@@ -105,6 +105,28 @@ class ProductContractApiTest extends WebTestCase
         $this->assertSame(899900, $body['pricing']['regular']);
         $this->assertNull($body['pricing']['special']);
         $this->assertNull($body['rental']['granularity'], 'location activée sans configuration : champs à null');
+    }
+
+    public function testCustomizableFollowsTheSavedCombinationsNotTheCheckbox(): void
+    {
+        // Cas Kara & B (09/10/2026) : combinaisons saisies sur une variante, case « Personnalisable » jamais cochée
+        static::getContainer()->get(\App\Services\BoutiqueDemoService\BoutiqueDemoSeeder::class)->seed('client-perso@example.invalid', false, false);
+        $db = $this->em()->getConnection();
+        $db->executeStatement("UPDATE product SET customizable = false WHERE code = 'DEMO-GOURDE'");
+        $db->executeStatement("UPDATE product SET customizable = true WHERE code = 'DEMO-CASQUETTE'");
+        static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTags(['products_all', 'products_by_offer', 'products_by_category']);
+        $bottle = $db->fetchOne("SELECT slug FROM product WHERE code = 'DEMO-GOURDE'");
+        $cap = $db->fetchOne("SELECT slug FROM product WHERE code = 'DEMO-CASQUETTE'");
+
+        $this->assertTrue($this->get('/api/products/by-slug/' . $bottle . '?locale=fr')['customizable'], 'combinaisons saisies : personnalisable');
+        $this->assertFalse($this->get('/api/products/by-slug/' . $cap . '?locale=fr')['customizable'], 'case cochée sans combinaison : non');
+        $list = $this->get('/api/products/newarrivals?locale=fr');
+        $list = $list['data'] ?? $list;
+        $bottleId = (int) $db->fetchOne("SELECT id FROM product WHERE code = 'DEMO-GOURDE'");
+        $inList = array_values(array_filter($list, fn ($p) => $p['id'] === $bottleId));
+        if ($inList !== []) {
+            $this->assertTrue($inList[0]['customizable'], 'même règle dans les listes');
+        }
     }
 
     private function get(string $path): array

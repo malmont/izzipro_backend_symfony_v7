@@ -13,27 +13,9 @@ class CustomizationValueDto
         public string $currency = 'EUR'
     ) {}
 
-    public static function fromEntity(ProductOptionValue $value, string $host): self
+    /** @param ?string $iconUrl adresse résolue par CustomizationMediaResolver (null : pas d'icône ou fichier introuvable) */
+    public static function fromEntity(ProductOptionValue $value, ?string $iconUrl): self
     {
-        $imagePath = $value->getImagePreview();
-        $fullUrl = null;
-
-        if ($imagePath) {
-            if (str_starts_with((string)$imagePath, 'http')) {
-                $fullUrl = $imagePath;
-            } else {
-                $cleanedHost = rtrim($host, '/');
-                $fullUrl = $cleanedHost . '/assets/uploads/icons/' . $imagePath;
-            }
-        }
-
-        return new self(
-            $value->getId(),
-            $value->getValue(),
-            $fullUrl,
-            ($value->getPriceDelta() ?? 0.0) * 100, 
-            'CAD' 
-        
-        );
+        return new self($value->getId(), $value->getValue(), $iconUrl, ($value->getPriceDelta() ?? 0.0) * 100, 'CAD');
     }
 }
