@@ -78,8 +78,9 @@ final class SubscriptionOrderFactory
 
         $quantity = max(1, $subscription->getQuantity());
         $subtotal = (int) ($invoice['subtotal'] ?? $plan->getPrice() * $quantity);
-        $tax = (int) ($invoice['tax'] ?? 0);
-        $total = (int) ($invoice['total'] ?? $subtotal + $tax);
+        $total = (int) ($invoice['total'] ?? $subtotal);
+        // API 2025-03+ : « tax » n'est plus rempli (total_taxes) ; les taxes sont la différence total − sous-total
+        $tax = isset($invoice['tax']) ? (int) $invoice['tax'] : max(0, $total - $subtotal);
 
         $order = $this->orders->createOrder($user, $source, $address, $subscription->getCarrier(), $status, $type);
         $order->setSubscription($subscription)->setStripeInvoiceId($invoiceId !== '' ? $invoiceId : null)
@@ -103,7 +104,8 @@ final class SubscriptionOrderFactory
         // La collection de la commande n'est pas rafraîchie par PaymentService : relire le paiement créé
         $payment = $em->getRepository(Payments::class)->findOneBy(['orderPayment' => $order], ['id' => 'DESC']);
         if ($payment) {
-            $payment->setStripePaymentId(is_string($invoice['payment_intent'] ?? null) ? $invoice['payment_intent'] : ($invoiceId ?: null));
+            $intent = $invoice['payment_intent'] ?? $invoice['payments']['data'][0]['payment']['payment_intent'] ?? null; // API 2025-03+ : dans payments
+            $payment->setStripePaymentId(is_string($intent) ? $intent : ($invoiceId ?: null));
             $payment->setStripeStatus('succeeded');
             $em->flush();
         }

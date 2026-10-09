@@ -76,7 +76,8 @@ class StripeWebhookController extends AbstractController
         }
 
         $eventType = is_object($event) ? $event->type : ($event['type'] ?? null);
-        $eventData = is_object($event) ? (array) $event->data->object : ($event['data']['object'] ?? []);
+        // Un objet du SDK se convertit par toArray() : le transtypage (array) ne donnait que ses propriétés internes
+        $eventData = is_object($event) ? $event->data->object->toArray() : ($event['data']['object'] ?? []);
 
         // Conversion récursive des objets Stripe en array si nécessaire
         if (is_object($eventData)) {

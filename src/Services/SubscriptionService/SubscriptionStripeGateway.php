@@ -7,6 +7,7 @@ use App\Entity\StripeConfig;
 use App\Entity\SubscriptionPlan;
 use App\Entity\User;
 use App\Services\TenantConnectionProvider;
+use App\Services\StripeService\StripeConnectSetupService;
 use App\Services\TenantEntityManagerProvider;
 use Stripe\StripeClient;
 use Stripe\Subscription as StripeSubscription;
@@ -25,6 +26,7 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly TenantConnectionProvider $tenantProvider,
         private readonly CacheInterface $cache,
+        private readonly StripeConnectSetupService $setup,
         #[Autowire('%env(default::STRIPE_SECRET_KEY)%')]
         private readonly ?string $stripeSecretKey
     ) {
@@ -94,7 +96,8 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
             'payment_behavior' => 'default_incomplete',
             'payment_settings' => ['save_default_payment_method' => 'on_subscription'],
             'metadata' => $metadata,
-            'expand' => ['latest_invoice.payment_intent', 'pending_setup_intent'],
+            // API 2025-03+ : le secret de la première facture est dans latest_invoice.confirmation_secret (payment_intent n'est plus exposé)
+            'expand' => ['latest_invoice.confirmation_secret', 'latest_invoice.payment_intent', 'pending_setup_intent'],
         ];
         if ($trialDays > 0) {
             $params['trial_period_days'] = $trialDays;
@@ -110,7 +113,7 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
 
     public function retrieve(string $subscriptionId): array
     {
-        return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->retrieve($subscriptionId, ['expand' => ['latest_invoice.payment_intent']], $o)));
+        return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->retrieve($subscriptionId, ['expand' => ['latest_invoice.confirmation_secret', 'latest_invoice.payment_intent']], $o)));
     }
 
     public function cancel(string $subscriptionId, bool $atPeriodEnd): array
@@ -141,7 +144,11 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
 
     public function portalUrl(string $customerId, string $returnUrl): string
     {
-        return (string) $this->call(fn (StripeClient $c, array $o) => $c->billingPortal->sessions->create(['customer' => $customerId, 'return_url' => $returnUrl], $o))->url;
+        // Compte Express : aucun portail par défaut, la plateforme crée sa configuration (StripeConnectSetupService)
+        $siteName = $this->emProvider->getEntityManager()->getRepository(\App\Entity\Entreprise::class)->findOneBy([])?->getName() ?? (string) $this->tenantProvider->getTenantCode();
+        $configuration = $this->setup->ensurePortalConfiguration($siteName);
+
+        return (string) $this->call(fn (StripeClient $c, array $o) => $c->billingPortal->sessions->create(array_filter(['customer' => $customerId, 'return_url' => $returnUrl, 'configuration' => $configuration]), $o))->url;
     }
 
     /** Forme commune d'un abonnement Stripe (objet du SDK ou tableau d'un webhook) */
@@ -156,7 +163,7 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
             'currentPeriodEnd' => isset($a['current_period_end']) ? (int) $a['current_period_end'] : (isset($item['current_period_end']) ? (int) $item['current_period_end'] : null),
             'cancelAtPeriodEnd' => (bool) ($a['cancel_at_period_end'] ?? false),
             'paused' => !empty($a['pause_collection']),
-            'clientSecret' => $a['latest_invoice']['payment_intent']['client_secret'] ?? $a['pending_setup_intent']['client_secret'] ?? null,
+            'clientSecret' => $a['latest_invoice']['confirmation_secret']['client_secret'] ?? $a['latest_invoice']['payment_intent']['client_secret'] ?? $a['pending_setup_intent']['client_secret'] ?? null,
             'itemId' => $item['id'] ?? null,
             'canceledAt' => isset($a['canceled_at']) ? (int) $a['canceled_at'] : null,
         ];

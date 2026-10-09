@@ -189,9 +189,9 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
   « bien physique » `txcd_99999999`, « service » `txcd_20030000` pour une location, livraison `txcd_92010001`),
   montants par juridiction (`taxes[].jurisdiction`), calcul gardé 10 min pour un même panier et une même adresse. À la
   commande payée, la transaction fiscale est enregistrée chez Stripe (`order.tax_transaction_id`, rapports de
-  déclaration du site). Prérequis par site : activer Stripe Tax dans le tableau de bord du compte connecté (siège,
-  inscriptions fiscales) ; sur `demo`, le compte est en `pending` (rien de saisi) tant que l'utilisateur ne l'a pas fait.
-  Coût : facturé par Stripe au compte connecté.
+  déclaration du site). Prérequis par site (compte Express, sans tableau de bord Tax) :
+  `app:boutique:stripe-setup --tenant=<code> --tax` pose le siège et les inscriptions (`CA`, `CA-QC` par défaut ; `US-NY`,
+  `FR`…) ; le statut passe de `pending` à `active`. Coût : facturé par Stripe au compte connecté.
 - Commande : `TaxCalculationService` reprend les taxes du devis (`Order::pendingTaxes`) et crée une ligne `OrderTax`
   par taxe (rattachée à la table pour `table`, sans rattachement pour Stripe) ; une commande de caisse ou un retour sans
   devis est calculé sur son sous-total. Schéma : `tax.country`, `order.tax_transaction_id` (migration
@@ -251,8 +251,17 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
   À déclarer dans Stripe : point de terminaison Connect (évènements des comptes connectés) sur
   `https://backend-strapi.online/api/stripe/webhook` (même serveur que `v2.` : les deux écouteurs du tableau de bord,
   « Votre compte » et « Comptes connectés », pointent déjà dessus), secret dans `STRIPE_CONNECT_WEBHOOK_SECRET`.
-- Prérequis par site : Stripe Billing et le portail client activés sur le compte connecté (tableau de bord Stripe) ; le
-  produit et le prix Stripe d'une formule sont créés à la première souscription (`stripe_product_id`, `stripe_price_id`).
+- Prérequis par site : les comptes connectés sont des comptes **Express**, sans réglage Billing, portail ni Tax dans
+  leur tableau de bord : c'est la plateforme qui les configure par l'API (`StripeConnectSetupService`) : la
+  configuration du portail client est créée à la première ouverture du portail, et
+  `php bin/console app:boutique:stripe-setup --tenant=<code> [--tax --registrations=CA,CA-QC]` la crée d'avance et
+  pose Stripe Tax (siège = adresse de la fiche entreprise, ou `--line1 --city --province --postal-code --country`).
+  Billing est disponible d'office sur un compte Express ; le produit et le prix Stripe d'une formule sont créés à la
+  première souscription (`stripe_product_id`, `stripe_price_id`).
+- Forme des objets Stripe (API 2025-03+, vérifiée en réel sur `demo` le 09/10/2026) : le secret de la première facture
+  est dans `latest_invoice.confirmation_secret` (plus `payment_intent`) ; la facture d'un webhook n'a plus `subscription`
+  ni `tax` (lire `parent.subscription_details.subscription`, taxes = `total − subtotal`, intention dans `payments`) ;
+  l'objet signé du SDK se convertit par `toArray()` (le transtypage `(array)` ne donne que ses propriétés internes).
 - Démo : trois formules sur « Panier bio de la semaine » (`BoutiqueDemoCatalog::SUBSCRIPTION_PLANS`).
 - Tests : `tests/Functional/Boutique/SubscriptionApiTest.php` (Stripe simulé : souscription, gestion, webhooks, refus).
 

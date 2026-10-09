@@ -184,7 +184,7 @@ final class TaxEngine
             foreach ($calculation->tax_breakdown ?? [] as $breakdown) {
                 $details = $breakdown->tax_rate_details;
                 $taxes[] = [
-                    'label' => (string) ($details->display_name ?? $details->tax_type ?? 'Taxe'),
+                    'label' => self::stripeLabel($details->display_name ?? null, $details->tax_type ?? null),
                     'rate' => isset($details->percentage_decimal) ? (float) $details->percentage_decimal / 100 : 0.0,
                     'amount' => (int) $breakdown->amount,
                     'jurisdiction' => trim(($details->country ?? '') . ' ' . ($details->state ?? '')),
@@ -194,6 +194,17 @@ final class TaxEngine
             return ['taxes' => $taxes, 'total' => (int) $calculation->tax_amount_exclusive, 'status' => $taxes ? self::STATUS_CALCULATED : self::STATUS_NO_TAX,
                 'provider' => self::PROVIDER_STRIPE, 'calculationId' => (string) $calculation->id];
         });
+    }
+
+    /** Libellé d'une taxe Stripe : nom affiché, sinon type de taxe en français (gst → TPS, qst → TVQ, hst → TVH, pst → TVP, vat → TVA) */
+    private static function stripeLabel(?string $displayName, ?string $taxType): string
+    {
+        if (is_string($displayName) && trim($displayName) !== '') {
+            return trim($displayName);
+        }
+        $type = strtolower((string) $taxType);
+
+        return match ($type) { 'gst' => 'TPS', 'qst' => 'TVQ', 'hst' => 'TVH', 'pst' => 'TVP', 'rst' => 'TVD', 'vat' => 'TVA', 'sales_tax' => 'Taxe de vente', '' => 'Taxe', default => strtoupper($type) };
     }
 
     /**
