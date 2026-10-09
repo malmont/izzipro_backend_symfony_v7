@@ -47,10 +47,10 @@ final class LandingAiCompositionChecker
     }
 
     /**
-     * Retouche d'une page système de la boutique : un bloc obligatoire (type exigé par une page du catalogue
-     * « systemPages » : stripePayment, cartLines, loginForm… ; ou groupe de mode : container portant « mode ») présent
-     * au départ doit rester présent, du même type et avec son mode, quelle que soit la demande. Sans ces blocs, la page
-     * ne fonctionne plus (paiement impossible, panier vide) ; l'administrateur ne peut pas les retirer non plus.
+     * Retouche d'une page système de la boutique : un bloc d'un type exigé par une page du catalogue « systemPages »
+     * (stripePayment, cartLines, loginForm…) présent au départ doit rester présent, du même type, quelle que soit la
+     * demande : sans lui, la page ne fonctionne plus (paiement impossible, panier vide). Les groupes de mode (container
+     * portant « mode ») se retirent un à un (« enlève la partie location »), mais la fiche en garde au moins un.
      *
      * @return list<array{path: string, message: string}>
      */
@@ -61,26 +61,39 @@ final class LandingAiCompositionChecker
             array_push($required, ...$page['required']);
         }
         $required = array_flip($required);
-        $isRequired = fn (object $block) => (is_string($block->type ?? null) && isset($required[$block->type])) || (($block->type ?? null) === 'container' && is_string($block->mode ?? null));
+        $isModeGroup = fn (object $block) => ($block->type ?? null) === 'container' && is_string($block->mode ?? null);
 
         $afterById = [];
+        $modesAfter = 0;
         foreach (is_array($after->blocks ?? null) ? $after->blocks : [] as $block) {
             if (is_object($block) && is_string($block->id ?? null)) {
                 $afterById[$block->id] = $block;
+                $modesAfter += $isModeGroup($block) ? 1 : 0;
             }
         }
         $errors = [];
+        $modesBefore = 0;
         foreach (is_array($before->blocks ?? null) ? $before->blocks : [] as $block) {
-            if (!is_object($block) || !is_string($block->id ?? null) || !$isRequired($block)) {
+            if (!is_object($block) || !is_string($block->id ?? null)) {
+                continue;
+            }
+            if ($isModeGroup($block)) {
+                $modesBefore++;
+                continue;
+            }
+            if (!is_string($block->type ?? null) || !isset($required[$block->type])) {
                 continue;
             }
             $kept = $afterById[$block->id] ?? null;
-            if ($kept === null || ($kept->type ?? null) !== $block->type || (isset($block->mode) && ($kept->mode ?? null) !== $block->mode)) {
+            if ($kept === null || ($kept->type ?? null) !== $block->type) {
                 $errors[] = ['path' => 'operations', 'message' => sprintf(
-                    'le bloc « %s » (%s) est obligatoire sur cette page de la boutique : il doit rester dans la composition, avec son type%s ; ne le supprime pas, explique dans warnings et limits pourquoi',
-                    $block->id, $block->type . (isset($block->mode) ? ', mode ' . $block->mode : ''), isset($block->mode) ? ' et son mode' : ''
+                    'le bloc « %s » (%s) est obligatoire sur cette page de la boutique : il doit rester dans la composition, avec son type ; ne le supprime pas, explique dans warnings et limits pourquoi',
+                    $block->id, $block->type
                 )];
             }
+        }
+        if ($modesBefore > 0 && $modesAfter === 0) {
+            $errors[] = ['path' => 'operations', 'message' => 'la fiche produit doit garder au moins un groupe de mode (container portant mode : sale, rental ou subscription) avec ses blocs ; ne supprime pas le dernier, explique dans warnings et limits pourquoi'];
         }
 
         return $errors;

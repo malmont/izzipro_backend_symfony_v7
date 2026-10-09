@@ -17,6 +17,10 @@ class OrderDTO
     public ?string $orderSource;
     public ?string $status;
     public array $orderItems;
+    /** Boutique réglable (08/10/2026) : devise du site, identifiant du statut, transporteur */
+    public string $currency = 'CAD';
+    public ?int $statusId = null;
+    public ?array $carrier = null;
 
     public function __construct(
         int $id,
@@ -51,10 +55,14 @@ class OrderDTO
         return [
             'id' => $this->id,
             'reference' => $this->reference,
-            'totalAmount' => $this->totalAmount,
-            'subTotal' => $this->subTotal,
-            'priceTax' => $this->totalTax,
-            'priceShipping' => $this->shippingCost,
+            // cents entiers (les colonnes sont décimales)
+            'totalAmount' => (int) round($this->totalAmount),
+            'subTotal' => $this->subTotal === null ? null : (int) round($this->subTotal),
+            'priceTax' => $this->totalTax === null ? null : (int) round($this->totalTax),
+            'priceShipping' => $this->shippingCost === null ? null : (int) round($this->shippingCost),
+            'currency' => $this->currency,
+            'statusId' => $this->statusId,
+            'carrier' => $this->carrier,
             'orderDate' => $this->orderDate,
             'userId' => $this->userId,
             'shippingAdress' => $this->shippingAdress,

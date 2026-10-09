@@ -82,6 +82,7 @@ class ProductContractApiTest extends WebTestCase
         $this->assertArrayHasKey('categories', $body);
 
         $byId = $this->get('/api/productsid/' . $product->getId());
+        $this->assertSame($byId['pricing'], $this->get('/api/products/' . $product->getId())['pricing'], 'GET /api/products/{id} : même fiche (route d\'API Platform court-circuitée)');
         $this->assertSame(array_diff_key($body['pricing'], ['currency' => 1]), array_diff_key($byId['pricing'], ['currency' => 1]), 'même contrat par identifiant (devise remise à CAD entre les deux)');
     }
 

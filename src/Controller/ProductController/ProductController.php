@@ -187,6 +187,16 @@ class ProductController extends AbstractController
         }
     }
 
+    /**
+     * Fiche d'un produit par identifiant, même contrat que by-slug et productsid. Passe avant la route d'API Platform
+     * /api/products/{id}, dont la sérialisation ne répondait jamais (boutique réglable, 09/10/2026).
+     */
+    #[Route('/api/products/{id}', name: 'get_product_detail', methods: ['GET'], priority: 20, requirements: ['id' => '\d+'])]
+    public function getProductDetail(int $id, Request $request): JsonResponse
+    {
+        return $this->getProductById($id, $request);
+    }
+
     #[Route('/api/products/by-slug/{slug}', name: 'get_product_by_slug', methods: ['GET'])]
     public function getProductBySlug(string $slug, Request $request): JsonResponse
     {

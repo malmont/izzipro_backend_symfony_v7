@@ -70,7 +70,7 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
             $path === '/api/otp-verify' => [
                 [$this->otpAccount, $this->accountKey($request, ['username', 'email'])],
             ],
-            $path === '/api/password-reset/request' => [
+            $path === '/api/password-reset/request', $path === '/api/password-reset/confirm' => [
                 [$this->resetAccount, $this->accountKey($request, ['email'])],
                 [$this->resetIp, $ip],
             ],

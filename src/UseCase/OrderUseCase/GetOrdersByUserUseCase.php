@@ -3,54 +3,19 @@
 namespace App\UseCase\OrderUseCase;
 
 use App\Dto\OrderDTO;
-use App\Dto\OrderItemDTO;
-use App\Dto\AdressOutputDTO;
+use App\Services\OrderService\OrderPresenter;
 use App\Services\OrderService\OrderService;
 
+/** GET /api/ordersuser : commandes du client connecté, de la plus récente à la plus ancienne, montants en cents */
 class GetOrdersByUserUseCase
 {
-    private $orderService;
-
-    public function __construct(OrderService $orderService)
+    public function __construct(private readonly OrderService $orderService, private readonly OrderPresenter $presenter)
     {
-        $this->orderService = $orderService;
     }
 
+    /** @return list<OrderDTO> */
     public function execute(int $userId, string $host, string $locale): array
     {
-        $orders = $this->orderService->getOrdersByUser($userId);
-        $orderDTOs = [];
-
-        foreach ($orders as $order) {
-            $orderItemDTOs = [];
-            foreach ($order->getOrderItems() as $orderItem) {
-                $orderItemDTOs[] = new OrderItemDTO($orderItem, $host);
-            }
-
-            $shippingAdressDTO = $order->getShippingAdress() 
-                ? new AdressOutputDTO($order->getShippingAdress()) 
-                : null;
-
-            $status = $order->getStatus();
-            $statusTranslation = $status ? $status->getTranslation($locale) : null;
-            $statusName = $statusTranslation ? $statusTranslation->getName() : ($status ? $status->getName() : null);
-
-            $orderDTOs[] = new OrderDTO(
-                $order->getId(),
-                $order->getReference(),
-                $order->getTotalAmount(),
-                $order->getSubTotal(),
-                $order->getTotalTax(),
-                $order->getShippingCost(),
-                $order->getOrderDate()->format('Y-m-d H:i:s'),
-                $order->getUserId() ? $order->getUserId()->getId() : null,
-                $shippingAdressDTO,
-                $order->getOrderSource() ? $order->getOrderSource()->getName() : null,
-                $statusName, 
-                $orderItemDTOs
-            );
-        }
-
-        return $orderDTOs;
+        return array_map(fn ($order) => $this->presenter->toDto($order, $host, $locale), $this->orderService->getOrdersByUser($userId));
     }
 }

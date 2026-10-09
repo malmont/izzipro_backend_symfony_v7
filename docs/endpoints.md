@@ -222,7 +222,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (147)
+## Boutique et commun (149)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -298,10 +298,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/media` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::upload` |
 | DELETE | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::deleteNoteDeFrais` |
 | PUT | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::updateNoteDeFrais` |
+| GET | `/api/order-statuses` | PUBLIC_ACCESS | `Controller\OrderController\OrderController::getOrderStatuses` |
 | POST | `/api/order/cancel/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\OrderController\OrderController::cancelOrder` |
 | POST | `/api/order/create-guest` | PUBLIC_ACCESS | `Controller\OrderController\OrderController::createGuestOrder` |
 | POST | `/api/order/create-multi-payment` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\OrderController\OrderController::createOrderWithMultiplePayments` |
 | POST | `/api/order/create` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\OrderController\OrderController::createOrder` |
+| GET | `/api/orders/{id}` | PUBLIC_ACCESS | `Controller\OrderController\OrderController::getCustomerOrder` |
 | GET | `/api/orders` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\OrderController\OrderController::getOrders` |
 | GET | `/api/ordersuser` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\OrderController\OrderController::getUserOrders` |
 | POST | `/api/payment` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::processPayment` |
@@ -374,13 +376,14 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/videos` | aucune règle | `Controller\VideoApiController\VideoApiController::list` |
 | POST | `/videos` | ROLE_ADMIN | `Controller\VideoApiController\VideoApiController::create` |
 
-## Authentification et comptes (9)
+## Authentification et comptes (10)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
 | POST | `/api/login` | PUBLIC_ACCESS | `Controller\Account\SecurityController::loginApi` |
 | POST | `/api/logout` | PUBLIC_ACCESS | `Controller\Account\SecurityController::logoutWeb` |
 | POST | `/api/otp-verify` | PUBLIC_ACCESS | `Controller\Account\OtpApiController::otpVerifyApi` |
+| POST | `/api/password-reset/confirm` | PUBLIC_ACCESS | `Controller\Account\ResetPasswordController::confirmPasswordResetApi` |
 | POST | `/api/password-reset/request` | PUBLIC_ACCESS | `Controller\Account\ResetPasswordController::requestPasswordReset` |
 | POST | `/api/register` | PUBLIC_ACCESS | `Controller\Account\RegistrationController::registerApi` |
 | POST | `/api/resend-verification` | PUBLIC_ACCESS | `Controller\Account\RegistrationController::resendVerificationEmail` |

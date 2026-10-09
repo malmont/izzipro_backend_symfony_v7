@@ -90,6 +90,10 @@ class Order
     #[ORM\Column(type: 'date', nullable: true)]
     private ?\DateTimeInterface $guestLicenseExpirationDate = null;
 
+    /** Jeton d'accès d'un invité à sa commande (GET /api/orders/{id}?token=), renvoyé par order/create-guest ; 08/10/2026 */
+    #[ORM\Column(name: 'guest_token', length: 64, nullable: true)]
+    private ?string $guestToken = null;
+
     public function __construct()
     {
         $this->orderItems = new ArrayCollection();
@@ -420,6 +424,18 @@ class Order
     public function setGuestLicenseExpirationDate(?\DateTimeInterface $guestLicenseExpirationDate): self
     {
         $this->guestLicenseExpirationDate = $guestLicenseExpirationDate;
+        return $this;
+    }
+
+    public function getGuestToken(): ?string
+    {
+        return $this->guestToken;
+    }
+
+    public function setGuestToken(?string $guestToken): static
+    {
+        $this->guestToken = $guestToken;
+
         return $this;
     }
 }

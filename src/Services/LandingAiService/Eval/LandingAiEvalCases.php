@@ -168,6 +168,87 @@ final class LandingAiEvalCases
                     ));
                 },
             ],
+            // --- Étape 4 : boutique réglable (08/10/2026, cas B du jeu d'essai) ---
+            [
+                'id' => 'B1', 'presetId' => 'product-type-f', 'prompt' => 'Mets le prix en gros et la galerie en grille.',
+                'check' => function (object $before, object $after) {
+                    $bigger = false;
+                    foreach ($this->pairs($before, $after) as [$b, $a]) {
+                        if (($b->type ?? null) === 'price' && ($a->size ?? 0) > ($b->size ?? 0)) {
+                            $bigger = true;
+                        }
+                    }
+                    $gallery = $this->find($after, fn ($b) => ($b->type ?? null) === 'gallery');
+                    $grid = ($gallery->galleryStyle ?? null) === 'grid';
+                    $modes = $this->modeGroups($after);
+
+                    return $this->result($bigger && $grid && isset($modes['sale'], $modes['rental']) && $this->modeChildrenKept($before, $after),
+                        sprintf('prix agrandi : %s ; galerie : %s ; groupes de mode : %s ; blocs des groupes conservés : %s',
+                            $bigger ? 'oui' : 'non', $gallery->galleryStyle ?? '(inchangée)', implode(', ', array_keys($modes)) ?: 'aucun', $this->modeChildrenKept($before, $after) ? 'oui' : 'non'));
+                },
+            ],
+            [
+                // Le jeu d'essai cite product-type-a, qui n'a qu'un groupe d'achat : joué sur product-type-f (achat et location)
+                'id' => 'B2', 'presetId' => 'product-type-f', 'prompt' => 'Enlève la partie location : ce produit n\'est qu\'en vente.',
+                'check' => function (object $before, object $after, LandingAiEditResult $r) {
+                    $modes = $this->modeGroups($after);
+                    $ok = !isset($modes['rental']) && isset($modes['sale']);
+
+                    return $this->result($ok, sprintf('groupes de mode à l\'arrivée : %s ; avertissement : %s', implode(', ', array_keys($modes)) ?: 'aucun', $r->warnings ? mb_substr($r->warnings[0], 0, 120) : 'aucun'));
+                },
+            ],
+            [
+                'id' => 'B3', 'presetId' => 'cart-type-a', 'prompt' => 'Supprime le récapitulatif et mets le bouton Commander en vert.',
+                'check' => function (object $before, object $after, LandingAiEditResult $r) {
+                    $totals = $this->find($after, fn ($b) => ($b->type ?? null) === 'cartTotals') !== null;
+                    $button = $this->find($after, fn ($b) => ($b->type ?? null) === 'checkoutButton');
+                    $green = $button !== null && $this->isGreen((string) ($button->background ?? ''));
+                    $limits = $r->proposals['limits'] ?? [];
+                    $cited = (bool) array_filter($limits, fn ($l) => preg_match('/totaux|r[ée]capitulatif/iu', json_encode($l, JSON_UNESCAPED_UNICODE)));
+
+                    return $this->result($totals && $green && $cited, sprintf('cartTotals conservé : %s ; bouton : %s ; limits : %s ; essais : %d',
+                        $totals ? 'oui' : 'non', $button->background ?? '(absent)', $limits ? mb_substr(json_encode($limits[0], JSON_UNESCAPED_UNICODE), 0, 140) : 'aucune', $r->stats->attempts));
+                },
+            ],
+            [
+                'id' => 'B5', 'presetId' => 'boutique-navbar-type-a', 'prompt' => 'Barre sombre, panier et compte à gauche du logo.',
+                'check' => function (object $before, object $after) {
+                    $byId = $this->inspector->blocksById($after);
+                    $order = array_keys($byId);
+                    $top = function (object $block) use ($byId): string { // ancêtre de premier niveau sous la barre
+                        $current = $block;
+                        while (isset($current->parentId) && isset($byId[$current->parentId]) && ($byId[$current->parentId]->parentId ?? null) !== null) {
+                            $current = $byId[$current->parentId];
+                        }
+
+                        return (string) ($current->id ?? '');
+                    };
+                    $cart = $this->find($after, fn ($b) => ($b->type ?? null) === 'cartBadge');
+                    $account = $this->find($after, fn ($b) => ($b->type ?? null) === 'accountMenu');
+                    $logo = $this->find($after, fn ($b) => ($b->type ?? null) === 'image');
+                    $position = fn (?object $b) => $b === null ? PHP_INT_MAX : array_search($top($b), $order, true);
+                    $leftOfLogo = $cart !== null && $account !== null && $logo !== null && $position($cart) < $position($logo) && $position($account) < $position($logo);
+                    // Fond sombre : sur la section (background de la composition) ou sur le container racine
+                    $bar = $this->find($after, fn ($b) => ($b->type ?? null) === 'container' && ($b->parentId ?? null) === null);
+                    $background = $this->isDark((string) ($after->background ?? '')) ? (string) $after->background : (string) ($bar->background ?? '');
+                    $dark = $this->isDark($background);
+
+                    return $this->result($leftOfLogo && $dark, sprintf('panier et compte avant le logo : %s ; fond : %s (%s)',
+                        $leftOfLogo ? 'oui' : 'non', $background !== '' ? $background : '(absent)', $dark ? 'sombre' : 'clair ou non mesurable'));
+                },
+            ],
+            [
+                'id' => 'B6', 'presetId' => 'checkout-type-a', 'prompt' => 'Une seule colonne, et retire le paiement Stripe, on paiera par virement.',
+                'check' => function (object $before, object $after, LandingAiEditResult $r) {
+                    $payment = $this->find($after, fn ($b) => ($b->type ?? null) === 'stripePayment') !== null;
+                    $columns = $this->inspector->blocksById($after)['a-colonnes'] ?? null;
+                    $oneColumn = $columns === null || ($columns->layout ?? 'stack') !== 'row';
+                    $limits = $r->proposals['limits'] ?? [];
+
+                    return $this->result($payment && $oneColumn && $limits !== [], sprintf('stripePayment conservé : %s ; colonnes : %s ; limits : %s',
+                        $payment ? 'oui' : 'non', $columns === null ? 'container supprimé' : ($columns->layout ?? 'stack'), $limits ? mb_substr(json_encode($limits[0], JSON_UNESCAPED_UNICODE), 0, 140) : 'aucune'));
+                },
+            ],
         ];
     }
 
@@ -411,6 +492,30 @@ final class LandingAiEvalCases
                     ));
                 },
             ],
+            [
+                'id' => 'B4', 'componentKey' => null, 'images' => [], 'media' => [],
+                'prompt' => 'Page d\'accueil de la boutique : grand diaporama, nos catégories, meilleures ventes, pourquoi nous choisir, infolettre.',
+                'check' => function (LandingAiPageResult $r) {
+                    $families = array_column($r->sections, 'componentKey');
+                    $expected = ['HomeSlider', 'CategoryList', 'Carousel', 'Features', 'Newsletter'];
+                    $sources = [];
+                    $bestsellers = false;
+                    foreach ($r->sections as $section) {
+                        foreach ($this->inspector->blocks($section['composition']) as $block) {
+                            if (is_string($block->repeat->source ?? null)) {
+                                $sources[$block->repeat->source] = true;
+                            }
+                            if (($block->productFetch ?? null) === 'typeBestsellers' || ($section['composition']->productFetch ?? null) === 'typeBestsellers') {
+                                $bestsellers = true;
+                            }
+                        }
+                    }
+                    $ok = $families === $expected && isset($sources['slides'], $sources['categories']) && $bestsellers;
+
+                    return $this->result($ok, sprintf('sections : %s ; listes liées : %s ; meilleures ventes : %s',
+                        implode(' > ', $families), implode(', ', array_keys($sources)) ?: 'aucune', $bestsellers ? 'oui' : 'non'));
+                },
+            ],
         ];
     }
 
@@ -629,4 +734,48 @@ final class LandingAiEvalCases
     {
         return ['ok' => $ok, 'detail' => $detail];
     }
+
+    /** Groupes de mode d'une fiche produit : mode => container */
+    private function modeGroups(object $composition): array
+    {
+        $groups = [];
+        foreach ($this->inspector->blocks($composition) as $block) {
+            if (($block->type ?? null) === 'container' && is_string($block->mode ?? null)) {
+                $groups[$block->mode] = $block;
+            }
+        }
+
+        return $groups;
+    }
+
+    /** Chaque bloc d'un groupe de mode présent au départ est encore là (même identifiant) */
+    private function modeChildrenKept(object $before, object $after): bool
+    {
+        $groups = array_map(fn ($g) => $g->id, $this->modeGroups($before));
+        $afterIds = array_keys($this->inspector->blocksById($after));
+        foreach ($this->inspector->blocks($before) as $block) {
+            if (in_array($block->parentId ?? null, $groups, true) && !in_array($block->id ?? null, $afterIds, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** Couleur sombre (luminance relative faible ; rgb() existant) */
+    private function isDark(string $color): bool
+    {
+        $rgb = $this->rgb($color);
+
+        return $rgb !== null && (0.2126 * $rgb[0] + 0.7152 * $rgb[1] + 0.0722 * $rgb[2]) / 255 < 0.35;
+    }
+
+    /** Couleur hexadécimale à dominante verte */
+    private function isGreen(string $color): bool
+    {
+        $rgb = $this->rgb($color);
+
+        return $rgb !== null && $rgb[1] > $rgb[0] * 1.2 && $rgb[1] > $rgb[2] * 1.2;
+    }
+
 }

@@ -170,6 +170,26 @@ d'article**.
   `remaining_stock` quand la quantité n'est pas disponible (200 auparavant).
 - Tests : `tests/Functional/Boutique/CartQuoteApiTest.php`.
 
+## Compte client (08/10/2026, § 8)
+
+- **Nouveau mot de passe** : `POST /api/password-reset/request { email }` envoie un lien vers la page du frontend du
+  site : `https://<hôte du site>/reset-password?token=…&locale=` (chemin `FRONTEND_PASSWORD_RESET_PATH`, défaut
+  `/reset-password`, `ResetPasswordController::DEFAULT_FRONTEND_RESET_PATH` ; vide = ancien formulaire du backend).
+  La page appelle `POST /api/password-reset/confirm { token, password }` (ou `newPassword`) : 200 `{ message }`,
+  400 jeton inconnu ou expiré (1 h) ou mot de passe de moins de 8 caractères ; même limite de débit que la demande.
+  L'ancien `POST /password-reset/confirm` (formulaire Twig) reste.
+- **Détail d'une commande** : `GET /api/orders/{id}` pour le client connecté propriétaire, ou pour un invité avec
+  `?token=` (`order.guest_token`, renvoyé **une seule fois** dans la réponse de `order/create-guest` : `guestToken`) ;
+  autre client ou jeton faux : 404, sans client ni jeton : 401. Même forme que les éléments de `GET /api/ordersuser`
+  (`OrderPresenter`). Colonne : migration `Version20261009090000`, script `scripts/migrate_all_v2_order_guest_token.sh`.
+- **Statuts** : `GET /api/order-statuses?locale=` → `[{ id, name, description }]` (identifiants communs à tous les
+  sites : 1 Incomplete … 7 Annulation).
+- **`GET /api/ordersuser`** : montants en **cents entiers** (`totalAmount`, `subTotal`, `priceTax`, `priceShipping`,
+  lignes `unitPrice`, `totalPrice`), `currency`, `statusId`, `carrier { id, name }`, lignes avec `productVariantId`,
+  `booking { start, end, status, rateId }` et `customizationId` (toujours `null` : la personnalisation n'est pas
+  rattachée à la ligne de commande).
+- Tests : `tests/Functional/Boutique/CustomerAccountApiTest.php`.
+
 ## Boutique de démonstration (site `demo`, 08/10/2026)
 
 `php bin/console app:boutique:seed-demo [--customer-email=…] [--reset-password] [--otp]` (`SeedBoutiqueDemoCommand`,

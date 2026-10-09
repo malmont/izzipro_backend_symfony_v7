@@ -20,6 +20,9 @@ use DateTimeImmutable;
 
 class ResetPasswordController extends AbstractController
 {
+    /** Page du frontend ouverte par le lien du courriel (chemin sur l'hôte du site) ; FRONTEND_PASSWORD_RESET_PATH la remplace, vide = formulaire du backend */
+    public const DEFAULT_FRONTEND_RESET_PATH = '/reset-password';
+
     public function __construct(
         private TenantEntityManagerProvider $tenantEmProvider,
         private TenantConnectionManager $tenantManager,
@@ -83,11 +86,18 @@ class ResetPasswordController extends AbstractController
         $em->flush();
 
         // 5. Génération URL (avec tenant_host pour que le lien cliquable sache où aller)
-        $resetUrl = $urlGenerator->generate(
-            'app_password_reset_confirm_form',
-            ['token' => $resetToken, 'tenant_host' => $clientHost],
-            UrlGeneratorInterface::ABSOLUTE_URL
-        );
+        // Boutique réglable (08/10/2026) : le lien ouvre la page du frontend du site (FRONTEND_PASSWORD_RESET_PATH, vide =
+        // ancien formulaire du backend), qui appelle POST /api/password-reset/confirm { token, password }
+        $frontendPath = trim((string) ($_ENV['FRONTEND_PASSWORD_RESET_PATH'] ?? $_SERVER['FRONTEND_PASSWORD_RESET_PATH'] ?? self::DEFAULT_FRONTEND_RESET_PATH));
+        if ($frontendPath !== '' && $request->headers->get('x-tenant-host')) {
+            $resetUrl = sprintf('https://%s%s?%s', $clientHost, '/' . ltrim($frontendPath, '/'), http_build_query(['token' => $resetToken, 'locale' => $locale]));
+        } else {
+            $resetUrl = $urlGenerator->generate(
+                'app_password_reset_confirm_form',
+                ['token' => $resetToken, 'tenant_host' => $clientHost],
+                UrlGeneratorInterface::ABSOLUTE_URL
+            );
+        }
 
         // CORRECTION ASSETS : Toujours utiliser le domaine du Backend (API)
         $baseUrl = $request->getSchemeAndHttpHost();
@@ -105,6 +115,35 @@ class ResetPasswordController extends AbstractController
         );
 
         return $this->json(['message' => 'Link sent if email exists.']);
+    }
+
+    /**
+     * Confirmation par l'API (page du frontend, boutique réglable 08/10/2026) : { token, password } (ou newPassword).
+     * Le site est celui de la requête (X-Tenant-Host). Même limite de débit que la demande.
+     */
+    #[Route('/api/password-reset/confirm', name: 'api_password_reset_confirm', methods: ['POST'])]
+    public function confirmPasswordResetApi(Request $request, UserPasswordHasherInterface $passwordHasher): JsonResponse
+    {
+        $content = json_decode($request->getContent(), true);
+        $token = is_array($content) ? ($content['token'] ?? null) : null;
+        $newPassword = is_array($content) ? ($content['password'] ?? $content['newPassword'] ?? null) : null;
+        if (!is_string($token) || $token === '' || !is_string($newPassword)) {
+            return $this->json(['error' => 'token et password attendus.'], 400);
+        }
+        if (strlen($newPassword) < 8 || strlen($newPassword) > 4096) {
+            return $this->json(['error' => 'Le mot de passe doit comporter au moins 8 caractères.'], 400);
+        }
+        $em = $this->tenantEmProvider->getEntityManager();
+        $user = $em->getRepository(User::class)->findOneBy(['resetToken' => $token]);
+        if (!$user || $user->getResetTokenExpiresAt() < new \DateTime()) {
+            return $this->json(['error' => 'Lien invalide ou expiré : demandez un nouveau lien.'], 400);
+        }
+        $user->setPassword($passwordHasher->hashPassword($user, $newPassword));
+        $user->setResetToken(null);
+        $user->setResetTokenExpiresAt(null);
+        $em->flush();
+
+        return $this->json(['message' => 'Mot de passe modifié. Vous pouvez vous connecter.']);
     }
 
     // --- ÉTAPE 2 : FORMULAIRE D'AFFICHAGE (GET) ---

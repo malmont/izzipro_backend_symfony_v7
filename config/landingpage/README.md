@@ -364,9 +364,13 @@ vérifications automatiques réussies à chaque niveau ; la qualité visuelle n'
   connaît la propriété `mode` des containers) : les blocs du commerce lisent les données de la page, l'IA ne règle
   que leur apparence et n'invente jamais une donnée de produit. Garde-fou en retouche
   (`LandingAiCompositionChecker::lostRequiredBlocks`) : un bloc d'un type exigé par une page système (`stripePayment`,
-  `cartLines`, `loginForm`…) ou un container portant `mode`, présent au départ, doit rester (même type, même mode),
-  **même si la demande le demande** : la proposition est renvoyée au modèle. Les créations et le mode page ne sont pas
+  `cartLines`, `loginForm`…), présent au départ, doit rester (même type), **même si la demande le demande** : la
+  proposition est renvoyée au modèle. Les groupes de mode (container portant `mode`) se retirent un à un (« enlève la
+  partie location »), mais la fiche en garde au moins un (09/10/2026). Les créations et le mode page ne sont pas
   rattachés à une page système : c'est le PUT des réglages (`docs/boutique.md`) qui exige les blocs obligatoires.
+  Jeu d'essai : cas **B1 à B6** (`LandingAiEvalCases`, étape 4 du jeu d'essai publié par le frontend) : B1, B2, B3, B5,
+  B6 en retouche (`--mode=edit --case=B1`), B4 en mode page. B2 est joué sur `product-type-f` (achat et location) et
+  non sur `product-type-a`, qui n'a qu'un groupe d'achat.
 - **Prompt de vidéo** (`POST /api/landingpage-ai/video-prompt`, 02/10/2026 ; `WriteLandingVideoPromptUseCase`,
   `LandingAiVideoPromptWriter`) : l'administrateur décrit en français la vidéo d'une scène au défilement, la réponse
   est un prompt en anglais pour un outil de génération de vidéo. Entrée `{ prompt (2 000 car.), format: landscape |

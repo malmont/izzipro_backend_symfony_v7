@@ -14,6 +14,7 @@ class OrderItemDTO
     public float $unitPrice;
     public float $totalPrice;
     public int $productId;
+    public ?int $productVariantId = null;
     public string $productVariantName;
     
     public ?string $productVariantSize = null;
@@ -37,6 +38,7 @@ class OrderItemDTO
         $product = $variant->getProduct();
         
         $this->productId = $product->getId();
+        $this->productVariantId = $variant->getId();
         $this->productVariantName = $product->getName();
         
         // Use the snapshot stored in the entity first, fall back to product if empty (for older orders)
@@ -60,14 +62,7 @@ class OrderItemDTO
         }
 
         // --- 3. GESTION IMAGE ---
-        $imagePath = $product->getImage();
-        if ($imagePath) {
-            $this->productImage = str_starts_with($imagePath, 'http')
-                ? $imagePath
-                : rtrim($host, '/') . '/assets/uploads/products/' . $imagePath;
-        } else {
-            $this->productImage = null;
-        }
+        $this->productImage = \App\Services\MediaUrlResolver::joinStored($product->getImage(), rtrim($host, '/') . '/assets/uploads/products');
 
         // --- 4. GESTION BOOKING ---
         $bookingEntity = $orderItem->getBooking(); 
@@ -78,6 +73,7 @@ class OrderItemDTO
                 'end'   => $bookingEntity->getEndAt()->format(DateTimeInterface::ATOM),
                 // On peut ajouter le status si besoin
                 'status'=> $bookingEntity->getStatus(), 
+                'rateId' => $bookingEntity->getRentalPackId(),
             ];
         }
     }
@@ -87,9 +83,11 @@ class OrderItemDTO
         return [
             'id' => $this->id,
             'quantity' => $this->quantity,
-            'unitPrice' => $this->unitPrice,
-            'totalPrice' => $this->totalPrice,
+            'unitPrice' => (int) round($this->unitPrice), // cents
+            'totalPrice' => (int) round($this->totalPrice),
             'productId' => $this->productId,
+            'productVariantId' => $this->productVariantId,
+            'customizationId' => null, // la personnalisation n'est pas rattachée à la ligne de commande (à venir)
             'productVariantName' => $this->productVariantName,
             'productSaleUnit' => $this->productSaleUnit,
             'productVariantColor' => $this->productVariantColor,

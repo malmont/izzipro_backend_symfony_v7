@@ -14,6 +14,9 @@ use App\Dto\PaymentMethodDTO;
 use App\Dto\CreateOrderMultiPaymentDTO;
 use Symfony\Bundle\SecurityBundle\Security;
 use App\UseCase\OrderUseCase\GetOrdersByUserUseCase;
+use App\UseCase\OrderUseCase\GetCustomerOrderUseCase;
+use App\UseCase\OrderUseCase\GetOrderStatusesUseCase;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use App\Entity\User;
 use App\Entity\Adress;
 use App\Entity\Carrier;
@@ -61,7 +64,9 @@ class OrderController extends AbstractController
         StripeService $stripeService,
         TenantConnectionManager $tenantManager,
         MediaUrlResolver $mediaUrlResolver,
-        private readonly BoutiqueSettingsService $boutiqueSettings
+        private readonly BoutiqueSettingsService $boutiqueSettings,
+        private readonly GetCustomerOrderUseCase $getCustomerOrderUseCase,
+        private readonly GetOrderStatusesUseCase $getOrderStatusesUseCase
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -441,6 +446,9 @@ class OrderController extends AbstractController
             }
 
             $em->refresh($result);
+            // Jeton d'accès de l'invité à sa commande (GET /api/orders/{id}?token=), renvoyé une seule fois ici
+            $result->setGuestToken(bin2hex(random_bytes(24)));
+            $em->flush();
 
             // Capture Stripe Payment Intent
             if (isset($data['paymentIntentId'])) {
@@ -489,6 +497,7 @@ class OrderController extends AbstractController
             return $this->json([
                 'success' => true,
                 'orderId' => $result->getId(),
+                'guestToken' => $result->getGuestToken(),
                 'message' => 'Commande Guest créée avec succès.'
             ], JsonResponse::HTTP_CREATED);
         }
@@ -744,5 +753,31 @@ class OrderController extends AbstractController
     {
         return $this->emProvider->getEntityManager()->getRepository(Payments::class)
             ->count(['stripePaymentId' => $paymentIntentId]) > 0;
+    }
+
+    /**
+     * Détail d'une commande pour son client connecté, ou pour un invité muni du jeton reçu à la commande (?token=).
+     * Boutique réglable, 08/10/2026. Autre client ou jeton faux : 404.
+     */
+    #[Route('/api/orders/{id}', name: 'api_customer_order', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function getCustomerOrder(int $id, Request $request): JsonResponse
+    {
+        /** @var User|null $user */
+        $user = $this->getUser();
+        $host = $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost());
+        try {
+            $order = $this->getCustomerOrderUseCase->execute($id, $user, $request->query->get('token'), $host, (string) $request->query->get('locale', 'fr'));
+        } catch (HttpException $e) {
+            return $this->json(['error' => $e->getMessage()], $e->getStatusCode());
+        }
+
+        return $this->json($order->toArray());
+    }
+
+    /** Statuts de commande du site, dans la langue demandée (public, lecture seule) */
+    #[Route('/api/order-statuses', name: 'api_order_statuses', methods: ['GET'])]
+    public function getOrderStatuses(Request $request): JsonResponse
+    {
+        return $this->json($this->getOrderStatusesUseCase->execute((string) $request->query->get('locale', 'fr')));
     }
 }
