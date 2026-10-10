@@ -207,7 +207,7 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 modèles ; version 2 : familles `app: boutique`, `systemPages`), `ia-assistant-jeu-essai.md` (cas d'évaluation),
 `ia-libelles-editeur.md` (facultatif : libellés de l'éditeur cités par l'assistant). **Ne pas les modifier à la main** :
 la version active vient de la synchronisation (`var/landingpage-config/`) ; ceux du dépôt sont la version de repli
-(tests, serveur neuf), recopiés depuis la dernière version synchronisée (09/10/2026 : `7dcabc2067458f54`, liste `features` des atouts).
+(tests, serveur neuf), recopiés depuis la dernière version synchronisée (10/10/2026 : `e105592449f84560`, `mobileCompact` des navbars).
 
 ## Tester
 

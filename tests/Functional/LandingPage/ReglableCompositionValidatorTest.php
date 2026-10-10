@@ -40,6 +40,19 @@ class ReglableCompositionValidatorTest extends KernelTestCase
         $this->assertSame([], $this->validator()->validateComposition($this->composition()));
     }
 
+    public function testMobileCompactNavbarIsAccepted(): void
+    {
+        // Contrat e105592449f84560 (10/10/2026) : barre mobile compacte des navbars, booléen sans valeur par défaut
+        $composition = $this->composition();
+        $composition->mobileCompact = true;
+        $validator = $this->validator();
+        $this->assertSame([], $validator->validateComposition($composition));
+        $this->assertTrue($composition->mobileCompact, 'la validation ne modifie pas la composition');
+
+        $composition->mobileCompact = 'oui';
+        $this->assertNotEmpty(array_filter($validator->validateComposition($composition), fn ($e) => $e['path'] === 'mobileCompact'));
+    }
+
     /** @dataProvider refusedCompositions */
     public function testInvalidCompositionIsRefused(callable $alter, string $expectedPath, string $expectedMessage): void
     {

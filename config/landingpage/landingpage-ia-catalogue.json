@@ -11000,6 +11000,7 @@
             "contentWidth": 1280,
             "scrollBackground": "rgba(255, 255, 255, 0.92)",
             "scrollBlur": true,
+            "mobileCompact": true,
             "blocks": [
               {
                 "id": "a-barre",
@@ -11270,6 +11271,7 @@
             "contentWidth": 1280,
             "scrollBackground": "rgba(15, 23, 42, 0.95)",
             "scrollBlur": true,
+            "mobileCompact": true,
             "blocks": [
               {
                 "id": "b-barre",
@@ -13823,7 +13825,10 @@
                 "fontFamily": "Georgia",
                 "lineHeight": 1.02,
                 "letterSpacing": -0.01,
-                "headingLevel": 1
+                "headingLevel": 1,
+                "mobile": {
+                  "size": 40
+                }
               },
               {
                 "id": "j-texte",

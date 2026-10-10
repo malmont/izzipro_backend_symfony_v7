@@ -122,6 +122,10 @@
       "type": "boolean",
       "description": "Barre fixée : fond flouté (verre) quand la page a défilé."
     },
+    "mobileCompact": {
+      "type": "boolean",
+      "description": "Navbar : barre mobile compacte. Sur téléphone, si le menu est en burger, les blocs compte (accountMenu) et langue (language) quittent la barre et passent dans le tiroir du menu ; restent logo, panier, burger."
+    },
     "overlayTop": {
       "type": "boolean",
       "description": "Navbar superposée : fixée en haut par-dessus le début de la page (fond transparent sur un héros) ; en édition, affichée avec le fond de défilement."
@@ -1918,23 +1922,19 @@
         },
         "showImages": {
           "type": "boolean",
-          "default": true,
-          "description": "Lignes du panier ou récapitulatif : vignettes des produits ; groupes d’options : icônes des options ; détail de commande : vignettes des articles. Types : cartLines, checkoutSummary, optionGroups, orderDetail."
+          "description": "Lignes du panier ou récapitulatif : vignettes des produits ; groupes d’options : icônes des options ; détail de commande : vignettes des articles. Types : cartLines, checkoutSummary, optionGroups, orderDetail. Vrai si absent ; seul false est enregistré."
         },
         "showDelta": {
           "type": "boolean",
-          "default": true,
-          "description": "Groupes d’options (personnalisation) : supplément de prix affiché sur chaque option. Types : optionGroups."
+          "description": "Groupes d’options (personnalisation) : supplément de prix affiché sur chaque option. Types : optionGroups. Vrai si absent ; seul false est enregistré."
         },
         "showShipping": {
           "type": "boolean",
-          "default": true,
-          "description": "Totaux du panier : ligne « Livraison ». Types : cartTotals."
+          "description": "Totaux du panier : ligne « Livraison ». Types : cartTotals. Vrai si absent ; seul false est enregistré."
         },
         "showTaxes": {
           "type": "boolean",
-          "default": true,
-          "description": "Totaux du panier : ligne « Taxes ». Types : cartTotals."
+          "description": "Totaux du panier : ligne « Taxes ». Types : cartTotals. Vrai si absent ; seul false est enregistré."
         },
         "badgeStyle": {
           "enum": [
