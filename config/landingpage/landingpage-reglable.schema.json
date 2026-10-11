@@ -1640,9 +1640,35 @@
         "navBurger": {
           "enum": [
             "plain",
-            "boxed"
+            "boxed",
+            "round"
           ],
-          "description": "Types : nav."
+          "description": "Bouton du menu sur mobile : plain (nu, défaut), boxed (dans un carré bordé) ou round (dans un rond bordé). Types : nav."
+        },
+        "navBurgerIcon": {
+          "enum": [
+            "lines",
+            "short",
+            "two",
+            "dots",
+            "grid",
+            "text"
+          ],
+          "description": "Icône du bouton du menu sur mobile : lines (3 barres, défaut), short (3 barres, la dernière courte), two (2 barres), dots (3 points verticaux), grid (grille de points) ou text (mot « Menu »). Types : nav."
+        },
+        "navBurgerColor": {
+          "$ref": "#/$defs/color",
+          "description": "Bouton du menu sur mobile : couleur de l’icône (défaut : couleur du menu). Types : nav."
+        },
+        "navBurgerBackground": {
+          "$ref": "#/$defs/color",
+          "description": "Bouton du menu sur mobile : fond du carré ou du rond (boxed, round). Types : nav."
+        },
+        "navBurgerSize": {
+          "type": "number",
+          "minimum": 28,
+          "maximum": 64,
+          "description": "Bouton du menu sur mobile : taille du bouton en px (40 par défaut). Types : nav."
         },
         "navLanguage": {
           "type": "boolean",
@@ -5631,6 +5657,86 @@
             "not": {
               "required": [
                 "navBurger"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navBurgerIcon"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navBurgerColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navBurgerBackground"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "nav"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "navBurgerSize"
               ]
             }
           }

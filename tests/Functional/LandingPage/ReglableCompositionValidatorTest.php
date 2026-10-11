@@ -53,6 +53,29 @@ class ReglableCompositionValidatorTest extends KernelTestCase
         $this->assertNotEmpty(array_filter($validator->validateComposition($composition), fn ($e) => $e['path'] === 'mobileCompact'));
     }
 
+    public function testNavBurgerSettingsAreAccepted(): void
+    {
+        // Contrat b731bbe4ab106fff (11/10/2026) : bouton du menu mobile réglable, champs réservés au bloc nav
+        $composition = $this->composition();
+        $composition->blocks[] = (object) [
+            'id' => 'menu', 'type' => 'nav', 'parentId' => null,
+            'links' => [(object) ['title' => 'Accueil', 'url' => '/']],
+            'navBurger' => 'round', 'navBurgerIcon' => 'grid', 'navBurgerColor' => '#ffffff',
+            'navBurgerBackground' => '#1d4ed8', 'navBurgerSize' => 48,
+        ];
+        $validator = $this->validator();
+        $this->assertSame([], $validator->validateComposition($composition));
+
+        $nav = count($composition->blocks) - 1;
+        $composition->blocks[$nav]->navBurgerSize = 80;
+        $composition->blocks[$nav]->navBurgerIcon = 'cross';
+        $composition->blocks[1]->navBurger = 'round';
+        $paths = array_column($validator->validateComposition($composition), 'path');
+        $this->assertContains("blocks[$nav].navBurgerSize", $paths);
+        $this->assertContains("blocks[$nav].navBurgerIcon", $paths);
+        $this->assertContains('blocks[1].navBurger', $paths, 'champ réservé au bloc nav');
+    }
+
     /** @dataProvider refusedCompositions */
     public function testInvalidCompositionIsRefused(callable $alter, string $expectedPath, string $expectedMessage): void
     {
