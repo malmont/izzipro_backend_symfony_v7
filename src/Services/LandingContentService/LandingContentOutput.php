@@ -69,7 +69,7 @@ final class LandingContentOutput
 
     private function option(ProductOption $option, string $locale): array
     {
-        return ['id' => $option->getId(), 'code' => $option->getCode(), 'name' => $option->getTranslation($locale)?->getName() ?? $option->getName()];
+        return ['id' => $option->getId(), 'isDemo' => $option->isDemo(), 'code' => $option->getCode(), 'name' => $option->getTranslation($locale)?->getName() ?? $option->getName()];
     }
 
     private function value(ProductOptionValue $value, string $locale, string $host): array

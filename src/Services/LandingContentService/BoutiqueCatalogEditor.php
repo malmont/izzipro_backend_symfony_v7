@@ -2,6 +2,7 @@
 
 namespace App\Services\LandingContentService;
 
+use App\Services\SiteContentService\DemoContentMarker;
 use App\Entity\CheckoutSession;
 use App\Entity\Color;
 use App\Entity\ColorTranslation;
@@ -74,6 +75,7 @@ final class BoutiqueCatalogEditor
             $this->stock->execute($variant, (int) $values['stockQuantity'], true); // mouvement d'inventaire, comme l'administration
         }
         $em->flush();
+        $this->customized($product);
 
         return $variant;
     }
@@ -91,15 +93,17 @@ final class BoutiqueCatalogEditor
         }
         $inCart = (int) $em->getConnection()->fetchOne(
             "SELECT COUNT(*) FROM checkout_session WHERE status IN (?, ?) AND cart::text ~ ?",
-            [CheckoutSession::STATUS_OPEN, CheckoutSession::STATUS_PROCESSING, '"productVariantId"\s*:\s*"?' . (int) $variant->getId() . '\b']
+            [CheckoutSession::STATUS_OPEN, CheckoutSession::STATUS_PROCESSING, '"productVariantId"\s*:\s*"?' . (int) $variant->getId() . '\y'] // \y : limite de mot de PostgreSQL
         );
         if ($inCart > 0) {
             throw new LandingContentException(409, 'Cette variante est dans un paiement en cours : réessayez plus tard, ou mettez son stock à 0.');
         }
         $em->createQuery('DELETE FROM ' . InventoryMovements::class . ' m WHERE m.productVariant = :v')->setParameter('v', $variant)->execute();
-        $variant->getProduct()?->removeVariant($variant);
+        $product = $variant->getProduct();
+        $product?->removeVariant($variant);
         $em->remove($variant);
         $em->flush();
+        $this->customized($product);
     }
 
     /** { name*, codeHexa } ; le nom est aussi écrit dans la langue demandée */
@@ -140,6 +144,7 @@ final class BoutiqueCatalogEditor
         $em = $this->emProvider->getEntityManager();
         $em->persist($value);
         $em->flush();
+        $this->customized($option);
         $this->editor->apply('customization-values', $value, $values, $locale);
 
         return $value;
@@ -155,8 +160,10 @@ final class BoutiqueCatalogEditor
                 implode(' ; ', array_filter([$combinations ? 'combinaisons n° ' . implode(', ', $combinations) : null, $variants ? 'variantes n° ' . implode(', ', $variants) : null]))));
         }
         $em = $this->emProvider->getEntityManager();
+        $option = $value->getProductOption();
         $em->remove($value);
         $em->flush();
+        $this->customized($option);
     }
 
     /** { optionIds* (identifiants de valeurs d'option), image*, stock } ; un ensemble d'options déjà présent : 422 */
@@ -188,6 +195,7 @@ final class BoutiqueCatalogEditor
         }
         $em->persist($combination);
         $em->flush();
+        $this->customized($variant);
 
         return $combination;
     }
@@ -199,6 +207,7 @@ final class BoutiqueCatalogEditor
         $em = $this->emProvider->getEntityManager();
         $em->remove($combination);
         $em->flush();
+        $this->customized($variant);
 
         return $variant;
     }
@@ -254,6 +263,14 @@ final class BoutiqueCatalogEditor
             $em->getRepository(Feature::class)->find($id)?->setPosition($position);
         }
         $em->flush();
+    }
+
+    /** Fiche d'exemple modifiée : devenue définitive, enregistrée à part (voir DemoContentMarker) */
+    private function customized(?object $entity): void
+    {
+        if (DemoContentMarker::customized($entity)) {
+            $this->emProvider->getEntityManager()->flush();
+        }
     }
 
     /**

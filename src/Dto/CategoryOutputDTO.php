@@ -7,6 +7,8 @@ use App\Services\MediaUrlResolver;
 class CategoryOutputDTO
 {
     public int $id;
+    /** Contenu d'exemple encore à remplacer (copié du site de référence, jamais modifié) */
+    public bool $isDemo = false;
     public ?string $name;
     public ?string $description;
     public ?string $image;
@@ -19,6 +21,8 @@ class CategoryOutputDTO
         $translation = $category->getTranslation($locale);
 
         $this->id = $category->getId();
+
+        $this->isDemo = $category->isDemo();
         $this->name = $translation?->getName() ?? $category->getName(); 
         $this->description = $translation?->getDescription() ?? $category->getDescription(); 
         $this->isRentalCategory = $category->isRentalCategory();
@@ -34,6 +38,7 @@ class CategoryOutputDTO
     {
         return [
             'id' => $this->id,
+            'isDemo' => $this->isDemo,
             'name' => $this->name,
             'description' => $this->description,
             'image' => $this->image,

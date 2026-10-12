@@ -8,6 +8,8 @@ use App\Services\MediaUrlResolver;
 class ExploreCardDto
 {
     public int     $id;
+    /** Contenu d'exemple encore à remplacer (copié du site de référence, jamais modifié) */
+    public bool $isDemo = false;
     public bool    $isDifferent;
     public ?string $standardTitle;
     public ?string $differentTitle;
@@ -24,6 +26,8 @@ class ExploreCardDto
         $translation = $entity->getTranslation($locale);
 
         $dto->id          = $entity->getId();
+
+        $dto->isDemo = $entity->isDemo();
         $dto->isDifferent = $entity->getIsDifferent();
         $dto->link        = $entity->getLink();
 

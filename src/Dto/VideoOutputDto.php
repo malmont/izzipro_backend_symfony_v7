@@ -6,6 +6,8 @@ use App\Entity\Video;
 class VideoOutputDto
 {
     public int $id;
+    /** Contenu d'exemple encore à remplacer (copié du site de référence, jamais modifié) */
+    public bool $isDemo = false;
     public ?string $titre;
     public ?string $title;
     public ?string $description;
@@ -26,6 +28,7 @@ class VideoOutputDto
         $translation = $video->getTranslation($locale);
         
         $this->id = (int) $video->getId();
+        $this->isDemo = $video->isDemo();
         $this->titre = $translation?->getTitre() ?? $video->getTitre();
         $this->title = $this->titre;
 

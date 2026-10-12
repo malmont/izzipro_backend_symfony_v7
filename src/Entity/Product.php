@@ -1,6 +1,7 @@
 <?php
 namespace App\Entity;
 
+use App\Entity\Traits\DemoContentTrait;
 use App\Enum\ProductMode;
 use DateTime;
 use App\Entity\Categories;
@@ -28,8 +29,10 @@ use Symfony\Component\Serializer\Annotation\Groups;
 #[ORM\Index(name: 'idx_product_is_pos', fields: ['isPos'])]
 #[ORM\Index(name: 'idx_product_is_accessory', fields: ['isAccessory'])]
 #[ApiResource]
-class Product implements TranslatableInterface
+class Product implements TranslatableInterface, DemoContentInterface
 {
+    use DemoContentTrait;
+
     #[Groups(['vehicle_product:read'])]
     #[ORM\Id]
     #[ORM\GeneratedValue]

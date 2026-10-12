@@ -2,6 +2,7 @@
 
 namespace App\Services\LandingContentService;
 
+use App\Services\SiteContentService\DemoContentMarker;
 use App\Entity\Presentation;
 use App\Entity\PresentationGroup;
 use App\Services\TenantEntityManagerProvider;
@@ -65,6 +66,7 @@ final class PresentationGroupEditor
             $presentation->{'set' . ucfirst($field)}($value);
         }
         $em->persist($presentation);
+        DemoContentMarker::customized($group);
         $group->addPresentation($presentation);
         $presentation->addPresentationGroup($group);
         $em->flush();
@@ -92,6 +94,7 @@ final class PresentationGroupEditor
             throw new LandingContentException(404, 'Présentation absente de ce groupe.');
         }
         $order = array_values(array_diff($this->order($group), [$presentationId]));
+        DemoContentMarker::customized($group);
         $presentation->removePresentationGroup($group);
         $group->removePresentation($presentation);
         $em = $this->emProvider->getEntityManager();
@@ -119,6 +122,7 @@ final class PresentationGroupEditor
             throw new LandingContentException(422, 'order : chaque présentation du groupe, une seule fois', [['path' => 'order', 'message' => sprintf('identifiants attendus : %s', implode(', ', $current))]]);
         }
         $group->setPresentationOrder($ids);
+        DemoContentMarker::customized($group);
         $this->emProvider->getEntityManager()->flush();
     }
 

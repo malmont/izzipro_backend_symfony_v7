@@ -6,6 +6,8 @@ use App\Entity\Marque;
 class MarqueOutputDto
 {
     public int $id;
+    /** Contenu d'exemple encore à remplacer (copié du site de référence, jamais modifié) */
+    public bool $isDemo = false;
     public string $titre;
     public ?string $logosMarquesUrl;
     public array $categories = [];
@@ -13,6 +15,7 @@ class MarqueOutputDto
     public function __construct(Marque $marque, ?string $baseImageUrl = null)
     {
         $this->id = $marque->getId();
+        $this->isDemo = $marque->isDemo();
         $this->titre = $marque->getTitre();
         $this->logosMarquesUrl = $marque->getLogosMarques() && $baseImageUrl
             ? rtrim($baseImageUrl, '/') . '/' . $marque->getLogosMarques()

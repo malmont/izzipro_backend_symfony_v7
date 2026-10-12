@@ -7,6 +7,8 @@ use App\Dto\PresentationOutputDto;
 class PresentationGroupOutputDto
 {
     public int $id;
+    /** Contenu d'exemple encore à remplacer (copié du site de référence, jamais modifié) */
+    public bool $isDemo = false;
     public ?string $titre;
     public array $presentations = [];
 
@@ -15,6 +17,8 @@ class PresentationGroupOutputDto
         $translation = $entity->getTranslation($locale);
         
         $this->id = $entity->getId();
+        
+        $this->isDemo = $entity->isDemo();
         $this->titre = $translation?->getTitre() ?? $entity->getTitre();
 
         // ordre choisi dans l'éditeur des landing pages (ordre de la base sinon)

@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Traits\DemoContentTrait;
 use App\Repository\ProductOptionRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -9,8 +10,10 @@ use Doctrine\ORM\Mapping as ORM;
 use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: ProductOptionRepository::class)]
-class ProductOption implements TranslatableInterface
+class ProductOption implements TranslatableInterface, DemoContentInterface
 {
+    use DemoContentTrait;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]

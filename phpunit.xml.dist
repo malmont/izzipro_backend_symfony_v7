@@ -49,6 +49,8 @@
 
     <listeners>
         <listener class="Symfony\Bridge\PhpUnit\SymfonyTestsListener" />
+        <!-- connexions à PostgreSQL libérées après chaque test (serveur partagé avec la production) -->
+        <listener class="App\Tests\ReleaseTestResourcesListener" />
     </listeners>
 
     <!-- Run `composer require symfony/panther` before enabling this extension -->

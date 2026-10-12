@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Traits\DemoContentTrait;
 use App\Repository\PresentationRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -11,8 +12,10 @@ use App\Entity\TranslatableInterface;
 
 
 #[ORM\Entity(repositoryClass: PresentationRepository::class)]
-class Presentation implements TranslatableInterface
+class Presentation implements TranslatableInterface, DemoContentInterface
 {
+    use DemoContentTrait;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]

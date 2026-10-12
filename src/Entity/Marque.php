@@ -2,14 +2,17 @@
 
 namespace App\Entity;
 
+use App\Entity\Traits\DemoContentTrait;
 use App\Repository\MarqueRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: MarqueRepository::class)]
-class Marque
+class Marque implements DemoContentInterface
 {
+    use DemoContentTrait;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]

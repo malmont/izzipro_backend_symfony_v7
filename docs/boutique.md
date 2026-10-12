@@ -413,6 +413,9 @@ publique du commerçant**, nom affiché « Marie D. ». Moyenne et nombre tenus 
 
 ## Boutique de démonstration (site `demo`, 08/10/2026)
 
+À ne pas confondre avec le contenu d'exemple des nouveaux sites (site de référence `gmasuite`, marquage `isDemo`) :
+`docs/contenu-exemple.md`.
+
 `php bin/console app:boutique:seed-demo [--customer-email=…] [--reset-password] [--otp]` (`SeedBoutiqueDemoCommand`,
 `SeedBoutiqueDemoUseCase`, `Services/BoutiqueDemoService/` : `BoutiqueDemoCatalog` pour les données,
 `BoutiqueDemoSeeder`, `DemoImageGenerator`). Refusé sur tout autre site que `demo` (`ALLOWED_TENANTS`, base lue dans

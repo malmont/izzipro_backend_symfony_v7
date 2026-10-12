@@ -2,7 +2,8 @@
 
 namespace App\Controller\Admin;
 
-use App\Services\TenantEntityManagerProvider; 
+use App\Services\SiteContentService\DemoContentMarker;
+use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use EasyCorp\Bundle\EasyAdminBundle\Collection\FieldCollection;
@@ -59,6 +60,9 @@ abstract class BaseTenantCrudController extends AbstractCrudController
     {
         $tenantEm = $this->emProvider->getEntityManager();
         $tenantEm->flush();
+        if (DemoContentMarker::customized($entityInstance)) { // une fiche d'exemple modifiée devient définitive
+            $tenantEm->flush();
+        }
     }
 
     /**

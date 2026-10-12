@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Traits\DemoContentTrait;
 use ApiPlatform\Metadata\ApiResource;
 use App\Repository\CategoriesRepository;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -12,8 +13,10 @@ use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: CategoriesRepository::class)]
 #[ApiResource]
-class Categories implements TranslatableInterface
+class Categories implements TranslatableInterface, DemoContentInterface
 {
+    use DemoContentTrait;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]

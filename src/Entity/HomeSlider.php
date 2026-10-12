@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Traits\DemoContentTrait;
 use App\Repository\HomeSliderRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -10,8 +11,10 @@ use App\Entity\TranslatableInterface;
 
 
 #[ORM\Entity(repositoryClass: HomeSliderRepository::class)]
-class HomeSlider implements TranslatableInterface
+class HomeSlider implements TranslatableInterface, DemoContentInterface
 {
+    use DemoContentTrait;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]

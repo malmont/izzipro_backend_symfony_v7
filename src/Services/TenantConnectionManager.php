@@ -3,6 +3,7 @@
 
 namespace App\Services;
 
+use App\Services\SiteContentService\SiteContentSpec;
 use PDO;
 use Psr\Log\LoggerInterface;
 use Doctrine\DBAL\DriverManager;
@@ -144,6 +145,7 @@ class TenantConnectionManager
             }
 
             $this->fixSequences($dbname);
+            $this->markDemoContent($dbname);
 
             // Insertion en base
             $stmt = $this->pdoMaster->prepare(
@@ -490,6 +492,28 @@ class TenantConnectionManager
 
             return null; // Redis cachera "null", évitant de refaire la requête pour un domaine invalide
         });
+    }
+
+    /**
+     * Le contenu copié de gmasuite (présentations, produits, catégories…) est le contenu d'exemple du nouveau site :
+     * marqué is_demo jusqu'à ce que le client le modifie (voir App\Services\SiteContentService). Un échec n'empêche
+     * pas la création du site (contenu alors non marqué, journalisé).
+     */
+    private function markDemoContent(string $dbname): void
+    {
+        try {
+            $pdo = new PDO(
+                sprintf('pgsql:host=%s;port=%d;dbname=%s', $this->tenantParams['host'] ?? $this->masterParams['host'], $this->tenantParams['port'] ?? $this->masterParams['port'], $dbname),
+                $this->tenantParams['user'] ?? $this->tenantParams['username'] ?? '',
+                $this->tenantParams['password'] ?? '',
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+            foreach (SiteContentSpec::RESOURCES as $spec) {
+                $pdo->exec(sprintf('UPDATE %s SET is_demo = true', $spec['table']));
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Contenu d\'exemple non marqué sur "%s" : %s', $dbname, $e->getMessage()));
+        }
     }
 
     /**

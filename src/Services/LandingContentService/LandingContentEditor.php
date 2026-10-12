@@ -2,6 +2,7 @@
 
 namespace App\Services\LandingContentService;
 
+use App\Services\SiteContentService\DemoContentMarker;
 use App\Entity\Product;
 use App\Entity\ProductPicture;
 use App\Entity\SharedMedia;
@@ -204,6 +205,9 @@ final class LandingContentEditor
             $em->persist($translation);
         }
         $em->flush();
+        if (DemoContentMarker::customized($entity)) {
+            $em->flush(); // à part : voir DemoContentMarker
+        }
         $this->hooks?->after($resource, $entity, $values);
     }
 

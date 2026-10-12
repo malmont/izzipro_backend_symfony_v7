@@ -24,6 +24,8 @@ const MV_TEST_TEMPLATE_DB = 'db_mv_test_booktypes';
 const MV_TEST_TENANT2_CODE = 'mvtest2';
 const MV_TEST_TENANT2_HOST = 'mvtest2.test';
 const MV_TEST_TENANT2_DB = 'db_mv_contract_test2';
+// Site de référence du contenu d'exemple (12/10/2026) : clone du modèle vidé de son contenu, rempli par SiteContentApiTest
+const SITE_CONTENT_REFERENCE_TEST_DB = 'db_site_reference_test';
 
 $prodUrl = getenv('DATABASE_URL') ?: ($_SERVER['DATABASE_URL'] ?? null);
 if (!$prodUrl) {
@@ -49,6 +51,8 @@ $overrides = [
     'STRIPE_SECRET_KEY' => 'sk_test_sans_appel_reel',
     // Synchronisation de la configuration des landing pages (faux frontend, voir config/services_test.yaml)
     'DEPLOY_SYNC_TOKEN' => 'jeton-de-deploiement-de-test-0123456789abcdef',
+    // Contenu d'exemple copié depuis une base de test, jamais depuis gmasuite
+    'SITE_CONTENT_REFERENCE_DB' => SITE_CONTENT_REFERENCE_TEST_DB,
 ];
 if (getenv('LANDING_AI_REAL_TEST')) {
     unset($overrides['ANTHROPIC_API_KEY_LANDING']); // lue dans .env
@@ -64,13 +68,17 @@ if (method_exists(Dotenv::class, 'bootEnv')) {
 
 // Bases de test recréées à chaque lancement
 $pdo = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=postgres', $u['host'], $u['port'] ?? 5432), urldecode($u['user']), urldecode($u['pass']), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB, MV_TEST_MASTER_DB] as $db) {
+foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB, MV_TEST_MASTER_DB, SITE_CONTENT_REFERENCE_TEST_DB] as $db) {
     $pdo->exec("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db' AND pid <> pg_backend_pid()");
     $pdo->exec("DROP DATABASE IF EXISTS \"$db\"");
 }
 $pdo->exec(sprintf('CREATE DATABASE "%s" WITH TEMPLATE "%s"', MV_TEST_TENANT_DB, MV_TEST_TEMPLATE_DB));
 $pdo->exec(sprintf('CREATE DATABASE "%s" WITH TEMPLATE "%s"', MV_TEST_TENANT2_DB, MV_TEST_TEMPLATE_DB));
 $pdo->exec(sprintf('CREATE DATABASE "%s"', MV_TEST_MASTER_DB));
+$pdo->exec(sprintf('CREATE DATABASE "%s" WITH TEMPLATE "%s"', SITE_CONTENT_REFERENCE_TEST_DB, MV_TEST_TEMPLATE_DB));
+$reference = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $u['host'], $u['port'] ?? 5432, SITE_CONTENT_REFERENCE_TEST_DB), urldecode($u['user']), urldecode($u['pass']), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$reference->exec('TRUNCATE presentation, presentation_group, baniere_statique, banniere, video, service_offer, marque, categorie_marque, explore_card, categories, product, product_option, home_slider, feature CASCADE');
+$reference = null;
 
 $master = new PDO(sprintf('pgsql:host=%s;port=%d;dbname=%s', $u['host'], $u['port'] ?? 5432, MV_TEST_MASTER_DB), urldecode($u['user']), urldecode($u['pass']), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $master->exec('CREATE TABLE tenants (id SERIAL PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE, name VARCHAR(255) NOT NULL, dbname VARCHAR(255) NOT NULL, dbuser VARCHAR(255), dbpass VARCHAR(255), gemsuite_token TEXT, is_internal_store BOOLEAN DEFAULT false, custom_domain VARCHAR(255) UNIQUE)');

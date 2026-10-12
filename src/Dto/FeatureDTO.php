@@ -6,6 +6,8 @@ use App\Entity\Feature;
 class FeatureDTO
 {
     public int    $id;
+    /** Contenu d'exemple encore à remplacer (copié du site de référence, jamais modifié) */
+    public bool $isDemo = false;
     public ?string $title;
     public ?string $iconUrl;
 
@@ -17,6 +19,7 @@ class FeatureDTO
         $translation = $feature->getTranslation($locale);
 
         $dto->id    = $feature->getId();
+        $dto->isDemo = $feature->isDemo();
         $dto->title = $translation?->getTitle() ?? $feature->getTitle();
         
         // Fichier téléversé (icons/), URL absolue ou média de la médiathèque (/media/secure/…, éditeur de la page)

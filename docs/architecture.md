@@ -76,7 +76,8 @@ autre nom, par exemple après un renommage de l'hôte, donne « non sécurisé �
 directement par un navigateur : la liste CORS de `docker/nginx/default.conf` est la seule liste de domaines codée en dur
 (inutile pour les appels qui passent par le relais du frontend).
 
-Ce que contient `gmasuite` devient la valeur par défaut des nouveaux clients (`TenantConnectionManager::createTenant`).
+Ce que contient `gmasuite` devient la valeur par défaut des nouveaux clients (`TenantConnectionManager::createTenant`),
+dont le contenu d'exemple de la landing page et de la boutique, marqué `is_demo` à la création : `docs/contenu-exemple.md`.
 - **Schéma sur toutes les bases** : les deux, toujours :
   1. une migration Doctrine dans `migrations/`, **idempotente** (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT
      EXISTS`) : c'est la trace versionnée, rejouable par `app:tenant:migrate-all` (un tenant : `app:tenant:migrate-db`,

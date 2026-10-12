@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Entity\Traits\DemoContentTrait;
 use App\Repository\VideoRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -10,8 +11,10 @@ use Doctrine\DBAL\Types\Types;
 use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: VideoRepository::class)]
-class Video implements TranslatableInterface
+class Video implements TranslatableInterface, DemoContentInterface
 {
+    use DemoContentTrait;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]

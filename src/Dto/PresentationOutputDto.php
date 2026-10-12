@@ -6,6 +6,8 @@ use App\Entity\Presentation;
 class PresentationOutputDto
 {
     public int $id;
+    /** Contenu d'exemple encore à remplacer (copié du site de référence, jamais modifié) */
+    public bool $isDemo = false;
     public ?string $titre;
     public ?string $texte;
     public ?string $image;
@@ -17,6 +19,8 @@ class PresentationOutputDto
         $translation = $entity->getTranslation($locale);
 
         $this->id = $entity->getId();
+
+        $this->isDemo = $entity->isDemo();
         $this->titre = $translation?->getTitre() ?? $entity->getTitre();
         $this->texte = $translation?->getTexte() ?? $entity->getTexte();
         $this->texteBouton = $translation?->getTexteBouton() ?? $entity->getTexteBouton();

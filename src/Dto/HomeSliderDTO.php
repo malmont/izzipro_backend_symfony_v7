@@ -13,6 +13,8 @@ class HomeSliderDTO
     public ?string $buttonMessage;
     public ?string $buttonUrl;
     public ?bool $isDiplayed;
+    /** Contenu d'exemple encore à remplacer (copié du site de référence, jamais modifié) */
+    public bool $isDemo = false;
 
     public function __construct(
         int $id,
@@ -21,7 +23,8 @@ class HomeSliderDTO
         ?string $description,
         ?string $buttonMessage,
         ?string $buttonUrl,
-        ?bool $isDiplayed
+        ?bool $isDiplayed,
+        bool $isDemo = false
     ) {
         $this->id = $id;
         $this->title = $title;
@@ -30,6 +33,7 @@ class HomeSliderDTO
         $this->buttonMessage = $buttonMessage;
         $this->buttonUrl = $buttonUrl;
         $this->isDiplayed = $isDiplayed;
+        $this->isDemo = $isDemo;
     }
 
    public static function fromEntity(HomeSlider $homeSlider, string $host, string $locale): self
@@ -46,6 +50,7 @@ class HomeSliderDTO
             $translation?->getButtonMessage() ?? $homeSlider->getButtonMessage(),
             $translation?->getButtonUrl() ?? $homeSlider->getButtonUrl(),
             $homeSlider->isIsDiplayed(),
+            $homeSlider->isDemo(),
         );
     }
 }

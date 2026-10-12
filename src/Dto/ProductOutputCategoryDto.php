@@ -11,6 +11,8 @@ use App\Enum\ProductMode;
 class ProductOutputCategoryDto
 {
     public int $id;
+    /** Contenu d'exemple encore à remplacer (copié du site de référence, jamais modifié) */
+    public bool $isDemo = false;
     public ?string $name;
     public ?string $description; 
     public ?string $moreinformations;
@@ -65,6 +67,7 @@ class ProductOutputCategoryDto
         }
         $productTranslation = $product->getTranslation($locale);
         $this->id = $product->getId();
+        $this->isDemo = $product->isDemo();
         $this->name = $productTranslation?->getName() ?? $product->getName(); 
         $this->description = $productTranslation?->getDescription() ?? $product->getDescription();
         $this->moreinformations = $productTranslation?->getMoreinformations() ?? $product->getMoreinformations();
