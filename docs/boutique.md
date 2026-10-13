@@ -255,8 +255,12 @@ intent Stripe) et la commande naît **une seule fois par paiement**, du navigate
 - **Pays absent** (commandes invité 9 et 10 de demo, hors taxes) : une province canadienne (code ou nom) ou un code
   postal canadien suffit à reconnaître le Canada (`TaxEngine::normalizeAddress`, adresse de l'invité).
 - **Abonnement en double** (`POST /api/subscriptions`) : un abonnement encore `incomplete` à la même formule et quantité
-  est **repris** (200, même `clientSecret`, `reused: true`) ; un incomplet d'une autre formule est annulé ; un abonnement
-  en cours (essai, actif, impayé, en pause) au même produit : **409**.
+  est **repris** (200, même `clientSecret`, `reused: true`) ; un incomplet d'une autre formule, ou expiré chez Stripe
+  (`incomplete_expired`, 23 h sans paiement), est annulé et remplacé ; un abonnement en cours au même produit (essai,
+  actif, impayé `past_due`/`unpaid`, en pause, résiliation programmée comprise), quelle que soit la formule : **409**
+  `{ error, errors, reason: "already_subscribed", subscriptionId, status }` (changer de formule :
+  `POST /api/subscriptions/{id}/change-plan`). Deux souscriptions simultanées du même client au même produit : verrou
+  PostgreSQL (`pg_advisory_lock`, clé client + produit, 13/10/2026), la seconde attend la première puis la trouve.
 
 ## Taxes par région (09/10/2026, `TaxEngine`)
 
@@ -345,7 +349,21 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
   (`SubscriptionOrderFactory` : aucune commande pour une facture à 0, ouverture d'un essai ou changement de
   formule sans montant dû ; première variante du produit, quantité, montants de la facture en cents, paiement
   carte, stock décrémenté s'il suffit ; rejouable par `stripe_invoice_id`) + courriel de confirmation, statut `active` ;
-  `invoice.payment_failed` → `past_due` + courriel ; `customer.subscription.*` → état recopié, courriel de résiliation.
+  `invoice.payment_failed` → voir « Paiement refusé » ; `customer.subscription.*` → état recopié, courriel de
+  résiliation (`paused`/`resumed` arrivent aussi par `updated` : seuls `invoice.paid`, `invoice.payment_failed`,
+  `customer.subscription.updated` et `deleted` sont déclarés sur l'écouteur Connect, vérifié le 13/10/2026).
+- **Paiement refusé** (13/10/2026, `HandleSubscriptionWebhookUseCase::paymentFailed`) :
+  - première facture (`incomplete`, `billing_reason` `subscription_create`) : l'abonnement reste `incomplete`, le client
+    réessaie (`POST /api/subscriptions` reprend le même abonnement et son `clientSecret`) ; Stripe l'expire au bout de
+    23 h (`incomplete_expired` → `canceled`) ;
+  - échéance : `past_due`, impayé gardé dans `subscription.payment_issue` (montant dû, devise, `hosted_invoice_url`,
+    prochain essai, numéro de l'essai), renvoyé par `GET /api/subscriptions` en `latestInvoice` tant que le statut est
+    `past_due` (null sinon), courriel avec le montant, l'essai « n sur 4 », la date du prochain essai et un bouton
+    « Payer maintenant » (page de facture Stripe) ; effacé par `invoice.paid` ;
+  - au 4e essai refusé (`SubscriptionService::MAX_FAILED_PAYMENTS`) ou quand Stripe ne prévoit plus d'essai
+    (`next_payment_attempt` null) : résiliation immédiate par le site (appel à Stripe) et courriel « résilié faute de
+    paiement ». La règle ne dépend donc pas des réglages de relance du compte Stripe. Migration
+    `Version20261013100000`, script `scripts/migrate_all_v2_subscription_payment_issue.sh`.
   À déclarer dans Stripe : point de terminaison Connect (évènements des comptes connectés) sur
   `https://backend-strapi.online/api/stripe/webhook` (même serveur que `v2.` : les deux écouteurs du tableau de bord,
   « Votre compte » et « Comptes connectés », pointent déjà dessus), secret dans `STRIPE_CONNECT_WEBHOOK_SECRET`.

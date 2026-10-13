@@ -165,8 +165,28 @@ class CheckoutApiTest extends WebTestCase
         $this->assertSame(201, $other->getStatusCode(), 'autre formule : l\'incomplet précédent est annulé');
         $this->assertSame('canceled', $this->db->fetchOne('SELECT status FROM subscription WHERE id = ?', [$first['subscriptionId']]));
         $this->db->executeStatement("UPDATE subscription SET status = 'trialing' WHERE id = ?", [json_decode($other->getContent(), true)['subscriptionId']]);
+        $current = json_decode($other->getContent(), true)['subscriptionId'];
         $refused = $this->request('POST', '/api/subscriptions', json_encode($body));
         $this->assertSame(409, $refused->getStatusCode(), 'abonnement en cours au même produit');
+        $refused = json_decode($refused->getContent(), true);
+        $this->assertSame(['already_subscribed', $current, 'trialing'], [$refused['reason'], $refused['subscriptionId'], $refused['status']], 'forme du 409 (13/10/2026)');
+        $this->assertNotEmpty($refused['error']);
+        foreach ([["status = 'past_due'", 'impayé (unpaid chez Stripe)'], ["status = 'active', cancel_at_period_end = true", 'résiliation programmée, période pas finie'], ["status = 'paused'", 'en pause']] as [$set, $label]) {
+            $this->db->executeStatement("UPDATE subscription SET $set WHERE id = ?", [$current]);
+            $this->assertSame(409, $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plans[1]['id']] + $body))->getStatusCode(), "$label : refusé, quelle que soit la formule");
+        }
+        $listed = array_values(array_filter($this->json($this->request('GET', '/api/subscriptions')), fn ($s) => $s['id'] === $current));
+        $this->assertSame($this->productId('DEMO-PANIER'), $listed[0]['plan']['productId'], 'GET /api/subscriptions : plan.productId');
+
+        // Incomplet abandonné : expiré chez Stripe (23 h), il ne bloque pas et une nouvelle souscription est créée
+        $this->db->executeStatement("UPDATE subscription SET status = 'canceled' WHERE id = ?", [$current]);
+        $pending = json_decode($this->request('POST', '/api/subscriptions', json_encode($body))->getContent(), true);
+        $stripeId = (string) $this->db->fetchOne('SELECT stripe_subscription_id FROM subscription WHERE id = ?', [$pending['subscriptionId']]);
+        FakeSubscriptionStripeGateway::$subscriptions[$stripeId]['status'] = 'incomplete_expired';
+        $fresh = $this->request('POST', '/api/subscriptions', json_encode($body));
+        $this->assertSame(201, $fresh->getStatusCode(), $fresh->getContent());
+        $this->assertNotSame($pending['subscriptionId'], json_decode($fresh->getContent(), true)['subscriptionId']);
+        $this->assertSame('canceled', $this->db->fetchOne('SELECT status FROM subscription WHERE id = ?', [$pending['subscriptionId']]));
     }
 
     private function guestBody(int $variant, string $email): array

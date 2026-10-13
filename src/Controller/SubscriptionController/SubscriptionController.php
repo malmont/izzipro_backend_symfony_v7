@@ -132,7 +132,7 @@ class SubscriptionController extends AbstractController
         try {
             return $action();
         } catch (SubscriptionException $e) {
-            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]), $e->getStatusCode());
+            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]) + $e->details, $e->getStatusCode());
         }
     }
 }

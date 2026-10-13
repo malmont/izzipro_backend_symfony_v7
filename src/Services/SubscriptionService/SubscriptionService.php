@@ -28,6 +28,9 @@ use App\Services\TenantEntityManagerProvider;
  */
 final class SubscriptionService
 {
+    /** Essais de paiement refusés d'une échéance avant résiliation (webhook invoice.payment_failed, 13/10/2026) */
+    public const MAX_FAILED_PAYMENTS = 4;
+
     private const STRIPE_STATUSES = [
         'incomplete' => Subscription::STATUS_INCOMPLETE, 'incomplete_expired' => Subscription::STATUS_CANCELED, 'trialing' => Subscription::STATUS_TRIALING,
         'active' => Subscription::STATUS_ACTIVE, 'past_due' => Subscription::STATUS_PAST_DUE, 'unpaid' => Subscription::STATUS_PAST_DUE,
@@ -83,13 +86,33 @@ final class SubscriptionService
         }
         $shippingAmount = $carrier !== null && !$carrier->isFree() ? (int) round((float) $carrier->getPrice()) : 0;
 
+        // Deux souscriptions simultanées du même client au même produit (deux onglets, double clic) : la seconde attend la
+        // fin de la première, puis la trouve (13/10/2026). Verrou de session PostgreSQL, libéré à la fin (ou à la
+        // déconnexion si le processus s'arrête).
+        $lock = 'subscription:' . $user->getId() . ':' . $plan->getProduct()->getId();
+        $connection = $em->getConnection();
+        $connection->executeQuery('SELECT pg_advisory_lock(hashtext(?))', [$lock]);
+        try {
+            return $this->subscribeLocked($user, $plan, $quantity, $address, $carrier, $shippingAmount);
+        } finally {
+            $connection->executeQuery('SELECT pg_advisory_unlock(hashtext(?))', [$lock]);
+        }
+    }
+
+    /** @return array{subscription: Subscription, clientSecret: ?string, reused: bool} */
+    private function subscribeLocked(User $user, SubscriptionPlan $plan, int $quantity, ?Adress $address, ?Carrier $carrier, int $shippingAmount): array
+    {
+        $em = $this->emProvider->getEntityManager();
         // Double souscription (double clic, nouvel essai après une erreur, 09/10/2026) : un abonnement encore incomplet à
-        // la même formule et quantité est repris (même paiement à confirmer) ; un incomplet d'une autre formule est
-        // annulé ; un abonnement en cours (essai, actif, impayé, en pause) au même produit refuse la souscription.
+        // la même formule et quantité est repris (même paiement à confirmer) ; un incomplet d'une autre formule, ou
+        // expiré chez Stripe (23 h sans paiement), est annulé ; un abonnement en cours (essai, actif, impayé, en pause,
+        // résiliation programmée comprise) au même produit refuse la souscription (409 already_subscribed), quelle que
+        // soit la formule : pour en changer, POST /api/subscriptions/{id}/change-plan.
         foreach ($this->subscriptions()->findOpenForProduct($user, $plan->getProduct()) as $open) {
             if ($open->getStatus() !== Subscription::STATUS_INCOMPLETE) {
                 throw new SubscriptionException(409, 'Vous êtes déjà abonné à ce produit : changez de formule ou résiliez depuis votre compte.',
-                    [['path' => 'planId', 'message' => sprintf('abonnement n° %d déjà en cours', $open->getId())]]);
+                    [['path' => 'planId', 'message' => sprintf('abonnement n° %d déjà en cours', $open->getId())]],
+                    ['reason' => 'already_subscribed', 'subscriptionId' => $open->getId(), 'status' => $open->getStatus()]);
             }
             $state = $open->getStripeSubscriptionId() ? $this->stripe->retrieve($open->getStripeSubscriptionId()) : null;
             if ($state !== null && $state['status'] === 'incomplete' && $open->getPlan()?->getId() === $plan->getId() && $open->getQuantity() === $quantity && $state['clientSecret']) {

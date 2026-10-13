@@ -7,15 +7,16 @@ use App\Services\OrderService\OrderMailerService;
 use App\Services\SubscriptionService\SubscriptionMailer;
 use App\Services\SubscriptionService\SubscriptionOrderFactory;
 use App\Services\SubscriptionService\SubscriptionService;
+use App\Services\SubscriptionService\SubscriptionException;
 use App\Services\SubscriptionService\SubscriptionStripeGateway;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
 
 /**
- * Webhooks Stripe Billing (POST /api/stripe/webhook) : invoice.paid → commande de l'échéance et abonnement actif ;
- * invoice.payment_failed → past_due et courriel ; customer.subscription.updated / deleted → état recopié, courriel de
- * résiliation. Le site vient des métadonnées posées à la souscription (tenant_code) ; un évènement sans site ou sans
+ * Webhooks Stripe Billing (POST /api/stripe/webhook) : invoice.paid → commande de l'échéance, abonnement actif, impayé
+ * effacé ; invoice.payment_failed → voir paymentFailed ; customer.subscription.updated / deleted / paused / resumed →
+ * état recopié, courriel de résiliation. Le site vient des métadonnées posées à la souscription (tenant_code) ; un évènement sans site ou sans
  * abonnement connu est ignoré.
  */
 class HandleSubscriptionWebhookUseCase
@@ -64,6 +65,7 @@ class HandleSubscriptionWebhookUseCase
                     return ['status' => 'ignored', 'detail' => 'facture non payée'];
                 }
                 $order = $this->orders->createFromInvoice($subscription, $object);
+                $subscription->setPaymentIssue(null);
                 $subscription->setStatus($subscription->getStatus() === Subscription::STATUS_TRIALING && (int) ($object['total'] ?? 0) === 0 ? Subscription::STATUS_TRIALING : Subscription::STATUS_ACTIVE);
                 $periodEnd = $object['lines']['data'][0]['period']['end'] ?? null;
                 if (is_numeric($periodEnd)) {
@@ -76,11 +78,7 @@ class HandleSubscriptionWebhookUseCase
 
                 return ['status' => 'processed', 'detail' => $order ? 'commande ' . $order->getId() : 'sans commande : ' . ($this->orders->lastSkipReason ?? '?')];
             case 'invoice.payment_failed':
-                $subscription->setStatus(Subscription::STATUS_PAST_DUE);
-                $em->flush();
-                $this->mailer->notify($subscription, 'payment_failed', $locale, $host);
-
-                return ['status' => 'processed'];
+                return $this->paymentFailed($subscription, $object, $locale, $host);
             default:
                 $before = $subscription->getStatus();
                 $this->service->applyStripeState($subscription, SubscriptionStripeGateway::normalize($object));
@@ -91,6 +89,53 @@ class HandleSubscriptionWebhookUseCase
 
                 return ['status' => 'processed', 'detail' => $subscription->getStatus()];
         }
+    }
+
+    /**
+     * Paiement refusé (13/10/2026) :
+     * - première facture (abonnement incomplete) : il le reste, le client réessaie depuis la page de souscription (même
+     *   abonnement, même clientSecret) ; Stripe l'expire au bout de 23 h (incomplete_expired → résilié) ;
+     * - échéance : past_due, impayé gardé (montant, lien de paiement Stripe, prochain essai) et courriel au client ;
+     * - au MAX_FAILED_PAYMENTS-ième essai, ou quand Stripe ne prévoit plus d'essai : résilié tout de suite, courriel.
+     *
+     * @return array{status: string, detail?: string}
+     */
+    private function paymentFailed(Subscription $subscription, array $invoice, string $locale, string $host): array
+    {
+        $em = $this->emProvider->getEntityManager();
+        if ($subscription->getStatus() === Subscription::STATUS_INCOMPLETE || ($invoice['billing_reason'] ?? null) === 'subscription_create') {
+            return ['status' => 'processed', 'detail' => 'premier paiement refusé : abonnement incomplete, nouvel essai possible'];
+        }
+        $attempt = (int) ($invoice['attempt_count'] ?? 1);
+        $next = is_numeric($invoice['next_payment_attempt'] ?? null) ? (new \DateTimeImmutable())->setTimestamp((int) $invoice['next_payment_attempt']) : null;
+        $issue = [
+            'amountDue' => (int) ($invoice['amount_due'] ?? $invoice['amount_remaining'] ?? 0), 'currency' => strtoupper((string) ($invoice['currency'] ?? 'cad')),
+            'hostedInvoiceUrl' => $invoice['hosted_invoice_url'] ?? null, 'nextPaymentAttempt' => $next?->format(\DateTimeInterface::ATOM),
+            'attemptCount' => $attempt, 'maxAttempts' => SubscriptionService::MAX_FAILED_PAYMENTS,
+        ];
+        $subscription->setStatus(Subscription::STATUS_PAST_DUE)->setPaymentIssue($issue);
+        $em->flush();
+        $amount = number_format($issue['amountDue'] / 100, 2, ',', ' ') . ' ' . $issue['currency'];
+
+        if ($attempt >= SubscriptionService::MAX_FAILED_PAYMENTS || $next === null) {
+            try {
+                $this->service->cancel($subscription, false);
+            } catch (SubscriptionException $e) {
+                // Déjà résilié chez Stripe (réglage de relance du compte) : l'état local suffit
+                $this->logger->warning('[Subscription] Résiliation après impayés : ' . $e->getMessage(), ['subscription' => $subscription->getId()]);
+                $subscription->setStatus(Subscription::STATUS_CANCELED)->setCanceledAt($subscription->getCanceledAt() ?? new \DateTimeImmutable());
+                $em->flush();
+            }
+            $this->mailer->notify($subscription, 'canceled_unpaid', $locale, $host, ['rows' => ['Montant impayé' => $amount, 'Essais de paiement' => (string) $attempt]]);
+
+            return ['status' => 'processed', 'detail' => sprintf('résilié après %d essai(s) de paiement', $attempt)];
+        }
+        $this->mailer->notify($subscription, 'payment_failed', $locale, $host, [
+            'rows' => ['Montant dû' => $amount, 'Essai' => sprintf('%d sur %d', $attempt, SubscriptionService::MAX_FAILED_PAYMENTS), 'Prochain essai' => $next->format('d/m/Y')],
+            'payUrl' => $issue['hostedInvoiceUrl'],
+        ]);
+
+        return ['status' => 'processed', 'detail' => sprintf('past_due, essai %d sur %d', $attempt, SubscriptionService::MAX_FAILED_PAYMENTS)];
     }
 
     private static function metadata(array $object, string $key): ?string

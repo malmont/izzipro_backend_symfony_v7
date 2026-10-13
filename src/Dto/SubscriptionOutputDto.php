@@ -5,11 +5,15 @@ namespace App\Dto;
 use App\Entity\Order;
 use App\Entity\Subscription;
 
-/** Abonnement d'un client (GET /api/subscriptions, …/{id}) : statut, période, adresse, transporteur, livraison par échéance (cents), commandes des échéances */
+/**
+ * Abonnement d'un client (GET /api/subscriptions, …/{id}) : statut, période, adresse, transporteur, livraison par échéance
+ * (cents), commandes des échéances ; latestInvoice : échéance impayée si le statut est past_due (13/10/2026), sinon null
+ */
 final class SubscriptionOutputDto
 {
     /**
      * @param list<array{id: int, reference: string, date: string, total: int, status: ?string}> $orders
+     * @param array{amountDue: int, currency: string, hostedInvoiceUrl: ?string, nextPaymentAttempt: ?string, attemptCount: int, maxAttempts: int}|null $latestInvoice
      */
     public function __construct(
         public readonly int $id,
@@ -23,7 +27,8 @@ final class SubscriptionOutputDto
         public readonly int $shippingAmount,
         public readonly string $createdAt,
         public readonly ?string $canceledAt,
-        public readonly array $orders
+        public readonly array $orders,
+        public readonly ?array $latestInvoice = null
     ) {
     }
 
@@ -47,7 +52,8 @@ final class SubscriptionOutputDto
             array_map(fn (Order $o) => [
                 'id' => (int) $o->getId(), 'reference' => (string) $o->getReference(), 'date' => $o->getOrderDate()->format(\DateTimeInterface::ATOM),
                 'total' => (int) round((float) $o->getTotalAmount()), 'status' => $o->getStatus()?->getTranslation($locale)?->getName() ?? $o->getStatus()?->getName(),
-            ], $orders)
+            ], $orders),
+            $subscription->getStatus() === Subscription::STATUS_PAST_DUE ? $subscription->getPaymentIssue() : null
         );
     }
 }

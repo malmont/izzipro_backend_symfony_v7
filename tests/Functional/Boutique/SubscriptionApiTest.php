@@ -144,15 +144,49 @@ class SubscriptionApiTest extends WebTestCase
         $this->assertSame('trialing', $body['status'], 'formule avec essai gratuit');
         $stripeId = $this->db->fetchOne('SELECT stripe_subscription_id FROM subscription WHERE id = ?', [$body['subscriptionId']]);
 
-        $failed = $this->webhook('invoice.payment_failed', ['id' => 'in_test_2', 'subscription' => $stripeId, 'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]);
-        $this->assertSame('processed', json_decode($failed->getContent(), true)['status'], $failed->getContent());
-        $this->assertSame('past_due', $this->json($this->request('GET', '/api/subscriptions/' . $body['subscriptionId']))['status']);
+        // Échéance refusée (1er essai) : past_due, échéance impayée renvoyée au client
+        $next = time() + 3 * 86400;
+        $invoice = fn (int $attempt, ?int $nextAttempt) => ['id' => 'in_test_2', 'subscription' => $stripeId, 'billing_reason' => 'subscription_cycle', 'attempt_count' => $attempt,
+            'next_payment_attempt' => $nextAttempt, 'amount_due' => 3500, 'currency' => 'cad', 'hosted_invoice_url' => 'https://invoice.stripe.test/i/in_test_2',
+            'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]];
+        $failed = $this->webhook('invoice.payment_failed', $invoice(1, $next));
+        $this->assertSame('past_due, essai 1 sur 4', json_decode($failed->getContent(), true)['detail'] ?? null, $failed->getContent());
+        $read = $this->json($this->request('GET', '/api/subscriptions/' . $body['subscriptionId']));
+        $this->assertSame('past_due', $read['status']);
+        $this->assertSame([3500, 'CAD', 'https://invoice.stripe.test/i/in_test_2', 1, 4], [$read['latestInvoice']['amountDue'], $read['latestInvoice']['currency'], $read['latestInvoice']['hostedInvoiceUrl'], $read['latestInvoice']['attemptCount'], $read['latestInvoice']['maxAttempts']]);
+        $this->assertSame((new \DateTimeImmutable())->setTimestamp($next)->format(\DateTimeInterface::ATOM), $read['latestInvoice']['nextPaymentAttempt']);
+        $this->assertSame(409, $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plan['id']]))->getStatusCode(), 'impayé : toujours un abonnement en cours');
+
+        // 4e essai refusé : résilié par le site (appel à Stripe), même si Stripe prévoyait encore un essai
+        $last = $this->webhook('invoice.payment_failed', $invoice(4, $next));
+        $this->assertSame('résilié après 4 essai(s) de paiement', json_decode($last->getContent(), true)['detail'] ?? null, $last->getContent());
+        $this->assertContains(['cancel', $stripeId, false], FakeSubscriptionStripeGateway::$calls);
+        $read = $this->json($this->request('GET', '/api/subscriptions/' . $body['subscriptionId']));
+        $this->assertSame(['canceled', null], [$read['status'], $read['latestInvoice']]);
 
         $this->webhook('customer.subscription.deleted', ['id' => $stripeId, 'status' => 'canceled', 'canceled_at' => time(), 'metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]);
         $this->assertSame('canceled', $this->json($this->request('GET', '/api/subscriptions/' . $body['subscriptionId']))['status']);
 
         $this->assertSame(['status' => 'ignored', 'detail' => 'abonnement inconnu'], json_decode($this->webhook('customer.subscription.updated', ['id' => 'sub_inconnu', 'metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]])->getContent(), true));
         $this->assertSame('ignored', json_decode($this->webhook('customer.subscription.updated', ['id' => $stripeId])->getContent(), true)['status'], 'sans tenant_code');
+    }
+
+    public function testRefusedFirstPaymentKeepsTheSubscriptionIncompleteAndRetryable(): void
+    {
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        $plan = $this->json($this->request('GET', '/api/subscription-plans?productId=' . $this->productId('DEMO-PANIER')))[0];
+        $body = json_decode($this->request('POST', '/api/subscriptions', json_encode(['planId' => $plan['id']]))->getContent(), true);
+        $this->assertSame('incomplete', $body['status'], 'formule sans essai : premier paiement à confirmer');
+        $stripeId = $this->db->fetchOne('SELECT stripe_subscription_id FROM subscription WHERE id = ?', [$body['subscriptionId']]);
+
+        $failed = $this->webhook('invoice.payment_failed', ['id' => 'in_test_first', 'subscription' => $stripeId, 'billing_reason' => 'subscription_create', 'attempt_count' => 1,
+            'next_payment_attempt' => null, 'amount_due' => 3500, 'currency' => 'cad', 'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]);
+        $this->assertStringContainsString('premier paiement refusé', json_decode($failed->getContent(), true)['detail'] ?? '', $failed->getContent());
+        $this->assertSame('incomplete', $this->db->fetchOne('SELECT status FROM subscription WHERE id = ?', [$body['subscriptionId']]), 'carte refusée : pas de past_due');
+        $retry = $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plan['id']]));
+        $this->assertSame(200, $retry->getStatusCode(), 'nouvel essai : même abonnement');
+        $retry = json_decode($retry->getContent(), true);
+        $this->assertSame([$body['subscriptionId'], $body['clientSecret'], 'incomplete', true], [$retry['subscriptionId'], $retry['clientSecret'], $retry['status'], $retry['reused']]);
     }
 
     public function testRefusalsAndIsolation(): void

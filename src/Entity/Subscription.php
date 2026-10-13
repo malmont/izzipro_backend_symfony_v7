@@ -80,6 +80,13 @@ class Subscription
     #[ORM\Column(name: 'paused_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $pausedAt = null;
 
+    /**
+     * Dernière échéance impayée (webhook invoice.payment_failed), effacée au paiement suivant :
+     * { amountDue (cents), currency, hostedInvoiceUrl, nextPaymentAttempt (ISO 8601 ou null), attemptCount }
+     */
+    #[ORM\Column(name: 'payment_issue', type: Types::JSON, nullable: true)]
+    private ?array $paymentIssue = null;
+
     public function __construct()
     {
         $this->createdAt = $this->updatedAt = new \DateTimeImmutable();
@@ -113,6 +120,8 @@ class Subscription
     public function getCanceledAt(): ?\DateTimeImmutable { return $this->canceledAt; }
     public function setCanceledAt(?\DateTimeImmutable $at): static { $this->canceledAt = $at; return $this; }
     public function getPausedAt(): ?\DateTimeImmutable { return $this->pausedAt; }
+    public function getPaymentIssue(): ?array { return $this->paymentIssue; }
+    public function setPaymentIssue(?array $issue): static { $this->paymentIssue = $issue; return $this; }
     public function setPausedAt(?\DateTimeImmutable $at): static { $this->pausedAt = $at; return $this; }
     public function touch(): static { $this->updatedAt = new \DateTimeImmutable(); return $this; }
 

@@ -21,7 +21,11 @@
                             <tr><td style="color: #64748b;">Quantité</td><td align="right">{{ subscription.quantity }}</td></tr>
                             <tr><td style="color: #64748b;">Statut</td><td align="right">{{ subscription.status }}</td></tr>
                             {% if subscription.currentPeriodEnd %}<tr><td style="color: #64748b;">Fin de la période</td><td align="right">{{ subscription.currentPeriodEnd|date('d/m/Y') }}</td></tr>{% endif %}
+                            {% for label, value in rows|default([]) %}<tr><td style="color: #64748b;">{{ label }}</td><td align="right" style="font-weight: 600;">{{ value }}</td></tr>{% endfor %}
                         </table>
+                        {% if payUrl|default(null) %}
+                        <p style="text-align: center; margin: 24px 0;"><a href="{{ payUrl }}" style="background: #1e293b; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">Payer maintenant</a></p>
+                        {% endif %}
                         <p style="color: #64748b; font-size: 13px;">Gérez votre abonnement depuis votre compte sur le site.</p>
                     </td>
                 </tr>
