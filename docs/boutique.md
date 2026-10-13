@@ -314,7 +314,7 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
 `Services/SubscriptionService/` (`SubscriptionService`, `SubscriptionStripeGateway` derrière
 `SubscriptionStripeGatewayInterface` — `tests/Fake/FakeSubscriptionStripeGateway` en test —, `SubscriptionOrderFactory`,
 `SubscriptionMailer`), entités `SubscriptionPlan` et `Subscription`, DTO `SubscriptionPlanOutputDto`,
-`SubscriptionOutputDto`, EasyAdmin « Formules d'abonnement » et « Abonnements » (lecture). Schéma : tables
+`SubscriptionOutputDto`, EasyAdmin « Formules d'abonnement » et « Abonnements » (actions, voir plus bas). Schéma : tables
 `subscription_plan`, `subscription`, colonnes `order.subscription_id`, `order.stripe_invoice_id`,
 `user.stripe_customer_id` (migration `Version20261009130000`, script `scripts/migrate_all_v2_subscriptions.sh`) ;
 `subscription.shipping_amount` et `order_items.customization_id` (migration `Version20261009150000`, script
@@ -369,7 +369,16 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
   dans EasyAdmin « Formules d'abonnement » ; texte en clair (balises retirées), sous-titre 160 caractères, badge 40,
   20 avantages de 120 caractères au plus ; cocher « Recommandée » décoche les autres formules du produit. Démo :
   « Panier aux deux semaines » recommandée (`BoutiqueDemoCatalog::SUBSCRIPTION_PLAN_EXTRAS`).
-- Tests : `tests/Functional/Boutique/SubscriptionApiTest.php` (Stripe simulé : souscription, gestion, webhooks, refus).
+- **Actions de l'administration** (13/10/2026, EasyAdmin « Abonnements », fiche d'un abonnement ; `AdminSubscriptionUseCase`,
+  liens protégés par jeton CSRF) : résilier en fin de période, résilier maintenant (sans remboursement), reprendre,
+  mettre en pause, changer de formule (formules actives du même produit, prorata de Stripe), relire l'état chez Stripe
+  (webhook manqué, action faite dans le tableau de bord Stripe), rembourser en entier le dernier paiement encaissé
+  (`refundLatestPayment` : dernière facture payée, `invoice.payments` de l'API 2025-03+ ; l'abonnement ne change pas ;
+  déjà remboursé : 409). Le client reçoit les mêmes courriels que s'il avait agi ; chaque action est tracée dans le
+  journal applicatif (`[Subscription] Action de l'administration`, avec l'administrateur). Ni création, ni modification
+  directe, ni suppression : l'état resterait différent de celui de Stripe. Remboursement vérifié sur `demo` (Stripe en
+  mode test, 13/10/2026).
+- Tests : `tests/Functional/Boutique/SubscriptionApiTest.php` (Stripe simulé : souscription, gestion, webhooks, refus). ; actions EasyAdmin : `testAdministratorManagesASubscriptionFromEasyAdmin`.
 
 ## Avis clients (09/10/2026)
 

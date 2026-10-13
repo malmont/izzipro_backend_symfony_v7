@@ -1,0 +1,30 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block page_title %}Changer de formule : abonnement n° {{ subscription.id }}{% endblock %}
+
+{% block main %}
+<div class="container-fluid mt-3" style="max-width: 720px">
+    <p>
+        Client : <strong>{{ subscription.user }}</strong><br>
+        Formule actuelle : <strong>{{ subscription.plan ? subscription.plan.name : '—' }}</strong>
+        {% if subscription.plan %}({{ (subscription.plan.price / 100)|number_format(2, ',', ' ') }} {{ subscription.plan.currency }} / {{ subscription.plan.intervalCount > 1 ? subscription.plan.intervalCount ~ ' ' : '' }}{{ {week: 'semaine', month: 'mois', year: 'an'}[subscription.plan.interval] ?? subscription.plan.interval }}){% endif %}
+    </p>
+    {% if plans is empty %}
+        <div class="alert alert-info">Aucune autre formule active pour ce produit. Créez-en une dans « Formules d'abonnement ».</div>
+    {% else %}
+        <form method="post" action="{{ action }}" onsubmit="return confirm('Changer la formule de cet abonnement ? Stripe calcule le prorata sur la prochaine facture.');">
+            <div class="mb-3">
+                <label class="form-label" for="planId">Nouvelle formule</label>
+                <select class="form-select" id="planId" name="planId" required>
+                    {% for plan in plans %}
+                        <option value="{{ plan.id }}">{{ plan.name }} : {{ (plan.price / 100)|number_format(2, ',', ' ') }} {{ plan.currency }} / {{ plan.intervalCount > 1 ? plan.intervalCount ~ ' ' : '' }}{{ {week: 'semaine', month: 'mois', year: 'an'}[plan.interval] ?? plan.interval }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">Formules actives du même produit. Le changement est immédiat ; la différence de prix est calculée au prorata sur la prochaine facture.</div>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-exchange-alt me-1"></i> Changer de formule</button>
+            <a class="btn btn-secondary ms-2" href="{{ back }}">Annuler</a>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

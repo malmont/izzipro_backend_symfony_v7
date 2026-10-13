@@ -201,6 +201,31 @@ final class SubscriptionService
         return $subscription;
     }
 
+    /** État relu chez Stripe (administration : webhook manqué, action faite dans le tableau de bord Stripe) */
+    public function sync(Subscription $subscription): Subscription
+    {
+        $this->requireStripe($subscription);
+        $this->applyStripeState($subscription, $this->stripe->retrieve($subscription->getStripeSubscriptionId()));
+        $this->emProvider->getEntityManager()->flush();
+
+        return $subscription;
+    }
+
+    /**
+     * Rembourse en entier le dernier paiement encaissé (administration). L'abonnement n'est pas modifié : le résilier
+     * ou le mettre en pause à part si besoin.
+     *
+     * @return array{refundId: string, amount: int, currency: string}
+     * @throws SubscriptionException 409 aucun paiement à rembourser, 502 Stripe (paiement déjà remboursé…)
+     */
+    public function refundLatest(Subscription $subscription): array
+    {
+        $this->requireStripe($subscription);
+
+        return $this->stripe->refundLatestPayment($subscription->getStripeSubscriptionId())
+            ?? throw new SubscriptionException(409, 'Aucun paiement encaissé à rembourser pour cet abonnement.');
+    }
+
     public function portalUrl(User $user, string $returnUrl): string
     {
         $customerId = $user->getStripeCustomerId() ?? $this->stripe->ensureCustomer($user, $user->getPrimaryAddress());

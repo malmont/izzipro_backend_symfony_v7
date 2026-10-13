@@ -165,6 +165,37 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         ], $o)));
     }
 
+    public function refundLatestPayment(string $subscriptionId): ?array
+    {
+        return $this->call(function (StripeClient $c, array $o) use ($subscriptionId): ?array {
+            // API 2025-03+ : le paiement d'une facture est dans invoice.payments (à demander), plus dans invoice.payment_intent
+            $invoice = $c->invoices->all(['subscription' => $subscriptionId, 'status' => 'paid', 'limit' => 1, 'expand' => ['data.payments']], $o)->data[0] ?? null;
+            if ($invoice === null || (int) $invoice->amount_paid === 0) {
+                return null;
+            }
+            $paymentIntent = null;
+            foreach ($invoice->payments->data ?? [] as $payment) {
+                if (($payment->status ?? null) === 'paid' && !empty($payment->payment->payment_intent)) {
+                    $paymentIntent = is_string($payment->payment->payment_intent) ? $payment->payment->payment_intent : $payment->payment->payment_intent->id;
+                    break;
+                }
+            }
+            if ($paymentIntent === null) {
+                return null;
+            }
+            try {
+                $refund = $c->refunds->create(['payment_intent' => $paymentIntent, 'metadata' => ['subscription' => $subscriptionId, 'invoice' => (string) $invoice->id]], $o);
+            } catch (\Stripe\Exception\InvalidRequestException $e) {
+                if ($e->getStripeCode() === 'charge_already_refunded') {
+                    throw new SubscriptionException(409, 'Le dernier paiement de cet abonnement est déjà remboursé.');
+                }
+                throw $e;
+            }
+
+            return ['refundId' => (string) $refund->id, 'amount' => (int) $refund->amount, 'currency' => (string) $refund->currency];
+        });
+    }
+
     public function portalUrl(string $customerId, string $returnUrl): string
     {
         // Compte Express : aucun portail par défaut, la plateforme crée sa configuration (StripeConnectSetupService)

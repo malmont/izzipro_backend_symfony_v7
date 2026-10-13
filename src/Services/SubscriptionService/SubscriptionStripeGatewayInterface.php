@@ -51,4 +51,11 @@ interface SubscriptionStripeGatewayInterface
     public function changePlan(string $subscriptionId, string $itemId, string $priceId, int $quantity): array;
 
     public function portalUrl(string $customerId, string $returnUrl): string;
+
+    /**
+     * Rembourse en entier le dernier paiement encaissé de l'abonnement (dernière facture payée).
+     *
+     * @return array{refundId: string, amount: int, currency: string}|null null : aucune facture payée à rembourser
+     */
+    public function refundLatestPayment(string $subscriptionId): ?array;
 }

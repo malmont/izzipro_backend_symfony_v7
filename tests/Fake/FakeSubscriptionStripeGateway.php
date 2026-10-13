@@ -119,6 +119,15 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
         return self::$subscriptions[$subscriptionId];
     }
 
+    /** Paiement simulé : 'paidAmount' posé par le test sur l'abonnement (absent : rien à rembourser) */
+    public function refundLatestPayment(string $subscriptionId): ?array
+    {
+        self::$calls[] = ['refund', $subscriptionId];
+        $amount = self::$subscriptions[$subscriptionId]['paidAmount'] ?? null;
+
+        return $amount === null ? null : ['refundId' => 're_test_' . bin2hex(random_bytes(3)), 'amount' => (int) $amount, 'currency' => 'cad'];
+    }
+
     public function portalUrl(string $customerId, string $returnUrl): string
     {
         self::$calls[] = ['portal', $customerId, $returnUrl];

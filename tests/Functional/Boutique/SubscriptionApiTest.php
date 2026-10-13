@@ -179,6 +179,64 @@ class SubscriptionApiTest extends WebTestCase
         }
     }
 
+    public function testAdministratorManagesASubscriptionFromEasyAdmin(): void
+    {
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        $plans = $this->json($this->request('GET', '/api/subscription-plans?productId=' . $this->productId('DEMO-PANIER')));
+        $created = $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plans[0]['id'], 'quantity' => 1, 'addressId' => $this->address(), 'carrierId' => 1]));
+        $this->assertSame(201, $created->getStatusCode(), $created->getContent());
+        $id = json_decode($created->getContent(), true)['subscriptionId'];
+        $stripeId = (string) $this->db->fetchOne('SELECT stripe_subscription_id FROM subscription WHERE id = ?', [$id]);
+        FakeSubscriptionStripeGateway::$subscriptions[$stripeId]['status'] = 'active';
+        $this->db->executeStatement("UPDATE subscription SET status = 'active' WHERE id = ?", [$id]);
+
+        $this->loginAdmin();
+        $click = function (string $action) use ($id): string {
+            $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query(['crudAction' => 'detail', 'crudControllerFqcn' => \App\Controller\Admin\SubscriptionCrudController::class, 'entityId' => $id]), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+            $this->assertSame(200, $this->client->getResponse()->getStatusCode(), substr(strip_tags((string) $this->client->getResponse()->getContent()), 0, 600));
+            $link = $this->client->getCrawler()->filter('a[href*="crudAction=' . $action . '"]');
+            $this->assertCount(1, $link, "action $action affichée");
+            $this->client->request('GET', $link->attr('href'), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+            $this->client->followRedirect();
+
+            return (string) $this->client->getResponse()->getContent();
+        };
+        $status = fn () => $this->db->fetchAssociative('SELECT status, cancel_at_period_end, plan_id FROM subscription WHERE id = ?', [$id]);
+
+        $this->assertStringContainsString('Abonnement en pause', $click('pauseSubscription'));
+        $this->assertSame('paused', $status()['status']);
+        $click('resumeSubscription');
+        $this->assertSame('active', $status()['status']);
+
+        // Changement de formule : page de choix, puis envoi du formulaire
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query(['crudAction' => 'detail', 'crudControllerFqcn' => \App\Controller\Admin\SubscriptionCrudController::class, 'entityId' => $id]), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->client->request('GET', $this->client->getCrawler()->filter('a[href*="crudAction=changePlan"]')->attr('href'), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertCount(2, $this->client->getCrawler()->filter('select[name="planId"] option'), 'les deux autres formules du produit');
+        $form = $this->client->getCrawler()->filter('form')->last()->form(['planId' => (string) $plans[2]['id']]);
+        $this->client->submit($form, [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->assertSame($plans[2]['id'], (int) $status()['plan_id']);
+
+        $this->assertStringContainsString('Aucun paiement encaissé', $click('refundLatest'), 'rien à rembourser : message, aucun changement');
+        FakeSubscriptionStripeGateway::$subscriptions[$stripeId]['paidAmount'] = 3500;
+        $this->assertStringContainsString('Remboursement effectué : 35,00 CAD', $click('refundLatest'));
+
+        FakeSubscriptionStripeGateway::$subscriptions[$stripeId]['status'] = 'past_due';
+        $click('syncSubscription');
+        $this->assertSame('past_due', $status()['status'], 'état relu chez Stripe');
+
+        $click('cancelAtPeriodEnd');
+        $this->assertTrue((bool) $status()['cancel_at_period_end']);
+        $click('cancelNow');
+        $this->assertSame('canceled', $status()['status']);
+        $this->assertSame(0, $this->client->getCrawler()->filter('a[href*="crudAction=cancelNow"]')->count(), 'abonnement résilié : plus d\'action de résiliation');
+
+        // Lien sans jeton : refusé
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query(['crudAction' => 'pauseSubscription', 'crudControllerFqcn' => \App\Controller\Admin\SubscriptionCrudController::class, 'entityId' => $id]), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->client->followRedirect();
+        $this->assertStringContainsString('Lien invalide ou expiré', (string) $this->client->getResponse()->getContent());
+    }
+
     private function webhook(string $type, array $object): Response
     {
         $this->session = $this->session; // les webhooks sont anonymes : aucun cookie n'est envoyé
@@ -250,5 +308,16 @@ class SubscriptionApiTest extends WebTestCase
         foreach ($this->client->getResponse()->headers->getCookies() as $cookie) {
             $this->session[$cookie->getName()] = $cookie->getValue();
         }
+    }
+
+    private function loginAdmin(): void
+    {
+        $email = 'abonnement-admin-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        $em = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager();
+        $user = (new User())->setEmail($email)->setUsername($email)->setFirstname('Admin')->setLastname('Abonnements')->setRoles(['ROLE_ADMIN'])->setIsVerified(true)->setPassword('x');
+        $em->persist($user);
+        $em->flush();
+        $this->client->getCookieJar()->clear();
+        $this->client->loginUser($user, 'main');
     }
 }
