@@ -81,32 +81,15 @@ class EntrepriseDto
             $dto->adress = $entreprise->getAdress();
         }
         
-        $imagePath = $entreprise->getLogo();
-        if (str_starts_with((string)$imagePath, 'http')) {
-            $dto->logo = $imagePath;
-        } else if ($imagePath) {
-            $dto->logo = rtrim($host, '/') . '/assets/uploads/email-logos/' . $imagePath;
-        }
-        $faviconPath = $entreprise->getFaviconFilename();
-        if (str_starts_with((string)$faviconPath, 'http')) {
-            $dto->faviconUrl = $faviconPath;
-        } else if ($faviconPath) {
-            $dto->faviconUrl = rtrim($host, '/') . '/assets/uploads/email-logos/' . $faviconPath;
-        }
+        $dto->logo = self::uploadUrl($entreprise->getLogo(), $host);
+        $dto->faviconUrl = self::uploadUrl($entreprise->getFaviconFilename(), $host);
 
         $dto->metaTitle = $entreprise->getMetaTitle();
         $dto->metaDescription = $entreprise->getMetaDescription();
         $dto->seoKeywords = $entreprise->getSeoKeywords();
         $dto->googleSiteVerification = $entreprise->getGoogleSiteVerification();
 
-        $ogImagePath = $entreprise->getOgImage();
-        if (str_starts_with((string)$ogImagePath, 'http')) {
-            $dto->ogImage = $ogImagePath;
-        } else if ($ogImagePath) {
-            $dto->ogImage = rtrim($host, '/') . '/assets/uploads/email-logos/' . $ogImagePath;
-        } else {
-            $dto->ogImage = null;
-        }
+        $dto->ogImage = self::uploadUrl($entreprise->getOgImage(), $host);
 
         $dto->conditionOfUse = $translation?->getConditionOfUse() ?? $entreprise->getConditionOfUse();
         $dto->LegalNotice = $translation?->getLegalNotice() ?? $entreprise->getLegalNotice();
@@ -118,5 +101,25 @@ class EntrepriseDto
         }
 
         return $dto;
+    }
+
+    /**
+     * Logo, favicon ou image de partage : URL absolue gardée telle quelle ; fichier du dossier email-logos. Fichier
+     * disparu du stockage : null plutôt qu'une adresse en 404 (13/10/2026 : le frontend affiche alors le nom ou les
+     * initiales du site).
+     */
+    private static function uploadUrl(?string $stored, string $host): ?string
+    {
+        if ($stored === null || $stored === '') {
+            return null;
+        }
+        if (str_starts_with($stored, 'http')) {
+            return $stored;
+        }
+        if (!str_contains($stored, '/') && !is_file(\dirname(__DIR__, 2) . '/var/storage/public_bucket/assets/uploads/email-logos/' . $stored)) {
+            return null;
+        }
+
+        return rtrim($host, '/') . '/assets/uploads/email-logos/' . $stored;
     }
 }

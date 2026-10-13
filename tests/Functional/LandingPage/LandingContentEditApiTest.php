@@ -294,6 +294,23 @@ class LandingContentEditApiTest extends WebTestCase
         $this->assertSame(422, $this->request('PUT', "/api/entreprise/$id?locale=fr", json_encode(['LegalNotice' => $legacy . ' modifié']))->getStatusCode(), 'modifié : contrôlé');
     }
 
+    public function testMissingCompanyLogoFileIsReturnedAsNull(): void
+    {
+        $id = (int) $this->db()->fetchOne('SELECT MIN(id) FROM entreprise');
+        $dir = dirname(__DIR__, 3) . '/var/storage/public_bucket/assets/uploads/email-logos/';
+        $present = 'logo-test-present-' . bin2hex(random_bytes(3)) . '.png';
+        file_put_contents($dir . $present, 'x');
+        try {
+            $this->db()->executeStatement('UPDATE entreprise SET logo = ?, favicon_filename = ? WHERE id = ?', [$present, 'favicon-disparu-0123456789.png', $id]);
+            static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
+            $company = json_decode($this->request('GET', "/api/entreprise/$id")->getContent(), true);
+            $this->assertStringEndsWith('/assets/uploads/email-logos/' . $present, (string) $company['logo']);
+            $this->assertNull($company['faviconUrl'], 'fichier disparu : null plutôt qu\'une adresse en 404');
+        } finally {
+            @unlink($dir . $present);
+        }
+    }
+
     public function testEditsAreJournaledAndCanBeRestored(): void
     {
         $id = $this->presentation('Titre d\'origine', ['fr' => 'Titre d\'origine']);

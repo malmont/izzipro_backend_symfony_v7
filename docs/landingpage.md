@@ -65,6 +65,11 @@ qu'il est déjà enregistré n'est pas contrôlé : un site dont les anciens tex
 le reste de sa fiche. Inventaire : `php bin/console app:entreprise:check-legal-texts` (au 07/10/2026 : seuls les 6
 textes de Kara & B, avec `className`, `target`, `rel`).
 
+Logo, favicon et image de partage (`EntrepriseDto::uploadUrl`, 13/10/2026) : fichier du dossier `email-logos` ; s'il a
+disparu du stockage, la lecture renvoie `null` plutôt qu'une adresse en 404 (le frontend affiche le nom ou les
+initiales). Au 13/10/2026, le logo d'arkanoa-media (`b0ae4b4f….webp`) manque depuis au moins le 28/09 (introuvable sur
+le serveur et dans l'ancienne application).
+
 ## Formulaire de contact
 
 `POST /api/contacts/create` (ou `POST /api/contacts`), public (07/10/2026 : `ContactApiController::create`,
