@@ -65,6 +65,16 @@ Mêmes vérifications V1 à V6. En plus, **V7** : les blocs obligatoires d'une p
 
 Cas suivants écrits et joués côté backend (commande d'évaluation, 19/19 réussis sur `demo` le 09/10/2026), non recopiés ici : **B7** fiche produit avec abonnement, **B8** page de souscription, **B9** personnalisation.
 
+## Étape 5 : site complet et pages système (ajouté le 15/10/2026, cas écrits côté backend : `LandingAiEvalCases::pageCases`, joués par `app:landingpage-ai:eval --mode=page --case=S1|Y1|Y2` sur `demo` ; pas encore joués pour de vrai)
+
+Mêmes vérifications V1 à V8. Nouveaux champs de `compose` : `mode: "page"` + `system`, `mode: "site"` + `pages` (1 à 8, 10 crédits par page, accueil compris, 402 si le solde ne couvre pas tout), `charter`, `style: { tone, motion, density }`, `designMd`, un PDF dans `images`.
+
+| # | Entrée | Demande | Vérifications propres | Critère humain |
+|---|---|---|---|---|
+| S1 | `mode: site`, aucune image, `style: { tone: expressif, motion: discret }` | « Boutique de vêtements réversibles « Deux Faces » : fond nuit avec un halo bleu, accents orange, titres géométriques, boutons en pilule. Accueil : héros, réassurance, 3 étapes, grille de produits, infolettre. Puis fiche produit, connexion, inscription et compte. » | Navbar et Footer présents, séparés des sections, à fond sombre ; au moins 4 sections d'accueil ; `charter` renvoyée avec `primaryColor`, `backgroundColor` (sombre), `headingFont`, `buttonStyle: pill` ; V1–V10 sur chaque section | Site cohérent d'une page à l'autre |
+| Y1 | `mode: page`, `system: login`, charte sombre (`primaryColor` #FFA552, `accentColor` #5AA9FF, `textColor` #F4F1EA, `backgroundColor` #060A18, Outfit / Inter, `radius` 100, pill) | « Page de connexion de la boutique, dans le style du site : carte étroite centrée, lien vers l'inscription et le mot de passe oublié. » | `system: login` repris ; un bloc `loginForm` habillé par la charte (`accent`, `color`, `background` ou `radius` écrits) ; fond de section #060A18 | Formulaire lisible, dans le style du site |
+| Y2 | `mode: page`, `system: product`, même charte | « Fiche produit de la boutique : galerie à gauche, à droite le nom, le prix, les options, la quantité et l'ajout au panier (seul bouton en dégradé bleu → orange), puis des accordéons Matières, Entretien, Livraison, et une section « Complétez le look ». » | `system: product` ; un container portant `mode` ; blocs `gallery`, `price`, `quantity`, `addToCart` présents ; rien d'inventé dans les blocs du commerce (V8) | Fiche complète, un seul bouton plein |
+
 ## Mesures relevées à chaque passage
 
 Taux de V1 à V6 réussies, nombre d'essais de correction, jetons (entrée, cache, sortie), durée, et coût estimé par mode. Ces mesures servent à ajuster les crédits (1 / 3 / 10) avant le lancement.

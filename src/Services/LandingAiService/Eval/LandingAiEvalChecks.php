@@ -10,7 +10,7 @@ use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
 /**
  * Vérifications automatiques communes du jeu d'essai (config/landingpage/ia-assistant-jeu-essai.md) :
  * V1 contrat, V2 types de la famille, V3 médias autorisés, V4 liaisons conservées, V5 chiffres non inventés,
- * V6 blocs non visés identiques, V7 contraste des textes sur leur fond réel, V8 alignement des blocs fitContent, V9 mise en page (formulaire en double cadre, prix des services) (création et page). Chaque vérification renvoie ['ok' => bool, 'detail' => string].
+ * V6 blocs non visés identiques, V7 contraste des textes sur leur fond réel, V8 alignement des blocs fitContent, V9 mise en page (formulaire en double cadre, prix des services), V10 goût (carte dans une carte, polices, gris sur fond coloré, largeurs, boutons pleins) (création et page). Chaque vérification renvoie ['ok' => bool, 'detail' => string].
  */
 final class LandingAiEvalChecks
 {
@@ -20,7 +20,8 @@ final class LandingAiEvalChecks
         private readonly CompositionInspector $inspector,
         private readonly LandingAiContrastCheck $contrast,
         private readonly LandingAiAlignCheck $align,
-        private readonly LandingAiLayoutCheck $layout
+        private readonly LandingAiLayoutCheck $layout,
+        private readonly LandingAiTasteCheck $taste
     ) {
     }
 
@@ -75,7 +76,7 @@ final class LandingAiEvalChecks
         }
         $v6 = ['ok' => !$changed, 'detail' => $changed ? 'blocs non visés modifiés : ' . implode(', ', array_slice($changed, 0, 5)) : sprintf('%d bloc(s) visé(s)', count($result->touchedBlockIds))];
 
-        return ['V1' => $v1, 'V2' => $v2, 'V3' => $v3, 'V4' => $v4, 'V5' => $v5, 'V6' => $v6, 'V7' => ['ok' => null, 'detail' => 'sans objet en retouche (contraste de départ non maîtrisé)'], 'V8' => ['ok' => null, 'detail' => 'sans objet en retouche'], 'V9' => ['ok' => null, 'detail' => 'sans objet en retouche']];
+        return ['V1' => $v1, 'V2' => $v2, 'V3' => $v3, 'V4' => $v4, 'V5' => $v5, 'V6' => $v6, 'V7' => ['ok' => null, 'detail' => 'sans objet en retouche (contraste de départ non maîtrisé)'], 'V8' => ['ok' => null, 'detail' => 'sans objet en retouche'], 'V9' => ['ok' => null, 'detail' => 'sans objet en retouche'], 'V10' => ['ok' => null, 'detail' => 'sans objet en retouche']];
     }
 
     /**
@@ -98,6 +99,7 @@ final class LandingAiEvalChecks
         $weak = $this->contrast->issues($composition, $under);
         $misaligned = $this->align->issues($composition);
         $layout = $this->layout->issues($composition);
+        $taste = $this->taste->issues($composition);
 
         return [
             'V1' => ['ok' => !$errors, 'detail' => $errors ? count($errors) . ' erreur(s), ex. ' . $errors[0]['path'] . ' : ' . $errors[0]['message'] : ''],
@@ -109,6 +111,7 @@ final class LandingAiEvalChecks
             'V7' => ['ok' => !$weak, 'detail' => $weak ? 'contraste insuffisant : ' . implode(' ; ', array_slice($weak, 0, 4)) : ''],
             'V8' => ['ok' => !$misaligned, 'detail' => $misaligned ? 'bouton ou badge fitContent décalé de sa pile (à regarder, peut être voulu) : ' . implode(' ; ', array_slice($misaligned, 0, 4)) : ''],
             'V9' => ['ok' => !$layout, 'detail' => implode(' ; ', array_slice($layout, 0, 4))],
+            'V10' => ['ok' => !$taste, 'detail' => $taste ? 'goût : ' . implode(' ; ', array_slice($taste, 0, 4)) : ''],
         ];
     }
 
@@ -158,11 +161,12 @@ final class LandingAiEvalChecks
     }
 
     /** @return list<string> */
+    /** Chiffres d'un texte ; les numéros d'étape « 01 », « 02 »… (deux chiffres, zéro devant) ne sont pas des faits */
     private function numbers(string $text): array
     {
         preg_match_all('/\d+(?:[.,]\d+)?/u', $text, $m);
 
-        return array_map(fn ($n) => str_replace(',', '.', $n), $m[0]);
+        return array_values(array_filter(array_map(fn ($n) => str_replace(',', '.', $n), $m[0]), fn ($n) => !preg_match('/^0\d$/', $n)));
     }
 
     private function encode(mixed $value): string

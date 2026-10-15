@@ -609,6 +609,90 @@ final class LandingAiEvalCases
                         implode(' > ', $families), implode(', ', array_keys($sources)) ?: 'aucune', $bestsellers ? 'oui' : 'non'));
                 },
             ],
+            [
+                // Accueil d'un site complet (mode site, 15/10/2026) : Navbar et Footer composés avec l'accueil, charte déduite
+                'id' => 'S1', 'componentKey' => null, 'images' => [], 'media' => [], 'site' => true,
+                'style' => ['tone' => 'expressif', 'motion' => 'discret'],
+                'prompt' => 'Boutique de vêtements réversibles « Deux Faces » : fond nuit avec un halo bleu, accents orange, titres géométriques, boutons en pilule. Accueil : héros, réassurance, 3 étapes, grille de produits, infolettre. Puis fiche produit, connexion, inscription et compte.',
+                'check' => function (LandingAiPageResult $r) {
+                    $families = array_column($r->sections, 'componentKey');
+                    $charter = $r->charter ?? [];
+                    $dark = fn (?string $c) => is_string($c) && ($rgb = $this->rgb($c)) !== null && (0.299 * $rgb[0] + 0.587 * $rgb[1] + 0.114 * $rgb[2]) / 255 < 0.3;
+                    $ok = $r->navbar !== null && $r->footer !== null && count($r->sections) >= 4
+                        && isset($charter['primaryColor'], $charter['backgroundColor'], $charter['headingFont'])
+                        && $dark($charter['backgroundColor'] ?? null) && $dark($r->navbar->background ?? null) && $dark($r->footer->background ?? null)
+                        && ($charter['buttonStyle'] ?? null) === 'pill';
+
+                    return $this->result($ok, sprintf(
+                        'navbar : %s ; footer : %s ; sections : %s ; charte : %s',
+                        $r->navbar ? ($r->navbar->background ?? '(sans fond)') : 'absente',
+                        $r->footer ? ($r->footer->background ?? '(sans fond)') : 'absent',
+                        implode(' > ', $families),
+                        $charter ? json_encode($charter, JSON_UNESCAPED_UNICODE) : 'aucune'
+                    ));
+                },
+            ],
+            [
+                // Accueil d'un site complet landing page (mode site, app landingpage) : Navbar liée aux onglets, Footer, charte ;
+                // les onglets Services, Contact et À propos sont composés ensuite par les tâches filles
+                'id' => 'S2', 'componentKey' => null, 'images' => [], 'media' => [], 'site' => true, 'app' => 'landingpage',
+                'tabs' => ['Services', 'Contact', 'À propos'],
+                'style' => ['tone' => 'equilibre', 'motion' => 'discret'],
+                'prompt' => 'Site vitrine d\'un atelier d\'architecture d\'intérieur « Atelier Lune » : fond crème, vert sauge et noir, titres serif, boutons à contour. Accueil : héros avec photo, trois engagements, réalisations récentes, appel à prendre rendez-vous. Puis les onglets Services, Contact et À propos.',
+                'check' => function (LandingAiPageResult $r) {
+                    $families = array_column($r->sections, 'componentKey');
+                    $charter = $r->charter ?? [];
+                    $shop = array_values(array_filter($families, fn ($f) => in_array($f, ['Catalogue', 'ProductPage', 'CartPage', 'Checkout', 'AuthPage', 'AccountPage', 'PlanGrid', 'Subscription'], true)));
+                    $navBound = false;
+                    foreach (is_array($r->navbar->blocks ?? null) ? $r->navbar->blocks : [] as $block) {
+                        $navBound = $navBound || (($block->type ?? null) === 'nav' && ($block->bindings->links ?? null) === 'navLinks');
+                    }
+                    $ok = $r->navbar !== null && $r->footer !== null && count($r->sections) >= 3 && $shop === [] && $navBound
+                        && isset($charter['primaryColor'], $charter['backgroundColor'], $charter['headingFont'])
+                        && ($charter['buttonStyle'] ?? null) === 'outline';
+
+                    return $this->result($ok, sprintf(
+                        'navbar : %s (nav lié aux onglets : %s) ; footer : %s ; sections : %s ; familles boutique : %s ; charte : %s',
+                        $r->navbar ? ($r->navbar->background ?? '(sans fond)') : 'absente', $navBound ? 'oui' : 'non',
+                        $r->footer ? ($r->footer->background ?? '(sans fond)') : 'absent',
+                        implode(' > ', $families), $shop ? implode(', ', $shop) : 'aucune',
+                        $charter ? json_encode($charter, JSON_UNESCAPED_UNICODE) : 'aucune'
+                    ));
+                },
+            ],
+            [
+                // Page système composée en mode page : la connexion, avec la charte d'un site sombre
+                'id' => 'Y1', 'componentKey' => null, 'images' => [], 'media' => [], 'system' => 'login',
+                'charter' => ['primaryColor' => '#FFA552', 'accentColor' => '#5AA9FF', 'textColor' => '#F4F1EA', 'backgroundColor' => '#060A18', 'headingFont' => 'Outfit', 'bodyFont' => 'Inter', 'radius' => 100, 'buttonStyle' => 'pill'],
+                'prompt' => 'Page de connexion de la boutique, dans le style du site : carte étroite centrée, lien vers l\'inscription et le mot de passe oublié.',
+                'check' => function (LandingAiPageResult $r) {
+                    $login = null;
+                    $backgrounds = [];
+                    foreach ($r->sections as $section) {
+                        $backgrounds[] = $section['composition']->background ?? '(sans fond)';
+                        $login ??= $this->find($section['composition'], fn ($b) => ($b->type ?? null) === 'loginForm');
+                    }
+                    $styled = $login !== null && (isset($login->accent) || isset($login->color) || isset($login->background) || isset($login->radius));
+                    $ok = $r->system === 'login' && $login !== null && $styled && in_array('#060A18', array_map('strtoupper', $backgrounds), true);
+
+                    return $this->result($ok, sprintf('loginForm : %s ; habillé par la charte : %s ; fonds : %s', $login ? 'oui' : 'non', $styled ? 'oui' : 'non', implode(', ', $backgrounds)));
+                },
+            ],
+            [
+                // Fiche produit : groupe de mode obligatoire, bouton d'ajout au panier en dégradé réservé
+                'id' => 'Y2', 'componentKey' => null, 'images' => [], 'media' => [], 'system' => 'product',
+                'charter' => ['primaryColor' => '#FFA552', 'accentColor' => '#5AA9FF', 'textColor' => '#F4F1EA', 'backgroundColor' => '#060A18', 'headingFont' => 'Outfit', 'bodyFont' => 'Inter', 'radius' => 100, 'buttonStyle' => 'pill'],
+                'prompt' => 'Fiche produit de la boutique : galerie à gauche, à droite le nom, le prix, les options, la quantité et l\'ajout au panier (seul bouton en dégradé bleu → orange), puis des accordéons Matières, Entretien, Livraison, et une section « Complétez le look ».',
+                'check' => function (LandingAiPageResult $r) {
+                    $compositions = array_column($r->sections, 'composition');
+                    $has = fn (string $type) => array_filter($compositions, fn ($c) => $this->find($c, fn ($b) => ($b->type ?? null) === $type) !== null) !== [];
+                    $mode = array_filter($compositions, fn ($c) => $this->find($c, fn ($b) => ($b->type ?? null) === 'container' && is_string($b->mode ?? null)) !== null) !== [];
+                    $ok = $r->system === 'product' && $mode && $has('gallery') && $has('price') && $has('addToCart') && $has('quantity');
+
+                    return $this->result($ok, sprintf('groupe de mode : %s ; galerie : %s ; prix : %s ; quantité : %s ; ajout au panier : %s ; sections : %s',
+                        $mode ? 'oui' : 'non', $has('gallery') ? 'oui' : 'non', $has('price') ? 'oui' : 'non', $has('quantity') ? 'oui' : 'non', $has('addToCart') ? 'oui' : 'non', implode(' > ', array_column($r->sections, 'componentKey'))));
+                },
+            ],
         ];
     }
 

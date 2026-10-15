@@ -81,6 +81,16 @@ class AiJob
         $this->startedAt = new \DateTimeImmutable();
     }
 
+    /**
+     * Tâche fille d'un site complet, lancée une fois l'accueil composé : nouvelle requête (charte, style de l'accueil)
+     * et horloge d'attente remise à zéro (une tâche en attente depuis 30 min est tenue pour bloquée).
+     */
+    public function requeue(string $input): void
+    {
+        $this->input = $input;
+        $this->createdAt = new \DateTimeImmutable();
+    }
+
     public function succeed(string $result): void
     {
         $this->finish(self::STATUS_DONE);

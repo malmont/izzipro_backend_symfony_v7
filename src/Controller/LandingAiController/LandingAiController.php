@@ -7,12 +7,14 @@ use App\Dto\LandingAiVideoPromptInputDto;
 use App\Services\LandingAiService\LandingAiComposeRunner;
 use App\Services\LandingAiService\LandingAiException;
 use App\UseCase\LandingAiUseCase\ComposeLandingSectionUseCase;
+use App\UseCase\LandingAiUseCase\ExportLandingDesignMdUseCase;
 use App\UseCase\LandingAiUseCase\GetLandingAiJobUseCase;
 use App\UseCase\LandingAiUseCase\GetLandingAiUsageUseCase;
 use App\UseCase\LandingAiUseCase\WriteLandingVideoPromptUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
 /**
@@ -25,7 +27,8 @@ class LandingAiController extends AbstractController
         private readonly ComposeLandingSectionUseCase $composeUseCase,
         private readonly GetLandingAiUsageUseCase $usageUseCase,
         private readonly GetLandingAiJobUseCase $jobUseCase,
-        private readonly WriteLandingVideoPromptUseCase $videoPromptUseCase
+        private readonly WriteLandingVideoPromptUseCase $videoPromptUseCase,
+        private readonly ExportLandingDesignMdUseCase $designMdUseCase
     ) {
     }
 
@@ -78,6 +81,17 @@ class LandingAiController extends AbstractController
     {
         try {
             return new JsonResponse($this->jobUseCase->execute($jobId), 200, [], true);
+        } catch (LandingAiException $e) {
+            return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
+        }
+    }
+
+    /** Charte du site en texte (DESIGN.md), sans IA ni crédit : ?app=landingpage (défaut) ou boutique */
+    #[Route('/design-md', name: 'api_landingpage_ai_design_md', methods: ['GET'])]
+    public function designMd(Request $request): Response
+    {
+        try {
+            return new Response($this->designMdUseCase->execute($request->query->get('app')), 200, ['Content-Type' => 'text/markdown; charset=UTF-8']);
         } catch (LandingAiException $e) {
             return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
         }

@@ -47,7 +47,8 @@ par exemple `tabs[0].sections[2].reglableConfig.blocks[3].fontColor`. Rien n'est
 - `landingpage-ia-catalogue.json` : **copie exacte** du catalogue du frontend (`Izzipro_next/docs/landingpage-ia-catalogue.json`,
   généré par `npm run ia:catalogue`). Pour chaque famille (`componentKey`) : types de blocs autorisés (`tools`), champs liables
   (`sectionFields`, `boundTools`, `list`) et modèles de référence (`presets`). Lu par `App\Services\LandingAiService\LandingAiCatalogue`.
-- `ia-assistant-jeu-essai.md` : jeu d'essai (cas R1–R10, C1–C8, P1–P3 et vérifications V1–V6), rejoué par
+- `ia-assistant-jeu-essai.md` : jeu d'essai (cas R1–R10, C1–C8, P1–P3 et vérifications V1–V6 ; côté backend aussi V7–V10,
+  B1–B9, S1 (accueil d'un site complet) et Y1–Y2 (pages système connexion et fiche produit, avec charte)), rejoué par
   `php bin/console app:landingpage-ai:eval [--tenant=demo] [--mode=edit|create|page|all] [--case=R1]` (sans HTTP ni quota, aucune écriture ;
   rapport JSON dans `var/landing-ai-eval/`). Images des cas P1 (charte) et P2 (capture) :
   `src/Services/LandingAiService/Eval/fixtures/`.
@@ -55,8 +56,8 @@ par exemple `tabs[0].sections[2].reglableConfig.blocks[3].fontColor`. Rien n'est
 ### Synchronisation depuis le frontend (remplace les copies manuelles)
 
 Les fichiers de ce dossier ne servent plus que de **version de repli** (`bundled`) : serveur sans synchronisation
-(nouvelle installation) et tests. Ce sont des copies de la dernière version synchronisée et validée (08/10/2026 :
-`528b8f8009eb1e0a`, catalogue version 2 avec les familles de la boutique et `systemPages` ; première synchronisation
+(nouvelle installation) et tests. Ce sont des copies de la dernière version synchronisée et validée (15/10/2026 :
+`94822d56a33d0874`, polices Syne, Manrope et JetBrains Mono ; 08/10/2026 : `528b8f8009eb1e0a`, catalogue version 2 avec les familles de la boutique et `systemPages` ; première synchronisation
 réelle le 29/09/2026 : `a966c990f8a0934f`) ; les recopier depuis `var/landingpage-config/versions/<id>/` quand le
 frontend change de version (les tests de la boutique exigent un catalogue avec `systemPages`). La version active est lue dans `var/landingpage-config/` (`LandingConfigStore`)
 par le validateur, le catalogue et le constructeur de prompts, sans redémarrage (worker compris).
@@ -114,6 +115,55 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     l'IA n'emploie que ses couleurs et polices (plus blanc, noir, gris neutres). Capture d'écran : l'IA en reproduit la
     structure ; les images de la capture ne sont pas des médias utilisables. Une requête avec images passe au modèle
     page et coûte 10 crédits.
+    Depuis le 15/10/2026, `images` accepte aussi **un** document `data:application/pdf;base64,…` (10 Mo au plus en
+    base64, compté dans les 5 ; en-tête `%PDF-` vérifié) : une maquette en PDF (accueil, fiche produit, charte…), envoyée à
+    l'API comme bloc `document` (chaque page lue comme une image et son texte).
+  - **page d'une page système** (15/10/2026) : `{ mode: "page", system: "product" | "login" | …, prompt, … }` ; `system` est une
+    clé de `systemPages` du catalogue synchronisé (400 sinon, ou si le catalogue n'en publie pas). Le modèle reçoit le
+    titre, l'adresse, les blocs obligatoires et les familles de la boutique faites pour la page
+    (`LandingAiCatalogue::familiesForRequired`) ; une réponse où un bloc obligatoire manque (`stripePayment`, `loginForm`,
+    groupe de mode…) est renvoyée au modèle (`LandingAiCompositionChecker::missingRequiredBlocks`, même règle que le PUT des
+    réglages de la boutique). Réponse : `system` repris, et `charter` si la demande en donnait une.
+  - **page d'un onglet de la landing page** (15/10/2026) : `{ mode: "page", tab: { title, brief? }, prompt, charter?, … }` ;
+    `tab` est exclusif avec `system` (400). `title` : 1 à 60 caractères sans `<` ni `>` ; `brief` : 300 au plus. Le modèle
+    reçoit « Onglet de la landing page à composer : « Services » — <brief> », les familles `app: landingpage` du
+    catalogue à préférer, une ancre par section, et l'interdiction de Navbar et Footer dans un onglet (une section de ces
+    familles est renvoyée au modèle). Une famille de la boutique utilisée sans que la demande ou le brief parle de
+    commerce (`LandingAiComposer::asksCommerce`) donne un `warning`, pas une erreur. Réponse : `tab` repris, et `charter`
+    si la demande en donnait une.
+  - **site** (15/10/2026) : `{ mode: "site", app?: "boutique" | "landingpage", pages: [...], prompt, images?, media?,
+    charter?, style?, designMd?, locale? }` → 202 `{ jobId, credits }`. `componentKey` interdit. Deux applications :
+    - **boutique** : `pages` = 1 à 8 clés de pages système distinctes (`["product", "login", …]`) ;
+    - **landing page** : `pages` = 1 à 8 objets `{ title, brief? }` (onglets à composer après l'accueil, titres distincts
+      sans distinction de casse ; mêmes limites que `tab`). Chaque onglet devient une tâche fille `page` + `tab` ; la
+      réponse de l'accueil porte `app: "landingpage"` et `pages: { "<slug du titre>": { jobId, status, title } }` (slug :
+      ascii minuscule, tirets, rendu unique par `-2`, `-3`… ; `LandingAiSiteOrchestrator::pageKeys`). Le modèle reçoit
+      pour l'accueil : Navbar en premier avec son bloc nav lié à `navLinks` (le menu vient des onglets du site ; sinon
+      `warning`), Footer en dernier, familles `app: landingpage` à préférer, et la liste des onglets à venir.
+    `app` absent : `boutique` si toutes les entrées de `pages` sont des chaînes, sinon `landingpage` ; un `app` explicite
+    qui contredit la forme de `pages`, ou des formes mélangées → 400. Coût : 10 crédits pour l'accueil + 10 par page, vérifiés d'un bloc avant toute réservation
+    (402 sinon) ; une tâche fille par page est créée aussitôt, crédits réservés 2 h (`SITE_PAGE_RESERVATION_TTL_SECONDS`),
+    puis lancée quand l'accueil est composé (`LandingAiSiteOrchestrator`). L'accueil est une demande page avec Navbar en
+    premier et Footer en dernier (exigés, sinon renvoyé au modèle) et une **charte** renvoyée par le modèle (`charter`,
+    exigée par l'outil), complétée par ce que les sections montrent (`LandingAiCharterExtractor`). Résultat de la tâche
+    mère : `{ mode: "site", sections (accueil, sans navbar ni footer), navbar, footer, charter, siteStyle (résumé du style,
+    redonné aux pages), pages: { <page>: { jobId, status, error? } }, summary, warnings, limits, credits, usage }` ; l'état
+    de chaque page est relu à chaque GET de la tâche mère, son résultat se lit sur sa propre tâche (`GET /jobs/{jobId}`,
+    réponse d'une page système avec `charter`). Accueil en échec : les pages échouent aussi (crédits libérés). Les tâches
+    filles comptent comme tâche active de l'utilisateur (409 pour une autre demande de fond jusqu'à la fin). Tout est
+    dans la base du tenant ; le worker reçoit le code du tenant avec chaque tâche.
+  - **charte, style et DESIGN.md** (15/10/2026, tous les modes) : `charter` (clés de la charte de la boutique :
+    `primaryColor`, `accentColor`, `textColor`, `backgroundColor`, `headingFont`, `bodyFont`, `radius`, `buttonStyle` ;
+    mêmes contrôles que `PUT /api/boutique-settings`, 400 sinon) prime sur la palette du site ; `style: { tone: sobre |
+    equilibre | expressif, motion: aucun | discret | vivant, density: aeree | normale | dense }` (chaque clé facultative) ;
+    `designMd` : charte en texte (fichier DESIGN.md ou description libre, 40 000 caractères au plus), encadrée `<charte>`
+    dans le message et présentée au modèle comme une donnée. `GET /api/landingpage-ai/design-md?app=landingpage|boutique`
+    (ROLE_ADMIN, sans IA ni crédit) écrit le DESIGN.md du site : charte enregistrée de la boutique s'il y en a une,
+    complétée par la palette et les polices des compositions (`LandingAiDesignMdWriter`), `text/markdown`.
+  - **Réparations sans nouvel essai** (`LandingAiOutputRepair`, détail dans la classe) : clés en double, null, style sans
+    effet, média de repli inventé, stepAt tardif, containers sans fond (transparent) et, depuis le 15/10/2026, blocs sans
+    `w` ni fitContent dans une pile, une grille ou un diaporama (w = 100 : une page réelle en avait 44, rendus sur deux
+    lettres par ligne). Dans une rangée ou en positions libres, rien n'est écrit.
   - **Relecture visuelle** (bouton de l'éditeur) : retouche dont la demande commence par « Relecture visuelle : », avec
     2 captures JPEG du rendu actuel de la section (ordinateur 1280 px, puis mobile 390 px). L'IA corrige les défauts
     visibles (contraste, espacements, alignements, textes coupés, mobile via `mobile.*`) par des opérations, sans toucher

@@ -12,6 +12,8 @@ use App\Services\LandingAiService\LandingAiDataSources;
 use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiJobService;
 use App\Services\LandingAiService\LandingAiQuotaService;
+use App\Services\LandingAiService\LandingAiSiteOrchestrator;
+use App\Services\BoutiqueSettingsService\BoutiqueConfigurationValidator;
 use App\Services\TenantConnectionProvider;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
@@ -19,8 +21,9 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
 /**
  * POST /api/landingpage-ai/compose : contrôles, limite par minute, réservation des crédits, puis
  * - edit, create : appel à l'IA et réponse 200 avec la proposition ;
- * - page ou requête avec images : tâche de fond (worker Messenger), réponse 202 { jobId, credits }, résultat à lire
- *   sur GET /api/landingpage-ai/jobs/{jobId}.
+ * - page, site ou requête avec images : tâche de fond (worker Messenger), réponse 202 { jobId, credits }, résultat à
+ *   lire sur GET /api/landingpage-ai/jobs/{jobId} ; un site crée en plus une tâche fille par page système, lancée
+ *   quand l'accueil est composé (LandingAiSiteOrchestrator).
  * N'enregistre jamais les réglages du site : la proposition est appliquée par l'administrateur dans l'éditeur puis
  * enregistrée avec le PUT habituel.
  */
@@ -35,7 +38,9 @@ class ComposeLandingSectionUseCase
         private readonly LandingAiJobService $jobs,
         private readonly MessageBusInterface $bus,
         private readonly TenantConnectionProvider $tenantProvider,
-        private readonly RateLimiterFactory $landingAiTenantLimiter
+        private readonly RateLimiterFactory $landingAiTenantLimiter,
+        private readonly LandingAiSiteOrchestrator $sites,
+        private readonly BoutiqueConfigurationValidator $boutiqueValidator
     ) {
     }
 
@@ -44,10 +49,12 @@ class ComposeLandingSectionUseCase
      */
     public function execute(LandingAiComposeInputDto $dto, ?string $userIdentifier): LandingAiComposeOutputDto
     {
-        $errors = $dto->validate($this->catalogue->componentKeys());
+        $errors = $dto->validate($this->catalogue->componentKeys(), array_keys($this->catalogue->systemPages()));
+        array_push($errors, ...$this->boutiqueValidator->validateCharter($dto->charter));
         if ($errors) {
             throw LandingAiException::badRequest('Requête invalide : ' . $errors[0]['path'] . ' : ' . $errors[0]['message'], $errors);
         }
+        $dto->children = []; // usage interne : jamais lu depuis la requête
         $defaultDataType = $dto->dataType !== null ? (string) $dto->dataType : null;
         if ($dto->mode === 'create' && $defaultDataType !== null) {
             if (!$this->data->familyUsesData((string) $dto->componentKey)) {
@@ -80,16 +87,27 @@ class ComposeLandingSectionUseCase
         $cost = LandingAiQuotaService::cost($dto->mode, $dto->images !== []);
 
         if ($dto->isAsync()) {
+            if ($dto->mode === 'site' && ($credits = $this->quota->credits())['remaining'] < LandingAiSiteOrchestrator::cost($dto)) {
+                throw new LandingAiException(402, 'Quota épuisé', sprintf(
+                    'Crédits IA insuffisants : un site de %d page(s) coûte %d crédits (10 pour l\'accueil, 10 par page), il en reste %d ce mois-ci.',
+                    count($dto->pages) + 1, LandingAiSiteOrchestrator::cost($dto), $credits['remaining']
+                ));
+            }
             $usage = $this->quota->reserve($dto->mode, $dto->componentKey ?? '', $cost, $userIdentifier, $dto->prompt, LandingAiQuotaService::JOB_RESERVATION_TTL_SECONDS);
             $job = null;
             try {
+                if ($dto->mode === 'site') {
+                    $dto->children = $this->sites->createChildren($dto, $userIdentifier);
+                }
                 $job = $this->jobs->create($usage, $userIdentifier, $dto->toJson());
                 $this->bus->dispatch(new LandingAiJobMessage($job->getId(), (string) $this->tenantProvider->getTenantCode()));
             } catch (\Throwable $e) {
                 $this->quota->release($usage, null);
+                $queueError = new LandingAiException(502, 'Service IA indisponible', 'La demande n\'a pas pu être mise en file. Aucun crédit n\'a été consommé.');
                 if ($job !== null) {
-                    $this->jobs->fail($job, new LandingAiException(502, 'Service IA indisponible', 'La demande n\'a pas pu être mise en file. Aucun crédit n\'a été consommé.'));
+                    $this->jobs->fail($job, $queueError);
                 }
+                $this->sites->failChildren($dto, $queueError);
                 throw $e;
             }
 

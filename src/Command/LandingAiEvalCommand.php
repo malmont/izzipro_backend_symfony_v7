@@ -218,19 +218,26 @@ class LandingAiEvalCommand extends Command
         }
         $io->writeln(sprintf(' <info>%s</info> page (%s) : « %s »', $case['id'], implode(', ', $case['images']) ?: 'sans image', $case['prompt']));
 
+        // Page système (system), onglet (tab) ou accueil d'un site complet (site : Navbar et Footer exigés, charte déduite ; app et onglets à venir)
+        $options = ['siteHome' => ($case['site'] ?? false) === true, 'siteApp' => $case['app'] ?? 'boutique', 'siteTabs' => $case['tabs'] ?? [], 'tab' => $case['tab'] ?? null,
+            'charter' => isset($case['charter']) ? (object) $case['charter'] : null, 'style' => $case['style'] ?? null];
+        if (isset($case['system']) && ($page = $this->catalogue->systemPages()[$case['system']] ?? null) !== null) {
+            $options['system'] = ['key' => $case['system'], 'route' => $page['route'], 'title' => $page['title']['fr'] ?? $case['system'], 'required' => $page['required'], 'families' => $this->catalogue->familiesForRequired($page['required'])];
+        }
         try {
-            $result = $this->composer->page($case['prompt'], 'fr', $case['media'], $images, $case['componentKey']);
+            $result = $this->composer->page($case['prompt'], 'fr', $case['media'], $images, $case['componentKey'], $options);
         } catch (LandingAiException $e) {
             return $this->failure($case['id'], 'page', $e);
         }
 
-        $common = $this->checks->commonPage($result->sections, $allowedMedia, $knownText);
+        $sections = [...($result->navbar ? [['componentKey' => 'Navbar', 'dataType' => null, 'composition' => $result->navbar]] : []), ...$result->sections, ...($result->footer ? [['componentKey' => 'Footer', 'dataType' => null, 'composition' => $result->footer]] : [])];
+        $common = $this->checks->commonPage($sections, $allowedMedia, $knownText);
         $specific = ($case['check'])($result);
 
         return [
             ['id' => $case['id'], 'mode' => 'page', 'images' => $case['images'], 'prompt' => $case['prompt'], 'status' => 'ok',
                 'checks' => $common, 'specific' => $specific, 'summary' => $result->summary, 'warnings' => $result->warnings,
-                'sections' => $result->sections, 'usage' => $result->stats->toArray()],
+                'sections' => $sections, 'charter' => $result->charter, 'usage' => $result->stats->toArray()],
             $this->row($case['id'], $common, $specific, $result->stats),
         ];
     }
@@ -322,7 +329,7 @@ class LandingAiEvalCommand extends Command
         $played = array_values(array_filter($cases, fn ($c) => $c['status'] !== 'skipped'));
         $ok = array_values(array_filter($played, fn ($c) => $c['status'] === 'ok'));
         $checks = [];
-        foreach (['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9'] as $v) {
+        foreach (['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10'] as $v) {
             $measured = array_filter($ok, fn ($c) => $c['checks'][$v]['ok'] !== null);
             $checks[$v] = [count(array_filter($measured, fn ($c) => $c['checks'][$v]['ok'])), count($measured)];
         }

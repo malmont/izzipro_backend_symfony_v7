@@ -802,7 +802,7 @@
             {
               "type": "number",
               "minimum": 0,
-              "maximum": 15,
+              "maximum": 30,
               "description": "Carrousel : défilement automatique en secondes, 0 = manuel."
             },
             {
@@ -1011,6 +1011,9 @@
             "Great Vibes",
             "Sacramento",
             "Aston Script",
+            "Syne",
+            "Manrope",
+            "JetBrains Mono",
             "Georgia",
             "Système"
           ],
@@ -1043,6 +1046,42 @@
             "grow"
           ],
           "description": "Effet au survol (hors édition). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+        },
+        "carouselTransition": {
+          "enum": [
+            "slide",
+            "fade"
+          ],
+          "description": "Carrousel : passage d’une image à l’autre, glissement (slide, défaut) ou fondu enchaîné (fade). Types : carousel."
+        },
+        "transitionDuration": {
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 3,
+          "description": "Carrousel : durée du passage d’une image à l’autre, en secondes (absent : vitesse du navigateur pour le glissement, 0,6 s pour le fondu). Types : carousel."
+        },
+        "kenBurns": {
+          "type": "boolean",
+          "description": "Carrousel : zoom lent sur l’image affichée. Types : carousel."
+        },
+        "controlsColor": {
+          "$ref": "#/$defs/color",
+          "description": "Carrousel : couleur des flèches et du point de l’image affichée. Types : carousel."
+        },
+        "dotsStyle": {
+          "enum": [
+            "dots",
+            "bars"
+          ],
+          "description": "Carrousel : points ronds (dots, défaut) ou traits (bars). Types : carousel."
+        },
+        "autoplayOnHover": {
+          "type": "boolean",
+          "description": "Carrousel : le défilement automatique continue quand la souris est dessus (absent : il s’arrête). Types : carousel."
+        },
+        "glowColor": {
+          "$ref": "#/$defs/color",
+          "description": "Couleur des halos du bloc : ombre « glow » et effet au survol « glow ». Absente : bleu clair (rgba(56, 189, 248)). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "animation": {
           "enum": [
@@ -1207,6 +1246,9 @@
             "Great Vibes",
             "Sacramento",
             "Aston Script",
+            "Syne",
+            "Manrope",
+            "JetBrains Mono",
             "Georgia",
             "Système"
           ],
@@ -1296,6 +1338,9 @@
             "Great Vibes",
             "Sacramento",
             "Aston Script",
+            "Syne",
+            "Manrope",
+            "JetBrains Mono",
             "Georgia",
             "Système"
           ],
@@ -2516,6 +2561,215 @@
             "not": {
               "required": [
                 "hover"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "carouselTransition"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "transitionDuration"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "kenBurns"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "controlsColor"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "dotsStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "carousel"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "autoplayOnHover"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container",
+                    "title",
+                    "text",
+                    "button",
+                    "image",
+                    "badge",
+                    "divider",
+                    "stat",
+                    "video",
+                    "carousel",
+                    "form",
+                    "embed",
+                    "nav",
+                    "language",
+                    "admin",
+                    "icon",
+                    "rating",
+                    "countdown",
+                    "modeSwitch",
+                    "price",
+                    "optionPicker",
+                    "quantity",
+                    "addToCart",
+                    "gallery",
+                    "stock",
+                    "rentalPack",
+                    "bookingCalendar",
+                    "deposit",
+                    "techSpecs",
+                    "share",
+                    "customizeButton",
+                    "optionGroups",
+                    "customPreview",
+                    "customPrice",
+                    "customAddToCart",
+                    "categoryPicker",
+                    "pagination",
+                    "cartLines",
+                    "cartTotals",
+                    "checkoutButton",
+                    "cartBadge",
+                    "checkoutIdentity",
+                    "checkoutAddress",
+                    "checkoutLicense",
+                    "checkoutShipping",
+                    "checkoutSummary",
+                    "stripePayment",
+                    "orderConfirmation",
+                    "accountMenu",
+                    "orderList",
+                    "addressList",
+                    "carrierList",
+                    "profileForm",
+                    "addressForm",
+                    "orderDetail",
+                    "subscriptionPlans",
+                    "subscribeButton",
+                    "subscriptionCheckout",
+                    "subscriptionList",
+                    "reviewSummary",
+                    "reviewList",
+                    "reviewForm",
+                    "myReviews",
+                    "newsletterForm",
+                    "financingForm",
+                    "loginForm",
+                    "registerForm",
+                    "passwordResetForm",
+                    "newPasswordForm",
+                    "resendVerificationForm"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "glowColor"
               ]
             }
           }

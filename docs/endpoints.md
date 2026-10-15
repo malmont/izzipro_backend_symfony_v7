@@ -9,12 +9,13 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
   leurs propres vérifications : `#[IsGranted]` est signalé, les autres (voters, contrôles dans le code) sont dans les fiches.
 - Toutes les routes sont résolues pour le tenant de la requête (en-tête `X-Tenant-Host`, voir `docs/architecture.md`).
 
-## Landing Page (14)
+## Landing Page (15)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
 | GET | `/api/components-config` | PUBLIC_ACCESS | `Controller\LandingPagesController\LandingPagesController::getComponentsConfig` |
 | POST | `/api/landingpage-ai/compose` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::compose` |
+| GET | `/api/landingpage-ai/design-md` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::designMd` |
 | GET | `/api/landingpage-ai/jobs/{jobId}` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::job` |
 | GET | `/api/landingpage-ai/usage` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::usage` |
 | POST | `/api/landingpage-ai/video-prompt` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::videoPrompt` |

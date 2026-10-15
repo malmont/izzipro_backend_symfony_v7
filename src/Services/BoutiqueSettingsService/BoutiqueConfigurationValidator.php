@@ -3,6 +3,7 @@
 namespace App\Services\BoutiqueSettingsService;
 
 use App\Services\LandingAiService\LandingAiCatalogue;
+use App\Services\LandingAiService\LandingAiCompositionChecker;
 use App\Services\LandingContentService\LandingContentEditor;
 use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
 
@@ -14,9 +15,10 @@ use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
  *    règles des landing pages (ReglableCompositionValidator : schéma synchronisé, HTML des textes) ;
  * 2. les pages système (onglets portant « system ») : page connue du catalogue synchronisé (« systemPages »), une
  *    seule page par couple (system, variant), et chacun de ses blocs obligatoires présent dans l'une de ses sections.
- *    Un bloc obligatoire est un type de bloc du schéma (stripePayment, cartLines…) ou l'un des groupes PSEUDO_BLOCKS,
- *    que le catalogue nomme sans qu'ils soient des types : « modeGroup » (container portant « mode ») et
- *    « productList » (container répété sur « products »). Un nom qui n'est ni l'un ni l'autre n'est pas exigé ;
+ *    Un bloc obligatoire est un type de bloc du schéma (stripePayment, cartLines…) ou l'un des groupes
+ *    LandingAiCompositionChecker::PSEUDO_BLOCKS, que le catalogue nomme sans qu'ils soient des types : « modeGroup »
+ *    (container portant « mode ») et « productList » (container répété sur « products »). Un nom qui n'est ni l'un ni
+ *    l'autre n'est pas exigé (même règle pour une page système composée par l'assistant) ;
  * 3. la charte (« charter ») et le commerce (« commerce ») : type de chaque clé connue. Les clés inconnues, comme
  *    tout champ hors compositions, sont conservées sans contrôle (le frontend est libre d'en ajouter).
  *
@@ -33,11 +35,6 @@ final class BoutiqueConfigurationValidator
     private const CHARTER_COLORS = ['primaryColor', 'accentColor', 'textColor', 'backgroundColor'];
     private const CHARTER_FONTS = ['headingFont', 'bodyFont'];
     private const COMMERCE_FLAGS = ['guestCheckout', 'subscriptionsEnabled'];
-    /** Blocs obligatoires du catalogue qui désignent un groupe plutôt qu'un type : nom => reconnaît un bloc */
-    private const PSEUDO_BLOCKS = [
-        'modeGroup' => [self::class, 'isModeGroup'],
-        'productList' => [self::class, 'isProductList'],
-    ];
 
     public function __construct(
         private readonly ReglableCompositionValidator $compositions,
@@ -93,7 +90,7 @@ final class BoutiqueConfigurationValidator
             }
 
             // Blocs obligatoires : types du schéma actif et groupes connus ; le reste n'est pas exigé
-            $required = array_values(array_filter($pages[$tab->system]['required'] ?? [], fn ($name) => in_array($name, $blockTypes, true) || isset(self::PSEUDO_BLOCKS[$name])));
+            $required = array_values(array_filter($pages[$tab->system]['required'] ?? [], fn ($name) => in_array($name, $blockTypes, true) || in_array($name, LandingAiCompositionChecker::PSEUDO_BLOCKS, true)));
             if ($required === []) {
                 continue;
             }
@@ -107,8 +104,8 @@ final class BoutiqueConfigurationValidator
                     if (is_string($block->type ?? null)) {
                         $found[$block->type] = true;
                     }
-                    foreach (self::PSEUDO_BLOCKS as $name => $matches) {
-                        if ($matches($block)) {
+                    foreach (LandingAiCompositionChecker::PSEUDO_BLOCKS as $name) {
+                        if (LandingAiCompositionChecker::matchesRequiredBlock($block, $name)) {
                             $found[$name] = true;
                         }
                     }
@@ -123,20 +120,12 @@ final class BoutiqueConfigurationValidator
         return $errors;
     }
 
-    /** Groupe d'un mode de vente : container portant « mode » (sale, rental, subscription) */
-    private static function isModeGroup(object $block): bool
-    {
-        return ($block->type ?? null) === 'container' && is_string($block->mode ?? null);
-    }
-
-    /** Liste des produits du catalogue : container répété sur la source « products » */
-    private static function isProductList(object $block): bool
-    {
-        return ($block->type ?? null) === 'container' && is_object($block->repeat ?? null) && ($block->repeat->source ?? null) === 'products';
-    }
-
-    /** @return list<array{path: string, message: string}> */
-    private function validateCharter(mixed $charter): array
+    /**
+     * Charte : aussi celle qu'une demande à l'assistant IA fournit (LandingAiComposeInputDto::$charter).
+     *
+     * @return list<array{path: string, message: string}>
+     */
+    public function validateCharter(mixed $charter): array
     {
         if ($charter === null) {
             return [];

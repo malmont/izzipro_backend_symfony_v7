@@ -12,6 +12,14 @@ final class LandingAiPageResult
      */
     public array $proposals = ['contentChanges' => [], 'groupChanges' => [], 'limits' => []];
 
+    /** Page système composée (mode page avec « system »), sinon null */
+    public ?string $system = null;
+    /** Accueil d'un site complet : sections Navbar et Footer, séparées des sections de la page, et charte déduite */
+    public ?object $navbar = null;
+    public ?object $footer = null;
+    /** @var array<string, mixed>|null */
+    public ?array $charter = null;
+
     /**
      * @param list<array{componentKey: string, dataType: ?string, composition: object}> $sections dans l'ordre de la page
      * @param list<string> $warnings

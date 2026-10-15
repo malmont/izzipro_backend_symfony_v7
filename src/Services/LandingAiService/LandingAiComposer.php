@@ -35,6 +35,7 @@ final class LandingAiComposer
         private readonly LandingAiOutputRepair $repair,
         private readonly LandingAiContentContext $content,
         private readonly LandingAiContentProposals $proposals,
+        private readonly LandingAiCharterExtractor $charters,
         #[Autowire('%env(default:landing_ai.default_model_edit:LANDING_AI_MODEL_EDIT)%')]
         private readonly string $editModel,
         #[Autowire('%env(default:landing_ai.default_model_page:LANDING_AI_MODEL_PAGE)%')]
@@ -79,13 +80,13 @@ final class LandingAiComposer
      * @param list<array{mediaType: string, data: string}> $images captures ou charte (modèle des requêtes avec images)
      * @throws LandingAiException 502 (pas de composition valide, IA indisponible) ou 504 (délai)
      */
-    public function edit(string $componentKey, object $composition, string $prompt, string $locale = 'fr', array $media = [], array $images = [], string|int|null $dataType = null): LandingAiEditResult
+    public function edit(string $componentKey, object $composition, string $prompt, string $locale = 'fr', array $media = [], array $images = [], string|int|null $dataType = null, array $options = []): LandingAiEditResult
     {
         $stored = $this->site->storedCompositions();
         $library = $this->content->mediaLibrary();
         $allowedMedia = $this->withLibrary($this->site->allowedMedia([...$stored, $composition], $media, $prompt), $library);
         $editable = $this->content->editableContent($componentKey, $dataType, $locale);
-        $payload = $this->prompts->editPayload($this->model($images), $componentKey, $composition, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $images, $library, $editable);
+        $payload = $this->prompts->editPayload($this->model($images), $componentKey, $composition, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $images, $library, $editable, $options);
 
         $removalAsked = self::asksRemoval($prompt);
 
@@ -107,6 +108,7 @@ final class LandingAiComposer
                 $this->logRepairs([...$this->repair->repair($applied['composition']), ...$this->repair->dropRefusedKeys($applied['composition']), ...$this->repair->dropInventedBoundMedia($applied['composition'], $allowedMedia)]);
                 $existing = array_values(array_filter(array_map(fn ($b) => is_object($b) && is_string($b->id ?? null) ? $b->id : null, is_array($composition->blocks ?? null) ? $composition->blocks : [])));
                 $this->logBackgrounds($this->repair->transparentContainers($applied['composition'], $existing));
+                $this->logWidths($this->repair->defaultWidths($applied['composition'], $existing));
                 $this->logRepairs($this->repair->dropLateSteps($applied['composition'], $existing));
             }
             $errors = $applied['errors'] ?: [
@@ -136,7 +138,7 @@ final class LandingAiComposer
      * @param list<array{mediaType: string, data: string}> $images captures ou charte (modèle des requêtes avec images)
      * @throws LandingAiException 502 ou 504
      */
-    public function create(string $componentKey, string $prompt, string $locale = 'fr', array $media = [], ?string $defaultDataType = null, array $images = []): LandingAiCreateResult
+    public function create(string $componentKey, string $prompt, string $locale = 'fr', array $media = [], ?string $defaultDataType = null, array $images = [], array $options = []): LandingAiCreateResult
     {
         $stored = $this->site->storedCompositions();
         $usesData = $this->data->familyUsesData($componentKey);
@@ -145,7 +147,7 @@ final class LandingAiComposer
         $availableIds = array_column($available, 'id');
         $library = $this->content->mediaLibrary();
         $allowedMedia = $this->withLibrary($this->site->allowedMedia([...$stored, ...$this->site->presetCompositions($componentKey)], $media, $prompt), $library);
-        $payload = $this->prompts->createPayload($this->model($images), $componentKey, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $usesData, $optional, $available, $defaultDataType, $images, $library);
+        $payload = $this->prompts->createPayload($this->model($images), $componentKey, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $usesData, $optional, $available, $defaultDataType, $images, $library, $options);
         $availableIds = [$componentKey => $availableIds];
 
         return $this->run($payload, LandingAiPromptBuilder::CREATE_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds) {
@@ -163,13 +165,19 @@ final class LandingAiComposer
 
     /**
      * Page : plusieurs sections (familles choisies par l'IA, ou toutes de la famille $componentKey), avec d'éventuelles
-     * captures d'écran ou une charte graphique. Chaque section est vérifiée comme une création.
+     * captures d'écran, une maquette PDF ou une charte graphique. Chaque section est vérifiée comme une création.
+     * Options (15/10/2026) : system (page système de la boutique : ses blocs obligatoires doivent tous figurer dans les
+     * sections), tab (onglet d'une landing page {title, brief} : ni Navbar ni Footer, familles de la boutique seulement
+     * si la demande le veut), charter, style, designMd (charte et réglages donnés avec la demande), siteHome (accueil
+     * d'un site complet : sections Navbar et Footer exigées et séparées, charte déduite), siteApp (landingpage ou
+     * boutique) et siteTabs (titres des onglets à venir), siteStyle (style de l'accueil, pour une page du même site).
      *
      * @param list<array> $media médias fournis par l'administrateur
      * @param list<array{mediaType: string, data: string}> $images
+     * @param array{system?: ?array, tab?: ?array, charter?: ?object, style?: ?array, designMd?: ?string, siteHome?: bool, siteApp?: string, siteTabs?: list<string>, siteStyle?: ?string} $options
      * @throws LandingAiException 502 ou 504
      */
-    public function page(string $prompt, string $locale = 'fr', array $media = [], array $images = [], ?string $componentKey = null): LandingAiPageResult
+    public function page(string $prompt, string $locale = 'fr', array $media = [], array $images = [], ?string $componentKey = null, array $options = []): LandingAiPageResult
     {
         $stored = $this->site->storedCompositions();
         $families = $componentKey !== null ? [$componentKey] : $this->catalogue->componentKeys();
@@ -185,9 +193,14 @@ final class LandingAiComposer
                 $availableIds[$family] = array_column($siteData[$family]['items'], 'id');
             }
         }
-        $payload = $this->prompts->pagePayload($this->pageModel, $componentKey, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $siteData, $images, $library);
+        $payload = $this->prompts->pagePayload($this->pageModel, $componentKey, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $siteData, $images, $library, $options);
+        $system = is_array($options['system'] ?? null) ? $options['system'] : null;
+        $tab = is_array($options['tab'] ?? null) ? $options['tab'] : null;
+        $siteHome = ($options['siteHome'] ?? false) === true;
+        $landingHome = $siteHome && ($options['siteApp'] ?? 'boutique') === 'landingpage';
+        $asksCommerce = self::asksCommerce($prompt . ' ' . ($tab['brief'] ?? ''));
 
-        return $this->run($payload, LandingAiPromptBuilder::PAGE_TOOL, true, function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds) {
+        return $this->run($payload, LandingAiPromptBuilder::PAGE_TOOL, true, function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds, $system, $tab, $siteHome, $landingHome, $asksCommerce) {
             $sections = is_array($input->sections ?? null) ? $input->sections : [];
             if (!$sections || count($sections) > LandingAiPromptBuilder::PAGE_MAX_SECTIONS) {
                 return [null, [['path' => 'sections', 'message' => sprintf('de 1 à %d sections attendues', LandingAiPromptBuilder::PAGE_MAX_SECTIONS)]]];
@@ -201,6 +214,10 @@ final class LandingAiComposer
                     $errors[] = ['path' => "sections[$i].componentKey", 'message' => $componentKey !== null ? sprintf('famille imposée : %s', $componentKey) : 'famille du catalogue attendue'];
                     continue;
                 }
+                if ($tab !== null && in_array($key, ['Navbar', 'Footer'], true)) {
+                    $errors[] = ['path' => "sections[$i].componentKey", 'message' => sprintf('onglet « %s » : pas de section %s dans un onglet (la navbar et le footer sont communs au site) ; retire-la', $tab['title'], $key)];
+                    continue;
+                }
                 [$checked, $sectionErrors] = $this->checkSection($section, $key, $allowedMedia, $availableIds, "sections[$i].");
                 $sectionErrors ? array_push($errors, ...$sectionErrors) : $valid[] = ['componentKey' => $key] + $checked;
             }
@@ -211,12 +228,70 @@ final class LandingAiComposer
             if ($errors) {
                 return [null, $errors];
             }
+            // Page système : chaque bloc obligatoire dans l'une des sections, sinon la page ne pourrait pas être enregistrée
+            if ($system !== null && ($missing = $this->checker->missingRequiredBlocks(array_column($valid, 'composition'), $system['required'] ?? [])) !== []) {
+                return [null, [['path' => 'sections', 'message' => sprintf(
+                    'page système « %s » : bloc(s) obligatoire(s) manquant(s) : %s ; place chacun dans l\'une des sections (familles faites pour cette page : %s)',
+                    $system['key'] ?? '', implode(', ', $missing), implode(', ', $system['families'] ?? []) ?: 'celles de la boutique'
+                )]]];
+            }
+            $navbar = $footer = null;
+            if ($siteHome) {
+                foreach ($valid as $i => $section) {
+                    if ($section['componentKey'] === 'Navbar' && $navbar === null) {
+                        $navbar = $section['composition'];
+                        unset($valid[$i]);
+                    } elseif ($section['componentKey'] === 'Footer' && $footer === null) {
+                        $footer = $section['composition'];
+                        unset($valid[$i]);
+                    }
+                }
+                if ($navbar === null || $footer === null || $valid === []) {
+                    return [null, [['path' => 'sections', 'message' => 'site complet : une section Navbar (famille Navbar) en premier, les sections de l\'accueil, puis une section Footer (famille Footer) en dernier sont attendues']]];
+                }
+                $valid = array_values($valid);
+            }
 
-            $result = new LandingAiPageResult($valid, $this->summary($input), $this->warnings($input->warnings ?? []), $stats);
+            $warnings = $this->warnings($input->warnings ?? []);
+            // Onglet d'une landing page : les familles de la boutique ne sont pas en cause si la demande ou le brief les veut
+            if ($tab !== null && !$asksCommerce) {
+                $shop = array_values(array_unique(array_filter(array_column($valid, 'componentKey'), fn ($key) => $this->catalogue->familyApp($key) === 'boutique')));
+                if ($shop !== []) {
+                    $warnings[] = sprintf('Onglet « %s » : sections de la boutique utilisées sans que la demande le précise (%s) ; à vérifier.', $tab['title'], implode(', ', $shop));
+                }
+            }
+            if ($landingHome && !self::navBoundToSiteTabs($navbar)) {
+                $warnings[] = 'Navbar : le bloc nav n\'est pas lié à navLinks ; le menu ne suivra pas les onglets du site.';
+            }
+            $result = new LandingAiPageResult($valid, $this->summary($input), $warnings, $stats);
             $result->proposals['limits'] = $this->proposals->limits($input);
+            $result->system = $system['key'] ?? null;
+            if ($siteHome) {
+                $result->navbar = $navbar;
+                $result->footer = $footer;
+                $result->charter = $this->charters->complete($this->charters->fromToolInput($input->charter ?? null), [...array_column($valid, 'composition'), $navbar, $footer]);
+            }
 
             return [$result, []];
         });
+    }
+
+    /** La demande (ou le brief d'un onglet) parle-t-elle de commerce ? Sinon, une section de la boutique dans un onglet est signalée. */
+    public static function asksCommerce(string $text): bool
+    {
+        return (bool) preg_match('/\b(boutique|e-?commerce|commerce|produits?|panier|commandes?|catalogue|achats?|acheter|vente|vendre|paiement|abonnements?|tarifs?|prix|shop|checkout)\b/iu', $text);
+    }
+
+    /** Navbar d'une landing page : un bloc nav lié aux onglets du site (bindings.links = navLinks) */
+    private static function navBoundToSiteTabs(?object $navbar): bool
+    {
+        foreach (is_array($navbar->blocks ?? null) ? $navbar->blocks : [] as $block) {
+            if (is_object($block) && ($block->type ?? null) === 'nav' && ($block->bindings->links ?? null) === 'navLinks') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -245,6 +320,7 @@ final class LandingAiComposer
         }
         $this->logRepairs([...$this->repair->repair($composition), ...$this->repair->dropRefusedKeys($composition), ...$this->repair->dropInventedBoundMedia($composition, $allowedMedia), ...$this->repair->dropLateSteps($composition)]);
         $this->logBackgrounds($this->repair->transparentContainers($composition));
+        $this->logWidths($this->repair->defaultWidths($composition));
         $dataType = $input->dataType ?? null;
         $dataType = is_int($dataType) || is_string($dataType) ? (string) $dataType : null;
         if (isset($input->dataType) && $dataType === null) {
@@ -303,6 +379,14 @@ final class LandingAiComposer
     {
         if ($ids) {
             $this->logger->info('Assistant IA : containers sans fond passés en transparent', ['count' => count($ids), 'ids' => array_slice($ids, 0, 10)]);
+        }
+    }
+
+    /** @param list<string> $ids */
+    private function logWidths(array $ids): void
+    {
+        if ($ids) {
+            $this->logger->info('Assistant IA : blocs sans largeur complétés (w = 100 dans une pile ou une grille)', ['count' => count($ids), 'ids' => array_slice($ids, 0, 10)]);
         }
     }
 

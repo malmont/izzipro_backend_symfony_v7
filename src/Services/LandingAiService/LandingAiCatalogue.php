@@ -43,6 +43,20 @@ final class LandingAiCatalogue
         return array_values(array_map(fn ($f) => (string) $f['componentKey'], $this->load()['families'] ?? []));
     }
 
+    /** Application d'une famille (« landingpage » ou « boutique » ; null : catalogue sans cette information) */
+    public function familyApp(string $componentKey): ?string
+    {
+        $app = $this->family($componentKey)['app'] ?? null;
+
+        return is_string($app) ? $app : null;
+    }
+
+    /** @return list<string> familles d'une application (landingpage : sections des onglets ; boutique : pages système) */
+    public function familiesOfApp(string $app): array
+    {
+        return array_values(array_map(fn ($f) => (string) $f['componentKey'], array_filter($this->load()['families'] ?? [], fn ($f) => ($f['app'] ?? null) === $app)));
+    }
+
     /** @return list<string> types de blocs autorisés pour la famille */
     public function tools(string $componentKey): array
     {
@@ -69,6 +83,36 @@ final class LandingAiCatalogue
         }
 
         return $pages;
+    }
+
+    /**
+     * Familles faites pour une page système : celles dont les outils contiennent un bloc obligatoire de la page
+     * (loginForm → AuthPage…) ; « modeGroup » désigne les familles qui ont le sélecteur de mode (fiche produit),
+     * « productList » celles dont la liste est la source « products ».
+     *
+     * @param list<string> $required
+     * @return list<string>
+     */
+    public function familiesForRequired(array $required): array
+    {
+        $families = [];
+        foreach ($this->load()['families'] ?? [] as $family) {
+            $tools = $family['tools'] ?? [];
+            foreach ($required as $name) {
+                $matches = match ($name) {
+                    'modeGroup' => in_array('modeSwitch', $tools, true) && in_array('addToCart', $tools, true) && in_array('price', $tools, true),
+                    'productList' => (($family['list']['source'] ?? null) === 'products'),
+                    default => in_array($name, $tools, true),
+                };
+                // les familles génériques (Navbar, Footer, Presentation…) acceptent tous les blocs du commerce : hors sujet
+                if ($matches && ($family['app'] ?? null) === 'boutique') {
+                    $families[] = (string) $family['componentKey'];
+                    break;
+                }
+            }
+        }
+
+        return array_values(array_unique($families));
     }
 
     /** Modèle par identifiant, toutes familles confondues : [famille, modèle] ou null */

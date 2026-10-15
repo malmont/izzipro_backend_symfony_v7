@@ -48,6 +48,9 @@ Code : `Controller/BoutiqueSettingsController/`, `UseCase/BoutiqueSettingsUseCas
     types : `modeGroup` = container portant `mode` (`sale`, `rental`, `subscription`), `productList` = container
     `repeat.source: products`. Un nom qui n'est ni l'un ni l'autre n'est pas exigé (à signaler au frontend).
   - Catalogue sans `systemPages` (version antérieure) : aucun contrôle des pages système.
+  - L'assistant IA compose une page système (`POST /api/landingpage-ai/compose`, `mode: page` + `system`) ou un site
+    complet (`mode: site`, accueil puis pages système, charte déduite) avec la même règle des blocs obligatoires ; charte
+    de la boutique acceptée en entrée (`charter`) : `config/landingpage/README.md`, « Fonctionnement » (15/10/2026).
 - **Charte** (`charter`, clés connues seulement ; `null` = non réglé) : `primaryColor`, `accentColor`, `textColor`,
   `backgroundColor` : couleur (`#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, `transparent`) ; `headingFont`,
   `bodyFont` : 1 à 100 caractères sans `<` ni `>` ; `radius` : nombre de 0 à 100 ou taille CSS (`px`, `rem`, `em`,

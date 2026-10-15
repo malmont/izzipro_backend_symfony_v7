@@ -20,12 +20,15 @@ use App\Services\TenantEntityManagerProvider;
 final class LandingAiQuotaService
 {
     public const TIMEZONE = 'America/Toronto';
-    public const COSTS = ['edit' => 1, 'create' => 3, 'page' => 10];
+    /** Mode site : 10 crédits pour l'accueil, puis 10 par page système (tâches filles, mode page) */
+    public const COSTS = ['edit' => 1, 'create' => 3, 'page' => 10, 'site' => 10];
     public const IMAGES_COST = 10;
     /** Prompt de vidéo pour une scène au défilement (POST /api/landingpage-ai/video-prompt) */
     public const VIDEO_PROMPT_COST = 1;
     public const RESERVATION_TTL_SECONDS = 300;
     public const JOB_RESERVATION_TTL_SECONDS = 2100;
+    /** Pages système d'un site complet : composées l'une après l'autre, après l'accueil (8 pages × 5 min au pire) */
+    public const SITE_PAGE_RESERVATION_TTL_SECONDS = 7200;
     public const RETENTION_DAYS = 90;
     /**
      * Demandes échouées après un appel réel à l'IA, par site et sur 24 h glissantes : au-delà, refus (429). Un échec

@@ -13,7 +13,8 @@ Routes et rôles : `docs/endpoints.md`, section « Landing Page » ; données de
 |---|---|---|
 | Lire / enregistrer les réglages du site | `GET` / `PUT /api/landingpage-settings` | public / `ROLE_ADMIN` |
 | Familles de sections et source de leurs données | `GET /api/components-config` | public |
-| Assistant IA (retouche, création, page, images) | `POST /api/landingpage-ai/compose` → 200, ou 202 `{ jobId }` | `ROLE_ADMIN` |
+| Assistant IA (retouche, création, page, page système, site complet, images et PDF) | `POST /api/landingpage-ai/compose` → 200, ou 202 `{ jobId }` | `ROLE_ADMIN` |
+| Assistant IA : charte du site en texte (DESIGN.md, sans IA) | `GET /api/landingpage-ai/design-md?app=landingpage\|boutique` | `ROLE_ADMIN` |
 | Assistant IA : prompt d'une vidéo pour une scène au défilement (1 crédit, synchrone) | `POST /api/landingpage-ai/video-prompt` | `ROLE_ADMIN` |
 | Résultat d'une tâche de fond | `GET /api/landingpage-ai/jobs/{jobId}` (même tenant, 1 h) | `ROLE_ADMIN` |
 | Crédits et historique | `GET /api/landingpage-ai/usage` | `ROLE_ADMIN` |
@@ -188,13 +189,14 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 | Validation (422 `{ path, message }`) | `Services/LandingPageSettingsService/ReglableCompositionValidator.php` (JSON Schema opis + règles entre blocs ; option `allowDefaults` désactivée : une validation n'insère jamais les valeurs `default` du schéma dans la composition, 09/10/2026), `RichTextPolicy.php` (HTML permis dans les textes), `ReglableCompositionScanner.php` (toutes les bases : réglages des landing pages et de la boutique, modèles de site) |
 | Familles (`components-config`) | `Services/LandingPagesService/ComponentsConfigProvider.php` (source unique : endpoint et assistant) |
 | Assistant : moteur | `Services/LandingAiService/` : `LandingAiComposer` (appel, vérifications, 3 essais), `LandingAiPromptBuilder` (prompt système, outils, cache), `LandingAiCatalogue`, `LandingAiDataSources` (valeurs de `dataType`), `CompositionEditApplier` (opérations de retouche), `LandingAiCompositionChecker`, `AnthropicLandingAiClient`, `LandingAiContentContext` (médiathèque, contenus modifiables de la donnée affichée), `LandingAiContentProposals` (contrôle de `contentChanges`, `groupChanges`, `limits`, jamais appliqués) |
-| Assistant : réglages, réparation | `LandingAiTuning` (effort par nature de demande, durée du cache), `LandingAiOutputRepair` (clés en double du modèle) |
+| Assistant : réglages, réparation | `LandingAiTuning` (effort par nature de demande, durée du cache), `LandingAiOutputRepair` (clés en double du modèle, fonds et largeurs manquants) |
+| Assistant : site complet, charte | `LandingAiSiteOrchestrator` (tâches filles : pages système de la boutique, ou onglets `{ title, brief? }` d'une landing page indexés par slug), `LandingAiCharterExtractor` (charte et style de l'accueil), `LandingAiDesignMdWriter` (export DESIGN.md) ; détail dans `config/landingpage/README.md` (15/10/2026) |
 | Assistant : quota, tâches | `LandingAiQuotaService` (réservation atomique, `pg_advisory_xact_lock`), `LandingAiJobService`, `LandingAiComposeRunner` |
-| Assistant : cas d'usage, HTTP | `UseCase/LandingAiUseCase/` (`ComposeLandingSection`, `RunLandingAiJob`, `GetLandingAiJob`, `GetLandingAiUsage`), `Controller/LandingAiController/`, DTO `LandingAiComposeInputDto` / `OutputDto` |
+| Assistant : cas d'usage, HTTP | `UseCase/LandingAiUseCase/` (`ComposeLandingSection`, `RunLandingAiJob`, `GetLandingAiJob`, `GetLandingAiUsage`, `ExportLandingDesignMd`), `Controller/LandingAiController/`, DTO `LandingAiComposeInputDto` / `OutputDto` |
 | Worker | `Message/LandingAiJobMessage.php`, `MessageHandler/LandingAiJobHandler.php` (transport `landing_ai`) |
 | Synchronisation | `Services/LandingConfigService/` (`LandingConfigStore` : versions dans `var/landingpage-config/`, `FrontendConfigFetcher`, `LandingConfigCompatibilityChecker`), `UseCase/LandingConfigUseCase/`, `Controller/LandingConfigController/`, `Repository/LandingConfigSyncRepository.php` |
 | Administration | `Controller/Admin/AiUsageCrudController.php` (historique), `AiCreditSettingCrudController.php` (crédits) |
-| Évaluation | `Command/LandingAiEvalCommand.php`, `Services/LandingAiService/Eval/` (cas R, C, P ; images dans `Eval/fixtures/`) |
+| Évaluation | `Command/LandingAiEvalCommand.php`, `Services/LandingAiService/Eval/` (cas R, C, P, B, S, Y ; vérifications V7 contraste, V8 alignement, V9 mise en page, V10 goût (`LandingAiTasteCheck`) ; images dans `Eval/fixtures/`) |
 
 ## Tables
 
@@ -212,7 +214,7 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 modèles ; version 2 : familles `app: boutique`, `systemPages`), `ia-assistant-jeu-essai.md` (cas d'évaluation),
 `ia-libelles-editeur.md` (facultatif : libellés de l'éditeur cités par l'assistant). **Ne pas les modifier à la main** :
 la version active vient de la synchronisation (`var/landingpage-config/`) ; ceux du dépôt sont la version de repli
-(tests, serveur neuf), recopiés depuis la dernière version synchronisée (11/10/2026 : `b731bbe4ab106fff`, bouton du menu mobile des blocs nav).
+(tests, serveur neuf), recopiés depuis la dernière version synchronisée (15/10/2026 : `94822d56a33d0874`, polices Syne, Manrope et JetBrains Mono, cas S1, Y1, Y2 du jeu d'essai).
 
 ## Tester
 

@@ -153,6 +153,55 @@ final class LandingAiCompositionChecker
         return $errors;
     }
 
+    /**
+     * Blocs obligatoires du catalogue qui désignent un groupe plutôt qu'un type : « modeGroup » (container portant
+     * « mode ») et « productList » (container répété sur « products »). Même règle que le PUT des réglages de la
+     * boutique (BoutiqueConfigurationValidator).
+     */
+    public const PSEUDO_BLOCKS = ['modeGroup', 'productList'];
+
+    /** Le bloc satisfait-il le bloc obligatoire $name (type du schéma, ou groupe de PSEUDO_BLOCKS) ? */
+    public static function matchesRequiredBlock(object $block, string $name): bool
+    {
+        return match ($name) {
+            'modeGroup' => ($block->type ?? null) === 'container' && is_string($block->mode ?? null),
+            'productList' => ($block->type ?? null) === 'container' && is_object($block->repeat ?? null) && ($block->repeat->source ?? null) === 'products',
+            default => ($block->type ?? null) === $name,
+        };
+    }
+
+    /**
+     * Page système composée par l'IA (mode page avec « system », 15/10/2026) : chaque bloc obligatoire de la page doit
+     * figurer dans l'une des sections, sinon la page ne pourrait pas être enregistrée (PUT des réglages de la boutique).
+     * Un nom qui n'est ni un type du schéma ni un groupe connu n'est pas exigé.
+     *
+     * @param list<object> $compositions
+     * @param list<string> $required
+     * @return list<string> blocs obligatoires absents
+     */
+    public function missingRequiredBlocks(array $compositions, array $required): array
+    {
+        $types = $this->validator->blockTypes();
+        $required = array_values(array_filter($required, fn ($name) => in_array($name, $types, true) || in_array($name, self::PSEUDO_BLOCKS, true)));
+        $missing = [];
+        foreach ($required as $name) {
+            $found = false;
+            foreach ($compositions as $composition) {
+                foreach ($this->inspector->blocks($composition) as $block) {
+                    if (self::matchesRequiredBlock($block, $name)) {
+                        $found = true;
+                        break 2;
+                    }
+                }
+            }
+            if (!$found) {
+                $missing[] = $name;
+            }
+        }
+
+        return $missing;
+    }
+
     public function sceneCount(object $composition): int
     {
         return count(array_filter(

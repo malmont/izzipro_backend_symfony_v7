@@ -9,6 +9,7 @@ use App\Services\LandingAiService\LandingAiComposeRunner;
 use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiJobService;
 use App\Services\LandingAiService\LandingAiQuotaService;
+use App\Services\LandingAiService\LandingAiSiteOrchestrator;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
 
@@ -24,7 +25,8 @@ class RunLandingAiJobUseCase
         private readonly LandingAiComposeRunner $runner,
         private readonly LandingAiQuotaService $quota,
         private readonly TenantEntityManagerProvider $emProvider,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly LandingAiSiteOrchestrator $sites
     ) {
     }
 
@@ -36,25 +38,41 @@ class RunLandingAiJobUseCase
             return;
         }
         $usage = $this->emProvider->getEntityManager()->find(AiUsage::class, $job->getUsageId());
-        $dto = LandingAiComposeInputDto::fromRequestBody(json_decode((string) $job->getInput(), false));
+        $dto = LandingAiComposeInputDto::fromStoredJob((string) $job->getInput());
         $this->jobs->start($job);
 
         try {
             if ($usage === null || $usage->getStatus() !== AiUsage::STATUS_RESERVED) {
                 throw new LandingAiException(504, 'Délai dépassé', 'La réservation des crédits a expiré avant le traitement. Aucun crédit n\'a été consommé.');
             }
-            $this->jobs->succeed($job, $this->runner->run($dto, $usage));
+            $body = $this->runner->run($dto, $usage);
+            $this->jobs->succeed($job, $body);
+            if ($dto->mode === 'site') {
+                // accueil composé : les pages système partent au worker avec sa charte et son style
+                $this->sites->launchChildren($dto, $body);
+            }
         } catch (LandingAiException $e) {
             $this->jobs->fail($job, $e);
+            $this->failSite($dto, $e);
         } catch (\Throwable $e) {
             $this->logger->error('Assistant IA : tâche en échec', ['job' => $jobId, 'message' => $e->getMessage()]);
             if ($usage !== null && $usage->getStatus() === AiUsage::STATUS_RESERVED) {
                 $this->quota->release($usage, null);
             }
-            $this->jobs->fail($job, new LandingAiException(500, 'Erreur interne', 'La demande n\'a pas pu être traitée. Aucun crédit n\'a été consommé.'));
+            $internal = new LandingAiException(500, 'Erreur interne', 'La demande n\'a pas pu être traitée. Aucun crédit n\'a été consommé.');
+            $this->jobs->fail($job, $internal);
+            $this->failSite($dto, $internal);
         }
 
         // Nettoyage du site : résultats de plus d'une heure, tâches bloquées
         $this->jobs->cleanUp();
+    }
+
+    /** Accueil d'un site en échec : ses pages système n'ont plus de charte à suivre, elles échouent aussi */
+    private function failSite(LandingAiComposeInputDto $dto, LandingAiException $e): void
+    {
+        if ($dto->mode === 'site' && $dto->children !== []) {
+            $this->sites->failChildren($dto, $e);
+        }
     }
 }

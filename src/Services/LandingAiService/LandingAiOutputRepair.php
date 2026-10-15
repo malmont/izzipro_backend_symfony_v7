@@ -27,7 +27,9 @@ final class LandingAiOutputRepair
      * Le contrat décide des types (« Types : … » dans le schéma) : fontFamily reste donc sur un container, qui la
      * transmet à ses enfants.
      */
-    public const STYLE_ONLY_PROPERTIES = ['fontFamily', 'lineHeight', 'letterSpacing', 'textShadow', 'underline', 'underlineColor'];
+    public const STYLE_ONLY_PROPERTIES = ['fontFamily', 'lineHeight', 'letterSpacing', 'textShadow', 'underline', 'underlineColor',
+        // sans effet sur un type qui ne l'utilise pas (15/10/2026 : hideEmpty sur un badge, un essai de page perdu)
+        'hideEmpty'];
 
     public function __construct(private readonly ReglableCompositionValidator $validator)
     {
@@ -137,6 +139,50 @@ final class LandingAiOutputRepair
         }
 
         return $removed;
+    }
+
+    /** Mises en page d'un parent où un enfant sans largeur prend toute la largeur dans les modèles du catalogue */
+    private const FULL_WIDTH_LAYOUTS = ['stack', 'grid', 'slides'];
+
+    /**
+     * Largeur manquante (14/10/2026, page ENVERS sur un site : 44 blocs sans « w », cartes et textes rendus sur deux
+     * ou trois lettres par ligne). Les 919 blocs des modèles du catalogue écrivent tous leur largeur. Un bloc produit
+     * par l'IA sans « w » et sans fitContent, dont le parent est en pile, en grille ou en diaporama (ou la racine de
+     * la section en rootLayout « stack »), reçoit w = 100, sans nouvel essai. Dans une rangée ou en positions libres,
+     * la largeur voulue ne se devine pas : rien n'est écrit. $skipIds : blocs de la composition de départ (retouche).
+     *
+     * @param list<string> $skipIds
+     * @return list<string> identifiants des blocs complétés
+     */
+    public function defaultWidths(object $composition, array $skipIds = []): array
+    {
+        $blocks = is_array($composition->blocks ?? null) ? array_filter($composition->blocks, 'is_object') : [];
+        $byId = [];
+        foreach ($blocks as $block) {
+            if (is_string($block->id ?? null)) {
+                $byId[$block->id] = $block;
+            }
+        }
+        $rootLayout = ($composition->rootLayout ?? null) === 'stack' ? 'stack' : 'free';
+        $completed = [];
+        foreach ($blocks as $block) {
+            $id = is_string($block->id ?? null) ? $block->id : '';
+            if (property_exists($block, 'w') || ($block->fitContent ?? false) === true || in_array($id, $skipIds, true)) {
+                continue;
+            }
+            $parent = is_string($block->parentId ?? null) ? ($byId[$block->parentId] ?? null) : null;
+            $layout = $parent === null ? $rootLayout : ($parent->layout ?? 'free');
+            if ($parent !== null && ($parent->type ?? null) !== 'container') {
+                continue;
+            }
+            if (!in_array($layout, self::FULL_WIDTH_LAYOUTS, true)) {
+                continue;
+            }
+            $block->w = 100;
+            $completed[] = $id;
+        }
+
+        return $completed;
     }
 
     /**
