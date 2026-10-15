@@ -3,6 +3,7 @@
 namespace App\Tests\Functional\Security;
 
 use App\Entity\User;
+use App\Services\AppKeyService\AppKeyService;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -135,6 +136,46 @@ class AppKeyTest extends WebTestCase
         $this->assertNotContains($created['id'], array_column($other, 'id'), 'les clés d\'un site sont invisibles depuis un autre');
         $this->assertSame(404, $this->request('DELETE', '/api/app-keys/' . $created['id'], null, MV_TEST_TENANT2_HOST)->getStatusCode(), 'ni révocables');
         $this->assertSame(MV_TEST_TENANT_CODE, json_decode($this->activate(['key' => $created['key'], 'app' => 'admin'])->getContent(), true)['tenant']['code'], 'la clé mène à son site');
+    }
+
+    public function testALivingMemoryKeyServesAnyNumberOfDevices(): void
+    {
+        // Application grand public Living Memory (15/10/2026) : une seule clé livingmemory embarquée dans l'application,
+        // donc la même clé sur tous les téléphones : aucune limite d'appareils, deviceName = dernier appareil vu
+        $this->loginAs(['ROLE_ADMIN'], 'admin');
+        $created = json_decode($this->request('POST', '/api/app-keys', json_encode(['app' => 'livingmemory', 'label' => 'Living Memory — essais', 'sendEmail' => false]))->getContent(), true);
+        $this->assertStringStartsWith('IZ-LMV-', $created['key']);
+        foreach (['Pixel 8 de Jeanne', 'iPhone 15 de Marc'] as $device) {
+            $activated = $this->activate(['key' => $created['key'], 'app' => 'livingmemory', 'deviceName' => $device]);
+            $this->assertSame(200, $activated->getStatusCode(), $activated->getContent());
+            $body = json_decode($activated->getContent(), true);
+            $this->assertSame(['code' => MV_TEST_TENANT_CODE, 'name' => 'Tenant de test', 'host' => MV_TEST_TENANT_HOST], $body['tenant']);
+            $this->assertSame(['livingmemory', 'Living Memory — essais', null, null], [$body['app'], $body['label'], $body['expiresAt'], $body['cashRegister']]);
+        }
+        $row = array_column(json_decode($this->request('GET', '/api/app-keys')->getContent(), true), null, 'id')[$created['id']];
+        $this->assertSame([2, 'iPhone 15 de Marc'], [$row['useCount'], $row['lastDevice']], 'compteur d\'activations et dernier appareil');
+        $this->assertSame('Living Memory — essais', $row['label'], 'le libellé reste celui de la clé');
+
+        $wrongApp = $this->activate(['key' => $created['key'], 'app' => 'mobile']);
+        $this->assertSame(403, $wrongApp->getStatusCode());
+        $this->assertSame('APP_KEY_WRONG_APP', json_decode($wrongApp->getContent(), true)['error']);
+        $this->assertSame(403, $this->activate(['key' => $created['key'], 'app' => 'pos'])->getStatusCode());
+        $this->assertSame(403, $this->activate(['key' => $created['key'], 'app' => 'admin'])->getStatusCode());
+        $pos = json_decode($this->request('POST', '/api/app-keys', json_encode(['app' => 'pos', 'label' => 'Caisse', 'sendEmail' => false]))->getContent(), true);
+        $this->assertSame(403, $this->activate(['key' => $pos['key'], 'app' => 'livingmemory'])->getStatusCode(), 'et inversement : une clé pos ne sert pas à Living Memory');
+
+        // Site sans domaine propre (cas de demo) : l'hôte rendu est <code>.<FRONTEND_BASE_DOMAIN>
+        $master = static::getContainer()->get(TenantConnectionManager::class)->getPdoMaster();
+        $master->prepare('INSERT INTO tenants (code, name, dbname, custom_domain) VALUES (?, ?, ?, NULL)')->execute(['mvtestpublic', 'Site sans domaine propre', MV_TEST_TENANT_DB]);
+        try {
+            $public = static::getContainer()->get(AppKeyService::class)->generate('mvtestpublic', 'livingmemory', 'Living Memory — application publique', 'test', null);
+            $activated = $this->activate(['key' => $public['key'], 'app' => 'livingmemory', 'deviceName' => 'Téléphone']);
+            $this->assertSame(200, $activated->getStatusCode(), $activated->getContent());
+            $this->assertSame(['code' => 'mvtestpublic', 'name' => 'Site sans domaine propre', 'host' => 'mvtestpublic.' . ($_SERVER['FRONTEND_BASE_DOMAIN'] ?? getenv('FRONTEND_BASE_DOMAIN'))], json_decode($activated->getContent(), true)['tenant']);
+        } finally {
+            $master->prepare('DELETE FROM tenant_app_keys WHERE tenant_code = ?')->execute(['mvtestpublic']);
+            $master->prepare('DELETE FROM tenants WHERE code = ?')->execute(['mvtestpublic']);
+        }
     }
 
     private function activate(?array $body): Response

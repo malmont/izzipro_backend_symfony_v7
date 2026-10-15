@@ -2,7 +2,7 @@
 {% extends ea is defined ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
 
 {% block title %}Clés des applications{% endblock %}
-{% block content_title %}Clés des applications (POS, e-commerce mobile, gestion){% endblock %}
+{% block content_title %}Clés des applications (POS, e-commerce mobile, gestion, LivingMemory){% endblock %}
 
 {% block main %}{{ block('app_keys_panel') }}{% endblock %}
 {% block body %}
@@ -25,7 +25,8 @@
         Une clé identifie ce site et une application : au premier lancement, l'application la demande (saisie ou code QR
         reçu par e-mail), puis chaque utilisateur se connecte avec son compte. Activer une application dans la fiche
         Entreprise génère sa première clé ; la désactiver révoque ses clés. Révoquez la clé d'un terminal perdu ; les
-        comptes ne sont pas touchés.
+        comptes ne sont pas touchés. Une clé n'est pas limitée en nombre d'appareils (l'application LivingMemory, publique,
+        embarque une seule clé par site).
     </p>
 
     <form action="{{ path('admin_app_keys_generate', app.request.query.get('tenant') ? {tenant: app.request.query.get('tenant')} : {}) }}" method="post" class="row g-2 align-items-end mb-4">

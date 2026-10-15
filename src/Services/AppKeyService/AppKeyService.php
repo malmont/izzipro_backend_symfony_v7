@@ -6,9 +6,11 @@ use App\Repository\TenantAppKeyRepository;
 use App\Services\TenantPublicHostResolver;
 
 /**
- * Clés d'activation des applications (15/10/2026). Une clé identifie un SITE et une APPLICATION (pos, mobile, admin),
- * jamais un utilisateur : le caissier ou l'administrateur se connecte ensuite normalement (POST /api/login).
- * Format : IZ-<POS|MOB|ADM>-XXXX-XXXX-XXXX (alphabet sans caractères ambigus, 60 bits d'aléa) ; seule l'empreinte
+ * Clés d'activation des applications (15/10/2026). Une clé identifie un SITE et une APPLICATION (pos, mobile, admin,
+ * livingmemory), jamais un utilisateur ni un appareil : le caissier ou l'administrateur se connecte ensuite
+ * normalement (POST /api/login). Aucune limite d'appareils (chaque activation compte et note le dernier appareil) :
+ * l'application grand public Living Memory embarque une seule clé livingmemory par site, la même sur tous les téléphones.
+ * Format : IZ-<POS|MOB|ADM|LMV>-XXXX-XXXX-XXXX (alphabet sans caractères ambigus, 60 bits d'aléa) ; seule l'empreinte
  * SHA-256 est stockée (base maître), la clé en clair n'est montrée qu'une fois. Révocable, expiration facultative.
  */
 class AppKeyService
