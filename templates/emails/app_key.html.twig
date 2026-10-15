@@ -12,7 +12,7 @@
             <tr><td style="font-size:20px;color:#1f2d34;padding-bottom:16px;">Clé d'activation : {{ label }}</td></tr>
             <tr><td style="font-size:15px;line-height:1.7;padding-bottom:16px;">
                 Voici la clé qui active l'application <strong>{{ appLabel }}</strong>
-                pour la boutique <strong>{{ siteName }}</strong>{% if siteHost %} ({{ siteHost }}){% endif %}.
+                pour la boutique <strong>{{ siteName }}</strong>{% if siteHost %} ({{ siteHost }}){% endif %}{% if cashRegisterName is defined and cashRegisterName %}, poste de caisse <strong>{{ cashRegisterName }}</strong>{% endif %}.
             </td></tr>
             <tr><td align="center" style="padding:8px 0 16px 0;">
                 <span style="display:inline-block;background:#f0f0f0;border:1px solid #dddddd;border-radius:4px;padding:14px 24px;font-size:20px;letter-spacing:2px;font-family:Consolas,Menlo,monospace;">{{ key }}</span>

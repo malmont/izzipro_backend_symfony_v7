@@ -5,8 +5,11 @@ namespace App\UseCase\AppKeyUseCase;
 use App\Dto\AppKeyInputDto;
 use App\Dto\AppKeyOutputDto;
 use App\Entity\Entreprise;
+use App\Services\AppKeyService\AppKeyException;
 use App\Services\AppKeyService\AppKeyService;
 use App\Services\AppKeyService\AppQrCodeGenerator;
+use App\Services\CaisseService\CashRegisterException;
+use App\Services\CaisseService\CashRegisterResolver;
 use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\TenantConnectionProvider;
 use App\Services\TenantEntityManagerProvider;
@@ -26,7 +29,8 @@ class GenerateAppKeyUseCase
         private readonly TenantPublicHostResolver $hosts,
         private readonly EmailSenderService $emails,
         private readonly LoggerInterface $logger,
-        private readonly AppQrCodeGenerator $qr
+        private readonly AppQrCodeGenerator $qr,
+        private readonly CashRegisterResolver $cashRegisters
     ) {
     }
 
@@ -34,16 +38,31 @@ class GenerateAppKeyUseCase
     public function execute(AppKeyInputDto $input, string $createdBy, string $domain): array
     {
         $tenantCode = $this->tenant->getTenantCode() ?? throw new \RuntimeException('Site non identifié');
-        $generated = $this->keys->generate($tenantCode, $input->app, $input->label, $createdBy, $input->expiresAt);
+        $generated = $this->keys->generate($tenantCode, $input->app, $input->label, $createdBy, $input->expiresAt, self::cashRegister($this->cashRegisters, $input->cashRegisterId));
         $emailSentTo = null;
         if ($input->sendEmail) {
-            $emailSentTo = $this->sendByEmail($generated['key'], $input, $tenantCode, $domain);
+            $emailSentTo = $this->sendByEmail($generated['key'], $input, $tenantCode, $domain, $generated['row']['cash_register_name'] ?? null);
         }
 
         return AppKeyOutputDto::toArray($generated['row']) + ['key' => $generated['key'], 'emailSentTo' => $emailSentTo];
     }
 
-    private function sendByEmail(string $key, AppKeyInputDto $input, string $tenantCode, string $domain): ?string
+    /** Poste du site (actif) copié sur la clé ; inconnu → 422 */
+    public static function cashRegister(CashRegisterResolver $registers, ?int $cashRegisterId): ?array
+    {
+        if ($cashRegisterId === null) {
+            return null;
+        }
+        try {
+            $register = $registers->resolve($cashRegisterId);
+        } catch (CashRegisterException $e) {
+            throw new AppKeyException('VALIDATION_FAILED', 'cashRegisterId : poste de caisse introuvable ou inactif', 422, [['path' => 'cashRegisterId', 'message' => 'poste de caisse introuvable ou inactif']]);
+        }
+
+        return ['id' => (int) $register->getId(), 'name' => $register->getName()];
+    }
+
+    private function sendByEmail(string $key, AppKeyInputDto $input, string $tenantCode, string $domain, ?string $cashRegisterName = null): ?string
     {
         try {
             $entreprise = $this->emProvider->getEntityManager()->getRepository(Entreprise::class)->findOneBy([]);
@@ -57,6 +76,7 @@ class GenerateAppKeyUseCase
             $sent = $this->emails->sendTemplatedEmail($to, 'Clé d\'activation : ' . $input->label, 'emails/app_key.html.twig', [
                 'key' => $key, 'app' => $input->app, 'appLabel' => AppKeyService::LABELS[$input->app] ?? $input->app, 'label' => $input->label,
                 'expiresAt' => $input->expiresAt, 'siteName' => $tenant['name'] ?? $tenantCode, 'siteHost' => $tenant['host'] ?? null, 'qrCid' => 'app_key_qr',
+                'cashRegisterName' => $cashRegisterName,
             ], 'fr', $domain, null, null, [
                 ['name' => 'app_key_qr', 'body' => $png, 'contentType' => 'image/png', 'inline' => true],
                 ['name' => 'cle-activation-' . $input->app . '.png', 'body' => $png, 'contentType' => 'image/png'],

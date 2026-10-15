@@ -10,19 +10,43 @@ use App\Services\TenantConnectionManager;
  */
 class TenantAppKeyRepository
 {
-    private const COLUMNS = 'id, tenant_code, app, key_hint, label, created_by, created_at, expires_at, revoked_at, last_used_at, last_device, use_count';
+    private const COLUMNS = 'id, tenant_code, app, key_hint, label, created_by, created_at, expires_at, revoked_at, last_used_at, last_device, use_count, cash_register_id, cash_register_name';
 
     public function __construct(private readonly TenantConnectionManager $connectionManager)
     {
     }
 
-    public function insert(string $tenantCode, string $app, string $keyHash, string $keyHint, string $label, string $createdBy, ?\DateTimeInterface $expiresAt): array
+    /** @param array{id: int, name: string}|null $cashRegister poste de caisse (clé POS), copié ici : l'activation n'a pas accès au site */
+    public function insert(string $tenantCode, string $app, string $keyHash, string $keyHint, string $label, string $createdBy, ?\DateTimeInterface $expiresAt, ?array $cashRegister = null): array
     {
         $pdo = $this->connectionManager->getPdoMaster();
-        $stmt = $pdo->prepare('INSERT INTO tenant_app_keys (tenant_code, app, key_hash, key_hint, label, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?) RETURNING ' . self::COLUMNS);
-        $stmt->execute([$tenantCode, $app, $keyHash, $keyHint, mb_substr($label, 0, 100), mb_substr($createdBy, 0, 255), $expiresAt?->format('Y-m-d H:i:s')]);
+        $stmt = $pdo->prepare('INSERT INTO tenant_app_keys (tenant_code, app, key_hash, key_hint, label, created_by, created_at, expires_at, cash_register_id, cash_register_name) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?) RETURNING ' . self::COLUMNS);
+        $stmt->execute([$tenantCode, $app, $keyHash, $keyHint, mb_substr($label, 0, 100), mb_substr($createdBy, 0, 255), $expiresAt?->format('Y-m-d H:i:s'), $cashRegister['id'] ?? null, isset($cashRegister['name']) ? mb_substr($cashRegister['name'], 0, 100) : null]);
 
         return $stmt->fetch(\PDO::FETCH_ASSOC);
+    }
+
+    /** Libellé et poste modifiables ; $cashRegister : tableau pour poser, null pour effacer, non fourni ($setRegister faux) pour garder */
+    public function update(int $id, string $tenantCode, ?string $label, bool $setRegister, ?array $cashRegister): void
+    {
+        $sets = [];
+        $params = [];
+        if ($label !== null) {
+            $sets[] = 'label = ?';
+            $params[] = mb_substr($label, 0, 100);
+        }
+        if ($setRegister) {
+            $sets[] = 'cash_register_id = ?';
+            $sets[] = 'cash_register_name = ?';
+            $params[] = $cashRegister['id'] ?? null;
+            $params[] = isset($cashRegister['name']) ? mb_substr($cashRegister['name'], 0, 100) : null;
+        }
+        if (!$sets) {
+            return;
+        }
+        $params[] = $id;
+        $params[] = $tenantCode;
+        $this->connectionManager->getPdoMaster()->prepare('UPDATE tenant_app_keys SET ' . implode(', ', $sets) . ' WHERE id = ? AND tenant_code = ?')->execute($params);
     }
 
     public function findByHash(string $keyHash): ?array

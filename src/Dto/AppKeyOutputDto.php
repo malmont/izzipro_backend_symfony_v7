@@ -22,6 +22,7 @@ class AppKeyOutputDto
             'lastUsedAt' => $date($row['last_used_at']),
             'lastDevice' => $row['last_device'],
             'useCount' => (int) $row['use_count'],
+            'cashRegister' => ($row['cash_register_id'] ?? null) !== null ? ['id' => (int) $row['cash_register_id'], 'name' => (string) $row['cash_register_name']] : null,
             'isActive' => $row['revoked_at'] === null && ($row['expires_at'] === null || new \DateTimeImmutable($row['expires_at']) >= new \DateTimeImmutable()),
         ];
     }

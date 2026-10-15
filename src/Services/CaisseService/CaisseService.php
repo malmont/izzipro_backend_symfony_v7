@@ -41,11 +41,16 @@ class CaisseService
         return $this->emProvider->getEntityManager()->getRepository(TransactionCaisse::class)->findBy(['caisse' => $openCaisse], ['id' => 'ASC']);
     }
 
-    /** Session de la vente d'origine (transaction de caisse de la commande), si elle est encore ouverte */
+    /** Session de la vente (première transaction de caisse de la commande), ouverte ou fermée */
+    public function getCaisseOfOrder(Order $order): ?Caisse
+    {
+        return $this->emProvider->getEntityManager()->getRepository(TransactionCaisse::class)->findOneBy(['orderCaisse' => $order], ['id' => 'ASC'])?->getCaisse();
+    }
+
+    /** Session de la vente d'origine, si elle est encore ouverte */
     public function getOpenCaisseOfOrder(Order $order): ?Caisse
     {
-        $transaction = $this->emProvider->getEntityManager()->getRepository(TransactionCaisse::class)->findOneBy(['orderCaisse' => $order], ['id' => 'ASC']);
-        $caisse = $transaction?->getCaisse();
+        $caisse = $this->getCaisseOfOrder($order);
 
         return $caisse && $caisse->isOpen() ? $caisse : null;
     }

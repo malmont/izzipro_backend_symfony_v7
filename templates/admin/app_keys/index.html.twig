@@ -41,6 +41,13 @@
             <input type="text" name="label" class="form-control" maxlength="100" required placeholder="Tablette comptoir 1">
         </div>
         <div class="col-md-2">
+            <label class="form-label">Poste (clé caisse)</label>
+            <select name="cashRegisterId" class="form-select">
+                <option value="">aucun</option>
+                {% for register in registers %}<option value="{{ register.id }}">{{ register.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
             <label class="form-label">Expire dans (jours)</label>
             <input type="number" name="expiresInDays" class="form-control" min="1" max="3650" placeholder="jamais">
         </div>
@@ -54,13 +61,14 @@
     </form>
 
     <table class="table table-sm">
-        <thead><tr><th>Application</th><th>Clé</th><th>Libellé</th><th>Créée</th><th>Expire</th><th>Dernier usage</th><th>État</th><th></th></tr></thead>
+        <thead><tr><th>Application</th><th>Clé</th><th>Libellé</th><th>Poste</th><th>Créée</th><th>Expire</th><th>Dernier usage</th><th>État</th><th></th></tr></thead>
         <tbody>
         {% for key in keys %}
             <tr class="{{ key.isActive ? '' : 'text-muted' }}">
                 <td>{{ labels[key.app] ?? key.app }}</td>
                 <td><code>{{ key.hint }}</code></td>
                 <td>{{ key.label }}</td>
+                <td>{{ key.cashRegister ? key.cashRegister.name : '' }}</td>
                 <td>{{ key.createdAt|date('d/m/Y H:i') }}<br><small>{{ key.createdBy }}</small></td>
                 <td>{{ key.expiresAt ? key.expiresAt|date('d/m/Y') : 'jamais' }}</td>
                 <td>{{ key.lastUsedAt ? key.lastUsedAt|date('d/m/Y H:i') ~ ' (' ~ key.useCount ~ ')' : 'jamais' }}{% if key.lastDevice %}<br><small>{{ key.lastDevice }}</small>{% endif %}</td>
@@ -76,7 +84,7 @@
                 </td>
             </tr>
         {% else %}
-            <tr><td colspan="8" class="text-muted">Aucune clé pour ce site.</td></tr>
+            <tr><td colspan="9" class="text-muted">Aucune clé pour ce site.</td></tr>
         {% endfor %}
         </tbody>
     </table>

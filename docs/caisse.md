@@ -103,7 +103,12 @@ Route distincte du tunnel web (`/api/order/create`, `create-guest`, webhook Stri
 - `payment.stripePaymentId` : seulement si un paiement Stripe a réellement eu lieu (terminal, lien) ; il est alors
   vérifié, à usage unique (409 s'il est déjà lié à une commande) et capturé après la commande. Sans lui, la caisse
   encaisse elle-même : aucun appel Stripe.
-- Réponse 201 `{success: true, orderId, message}` ; e-mails de confirmation envoyés comme pour le web.
+- Réponse 201 : champs historiques `{success: true, orderId, message}` **plus le bloc « ticket de caisse »**
+  (16/10/2026, `Dto/PosReceiptDto`), montants en dollars : `reference`, `createdAt` (ISO 8601), `subTotal`,
+  `totalTax`, `totalAmount`, `taxes: [{name, rate, amount}]`, `payments: [{type, label, amount}]` (`type` =
+  `payment_method.id`, `label` dans la langue `?locale=`), `cashRegister: {id, name}`, `store: {name, address, phone,
+  taxNumber}` (fiche entreprise du site ; `taxNumber` = numéro de TVA, sinon SIRET). E-mails de confirmation envoyés
+  comme pour le web. `GET /api/orders/{id}` (client ou jeton invité) ne donne ni les taxes, ni les paiements, ni le poste.
 
 Autres refus : 400 `INVALID_BODY`, `ITEMS_REQUIRED`, `PAYMENT_METHODS_REQUIRED`, `PAYMENT_METHODS_INVALID` ;
 400 `CASH_REGISTER_REQUIRED` ; 404 `CASH_REGISTER_NOT_FOUND`.
@@ -129,5 +134,8 @@ mise à jour de `amountTotal`, puis écrit la `TransactionCaisse` ; il s'exécut
 Au premier lancement, le POS s'active avec une clé générée par l'administrateur du site (`POST /api/app/activate`,
 voir `docs/architecture.md`, « Clé d'activation des applications mobiles ») ou, à défaut, par
 `GET /api/tenant/check-mobile` ; il garde l'hôte complet reçu (`tenant.host`) et l'envoie dans `X-Tenant-Host` sur
-chaque requête. Puis le caissier se connecte : `POST /api/login {username, password, platform: "pos"}` →
+chaque requête. Une clé POS peut être **rattachée à un poste de caisse** (`cashRegisterId` à la création ou par
+`PUT /api/app-keys/{id}`, écran « Clés des applications ») : l'activation rend alors `cashRegister: {id, name}` (copie
+faite sur la clé, le site n'étant pas accessible à ce moment) et le POS présélectionne ce poste, le caissier pouvant en
+changer ; `null` sinon, et le POS demande le poste (`GET /api/cash-registers`). Puis le caissier se connecte : `POST /api/login {username, password, platform: "pos"}` →
 `{token, refresh_token}` (voir `docs/architecture.md`, « Authentification »).

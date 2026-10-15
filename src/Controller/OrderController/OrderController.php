@@ -31,6 +31,8 @@ use App\Services\OrderService\OrderMailerService;
 use App\Services\StripeService\StripeService;
 use App\Services\MediaUrlResolver;
 use App\Services\BoutiqueSettingsService\BoutiqueSettingsService;
+use App\Services\CaisseService\CaisseService;
+use App\Dto\PosReceiptDto;
 
 class OrderController extends AbstractController
 {
@@ -68,7 +70,8 @@ class OrderController extends AbstractController
         private readonly BoutiqueSettingsService $boutiqueSettings,
         private readonly GetCustomerOrderUseCase $getCustomerOrderUseCase,
         private readonly GetOrderStatusesUseCase $getOrderStatusesUseCase,
-        private readonly \App\UseCase\CheckoutUseCase\FinalizeCheckoutOrderUseCase $finalizeCheckout
+        private readonly \App\UseCase\CheckoutUseCase\FinalizeCheckoutOrderUseCase $finalizeCheckout,
+        private readonly CaisseService $caisseService
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -487,11 +490,12 @@ class OrderController extends AbstractController
                 ]);
             }
 
+            // Champs historiques inchangés + bloc « ticket de caisse » (16/10/2026, docs/caisse.md)
             return $this->json([
                 'success' => true,
                 'orderId' => $result->getId(),
-                'message' => 'Commande créée.'
-            ], JsonResponse::HTTP_CREATED);
+                'message' => 'Commande créée.',
+            ] + PosReceiptDto::fromOrder($result, $tenantEm->getRepository(\App\Entity\Entreprise::class)->findOneBy([]), $this->caisseService->getCaisseOfOrder($result), $this->locale($request)), JsonResponse::HTTP_CREATED);
         }
         return $result;
     }

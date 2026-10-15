@@ -25,7 +25,8 @@ class AppKeyAdminController extends AbstractController
     public function __construct(
         private readonly ListAppKeysUseCase $list,
         private readonly GenerateAppKeyUseCase $generate,
-        private readonly RevokeAppKeyUseCase $revoke
+        private readonly RevokeAppKeyUseCase $revoke,
+        private readonly \App\Services\CaisseService\CashRegisterService $cashRegisters
     ) {
     }
 
@@ -36,6 +37,7 @@ class AppKeyAdminController extends AbstractController
             'keys' => $this->list->execute(),
             'apps' => array_keys(AppKeyService::APPS),
             'labels' => AppKeyService::LABELS,
+            'registers' => $this->cashRegisters->list(false),
             'csrf_id' => self::CSRF_ID,
             'new_key' => $request->getSession()->getFlashBag()->get('app_key_plain')[0] ?? null,
         ]);
@@ -53,6 +55,7 @@ class AppKeyAdminController extends AbstractController
             $input = AppKeyInputDto::fromArray([
                 'app' => $request->request->get('app'), 'label' => $request->request->get('label'),
                 'expiresInDays' => $request->request->get('expiresInDays'), 'sendEmail' => $request->request->getBoolean('sendEmail'),
+                'cashRegisterId' => $request->request->get('app') === 'pos' ? $request->request->get('cashRegisterId') : null,
             ]);
             $result = $this->generate->execute($input, $this->getUser()?->getUserIdentifier() ?? 'admin', $request->getSchemeAndHttpHost());
             $request->getSession()->getFlashBag()->add('app_key_plain', $result['key']);

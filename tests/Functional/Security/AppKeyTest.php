@@ -54,7 +54,7 @@ class AppKeyTest extends WebTestCase
         $this->assertSame(200, $activated->getStatusCode(), $activated->getContent());
         $this->assertSame([
             'tenant' => ['code' => MV_TEST_TENANT_CODE, 'name' => 'Tenant de test', 'host' => MV_TEST_TENANT_HOST],
-            'app' => 'pos', 'label' => 'Tablette comptoir 1', 'expiresAt' => null,
+            'app' => 'pos', 'label' => 'Tablette comptoir 1', 'expiresAt' => null, 'cashRegister' => null,
         ], json_decode($activated->getContent(), true));
         $this->assertSame(MV_TEST_TENANT_CODE, static::getContainer()->get(TenantConnectionManager::class)->findTenantConfigByHost(MV_TEST_TENANT_HOST)?->getCode(), 'l\'hôte rendu résout bien le site');
 
@@ -99,6 +99,25 @@ class AppKeyTest extends WebTestCase
         $expired = $this->activate(['key' => $created['key'], 'app' => 'mobile']);
         $this->assertSame(404, $expired->getStatusCode(), 'clé expirée');
         $this->assertFalse(array_column(json_decode($this->request('GET', '/api/app-keys')->getContent(), true), null, 'id')[$created['id']]['isActive']);
+
+        // Clé POS rattachée à un poste de caisse (16/10/2026) : copié sur la clé, rendu à l'activation
+        $register = (int) static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager()->getConnection()->fetchOne('SELECT MIN(id) FROM cash_register WHERE is_active = true');
+        $registerName = (string) static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager()->getConnection()->fetchOne('SELECT name FROM cash_register WHERE id = ?', [$register]);
+        $bound = json_decode($this->request('POST', '/api/app-keys', json_encode(['app' => 'pos', 'label' => 'Tablette poste', 'sendEmail' => false, 'cashRegisterId' => $register]))->getContent(), true);
+        $this->assertSame(['id' => $register, 'name' => $registerName], $bound['cashRegister'], json_encode($bound));
+        $activated = json_decode($this->activate(['key' => $bound['key'], 'app' => 'pos'])->getContent(), true);
+        $this->assertSame(['id' => $register, 'name' => $registerName], $activated['cashRegister'], 'le POS présélectionne ce poste');
+        $this->assertNull(json_decode($this->activate(['key' => $created['key'] ?? 'x', 'app' => 'mobile'])->getContent(), true)['cashRegister'] ?? null, 'clé sans poste : null');
+        $unknownRegister = $this->request('POST', '/api/app-keys', json_encode(['app' => 'pos', 'label' => 'x', 'sendEmail' => false, 'cashRegisterId' => 999999]));
+        $this->assertSame(422, $unknownRegister->getStatusCode());
+        $this->assertSame('cashRegisterId', json_decode($unknownRegister->getContent(), true)['errors'][0]['path']);
+        $notPos = $this->request('POST', '/api/app-keys', json_encode(['app' => 'admin', 'label' => 'x', 'sendEmail' => false, 'cashRegisterId' => $register]));
+        $this->assertSame(422, $notPos->getStatusCode(), 'seule une clé pos a un poste');
+        $updated = $this->request('PUT', '/api/app-keys/' . $bound['id'], json_encode(['label' => 'Tablette poste bis', 'cashRegisterId' => null]));
+        $this->assertSame(200, $updated->getStatusCode(), $updated->getContent());
+        $this->assertSame(['Tablette poste bis', null], [json_decode($updated->getContent(), true)['label'], json_decode($updated->getContent(), true)['cashRegister']]);
+        $this->assertSame($register, json_decode($this->request('PUT', '/api/app-keys/' . $bound['id'], json_encode(['cashRegisterId' => $register]))->getContent(), true)['cashRegister']['id']);
+        $this->assertSame(404, $this->request('PUT', '/api/app-keys/999999', json_encode(['label' => 'x']))->getStatusCode());
 
         $this->loginAs(['ROLE_USER_POS'], 'pos');
         $this->assertSame(403, $this->request('POST', '/api/app-keys', json_encode(['app' => 'pos', 'label' => 'x']))->getStatusCode(), 'caissier : pas de génération');

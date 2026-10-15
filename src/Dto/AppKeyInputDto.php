@@ -8,7 +8,7 @@ use App\Services\AppKeyService\AppKeyService;
 /** Corps de POST /api/app-keys : {app, label, expiresInDays?, sendEmail?} ; validé → VALIDATION_FAILED (422) */
 class AppKeyInputDto
 {
-    public function __construct(public readonly string $app, public readonly string $label, public readonly ?\DateTimeImmutable $expiresAt, public readonly bool $sendEmail)
+    public function __construct(public readonly string $app, public readonly string $label, public readonly ?\DateTimeImmutable $expiresAt, public readonly bool $sendEmail, public readonly ?int $cashRegisterId = null)
     {
     }
 
@@ -44,10 +44,21 @@ class AppKeyInputDto
                 $expiresAt = (new \DateTimeImmutable())->modify(sprintf('+%d days', (int) $data['expiresInDays']));
             }
         }
+        // Clé POS : poste de caisse facultatif, présélectionné par le terminal à l'activation
+        $cashRegisterId = null;
+        if (isset($data['cashRegisterId']) && $data['cashRegisterId'] !== '' && $data['cashRegisterId'] !== null) {
+            if (!is_numeric($data['cashRegisterId'])) {
+                $errors[] = ['path' => 'cashRegisterId', 'message' => 'identifiant de poste attendu'];
+            } elseif ($app !== 'pos') {
+                $errors[] = ['path' => 'cashRegisterId', 'message' => 'seule une clé de caisse (pos) a un poste'];
+            } else {
+                $cashRegisterId = (int) $data['cashRegisterId'];
+            }
+        }
         if ($errors) {
             throw new AppKeyException('VALIDATION_FAILED', $errors[0]['path'] . ' : ' . $errors[0]['message'], 422, $errors);
         }
 
-        return new self($app, $label, $expiresAt, !array_key_exists('sendEmail', $data) || filter_var($data['sendEmail'], FILTER_VALIDATE_BOOLEAN));
+        return new self($app, $label, $expiresAt, !array_key_exists('sendEmail', $data) || filter_var($data['sendEmail'], FILTER_VALIDATE_BOOLEAN), $cashRegisterId);
     }
 }

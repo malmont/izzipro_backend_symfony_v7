@@ -55,7 +55,24 @@ class PosOrderApiTest extends WebTestCase
             'paymentMethods' => [['type' => 2, 'amount' => $cash], ['type' => 1, 'amount' => $card]],
         ]));
         $this->assertSame(201, $response->getStatusCode(), $response->getContent());
-        $orderId = json_decode($response->getContent(), true)['orderId'];
+        $body = json_decode($response->getContent(), true);
+        $orderId = $body['orderId'];
+
+        // Bloc « ticket de caisse » (16/10/2026) : champs historiques conservés, montants en dollars
+        $this->assertSame([true, 'Commande créée.'], [$body['success'], $body['message']]);
+        $this->assertStringStartsWith('REF#', $body['reference']);
+        $this->assertNotEmpty($body['createdAt']);
+        $this->assertEqualsWithDelta([$price / 100, $taxes / 100, $total / 100], [$body['subTotal'], $body['totalTax'], $body['totalAmount']], 0.001);
+        $this->assertEqualsWithDelta($taxes / 100, array_sum(array_column($body['taxes'], 'amount')), 0.001, 'détail des taxes');
+        $this->assertNotEmpty($body['taxes'][0]['name']);
+        $this->assertSame([2, 1], array_column($body['payments'], 'type'));
+        $this->assertEqualsWithDelta([$cash, $card], array_column($body['payments'], 'amount'), 0.001);
+        $this->assertSame('Espèces', $body['payments'][0]['label']);
+        $this->assertSame($this->db->fetchOne('SELECT cash_register_id FROM caisse WHERE id = ?', [$caisse]), $body['cashRegister']['id']);
+        $this->assertNotEmpty($body['cashRegister']['name']);
+        $this->assertStringContainsString('Montréal', $body['store']['address'], 'adresse du magasin (fiche entreprise)');
+        $this->assertArrayHasKey('taxNumber', $body['store']);
+        $this->assertNotEmpty($body['store']['name']);
 
         $order = $this->db->fetchAssociative('SELECT shipping_adress_id, carrier_id, shipping_cost, sub_total, total_tax, total_amount, order_source_id, order_type_id FROM "order" WHERE id = ?', [$orderId]);
         $this->assertNull($order['shipping_adress_id'], 'vente au comptoir : sans adresse');

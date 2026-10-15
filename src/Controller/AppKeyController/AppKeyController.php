@@ -7,6 +7,7 @@ use App\Services\AppKeyService\AppKeyException;
 use App\UseCase\AppKeyUseCase\GenerateAppKeyUseCase;
 use App\UseCase\AppKeyUseCase\ListAppKeysUseCase;
 use App\UseCase\AppKeyUseCase\RevokeAppKeyUseCase;
+use App\UseCase\AppKeyUseCase\UpdateAppKeyUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -18,7 +19,8 @@ class AppKeyController extends AbstractController
     public function __construct(
         private readonly ListAppKeysUseCase $list,
         private readonly GenerateAppKeyUseCase $generate,
-        private readonly RevokeAppKeyUseCase $revoke
+        private readonly RevokeAppKeyUseCase $revoke,
+        private readonly UpdateAppKeyUseCase $update
     ) {
     }
 
@@ -35,6 +37,16 @@ class AppKeyController extends AbstractController
             $input = AppKeyInputDto::fromRequestBody($request->getContent());
 
             return $this->json($this->generate->execute($input, $this->getUser()?->getUserIdentifier() ?? 'admin', $request->getSchemeAndHttpHost()), JsonResponse::HTTP_CREATED);
+        } catch (AppKeyException $e) {
+            return $this->json($e->toBody(), $e->status);
+        }
+    }
+
+    #[Route('/api/app-keys/{id}', name: 'app_keys_update', methods: ['PUT'], requirements: ['id' => '\d+'])]
+    public function update(int $id, Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->update->execute($id, $request->getContent()));
         } catch (AppKeyException $e) {
             return $this->json($e->toBody(), $e->status);
         }

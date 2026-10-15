@@ -22,8 +22,11 @@ class AppKeyService
     {
     }
 
-    /** @return array{key: string, row: array<string, mixed>} la clé en clair (une seule fois) et sa ligne */
-    public function generate(string $tenantCode, string $app, string $label, string $createdBy, ?\DateTimeInterface $expiresAt): array
+    /**
+     * @param array{id: int, name: string}|null $cashRegister poste de caisse d'une clé POS (présélectionné par le terminal)
+     * @return array{key: string, row: array<string, mixed>} la clé en clair (une seule fois) et sa ligne
+     */
+    public function generate(string $tenantCode, string $app, string $label, string $createdBy, ?\DateTimeInterface $expiresAt, ?array $cashRegister = null): array
     {
         if (!isset(self::APPS[$app])) {
             throw new AppKeyException('VALIDATION_FAILED', 'app : pos, mobile, admin ou livingmemory attendu', 422, [['path' => 'app', 'message' => 'pos, mobile, admin ou livingmemory attendu']]);
@@ -33,7 +36,7 @@ class AppKeyService
             $random .= self::ALPHABET[random_int(0, strlen(self::ALPHABET) - 1)];
         }
         $key = sprintf('IZ-%s-%s-%s-%s', self::APPS[$app], substr($random, 0, 4), substr($random, 4, 4), substr($random, 8, 4));
-        $row = $this->keys->insert($tenantCode, $app, self::hash($key), substr($key, 0, 11) . '-****-****', $label, $createdBy, $expiresAt);
+        $row = $this->keys->insert($tenantCode, $app, self::hash($key), substr($key, 0, 11) . '-****-****', $label, $createdBy, $expiresAt, $app === 'pos' ? $cashRegister : null);
 
         return ['key' => $key, 'row' => $row];
     }
@@ -48,6 +51,18 @@ class AppKeyService
     public function revokeAllForApp(string $tenantCode, string $app): int
     {
         return $this->keys->revokeAllForApp($tenantCode, $app);
+    }
+
+    /** Modification d'une clé du site : libellé et, pour une clé POS, poste de caisse (null : aucun) */
+    public function update(int $id, string $tenantCode, ?string $label, bool $setRegister, ?array $cashRegister): array
+    {
+        $row = $this->keys->findOneForTenant($id, $tenantCode) ?? throw new AppKeyException('APP_KEY_NOT_FOUND', 'Clé introuvable', 404);
+        if ($setRegister && $cashRegister !== null && $row['app'] !== 'pos') {
+            throw new AppKeyException('VALIDATION_FAILED', 'cashRegisterId : seule une clé de caisse (pos) a un poste', 422, [['path' => 'cashRegisterId', 'message' => 'seule une clé de caisse (pos) a un poste']]);
+        }
+        $this->keys->update($id, $tenantCode, $label, $setRegister, $cashRegister);
+
+        return $this->keys->findOneForTenant($id, $tenantCode) ?? $row;
     }
 
     public function revoke(int $id, string $tenantCode): array
@@ -81,7 +96,12 @@ class AppKeyService
         $tenant = $this->hosts->describe($row['tenant_code']) ?? throw new AppKeyException('APP_KEY_INVALID', 'Le site de cette clé n\'existe plus', 404);
         $this->keys->touch((int) $row['id'], $device);
 
-        return ['tenant' => $tenant, 'app' => $row['app'], 'label' => $row['label'], 'expiresAt' => $row['expires_at'] ? (new \DateTimeImmutable($row['expires_at']))->format(\DateTimeInterface::ATOM) : null];
+        return [
+            'tenant' => $tenant, 'app' => $row['app'], 'label' => $row['label'],
+            'expiresAt' => $row['expires_at'] ? (new \DateTimeImmutable($row['expires_at']))->format(\DateTimeInterface::ATOM) : null,
+            // Poste de caisse rattaché à une clé POS (copie faite à la création : le POS le présélectionne et confirme par GET /api/cash-registers)
+            'cashRegister' => $row['cash_register_id'] !== null ? ['id' => (int) $row['cash_register_id'], 'name' => (string) $row['cash_register_name']] : null,
+        ];
     }
 
     /** Forme canonique IZ-XXX-XXXX-XXXX-XXXX d'une saisie (minuscules, espaces et tirets tolérés) ; null si vide ou malformée */
