@@ -38,7 +38,11 @@ class CreateOrderCommandUseCase
     {
         try {
             $orderSource = $this->entityRetrieverService->findOrFail(OrderSource::class, $orderDTO->getOrderSource(), 'Invalid order source ID');
-            $address = $this->entityRetrieverService->findOrFail(Adress::class, $orderDTO->getAddressId(), 'Invalid address ID');
+            // Adresse facultative pour la seule route caisse (CreateOrderMultiPaymentDTO, 15/10/2026) ; CreateOrderDTO
+            // (web) en fournit toujours une et garde ce contrôle
+            $address = $orderDTO->getAddressId() !== null
+                ? $this->entityRetrieverService->findOrFail(Adress::class, $orderDTO->getAddressId(), 'Invalid address ID')
+                : null;
             $carrierId = $orderDTO->getCarrierId();
             $carrier = null;
 

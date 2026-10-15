@@ -9,6 +9,7 @@ use App\Services\EntityRetrieverService;
 use App\Services\OrderService\CartQuoteCalculator;
 use App\Services\OrderService\CartQuoteException;
 use App\Services\OrderService\OrderItemService;
+use App\Services\OrderService\OrderTaxAddressResolver;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
@@ -23,7 +24,8 @@ class ProcessOrderItemsUseCase
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly EntityRetrieverService $entityRetrieverService,
         private readonly OrderItemService $orderItemService,
-        private readonly CartQuoteCalculator $quotes
+        private readonly CartQuoteCalculator $quotes,
+        private readonly OrderTaxAddressResolver $taxAddress
     ) {
     }
 
@@ -38,9 +40,9 @@ class ProcessOrderItemsUseCase
         $isCancel = $typeOrderId !== 1;
 
         try {
-            $address = $order->getShippingAdress();
+            // Taxes selon l'adresse de livraison, sinon l'adresse du site (vente au comptoir sans adresse, 15/10/2026)
             $quote = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'carrierId' => $carrierId, 'shippingPrice' => $priceShipping,
-                'shippingAddress' => $address ? ['country' => $address->getCountry(), 'province' => $address->getProvince(), 'city' => $address->getCity(), 'postalCode' => $address->getCodepostal()] : null]));
+                'shippingAddress' => $this->taxAddress->forOrder($order)]));
             $order->setPendingTaxCalculationId($quote['taxCalculationId']); // transaction Stripe Tax enregistrée après le paiement
             $order->setPendingTaxes($quote['taxes']); // mêmes taxes que le devis et que le montant autorisé
         } catch (CartQuoteException $e) {

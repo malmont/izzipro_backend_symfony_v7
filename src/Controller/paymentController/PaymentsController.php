@@ -21,6 +21,8 @@ use App\Services\TenantConnectionManager;
 
 class PaymentsController extends AbstractController
 {
+    private const ORDER_SOURCE_POS = 2; // table order_source
+
     private GetPaymentsByOrderSourceUseCase $getPaymentsByOrderSourceUseCase;
     private CreatePaymentUseCase $createPaymentUseCase;
     private TenantEntityManagerProvider $emProvider;
@@ -49,6 +51,11 @@ class PaymentsController extends AbstractController
         $this->connectionManager = $connectionManager;
     }
 
+    /**
+     * Paiements du site par source (application de gestion, caisse). 15/10/2026 : réservé à ROLE_ADMIN (toutes sources)
+     * et à ROLE_USER_POS (source caisse, orderSource 2, seulement) ; tout autre compte → 403. Avant, n'importe quel client
+     * connecté ayant passé une commande recevait tous les paiements du site.
+     */
     #[Route('api/payments', name: 'get_payments', methods: ['GET'])]
     public function getPayments(Request $request): JsonResponse
     {
@@ -60,14 +67,12 @@ class PaymentsController extends AbstractController
         if (!$orderSourceId) {
             return $this->json(['error' => 'orderSource parameter is required'], JsonResponse::HTTP_BAD_REQUEST);
         }
+        if (!$this->isGranted('ROLE_ADMIN') && !($this->isGranted('ROLE_USER_POS') && (int) $orderSourceId === self::ORDER_SOURCE_POS)) {
+            return $this->json(['error' => 'FORBIDDEN', 'message' => 'Accès réservé aux administrateurs et, pour la caisse, aux caissiers'], JsonResponse::HTTP_FORBIDDEN);
+        }
         $days = $request->query->get('days');
         $host = $request->getSchemeAndHttpHost();
         $locale = $request->getLocale();
-        $em = $this->emProvider->getEntityManager();
-        $userOrders = $em->getRepository(Order::class)->findBy(['user' => $user]);
-        if (!$userOrders) {
-            return $this->json(['error' => 'Unauthorized access to payments'], JsonResponse::HTTP_FORBIDDEN);
-        }
         $cacheKey = 'payments_orderSource_' . $orderSourceId . '_locale_' . $locale . ($days ? '_days_' . (int)$days : '');
         $paymentDTOs = $this->cache->get(
             $cacheKey,

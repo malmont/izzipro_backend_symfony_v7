@@ -4,6 +4,12 @@ namespace App\Entity;
 
 use App\Entity\Traits\DemoContentTrait;
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Put;
 use App\Repository\CategoriesRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -12,7 +18,16 @@ use Doctrine\ORM\Mapping as ORM;
 use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: CategoriesRepository::class)]
-#[ApiResource]
+// Lectures inchangées (connecté, règle ^/api) ; écritures réservées aux administrateurs depuis le 15/10/2026 : avant,
+// tout client connecté pouvait créer, modifier et supprimer les catégories du site. La boutique lit /api/category (autre route).
+#[ApiResource(operations: [
+    new GetCollection(),
+    new Get(),
+    new Post(security: "is_granted('ROLE_ADMIN')"),
+    new Put(security: "is_granted('ROLE_ADMIN')"),
+    new Patch(security: "is_granted('ROLE_ADMIN')"),
+    new Delete(security: "is_granted('ROLE_ADMIN')"),
+])]
 class Categories implements TranslatableInterface, DemoContentInterface
 {
     use DemoContentTrait;

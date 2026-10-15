@@ -32,12 +32,16 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     private ?string $stripeRiskLevel;
     private ?string $guestLicenseNumber;
     private ?string $guestLicenseExpirationDate;
+    // Somme des moyens de paiement (cents) posée par la route caisse : le total calculé doit lui correspondre
+    private ?int $verifiedPaymentAmount = null;
+    // Poste de caisse de la vente (15/10/2026) ; null : poste unique du site (CashRegisterResolver)
+    private ?int $cashRegisterId = null;
 
     public function __construct(
         int $userId,
         int $orderSource,
         array $paymentMethods,
-        int $addressId,
+        ?int $addressId,
         ?int $carrierId,
         int $typeOrder,
         array $items,
@@ -100,7 +104,7 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     {
         return $this->paymentMethods;
     }
-    public function getAddressId(): int
+    public function getAddressId(): ?int
     {
         return $this->addressId;
     }
@@ -124,6 +128,28 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     public function getPaymentMethod(): ?int
     {
         return null;
+    }
+
+    public function setVerifiedPaymentAmount(?int $amount): self
+    {
+        $this->verifiedPaymentAmount = $amount;
+        return $this;
+    }
+
+    public function getVerifiedPaymentAmount(): ?int
+    {
+        return $this->verifiedPaymentAmount;
+    }
+
+    public function setCashRegisterId(?int $cashRegisterId): self
+    {
+        $this->cashRegisterId = $cashRegisterId;
+        return $this;
+    }
+
+    public function getCashRegisterId(): ?int
+    {
+        return $this->cashRegisterId;
     }
 
     // ✅ Getters pour les données de paiement Square

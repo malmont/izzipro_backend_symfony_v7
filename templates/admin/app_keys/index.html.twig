@@ -1,0 +1,83 @@
+{# Écran « Clés des applications » (AppKeyAdminController). Habillage EasyAdmin quand la page est ouverte depuis le menu. #}
+{% extends ea is defined ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Clés des applications{% endblock %}
+{% block content_title %}Clés des applications (POS, e-commerce mobile, gestion){% endblock %}
+
+{% block main %}{{ block('app_keys_panel') }}{% endblock %}
+{% block body %}
+    <h1 class="mb-4">Clés des applications</h1>
+    {{ block('app_keys_panel') }}
+{% endblock %}
+
+{% block app_keys_panel %}
+    {% for type, messages in app.flashes %}
+        {% for message in messages %}<div class="alert alert-{{ type }}">{{ message }}</div>{% endfor %}
+    {% endfor %}
+    {% if new_key %}
+        <div class="alert alert-warning">
+            <strong>Nouvelle clé (affichée une seule fois) :</strong>
+            <code style="font-size:1.3em;letter-spacing:1px;">{{ new_key }}</code>
+        </div>
+    {% endif %}
+
+    <p class="text-muted">
+        Une clé identifie ce site et une application : au premier lancement, l'application la demande (saisie ou code QR
+        reçu par e-mail), puis chaque utilisateur se connecte avec son compte. Activer une application dans la fiche
+        Entreprise génère sa première clé ; la désactiver révoque ses clés. Révoquez la clé d'un terminal perdu ; les
+        comptes ne sont pas touchés.
+    </p>
+
+    <form action="{{ path('admin_app_keys_generate', app.request.query.get('tenant') ? {tenant: app.request.query.get('tenant')} : {}) }}" method="post" class="row g-2 align-items-end mb-4">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <div class="col-md-2">
+            <label class="form-label">Application</label>
+            <select name="app" class="form-select">
+                {% for app in apps %}<option value="{{ app }}">{{ labels[app] ?? app }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Libellé (terminal, personne)</label>
+            <input type="text" name="label" class="form-control" maxlength="100" required placeholder="Tablette comptoir 1">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Expire dans (jours)</label>
+            <input type="number" name="expiresInDays" class="form-control" min="1" max="3650" placeholder="jamais">
+        </div>
+        <div class="col-md-2 form-check mb-2">
+            <input type="checkbox" name="sendEmail" value="1" class="form-check-input" id="sendEmail" checked>
+            <label class="form-check-label" for="sendEmail">Envoyer par e-mail au contact du site</label>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary">Générer une clé</button>
+        </div>
+    </form>
+
+    <table class="table table-sm">
+        <thead><tr><th>Application</th><th>Clé</th><th>Libellé</th><th>Créée</th><th>Expire</th><th>Dernier usage</th><th>État</th><th></th></tr></thead>
+        <tbody>
+        {% for key in keys %}
+            <tr class="{{ key.isActive ? '' : 'text-muted' }}">
+                <td>{{ labels[key.app] ?? key.app }}</td>
+                <td><code>{{ key.hint }}</code></td>
+                <td>{{ key.label }}</td>
+                <td>{{ key.createdAt|date('d/m/Y H:i') }}<br><small>{{ key.createdBy }}</small></td>
+                <td>{{ key.expiresAt ? key.expiresAt|date('d/m/Y') : 'jamais' }}</td>
+                <td>{{ key.lastUsedAt ? key.lastUsedAt|date('d/m/Y H:i') ~ ' (' ~ key.useCount ~ ')' : 'jamais' }}{% if key.lastDevice %}<br><small>{{ key.lastDevice }}</small>{% endif %}</td>
+                <td>{{ key.revokedAt ? 'révoquée le ' ~ key.revokedAt|date('d/m/Y') : (key.isActive ? 'active' : 'expirée') }}</td>
+                <td>
+                    {% if key.revokedAt is null %}
+                        <form action="{{ path('admin_app_keys_revoke', {id: key.id} + (app.request.query.get('tenant') ? {tenant: app.request.query.get('tenant')} : {})) }}" method="post" class="d-inline"
+                              onsubmit="return confirm('Révoquer cette clé ? L\'application ne pourra plus s\'activer avec elle.');">
+                            <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Révoquer</button>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="8" class="text-muted">Aucune clé pour ce site.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

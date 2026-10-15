@@ -55,8 +55,10 @@ class EmailSenderService
         string $locale,
         string $domain,
         ?string $customFromName = null,
-        ?string $replyTo = null
+        ?string $replyTo = null,
+        array $attachments = []
     ): bool {
+        // $attachments (15/10/2026) : [{name, body, contentType, inline?}] ; inline => image incorporée, cid = name
         try {
             $emailConfig = $this->emailConfigService->findOneByLocale($locale);
 
@@ -113,6 +115,13 @@ class EmailSenderService
 
             if ($logoPath !== null) {
                 $emailMessage->embedFromPath($logoPath, self::LOGO_CID);
+            }
+            foreach ($attachments as $attachment) {
+                if (!empty($attachment['inline'])) {
+                    $emailMessage->embed($attachment['body'], $attachment['name'], $attachment['contentType'] ?? null);
+                } else {
+                    $emailMessage->attach($attachment['body'], $attachment['name'], $attachment['contentType'] ?? null);
+                }
             }
 
             // Serveur d'envoi du site (configuration e-mail du tenant), comme les e-mails de rendez-vous et de

@@ -16,7 +16,7 @@ use App\Services\TenantEntityManagerProvider;
  */
 class TaxCalculationService
 {
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly TaxEngine $engine, private readonly TenantCurrencyProvider $currency)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly TaxEngine $engine, private readonly TenantCurrencyProvider $currency, private readonly OrderTaxAddressResolver $taxAddress)
     {
     }
 
@@ -27,8 +27,7 @@ class TaxCalculationService
         $taxes = $order->getPendingTaxes();
         if ($taxes === null) {
             // Sans devis préalable (caisse, retour) : calcul sur le sous-total, livraison comprise
-            $address = $order->getShippingAdress();
-            $normalized = $address ? TaxEngine::normalizeAddress(['country' => $address->getCountry(), 'province' => $address->getProvince(), 'city' => $address->getCity(), 'postalCode' => $address->getCodepostal()]) : null;
+            $normalized = TaxEngine::normalizeAddress($this->taxAddress->forOrder($order)); // livraison, sinon adresse du site (comptoir)
             $result = $this->engine->compute($normalized, [['amount' => (int) round(abs($subtotal)), 'quantity' => 1, 'kind' => 'sale', 'reference' => 'order']], 0, $this->currency->code());
             $order->setPendingTaxCalculationId($result['calculationId']);
             $taxes = $result['taxes'];

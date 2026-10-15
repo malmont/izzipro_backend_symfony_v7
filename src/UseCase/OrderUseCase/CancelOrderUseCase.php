@@ -7,6 +7,9 @@ use App\Entity\StatusCommande;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
+use App\Services\CaisseService\CaisseService;
+use App\Services\CaisseService\CashRegisterException;
+use App\Services\CaisseService\CashRegisterResolver;
 use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
 use Exception;
 
@@ -25,7 +28,9 @@ class CancelOrderUseCase
         PaymentHandlerUseCase $paymentHandlerUseCase,
         UpdateStockAndInventoryUseCase $updateStockAndInventoryUseCase,
         HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase,
-        TenantEntityManagerProvider $emProvider
+        TenantEntityManagerProvider $emProvider,
+        private readonly CaisseService $caisseService,
+        private readonly CashRegisterResolver $cashRegisters
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
@@ -33,7 +38,8 @@ class CancelOrderUseCase
         $this->emProvider = $emProvider;
     }
 
-    public function execute(int $orderId, int $paymentMethod): JsonResponse
+    /** @param ?int $cashRegisterId poste du remboursement d'une vente POS si la session d'origine est fermée (15/10/2026) */
+    public function execute(int $orderId, ?int $paymentMethod = null, ?int $cashRegisterId = null): JsonResponse
     {
         // On récupère l'EM du tenant une seule fois
         $em = $this->emProvider->getEntityManager();
@@ -88,8 +94,12 @@ class CancelOrderUseCase
                 $caisseAmount += $refundAmount;
             }
             $transactionTypeId = 2; // Type de transaction "Remboursement"
-            if ($order->getOrderSource()->getId() === 2) { // Supposons que 2 = POS
-                $this->handleCaisseTransactionUseCase->execute($order, $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount);
+            if ($order->getOrderSource()->getId() === 2) { // 2 = vente POS : seule à toucher une caisse (une commande web ne change pas)
+                // Poste de la vente d'origine si sa session est ouverte, sinon le poste demandé s'il est ouvert, sinon règle du poste unique
+                $caisse = $this->caisseService->getOpenCaisseOfOrder($order)
+                    ?? ($cashRegisterId !== null ? $this->cashRegisters->openSession($this->cashRegisters->resolve($cashRegisterId)) : null)
+                    ?? $this->cashRegisters->requireOpenSession(null, 409);
+                $this->handleCaisseTransactionUseCase->execute($caisse, $order, $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount);
             }
 
             // Valider la transaction en base de données
@@ -97,6 +107,10 @@ class CancelOrderUseCase
             $em->getConnection()->commit();
 
             return new JsonResponse(['message' => 'Order canceled and refunded successfully'], Response::HTTP_OK);
+        } catch (CashRegisterException $e) {
+            $em->getConnection()->rollback();
+
+            return new JsonResponse($e->toBody(), $e->status);
         } catch (Exception $e) {
             // En cas d'erreur, on annule toutes les opérations
             $em->getConnection()->rollback();

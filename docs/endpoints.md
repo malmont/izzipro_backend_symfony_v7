@@ -223,7 +223,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (177)
+## Boutique et commun (184)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -250,18 +250,25 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/adresses/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::editAdress` |
 | GET | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
 | POST | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::createAdress` |
+| DELETE | `/api/app-keys/{id}` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::revoke` |
+| GET | `/api/app-keys` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::list` |
+| POST | `/api/app-keys` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::create` |
+| POST | `/api/app/activate` | PUBLIC_ACCESS | `Controller\AppKeyController\AppActivationController::activate` |
 | GET | `/api/boutique-settings` | PUBLIC_ACCESS | `Controller\BoutiqueSettingsController\BoutiqueSettingsController::getSettings` |
 | PUT | `/api/boutique-settings` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\BoutiqueSettingsController\BoutiqueSettingsController::updateSettings` |
-| POST | `/api/caisse/cashfunddeposit` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundDeposit` |
-| POST | `/api/caisse/cashfundwithdraw` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundWithdraw` |
-| POST | `/api/caisse/close` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::closeCaisse` |
-| POST | `/api/caisse/deposit` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::deposit` |
-| POST | `/api/caisse/open` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::openCaisse` |
-| GET | `/api/caisse/transactions` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::getOpenCaisseTransactions` |
-| POST | `/api/caisse/withdraw` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::withdraw` |
-| GET | `/api/caisse` | ROLE_ADMIN | `Controller\CaisseController\CaisseController::getCaisse` |
+| POST | `/api/caisse/cashfunddeposit` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundDeposit` |
+| POST | `/api/caisse/cashfundwithdraw` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundWithdraw` |
+| POST | `/api/caisse/close` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::closeCaisse` |
+| POST | `/api/caisse/deposit` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::deposit` |
+| POST | `/api/caisse/open` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::openCaisse` |
+| GET | `/api/caisse/transactions` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::getOpenCaisseTransactions` |
+| POST | `/api/caisse/withdraw` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::withdraw` |
+| GET | `/api/caisse` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::getCaisse` |
 | GET | `/api/carrier/statistics` | ROLE_ADMIN | `Controller\StatistiqueDashboard\CarrierStatisticsController::getCarrierStatistics` |
 | POST | `/api/cart/quote` | PUBLIC_ACCESS | `Controller\CartController\CartQuoteController::quote` |
+| PUT | `/api/cash-registers/{id}` | ROLE_ADMIN | `Controller\CashRegisterController\CashRegisterController::update` |
+| GET | `/api/cash-registers` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CashRegisterController\CashRegisterController::list` |
+| POST | `/api/cash-registers` | ROLE_ADMIN | `Controller\CashRegisterController\CashRegisterController::create` |
 | GET | `/api/category` | PUBLIC_ACCESS | `Controller\CategoriesControlleur\CategoryController::getCategories` |
 | GET | `/api/collections/{id}/commandes` | ROLE_ADMIN | `Controller\CommandeController\CommandeController::getCommandesByCollection` |
 | POST | `/api/collections/{id}/commandes` | ROLE_ADMIN | `Controller\CommandeController\CommandeController::createCommande` |
@@ -420,11 +427,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/validate-token` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\Account\SecurityController::validateToken` |
 | GET | `/verify/email` | aucune règle | `Controller\Account\RegistrationController::verifyEmail` |
 
-## Tenants (4)
+## Tenants (5)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
 | GET | `/api/health` | PUBLIC_ACCESS | `Controller\HealthController::index` |
+| GET | `/api/tenant/check-mobile` | PUBLIC_ACCESS | `Controller\TenantSetupController\TenantController::checkMobile` |
 | GET, POST | `/api/tenant/check` | PUBLIC_ACCESS | `Controller\TenantSetupController\TenantController::check` |
 | ANY | `/setup/new-store` | aucune règle | `Controller\TenantSetupController\TenantSetupController::setup` |
 | ANY | `/setup/status/{tenantCode}/{syncJobId}/{finalUrl}` | aucune règle | `App\Controller\TenantSetupController\SyncStatusController` |
@@ -442,10 +450,13 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (16)
+## Administration (EasyAdmin) (19)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
+| POST | `/admin/app-keys/generate` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::generate` |
+| POST | `/admin/app-keys/{id}/revoke` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::revoke` |
+| GET | `/admin/app-keys` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::index` |
 | GET | `/admin/barcode-image/{id}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::barcodeImage` |
 | GET | `/admin/barcode-management/search` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::search` |
 | ANY | `/admin/barcode-management` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::index` |

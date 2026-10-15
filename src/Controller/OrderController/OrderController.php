@@ -48,6 +48,7 @@ class OrderController extends AbstractController
 
     // Identifiants des tables order_source / payment_method et type de commande (1 = vente, 2 = retour)
     private const ORDER_SOURCE_ECOMMERCE = 1;
+    private const ORDER_SOURCE_POS = 2;
     private const ORDER_SOURCE_MOBILE_APP = 3;
     private const PAYMENT_METHOD_ONLINE = 2; // valeur historique envoyée par le tunnel web (paiement Stripe)
     private const TYPE_ORDER_SALE = 1;
@@ -314,40 +315,88 @@ class OrderController extends AbstractController
         return preg_match('/^[a-z]{2}$/', $locale) ? $locale : 'fr';
     }
 
+    /**
+     * Vente en caisse (POS) : encaissement en un ou plusieurs moyens de paiement (espèces, carte…) par le personnel.
+     * Route distincte du tunnel web (createOrder, create-guest, webhook Stripe), mise à niveau le 15/10/2026 :
+     * - corps validé (items, paymentMethods) ; orderSource 2 (caisse) et typeOrder 1 (vente) par défaut ;
+     * - addressId et carrierId facultatifs : une vente au comptoir n'a ni adresse de livraison ni transporteur ; les
+     *   taxes sont alors calculées sur l'adresse de la fiche entreprise (OrderTaxAddressResolver) ;
+     * - la somme des moyens de paiement doit égaler le total calculé par le serveur (tolérance 1 cent) ;
+     * - paiement Stripe (payment.stripePaymentId) vérifié seulement s'il est fourni : la caisse encaisse elle-même.
+     *   Avant, $paymentIntent n'était pas défini ici : 500 à chaque vente avec le débogage actif.
+     * Contrat complet : docs/caisse.md.
+     */
     #[Route('/api/order/create-multi-payment', name: 'order_create_multi_payment', methods: ['POST'])]
     public function createOrderWithMultiplePayments(Request $request): JsonResponse
     {
-        $data = json_decode($request->getContent(), true);
         /** @var \App\Entity\User $user */
         $user = $this->getUser();
         if (!$user) {
             return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
-        $paymentData = $data['payment'] ?? [];
-        $paymentMethods = array_map(function ($method) {
-            return new PaymentMethodDTO($method['type'], $method['amount']);
-        }, $data['paymentMethods'] ?? []);
-
+        $data = json_decode($request->getContent(), true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'INVALID_BODY', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        if (empty($data['items']) || !is_array($data['items'])) {
+            return $this->json(['error' => 'ITEMS_REQUIRED', 'message' => 'La vente doit contenir au moins un article'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        $paymentMethods = [];
+        foreach (is_array($data['paymentMethods'] ?? null) ? $data['paymentMethods'] : [] as $method) {
+            if (!is_array($method) || !is_numeric($method['type'] ?? null) || !is_numeric($method['amount'] ?? null) || (float) $method['amount'] < 0) {
+                return $this->json(['error' => 'PAYMENT_METHODS_INVALID', 'message' => 'Chaque moyen de paiement doit avoir un type et un montant positif'], JsonResponse::HTTP_BAD_REQUEST);
+            }
+            $paymentMethods[] = new PaymentMethodDTO((int) $method['type'], (float) $method['amount']);
+        }
+        if (!$paymentMethods) {
+            return $this->json(['error' => 'PAYMENT_METHODS_REQUIRED', 'message' => 'Au moins un moyen de paiement est requis'], JsonResponse::HTTP_BAD_REQUEST);
+        }
         if (isset($data['priceShipping']) && (float) $data['priceShipping'] < 0) {
             return $this->json(['error' => 'Frais de livraison invalides'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        $typeOrder = (int) ($data['typeOrder'] ?? self::TYPE_ORDER_SALE);
+        $em = $this->emProvider->getEntityManager();
+        $addressId = is_numeric($data['addressId'] ?? null) ? (int) $data['addressId'] : null;
+        if ($addressId !== null && !$em->getRepository(Adress::class)->find($addressId)) {
+            return $this->json(['error' => 'ADDRESS_NOT_FOUND', 'message' => 'Adresse introuvable'], JsonResponse::HTTP_NOT_FOUND);
+        }
+        $carrierId = is_numeric($data['carrierId'] ?? null) ? (int) $data['carrierId'] : null;
+        if ($carrierId !== null && !$em->getRepository(Carrier::class)->find($carrierId)) {
+            return $this->json(['error' => 'CARRIER_NOT_FOUND', 'message' => 'Transporteur introuvable'], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        // Paiement Stripe (terminal, lien de paiement) : vérifié et à usage unique s'il est fourni, comme sur le web
+        $paymentData = is_array($data['payment'] ?? null) ? $data['payment'] : [];
+        $paymentIntent = null;
+        if (!empty($paymentData['stripePaymentId'])) {
+            $paymentIntent = $this->stripeService->verifyPaymentIntent((string) $paymentData['stripePaymentId']);
+            if (!$paymentIntent) {
+                return $this->json(['error' => 'Payment verification failed or payment not completed'], JsonResponse::HTTP_PAYMENT_REQUIRED);
+            }
+            if ($this->isPaymentIntentAlreadyUsed($paymentIntent->id)) {
+                return $this->json(['error' => 'Ce paiement est déjà associé à une commande.'], JsonResponse::HTTP_CONFLICT);
+            }
+            $charge = $paymentIntent->charges->data[0] ?? null;
+            $paymentData = [
+                'stripePaymentId' => $paymentIntent->id,
+                'status' => $paymentIntent->status,
+                'receiptUrl' => $charge?->receipt_url,
+                'cardBrand' => $charge?->payment_method_details?->card?->brand,
+                'last4' => $charge?->payment_method_details?->card?->last4,
+                'riskLevel' => $charge?->outcome?->risk_level,
+            ];
         }
 
         $dto = new CreateOrderMultiPaymentDTO(
             $user->getId(),
-            $data['orderSource'],
+            (int) ($data['orderSource'] ?? self::ORDER_SOURCE_POS),
             $paymentMethods,
-            $data['addressId'] ?? null,
-            $data['carrierId'] ?? null,
-            $data['typeOrder'] ?? null,
-            $data['items'] ?? [],
-            $data['priceShipping'] ?? null,
-            $paymentData['squarePaymentId'] ?? null,
-            $paymentData['squareOrderId'] ?? null,
-            $paymentData['squareReceiptUrl'] ?? null,
-            $paymentData['squareStatus'] ?? null,
-            $paymentData['squareCardBrand'] ?? null,
-            $paymentData['squareLast4'] ?? null,
-            $paymentData['squareRiskLevel'] ?? null,
+            $addressId,
+            $carrierId,
+            $typeOrder,
+            $data['items'],
+            isset($data['priceShipping']) ? (float) $data['priceShipping'] : null,
+            null, null, null, null, null, null, null, // Square : plus utilisé
             $paymentData['stripePaymentId'] ?? null,
             $paymentData['receiptUrl'] ?? null,
             $paymentData['status'] ?? null,
@@ -357,9 +406,12 @@ class OrderController extends AbstractController
             $data['licenseNumber'] ?? null,
             $data['licenseExpirationDate'] ?? null
         );
-        if ($paymentIntent !== null) {
-            $dto->setVerifiedPaymentAmount((int) $paymentIntent->amount);
-        }
+        // Les moyens de paiement doivent couvrir exactement le total calculé par le serveur (négatif pour un retour)
+        $paid = (int) round(array_sum(array_map(fn (PaymentMethodDTO $m) => $m->getAmount(), $paymentMethods)) * 100);
+        $dto->setVerifiedPaymentAmount($typeOrder === self::TYPE_ORDER_SALE ? $paid : -$paid);
+        // Poste de caisse (facultatif : poste unique sinon) ; sans session ouverte → 409 CASH_REGISTER_CLOSED, rien n'est créé
+        $dto->setCashRegisterId(is_numeric($data['cashRegisterId'] ?? null) ? (int) $data['cashRegisterId'] : null);
+
         $result = $this->createOrderUseCase->execute($dto);
         if (!$result instanceof Order && $paymentIntent !== null) {
             $this->stripeService->cancelPaymentIntent($paymentIntent->id);
@@ -462,15 +514,23 @@ class OrderController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true);
-        return $this->cancelOrderUseCase->execute($id, $data['paymentMethod'] ?? null);
+        $data = is_array($data) ? $data : [];
+        // cashRegisterId (15/10/2026) : poste du remboursement d'une vente POS si la session d'origine est fermée ; ignoré pour une commande web
+        return $this->cancelOrderUseCase->execute($id, is_numeric($data['paymentMethod'] ?? null) ? (int) $data['paymentMethod'] : null,
+            is_numeric($data['cashRegisterId'] ?? null) ? (int) $data['cashRegisterId'] : null);
     }
 
+    /**
+     * Commandes du site par source (application de gestion, caisse). ROLE_ADMIN : toutes sources, comme avant ;
+     * ROLE_USER_POS (15/10/2026) : ventes de la caisse (orderSource 2) seulement ; autre compte : 403.
+     */
     #[Route("api/orders", name: "get_orders", methods: ["GET"])]
     public function getOrders(Request $request): JsonResponse
     {
-        $this->denyAccessUnlessGranted('ROLE_ADMIN');
-
         $orderSourceId = $request->query->get('orderSource');
+        if (!$this->isGranted('ROLE_ADMIN') && !($this->isGranted('ROLE_USER_POS') && (int) $orderSourceId === self::ORDER_SOURCE_POS)) {
+            throw $this->createAccessDeniedException();
+        }
         if (!$orderSourceId) {
             return $this->json(['error' => 'orderSource parameter is required'], JsonResponse::HTTP_BAD_REQUEST);
         }

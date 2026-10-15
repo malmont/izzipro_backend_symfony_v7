@@ -30,6 +30,11 @@ class EntrepriseDto
     public bool $isLandingPageActive = true;
     public bool $isBoussoleEsgActive = false;
     public bool $isMemoireVivanteActive = false;
+    /** Applications mobiles activées pour ce site (15/10/2026) : POS, e-commerce mobile, gestion, LivingMemory */
+    public bool $isPosActive = false;
+    public bool $isMobileShopActive = false;
+    public bool $isManagementAppActive = false;
+    public bool $isLivingMemoryActive = false;
     public ?string $metaTitle = null;
     public ?string $metaDescription = null;
     public ?string $seoKeywords = null;
@@ -58,6 +63,10 @@ class EntrepriseDto
         $dto->isLandingPageActive = $entreprise->isLandingPageActive() ?? true;
         $dto->isBoussoleEsgActive = $entreprise->isBoussoleEsgActive() ?? false;
         $dto->isMemoireVivanteActive = $entreprise->isMemoireVivanteActive() ?? false;
+        $dto->isPosActive = $entreprise->isPosActive();
+        $dto->isMobileShopActive = $entreprise->isMobileShopActive();
+        $dto->isManagementAppActive = $entreprise->isManagementAppActive();
+        $dto->isLivingMemoryActive = $entreprise->isLivingMemoryActive();
         
         $addressObj = $entreprise->getAddressEntreprise();
 

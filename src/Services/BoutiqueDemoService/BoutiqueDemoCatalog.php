@@ -23,6 +23,8 @@ final class BoutiqueDemoCatalog
         'payment_method' => [[1, 'carte de crédit', 'credit card'], [2, 'Espèces', 'Cash'], [3, 'Paypal', 'Paypal']],
         'payment_type' => [[1, 'RemboursementClient'], [2, 'PaiementClient']],
         'movement_type' => [[1, 'Entrant'], [2, 'Sortant'], [3, 'Return'], [4, 'Ajustement']],
+        // Caisse (HandleCaisseTransactionUseCase) : aucune base de site n'en avait au 15/10/2026
+        'transaction_type' => [[1, 'Vente'], [2, 'Remboursement'], [3, 'Dépôt'], [4, 'Ouverture'], [5, 'Fermeture'], [6, 'Retrait'], [7, 'Retrait fond de caisse'], [8, 'Ajout fond de caisse']],
     ];
 
     /**

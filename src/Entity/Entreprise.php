@@ -98,6 +98,20 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(type: 'boolean', options: ['default' => true])]
     private ?bool $isLandingPageActive = true;
 
+    // Applications mobiles (15/10/2026) : activer génère une clé d'activation envoyée au contact du site, désactiver
+    // révoque les clés de l'application (AppActivationService). Colonnes : scripts/migrate_all_v2_app_activation.sh.
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private ?bool $isPosActive = false;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private ?bool $isMobileShopActive = false;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private ?bool $isManagementAppActive = false;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private ?bool $isLivingMemoryActive = false;
+
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $metaTitle = null;
 
@@ -435,6 +449,54 @@ class Entreprise implements TranslatableInterface
     public function setIsLandingPageActive(bool $isLandingPageActive): static
     {
         $this->isLandingPageActive = $isLandingPageActive;
+
+        return $this;
+    }
+
+    public function isPosActive(): bool
+    {
+        return (bool) $this->isPosActive;
+    }
+
+    public function setIsPosActive(bool $active): static
+    {
+        $this->isPosActive = $active;
+
+        return $this;
+    }
+
+    public function isMobileShopActive(): bool
+    {
+        return (bool) $this->isMobileShopActive;
+    }
+
+    public function setIsMobileShopActive(bool $active): static
+    {
+        $this->isMobileShopActive = $active;
+
+        return $this;
+    }
+
+    public function isManagementAppActive(): bool
+    {
+        return (bool) $this->isManagementAppActive;
+    }
+
+    public function setIsManagementAppActive(bool $active): static
+    {
+        $this->isManagementAppActive = $active;
+
+        return $this;
+    }
+
+    public function isLivingMemoryActive(): bool
+    {
+        return (bool) $this->isLivingMemoryActive;
+    }
+
+    public function setIsLivingMemoryActive(bool $active): static
+    {
+        $this->isLivingMemoryActive = $active;
 
         return $this;
     }

@@ -8,7 +8,13 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
+/**
+ * Session de caisse d'un poste (CashRegister, 15/10/2026) : ouverture → fermeture, montant reporté de la session fermée
+ * précédente du même poste. Une seule session ouverte par poste (index unique partiel uniq_caisse_open_register).
+ */
 #[ORM\Entity(repositoryClass: CaisseRepository::class)]
+#[ORM\Table(name: 'caisse')]
+#[ORM\UniqueConstraint(name: 'uniq_caisse_open_register', columns: ['cash_register_id'], options: ['where' => '(is_open = true)'])]
 class Caisse
 {
     #[ORM\Id]
@@ -33,6 +39,13 @@ class Caisse
 
     #[ORM\Column(nullable: true)]
     private ?float $fonDeCaisse = null;
+
+    #[ORM\ManyToOne(targetEntity: CashRegister::class, inversedBy: 'sessions')]
+    #[ORM\JoinColumn(nullable: false)]
+    private ?CashRegister $cashRegister = null;
+
+    #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
+    private ?\DateTimeInterface $closedAt = null;
 
     public function __construct()
     {
@@ -116,6 +129,30 @@ class Caisse
     public function setOpen(bool $isOpen): static
     {
         $this->isOpen = $isOpen;
+
+        return $this;
+    }
+
+    public function getCashRegister(): ?CashRegister
+    {
+        return $this->cashRegister;
+    }
+
+    public function setCashRegister(?CashRegister $cashRegister): static
+    {
+        $this->cashRegister = $cashRegister;
+
+        return $this;
+    }
+
+    public function getClosedAt(): ?\DateTimeInterface
+    {
+        return $this->closedAt;
+    }
+
+    public function setClosedAt(?\DateTimeInterface $closedAt): static
+    {
+        $this->closedAt = $closedAt;
 
         return $this;
     }

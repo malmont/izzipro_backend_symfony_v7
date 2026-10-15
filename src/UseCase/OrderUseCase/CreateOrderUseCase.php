@@ -6,6 +6,8 @@ use App\Dto\CreateOrderDTO;
 use App\Dto\CreateOrderMultiPaymentDTO;
 use App\Dto\ICreateOrderDTO;
 use App\Services\TenantEntityManagerProvider;
+use App\Services\CaisseService\CashRegisterException;
+use App\Services\CaisseService\CashRegisterResolver;
 use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -43,7 +45,8 @@ class CreateOrderUseCase
         HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase,
         TenantEntityManagerProvider $emProvider,
         Security $security,
-        HandleBookingUseCase $handleBookingUseCase
+        HandleBookingUseCase $handleBookingUseCase,
+        private readonly CashRegisterResolver $cashRegisters
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -91,9 +94,10 @@ class CreateOrderUseCase
             }
             $totalAmount = $this->calculateTotalAmountUseCase->execute($subtotal, $totalTax);
 
-            // Paiement Stripe vérifié : le montant autorisé doit correspondre au total calculé par le serveur
-            // (sinon un petit paiement pouvait valider une grosse commande). Tolérance : 1 centime d'arrondi.
-            if ($orderDTO instanceof CreateOrderDTO && $orderDTO->getVerifiedPaymentAmount() !== null
+            // Paiement Stripe vérifié (web) ou somme des moyens de paiement (caisse, 15/10/2026) : le montant doit
+            // correspondre au total calculé par le serveur (sinon un petit paiement pouvait valider une grosse commande).
+            // Tolérance : 1 centime d'arrondi. Sans montant (EasyAdmin) : pas de contrôle, comme avant.
+            if ($orderDTO->getVerifiedPaymentAmount() !== null
                 && abs((int) round($totalAmount) - $orderDTO->getVerifiedPaymentAmount()) > 1) {
                 throw new \Exception(sprintf(
                     'Le montant payé (%.2f) ne correspond pas au total de la commande (%.2f).',
@@ -146,13 +150,21 @@ class CreateOrderUseCase
 
             $caisseAmount = $caisseAmount * 100;
             if ($order->getOrderSource()->getId() === 2) {
+                // Vente ou retour en caisse : session ouverte du poste (cashRegisterId de la route caisse, sinon poste
+                // unique du site) ; poste sans session ouverte → 409 CASH_REGISTER_CLOSED et la transaction est annulée
                 $transactionTypeId = $typeOrderId === 1 ? 1 : 2;
-                $this->handleCaisseTransactionUseCase->execute($order, $user, $totalAmount, $transactionTypeId, [], $caisseAmount);
+                $caisse = $this->cashRegisters->requireOpenSession($orderDTO instanceof CreateOrderMultiPaymentDTO ? $orderDTO->getCashRegisterId() : null, 409);
+                $this->handleCaisseTransactionUseCase->execute($caisse, $order, $user, $totalAmount, $transactionTypeId, [], $caisseAmount);
             }
 
             $em->flush();
             $em->getConnection()->commit();
             return $order;
+        } catch (CashRegisterException $e) {
+            if ($em->getConnection()->isTransactionActive()) {
+                $em->getConnection()->rollBack();
+            }
+            return new JsonResponse($e->toBody(), $e->status);
         } catch (\Exception $e) {
             if ($em->getConnection()->isTransactionActive()) {
                 $em->getConnection()->rollBack();

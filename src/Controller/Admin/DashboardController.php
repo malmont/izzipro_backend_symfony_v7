@@ -504,6 +504,8 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Inventory Movements', 'fas fa-dolly', InventoryMovements::class);
 
         yield MenuItem::section('Caisse');
+        yield MenuItem::linkToCrud('Postes de caisse', 'fas fa-store', \App\Entity\CashRegister::class);
+        yield MenuItem::linkToRoute('Clés des applications', 'fas fa-key', 'admin_app_keys');
         yield MenuItem::linkToCrud('Caisse', 'fas fa-cash-register', Caisse::class);
         yield MenuItem::linkToCrud('Transaction Caisse', 'fas fa-cash-register', TransactionCaisse::class)->setController(TransactionCaisseCrudController::class);
         yield MenuItem::linkToCrud('Transaction Type caisse', 'fas fa-exchange-alt', TransactionType::class);

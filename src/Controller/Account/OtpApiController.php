@@ -14,6 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Core\User\UserInterface;
 use App\Services\TokenService;
+use App\Services\AuthenticationService;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 class OtpApiController extends AbstractController
@@ -25,7 +26,8 @@ class OtpApiController extends AbstractController
     public function __construct(
         TenantEntityManagerProvider $emProvider,
         TokenService $tokenService,
-        RequestStack $requestStack
+        RequestStack $requestStack,
+        private readonly AuthenticationService $authenticationService
     ) {
         $this->emProvider   = $emProvider;
         $this->tokenService = $tokenService;
@@ -38,7 +40,11 @@ class OtpApiController extends AbstractController
         $data = json_decode($request->getContent(), true) ?? [];
         $email = $data['username'] ?? '';
         $otpProvided = $data['otp'] ?? '';
-        $platform = $data['platform'] ?? 'mobile';
+        // Absente → « mobile » comme avant ; valeur explicite inconnue → 400 PLATFORM_INVALID (15/10/2026)
+        $platform = $this->authenticationService->normalizePlatform((string) ($data['platform'] ?? 'mobile'), 'otp-verify');
+        if ($platform === null) {
+            return AuthenticationService::invalidPlatformResponse();
+        }
         $em = $this->emProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if (!$user instanceof UserInterface) {
@@ -56,6 +62,12 @@ class OtpApiController extends AbstractController
             return $this->json([
                 'error' => 'Code OTP invalide ou expiré'
             ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        // Plateforme « admin » (application de gestion, 15/10/2026) : ROLE_ADMIN exigé ; les autres valeurs ne sont pas
+        // contrôlées ici (comme avant : le rôle a été vérifié à l'étape de connexion)
+        if ($platform === 'admin' && $user instanceof User && ($refused = $this->authenticationService->platformRoleViolation($user, $platform))) {
+            return $refused;
         }
 
         $em->remove($otpCode);

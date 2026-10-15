@@ -19,13 +19,58 @@ class AuthenticationService
     // MODIFICATION 1 : Simplification du constructeur
     // On enlève ManagerRegistry et TenantStateService
     // On ajoute TenantEntityManagerProvider
+    /** Plateformes de connexion connues : web (cookies), mobile, pos (caisse) et admin (application de gestion, 15/10/2026) */
+    public const PLATFORMS = ['web', 'mobile', 'pos', 'admin'];
+
     public function __construct(
         private TenantEntityManagerProvider $emProvider,
         private UserPasswordHasherInterface $passwordHasher,
         private OtpService $otpService,
         private TokenService $tokenService,
         private \App\Security\TwoFactorPolicy $twoFactor,
+        private \Psr\Log\LoggerInterface $logger,
+        private TenantConnectionProvider $tenantConnectionProvider,
     ) {}
+
+    /**
+     * Valeur platform normalisée (trim, minuscules) ou null si elle est inconnue (15/10/2026 : avant, une valeur
+     * inconnue sautait tout contrôle de rôle et obtenait des jetons). Journalisée pour repérer un client oublié.
+     */
+    public function normalizePlatform(string $platform, string $context): ?string
+    {
+        $normalized = strtolower(trim($platform));
+        if (!in_array($normalized, self::PLATFORMS, true)) {
+            $this->logger->warning(sprintf('[%s] platform inconnue refusée : « %s » (site %s)', $context, $platform, $this->tenantConnectionProvider->getTenantCode() ?? 'inconnu'));
+            return null;
+        }
+
+        return $normalized;
+    }
+
+    /** Rôle exigé par la plateforme : web et mobile → ROLE_USER_INTERNET, pos → ROLE_USER_POS, admin → ROLE_ADMIN ; null si tout va bien */
+    public function platformRoleViolation(User $user, string $platform): ?JsonResponse
+    {
+        if (in_array($platform, ['web', 'mobile'], true)) {
+            if (!in_array('ROLE_USER_INTERNET', $user->getRoles(), true)) {
+                return new JsonResponse(['error' => 'This account is not allowed to access the web/mobile platform.'], Response::HTTP_FORBIDDEN);
+            }
+        } elseif ($platform === 'pos') {
+            if (!in_array('ROLE_USER_POS', $user->getRoles(), true)) {
+                return new JsonResponse(['error' => 'This account is not allowed to access the POS platform.'], Response::HTTP_FORBIDDEN);
+            }
+        } elseif ($platform === 'admin') {
+            if (!in_array('ROLE_ADMIN', $user->getRoles(), true)) {
+                return new JsonResponse(['error' => 'This account is not allowed to access the admin platform.'], Response::HTTP_FORBIDDEN);
+            }
+        }
+
+        return null;
+    }
+
+    public static function invalidPlatformResponse(): JsonResponse
+    {
+        return new JsonResponse(['error' => 'PLATFORM_INVALID', 'message' => 'Plateforme de connexion inconnue'], Response::HTTP_BAD_REQUEST);
+    }
 
     /**
      * MODIFICATION 2 : La méthode complexe est entièrement supprimée.
@@ -35,6 +80,10 @@ class AuthenticationService
 
     public function login(string $email, string $password, string $platform, Request $request): Response
     {
+        $platform = $this->normalizePlatform($platform, 'login');
+        if ($platform === null) {
+            return self::invalidPlatformResponse();
+        }
 
         $em = $this->emProvider->getEntityManager();
 
@@ -54,20 +103,8 @@ class AuthenticationService
             );
         }
 
-        if (in_array($platform, ['web', 'mobile'])) {
-            if (!in_array('ROLE_USER_INTERNET', $user->getRoles(), true)) {
-                return new JsonResponse(
-                    ['error' => 'This account is not allowed to access the web/mobile platform.'],
-                    Response::HTTP_FORBIDDEN
-                );
-            }
-        } elseif ($platform === 'pos') {
-            if (!in_array('ROLE_USER_POS', $user->getRoles(), true)) {
-                return new JsonResponse(
-                    ['error' => 'This account is not allowed to access the POS platform.'],
-                    Response::HTTP_FORBIDDEN
-                );
-            }
+        if ($refused = $this->platformRoleViolation($user, $platform)) {
+            return $refused;
         }
 
         if ($this->twoFactor->required($user)) {

@@ -12,6 +12,7 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 | Landing Page : réglages, validation, assistant IA, synchronisation | `docs/landingpage.md`, puis `config/landingpage/README.md` |
 | Mémoires Vivantes | `docs/memoires-vivantes.md` |
 | Boussole ESG | `docs/boussole-esg.md` ; code `src/ESG/` |
+| Caisse (POS : postes de caisse, sessions, vente `create-multi-payment`, remboursements, droits du caissier) | `docs/caisse.md` |
 | Boutique (réglages de la boutique réglable ; produits, commandes, paiement, livraison : aucune en production) | `docs/boutique.md` ; routes dans `docs/endpoints.md` ; demandes du frontend `docs/boutique-reglable-backend-demandes.md` ; côté frontend `src/components/Boutique/README.md` |
 | Contenu d'exemple des sites (site de référence `gmasuite`, `isDemo`, copie, suppression) | `docs/contenu-exemple.md` |
 | Contrats partagés avec le frontend (schéma, catalogue IA, jeu d'essai, libellés de l'éditeur) | `config/landingpage/` (synchronisés, ne pas modifier à la main) |

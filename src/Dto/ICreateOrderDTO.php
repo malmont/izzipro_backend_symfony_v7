@@ -6,7 +6,7 @@ interface ICreateOrderDTO
 {
     public function getUserId(): int;
     public function getOrderSource(): int;
-    public function getAddressId(): int;
+    public function getAddressId(): ?int; // null : vente au comptoir sans adresse (route caisse seulement, 15/10/2026)
     public function getCarrierId(): ?int;
     public function getTypeOrder(): int;
     public function getItems(): array;
@@ -14,6 +14,9 @@ interface ICreateOrderDTO
 
     // Ajout de la méthode pour récupérer le moyen de paiement (ou null en cas de multiple)
     public function getPaymentMethod(): ?int;
+
+    /** Montant (cents) certifié par le paiement (Stripe) ou déclaré par la caisse ; null : pas de contrôle du total */
+    public function getVerifiedPaymentAmount(): ?int;
 
     // Square
     public function getSquarePaymentId(): ?string;

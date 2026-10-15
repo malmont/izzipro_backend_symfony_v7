@@ -2,9 +2,11 @@
 namespace App\Controller\Admin;
 
 use App\Entity\Caisse;
-use App\Entity\TransactionCaisse;
-use App\Entity\TransactionType;
+use App\Entity\CashRegister;
+use App\Services\CaisseService\CashRegisterException;
+use App\Services\CaisseService\CashRegisterResolver;
 use App\Services\TenantEntityManagerProvider;
+use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
 use App\Controller\Admin\BaseTenantCrudController;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -12,6 +14,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Filters;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -28,7 +31,9 @@ class CaisseCrudController extends BaseTenantCrudController
     public function __construct(
         TenantEntityManagerProvider $emProvider, // Requis par le parent
         Security $security,
-        AdminUrlGenerator $adminUrlGenerator
+        AdminUrlGenerator $adminUrlGenerator,
+        private readonly CashRegisterResolver $registers,
+        private readonly HandleCaisseTransactionUseCase $transactions
     ) {
         parent::__construct($emProvider);
         $this->security = $security;
@@ -56,11 +61,21 @@ class CaisseCrudController extends BaseTenantCrudController
      */
     public function configureFields(string $pageName): iterable
     {
+        $tenantEm = $this->emProvider->getEntityManager();
+
         return [
+            // Poste de la session (15/10/2026) ; un seul poste sur le site : préselectionné, l'écran reste celui d'avant
+            AssociationField::new('cashRegister', 'Poste de caisse')
+                ->setFormTypeOptions([
+                    'em' => $tenantEm,
+                    'query_builder' => fn ($repo) => $repo->createQueryBuilder('r')->andWhere('r.isActive = true')->orderBy('r.id', 'ASC'),
+                    'choice_label' => 'name',
+                ]),
             MoneyField::new('amountTotal', 'Montant Total')->setCurrency('USD')->setStoredAsCents(false),
             DateField::new('createdAt', 'Date de Création')->setFormat('dd/MM/yyyy')->hideOnForm(),
             MoneyField::new('fonDeCaisse', 'Fond de Caisse')->setCurrency('USD')->setStoredAsCents(false),
             BooleanField::new('isOpen', 'Ouverte')->renderAsSwitch(false),
+            DateTimeField::new('closedAt', 'Fermée le')->hideOnForm(),
             AssociationField::new('transactionCaisses', 'Transactions')
                 ->formatValue(function ($value, $entity) {
                     $transactionCaissesUrl = $this->adminUrlGenerator
@@ -96,42 +111,31 @@ class CaisseCrudController extends BaseTenantCrudController
         $tenantEm = $this->emProvider->getEntityManager();
 
         if ($entityInstance instanceof Caisse) {
-            $existingCaisse = $this->getOpenCaisse();
-            if ($existingCaisse) {
-                throw new \Exception('A caisse is already open. Please close it before opening a new one.');
+            // Poste choisi dans le formulaire, sinon le poste unique du site (règle CashRegisterResolver)
+            $register = $entityInstance->getCashRegister() ?? $this->registers->resolve(null);
+            if ($this->registers->openSession($register)) {
+                throw new CashRegisterException('CAISSE_ALREADY_OPEN', sprintf('Une session est déjà ouverte sur le poste « %s ». Fermez-la avant d\'en ouvrir une autre.', $register->getName()), 400);
             }
-
+            $entityInstance->setCashRegister($register);
             $entityInstance->setOpen(true);
             $entityInstance->setCreatedAt(new \DateTime());
+            $entityInstance->setAmountTotal((float) ($entityInstance->getAmountTotal() ?? 0));
 
             $tenantEm->persist($entityInstance);
             $tenantEm->flush();
 
-            $transactionType = $tenantEm->getRepository(TransactionType::class)->findOneBy(['name' => 'Ouverture']);
-            if (!$transactionType) {
-                throw new \Exception("Le type de transaction 'Ouverture' est introuvable.");
-            }
-            $user = $this->security->getUser();
-
-            $transactionCaisse = new TransactionCaisse();
-            $transactionCaisse->setCaisse($entityInstance);
-            $transactionCaisse->setUserCaisse($user);
-            $transactionCaisse->setTransactionDate(new \DateTime());
-            $transactionCaisse->setTransactionType($transactionType);
-            $transactionCaisse->setAmount(0.0);
-
-            $tenantEm->persist($user);
-            $tenantEm->persist($transactionType);
-            
-            $tenantEm->persist($transactionCaisse);
-            $tenantEm->flush();
+            // Transaction d'ouverture (type 4), comme par l'API
+            $this->transactions->execute($entityInstance, null, $this->security->getUser(), 0.0, HandleCaisseTransactionUseCase::OPENING);
         }
     }
 
-    private function getOpenCaisse(): ?Caisse
+    /** Fermeture depuis le formulaire (interrupteur « Ouverte ») : date de fermeture posée */
+    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
-        $tenantEm = $this->emProvider->getEntityManager();
-        return $tenantEm->getRepository(Caisse::class)->findOneBy(['isOpen' => true]);
+        if ($entityInstance instanceof Caisse && !$entityInstance->isOpen() && !$entityInstance->getClosedAt()) {
+            $entityInstance->setClosedAt(new \DateTime());
+        }
+        parent::updateEntity($entityManager, $entityInstance);
     }
     
     // Les méthodes createIndexQueryBuilder, updateEntity, et deleteEntity ne sont plus nécessaires ici,

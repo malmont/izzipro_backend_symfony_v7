@@ -219,6 +219,10 @@ services:
         arguments:
             $appEnv: '%kernel.environment%'
 
+    App\Services\TenantPublicHostResolver:
+        arguments:
+            $frontendBaseDomain: '%env(resolve:FRONTEND_BASE_DOMAIN)%'
+
     App\Controller\TenantSetupController\TenantController:
         arguments:
             $frontendBaseDomain: '%env(resolve:FRONTEND_BASE_DOMAIN)%'

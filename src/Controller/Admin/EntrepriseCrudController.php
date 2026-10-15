@@ -28,10 +28,27 @@ class EntrepriseCrudController extends BaseTenantCrudController
 
     public function __construct(
         AdminUrlGenerator $adminUrlGenerator,
-        TenantEntityManagerProvider $emProvider
+        TenantEntityManagerProvider $emProvider,
+        private readonly \App\Services\AppKeyService\AppActivationService $appActivation,
+        private readonly \App\Services\TenantConnectionProvider $tenant,
+        private readonly \Symfony\Component\HttpFoundation\RequestStack $requestStack
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
+    }
+
+    /** Mise à jour habituelle, puis clés d'activation des applications mobiles selon les interrupteurs changés (15/10/2026) */
+    public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $tenantEm->getUnitOfWork()->computeChangeSets();
+        $changeSet = $tenantEm->getUnitOfWork()->getEntityChangeSet($entityInstance);
+        parent::updateEntity($entityManager, $entityInstance);
+
+        $request = $this->requestStack->getCurrentRequest();
+        foreach ($this->appActivation->applyChanges($changeSet, $this->tenant->getTenantCode() ?? '', $this->getUser()?->getUserIdentifier() ?? 'admin', $request?->getSchemeAndHttpHost() ?? '') as $app => $message) {
+            $this->addFlash(str_contains($message, 'non créée') ? 'danger' : 'success', sprintf('%s : %s', \App\Services\AppKeyService\AppKeyService::LABELS[$app] ?? $app, $message));
+        }
     }
 
     public static function getEntityFqcn(): string
@@ -73,6 +90,13 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->setHelp('Activer le module de diagnostic et bilans ESG'),
             BooleanField::new('isMemoireVivanteActive', 'Mémoire Vivante')
                 ->setHelp('Activer l\'application Mémoire Vivante'),
+
+            FormField::addPanel('Applications mobiles')
+                ->setHelp('Activer génère une clé d\'activation et l\'envoie (clé + code QR) à l\'e-mail de l\'entreprise ; désactiver révoque les clés de l\'application. Détail : menu Caisse → Clés des applications.'),
+            BooleanField::new('isPosActive', 'Caisse (POS)'),
+            BooleanField::new('isMobileShopActive', 'E-commerce mobile'),
+            BooleanField::new('isManagementAppActive', 'Application de gestion'),
+            BooleanField::new('isLivingMemoryActive', 'LivingMemory (Mémoires Vivantes)'),
 
             FormField::addPanel('Informations Générales'),
             TextField::new('facebookPixelId', 'Facebook Pixel ID')->hideOnIndex(),

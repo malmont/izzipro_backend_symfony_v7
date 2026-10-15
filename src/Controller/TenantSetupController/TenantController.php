@@ -127,6 +127,40 @@ class TenantController extends AbstractController
     }
 
     /**
+     * Choix du site par les applications mobiles (15/10/2026) : X-Tenant-Host = saisie de l'utilisateur, nettoyée par
+     * l'application (code « demo » ou domaine « boutique.ca »). Résolution identique à celle de toutes les requêtes
+     * suivantes (TenantConnectionManager::findTenantConfigByHost, lecture seule). Rend l'hôte COMPLET à envoyer ensuite
+     * dans X-Tenant-Host : le domaine propre du site, sinon <code>.<domaine de base du frontend> (les liens des e-mails
+     * sont construits avec cette valeur : un code nu donnerait des liens faux). Route distincte de check(), celle du
+     * frontend web, qui n'est pas modifiée. Pas de redirection vers la création d'un site.
+     */
+    #[Route('/api/tenant/check-mobile', name: 'api_tenant_check_mobile', methods: ['GET'])]
+    public function checkMobile(Request $request, TenantConnectionManager $tenantManager, \App\Services\TenantPublicHostResolver $hosts): JsonResponse
+    {
+        $input = strtolower(trim((string) $request->headers->get('X-Tenant-Host', '')));
+        $input = explode(':', explode('/', preg_replace('#^https?://#', '', $input))[0])[0]; // tolérance : schéma, chemin, port
+        if ($input === '') {
+            return new JsonResponse(['error' => 'TENANT_HOST_MISSING', 'message' => 'Indiquez le code ou le domaine de votre boutique'], 400);
+        }
+
+        $config = $tenantManager->findTenantConfigByHost($input);
+        if (!$config) {
+            return new JsonResponse(['exists' => false, 'error' => 'TENANT_NOT_FOUND', 'message' => 'Boutique introuvable'], 404);
+        }
+
+        try {
+            $tenant = $hosts->describe($config->getCode());
+        } catch (\Throwable $e) {
+            return new JsonResponse(['error' => 'MASTER_UNAVAILABLE', 'message' => 'Annuaire des sites indisponible'], 500);
+        }
+        if (!$tenant) {
+            return new JsonResponse(['exists' => false, 'error' => 'TENANT_NOT_FOUND', 'message' => 'Boutique introuvable'], 404);
+        }
+
+        return new JsonResponse(['exists' => true, 'tenant' => $tenant]);
+    }
+
+    /**
      * Helper pour extraire "boutique" de "boutique.mon-saas.com" ou "boutique.localhost"
      */
     private function extractSubdomainCode(string $host): ?string

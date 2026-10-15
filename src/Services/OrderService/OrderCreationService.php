@@ -14,7 +14,7 @@ class OrderCreationService
     public function createOrder(
         User $user,
         OrderSource $orderSource,
-        Adress $address,
+        ?Adress $address, // null : vente au comptoir (route caisse)
         ?Carrier $carrier,
         StatusCommande $statusCommande,
         OrderType $orderType

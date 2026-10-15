@@ -169,10 +169,13 @@ class SecurityController extends AbstractController
                 ->withDomain($cookieDomain)
         );
 
-        // Include the new CSRF token in the response body for cross-origin frontends
+        // Include the new CSRF token in the response body for cross-origin frontends.
+        // 15/10/2026 : le nouveau JWT est aussi dans le corps (« token ») pour les applications natives, qui n'ont pas
+        // de cookie ; cookies et refresh token (non renouvelé) inchangés pour les clients existants.
         $response->setContent(json_encode([
             'message'    => 'Token refreshed successfully',
             'csrf_token' => $csrfTokenValue,
+            'token'      => $newToken,
         ]));
 
         return $response;

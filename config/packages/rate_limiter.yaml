@@ -50,6 +50,13 @@ framework:
             interval: '1 minute'
             lock_factory: null
 
+        # Activation d'une application mobile par clé (15/10/2026) : essais de clés par IP
+        app_activation_ip:
+            policy: sliding_window
+            limit: 20
+            interval: '15 minutes'
+            lock_factory: null
+
         # Avis clients : dépôts par client connecté (09/10/2026)
         review_submit:
             policy: sliding_window

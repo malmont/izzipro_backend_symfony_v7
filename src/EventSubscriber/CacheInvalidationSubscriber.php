@@ -150,7 +150,7 @@ class CacheInvalidationSubscriber implements EventSubscriber
             'invalidate_tags' => ['bannieres_all', 'bannieres_statiques_all'],
         ],
         [
-            'classes' => [TransactionCaisse::class],
+            'classes' => [TransactionCaisse::class, \App\Entity\Caisse::class, \App\Entity\CashRegister::class],
             'delete' => ['open_caisse_transactions'],
             'invalidate_tags' => ['caisses_tag'],
         ],
