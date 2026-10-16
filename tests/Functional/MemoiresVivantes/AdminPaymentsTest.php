@@ -70,7 +70,7 @@ class AdminPaymentsTest extends BookTypeApiTestCase
         $this->assertEquals([200.0, 1, 'created'], [$print['refundedAmount'], $print['print']['quantity'], $print['print']['luluStatus']]);
         $this->assertSame(['userId' => $owner['id'], 'email' => $owner['email'], 'name' => 'Jeanne Dupont'], $print['user']);
         $this->assertSame(['id' => $book['id'], 'title' => 'Livre du registre', 'channel' => 'mobile'], $print['book']);
-        $this->assertStringNotContainsString('Livre web payé', json_encode($ledger), 'les livres web payés par lien ne sont pas inclus par défaut');
+        $this->assertStringNotContainsString('Livre web payé', json_encode($ledger), 'recherche sur le propriétaire mobile : le livre web d\'un autre compte n\'y est pas');
 
         // Filtres
         [, $onlyChapters] = $this->api('GET', '/admin/payments?kind=chapter&search=' . urlencode($owner['email']));
@@ -96,6 +96,74 @@ class AdminPaymentsTest extends BookTypeApiTestCase
         $this->assertCount(4, $lines, 'en-tête + 3 lignes');
         $this->assertStringStartsWith("\xEF\xBB\xBFkind;status;amount;currency;paidAt", $lines[0]);
         $this->assertStringContainsString('app_store:reg-tx1', $response->getContent());
+    }
+
+    public function testTheRevenueOverviewCoversEveryBookWebAndMobile(): void
+    {
+        $owner = $this->userWithToken('revenu-' . bin2hex(random_bytes(3)) . '@example.invalid');
+        [, $book] = $this->as('POST', '/api/memoires/mobile/books', ['title' => 'Livre mobile revenu ' . $owner['id'], 'type' => 'famille'], $owner['token']);
+        $chapters = [];
+        foreach ([2, 3] as $position) {
+            [, $chapters[]] = $this->as('POST', "/api/memoires/books/{$book['id']}/chapters", ['title' => "Chapitre $position", 'theme' => 'regards_croises', 'position' => $position, 'answers' => [['index' => 0, 'question' => 'Q', 'answer' => 'R']]], $owner['token']);
+        }
+        $appUserId = MV_TEST_TENANT_CODE . ':' . $owner['id'];
+        FakeRevenueCatClient::addPurchase($appUserId, 'rev-tx1', 'app_store', 'lm_chapter_writing', 4.99, 'eur');
+        FakeRevenueCatClient::addPurchase($appUserId, 'rev-tx2', 'app_store', 'lm_chapter_writing', 4.99, 'eur');
+        $this->as('POST', "/api/memoires/mobile/chapters/{$chapters[0]['id']}/unlock", ['transactionId' => 'rev-tx1', 'store' => 'app_store'], $owner['token']);
+        $this->as('POST', "/api/memoires/mobile/chapters/{$chapters[1]['id']}/unlock", ['transactionId' => 'rev-tx2', 'store' => 'app_store'], $owner['token']);
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/api/webhooks/revenuecat', [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => 'test-webhook-secret'], json_encode(['event' => ['type' => 'CANCELLATION', 'app_user_id' => $appUserId, 'store' => 'APP_STORE', 'transaction_id' => 'rev-tx2']]));
+        self::db()->exec("UPDATE mv_chapter SET content_final = 'Texte' WHERE id = '{$chapters[0]['id']}'");
+        $recipient = ['name' => 'Jeanne Dupont', 'street1' => '12 rue des Flamboyants', 'city' => 'Fort-de-France', 'postal_code' => '97200', 'country_code' => 'FR', 'phone_number' => '+596696000000'];
+        [, $intent] = $this->as('POST', "/api/memoires/books/{$book['id']}/print/payment-intent", ['quantity' => 2, 'currency' => 'eur', 'recipient' => $recipient], $owner['token']);
+        FakeCheckoutPaymentGateway::confirm($intent['paymentIntentId']);
+        $this->assertSame(200, $this->as('POST', "/api/memoires/books/{$book['id']}/print/order", ['paymentIntentId' => $intent['paymentIntentId']] + $recipient, $owner['token'])[0]);
+        [, $web] = $this->api('POST', '/books', ['title' => 'Livre web revenu ' . $owner['id'], 'type' => 'individuel'], 'client');
+        self::db()->exec("UPDATE mv_book SET payment_status = 'paid', payment_amount = 49.9, payment_currency = 'eur', paid_at = NOW() WHERE id = '{$web['id']}'");
+
+        [$status, $overview] = $this->api('GET', '/admin/revenue?search=' . urlencode('revenu ' . $owner['id']));
+        $this->assertSame(200, $status, json_encode($overview));
+        $this->assertSame([null, null, 'America/Martinique', 2], [$overview['from'], $overview['to'], $overview['timezone'], $overview['total']]);
+        $this->assertSame(['total' => 2, 'web' => 1, 'mobile' => 1], $overview['summary']['books']);
+        $byChannel = array_column($overview['summary']['byChannel'], null, 'channel');
+        $this->assertEquals([['currency' => 'eur', 'book' => 0.0, 'chapters' => 9.98, 'prints' => 300.0, 'refunded' => 4.99, 'net' => 304.99]], $byChannel['mobile']['totals']);
+        $this->assertSame(['booksPaid' => 0, 'chaptersPaid' => 1, 'printsPaid' => 1, 'refunds' => 1], $byChannel['mobile']['counts']);
+        $this->assertEquals([['currency' => 'eur', 'book' => 49.9, 'chapters' => 0.0, 'prints' => 0.0, 'refunded' => 0.0, 'net' => 49.9]], $byChannel['web']['totals']);
+        $this->assertSame(['booksPaid' => 1, 'chaptersPaid' => 0, 'printsPaid' => 0, 'refunds' => 0], $byChannel['web']['counts']);
+        $this->assertEquals([['currency' => 'eur', 'book' => 49.9, 'chapters' => 9.98, 'prints' => 300.0, 'refunded' => 4.99, 'net' => 354.89]], $overview['summary']['totals']);
+
+        [$mobileLine, $webLine] = $overview['books'];
+        $this->assertSame([$book['id'], 'mobile', $web['id'], 'web'], [$mobileLine['id'], $mobileLine['channel'], $webLine['id'], $webLine['channel']], 'tri : net décroissant');
+        $this->assertSame(['userId' => $owner['id'], 'email' => $owner['email'], 'name' => 'Jeanne Dupont'], $mobileLine['owner']);
+        $this->assertNull($mobileLine['biographer']);
+        $this->assertSame(['total' => 2, 'written' => 1, 'paid' => 1], $mobileLine['chapters']);
+        $this->assertNull($mobileLine['bookPayment']);
+        $this->assertEquals([['currency' => 'eur', 'paid' => 9.98, 'refunded' => 4.99]], $mobileLine['chaptersRevenue']);
+        $this->assertEquals(['orders' => 1, 'copies' => 2, 'revenue' => [['currency' => 'eur', 'paid' => 300.0, 'pending' => 0.0, 'refunded' => 0.0]]], $mobileLine['prints']);
+        $this->assertEquals([['currency' => 'eur', 'amount' => 304.99]], $mobileLine['net']);
+        $this->assertEquals(['status' => 'paid', 'amount' => 49.9, 'currency' => 'eur'], array_diff_key($webLine['bookPayment'], ['paidAt' => 1]));
+        $this->assertEquals([['currency' => 'eur', 'amount' => 49.9]], $webLine['net']);
+
+        [, $onlyWeb] = $this->api('GET', '/admin/revenue?channel=web&search=' . urlencode('revenu ' . $owner['id']));
+        $this->assertSame(['web'], array_column($onlyWeb['books'], 'channel'));
+        $this->assertSame(['web'], array_column($onlyWeb['summary']['byChannel'], 'channel'));
+        $yesterday = (new \DateTimeImmutable('-1 day', new \DateTimeZone('America/Martinique')))->format('Y-m-d');
+        [, $past] = $this->api('GET', "/admin/revenue?to=$yesterday&search=" . urlencode('revenu ' . $owner['id']));
+        $this->assertSame(2, $past['total'], 'tous les livres restent listés');
+        $this->assertSame([], $past['summary']['totals'], 'mais aucun paiement dans la période');
+        $this->assertEquals([], array_column($past['books'], 'net')[0]);
+        [, $paged] = $this->api('GET', '/admin/revenue?perPage=1&page=2&search=' . urlencode('revenu ' . $owner['id']));
+        $this->assertSame([1, 2, $web['id']], [count($paged['books']), $paged['total'], $paged['books'][0]['id']]);
+        $this->assertSame(422, $this->api('GET', '/admin/revenue?channel=tablette')[0]);
+        $this->assertSame(422, $this->api('GET', '/admin/revenue?from=2026-02-30')[0]);
+        $this->assertSame(403, $this->api('GET', '/admin/revenue', null, 'client')[0]);
+
+        // Journal : livres web payés par lien inclus par défaut, filtre channel
+        [, $ledger] = $this->api('GET', '/admin/payments?channel=web&search=' . urlencode(self::CLIENT_EMAIL));
+        $this->assertContains('book-payment-' . $web['id'], array_column($ledger['payments'], 'id'));
+        $this->assertSame(['web'], array_values(array_unique(array_map(fn ($p) => $p['book']['channel'], $ledger['payments']))));
+        [, $mobileOnly] = $this->api('GET', '/admin/payments?channel=mobile&search=' . urlencode($owner['email']));
+        $this->assertSame(['mobile'], array_values(array_unique(array_map(fn ($p) => $p['book']['channel'], $mobileOnly['payments']))));
+        $this->assertSame(3, $mobileOnly['total']);
     }
 
     /** @return array{id: int, email: string, token: string} */

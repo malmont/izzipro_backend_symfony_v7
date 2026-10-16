@@ -47,7 +47,7 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Impression | `/books/{id}/print/estimate`, `print/payment-intent`, `print/order`, `print/orders` ; `POST /api/webhooks/lulu` | `BookPrintApiController`, `LuluWebhookController` |
 | Types de livre (lecture) | `GET /book-types`, `/book-types/{code}`, `GET /questions`, `GET /ai-models` | `BookTypeController`, `QuestionController` |
 | Polices des livres | `GET /book-fonts` | `BookFontController` |
-| Administration | `/admin/book-types…`, `/admin/book-type-chapters…`, `/admin/book-type-roles…`, `/admin/questions…`, `/admin/users…`, `/admin/ai-quotas` (+ `/usage`), `/admin/mobile-users` (+ `/{userId}`), `/admin/pricing`, `/admin/payments` | `Controller/Admin/` (`#[IsGranted('ROLE_ADMIN')]`) |
+| Administration | `/admin/book-types…`, `/admin/book-type-chapters…`, `/admin/book-type-roles…`, `/admin/questions…`, `/admin/users…`, `/admin/ai-quotas` (+ `/usage`), `/admin/mobile-users` (+ `/{userId}`), `/admin/pricing`, `/admin/payments`, `/admin/revenue` | `Controller/Admin/` (`#[IsGranted('ROLE_ADMIN')]`) |
 | Activation de compte | `POST /auth/activate` | `AccountActivationController` ; l'invitation (`POST /admin/users` sans mot de passe) envoie un e-mail avec le lien (`emails/memoires_account_invitation.html.twig`) |
 
 Liens envoyés aux utilisateurs (activation, partage de chapitre, retour de paiement) : `Services/FrontendUrlResolver`
@@ -220,10 +220,11 @@ simulation).
 **Registre des paiements** (`Controller/Admin/PaymentsAdminController`, `Services/PaymentLedgerService`,
 `Repository/PaymentLedgerRepository` : une lecture SQL réunissant les trois sources ; lecture seule, aucune action).
 - `GET /api/memoires/admin/payments?from=AAAA-MM-JJ&to=AAAA-MM-JJ&kind=chapter,print,book&status=paid,pending,refunded
-  &store=app_store,play_store,stripe&search=&page=1&perPage=50` (ROLE_ADMIN). Défaut : 30 derniers jours (dates du
-  site, minuit à minuit dans son fuseau), tous statuts, kinds `chapter` et `print` ; les livres web payés par lien
-  Stripe (`kind=book`) seulement sur demande. `google_play` est accepté comme alias de `play_store`. Tri : `paidAt`
-  décroissant. → `{from, to, timezone, page, perPage, total, totals: [{currency, paid, refunded, pending, net}]
+  &store=app_store,play_store,stripe&channel=web,mobile&search=&page=1&perPage=50` (ROLE_ADMIN). Défaut : 30 derniers
+  jours (dates du site, minuit à minuit dans son fuseau), tous statuts, les trois kinds (les livres payés par lien
+  Stripe font une ligne par livre, datée de `paid_at` : `mv_book` ne garde que l'état courant du paiement, pas
+  d'historique de liens). `channel` filtre sur l'origine du livre ; `google_play` est accepté comme alias de
+  `play_store`. Tri : `paidAt` décroissant. → `{from, to, timezone, page, perPage, total, totals: [{currency, paid, refunded, pending, net}]
   (par devise, jamais additionnées ; `paid` inclut les montants ensuite remboursés, `net = paid − refunded`),
   counts: {paid, pending, refunded}, payments: [{id, kind, status, amount, currency, paidAt, refundedAt,
   refundedAmount, store, paymentRef, environment, user: {userId, email, name}, book: {id, title, channel} | null,
@@ -232,6 +233,21 @@ simulation).
 - Export : `?format=csv` ou `Accept: text/csv` → toutes les lignes de la fenêtre (500 au plus), séparateur `;`,
   UTF-8 avec BOM, montants en unités avec un point, `Content-Disposition: attachment`.
 - Données complètes à partir du 16/10/2026 (création des tables). Tests : `AdminPaymentsTest`.
+
+**Vue d'ensemble par livre** (`Controller/Admin/RevenueAdminController`, `Services/RevenueOverviewService`), lecture seule.
+- `GET /api/memoires/admin/revenue?from=&to=&channel=web,mobile&search=&page=1&perPage=50` (ROLE_ADMIN) : **tous
+  les livres**, web et mobile, même sans paiement. La période (dates du site) s'applique aux dates de paiement
+  (livre : `paid_at` ; chapitre : affectation, sinon achat ; impression : commande) ; sans période : tout. →
+  `{from, to, timezone, summary: {books: {total, web, mobile}, byChannel: [{channel, totals: [{currency, book,
+  chapters, prints, refunded, net}], counts: {booksPaid, chaptersPaid, printsPaid, refunds}}], totals: [...]}, page,
+  perPage, total, books: [{id, title, type, channel, createdAt, owner: {userId, email, name}, biographer: null,
+  chapters: {total, written, paid}, bookPayment: {status, amount, currency, paidAt} | null, chaptersRevenue:
+  [{currency, paid, refunded}], prints: {orders, copies, revenue: [{currency, paid, pending, refunded}]}, net:
+  [{currency, amount}]}]}`. Montants bruts encaissés dans `book`, `chapters`, `prints` (remboursés compris),
+  `refunded` à part, `net = book + chapters + prints − refunded`, par devise. Une commande d'impression web sans
+  paiement compte dans `orders` et `copies`, pas dans `revenue`. `biographer` est toujours null : aucun lien
+  biographe-livre n'existe en base (le propriétaire est le client). Tri : net décroissant (devise par défaut du
+  site) puis création décroissante. 422 `VALIDATION_FAILED` sur un paramètre invalide.
 
 ## Console d'administration : populations et utilisateurs mobile
 

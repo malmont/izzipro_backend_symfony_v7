@@ -7,8 +7,9 @@ use App\MemoiresVivantes\Repository\PaymentLedgerRepository;
 /**
  * Écran « Paiements » de la console d'administration (16/10/2026), lecture seule : tout ce qui a été payé depuis
  * l'application mobile (chapitres par achat intégré, impressions par Stripe) avec les remboursements tels qu'ils
- * arrivent ; les livres payés par lien Stripe seulement si kind=book est demandé. Totaux par devise, jamais
- * additionnés entre devises. Fenêtre : dates du site (minuit à minuit dans son fuseau), 30 derniers jours par défaut.
+ * arrivent, et les livres payés par lien Stripe (une ligne par livre, datée de paid_at : mv_book ne garde que l'état
+ * courant). Totaux par devise, jamais additionnés entre devises. Fenêtre : dates du site (minuit à minuit dans son
+ * fuseau), 30 derniers jours par défaut. Filtre channel (web | mobile) sur l'origine du livre.
  */
 class PaymentLedgerService
 {
@@ -34,13 +35,14 @@ class PaymentLedgerService
         if ($from > $to) {
             throw new \InvalidArgumentException('from : doit précéder to');
         }
-        $kinds = $this->listParam($query['kind'] ?? null, PaymentLedgerRepository::KINDS, 'kind') ?: ['chapter', 'print'];
+        $kinds = $this->listParam($query['kind'] ?? null, PaymentLedgerRepository::KINDS, 'kind') ?: PaymentLedgerRepository::KINDS;
+        $channels = $this->listParam($query['channel'] ?? null, ['web', 'mobile'], 'channel');
         $statuses = $this->listParam($query['status'] ?? null, self::STATUSES, 'status');
         $stores = array_map(fn ($s) => $s === 'google_play' ? 'play_store' : $s, $this->listParam($query['store'] ?? null, array_merge(self::STORES, ['google_play']), 'store'));
         $page = max(1, (int) ($query['page'] ?? 1));
         $perPage = min(self::MAX_PER_PAGE, max(1, (int) ($query['perPage'] ?? self::DEFAULT_PER_PAGE)));
         $utc = new \DateTimeZone('UTC');
-        $rows = $this->ledger->find($from->setTimezone($utc), $to->modify('+1 day')->setTimezone($utc), $kinds, $statuses, $stores, trim((string) ($query['search'] ?? '')));
+        $rows = $this->ledger->find($from->setTimezone($utc), $to->modify('+1 day')->setTimezone($utc), $kinds, $statuses, $stores, trim((string) ($query['search'] ?? '')), $channels);
 
         $totals = [];
         $counts = ['paid' => 0, 'pending' => 0, 'refunded' => 0];
