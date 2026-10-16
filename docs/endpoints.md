@@ -101,7 +101,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/videos` | PUBLIC_ACCESS | `Controller\VideoApiController\VideoApiController::list` |
 | POST | `/api/videos` | ROLE_ADMIN | `Controller\VideoApiController\VideoApiController::create` |
 
-## Mémoires Vivantes (90)
+## Mémoires Vivantes (91)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -128,6 +128,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/memoires/admin/book-types` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::createType` |
 | GET | `/api/memoires/admin/mobile-users/{userId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\MobileUserAdminController::show` |
 | GET | `/api/memoires/admin/mobile-users` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\MobileUserAdminController::list` |
+| GET | `/api/memoires/admin/payments` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\PaymentsAdminController::list` |
 | GET | `/api/memoires/admin/pricing` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\PricingAdminController::show` |
 | PUT | `/api/memoires/admin/pricing` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\PricingAdminController::update` |
 | DELETE | `/api/memoires/admin/questions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::deleteQuestion` |

@@ -47,7 +47,7 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Impression | `/books/{id}/print/estimate`, `print/payment-intent`, `print/order`, `print/orders` ; `POST /api/webhooks/lulu` | `BookPrintApiController`, `LuluWebhookController` |
 | Types de livre (lecture) | `GET /book-types`, `/book-types/{code}`, `GET /questions`, `GET /ai-models` | `BookTypeController`, `QuestionController` |
 | Polices des livres | `GET /book-fonts` | `BookFontController` |
-| Administration | `/admin/book-types…`, `/admin/book-type-chapters…`, `/admin/book-type-roles…`, `/admin/questions…`, `/admin/users…`, `/admin/ai-quotas` (+ `/usage`), `/admin/mobile-users` (+ `/{userId}`), `/admin/pricing` | `Controller/Admin/` (`#[IsGranted('ROLE_ADMIN')]`) |
+| Administration | `/admin/book-types…`, `/admin/book-type-chapters…`, `/admin/book-type-roles…`, `/admin/questions…`, `/admin/users…`, `/admin/ai-quotas` (+ `/usage`), `/admin/mobile-users` (+ `/{userId}`), `/admin/pricing`, `/admin/payments` | `Controller/Admin/` (`#[IsGranted('ROLE_ADMIN')]`) |
 | Activation de compte | `POST /auth/activate` | `AccountActivationController` ; l'invitation (`POST /admin/users` sans mot de passe) envoie un e-mail avec le lien (`emails/memoires_account_invitation.html.twig`) |
 
 Liens envoyés aux utilisateurs (activation, partage de chapitre, retour de paiement) : `Services/FrontendUrlResolver`
@@ -66,7 +66,7 @@ plus qu'un dernier repli : chaque site a son frontend.
 | `mv_question` | `MemoireQuestion` | questions des chapitres |
 | `mv_book_print_order` | `BookPrintOrder` | commandes d'impression Lulu ; commandes de l'application : montant facturé (`charged_amount`, `charged_currency`), `payment_status` (`pending` / `paid`), `stripe_payment_intent_id`, statut `pending_payment` avant paiement |
 | `mv_ai_quota_setting` | `AiQuotaSetting` | quotas IA du site (une ligne ; sans ligne : valeurs par défaut), voir « Quotas des appels IA » ; `regenerations_per_day` depuis le lot « rédaction payante » |
-| `mv_chapter_payment` | `ChapterPayment` | registre des achats de rédaction de chapitre (RevenueCat : store, transaction, montant, devise, statut `paid` / `refunded`, chapitre affecté) ; le chapitre porte en copie le paiement qui le débloque (`mv_chapter.paid_*`, `hidden_after_refund`) |
+| `mv_chapter_payment` | `ChapterPayment` | registre des achats de rédaction de chapitre (RevenueCat : store, transaction, montant, devise, statut `paid` / `refunded`, `environment` sandbox / production, chapitre affecté) ; le chapitre porte en copie le paiement qui le débloque (`mv_chapter.paid_*`, `hidden_after_refund`) |
 | `mv_pricing_setting` | `PricingSetting` | tarifs du site : grille du livre imprimé par devise (JSON), produit « rédaction d'un chapitre » des stores |
 | `mv_ai_usage` | `AiUsage` | appels IA aboutis par utilisateur : `transcription`, `improvement` (soumis aux quotas) et `generation` (rédaction aboutie d'un chapitre d'un livre soumis aux quotas, enregistrée par `GenerateChapterHandler` : cumul seulement, pas de quota) |
 | `user` (table commune) | `App\Entity\User` | depuis le 16/10/2026 : `signup_channel` (`web_invite` invitation par un biographe, `web_register` inscription web, `mobile` application Living Memory ; null avant), `created_at` (null avant), `last_login_at` (`/api/login`, `/api/otp-verify`, `/api/token/refresh`) ; `scripts/migrate_all_v2_user_signup.sh` |
@@ -209,8 +209,29 @@ simulation).
   sinon, 409 `PRINT_ALREADY_ORDERED` si déjà convertie), complète la commande (PDF, Lulu) puis capture le paiement
   (`payment_status = paid`). **Plus de commande Lulu avant paiement pour l'application** ; le flux web est inchangé.
 - Console d'administration : `payments[]` kind `chapter` (statut `paid` / `refunded`, `refundedAt`, `refundedAmount`,
-  `paymentRef`, `store`) et `print` (montant facturé, `pending` / `paid`), `payments.totals` par devise
-  (`totalAmount` = repli, devise par défaut du site), `books.chaptersPaid`, `chapters[].paid` et `hiddenAfterRefund`.
+  `paymentRef`, `store`, `environment`) et `print` (montant facturé, `pending` / `paid` / `refunded`, `paymentRef` =
+  intention Stripe), `payments.totals` par devise (`totalAmount` = repli, devise par défaut du site),
+  `books.chaptersPaid`, `chapters[].paid` et `hiddenAfterRefund`.
+- **Remboursement d'une impression fait dans Stripe** : le webhook Stripe existant (`POST /api/stripe/webhook`,
+  événement `charge.refunded`, métadonnées `memoires_print` et `tenant_code` posées sur l'intention) passe la
+  commande en `payment_status = refunded` avec `refunded_at` et `refunded_amount`. Le livre reste imprimé : rien
+  d'autre n'est fait. L'événement `charge.refunded` doit être activé sur le point de terminaison Stripe du site.
+
+**Registre des paiements** (`Controller/Admin/PaymentsAdminController`, `Services/PaymentLedgerService`,
+`Repository/PaymentLedgerRepository` : une lecture SQL réunissant les trois sources ; lecture seule, aucune action).
+- `GET /api/memoires/admin/payments?from=AAAA-MM-JJ&to=AAAA-MM-JJ&kind=chapter,print,book&status=paid,pending,refunded
+  &store=app_store,play_store,stripe&search=&page=1&perPage=50` (ROLE_ADMIN). Défaut : 30 derniers jours (dates du
+  site, minuit à minuit dans son fuseau), tous statuts, kinds `chapter` et `print` ; les livres web payés par lien
+  Stripe (`kind=book`) seulement sur demande. `google_play` est accepté comme alias de `play_store`. Tri : `paidAt`
+  décroissant. → `{from, to, timezone, page, perPage, total, totals: [{currency, paid, refunded, pending, net}]
+  (par devise, jamais additionnées ; `paid` inclut les montants ensuite remboursés, `net = paid − refunded`),
+  counts: {paid, pending, refunded}, payments: [{id, kind, status, amount, currency, paidAt, refundedAt,
+  refundedAmount, store, paymentRef, environment, user: {userId, email, name}, book: {id, title, channel} | null,
+  chapter: {id, title} | null, print: {quantity, orderId, luluStatus} | null}]}`. 422 `VALIDATION_FAILED` sur un
+  paramètre invalide. Les totaux portent sur toute la fenêtre filtrée, pas seulement la page.
+- Export : `?format=csv` ou `Accept: text/csv` → toutes les lignes de la fenêtre (500 au plus), séparateur `;`,
+  UTF-8 avec BOM, montants en unités avec un point, `Content-Disposition: attachment`.
+- Données complètes à partir du 16/10/2026 (création des tables). Tests : `AdminPaymentsTest`.
 
 ## Console d'administration : populations et utilisateurs mobile
 
