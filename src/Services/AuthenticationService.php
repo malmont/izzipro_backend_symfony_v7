@@ -55,7 +55,7 @@ class AuthenticationService
                 return new JsonResponse(['error' => 'This account is not allowed to access the web/mobile platform.'], Response::HTTP_FORBIDDEN);
             }
         } elseif ($platform === 'pos') {
-            if (!in_array('ROLE_USER_POS', $user->getRoles(), true)) {
+            if (!array_intersect(['ROLE_USER_POS', 'ROLE_POS_MANAGER'], $user->getRoles())) {
                 return new JsonResponse(['error' => 'This account is not allowed to access the POS platform.'], Response::HTTP_FORBIDDEN);
             }
         } elseif ($platform === 'admin') {

@@ -39,7 +39,7 @@ class CancelOrderUseCase
     }
 
     /** @param ?int $cashRegisterId poste du remboursement d'une vente POS si la session d'origine est fermée (15/10/2026) */
-    public function execute(int $orderId, ?int $paymentMethod = null, ?int $cashRegisterId = null): JsonResponse
+    public function execute(int $orderId, ?int $paymentMethod = null, ?int $cashRegisterId = null, ?\App\Entity\User $refundedBy = null): JsonResponse
     {
         // On récupère l'EM du tenant une seule fois
         $em = $this->emProvider->getEntityManager();
@@ -99,7 +99,7 @@ class CancelOrderUseCase
                 $caisse = $this->caisseService->getOpenCaisseOfOrder($order)
                     ?? ($cashRegisterId !== null ? $this->cashRegisters->openSession($this->cashRegisters->resolve($cashRegisterId)) : null)
                     ?? $this->cashRegisters->requireOpenSession(null, 409);
-                $this->handleCaisseTransactionUseCase->execute($caisse, $order, $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount);
+                $this->handleCaisseTransactionUseCase->execute($caisse, $order, $refundedBy ?? $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount);
             }
 
             // Valider la transaction en base de données

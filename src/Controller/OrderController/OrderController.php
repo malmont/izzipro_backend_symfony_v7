@@ -513,7 +513,11 @@ class OrderController extends AbstractController
         if (!$order) {
             return $this->json(['error' => 'Order not found'], JsonResponse::HTTP_NOT_FOUND);
         }
-        if ($order->getUserId() !== $user) {
+        // Une vente POS peut être remboursée par un responsable de caisse ou un administrateur (16/10/2026) ; une
+        // commande web, par son auteur seulement, comme avant
+        $posSale = $order->getOrderSource()?->getId() === self::ORDER_SOURCE_POS;
+        $manager = $this->isGranted('ROLE_POS_MANAGER') || $this->isGranted('ROLE_ADMIN');
+        if ($order->getUserId() !== $user && !($posSale && $manager)) {
             return $this->json(['error' => 'Unauthorized: You can only cancel your own orders'], JsonResponse::HTTP_FORBIDDEN);
         }
 
@@ -521,7 +525,7 @@ class OrderController extends AbstractController
         $data = is_array($data) ? $data : [];
         // cashRegisterId (15/10/2026) : poste du remboursement d'une vente POS si la session d'origine est fermée ; ignoré pour une commande web
         return $this->cancelOrderUseCase->execute($id, is_numeric($data['paymentMethod'] ?? null) ? (int) $data['paymentMethod'] : null,
-            is_numeric($data['cashRegisterId'] ?? null) ? (int) $data['cashRegisterId'] : null);
+            is_numeric($data['cashRegisterId'] ?? null) ? (int) $data['cashRegisterId'] : null, $user instanceof User ? $user : null);
     }
 
     /**
@@ -532,7 +536,7 @@ class OrderController extends AbstractController
     public function getOrders(Request $request): JsonResponse
     {
         $orderSourceId = $request->query->get('orderSource');
-        if (!$this->isGranted('ROLE_ADMIN') && !($this->isGranted('ROLE_USER_POS') && (int) $orderSourceId === self::ORDER_SOURCE_POS)) {
+        if (!$this->isGranted('ROLE_ADMIN') && !(($this->isGranted('ROLE_USER_POS') || $this->isGranted('ROLE_POS_MANAGER')) && (int) $orderSourceId === self::ORDER_SOURCE_POS)) {
             throw $this->createAccessDeniedException();
         }
         if (!$orderSourceId) {

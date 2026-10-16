@@ -28,7 +28,7 @@ class CashRegisterController extends AbstractController
     #[Route('/api/cash-registers', name: 'cash_registers_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $includeInactive = $this->isGranted('ROLE_ADMIN') && $request->query->getBoolean('all');
+        $includeInactive = ($this->isGranted('ROLE_ADMIN') || $this->isGranted('ROLE_POS_MANAGER')) && $request->query->getBoolean('all');
 
         return $this->json($this->list->execute($includeInactive));
     }

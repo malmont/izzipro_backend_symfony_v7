@@ -72,7 +72,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/multiliens` | PUBLIC_ACCESS | `Controller\MultilienApiController\MultilienApiController::list` |
 | POST | `/api/multiliens` | ROLE_ADMIN | `Controller\MultilienApiController\MultilienApiController::create` |
 | POST | `/api/newsletter/subscribe` | PUBLIC_ACCESS | `Controller\NewsletterApiController\NewsletterApiController::subscribe` |
-| GET | `/api/newsletter` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\NewsletterApiController\NewsletterApiController::list` |
+| GET | `/api/newsletter` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\NewsletterApiController\NewsletterApiController::list` |
 | PUT | `/api/presentation-groups/{id}/presentations/order` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::reorder` |
 | DELETE | `/api/presentation-groups/{id}/presentations/{presentationId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::removePresentation` |
 | POST | `/api/presentation-groups/{id}/presentations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::addPresentation` |
@@ -242,14 +242,14 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/admin-settings/presets` | ROLE_ADMIN | `Controller\AdminSettingsController\AdminSettingsController::savePreset` |
 | GET | `/api/admin-settings` | PUBLIC_ACCESS | `Controller\AdminSettingsController\AdminSettingsController::getAdminSettings` |
 | PUT | `/api/admin-settings` | ROLE_ADMIN | `Controller\AdminSettingsController\AdminSettingsController::updateAdminSettings` |
-| GET | `/api/adresses/` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
+| GET | `/api/adresses/` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
 | GET | `/api/adresses/autocomplete` | PUBLIC_ACCESS | `Controller\AdressController\AddressAutocompleteController::suggest` |
 | GET | `/api/adresses/details` | PUBLIC_ACCESS | `Controller\AdressController\AddressAutocompleteController::details` |
-| PUT | `/api/adresses/{id}/set-primary` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::setPrimaryAddress` |
-| DELETE | `/api/adresses/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::deleteAdress` |
-| PUT | `/api/adresses/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::editAdress` |
-| GET | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
-| POST | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::createAdress` |
+| PUT | `/api/adresses/{id}/set-primary` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::setPrimaryAddress` |
+| DELETE | `/api/adresses/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::deleteAdress` |
+| PUT | `/api/adresses/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::editAdress` |
+| GET | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::getUserAdresses` |
+| POST | `/api/adresses` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\AdressController\AdressApiController::createAdress` |
 | DELETE | `/api/app-keys/{id}` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::revoke` |
 | PUT | `/api/app-keys/{id}` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::update` |
 | GET | `/api/app-keys` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::list` |
@@ -257,19 +257,19 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/app/activate` | PUBLIC_ACCESS | `Controller\AppKeyController\AppActivationController::activate` |
 | GET | `/api/boutique-settings` | PUBLIC_ACCESS | `Controller\BoutiqueSettingsController\BoutiqueSettingsController::getSettings` |
 | PUT | `/api/boutique-settings` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\BoutiqueSettingsController\BoutiqueSettingsController::updateSettings` |
-| POST | `/api/caisse/cashfunddeposit` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundDeposit` |
-| POST | `/api/caisse/cashfundwithdraw` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundWithdraw` |
-| POST | `/api/caisse/close` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::closeCaisse` |
-| POST | `/api/caisse/deposit` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::deposit` |
-| POST | `/api/caisse/open` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::openCaisse` |
-| GET | `/api/caisse/transactions` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::getOpenCaisseTransactions` |
-| POST | `/api/caisse/withdraw` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::withdraw` |
-| GET | `/api/caisse` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::getCaisse` |
+| POST | `/api/caisse/cashfunddeposit` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundDeposit` |
+| POST | `/api/caisse/cashfundwithdraw` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundWithdraw` |
+| POST | `/api/caisse/close` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::closeCaisse` |
+| POST | `/api/caisse/deposit` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::deposit` |
+| POST | `/api/caisse/open` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::openCaisse` |
+| GET | `/api/caisse/transactions` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::getOpenCaisseTransactions` |
+| POST | `/api/caisse/withdraw` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::withdraw` |
+| GET | `/api/caisse` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::getCaisse` |
 | GET | `/api/carrier/statistics` | ROLE_ADMIN | `Controller\StatistiqueDashboard\CarrierStatisticsController::getCarrierStatistics` |
 | POST | `/api/cart/quote` | PUBLIC_ACCESS | `Controller\CartController\CartQuoteController::quote` |
-| PUT | `/api/cash-registers/{id}` | ROLE_ADMIN | `Controller\CashRegisterController\CashRegisterController::update` |
-| GET | `/api/cash-registers` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\CashRegisterController\CashRegisterController::list` |
-| POST | `/api/cash-registers` | ROLE_ADMIN | `Controller\CashRegisterController\CashRegisterController::create` |
+| PUT | `/api/cash-registers/{id}` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CashRegisterController\CashRegisterController::update` |
+| GET | `/api/cash-registers` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CashRegisterController\CashRegisterController::list` |
+| POST | `/api/cash-registers` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CashRegisterController\CashRegisterController::create` |
 | GET | `/api/category` | PUBLIC_ACCESS | `Controller\CategoriesControlleur\CategoryController::getCategories` |
 | GET | `/api/collections/{id}/commandes` | ROLE_ADMIN | `Controller\CommandeController\CommandeController::getCommandesByCollection` |
 | POST | `/api/collections/{id}/commandes` | ROLE_ADMIN | `Controller\CommandeController\CommandeController::createCommande` |
@@ -277,7 +277,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/collections/{id}/notes-de-frais` | ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::createNoteDeFrais` |
 | DELETE | `/api/collections/{id}` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::deleteCollection` |
 | GET | `/api/collections` | ROLE_ADMIN | `Controller\CollectionsController\CollectionController::getCollections` |
-| GET | `/api/colors` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ColorsController\ColorController::getColors` |
+| GET | `/api/colors` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ColorsController\ColorController::getColors` |
 | POST | `/api/colors` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createColor` |
 | DELETE | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::deleteFraisDePort` |
 | GET | `/api/commandes/{id}/frais-de-port` | ROLE_ADMIN | `Controller\FraisDePortController\FraisDePortController::getFraisDePort` |
@@ -312,19 +312,19 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PATCH | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::rename` |
 | GET | `/api/media` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::list` |
 | POST | `/api/media` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::upload` |
-| DELETE | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::deleteNoteDeFrais` |
-| PUT | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::updateNoteDeFrais` |
+| DELETE | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::deleteNoteDeFrais` |
+| PUT | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::updateNoteDeFrais` |
 | GET | `/api/order-statuses` | PUBLIC_ACCESS | `Controller\OrderController\OrderController::getOrderStatuses` |
-| POST | `/api/order/cancel/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\OrderController\OrderController::cancelOrder` |
+| POST | `/api/order/cancel/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\OrderController\OrderController::cancelOrder` |
 | POST | `/api/order/create-guest` | PUBLIC_ACCESS | `Controller\OrderController\OrderController::createGuestOrder` |
-| POST | `/api/order/create-multi-payment` | ROLE_USER_POS ou ROLE_ADMIN | `Controller\OrderController\OrderController::createOrderWithMultiplePayments` |
-| POST | `/api/order/create` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\OrderController\OrderController::createOrder` |
+| POST | `/api/order/create-multi-payment` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\OrderController\OrderController::createOrderWithMultiplePayments` |
+| POST | `/api/order/create` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\OrderController\OrderController::createOrder` |
 | GET | `/api/orders/{id}` | PUBLIC_ACCESS | `Controller\OrderController\OrderController::getCustomerOrder` |
-| GET | `/api/orders` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\OrderController\OrderController::getOrders` |
-| GET | `/api/ordersuser` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\OrderController\OrderController::getUserOrders` |
-| POST | `/api/payment` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::processPayment` |
+| GET | `/api/orders` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\OrderController\OrderController::getOrders` |
+| GET | `/api/ordersuser` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\OrderController\OrderController::getUserOrders` |
+| POST | `/api/payment` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::processPayment` |
 | GET | `/api/payments/statistics/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\PaymentsController::getPaymentStatistics` |
-| GET | `/api/payments` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::getPayments` |
+| GET | `/api/payments` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::getPayments` |
 | POST | `/api/product-variants/{id}/customization-combinations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::addCombination` |
 | DELETE | `/api/product-variants/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::deleteVariant` |
 | GET | `/api/products/by-category` | PUBLIC_ACCESS | `Controller\CategoriesControlleur\CategoryController::getProductsByCategory` |
@@ -339,21 +339,21 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/products/{offer}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductsByOffer` |
 | GET | `/api/products` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getAllProducts` |
 | GET | `/api/productsid/{id}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductById` |
-| GET | `/api/profile` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\Account\ProfileApiController::getProfile` |
-| PATCH, PUT | `/api/profile` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\Account\ProfileApiController::updateProfile` |
-| GET | `/api/reviews/mine` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::mine` |
-| DELETE | `/api/reviews/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::delete` |
-| PUT, PATCH | `/api/reviews/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::update` |
-| POST | `/api/shipping/buy` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ShippingController\ShippingController::buy` |
-| POST | `/api/shipping/parcels` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\ShippingController\ShippingController::parcels` |
+| GET | `/api/profile` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\Account\ProfileApiController::getProfile` |
+| PATCH, PUT | `/api/profile` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\Account\ProfileApiController::updateProfile` |
+| GET | `/api/reviews/mine` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::mine` |
+| DELETE | `/api/reviews/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::delete` |
+| PUT, PATCH | `/api/reviews/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::update` |
+| POST | `/api/shipping/buy` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ShippingController\ShippingController::buy` |
+| POST | `/api/shipping/parcels` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ShippingController\ShippingController::parcels` |
 | POST | `/api/shipping/rates` | PUBLIC_ACCESS | `Controller\ShippingController\ShippingController::rates` |
 | POST | `/api/shipping/summary` | PUBLIC_ACCESS | `Controller\ShippingController\ShippingController::summary` |
 | DELETE | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::deleteDemo` |
 | GET | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::demo` |
 | POST | `/api/site-content/seed` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::seed` |
-| GET | `/api/sizes` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\SizesController\SizeController::getSizes` |
+| GET | `/api/sizes` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SizesController\SizeController::getSizes` |
 | POST | `/api/sizes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createSize` |
-| GET | `/api/social-networks` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\SocialNetworkController\SocialNetworkController::list` |
+| GET | `/api/social-networks` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SocialNetworkController\SocialNetworkController::list` |
 | GET | `/api/statistiques/chiffre-affaires/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\StatistiqueGeneraleController::getChiffreAffaires` |
 | GET | `/api/statistiques/nombre-commandes/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\StatistiqueGeneraleController::getOrderStatistics` |
 | GET | `/api/statistiques/panier-moyen/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\StatistiqueGeneraleController::getAverageOrderValueStatistics` |
@@ -362,22 +362,22 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/stripe-config` | PUBLIC_ACCESS | `Controller\paymentController\PaymentsController::getStripeConfig` |
 | POST | `/api/stripe/create-intent` | PUBLIC_ACCESS | `Controller\paymentController\PaymentsController::createStripePaymentIntent` |
 | POST | `/api/stripe/webhook` | PUBLIC_ACCESS | `Controller\StripeController\StripeWebhookController::handleWebhook` |
-| GET | `/api/styles` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\StyleController\StyleController::getStyles` |
+| GET | `/api/styles` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\StyleController\StyleController::getStyles` |
 | GET | `/api/subscription-plans` | PUBLIC_ACCESS | `Controller\SubscriptionController\SubscriptionController::plans` |
-| POST | `/api/subscriptions/portal-session` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::portal` |
-| POST | `/api/subscriptions/{id}/cancel` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::cancel` |
-| POST | `/api/subscriptions/{id}/change-plan` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::changePlan` |
-| POST | `/api/subscriptions/{id}/pause` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::pause` |
-| POST | `/api/subscriptions/{id}/resume` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::resume` |
-| GET | `/api/subscriptions/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::get` |
-| GET | `/api/subscriptions` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::list` |
-| POST | `/api/subscriptions` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::subscribe` |
+| POST | `/api/subscriptions/portal-session` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::portal` |
+| POST | `/api/subscriptions/{id}/cancel` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::cancel` |
+| POST | `/api/subscriptions/{id}/change-plan` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::changePlan` |
+| POST | `/api/subscriptions/{id}/pause` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::pause` |
+| POST | `/api/subscriptions/{id}/resume` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::resume` |
+| GET | `/api/subscriptions/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::get` |
+| GET | `/api/subscriptions` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::list` |
+| POST | `/api/subscriptions` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_USER_INTERNET)]` | `Controller\SubscriptionController\SubscriptionController::subscribe` |
 | GET | `/api/taxes/monthly` | ROLE_ADMIN | `Controller\StatistiqueDashboard\TaxController::getMonthlyTaxes` |
 | DELETE | `/api/transporteurs/{id}` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::deleteTransporteur` |
 | GET | `/api/transporteurs` | PUBLIC_ACCESS | `Controller\TransporteurController\TransporteurController::getTransporteurs` |
 | POST | `/api/transporteurs` | ROLE_ADMIN | `Controller\TransporteurController\TransporteurController::createTransporteur` |
-| GET | `/api/type-fournisseurs` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\TypeFournisseurController\TypeFournisseurController::list` |
-| GET | `/api/type-note-de-frais` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\TypeNoteDeFraisController\TypeNoteDeFraisController::list` |
+| GET | `/api/type-fournisseurs` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\TypeFournisseurController\TypeFournisseurController::list` |
+| GET | `/api/type-note-de-frais` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\TypeNoteDeFraisController\TypeNoteDeFraisController::list` |
 | GET | `/api/vehicles/carousel` | PUBLIC_ACCESS | `Controller\Api\VehicleApiController::getCarouselVehicles` |
 | DELETE | `/api/{app}-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::delete` |
 | GET | `/api/{app}-site-models/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingSiteModelController\LandingSiteModelController::getOne` |
@@ -425,7 +425,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/register` | PUBLIC_ACCESS | `Controller\Account\RegistrationController::registerApi` |
 | POST | `/api/resend-verification` | PUBLIC_ACCESS | `Controller\Account\RegistrationController::resendVerificationEmail` |
 | POST | `/api/token/refresh` | PUBLIC_ACCESS | `Controller\Account\SecurityController::refreshToken` |
-| GET | `/api/validate-token` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\Account\SecurityController::validateToken` |
+| GET | `/api/validate-token` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\Account\SecurityController::validateToken` |
 | GET | `/verify/email` | aucune règle | `Controller\Account\RegistrationController::verifyEmail` |
 
 ## Tenants (5)
@@ -479,28 +479,28 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
-| GET | `/api/categories.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | API Platform (Categories) |
-| POST | `/api/categories.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | API Platform (Categories) |
-| DELETE | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | API Platform (Categories) |
-| GET | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | API Platform (Categories) |
-| PATCH | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | API Platform (Categories) |
-| PUT | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | API Platform (Categories) |
+| GET | `/api/categories.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
+| POST | `/api/categories.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
+| DELETE | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
+| GET | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
+| PATCH | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
+| PUT | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
 | GET | `/api/commandes.{_format}` | ROLE_ADMIN | API Platform (Commande) |
 | POST | `/api/commandes.{_format}` | ROLE_ADMIN | API Platform (Commande) |
 | DELETE | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
 | GET | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
 | PATCH | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
 | PUT | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
-| GET, HEAD | `/api/errors/{status}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | API Platform (?) |
+| GET, HEAD | `/api/errors/{status}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (?) |
 | GET | `/api/products.{_format}` | PUBLIC_ACCESS | API Platform (Product) |
 | POST | `/api/products.{_format}` | ROLE_ADMIN | API Platform (Product) |
 | DELETE | `/api/products/{id}.{_format}` | ROLE_ADMIN | API Platform (Product) |
 | GET | `/api/products/{id}.{_format}` | PUBLIC_ACCESS | API Platform (Product) |
 | PATCH | `/api/products/{id}.{_format}` | ROLE_ADMIN | API Platform (Product) |
 | PUT | `/api/products/{id}.{_format}` | ROLE_ADMIN | API Platform (Product) |
-| GET | `/api/validation_errors/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | API Platform (ValidationException) |
-| GET | `/api/validation_errors/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | API Platform (ValidationException) |
-| GET | `/api/validation_errors/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | API Platform (ValidationException) |
+| GET | `/api/validation_errors/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (ValidationException) |
+| GET | `/api/validation_errors/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (ValidationException) |
+| GET | `/api/validation_errors/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (ValidationException) |
 | GET | `/api/vehicle_products.{_format}` | PUBLIC_ACCESS | API Platform (VehicleProduct) |
 | POST | `/api/vehicle_products.{_format}` | ROLE_ADMIN | API Platform (VehicleProduct) |
 | DELETE | `/api/vehicle_products/{id}.{_format}` | ROLE_ADMIN | API Platform (VehicleProduct) |

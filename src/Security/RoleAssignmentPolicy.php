@@ -18,6 +18,7 @@ final class RoleAssignmentPolicy
         'Administrateur du site' => 'ROLE_ADMIN',
         'Client en ligne' => 'ROLE_USER_INTERNET',
         'Caisse (point de vente)' => 'ROLE_USER_POS',
+        'Responsable de caisse (postes, remboursements ; sans back-office)' => 'ROLE_POS_MANAGER',
         'Utilisateur' => 'ROLE_USER',
     ];
 

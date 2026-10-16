@@ -38,7 +38,8 @@ sien) ; avec `cashRegisterId`, celles de ce poste.
 | Rôle | Peut |
 |---|---|
 | `ROLE_USER_POS` (caissier, sans `ROLE_ADMIN`) | connexion `platform: "pos"` ; toutes les routes `/api/caisse/*` ; `GET /api/cash-registers` (postes actifs) ; vente `POST /api/order/create-multi-payment` ; `GET /api/orders?orderSource=2`, `GET /api/payments?orderSource=2` ; statistiques de la source `pos` (`/api/statistiques/{chiffre-affaires,nombre-commandes,panier-moyen}/pos`, `/api/payments/statistics/pos`). Autre source → 403. |
-| `ROLE_ADMIN` | tout ce qui précède pour toutes les sources, plus création et modification des postes (`POST`/`PUT /api/cash-registers`, `?all=1`), écrans EasyAdmin. |
+| `ROLE_POS_MANAGER` (responsable de caisse, 16/10/2026 ; porte aussi ROLE_USER_POS en pratique) | tout ce que fait le caissier, plus : créer, renommer et désactiver les postes (`POST`/`PUT /api/cash-registers`, `?all=1`), rembourser une vente POS faite par un autre caissier (`POST /api/order/cancel/{id}`). Rien d'autre : pas de back-office EasyAdmin, pas de clés d'activation, pas d'autre source que la caisse, connexion `platform: "pos"` seulement. Attribuable par l'administrateur du site dans l'écran des utilisateurs. |
+| `ROLE_ADMIN` | tout ce qui précède pour toutes les sources, plus les clés d'activation, les écrans EasyAdmin. |
 | Clients (`ROLE_USER_INTERNET`) | rien de la caisse (403). |
 
 ## Routes de session (`/api/caisse`)
@@ -115,7 +116,9 @@ Autres refus : 400 `INVALID_BODY`, `ITEMS_REQUIRED`, `PAYMENT_METHODS_REQUIRED`,
 
 ## Remboursement : `POST /api/order/cancel/{id}`
 
-Route partagée avec le web (`{paymentMethod?, cashRegisterId?}`), réservée à l'auteur de la commande. Seule
+Route partagée avec le web (`{paymentMethod?, cashRegisterId?}`), réservée à l'auteur de la commande ; une **vente
+POS** peut aussi être remboursée par un responsable de caisse ou un administrateur (la transaction de caisse porte
+alors celui qui rembourse). Seule
 l'annulation d'une **vente POS** (`orderSource` 2) touche une caisse : le remboursement va au **poste de la vente
 d'origine** si sa session est ouverte, sinon au poste `cashRegisterId` du corps s'il a une session ouverte, sinon au
 poste unique du site (règle du poste) ; aucune session ouverte → 409 `CASH_REGISTER_CLOSED`. `paymentMethod` 2

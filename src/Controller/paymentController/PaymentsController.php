@@ -67,7 +67,7 @@ class PaymentsController extends AbstractController
         if (!$orderSourceId) {
             return $this->json(['error' => 'orderSource parameter is required'], JsonResponse::HTTP_BAD_REQUEST);
         }
-        if (!$this->isGranted('ROLE_ADMIN') && !($this->isGranted('ROLE_USER_POS') && (int) $orderSourceId === self::ORDER_SOURCE_POS)) {
+        if (!$this->isGranted('ROLE_ADMIN') && !(($this->isGranted('ROLE_USER_POS') || $this->isGranted('ROLE_POS_MANAGER')) && (int) $orderSourceId === self::ORDER_SOURCE_POS)) {
             return $this->json(['error' => 'FORBIDDEN', 'message' => 'Accès réservé aux administrateurs et, pour la caisse, aux caissiers'], JsonResponse::HTTP_FORBIDDEN);
         }
         $days = $request->query->get('days');
