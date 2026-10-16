@@ -156,6 +156,9 @@ class BookPdfGeneratorService
                 if ($book->getPerson2FirstName()) {
                     $authorName .= ' & ' . $book->getPerson2FirstName();
                 }
+            } elseif ($book->getChannel() === Book::CHANNEL_MOBILE) {
+                // Livre de l'application Living Memory : à défaut d'autre nom, le propriétaire ; jamais le nom par défaut du site
+                $authorName = $book->getUser() ? trim($book->getUser()->getFirstname() . ' ' . $book->getUser()->getLastname()) : '';
             } elseif ($book->getUser()) {
                 $name = trim($book->getUser()->getFirstname() . ' ' . $book->getUser()->getLastname());
                 $authorName = ($name !== 'Admin User' && !empty($name)) ? $name : 'Danielle Almont';

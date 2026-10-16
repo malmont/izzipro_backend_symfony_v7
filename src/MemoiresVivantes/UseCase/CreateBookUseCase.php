@@ -16,12 +16,14 @@ class CreateBookUseCase
         private readonly BookTypeResolver $bookTypeResolver
     ) {}
 
-    public function execute(User $user, BookInputDto $dto): Book
+    /** @param string $channel origine du livre : Book::CHANNEL_WEB (défaut, POST /books) ou Book::CHANNEL_MOBILE (CreateMobileBookUseCase) */
+    public function execute(User $user, BookInputDto $dto, string $channel = Book::CHANNEL_WEB): Book
     {
         $em = $this->emProvider->getEntityManager();
 
         $book = new Book();
         $book->setUser($user);
+        $book->setChannel($channel);
         $book->setTitle($dto->title);
         $book->setSubtitle($dto->subtitle);
         $book->setBirthplace($dto->birthplace);

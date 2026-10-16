@@ -18,6 +18,8 @@ class BookOutputDto
     public string $createdAt;
     public string $updatedAt;
     public string $type;
+    /** Origine du livre : web (outil de gestion) ou mobile (application Living Memory), fixée à la création */
+    public string $channel;
     public ?string $person1FirstName;
     public ?string $person1Birthplace;
     public ?string $person2FirstName;
@@ -113,6 +115,7 @@ class BookOutputDto
         $this->createdAt = $book->getCreatedAt()->format(\DateTimeInterface::ATOM);
         $this->updatedAt = $book->getUpdatedAt()->format(\DateTimeInterface::ATOM);
         $this->type = $book->getType();
+        $this->channel = $book->getChannel();
         $this->person1FirstName = $book->getPerson1FirstName();
         $this->person1Birthplace = $book->getPerson1Birthplace();
         $this->person2FirstName = $book->getPerson2FirstName();

@@ -101,7 +101,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/videos` | PUBLIC_ACCESS | `Controller\VideoApiController\VideoApiController::list` |
 | POST | `/api/videos` | ROLE_ADMIN | `Controller\VideoApiController\VideoApiController::create` |
 
-## Mémoires Vivantes (76)
+## Mémoires Vivantes (77)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -174,6 +174,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/memoires/contributors/{id}/approve` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::approve` |
 | DELETE | `/api/memoires/contributors/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::delete` |
 | PUT | `/api/memoires/contributors/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::update` |
+| POST | `/api/memoires/mobile/books` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobileBookController::create` |
 | DELETE | `/api/memoires/photos/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterPhotoController::delete` |
 | PUT | `/api/memoires/photos/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterPhotoController::update` |
 | POST | `/api/memoires/print/order` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::createOrder` |

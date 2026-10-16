@@ -21,6 +21,10 @@ use Symfony\Component\Uid\Uuid;
 )]
 class Book
 {
+    /** Origine d'un livre : outil web de gestion des projets biographiques, ou application mobile Living Memory */
+    public const CHANNEL_WEB = 'web';
+    public const CHANNEL_MOBILE = 'mobile';
+
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
     #[Groups(['book:read', 'chapter:read'])]
@@ -89,6 +93,14 @@ class Book
     /** Adresse du client, où se tiennent les séances d'écriture : itinéraire du biographe (jamais montrée aux invités) */
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $clientAddress = null;
+
+    /**
+     * Origine du livre (16/10/2026) : web par défaut (tous les livres existants, POST /books), mobile pour un livre créé
+     * par POST /mobile/books (application Living Memory). Fixée à la création, jamais modifiée ensuite (ni par PUT, ni
+     * par l'API) : la rédaction payante par chapitre ne concernera que les livres mobile.
+     */
+    #[ORM\Column(length: 10, options: ['default' => self::CHANNEL_WEB])]
+    private string $channel = self::CHANNEL_WEB;
  
     #[ORM\Column(length: 20)]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
@@ -332,6 +344,22 @@ class Book
     {
         $clientAddress = trim((string) $clientAddress);
         $this->clientAddress = $clientAddress !== '' ? $clientAddress : null;
+        return $this;
+    }
+
+    public function getChannel(): string
+    {
+        return $this->channel;
+    }
+
+    /** Réservé à la création du livre (CreateBookUseCase) : l'origine ne change jamais ensuite */
+    public function setChannel(string $channel): static
+    {
+        if (!in_array($channel, [self::CHANNEL_WEB, self::CHANNEL_MOBILE], true)) {
+            throw new \InvalidArgumentException(sprintf('Origine de livre inconnue : « %s »', $channel));
+        }
+        $this->channel = $channel;
+
         return $this;
     }
 

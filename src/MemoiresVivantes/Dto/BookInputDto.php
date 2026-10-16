@@ -9,6 +9,8 @@ class BookInputDto
     public ?string $birthplace = null;
     public ?string $format = null;
     public ?string $type = null;
+    /** Type tel que saisi (texte brut), null si absent : permet de distinguer « pas de type » d'un type mal formé ou inconnu */
+    public ?string $typeInput = null;
     public ?string $person1FirstName = null;
     public ?string $person1Birthplace = null;
     public ?string $person2FirstName = null;
@@ -32,6 +34,7 @@ class BookInputDto
         $this->birthplace = self::text($data['birthplace'] ?? null);
         $this->format = self::text($data['format'] ?? null);
         $typeInput = $data['type'] ?? null;
+        $this->typeInput = self::text($typeInput);
         // Code bien formé uniquement : l'existence du type (historique ou actif en base) est vérifiée par les use cases
         $this->type = (is_string($typeInput) && preg_match('/^[a-z][a-z0-9_]{0,49}$/', $typeInput)) ? $typeInput : null;
         $this->person1FirstName = self::text($data['person1FirstName'] ?? null);

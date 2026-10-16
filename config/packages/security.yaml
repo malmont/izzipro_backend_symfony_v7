@@ -60,6 +60,8 @@ security:
         #    aux utilisateurs connectés (propriétaire du livre ou admin, vérifié par BookAccessGuard). Publics avant le 29/09/2026.
         - { path: ^/api/memoires/(books/[^/]+/)?print/, roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/api/memoires/books/[^/]+/(pdf/generate|payment-link|send-payment-link)$, roles: IS_AUTHENTICATED_FULLY }
+        # Routes de l'application mobile Living Memory (16/10/2026) : connexion obligatoire
+        - { path: ^/api/memoires/mobile/, roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/api/memoires/, roles: PUBLIC_ACCESS }
 
         # 🔹 Réservations publiques (prise de rendez-vous et prestations)

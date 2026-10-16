@@ -11,7 +11,7 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 
 - `access_control` laisse `/api/memoires/` **public**, pour que les liens de partage fonctionnent sans connexion, sauf :
   `/api/memoires/admin/` (`ROLE_ADMIN`) ; impression (`…/print/…`), `pdf/generate`, `payment-link`,
-  `send-payment-link` (connexion obligatoire, `IS_AUTHENTICATED_FULLY`).
+  `send-payment-link` et `/api/memoires/mobile/` (connexion obligatoire, `IS_AUTHENTICATED_FULLY`).
 - **Le contrôle est dans chaque action** :
   - livre : `Security/BookAccessGuard.php`, avec `canView` (lien de chapitre signé, clé `APP_SECRET`, ou voter
     `BOOK_VIEW`) et `canManage` (connecté, propriétaire ou admin : `BOOK_EDIT`) ;
@@ -37,6 +37,7 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Groupe | Routes | Contrôleur |
 |---|---|---|
 | Livres | `GET, POST /books`, `GET, PUT, DELETE /books/{id}`, couverture | `BookController` |
+| Application mobile Living Memory | `POST /mobile/books` (connexion obligatoire ; voir « Application mobile Living Memory ») | `MobileBookController` |
 | Chapitres | `/books/{id}/chapters`, `/chapters/{id}` (+ `status`, `generate`, `reset`, `audio`, `improve-answer`, `share-link`, `contributor-links`) | `ChapterController` |
 | Photos | `/chapters/{id}/photos`, `/photos/{id}`, mise en page | `ChapterController`, `ChapterPhotoController` |
 | Contributeurs | `/books/{id}/contributors`, `/contributors/{id}` (+ `approve`) | `ContributorController` |
@@ -56,7 +57,7 @@ plus qu'un dernier repli : chaque site a son frontend.
 
 | Table | Entité | Contenu |
 |---|---|---|
-| `mv_book` | `Book` | livre (propriétaire, type, statut de paiement, nombre de séances d'entretien `session_count` / `sessionCount` de 1 à 12, adresse du client `client_address` : itinéraire Google Maps pour le biographe, `clientAddressMapsUrl` dans l'API, jamais montrée aux invités) ; identifiant UUID |
+| `mv_book` | `Book` | livre (propriétaire, type, origine `channel` : `web` par défaut, `mobile` pour un livre créé par l'application Living Memory, fixée à la création ; statut de paiement, nombre de séances d'entretien `session_count` / `sessionCount` de 1 à 12, adresse du client `client_address` : itinéraire Google Maps pour le biographe, `clientAddressMapsUrl` dans l'API, jamais montrée aux invités) ; identifiant UUID |
 | `mv_chapter` | `Chapter` | réponses, texte généré, `generation_status` |
 | `mv_chapter_photo` | `ChapterPhoto` | photos d'un chapitre |
 | `mv_contributor` | `Contributor` | contributeurs (livres collectifs) |
@@ -81,6 +82,27 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
   `BookTypeAdminService` / `EventListener/MemoireQuestionAnswerSyncListener`.
 - Nouveaux tenants : les types et questions par défaut viennent de la base modèle `gmasuite`, publiés depuis
   `db_memoiresvivantes` par `app:memoires:publish-template` (refuse une cible qui contient des livres).
+
+## Application mobile Living Memory
+
+Application Flutter grand public (site `memoiresvivantes`, activation par clé `livingmemory`, connexion `platform`
+`mobile`, `ROLE_USER_INTERNET` : `docs/architecture.md`, « Authentification »). Elle lit et écrit par les routes
+existantes du module ; une seule route lui est propre (16/10/2026) :
+
+- `POST /api/memoires/mobile/books` (`MobileBookController`, `UseCase/CreateMobileBookUseCase`) : même corps et même
+  réponse (201, livre complet) que `POST /books`, mais le livre est créé avec **`channel = mobile`** et un type demandé
+  mais inconnu ou désactivé répond **422 `{"error": "TYPE_INVALID", "message"}`** (le web crée alors un livre
+  individuel ; sans type, la route mobile crée aussi un livre individuel).
+- **`channel`** (`mv_book.channel`, champ `channel` de `BookOutputDto`) : `web` pour tous les livres existants et pour
+  `POST /books`, `mobile` pour un livre de l'application. Fixé à la création, jamais modifiable (ignoré par `PUT`,
+  `Book::setChannel` n'est appelé que par `CreateBookUseCase`). Il distingue les livres dont la rédaction d'un chapitre
+  sera payante (achat intégré, un chapitre à la fois, à venir : 402 `CHAPTER_NOT_PAID`) ; la rédaction des livres web
+  reste libre. **Aujourd'hui rien n'est bloqué** pour les livres mobile.
+- Les livres mobile ne sont traités à part nulle part ailleurs : le mode administration du web les liste
+  (`GET /books?scope=all`, `?userId=`), les ouvre, les modifie, les supprime, en rédige les chapitres et les PDF comme
+  les autres (`BookVoter` accorde tout à `ROLE_ADMIN`). Le champ `channel` permet au web d'afficher l'origine.
+- PDF : l'auteur d'un livre mobile n'est jamais le nom par défaut du site (voir « Mise en page du livre »).
+- Tests : `MobileBookChannelTest`.
 
 ## Génération d'un chapitre (tâche de fond)
 
@@ -141,6 +163,8 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
   Catégorie `script` (écriture manuscrite) : la police ne s'applique qu'aux titres (`titleFamily` : couverture, pages de
   titre, titres de chapitre, sous-titres), sans capitales ni interlettrage ; le texte courant reste en police de lecture.
 - Auteur : texte ou objet `author` du livre (`normalizeAuthorName`) ; à l'impression, jamais le destinataire du colis.
+  À défaut (`resolveAuthorName`) : prénom(s) du narrateur, sinon prénom et nom du propriétaire, sinon le nom par défaut
+  codé en dur pour un livre `web` ; pour un livre `mobile`, jamais ce nom par défaut (propriétaire, sinon vide).
 - Vérifier un rendu : générer le PDF et le regarder (les tests ne contrôlent que le HTML produit).
 
 ## Tester
@@ -163,8 +187,11 @@ Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/upl
   narrateur, réponses saisies ignorées par les synthèses quand la clé `improvedAnswer` était vide, PDF (balisage brut,
   couverture décalée), erreur 500 de `pdf/generate` avec l'objet auteur, livre bloqué « pending » sur un lien de
   paiement expiré (un lien Stripe Checkout vit 24 h : `BookPaymentService::resetExpiredPayment`).
-- Auteur par défaut « Danielle Almont » en dur (`resolveAuthorName`) : à rendre configurable par site avant un
-  second client.
+- Auteur par défaut « Danielle Almont » en dur (`resolveAuthorName`, livres `web` seulement : un livre `mobile` n'y a
+  jamais recours) : à rendre configurable par site avant un second client.
+- `Book` porte un `#[ApiResource]` sans effet : API Platform n'explore que `src/Entity`, donc aucune opération
+  (`/api/books`, `/api/book_print_orders`) n'existe, avec ou sans jeton (vérifié le 16/10/2026 : 404 partout) ; seules
+  les routes `/api/memoires/` et leurs voters donnent accès aux livres.
 - **À faire avant de passer Lulu en production** (aujourd'hui : bac à sable) : le paiement de l'impression n'existe
   pas (`print/payment-intent` renvoie un `client_secret` vide) et `print/order` transmet le travail à Lulu dès sa
   création. Le propriétaire connecté peut donc commander une impression sans payer. Il faut vérifier le paiement
