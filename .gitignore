@@ -41,3 +41,8 @@ migrate_all.sh
 *.af
 interieur_lulu.pdf
 /scripts/
+
+# Documents de l'audit des applications mobiles, copiés sur le serveur hors dépôt (15/10/2026)
+/docs/audit-multitenant.md
+/docs/strategie-multitenant-mobile.md
+/docs/prompt-backend-corrections.md
