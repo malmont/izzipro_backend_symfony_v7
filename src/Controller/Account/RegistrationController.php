@@ -74,6 +74,7 @@ class RegistrationController extends AbstractController
                     $form->get('plainPassword')->getData()
                 )
             );
+            $user->setSignupChannel(User::SIGNUP_WEB_REGISTER);
 
             $em->persist($user);
             $em->flush();
@@ -156,6 +157,9 @@ class RegistrationController extends AbstractController
         $user->setLastname($lastName);
         $user->setUsername($username);
         $user->setPassword($passwordHasher->hashPassword($user, $password));
+
+        // Origine du compte (16/10/2026) : l'application Living Memory envoie {"app": "livingmemory"} ; sinon inscription web
+        $user->setSignupChannel(($decoded['app'] ?? null) === 'livingmemory' ? User::SIGNUP_MOBILE : User::SIGNUP_WEB_REGISTER);
 
         $platform = $decoded['platform'] ?? 'mobile';
         if ($platform === 'pos') {

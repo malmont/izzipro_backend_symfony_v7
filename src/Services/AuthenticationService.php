@@ -78,6 +78,17 @@ class AuthenticationService
      */
     // private function createIsolatedEntityManager(): EntityManagerInterface { ... }
 
+    /** Dernière connexion réussie (16/10/2026) ; ne doit jamais faire échouer la connexion */
+    public function recordLogin(User $user): void
+    {
+        try {
+            $user->setLastLoginAt(new \DateTimeImmutable());
+            $this->emProvider->getEntityManager()->flush();
+        } catch (\Throwable $e) {
+            $this->logger->warning('Dernière connexion non enregistrée : ' . $e->getMessage());
+        }
+    }
+
     public function login(string $email, string $password, string $platform, Request $request): Response
     {
         $platform = $this->normalizePlatform($platform, 'login');
@@ -119,6 +130,7 @@ class AuthenticationService
             );
         }
 
+        $this->recordLogin($user);
         $tokens = $this->tokenService->generateTokens($user, $platform);
         $host = $request->getHost();
         return $this->tokenService->createResponseWithTokens($tokens, $platform, $host);

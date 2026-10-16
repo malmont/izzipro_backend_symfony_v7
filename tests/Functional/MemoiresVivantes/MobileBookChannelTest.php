@@ -54,7 +54,8 @@ class MobileBookChannelTest extends BookTypeApiTestCase
         [$status, $r] = $this->api('POST', '/mobile/books', ['title' => 'Type inconnu', 'type' => 'type_inexistant_xyz'], 'client');
         $this->assertSame(422, $status);
         $this->assertSame('TYPE_INVALID', $r['error']);
-        $this->assertStringContainsString('type_inexistant_xyz', $r['message']);
+        $this->assertSame('type_inexistant_xyz', $r['requestedType']);
+        $this->assertSame('Ce type de livre n\'est plus proposé. Choisissez-en un autre.', $r['message'], 'message destiné aux utilisateurs, sans route technique');
         [$status, $r] = $this->api('POST', '/mobile/books', ['title' => 'Type mal formé', 'type' => 'Pas Un Code'], 'client');
         $this->assertSame([422, 'TYPE_INVALID'], [$status, $r['error']]);
 

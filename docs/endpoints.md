@@ -101,10 +101,13 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/videos` | PUBLIC_ACCESS | `Controller\VideoApiController\VideoApiController::list` |
 | POST | `/api/videos` | ROLE_ADMIN | `Controller\VideoApiController\VideoApiController::create` |
 
-## Mémoires Vivantes (77)
+## Mémoires Vivantes (83)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
+| GET | `/api/memoires/admin/ai-quotas/usage` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\AiQuotaAdminController::usage` |
+| GET | `/api/memoires/admin/ai-quotas` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\AiQuotaAdminController::show` |
+| PUT | `/api/memoires/admin/ai-quotas` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\AiQuotaAdminController::update` |
 | POST | `/api/memoires/admin/book-type-chapters/{id}/prompt/optimize` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::optimizeChapterPrompt` |
 | PUT | `/api/memoires/admin/book-type-chapters/{id}/questions/order` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::reorderQuestions` |
 | POST | `/api/memoires/admin/book-type-chapters/{id}/questions` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::addQuestion` |
@@ -123,6 +126,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT, PATCH | `/api/memoires/admin/book-types/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::updateType` |
 | GET | `/api/memoires/admin/book-types` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::listTypes` |
 | POST | `/api/memoires/admin/book-types` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::createType` |
+| GET | `/api/memoires/admin/mobile-users/{userId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\MobileUserAdminController::show` |
+| GET | `/api/memoires/admin/mobile-users` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\MobileUserAdminController::list` |
 | DELETE | `/api/memoires/admin/questions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::deleteQuestion` |
 | PUT, PATCH | `/api/memoires/admin/questions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::updateQuestion` |
 | DELETE | `/api/memoires/admin/users/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::delete` |
@@ -175,6 +180,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/memoires/contributors/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::delete` |
 | PUT | `/api/memoires/contributors/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::update` |
 | POST | `/api/memoires/mobile/books` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobileBookController::create` |
+| GET | `/api/memoires/mobile/quotas` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobileQuotaController::show` |
 | DELETE | `/api/memoires/photos/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterPhotoController::delete` |
 | PUT | `/api/memoires/photos/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterPhotoController::update` |
 | POST | `/api/memoires/print/order` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::createOrder` |
@@ -452,7 +458,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (19)
+## Administration (EasyAdmin) (21)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -462,6 +468,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/barcode-image/{id}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::barcodeImage` |
 | GET | `/admin/barcode-management/search` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::search` |
 | ANY | `/admin/barcode-management` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::index` |
+| GET | `/admin/memoires/ai-quotas` | ROLE_ADMIN | `Controller\Admin\Memoires\AiQuotaPageController::index` |
+| POST | `/admin/memoires/ai-quotas` | ROLE_ADMIN | `Controller\Admin\Memoires\AiQuotaPageController::save` |
 | ANY | `/admin/pdf/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::pdfPrintBarcode` |
 | ANY | `/admin/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printBarcode` |
 | ANY | `/admin/product-variant/{id}/edit-custom` | ROLE_ADMIN | `Controller\Admin\CustomProductVariantController::edit` |

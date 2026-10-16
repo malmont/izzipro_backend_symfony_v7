@@ -43,6 +43,7 @@ class BookController extends AbstractController
         private readonly SyncBookPaymentStatusUseCase $syncBookPaymentStatusUseCase,
         private readonly BookAccessGuard $accessGuard,
         private readonly BookTypeNormalizer $bookTypeNormalizer,
+        private readonly \App\MemoiresVivantes\Services\AiQuotaService $aiQuota,
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
@@ -116,7 +117,7 @@ class BookController extends AbstractController
             $count = $ordersCountByBookId[$bId] ?? 0;
             $speakersByType[$b->getType()] ??= $this->bookTypeResolver->speakersByTheme($b);
             $typeInfoByType[$b->getType()] ??= [$this->typeInfo($b)];
-            return new BookOutputDto($b, $host, $latest, $count, speakersByTheme: $speakersByType[$b->getType()], typeInfo: $typeInfoByType[$b->getType()][0]);
+            return new BookOutputDto($b, $host, $latest, $count, speakersByTheme: $speakersByType[$b->getType()], typeInfo: $typeInfoByType[$b->getType()][0], aiQuotaLimited: $this->aiQuota->isLimited($b, $this->getUser()));
         }, $books);
 
         return $this->json($dtos);
@@ -186,7 +187,8 @@ class BookController extends AbstractController
             // E-mail du propriétaire et lien de paiement : jamais pour un invité venu par un lien de partage
             $this->getUser() !== null && $this->isGranted('BOOK_VIEW', $book),
             $this->bookTypeResolver->speakersByTheme($book),
-            $this->typeInfo($book)
+            $this->typeInfo($book),
+            $this->aiQuota->isLimited($book, $this->getUser())
         ));
     }
 
@@ -218,7 +220,7 @@ class BookController extends AbstractController
         $book = $this->createBookUseCase->execute($user, $dto);
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book)), 201);
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book), aiQuotaLimited: $this->aiQuota->isLimited($book, $this->getUser())), 201);
     }
 
     #[Route('/{id}', methods: ['PUT'])]
@@ -234,7 +236,7 @@ class BookController extends AbstractController
         $book = $this->updateBookUseCase->execute($book, new BookInputDto(is_array($data) ? $data : []));
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book)));
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book), aiQuotaLimited: $this->aiQuota->isLimited($book, $this->getUser())));
     }
 
     #[Route('/{id}', methods: ['DELETE'])]
@@ -271,7 +273,7 @@ class BookController extends AbstractController
         }
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book)));
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book), aiQuotaLimited: $this->aiQuota->isLimited($book, $this->getUser())));
     }
 
     #[Route('/{id}/cover', methods: ['DELETE'])]
@@ -286,7 +288,7 @@ class BookController extends AbstractController
         $this->bookService->removeCover($book);
         
         $host = $this->resolveHost($request);
-        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book)));
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book), aiQuotaLimited: $this->aiQuota->isLimited($book, $this->getUser())));
     }
 
     /** Lien de chapitre signé ou voter : voir BookAccessGuard::canView */

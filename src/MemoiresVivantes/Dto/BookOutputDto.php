@@ -20,6 +20,8 @@ class BookOutputDto
     public string $type;
     /** Origine du livre : web (outil de gestion) ou mobile (application Living Memory), fixée à la création */
     public string $channel;
+    /** Vrai quand les appels IA de ce livre sont soumis aux quotas pour l'utilisateur courant (16/10/2026) : le frontend affiche alors le reste du jour (GET /mobile/quotas) */
+    public bool $aiQuotaLimited = false;
     public ?string $person1FirstName;
     public ?string $person1Birthplace;
     public ?string $person2FirstName;
@@ -77,9 +79,11 @@ class BookOutputDto
         ?array $currentContributor = null,
         bool $withPrivateDetails = true,
         array $speakersByTheme = [],
-        ?array $typeInfo = null
+        ?array $typeInfo = null,
+        bool $aiQuotaLimited = false
     ) {
         $this->typeInfo = $typeInfo;
+        $this->aiQuotaLimited = $aiQuotaLimited;
         $this->id = (string) $book->getId();
         if ($book->getUser()) {
             $this->author = [

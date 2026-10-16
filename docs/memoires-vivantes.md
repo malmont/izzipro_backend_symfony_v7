@@ -37,7 +37,7 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Groupe | Routes | Contrôleur |
 |---|---|---|
 | Livres | `GET, POST /books`, `GET, PUT, DELETE /books/{id}`, couverture | `BookController` |
-| Application mobile Living Memory | `POST /mobile/books` (connexion obligatoire ; voir « Application mobile Living Memory ») | `MobileBookController` |
+| Application mobile Living Memory | `POST /mobile/books`, `GET /mobile/quotas` (connexion obligatoire ; voir « Application mobile Living Memory » et « Quotas des appels IA ») | `MobileBookController`, `MobileQuotaController` |
 | Chapitres | `/books/{id}/chapters`, `/chapters/{id}` (+ `status`, `generate`, `reset`, `audio`, `improve-answer`, `share-link`, `contributor-links`) | `ChapterController` |
 | Photos | `/chapters/{id}/photos`, `/photos/{id}`, mise en page | `ChapterController`, `ChapterPhotoController` |
 | Contributeurs | `/books/{id}/contributors`, `/contributors/{id}` (+ `approve`) | `ContributorController` |
@@ -46,7 +46,7 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Impression | `/books/{id}/print/estimate`, `print/payment-intent`, `print/order`, `print/orders` ; `POST /api/webhooks/lulu` | `BookPrintApiController`, `LuluWebhookController` |
 | Types de livre (lecture) | `GET /book-types`, `/book-types/{code}`, `GET /questions`, `GET /ai-models` | `BookTypeController`, `QuestionController` |
 | Polices des livres | `GET /book-fonts` | `BookFontController` |
-| Administration | `/admin/book-types…`, `/admin/book-type-chapters…`, `/admin/book-type-roles…`, `/admin/questions…`, `/admin/users…` | `Controller/Admin/` (`#[IsGranted('ROLE_ADMIN')]`) |
+| Administration | `/admin/book-types…`, `/admin/book-type-chapters…`, `/admin/book-type-roles…`, `/admin/questions…`, `/admin/users…`, `/admin/ai-quotas` (+ `/usage`), `/admin/mobile-users` (+ `/{userId}`) | `Controller/Admin/` (`#[IsGranted('ROLE_ADMIN')]`) |
 | Activation de compte | `POST /auth/activate` | `AccountActivationController` ; l'invitation (`POST /admin/users` sans mot de passe) envoie un e-mail avec le lien (`emails/memoires_account_invitation.html.twig`) |
 
 Liens envoyés aux utilisateurs (activation, partage de chapitre, retour de paiement) : `Services/FrontendUrlResolver`
@@ -64,6 +64,9 @@ plus qu'un dernier repli : chaque site a son frontend.
 | `mv_book_type`, `mv_book_type_chapter`, `mv_book_type_role` | `BookType…` | types de livre configurables |
 | `mv_question` | `MemoireQuestion` | questions des chapitres |
 | `mv_book_print_order` | `BookPrintOrder` | commandes d'impression Lulu |
+| `mv_ai_quota_setting` | `AiQuotaSetting` | quotas IA du site (une ligne ; sans ligne : valeurs par défaut), voir « Quotas des appels IA » |
+| `mv_ai_usage` | `AiUsage` | appels IA aboutis par utilisateur : `transcription`, `improvement` (soumis aux quotas) et `generation` (rédaction aboutie d'un chapitre d'un livre soumis aux quotas, enregistrée par `GenerateChapterHandler` : cumul seulement, pas de quota) |
+| `user` (table commune) | `App\Entity\User` | depuis le 16/10/2026 : `signup_channel` (`web_invite` invitation par un biographe, `web_register` inscription web, `mobile` application Living Memory ; null avant), `created_at` (null avant), `last_login_at` (`/api/login`, `/api/otp-verify`, `/api/token/refresh`) ; `scripts/migrate_all_v2_user_signup.sh` |
 
 Fichiers : `var/storage/public_bucket/uploads/memoires/` (photos, PDF), `…/uploads/audio/` (enregistrements).
 
@@ -91,7 +94,8 @@ existantes du module ; une seule route lui est propre (16/10/2026) :
 
 - `POST /api/memoires/mobile/books` (`MobileBookController`, `UseCase/CreateMobileBookUseCase`) : même corps et même
   réponse (201, livre complet) que `POST /books`, mais le livre est créé avec **`channel = mobile`** et un type demandé
-  mais inconnu ou désactivé répond **422 `{"error": "TYPE_INVALID", "message"}`** (le web crée alors un livre
+  mais inconnu ou désactivé répond **422 `{"error": "TYPE_INVALID", "message", "requestedType"}`** (`message` est
+  destiné aux utilisateurs, sans route technique ; le web crée alors un livre
   individuel ; sans type, la route mobile crée aussi un livre individuel).
 - **`channel`** (`mv_book.channel`, champ `channel` de `BookOutputDto`) : `web` pour tous les livres existants et pour
   `POST /books`, `mobile` pour un livre de l'application. Fixé à la création, jamais modifiable (ignoré par `PUT`,
@@ -102,7 +106,80 @@ existantes du module ; une seule route lui est propre (16/10/2026) :
   (`GET /books?scope=all`, `?userId=`), les ouvre, les modifie, les supprime, en rédige les chapitres et les PDF comme
   les autres (`BookVoter` accorde tout à `ROLE_ADMIN`). Le champ `channel` permet au web d'afficher l'origine.
 - PDF : l'auteur d'un livre mobile n'est jamais le nom par défaut du site (voir « Mise en page du livre »).
-- Tests : `MobileBookChannelTest`.
+- Transcriptions et améliorations : quotas par utilisateur et par jour, `GET /mobile/quotas` (voir « Quotas des appels IA »).
+  Chaque livre rendu porte **`aiQuotaLimited`** (16/10/2026) : vrai quand les appels IA de ce livre sont soumis aux
+  quotas pour l'utilisateur courant (livre mobile, ou livre web si le site applique les quotas au web, et
+  utilisateur non administrateur) ; le frontend affiche alors le reste du jour près des boutons.
+- Tests : `MobileBookChannelTest`, `AiQuotaTest`.
+
+## Quotas des appels IA
+
+`POST /chapters/{id}/audio` (Whisper) et `POST /chapters/{id}/improve-answer` (Anthropic) coûtent à chaque appel.
+Depuis le 16/10/2026, chaque site a des quotas, réglables par l'administrateur sans nouvelle version du code
+(`Services/AiQuotaService`, `Entity/AiQuotaSetting`, `Entity/AiUsage`, `UseCase/Quota/`).
+
+- **Réglages** (une ligne `mv_ai_quota_setting` par site, valeurs par défaut sans ligne) : transcriptions par
+  utilisateur et par jour (40), améliorations par utilisateur et par jour (60), durée maximale d'un enregistrement
+  en secondes (300, entre 30 et 1 800), application aux livres web (non), fuseau horaire du site (`America/Martinique` :
+  aucun site ne porte de fuseau ailleurs). **0 = illimité.** Le jour va de minuit à minuit dans ce fuseau.
+- **Qui est limité** (`AiQuotaService::isLimited`) : le propriétaire connecté d'un livre `channel = mobile` ; d'un
+  livre `web` seulement si « application aux livres web » est activé. Jamais un administrateur (même sur le livre d'un
+  autre), jamais un proche invité venu par un lien (sa règle reste : une amélioration par question).
+- **Contrôles, avant l'appel IA** :
+  - enregistrement trop long : 400 `{"error": "AUDIO_TOO_LONG", "message", "maxSeconds"}`. La durée est lue dans
+    l'en-tête du fichier (`Services/AudioDurationProbe` : WAV, MP4/M4A, OGG, MP3, WebM quand il porte une durée) et
+    comparée au champ facultatif `durationSeconds` du formulaire (la plus grande des deux compte) : un WebM enregistré
+    en direct par un navigateur n'a souvent pas de durée dans son en-tête, les clients envoient donc `durationSeconds` ;
+  - quota du jour atteint : 429 `{"error": "QUOTA_EXCEEDED", "message", "quota": {"kind": "transcription" |
+    "improvement", "limit", "used", "resetsAt"}}` + en-tête `Retry-After` (secondes jusqu'à la remise à zéro).
+- **Seuls les appels aboutis comptent** (`AiQuotaService::record`) : un 422 `noSpeech`, un 503 de l'IA ou une
+  erreur ne sont pas décomptés.
+- **Lecture par l'application** : `GET /api/memoires/mobile/quotas` (connexion obligatoire) →
+  `{"transcription": {"limit", "used", "remaining", "resetsAt"}, "improvement": {…}, "maxAudioSeconds"}`
+  (`limit` null = illimité). Le web peut l'appeler aussi.
+- **Réglage par l'administrateur** : écran EasyAdmin « Quotas IA Mémoires Vivantes »
+  (`Controller/Admin/Memoires/AiQuotaPageController`, réglages + consommation d'un jour par utilisateur) ; API
+  `ROLE_ADMIN` (`Controller/Admin/AiQuotaAdminController`) : `GET`/`PUT /api/memoires/admin/ai-quotas`
+  (`{transcriptionsPerDay, improvementsPerDay, maxAudioSeconds, applyToWebBooks, timezone}`, champs facultatifs au
+  `PUT`, 422 `VALIDATION_FAILED` avec `errors[{path, message}]`), `GET /api/memoires/admin/ai-quotas/usage?date=AAAA-MM-JJ`
+  → `{date, timezone, from, to, users: [{userId, email, name, transcriptions, improvements}], limits}`.
+- Schéma : `migrations/Version20261016120000.php`, `scripts/migrate_all_v2_mv_ai_quotas.sh`. Tests : `AiQuotaTest`
+  (Whisper simulé : `tests/Fake/FakeOpenAiService.php`).
+
+## Console d'administration : populations et utilisateurs mobile
+
+Rien en base ne rattache un compte à une population : elle est **calculée** (`Services/UserPopulationResolver`),
+avec une priorité : `team` (ROLE_ADMIN : biographes) ; `mobile` (inscrit depuis l'application, `signup_channel =
+mobile`, **ou** propriétaire d'au moins un livre `channel = mobile`) ; `web_client` (tous les autres : clients dont
+un biographe fait le livre, collaborateurs invités, comptes de la boutique : mêmes rôles, indiscernables). Un client
+web qui crée un livre dans l'application devient donc « mobile ». L'application Living Memory envoie
+`{"app": "livingmemory"}` dans le corps de `POST /api/register` (en plus de `platform: "mobile"`) : c'est ce qui
+marque l'origine mobile, car `platform` vaut déjà `mobile` par défaut quand il est absent et ne distingue rien.
+Lecture métier : un compte web est en général un biographe de l'équipe ou un client suivi par lui ; un utilisateur
+mobile fait son propre livre, avec des quotas et, à venir, des chapitres payants (le web affiche `web_client` comme « Web »).
+
+- `GET /admin/users` : champs **ajoutés** à chaque utilisateur : `population`, `signupChannel`, `createdAt`,
+  `lastActivityAt` (dernier des : dernière connexion, modification d'un livre ou d'un chapitre, appel IA),
+  `mobileBooksCount`. Cette liste contient tous les comptes du site, clients de la boutique compris.
+- `GET /admin/mobile-users?search=&page=1&perPage=20` (`Controller/Admin/MobileUserAdminController`,
+  `Services/MobileUserStatsService`, `Repository/UserActivityStatsRepository` : SQL agrégé, une requête par famille) :
+  population mobile seulement, administrateurs exclus → `{date, timezone, limits, page, perPage, total, users:
+  [{userId, email, name, signupChannel, createdAt, lastActivityAt, books: {count, mobileCount, chaptersTotal,
+  chaptersWritten, chaptersPaid}, payments: {count, totalAmount, currency, lastPaidAt}, credits: null, ai:
+  {transcriptionsToday, improvementsToday, transcriptionsTotal, improvementsTotal, generationsTotal, lastCallAt,
+  remaining: {transcriptions, improvements}}}]}`. Montants en unités avec la devise, dates ISO 8601 dans le fuseau
+  du site. `perPage` ≤ 100.
+- `GET /admin/mobile-users/{userId}` → `{user: {…, population, roles}, books: [{id, title, type, channel, createdAt,
+  paymentStatus, chapters: [{id, title, position, generationStatus, hasText, updatedAt, paid: null}]}], payments:
+  [{id, amount, currency, status, paidAt, object: {kind: "book" | "print", id, title}}], credits: null, ai: {…,
+  history: [{date, transcriptions, improvements, generations}] (30 jours)}}` ; 404 `MOBILE_USER_NOT_FOUND` hors
+  population mobile.
+- Ce qui est mesuré aujourd'hui : paiements = livre payé par lien Stripe (`mv_book`) et commandes d'impression
+  (`mv_book_print_order`) ; **aucun paiement par chapitre ni crédit par utilisateur n'existe** (`chaptersPaid` = 0,
+  `paid` = null, `credits` = null, jusqu'au lot « achat intégré » : table `mv_chapter_payment` à venir, kind
+  `chapter`) ; cumuls IA à partir du 16/10/2026 et seulement pour les appels soumis aux quotas (plus `generation`
+  pour les livres mobile). `createdAt` est null pour les comptes antérieurs au 16/10/2026.
+- Tests : `MobileUserAdminTest`.
 
 ## Génération d'un chapitre (tâche de fond)
 
@@ -172,6 +249,7 @@ existantes du module ; une seule route lui est propre (16/10/2026) :
 - `tests/Functional/MemoiresVivantes/` (`BookTypeApiTestCase` imite le frontend : `?locale=fr`, `X-XSRF-TOKEN`, JWT) :
   contrat des types de livre, accès aux livres, rédaction (`ChapterGenerationTest`), invités et contributeurs
   (`ChapterGuestAccessTest`), PDF (`BookPdfTest`). Base modèle des tests : `db_mv_test_booktypes` (ne jamais la supprimer).
+- Whisper simulé : `tests/Fake/FakeOpenAiService.php` (`transcribe` ; chaîne vide = 422 `noSpeech`).
 - Client Anthropic simulé : `tests/Fake/FakeAnthropicService.php` (`complete` et `improveAnswer` ; les consignes
   historiques du code appellent l'API réelle : ne pas exécuter le handler d'un type historique dans un test).
 - Essai réel de bout en bout : sur le site `demo` uniquement (types et questions publiés le 30/09/2026).

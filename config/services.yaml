@@ -193,6 +193,10 @@ services:
         arguments:
             $deepLApiKey: '%env(DEEPL_API_KEY)%'
 
+    # Lectures agrégées pour la console d'administration de Mémoires Vivantes (16/10/2026) : classe de dépôt sans
+    # entité, dans un dossier exclu de l'autoconfiguration (dépôts Doctrine) : enregistrée explicitement
+    App\MemoiresVivantes\Repository\UserActivityStatsRepository: ~
+
     App\Controller\TenantSetupController\TenantSetupController:
         bind:
             $frontendBaseDomain: '%env(FRONTEND_BASE_DOMAIN)%'

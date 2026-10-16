@@ -32,7 +32,8 @@ class GenerateChapterHandler
         private readonly ChapterGenerationService $generationService,
         private readonly ChapterTextFormatter $textFormatter,
         private readonly MessageBusInterface $messageBus,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly \App\MemoiresVivantes\Services\AiQuotaService $aiQuota
     ) {}
 
     public function __invoke(GenerateChapterMessage $message): void
@@ -162,6 +163,17 @@ class GenerateChapterHandler
                 $chapter->setContentFinal($fullContent);
                 $chapter->setGenerationStatus('completed');
                 $em->flush();
+                // Cumul par utilisateur (16/10/2026) : rédaction aboutie d'un chapitre d'un livre soumis aux quotas
+                // (mobile, ou web si le site applique les quotas au web ; jamais pour un administrateur)
+                try {
+                    $book = $chapter->getBook();
+                    if ($book && $book->getUser() && $this->aiQuota->isLimited($book, $book->getUser())) {
+                        $em->persist(new \App\MemoiresVivantes\Entity\AiUsage($book->getUser(), \App\MemoiresVivantes\Entity\AiUsage::KIND_GENERATION, $book->getId(), $chapter->getId()));
+                        $em->flush();
+                    }
+                } catch (\Throwable $usageError) {
+                    $this->logger->warning('GenerateChapterHandler: cumul de rédaction non enregistré : ' . $usageError->getMessage());
+                }
             }
         } catch (\Throwable $e) {
             // \Throwable et pas seulement \Exception : une Error PHP laissait le chapitre bloqué en "generating"

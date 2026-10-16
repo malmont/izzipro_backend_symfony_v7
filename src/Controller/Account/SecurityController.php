@@ -113,6 +113,12 @@ class SecurityController extends AbstractController
         if (!$user instanceof UserInterface) {
             return $this->json(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
         }
+        // Dernière activité du compte (16/10/2026) : un rafraîchissement vaut une connexion
+        try {
+            $user->setLastLoginAt(new \DateTimeImmutable());
+            $em->flush();
+        } catch (\Throwable) {
+        }
 
         if ($isWebSession) {
             // Session web : l'activité repousse la déconnexion automatique (fenêtre d'inactivité glissante)

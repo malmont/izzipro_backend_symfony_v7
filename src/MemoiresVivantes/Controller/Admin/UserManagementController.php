@@ -27,7 +27,8 @@ class UserManagementController extends AbstractController
         private readonly RoleAssignmentPolicy $rolePolicy,
         private readonly FrontendUrlResolver $frontendUrl,
         private readonly EmailSenderService $emailSender,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly \App\MemoiresVivantes\Services\MobileUserStatsService $mobileUserStats
     ) {}
 
     /** Adresse du site frontend (les liens d'activation y renvoient ; avant, ils pointaient vers le stockage des médias) */
@@ -56,6 +57,8 @@ class UserManagementController extends AbstractController
         }
 
         $host = $this->resolveHost($request);
+        // Champs ajoutés (16/10/2026) : population, origine, création, dernière activité, livres mobile
+        $extra = $this->mobileUserStats->enrichment($users);
         $data = [];
 
         foreach ($users as $u) {
@@ -74,6 +77,11 @@ class UserManagementController extends AbstractController
                 'isVerified' => $u->isVerified(),
                 'isPending' => $isPending,
                 'booksCount' => $countMap[$u->getId()] ?? 0,
+                'population' => $extra[$u->getId()]['population'] ?? null,
+                'signupChannel' => $extra[$u->getId()]['signupChannel'] ?? null,
+                'createdAt' => $extra[$u->getId()]['createdAt'] ?? null,
+                'lastActivityAt' => $extra[$u->getId()]['lastActivityAt'] ?? null,
+                'mobileBooksCount' => $extra[$u->getId()]['mobileBooksCount'] ?? 0,
                 'activationUrl' => $activationUrl,
             ];
         }
@@ -118,6 +126,7 @@ class UserManagementController extends AbstractController
             ? ['ROLE_ADMIN', 'ROLE_USER', 'ROLE_USER_POS', 'ROLE_USER_INTERNET']
             : ['ROLE_USER', 'ROLE_USER_INTERNET'];
         $newUser->setRoles($assignedRoles);
+        $newUser->setSignupChannel(User::SIGNUP_WEB_INVITE);
 
         $host = $this->resolveHost($request);
         $token = null;

@@ -28,10 +28,11 @@ class MobileBookController extends AbstractController
         private readonly CreateMobileBookUseCase $createMobileBookUseCase,
         private readonly BookTypeResolver $bookTypeResolver,
         private readonly BookTypeNormalizer $bookTypeNormalizer,
+        private readonly \App\MemoiresVivantes\Services\AiQuotaService $aiQuota,
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
-    /** Même corps et même réponse (201, livre complet) que POST /api/memoires/books ; type inconnu ou inactif : 422 TYPE_INVALID */
+    /** Même corps et même réponse (201, livre complet) que POST /api/memoires/books ; type inconnu ou inactif : 422 {error: TYPE_INVALID, message (pour l'utilisateur), requestedType} */
     #[Route('', methods: ['POST'])]
     public function create(Request $request): JsonResponse
     {
@@ -46,11 +47,11 @@ class MobileBookController extends AbstractController
         try {
             $book = $this->createMobileBookUseCase->execute($user, $dto);
         } catch (InvalidBookTypeException $e) {
-            return $this->json(['error' => 'TYPE_INVALID', 'message' => $e->getMessage()], 422);
+            return $this->json(['error' => 'TYPE_INVALID', 'message' => $e->getMessage(), 'requestedType' => $e->requestedType], 422);
         }
         $host = $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost()) ?? $request->getSchemeAndHttpHost();
 
-        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book)), 201);
+        return $this->json(new BookOutputDto($book, $host, speakersByTheme: $this->bookTypeResolver->speakersByTheme($book), typeInfo: $this->typeInfo($book), aiQuotaLimited: $this->aiQuota->isLimited($book, $this->getUser())), 201);
     }
 
     /** Comme BookController::typeInfo : le type du livre, même désactivé, plus isActive */

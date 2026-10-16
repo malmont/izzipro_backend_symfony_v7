@@ -7,6 +7,7 @@ class InvalidBookTypeException extends \InvalidArgumentException
 {
     public function __construct(public readonly string $requestedType)
     {
-        parent::__construct(sprintf('Type de livre inconnu ou désactivé : « %s ». Choisissez un type de GET /api/memoires/book-types.', $requestedType));
+        // Message destiné aux utilisateurs (l'application l'affiche tel quel) ; le code demandé est rendu à part (requestedType)
+        parent::__construct('Ce type de livre n\'est plus proposé. Choisissez-en un autre.');
     }
 }

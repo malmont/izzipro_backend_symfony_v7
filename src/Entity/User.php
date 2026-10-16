@@ -104,6 +104,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->userOrders = new ArrayCollection();
         $this->transactionCaisses = new ArrayCollection();
         $this->otpCodes = new ArrayCollection();
+        $this->createdAt = new \DateTimeImmutable();
     }
 
     public function getId(): ?int
@@ -498,6 +499,29 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /** Client Stripe sur le compte connecté du site (abonnements, boutique réglable 09/10/2026) */
     #[ORM\Column(name: 'stripe_customer_id', length: 64, nullable: true)]
     private ?string $stripeCustomerId = null;
+
+    /** Origine de l'inscription (16/10/2026) : invitation par un biographe, inscription sur le web, application mobile Living Memory ; null pour les comptes antérieurs ou créés autrement (EasyAdmin, caisse) */
+    public const SIGNUP_WEB_INVITE = 'web_invite';
+    public const SIGNUP_WEB_REGISTER = 'web_register';
+    public const SIGNUP_MOBILE = 'mobile';
+
+    #[ORM\Column(name: 'signup_channel', length: 20, nullable: true)]
+    private ?string $signupChannel = null;
+
+    /** Date de création du compte (null pour les comptes antérieurs au 16/10/2026) */
+    #[ORM\Column(name: 'created_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $createdAt = null;
+
+    /** Dernière connexion réussie (/api/login, /api/otp-verify, /api/token/refresh) */
+    #[ORM\Column(name: 'last_login_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $lastLoginAt = null;
+
+    public function getSignupChannel(): ?string { return $this->signupChannel; }
+    public function setSignupChannel(?string $signupChannel): static { $this->signupChannel = $signupChannel; return $this; }
+    public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
+    public function setCreatedAt(?\DateTimeImmutable $createdAt): static { $this->createdAt = $createdAt; return $this; }
+    public function getLastLoginAt(): ?\DateTimeImmutable { return $this->lastLoginAt; }
+    public function setLastLoginAt(?\DateTimeImmutable $lastLoginAt): static { $this->lastLoginAt = $lastLoginAt; return $this; }
 
     public function getStripeCustomerId(): ?string
     {
