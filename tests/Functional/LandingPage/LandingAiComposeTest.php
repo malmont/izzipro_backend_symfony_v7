@@ -911,6 +911,8 @@ class LandingAiComposeTest extends WebTestCase
         $homeRequest = FakeLandingAiClient::$requests[0]['messages'][0]['content'];
         $this->assertStringContainsString('Site complet : cette demande compose l\'accueil', $homeRequest);
         $this->assertContains('charter', FakeLandingAiClient::$requests[0]['tools'][0]['input_schema']['required'], 'la charte est exigée du modèle pour l\'accueil');
+        $this->assertEqualsWithDelta(\App\Services\LandingAiService\LandingAiComposer::SITE_CALL_TIMEOUT, FakeLandingAiClient::$timeouts[0], 1.0, 'accueil d\'un site : délai long par appel');
+        $this->assertSame(\App\Services\LandingAiService\LandingAiPromptBuilder::SITE_MAX_TOKENS, FakeLandingAiClient::$requests[0]['max_tokens']);
         $this->assertStringContainsString('site complet : une section Navbar', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
 
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'AuthPage', 'dataType' => null, 'composition' => $this->preset('auth-login')]]);

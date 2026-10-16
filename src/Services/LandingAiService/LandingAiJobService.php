@@ -16,8 +16,8 @@ final class LandingAiJobService
     public const RESULT_TTL_SECONDS = 3600;
     /** En attente depuis plus de 30 minutes : le worker ne tourne pas */
     public const PENDING_TIMEOUT_SECONDS = 1800;
-    /** En cours depuis plus de 10 minutes (traitement limité à 300 s) : worker interrompu */
-    public const RUNNING_TIMEOUT_SECONDS = 600;
+    /** En cours depuis plus de 15 minutes (traitement limité à 600 s pour l'accueil d'un site, 300 s sinon) : worker interrompu */
+    public const RUNNING_TIMEOUT_SECONDS = 900;
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -110,7 +110,7 @@ final class LandingAiJobService
         }
     }
 
-    /** En attente depuis 30 min (worker arrêté) ou en cours depuis 10 min (worker interrompu) */
+    /** En attente depuis 30 min (worker arrêté) ou en cours depuis 15 min (worker interrompu) */
     private function isStale(AiJob $job, \DateTimeImmutable $now): bool
     {
         return match ($job->getStatus()) {

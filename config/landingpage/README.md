@@ -225,11 +225,13 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     demande. `GET /api/landingpage-ai/jobs/{jobId}` → `{ jobId, status: pending | running | done | failed, result?
     (même contenu que la réponse synchrone), error? { status, error, message, errors? } }`, réservé aux administrateurs
     du tenant de la tâche (404 pour un autre tenant). Résultat conservé 1 heure ; la requête (images comprises) est
-    effacée dès le traitement. Tâche en attente depuis 30 min (worker arrêté) ou en cours depuis 10 min : échec 504,
+    effacée dès le traitement. Tâche en attente depuis 30 min (worker arrêté) ou en cours depuis 15 min : échec 504,
     crédits libérés. Réservation des crédits : 35 min pour une tâche de fond, 5 min en synchrone
     (`ai_usage.reserved_until`). Edit et create sans image restent synchrones (200).
   - Délais : retouche et création 90 s par appel, 180 s au total ; page et requêtes avec images 180 s par appel, 300 s
-    au total (504 au-delà, crédits libérés). **Les intermédiaires doivent laisser passer 330 s** : `fastcgi_read_timeout
+    au total (504 au-delà, crédits libérés) ; accueil d'un site complet (mode site) 420 s par appel, 600 s au total et
+    48 000 jetons de sortie (16/10/2026 : deux accueils avec une maquette PDF de 5 pages coupés à 180 s sans réponse ;
+    la réponse d'un accueil fidèle à une maquette dépasse 20 000 jetons, soit plus de 3 minutes). **Les intermédiaires doivent laisser passer 330 s** : `fastcgi_read_timeout
     330s` dans `docker/nginx/default.conf` (le défaut de 60 s coupait la réponse en 504 pendant que PHP terminait et
     consommait les crédits), `proxy_read_timeout` du proxy public (Nginx Proxy Manager : 90 s par défaut) et délai
     d'attente du frontend.

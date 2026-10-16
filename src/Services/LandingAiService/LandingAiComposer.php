@@ -18,6 +18,13 @@ final class LandingAiComposer
     /** Page et requêtes avec images (claude-opus-5-5, plusieurs sections) : une page de 4 sections prend déjà ~70 s */
     public const PAGE_CALL_TIMEOUT = 180.0;
     public const PAGE_TOTAL_TIMEOUT = 300.0;
+    /**
+     * Accueil d'un site complet (navbar, footer, charte et jusqu'à dix sections, souvent avec une maquette PDF) : 16/10/2026,
+     * deux accueils ENVERS coupés à 180 s sans aucune réponse (0 jeton). La réponse dépasse 20 000 jetons : 7 minutes
+     * par appel, 10 au total (le worker n'a pas de limite par message ; l'API refuse au-delà de 10 min sans flux).
+     */
+    public const SITE_CALL_TIMEOUT = 420.0;
+    public const SITE_TOTAL_TIMEOUT = 600.0;
     private const MIN_CALL_TIME = 5.0;
     /** Nouveaux essais d'un même appel sur une erreur passagère de l'API (429, 529, 5xx), dans le délai total */
     public const TRANSIENT_RETRIES = 2;
@@ -273,7 +280,7 @@ final class LandingAiComposer
             }
 
             return [$result, []];
-        });
+        }, $siteHome ? [self::SITE_CALL_TIMEOUT, self::SITE_TOTAL_TIMEOUT] : null);
     }
 
     /** La demande (ou le brief d'un onglet) parle-t-elle de commerce ? Sinon, une section de la boutique dans un onglet est signalée. */
@@ -402,13 +409,14 @@ final class LandingAiComposer
      * Publique pour les demandes qui ne produisent pas de composition (LandingAiVideoPromptWriter).
      *
      * @param callable(object, LandingAiUsageStats): array{0: mixed, 1: list<array{path: string, message: string}>} $handle
+     * @param array{0: float, 1: float}|null $timeouts délai par appel et délai total, à la place de ceux de $long (accueil d'un site)
      */
-    public function run(array $payload, string $tool, bool $long, callable $handle): mixed
+    public function run(array $payload, string $tool, bool $long, callable $handle, ?array $timeouts = null): mixed
     {
         $stats = new LandingAiUsageStats($payload['model']);
         $start = microtime(true);
         $errors = [];
-        $timeouts = $long ? [self::PAGE_CALL_TIMEOUT, self::PAGE_TOTAL_TIMEOUT] : [self::CALL_TIMEOUT, self::TOTAL_TIMEOUT];
+        $timeouts ??= $long ? [self::PAGE_CALL_TIMEOUT, self::PAGE_TOTAL_TIMEOUT] : [self::CALL_TIMEOUT, self::TOTAL_TIMEOUT];
 
         for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
             $response = $this->call($payload, $start, $stats, ...$timeouts);

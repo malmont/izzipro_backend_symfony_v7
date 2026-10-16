@@ -20,6 +20,8 @@ final class LandingAiPromptBuilder
     public const VIDEO_PROMPT_TOOL = 'ecrire_prompt_video';
     public const MAX_TOKENS = 16000;
     public const PAGE_MAX_TOKENS = 32000;
+    /** Accueil d'un site complet : navbar, footer, charte et jusqu'à dix sections fidèles à une maquette */
+    public const SITE_MAX_TOKENS = 48000;
     public const PAGE_MAX_SECTIONS = 12;
     /** Données du site listées par famille en mode page */
     private const PAGE_DATA_ITEMS = 15;
@@ -289,7 +291,9 @@ TXT;
             sprintf('Appelle l\'outil %s avec les sections dans l\'ordre de la page (componentKey, dataType, composition complète), un résumé, les avertissements éventuels et les limites (limits) s\'il y en a%s.', self::PAGE_TOOL, ($options['siteHome'] ?? false) ? ', ainsi que la charte (charter) déduite de l\'accueil composé' : ''),
         ];
 
-        return $this->payload($model, $this->pageContext(), implode("\n", $context), $this->pageTool(($options['siteHome'] ?? false) === true), $images, self::PAGE_MAX_TOKENS, 'page');
+        $siteHome = ($options['siteHome'] ?? false) === true;
+
+        return $this->payload($model, $this->pageContext(), implode("\n", $context), $this->pageTool($siteHome), $images, $siteHome ? self::SITE_MAX_TOKENS : self::PAGE_MAX_TOKENS, 'page');
     }
 
     /**
