@@ -25,6 +25,7 @@ class StripeWebhookController extends AbstractController
         private readonly LoggerInterface $logger,
         private readonly HandleSubscriptionWebhookUseCase $subscriptionWebhookUseCase,
         private readonly \App\UseCase\CheckoutUseCase\FinalizeCheckoutOrderUseCase $finalizeCheckout,
+        private readonly \App\MemoiresVivantes\Services\PrintPaymentService $printPayments,
         #[Autowire('%kernel.environment%')]
         private readonly string $environment = 'prod'
     ) {}
@@ -117,6 +118,23 @@ class StripeWebhookController extends AbstractController
             $this->logger->info(sprintf('[StripeWebhook] %s %s : %s (%s)', $eventType, $eventData['id'], $result['status'], $result['detail']));
 
             return $this->json($result);
+        }
+
+        // Remboursement Stripe d'une impression commandée depuis l'application Living Memory (16/10/2026) : la commande
+        // passe en « refunded » pour la console d'administration ; rien d'autre n'est fait (le livre reste imprimé)
+        if ($eventType === 'charge.refunded' && !empty($eventData['metadata']['memoires_print']) && is_string($eventData['payment_intent'] ?? null)) {
+            if (!is_object($event) && $this->environment !== 'test') {
+                return $this->json(['error' => 'Signature requise'], Response::HTTP_BAD_REQUEST);
+            }
+            $tenantCode = $eventData['metadata']['tenant_code'] ?? null;
+            $tenant = is_string($tenantCode) && $tenantCode !== '' ? $this->connectionManager->findTenantByCode($tenantCode) : null;
+            if (!$tenant || empty($tenant['dbname'])) {
+                return $this->json(['status' => 'ignored', 'detail' => 'impression sans site connu']);
+            }
+            $this->emProvider->switchTenant($tenant['dbname'], $tenantCode);
+            $order = $this->printPayments->refundFromStripe($eventData['payment_intent'], ((int) ($eventData['amount_refunded'] ?? 0)) / 100);
+
+            return $this->json(['status' => $order ? 'refunded' : 'ignored', 'detail' => $order ? 'commande ' . $order->getId()->toRfc4122() : 'intention inconnue']);
         }
 
         if ($eventType === 'checkout.session.completed') {

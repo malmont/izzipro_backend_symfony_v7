@@ -33,6 +33,14 @@ class ChapterOutputDto
     public ?string $speaker = null;
     /** Chapitre de synthèse : rédigé à partir de tous les témoignages du livre, sans questionnaire obligatoire */
     public bool $isSynthesis = false;
+    /** Rédaction payante (16/10/2026) : paiement qui débloque le chapitre (livres mobile), null sinon */
+    public ?array $paid = null;
+    /** Vrai quand POST /generate répondra 402 CHAPTER_NOT_PAID pour l'utilisateur courant (jamais pour un administrateur) */
+    public bool $writingLocked = false;
+    /** Texte masqué après un remboursement (conservé en base, rétabli par un nouvel achat) */
+    public bool $hiddenAfterRefund = false;
+    /** Posé par ChapterViewerContextSubscriber à chaque requête */
+    public static bool $viewerIsAdmin = false;
 
     public function __construct(
         Chapter $chapter,
@@ -178,6 +186,12 @@ class ChapterOutputDto
         }
 
         $this->contentFinal = $chapter->getContentFinal();
+        $this->paid = $chapter->getPaid();
+        $this->hiddenAfterRefund = $chapter->isHiddenAfterRefund();
+        if ($this->hiddenAfterRefund) {
+            $this->contentFinal = null;
+        }
+        $this->writingLocked = $book !== null && $book->getChannel() === \App\MemoiresVivantes\Entity\Book::CHANNEL_MOBILE && !$chapter->isPaid() && !self::$viewerIsAdmin;
         $this->generationStatus = $chapter->getGenerationStatus();
         $this->generationError = $chapter->getGenerationError();
         $layout = $chapter->getPhotoLayout();

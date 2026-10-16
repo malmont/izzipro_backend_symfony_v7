@@ -25,7 +25,8 @@ class MobileUserStatsService
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly UserActivityStatsRepository $stats,
-        private readonly AiQuotaService $quotas
+        private readonly AiQuotaService $quotas,
+        private readonly PricingService $pricing
     ) {}
 
     /** GET /admin/mobile-users */
@@ -75,7 +76,7 @@ class MobileUserStatsService
                 'chapters' => array_map(fn ($c) => [
                     'id' => (string) $c->getId(), 'title' => $c->getTitle(), 'position' => $c->getPosition(), 'generationStatus' => $c->getGenerationStatus(),
                     'hasText' => trim((string) ($c->getContentFinal() ?: $c->getContentGenerated())) !== '', 'updatedAt' => $this->iso($c->getUpdatedAt()),
-                    'paid' => null, // paiement par chapitre : lot « achat intégré » à venir
+                    'paid' => $c->getPaid(), 'hiddenAfterRefund' => $c->isHiddenAfterRefund(),
                 ], $book->getChapters()->toArray()),
             ];
             if ($book->getPaymentStatus() === 'paid') {
@@ -84,8 +85,26 @@ class MobileUserStatsService
             }
         }
         foreach ($em->getRepository(BookPrintOrder::class)->findBy(['user' => $user], ['createdAt' => 'DESC']) as $order) {
-            $payments[] = ['id' => (string) $order->getId(), 'amount' => $order->getTotalCost() !== null ? round((float) $order->getTotalCost(), 2) : null, 'currency' => strtolower($order->getCurrency() ?: 'eur'), 'status' => $order->getStatus(), 'paidAt' => $this->iso($order->getCreatedAt()),
+            // Commande de l'application : montant facturé et état du paiement Stripe ; commande web : coût Lulu, état Lulu
+            $charged = $order->getChargedAmount();
+            $payments[] = ['id' => (string) $order->getId(), 'amount' => $charged ?? ($order->getTotalCost() !== null ? round((float) $order->getTotalCost(), 2) : null),
+                'currency' => $order->getChargedCurrency() ?? strtolower($order->getCurrency() ?: 'eur'), 'status' => $order->getPaymentStatus() ?? $order->getStatus(), 'paidAt' => $this->iso($order->getCreatedAt()),
+                'refundedAt' => $this->iso($order->getRefundedAt()), 'refundedAmount' => $order->getRefundedAmount(), 'store' => $order->getPaymentStatus() !== null ? 'stripe' : null, 'paymentRef' => $order->getStripePaymentIntentId(),
                 'object' => ['kind' => 'print', 'id' => $order->getBook() ? (string) $order->getBook()->getId() : null, 'title' => $order->getBook()?->getTitle()]];
+        }
+        // Achats de rédaction de chapitre (RevenueCat), remboursés compris
+        $chapterTitles = [];
+        foreach ($bookList as $b) {
+            foreach ($b['chapters'] as $c) {
+                $chapterTitles[$c['id']] = $c['title'];
+            }
+        }
+        foreach ($em->getRepository(\App\MemoiresVivantes\Entity\ChapterPayment::class)->findForUser($user) as $purchase) {
+            $payments[] = ['id' => 'chapter-payment-' . $purchase->getId(), 'amount' => $purchase->getAmount(), 'currency' => $purchase->getCurrency(), 'status' => $purchase->getStatus(),
+                'paidAt' => $this->iso($purchase->getAssignedAt() ?? $purchase->getPurchasedAt() ?? $purchase->getCreatedAt()),
+                'refundedAt' => $this->iso($purchase->getRefundedAt()), 'refundedAmount' => $purchase->getRefundedAmount(),
+                'paymentRef' => $purchase->reference(), 'store' => $purchase->getStore(), 'environment' => $purchase->getEnvironment(),
+                'object' => ['kind' => 'chapter', 'id' => $purchase->getChapterId() ? (string) $purchase->getChapterId() : null, 'title' => $purchase->getChapterId() ? ($chapterTitles[(string) $purchase->getChapterId()] ?? null) : null]];
         }
         usort($payments, fn ($a, $b) => strcmp((string) $b['paidAt'], (string) $a['paidAt']));
         $summary['ai']['history'] = $this->stats->aiHistory($userId, $this->quotas->timezone()->getName(), self::HISTORY_DAYS);
@@ -131,8 +150,15 @@ class MobileUserStatsService
     private function summary(User $user): array
     {
         $id = (int) $user->getId();
-        $bookStats = $this->stats->bookStats([$id])[$id] ?? ['books' => 0, 'mobileBooks' => 0, 'chaptersTotal' => 0, 'chaptersWritten' => 0, 'lastActivity' => null];
-        $payments = $this->stats->paymentStats([$id])[$id] ?? ['count' => 0, 'totalAmount' => 0.0, 'currency' => 'eur', 'lastPaidAt' => null];
+        $bookStats = $this->stats->bookStats([$id])[$id] ?? ['books' => 0, 'mobileBooks' => 0, 'chaptersTotal' => 0, 'chaptersWritten' => 0, 'chaptersPaid' => 0, 'lastActivity' => null];
+        $payments = $this->stats->paymentStats([$id])[$id] ?? ['count' => 0, 'totals' => [], 'lastPaidAt' => null];
+        $defaultCurrency = $this->pricing->settings()->defaultCurrency();
+        $defaultTotal = 0.0;
+        foreach ($payments['totals'] as $t) {
+            if ($t['currency'] === $defaultCurrency) {
+                $defaultTotal = $t['amount'];
+            }
+        }
         $totals = $this->stats->aiTotals([$id])[$id] ?? ['kinds' => [], 'lastCallAt' => null];
         [$from, $to] = $this->quotas->dayWindow();
         $today = $this->stats->aiTotals([$id], $from, $to)[$id]['kinds'] ?? [];
@@ -145,8 +171,9 @@ class MobileUserStatsService
                 'signupChannel' => $user->getSignupChannel(), 'createdAt' => $this->iso($user->getCreatedAt()),
                 'lastActivityAt' => $this->lastActivity($user, $bookStats['lastActivity'], $totals['lastCallAt']),
             ],
-            'books' => ['count' => $bookStats['books'], 'mobileCount' => $bookStats['mobileBooks'], 'chaptersTotal' => $bookStats['chaptersTotal'], 'chaptersWritten' => $bookStats['chaptersWritten'], 'chaptersPaid' => 0],
-            'payments' => ['count' => $payments['count'], 'totalAmount' => $payments['totalAmount'], 'currency' => $payments['currency'], 'lastPaidAt' => $this->iso($payments['lastPaidAt'])],
+            'books' => ['count' => $bookStats['books'], 'mobileCount' => $bookStats['mobileBooks'], 'chaptersTotal' => $bookStats['chaptersTotal'], 'chaptersWritten' => $bookStats['chaptersWritten'], 'chaptersPaid' => $bookStats['chaptersPaid'] ?? 0],
+            // totalAmount et currency : repli (total de la devise par défaut du site) ; la vérité est dans totals, par devise
+            'payments' => ['count' => $payments['count'], 'totalAmount' => $defaultTotal, 'currency' => $defaultCurrency, 'totals' => $payments['totals'], 'lastPaidAt' => $this->iso($payments['lastPaidAt'])],
             'credits' => null,
             'ai' => [
                 'transcriptionsToday' => $today[AiUsage::KIND_TRANSCRIPTION] ?? 0, 'improvementsToday' => $today[AiUsage::KIND_IMPROVEMENT] ?? 0,

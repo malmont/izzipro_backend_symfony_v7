@@ -78,6 +78,26 @@ class AiQuotaService
         }
     }
 
+    /**
+     * Reprise de rédaction d'un chapitre déjà rédigé : bornée par chapitre et par jour (regenerationsPerDay, 0 =
+     * illimité). La première rédaction n'est pas une reprise.
+     *
+     * @throws AiQuotaExceededException quota de reprises du jour atteint
+     */
+    public function assertRegenerationAllowed(User $user, Chapter $chapter): void
+    {
+        $limit = $this->settings()->limitFor(AiUsage::KIND_REGENERATION);
+        $alreadyWritten = trim((string) ($chapter->getContentFinal() ?: $chapter->getContentGenerated())) !== '';
+        if ($limit === null || !$alreadyWritten) {
+            return;
+        }
+        [$from, $to, $resetsAt] = $this->dayWindow();
+        $used = $this->usageRepository()->countGenerationsForChapter($chapter, $from, $to);
+        if ($used >= $limit) {
+            throw new AiQuotaExceededException(AiUsage::KIND_REGENERATION, $limit, $used, $resetsAt);
+        }
+    }
+
     /** À appeler seulement quand l'appel IA a rendu un résultat */
     public function record(User $user, string $kind, ?Book $book = null, ?Chapter $chapter = null): void
     {

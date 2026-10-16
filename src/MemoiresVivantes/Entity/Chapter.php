@@ -68,6 +68,26 @@ class Chapter
     #[ORM\Column(type: Types::JSON, nullable: true)]
     private ?array $photoLayout = null;
 
+    /**
+     * Rédaction payante (16/10/2026, livres de l'application mobile) : copie du paiement qui débloque ce chapitre
+     * (registre : ChapterPayment). null = pas payé ; un livre web n'en a jamais besoin.
+     */
+    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
+    private ?string $paidAmount = null;
+
+    #[ORM\Column(length: 3, nullable: true)]
+    private ?string $paidCurrency = null;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $paidAt = null;
+
+    #[ORM\Column(length: 191, nullable: true)]
+    private ?string $paymentRef = null;
+
+    /** Texte masqué après un remboursement (conservé en base, rétabli par un nouvel achat) */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $hiddenAfterRefund = false;
+
     public function __construct()
     {
         $this->id = Uuid::v4();
@@ -255,6 +275,50 @@ class Chapter
     {
         $this->contributorAnswers = $contributorAnswers;
         return $this;
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->paidAt !== null;
+    }
+
+    /** @return array{amount: ?float, currency: ?string, paidAt: string, paymentRef: ?string}|null */
+    public function getPaid(): ?array
+    {
+        return $this->paidAt === null ? null : ['amount' => $this->paidAmount === null ? null : (float) $this->paidAmount, 'currency' => $this->paidCurrency, 'paidAt' => $this->paidAt->format(\DateTimeInterface::ATOM), 'paymentRef' => $this->paymentRef];
+    }
+
+    public function markPaid(?float $amount, ?string $currency, string $paymentRef, ?\DateTimeImmutable $at = null): static
+    {
+        $this->paidAmount = $amount === null ? null : number_format($amount, 2, '.', '');
+        $this->paidCurrency = $currency === null ? null : strtolower(substr($currency, 0, 3));
+        $this->paidAt = $at ?? new \DateTimeImmutable();
+        $this->paymentRef = $paymentRef;
+        $this->hiddenAfterRefund = false;
+
+        return $this;
+    }
+
+    /** Remboursement : plus payé, texte masqué (conservé) */
+    public function markRefunded(): static
+    {
+        $this->paidAmount = null;
+        $this->paidCurrency = null;
+        $this->paidAt = null;
+        $this->paymentRef = null;
+        $this->hiddenAfterRefund = true;
+
+        return $this;
+    }
+
+    public function isHiddenAfterRefund(): bool
+    {
+        return $this->hiddenAfterRefund;
+    }
+
+    public function getPaymentRefMatches(string $reference): bool
+    {
+        return $this->paymentRef === $reference;
     }
 
     public function getPhotoLayout(): ?array

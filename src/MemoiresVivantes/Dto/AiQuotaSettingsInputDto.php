@@ -12,6 +12,7 @@ class AiQuotaSettingsInputDto
 {
     public ?int $transcriptionsPerDay = null;
     public ?int $improvementsPerDay = null;
+    public ?int $regenerationsPerDay = null;
     public ?int $maxAudioSeconds = null;
     public ?bool $applyToWebBooks = null;
     public ?string $timezone = null;
@@ -21,7 +22,7 @@ class AiQuotaSettingsInputDto
     /** @param array<string, mixed> $data */
     public function __construct(array $data)
     {
-        foreach (['transcriptionsPerDay' => 'transcriptions_per_day', 'improvementsPerDay' => 'improvements_per_day'] as $field => $alt) {
+        foreach (['transcriptionsPerDay' => 'transcriptions_per_day', 'improvementsPerDay' => 'improvements_per_day', 'regenerationsPerDay' => 'regenerations_per_day'] as $field => $alt) {
             $value = $data[$field] ?? $data[$alt] ?? null;
             if ($value === null || $value === '') continue;
             if (!is_numeric($value) || (int) $value < 0 || (int) $value > 100000 || (string) (int) $value !== (string) $value && !is_int($value)) {
@@ -61,6 +62,7 @@ class AiQuotaSettingsInputDto
     {
         if ($this->transcriptionsPerDay !== null) $settings->setTranscriptionsPerDay($this->transcriptionsPerDay);
         if ($this->improvementsPerDay !== null) $settings->setImprovementsPerDay($this->improvementsPerDay);
+        if ($this->regenerationsPerDay !== null) $settings->setRegenerationsPerDay($this->regenerationsPerDay);
         if ($this->maxAudioSeconds !== null) $settings->setMaxAudioSeconds($this->maxAudioSeconds);
         if ($this->applyToWebBooks !== null) $settings->setApplyToWebBooks($this->applyToWebBooks);
         if ($this->timezone !== null) $settings->setTimezone($this->timezone);

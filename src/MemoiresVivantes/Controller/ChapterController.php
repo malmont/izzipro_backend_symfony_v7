@@ -52,6 +52,8 @@ class ChapterController extends AbstractController
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly \Psr\Log\LoggerInterface $logger,
         private readonly \App\MemoiresVivantes\Services\AiQuotaService $aiQuota,
+        private readonly \App\MemoiresVivantes\Services\ChapterPaymentService $chapterPayments,
+        private readonly \App\MemoiresVivantes\Services\PricingService $pricing,
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
@@ -342,6 +344,20 @@ class ChapterController extends AbstractController
         if (!$chapter) return $this->json(['error' => 'Chapter not found'], 404);
 
         $this->denyAccessUnlessGranted('CHAPTER_EDIT', $chapter);
+
+        // Rédaction payante (16/10/2026) : chapitre d'un livre mobile non payé → achat dans l'application
+        $generatingUser = $this->getUser();
+        if ($this->chapterPayments->requiresPayment($chapter, $generatingUser)) {
+            return $this->json(['error' => 'CHAPTER_NOT_PAID', 'message' => 'La rédaction de ce chapitre est payante. Achetez-la dans l\'application pour continuer.', 'product' => $this->pricing->settings()->getChapterProduct()], 402);
+        }
+        // Reprises de rédaction bornées par jour pour un livre soumis aux quotas (jamais un administrateur)
+        if ($generatingUser instanceof \App\Entity\User && $this->aiQuota->isLimited($chapter->getBook(), $generatingUser)) {
+            try {
+                $this->aiQuota->assertRegenerationAllowed($generatingUser, $chapter);
+            } catch (\App\MemoiresVivantes\Exception\AiQuotaExceededException $e) {
+                return $this->json($e->toBody(), 429, ['Retry-After' => (string) $e->retryAfterSeconds()]);
+            }
+        }
 
         // Rédaction déjà en file ou en cours (double clic, relance du frontend) : pas de seconde rédaction payée
         if ($this->generationService->isInProgress($chapter)) {

@@ -196,6 +196,17 @@ services:
     # Lectures agrégées pour la console d'administration de Mémoires Vivantes (16/10/2026) : classe de dépôt sans
     # entité, dans un dossier exclu de l'autoconfiguration (dépôts Doctrine) : enregistrée explicitement
     App\MemoiresVivantes\Repository\UserActivityStatsRepository: ~
+    App\MemoiresVivantes\Repository\PaymentLedgerRepository: ~
+
+    # Rédaction payante (16/10/2026) : RevenueCat (clé secrète et secret du webhook dans .env, vides tant qu'ils ne
+    # sont pas fournis : aucun appel, webhook en 503)
+    App\MemoiresVivantes\Services\RevenueCat\RevenueCatClient:
+        arguments:
+            $secretKey: '%env(string:default::REVENUECAT_SECRET_KEY)%'
+    App\MemoiresVivantes\Services\RevenueCat\RevenueCatClientInterface: '@App\MemoiresVivantes\Services\RevenueCat\RevenueCatClient'
+    App\MemoiresVivantes\Controller\RevenueCatWebhookController:
+        arguments:
+            $webhookSecret: '%env(string:default::REVENUECAT_WEBHOOK_SECRET)%'
 
     App\Controller\TenantSetupController\TenantSetupController:
         bind:

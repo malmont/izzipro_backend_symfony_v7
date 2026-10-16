@@ -38,6 +38,10 @@ class BookPdfController extends AbstractController
             return $this->json(['error' => $denied[1]], $denied[0]);
         }
 
+        // Livre de l'application mobile sans aucun chapitre payé et rédigé : rien à mettre en page (16/10/2026)
+        if ($book->getChannel() === Book::CHANNEL_MOBILE && !$this->pdfService->hasPrintableContent($book)) {
+            return $this->json(['error' => 'BOOK_EMPTY', 'message' => 'Aucun chapitre payé et rédigé : le livre est vide.'], 422);
+        }
         $author = BookPdfGeneratorService::normalizeAuthorName($request->query->all()['author'] ?? null);
         // Police à l'essai (code du catalogue) ; absente ou inconnue : celle du livre
         $pdfBinary = $this->pdfService->generateInteriorBinary($book, $author, self::fontParam($request->query->all()['font'] ?? null));

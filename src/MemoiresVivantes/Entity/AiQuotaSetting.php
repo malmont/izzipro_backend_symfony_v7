@@ -19,6 +19,8 @@ class AiQuotaSetting
     public const DEFAULT_TRANSCRIPTIONS_PER_DAY = 40;
     public const DEFAULT_IMPROVEMENTS_PER_DAY = 60;
     public const DEFAULT_MAX_AUDIO_SECONDS = 300;
+    /** Reprises de rédaction d'un chapitre déjà rédigé, par chapitre et par jour (livres soumis aux quotas) */
+    public const DEFAULT_REGENERATIONS_PER_DAY = 3;
     public const MIN_AUDIO_SECONDS = 30;
     public const MAX_AUDIO_SECONDS = 1800;
     /** Aucun site ne porte de fuseau horaire : celui des quotas se règle ici (jour de minuit à minuit) */
@@ -37,6 +39,9 @@ class AiQuotaSetting
 
     #[ORM\Column(options: ['default' => self::DEFAULT_MAX_AUDIO_SECONDS])]
     private int $maxAudioSeconds = self::DEFAULT_MAX_AUDIO_SECONDS;
+
+    #[ORM\Column(options: ['default' => self::DEFAULT_REGENERATIONS_PER_DAY])]
+    private int $regenerationsPerDay = self::DEFAULT_REGENERATIONS_PER_DAY;
 
     #[ORM\Column(options: ['default' => false])]
     private bool $applyToWebBooks = false;
@@ -57,6 +62,8 @@ class AiQuotaSetting
     public function setTranscriptionsPerDay(int $value): static { $this->transcriptionsPerDay = max(0, $value); return $this->touch(); }
     public function getImprovementsPerDay(): int { return $this->improvementsPerDay; }
     public function setImprovementsPerDay(int $value): static { $this->improvementsPerDay = max(0, $value); return $this->touch(); }
+    public function getRegenerationsPerDay(): int { return $this->regenerationsPerDay; }
+    public function setRegenerationsPerDay(int $value): static { $this->regenerationsPerDay = max(0, $value); return $this->touch(); }
     public function getMaxAudioSeconds(): int { return $this->maxAudioSeconds; }
     public function setMaxAudioSeconds(int $value): static { $this->maxAudioSeconds = $value; return $this->touch(); }
     public function isApplyToWebBooks(): bool { return $this->applyToWebBooks; }
@@ -68,7 +75,12 @@ class AiQuotaSetting
     /** Limite d'un type d'appel : null = illimité (0 en base) */
     public function limitFor(string $kind): ?int
     {
-        $limit = $kind === AiUsage::KIND_TRANSCRIPTION ? $this->transcriptionsPerDay : $this->improvementsPerDay;
+        $limit = match ($kind) {
+            AiUsage::KIND_TRANSCRIPTION => $this->transcriptionsPerDay,
+            AiUsage::KIND_IMPROVEMENT => $this->improvementsPerDay,
+            AiUsage::KIND_REGENERATION => $this->regenerationsPerDay,
+            default => 0,
+        };
 
         return $limit > 0 ? $limit : null;
     }

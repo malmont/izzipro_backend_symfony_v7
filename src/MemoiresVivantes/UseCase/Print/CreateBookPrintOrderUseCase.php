@@ -27,7 +27,8 @@ class CreateBookPrintOrderUseCase
         Book $book,
         User $user,
         array $shippingData,
-        string $publicBaseUrl
+        string $publicBaseUrl,
+        ?BookPrintOrder $pendingOrder = null
     ): BookPrintOrder {
         // Normalisation complète et conforme de l'adresse de livraison
         $normalizedAddress = LuluPrintService::normalizeAddress($shippingData);
@@ -87,7 +88,7 @@ class CreateBookPrintOrderUseCase
         );
 
         // 3. Création et persistance de l'entité BookPrintOrder avec données normalisées
-        $order = new BookPrintOrder();
+        $order = $pendingOrder ?? new BookPrintOrder(); // commande de l'application déjà payée : complétée (16/10/2026)
         $order->setBook($book);
         $order->setUser($user);
         $order->setCoverStyle($coverStyle);

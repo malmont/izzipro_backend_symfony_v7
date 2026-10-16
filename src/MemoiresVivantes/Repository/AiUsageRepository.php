@@ -21,6 +21,18 @@ class AiUsageRepository extends EntityRepository
             ->getQuery()->getSingleScalarResult();
     }
 
+    /** Rédactions abouties d'un chapitre dans une fenêtre [from, to[ (reprises du jour) */
+    public function countGenerationsForChapter(\App\MemoiresVivantes\Entity\Chapter $chapter, \DateTimeImmutable $from, \DateTimeImmutable $to): int
+    {
+        return (int) $this->createQueryBuilder('u')
+            ->select('COUNT(u.id)')
+            ->where('u.chapterId = :chapter')->andWhere('u.kind = :kind')
+            ->andWhere('u.createdAt >= :from')->andWhere('u.createdAt < :to')
+            ->setParameter('chapter', $chapter->getId(), 'uuid')->setParameter('kind', AiUsage::KIND_GENERATION)
+            ->setParameter('from', $from)->setParameter('to', $to)
+            ->getQuery()->getSingleScalarResult();
+    }
+
     /**
      * Consommation par utilisateur dans une fenêtre : liste triée par e-mail
      *

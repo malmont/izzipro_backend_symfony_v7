@@ -37,7 +37,8 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Groupe | Routes | Contrôleur |
 |---|---|---|
 | Livres | `GET, POST /books`, `GET, PUT, DELETE /books/{id}`, couverture | `BookController` |
-| Application mobile Living Memory | `POST /mobile/books`, `GET /mobile/quotas` (connexion obligatoire ; voir « Application mobile Living Memory » et « Quotas des appels IA ») | `MobileBookController`, `MobileQuotaController` |
+| Application mobile Living Memory | `POST /mobile/books`, `GET /mobile/quotas`, `GET /mobile/pricing`, `POST /mobile/chapters/{id}/unlock`, `GET /mobile/purchases/unassigned` (connexion obligatoire ; voir « Application mobile Living Memory », « Quotas des appels IA », « Rédaction payante et livre imprimé ») | `MobileBookController`, `MobileQuotaController`, `MobilePurchaseController` |
+| Webhook RevenueCat | `POST /api/webhooks/revenuecat` (public, en-tête Authorization = `REVENUECAT_WEBHOOK_SECRET`) | `RevenueCatWebhookController` |
 | Chapitres | `/books/{id}/chapters`, `/chapters/{id}` (+ `status`, `generate`, `reset`, `audio`, `improve-answer`, `share-link`, `contributor-links`) | `ChapterController` |
 | Photos | `/chapters/{id}/photos`, `/photos/{id}`, mise en page | `ChapterController`, `ChapterPhotoController` |
 | Contributeurs | `/books/{id}/contributors`, `/contributors/{id}` (+ `approve`) | `ContributorController` |
@@ -46,7 +47,7 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Impression | `/books/{id}/print/estimate`, `print/payment-intent`, `print/order`, `print/orders` ; `POST /api/webhooks/lulu` | `BookPrintApiController`, `LuluWebhookController` |
 | Types de livre (lecture) | `GET /book-types`, `/book-types/{code}`, `GET /questions`, `GET /ai-models` | `BookTypeController`, `QuestionController` |
 | Polices des livres | `GET /book-fonts` | `BookFontController` |
-| Administration | `/admin/book-types…`, `/admin/book-type-chapters…`, `/admin/book-type-roles…`, `/admin/questions…`, `/admin/users…`, `/admin/ai-quotas` (+ `/usage`), `/admin/mobile-users` (+ `/{userId}`) | `Controller/Admin/` (`#[IsGranted('ROLE_ADMIN')]`) |
+| Administration | `/admin/book-types…`, `/admin/book-type-chapters…`, `/admin/book-type-roles…`, `/admin/questions…`, `/admin/users…`, `/admin/ai-quotas` (+ `/usage`), `/admin/mobile-users` (+ `/{userId}`), `/admin/pricing` | `Controller/Admin/` (`#[IsGranted('ROLE_ADMIN')]`) |
 | Activation de compte | `POST /auth/activate` | `AccountActivationController` ; l'invitation (`POST /admin/users` sans mot de passe) envoie un e-mail avec le lien (`emails/memoires_account_invitation.html.twig`) |
 
 Liens envoyés aux utilisateurs (activation, partage de chapitre, retour de paiement) : `Services/FrontendUrlResolver`
@@ -63,8 +64,10 @@ plus qu'un dernier repli : chaque site a son frontend.
 | `mv_contributor` | `Contributor` | contributeurs (livres collectifs) |
 | `mv_book_type`, `mv_book_type_chapter`, `mv_book_type_role` | `BookType…` | types de livre configurables |
 | `mv_question` | `MemoireQuestion` | questions des chapitres |
-| `mv_book_print_order` | `BookPrintOrder` | commandes d'impression Lulu |
-| `mv_ai_quota_setting` | `AiQuotaSetting` | quotas IA du site (une ligne ; sans ligne : valeurs par défaut), voir « Quotas des appels IA » |
+| `mv_book_print_order` | `BookPrintOrder` | commandes d'impression Lulu ; commandes de l'application : montant facturé (`charged_amount`, `charged_currency`), `payment_status` (`pending` / `paid`), `stripe_payment_intent_id`, statut `pending_payment` avant paiement |
+| `mv_ai_quota_setting` | `AiQuotaSetting` | quotas IA du site (une ligne ; sans ligne : valeurs par défaut), voir « Quotas des appels IA » ; `regenerations_per_day` depuis le lot « rédaction payante » |
+| `mv_chapter_payment` | `ChapterPayment` | registre des achats de rédaction de chapitre (RevenueCat : store, transaction, montant, devise, statut `paid` / `refunded`, chapitre affecté) ; le chapitre porte en copie le paiement qui le débloque (`mv_chapter.paid_*`, `hidden_after_refund`) |
+| `mv_pricing_setting` | `PricingSetting` | tarifs du site : grille du livre imprimé par devise (JSON), produit « rédaction d'un chapitre » des stores |
 | `mv_ai_usage` | `AiUsage` | appels IA aboutis par utilisateur : `transcription`, `improvement` (soumis aux quotas) et `generation` (rédaction aboutie d'un chapitre d'un livre soumis aux quotas, enregistrée par `GenerateChapterHandler` : cumul seulement, pas de quota) |
 | `user` (table commune) | `App\Entity\User` | depuis le 16/10/2026 : `signup_channel` (`web_invite` invitation par un biographe, `web_register` inscription web, `mobile` application Living Memory ; null avant), `created_at` (null avant), `last_login_at` (`/api/login`, `/api/otp-verify`, `/api/token/refresh`) ; `scripts/migrate_all_v2_user_signup.sh` |
 
@@ -119,7 +122,8 @@ Depuis le 16/10/2026, chaque site a des quotas, réglables par l'administrateur 
 (`Services/AiQuotaService`, `Entity/AiQuotaSetting`, `Entity/AiUsage`, `UseCase/Quota/`).
 
 - **Réglages** (une ligne `mv_ai_quota_setting` par site, valeurs par défaut sans ligne) : transcriptions par
-  utilisateur et par jour (40), améliorations par utilisateur et par jour (60), durée maximale d'un enregistrement
+  utilisateur et par jour (40), améliorations par utilisateur et par jour (60), reprises de rédaction par chapitre et
+  par jour (3, voir « Rédaction payante »), durée maximale d'un enregistrement
   en secondes (300, entre 30 et 1 800), application aux livres web (non), fuseau horaire du site (`America/Martinique` :
   aucun site ne porte de fuseau ailleurs). **0 = illimité.** Le jour va de minuit à minuit dans ce fuseau.
 - **Qui est limité** (`AiQuotaService::isLimited`) : le propriétaire connecté d'un livre `channel = mobile` ; d'un
@@ -145,6 +149,68 @@ Depuis le 16/10/2026, chaque site a des quotas, réglables par l'administrateur 
   → `{date, timezone, from, to, users: [{userId, email, name, transcriptions, improvements}], limits}`.
 - Schéma : `migrations/Version20261016120000.php`, `scripts/migrate_all_v2_mv_ai_quotas.sh`. Tests : `AiQuotaTest`
   (Whisper simulé : `tests/Fake/FakeOpenAiService.php`).
+
+## Rédaction payante et livre imprimé (application mobile)
+
+Lot du 16/10/2026, livres `channel = mobile` seulement : les livres web ne sont jamais verrouillés ni facturés, et un
+administrateur n'est jamais soumis au paiement ni aux reprises. Schéma : `migrations/Version20261016160000.php`,
+`scripts/migrate_all_v2_mv_paid_chapters.sh`. Tests : `PaidChapterTest` (RevenueCat simulé :
+`tests/Fake/FakeRevenueCatClient.php` ; paiement Stripe simulé : `FakeCheckoutPaymentGateway` ; Lulu sans clé =
+simulation).
+
+**Rédaction d'un chapitre** (`Services/ChapterPaymentService`, `Entity/ChapterPayment`, `UseCase/Payment/`).
+- Un achat consommable dans les stores (produit `lm_chapter_writing`, prix fixé par pays dans les stores, 4,99 € en
+  France) débloque **un chapitre, définitivement**, reprises comprises. Identifiant RevenueCat de l'utilisateur :
+  `"<code du site>:<userId>"`. Pas de chapitre offert.
+- `POST /chapters/{id}/generate` : chapitre d'un livre mobile non payé → **402 `{"error": "CHAPTER_NOT_PAID",
+  "message", "product"}`** pour le propriétaire. Un chapitre créé ou modifié avec des réponses n'est **jamais rédigé
+  automatiquement** tant qu'il n'est pas payé (`ChapterGenerationService::isWritingLocked`). Chapitre déjà rédigé :
+  les reprises sont bornées par chapitre et par jour (`regenerationsPerDay`, défaut 3, 0 = illimité) pour les livres
+  soumis aux quotas → 429 `QUOTA_EXCEEDED` avec `quota.kind = "regeneration"` ; comptées sur les lignes `generation`
+  de `mv_ai_usage` (la première rédaction n'est pas une reprise). L'achat n'est consommé que si la rédaction aboutit.
+- `POST /api/memoires/mobile/chapters/{id}/unlock {"transactionId", "store": "app_store" | "play_store"}` → 200 le
+  chapitre complet (`paid` renseigné) ; idempotent (même transaction, même chapitre) ; 404 `PURCHASE_NOT_FOUND`
+  (inconnue de RevenueCat, réessayer), 409 `PURCHASE_ALREADY_USED` (autre chapitre), 409 `CHAPTER_ALREADY_PAID`
+  (la transaction reste disponible), 409 `PURCHASE_REFUNDED`, 422 `WRONG_PRODUCT`, 422 `BOOK_NOT_MOBILE`. Le backend
+  vérifie la transaction auprès de RevenueCat (clé secrète `REVENUECAT_SECRET_KEY`) si elle n'est pas déjà connue.
+- `GET /api/memoires/mobile/purchases/unassigned` → `{purchases: [{transactionId, store, product, amount, currency,
+  purchasedAt}]}` : achats réglés pas encore affectés (après synchronisation RevenueCat ; sert au rétablissement des achats).
+- **Webhook** `POST /api/webhooks/revenuecat` (en-tête Authorization = `REVENUECAT_WEBHOOK_SECRET`, 503 tant qu'il
+  n'est pas configuré, 401 sinon) : `INITIAL_PURCHASE` / `NON_RENEWING_PURCHASE` → achat enregistré, non affecté ;
+  `CANCELLATION` (remboursement d'un consommable, toujours total) → ligne `refunded` (`refundedAt`, `refundedAmount`),
+  chapitre repassé **non payé, texte masqué** (`hiddenAfterRefund`, texte conservé en base, `contentFinal` rendu
+  null, exclu du PDF), rétabli par un nouvel achat. Rejouable sans effet. Jamais de remboursement déclenché par nous.
+- Chaque chapitre rendu (`ChapterOutputDto`) porte `paid` (`{amount, currency, paidAt, paymentRef}` ou null),
+  `writingLocked` (vrai = 402 attendu ; toujours faux pour un administrateur, contexte posé par
+  `EventListener/ChapterViewerContextSubscriber`) et `hiddenAfterRefund` ; livre web : `null`, `false`, `false`.
+- PDF : un livre mobile n'inclut que ses chapitres payés et non remboursés (`BookPdfGeneratorService::isPrintable`) ;
+  sans aucun chapitre payé et rédigé, `pdf/preview-interior` répond 422 `BOOK_EMPTY`.
+
+**Livre imprimé** (`Services/PricingService`, `Services/PrintPaymentService`, `Entity/PricingSetting`).
+- Grille **par devise, réglable par site** : premier exemplaire d'un livre, exemplaires suivants du même livre,
+  livraison comprise. Défaut : EUR 200 / 100, CAD 300 / 150. Devises autorisées (liste fermée, Stripe) : `eur`,
+  `cad`, `usd`, `chf`, `gbp`. La devise suit le pays du store de l'utilisateur ; un livre garde la devise de son
+  premier exemplaire facturé. Ne s'applique qu'aux commandes passées **depuis l'application par le propriétaire d'un
+  livre mobile** (`PricingService::paymentRequired`) ; un biographe ou un administrateur commande comme avant (coût
+  Lulu, pas de paiement).
+- `GET /api/memoires/mobile/pricing` → `{currencies, defaultCurrency, print: {<devise>: {firstCopy, nextCopies}},
+  chapterProduct}`. `GET`/`PUT /api/memoires/admin/pricing` (ROLE_ADMIN) → `{print, chapterProduct, defaultCurrency,
+  allowedCurrencies, isDefault, updatedAt}` ; `PUT {"print": {…}}` remplace toute la grille (une devise absente est
+  retirée, au moins une devise, montants décimaux ≥ 0 à deux décimales), `chapterProduct` ignoré ; 422
+  `VALIDATION_FAILED` avec `errors[].path` = `print`, `print.<devise>`, `print.<devise>.<champ>`.
+- `GET /books/{id}/print/estimate?quantity=n&currency=eur` (nouveau, sans adresse) → `{quantity, currency, lines:
+  [{copy, label, quantity, amount}], total, alreadyPrinted, paymentRequired}` ; 422 `CURRENCY_NOT_SUPPORTED`. Le
+  `POST …/print/estimate` du web (avec adresse) garde sa forme et reçoit en plus `billing`, `lines`, `total`,
+  `alreadyPrinted`, `paymentRequired` (`currency` reste celle de l'estimation Lulu).
+- Paiement (propriétaire d'un livre mobile) : `POST …/print/payment-intent {quantity, currency, recipient}` crée une
+  commande `pending_payment` (montant de la grille, `payment_status = pending`) et une intention Stripe (passerelle du
+  panier, capture manuelle) → `{clientSecret, amount, currency, paymentIntentId, order_id, paymentRequired: true}` ;
+  `POST …/print/order {paymentIntentId, recipient…}` exige l'intention autorisée ou réglée (402 `PRINT_NOT_PAID`
+  sinon, 409 `PRINT_ALREADY_ORDERED` si déjà convertie), complète la commande (PDF, Lulu) puis capture le paiement
+  (`payment_status = paid`). **Plus de commande Lulu avant paiement pour l'application** ; le flux web est inchangé.
+- Console d'administration : `payments[]` kind `chapter` (statut `paid` / `refunded`, `refundedAt`, `refundedAmount`,
+  `paymentRef`, `store`) et `print` (montant facturé, `pending` / `paid`), `payments.totals` par devise
+  (`totalAmount` = repli, devise par défaut du site), `books.chaptersPaid`, `chapters[].paid` et `hiddenAfterRefund`.
 
 ## Console d'administration : populations et utilisateurs mobile
 

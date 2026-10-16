@@ -23,6 +23,8 @@ class AiUsage
     public const KIND_IMPROVEMENT = 'improvement';
     /** Rédaction d'un chapitre aboutie (livres mobile, enregistrée par GenerateChapterHandler) : cumul seulement, pas de quota */
     public const KIND_GENERATION = 'generation';
+    /** Type de quota des reprises de rédaction (pas une ligne d'usage : les reprises sont comptées sur les lignes « generation » du chapitre) */
+    public const KIND_REGENERATION = 'regeneration';
     /** Types soumis aux quotas journaliers */
     public const QUOTA_KINDS = [self::KIND_TRANSCRIPTION, self::KIND_IMPROVEMENT];
     public const KINDS = [self::KIND_TRANSCRIPTION, self::KIND_IMPROVEMENT, self::KIND_GENERATION];

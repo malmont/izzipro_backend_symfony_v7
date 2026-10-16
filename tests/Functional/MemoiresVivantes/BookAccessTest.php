@@ -18,7 +18,7 @@ class BookAccessTest extends BookTypeApiTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $row = self::db()->query('SELECT b.id AS book, c.id AS chapter FROM mv_book b JOIN mv_chapter c ON c.book_id = b.id ORDER BY b.id LIMIT 1')->fetch();
+        $row = self::db()->query('SELECT b.id AS book, c.id AS chapter FROM mv_book b JOIN mv_chapter c ON c.book_id = b.id WHERE b.channel = 'web' ORDER BY b.id LIMIT 1')->fetch();
         [$this->bookId, $this->chapterId] = [$row['book'], $row['chapter']];
         $this->tokenFor('client');
         self::db()->prepare('UPDATE mv_book SET user_id = (SELECT id FROM "user" WHERE email = ?) WHERE id = ?')->execute([self::CLIENT_EMAIL, $this->bookId]);

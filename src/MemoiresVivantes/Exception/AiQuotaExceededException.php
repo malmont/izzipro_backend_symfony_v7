@@ -7,7 +7,11 @@ class AiQuotaExceededException extends \RuntimeException
 {
     public function __construct(public readonly string $kind, public readonly int $limit, public readonly int $used, public readonly \DateTimeImmutable $resetsAt)
     {
-        $what = $kind === 'transcription' ? ($limit > 1 ? 'transcriptions' : 'transcription') : ($limit > 1 ? 'améliorations par l\'IA' : 'amélioration par l\'IA');
+        $what = match ($kind) {
+            'transcription' => $limit > 1 ? 'transcriptions' : 'transcription',
+            'regeneration' => $limit > 1 ? 'reprises de rédaction de ce chapitre' : 'reprise de rédaction de ce chapitre',
+            default => $limit > 1 ? 'améliorations par l\'IA' : 'amélioration par l\'IA',
+        };
         parent::__construct(sprintf('Vous avez atteint votre limite de %d %s par jour. Vous pourrez recommencer le %s.', $limit, $what, $resetsAt->format('d/m/Y à H:i')));
     }
 

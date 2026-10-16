@@ -145,7 +145,7 @@ class UpdateChapterUseCase
 
         $em->flush();
 
-        if ($triggerGenerate) {
+        if ($triggerGenerate && !\App\MemoiresVivantes\Services\ChapterGenerationService::isWritingLocked($chapter)) {
             $chapter->setGenerationStatus('pending');
             $em->flush();
             $this->messageBus->dispatch(new GenerateChapterMessage((string) $chapter->getId(), 1, $tenantHost));

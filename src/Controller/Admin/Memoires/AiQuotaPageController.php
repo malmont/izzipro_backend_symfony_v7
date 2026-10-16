@@ -55,6 +55,7 @@ class AiQuotaPageController extends AbstractController
             $dto = new AiQuotaSettingsInputDto([
                 'transcriptionsPerDay' => $request->request->get('transcriptionsPerDay'),
                 'improvementsPerDay' => $request->request->get('improvementsPerDay'),
+                'regenerationsPerDay' => $request->request->get('regenerationsPerDay'),
                 'maxAudioSeconds' => $request->request->get('maxAudioSeconds'),
                 'applyToWebBooks' => $request->request->getBoolean('applyToWebBooks') ? '1' : '0',
                 'timezone' => $request->request->get('timezone'),

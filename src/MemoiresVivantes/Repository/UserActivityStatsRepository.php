@@ -41,7 +41,7 @@ class UserActivityStatsRepository
 
     /**
      * @param list<int>|null $userIds null = tous les utilisateurs ayant au moins un livre
-     * @return array<int, array{books: int, mobileBooks: int, chaptersTotal: int, chaptersWritten: int, lastActivity: ?string}>
+     * @return array<int, array{books: int, mobileBooks: int, chaptersTotal: int, chaptersWritten: int, chaptersPaid: int, lastActivity: ?string}>
      */
     public function bookStats(?array $userIds): array
     {
@@ -51,6 +51,7 @@ class UserActivityStatsRepository
         $sql = 'SELECT b.user_id, COUNT(DISTINCT b.id) AS books, COUNT(DISTINCT CASE WHEN b.channel = \'mobile\' THEN b.id END) AS mobile_books,'
             . ' COUNT(c.id) AS chapters_total,'
             . ' COUNT(CASE WHEN c.generation_status = \'completed\' AND COALESCE(NULLIF(c.content_final, \'\'), NULLIF(c.content_generated, \'\')) IS NOT NULL THEN 1 END) AS chapters_written,'
+            . ' COUNT(CASE WHEN c.paid_at IS NOT NULL THEN 1 END) AS chapters_paid,'
             . ' MAX(GREATEST(b.updated_at, c.updated_at)) AS last_activity'
             . ' FROM mv_book b LEFT JOIN mv_chapter c ON c.book_id = b.id'
             . ($userIds !== null ? ' WHERE b.user_id IN (:ids)' : '')
@@ -58,31 +59,41 @@ class UserActivityStatsRepository
         $rows = $this->connection()->fetchAllAssociative($sql, $userIds !== null ? ['ids' => $userIds] : [], $userIds !== null ? ['ids' => ArrayParameterType::INTEGER] : []);
         $out = [];
         foreach ($rows as $r) {
-            $out[(int) $r['user_id']] = ['books' => (int) $r['books'], 'mobileBooks' => (int) $r['mobile_books'], 'chaptersTotal' => (int) $r['chapters_total'], 'chaptersWritten' => (int) $r['chapters_written'], 'lastActivity' => $r['last_activity']];
+            $out[(int) $r['user_id']] = ['books' => (int) $r['books'], 'mobileBooks' => (int) $r['mobile_books'], 'chaptersTotal' => (int) $r['chapters_total'], 'chaptersWritten' => (int) $r['chapters_written'], 'chaptersPaid' => (int) $r['chapters_paid'], 'lastActivity' => $r['last_activity']];
         }
 
         return $out;
     }
 
     /**
-     * Paiements de livre (Stripe Checkout, portés par mv_book) et commandes d'impression (mv_book_print_order)
+     * Paiements réglés par utilisateur et par devise : livre payé par lien Stripe (mv_book), impressions (montant
+     * facturé des commandes de l'application réglées, coût Lulu des commandes web historiques), achats de chapitre
+     * (mv_chapter_payment en « paid »). Jamais deux devises additionnées : totaux par devise.
      *
      * @param list<int> $userIds
-     * @return array<int, array{count: int, totalAmount: float, currency: string, lastPaidAt: ?string}>
+     * @return array<int, array{count: int, totals: list<array{currency: string, amount: float}>, lastPaidAt: ?string}>
      */
     public function paymentStats(array $userIds): array
     {
         if ($userIds === []) {
             return [];
         }
-        $sql = 'SELECT user_id, SUM(n) AS n, SUM(total) AS total, MAX(last_at) AS last_at, MAX(currency) AS currency FROM ('
-            . ' SELECT user_id, COUNT(*) AS n, COALESCE(SUM(payment_amount), 0) AS total, MAX(paid_at) AS last_at, MAX(payment_currency) AS currency FROM mv_book WHERE payment_status = \'paid\' AND user_id IN (:ids) GROUP BY user_id'
+        $sql = 'SELECT user_id, currency, COUNT(*) AS n, SUM(total) AS total, MAX(last_at) AS last_at FROM ('
+            . ' SELECT user_id, LOWER(COALESCE(payment_currency, \'eur\')) AS currency, COALESCE(payment_amount, 0) AS total, paid_at AS last_at FROM mv_book WHERE payment_status = \'paid\' AND user_id IN (:ids)'
             . ' UNION ALL'
-            . ' SELECT user_id, COUNT(*) AS n, COALESCE(SUM(total_cost), 0) AS total, MAX(created_at) AS last_at, MAX(currency) AS currency FROM mv_book_print_order WHERE user_id IN (:ids) GROUP BY user_id'
-            . ') p GROUP BY user_id';
+            . ' SELECT user_id, LOWER(COALESCE(charged_currency, currency, \'eur\')), COALESCE(charged_amount, total_cost, 0), created_at FROM mv_book_print_order WHERE user_id IN (:ids) AND (payment_status = \'paid\' OR payment_status IS NULL)'
+            . ' UNION ALL'
+            . ' SELECT user_id, LOWER(COALESCE(currency, \'eur\')), COALESCE(amount, 0), COALESCE(assigned_at, purchased_at, created_at) FROM mv_chapter_payment WHERE status = \'paid\' AND user_id IN (:ids)'
+            . ') p GROUP BY user_id, currency ORDER BY user_id, currency';
         $out = [];
         foreach ($this->connection()->fetchAllAssociative($sql, ['ids' => $userIds], ['ids' => ArrayParameterType::INTEGER]) as $r) {
-            $out[(int) $r['user_id']] = ['count' => (int) $r['n'], 'totalAmount' => round((float) $r['total'], 2), 'currency' => strtolower((string) ($r['currency'] ?: 'eur')), 'lastPaidAt' => $r['last_at']];
+            $id = (int) $r['user_id'];
+            $out[$id] ??= ['count' => 0, 'totals' => [], 'lastPaidAt' => null];
+            $out[$id]['count'] += (int) $r['n'];
+            $out[$id]['totals'][] = ['currency' => (string) $r['currency'], 'amount' => round((float) $r['total'], 2)];
+            if ($out[$id]['lastPaidAt'] === null || $r['last_at'] > $out[$id]['lastPaidAt']) {
+                $out[$id]['lastPaidAt'] = $r['last_at'];
+            }
         }
 
         return $out;

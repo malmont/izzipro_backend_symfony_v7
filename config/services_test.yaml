@@ -18,6 +18,16 @@ services:
             $logger: '@logger'
         public: true
 
+    # Rédaction payante : RevenueCat simulé (achats scriptés par les tests) ; Lulu sans clé = simulation (aucun appel)
+    App\Tests\Fake\FakeRevenueCatClient:
+        public: true
+    App\MemoiresVivantes\Services\RevenueCat\RevenueCatClientInterface: '@App\Tests\Fake\FakeRevenueCatClient'
+    App\MemoiresVivantes\Services\LuluPrintService:
+        autowire: true
+        arguments:
+            $luluClientKey: null
+            $luluClientSecret: null
+
     # Assistant IA des landing pages : client Anthropic simulé (réponses scriptées par les tests)
     App\Tests\Fake\FakeLandingAiClient:
         public: true

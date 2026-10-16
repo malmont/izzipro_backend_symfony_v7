@@ -101,7 +101,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/videos` | PUBLIC_ACCESS | `Controller\VideoApiController\VideoApiController::list` |
 | POST | `/api/videos` | ROLE_ADMIN | `Controller\VideoApiController\VideoApiController::create` |
 
-## Mémoires Vivantes (83)
+## Mémoires Vivantes (90)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -128,6 +128,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/memoires/admin/book-types` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::createType` |
 | GET | `/api/memoires/admin/mobile-users/{userId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\MobileUserAdminController::show` |
 | GET | `/api/memoires/admin/mobile-users` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\MobileUserAdminController::list` |
+| GET | `/api/memoires/admin/pricing` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\PricingAdminController::show` |
+| PUT | `/api/memoires/admin/pricing` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\PricingAdminController::update` |
 | DELETE | `/api/memoires/admin/questions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::deleteQuestion` |
 | PUT, PATCH | `/api/memoires/admin/questions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\BookTypeAdminController::updateQuestion` |
 | DELETE | `/api/memoires/admin/users/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `MemoiresVivantes\Controller\Admin\UserManagementController::delete` |
@@ -152,6 +154,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/memoires/books/{id}/pdf/generate` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPdfController::generatePdfs` |
 | GET | `/api/memoires/books/{id}/pdf/preview-cover` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookPdfController::previewCover` |
 | GET | `/api/memoires/books/{id}/pdf/preview-interior` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookPdfController::previewInterior` |
+| GET | `/api/memoires/books/{id}/print/estimate` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::billingEstimate` |
 | POST | `/api/memoires/books/{id}/print/estimate` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::estimate` |
 | POST | `/api/memoires/books/{id}/print/order` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::createOrder` |
 | GET | `/api/memoires/books/{id}/print/orders` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::listOrdersByBook` |
@@ -180,6 +183,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/memoires/contributors/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::delete` |
 | PUT | `/api/memoires/contributors/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::update` |
 | POST | `/api/memoires/mobile/books` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobileBookController::create` |
+| POST | `/api/memoires/mobile/chapters/{id}/unlock` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobilePurchaseController::unlock` |
+| GET | `/api/memoires/mobile/pricing` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobilePurchaseController::pricing` |
+| GET | `/api/memoires/mobile/purchases/unassigned` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobilePurchaseController::unassignedPurchases` |
 | GET | `/api/memoires/mobile/quotas` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobileQuotaController::show` |
 | DELETE | `/api/memoires/photos/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterPhotoController::delete` |
 | PUT | `/api/memoires/photos/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterPhotoController::update` |
@@ -188,6 +194,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/memoires/print/payment-intent` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::createPaymentIntent` |
 | GET | `/api/memoires/questions` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\QuestionController::list` |
 | POST | `/api/webhooks/lulu` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\LuluWebhookController::handleLuluWebhook` |
+| POST | `/api/webhooks/revenuecat` | PUBLIC_ACCESS | `App\MemoiresVivantes\Controller\RevenueCatWebhookController` |
 
 ## Boussole ESG (20)
 

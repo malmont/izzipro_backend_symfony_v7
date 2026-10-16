@@ -175,6 +175,16 @@ class ChapterGenerationService
         return true;
     }
 
+    /**
+     * Rédaction payante (16/10/2026) : un chapitre d'un livre de l'application mobile n'est jamais rédigé
+     * automatiquement (création ou modification avec des réponses) tant qu'il n'est pas payé. Seul POST /generate
+     * décide (402 pour le propriétaire, libre pour un administrateur).
+     */
+    public static function isWritingLocked(Chapter $chapter): bool
+    {
+        return $chapter->getBook()?->getChannel() === \App\MemoiresVivantes\Entity\Book::CHANNEL_MOBILE && !$chapter->isPaid();
+    }
+
     public function markFailed(Chapter $chapter, string $reason): void
     {
         $chapter->setGenerationStatus('failed');

@@ -152,6 +152,30 @@ class BookPrintOrder
     #[Groups(['book_print:read'])]
     private ?string $errorMessage = null;
 
+    /**
+     * Commande passée depuis l'application mobile (16/10/2026) : montant facturé selon la grille du site (livraison
+     * comprise), devise, état du paiement Stripe (pending | paid) et identifiant du PaymentIntent. null pour une
+     * commande d'un biographe depuis le web (coût Lulu seul, pas de paiement).
+     */
+    #[ORM\Column(name: 'charged_amount', type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
+    private ?string $chargedAmount = null;
+
+    #[ORM\Column(name: 'charged_currency', length: 3, nullable: true)]
+    private ?string $chargedCurrency = null;
+
+    #[ORM\Column(name: 'payment_status', length: 20, nullable: true)]
+    private ?string $paymentStatus = null;
+
+    #[ORM\Column(name: 'stripe_payment_intent_id', length: 255, nullable: true)]
+    private ?string $stripePaymentIntentId = null;
+
+    /** Remboursement fait dans Stripe (webhook charge.refunded) */
+    #[ORM\Column(name: 'refunded_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $refundedAt = null;
+
+    #[ORM\Column(name: 'refunded_amount', type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
+    private ?string $refundedAmount = null;
+
     // --- Timestamps ---
     #[ORM\Column]
     #[Groups(['book_print:read'])]
@@ -177,6 +201,18 @@ class BookPrintOrder
     {
         $this->updatedAt = new \DateTime();
     }
+
+    public function getChargedAmount(): ?float { return $this->chargedAmount === null ? null : (float) $this->chargedAmount; }
+    public function setChargedAmount(?float $amount): static { $this->chargedAmount = $amount === null ? null : number_format($amount, 2, '.', ''); return $this; }
+    public function getChargedCurrency(): ?string { return $this->chargedCurrency; }
+    public function setChargedCurrency(?string $currency): static { $this->chargedCurrency = $currency === null ? null : strtolower(substr($currency, 0, 3)); return $this; }
+    public function getPaymentStatus(): ?string { return $this->paymentStatus; }
+    public function setPaymentStatus(?string $status): static { $this->paymentStatus = $status; return $this; }
+    public function getStripePaymentIntentId(): ?string { return $this->stripePaymentIntentId; }
+    public function setStripePaymentIntentId(?string $id): static { $this->stripePaymentIntentId = $id; return $this; }
+    public function getRefundedAt(): ?\DateTimeImmutable { return $this->refundedAt; }
+    public function getRefundedAmount(): ?float { return $this->refundedAmount === null ? null : (float) $this->refundedAmount; }
+    public function markRefunded(float $amount): static { $this->refundedAt = new \DateTimeImmutable(); $this->refundedAmount = number_format($amount, 2, '.', ''); $this->paymentStatus = 'refunded'; return $this; }
 
     public function getId(): ?Uuid
     {

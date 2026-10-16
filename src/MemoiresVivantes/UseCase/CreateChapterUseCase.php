@@ -37,7 +37,8 @@ class CreateChapterUseCase
 
         // Rédaction immédiate seulement si le chapitre arrive avec des réponses. Le frontend crée les chapitres vides :
         // chaque création envoyait à l'IA un chapitre sans réponse (texte inventé ou refus enregistré comme chapitre).
-        if ($this->generationService->cannotGenerateReason($chapter) === null) {
+        // Chapitre non payé d'un livre mobile : pas de rédaction automatique (POST /generate répondra 402)
+        if (!ChapterGenerationService::isWritingLocked($chapter) && $this->generationService->cannotGenerateReason($chapter) === null) {
             $this->generationService->start($chapter, $tenantHost);
         }
 

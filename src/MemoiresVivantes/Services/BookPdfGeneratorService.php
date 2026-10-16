@@ -147,6 +147,24 @@ class BookPdfGeneratorService
         return $author === '' || in_array(mb_strtolower($author), ['auteur', 'author', 'admin user'], true) ? null : $author;
     }
 
+    /** Un chapitre d'un livre mobile n'entre dans le PDF que payé et non remboursé ; un livre web n'a pas cette règle */
+    public static function isPrintable(Book $book, Chapter $chapter): bool
+    {
+        return $book->getChannel() !== Book::CHANNEL_MOBILE || ($chapter->isPaid() && !$chapter->isHiddenAfterRefund());
+    }
+
+    /** Au moins un chapitre imprimable avec un texte (livres mobile : 422 BOOK_EMPTY sinon) */
+    public function hasPrintableContent(Book $book): bool
+    {
+        foreach ($book->getChapters() as $chapter) {
+            if (self::isPrintable($book, $chapter) && trim((string) ($chapter->getContentFinal() ?: $chapter->getContentGenerated())) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function resolveAuthorName(Book $book, ?string $customAuthorName = null): string
     {
         $authorName = self::normalizeAuthorName($customAuthorName);
@@ -268,6 +286,10 @@ class BookPdfGeneratorService
         $font = $this->fontOf($book, $font);
         $chaptersData = [];
         foreach ($book->getChapters() as $chapter) {
+            // Livre de l'application mobile : seuls les chapitres payés et non remboursés entrent dans le livre (16/10/2026)
+            if (!self::isPrintable($book, $chapter)) {
+                continue;
+            }
             // Titre répété en tête par l'IA (chapitres rédigés avant qu'il soit retiré à la rédaction) : pas deux fois dans le livre
             $blocks = $this->formatter->blocks($this->formatter->withoutRepeatedTitle($this->cleanText($chapter->getContentFinal() ?: ($chapter->getContentGenerated() ?: '')), $chapter->getTitle()));
             $photoPages = $this->resolveChapterPhotoPages($chapter);

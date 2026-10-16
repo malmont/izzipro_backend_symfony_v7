@@ -35,6 +35,10 @@
             <input type="number" name="improvementsPerDay" class="form-control" min="0" max="100000" value="{{ settings.improvementsPerDay }}" required>
         </div>
         <div class="col-md-2">
+            <label class="form-label">Reprises / chapitre / jour</label>
+            <input type="number" name="regenerationsPerDay" class="form-control" min="0" max="100000" value="{{ settings.regenerationsPerDay }}" required>
+        </div>
+        <div class="col-md-2">
             <label class="form-label">Enregistrement max (s)</label>
             <input type="number" name="maxAudioSeconds" class="form-control" min="30" max="1800" value="{{ settings.maxAudioSeconds }}" required>
         </div>

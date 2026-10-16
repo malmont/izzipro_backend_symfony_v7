@@ -12,6 +12,7 @@ class AiQuotaSettingsOutputDto
         return [
             'transcriptionsPerDay' => $settings->getTranscriptionsPerDay(),
             'improvementsPerDay' => $settings->getImprovementsPerDay(),
+            'regenerationsPerDay' => $settings->getRegenerationsPerDay(),
             'maxAudioSeconds' => $settings->getMaxAudioSeconds(),
             'applyToWebBooks' => $settings->isApplyToWebBooks(),
             'timezone' => $settings->getTimezone(),

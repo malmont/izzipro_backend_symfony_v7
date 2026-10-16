@@ -25,12 +25,37 @@ class BookPrintApiController extends AbstractController
         private readonly EstimateBookPrintUseCase $estimateUseCase,
         private readonly CreateBookPrintOrderUseCase $createOrderUseCase,
         private readonly GetBookPrintOrderUseCase $getOrderUseCase,
+        private readonly \App\MemoiresVivantes\Services\PricingService $pricing,
+        private readonly \App\MemoiresVivantes\Services\PrintPaymentService $printPayments,
         private readonly BookAccessGuard $accessGuard
     ) {}
 
     /**
      * Calcule le devis d'impression et d'expédition selon l'adresse de livraison.
      */
+    /**
+     * Facturation selon la grille du site (16/10/2026), sans adresse : {quantity, currency, lines, total, alreadyPrinted,
+     * paymentRequired} ; currency ignoré si le livre a déjà une devise ; 422 CURRENCY_NOT_SUPPORTED
+     */
+    #[Route('/books/{id}/print/estimate', methods: ['GET'])]
+    public function billingEstimate(string $id, Request $request): JsonResponse
+    {
+        $book = $this->findBook($id);
+        if (!$book) {
+            return $this->json(['error' => 'Livre introuvable'], Response::HTTP_NOT_FOUND);
+        }
+        if ($denied = $this->accessGuard->canManage($book)) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
+        }
+        try {
+            $billing = $this->pricing->estimate($book, max(1, (int) $request->query->get('quantity', 1)), $request->query->get('currency'));
+        } catch (\App\MemoiresVivantes\Exception\ApiErrorException $e) {
+            return $this->json($e->toBody(), $e->status);
+        }
+
+        return $this->json($billing + ['paymentRequired' => $this->pricing->paymentRequired($book, $this->getUser())]);
+    }
+
     #[Route('/books/{id}/print/estimate', methods: ['POST'])]
     public function estimate(string $id, Request $request): JsonResponse
     {
@@ -54,6 +79,13 @@ class BookPrintApiController extends AbstractController
                 $shippingLevel,
                 $quantity
             );
+            // Facturation selon la grille du site (16/10/2026) : champs ajoutés, `currency` reste celle de l'estimation Lulu
+            try {
+                $billing = $this->pricing->estimate($book, $quantity, $data['currency'] ?? $data['billing_currency'] ?? null) + ['paymentRequired' => $this->pricing->paymentRequired($book, $this->getUser())];
+                $estimate += ['billing' => $billing, 'lines' => $billing['lines'], 'total' => $billing['total'], 'alreadyPrinted' => $billing['alreadyPrinted'], 'paymentRequired' => $billing['paymentRequired']];
+            } catch (\App\MemoiresVivantes\Exception\ApiErrorException $e) {
+                $estimate += ['billing' => null, 'billingError' => $e->toBody()];
+            }
             return $this->json($estimate);
         } catch (\Throwable $e) {
             return $this->json(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
@@ -75,6 +107,28 @@ class BookPrintApiController extends AbstractController
         }
         if ($denied = $this->accessGuard->canManage($book)) {
             return $this->json(['error' => $denied[1]], $denied[0]);
+        }
+
+        // Commande depuis l'application par le propriétaire d'un livre mobile (16/10/2026) : montant de la grille,
+        // intention Stripe réelle, commande en attente de paiement (complétée par print/order avec paymentIntentId)
+        if ($this->pricing->paymentRequired($book, $this->getUser())) {
+            try {
+                /** @var User $payer */
+                $payer = $this->getUser();
+                $pending = $this->printPayments->createPendingOrder($book, $payer, max(1, (int) ($data['quantity'] ?? 1)), $data['currency'] ?? null, $data['recipient'] ?? $data['shipping_address'] ?? $data);
+            } catch (\App\MemoiresVivantes\Exception\ApiErrorException $e) {
+                return $this->json($e->toBody(), $e->status);
+            }
+
+            return $this->json([
+                'success' => true,
+                'client_secret' => $pending['clientSecret'], 'clientSecret' => $pending['clientSecret'],
+                'amount' => $pending['amount'], 'currency' => $pending['currency'],
+                'paymentIntentId' => $pending['order']->getStripePaymentIntentId(),
+                'order_id' => $pending['order']->getId()->toRfc4122(), 'orderId' => $pending['order']->getId()->toRfc4122(),
+                'paymentRequired' => true, 'billing' => $pending['billing'],
+                'stripe_public_key' => $_ENV['STRIPE_PUBLIC_KEY'] ?? null, 'stripePublicKey' => $_ENV['STRIPE_PUBLIC_KEY'] ?? null,
+            ]);
         }
 
         $amount = (float)($data['amount'] ?? $data['total_cost'] ?? 0.0);
@@ -137,13 +191,28 @@ class BookPrintApiController extends AbstractController
 
         $publicBaseUrl = $request->getSchemeAndHttpHost();
 
+        // Commande depuis l'application (16/10/2026) : paiement Stripe confirmé obligatoire, sinon 402 PRINT_NOT_PAID
+        $pendingOrder = null;
+        if ($this->pricing->paymentRequired($book, $user)) {
+            try {
+                $pendingOrder = $this->printPayments->confirm($book, $user, (string) ($data['paymentIntentId'] ?? $data['payment_intent_id'] ?? ''));
+            } catch (\App\MemoiresVivantes\Exception\ApiErrorException $e) {
+                return $this->json($e->toBody(), $e->status);
+            }
+            $shippingData['quantity'] = $pendingOrder->getQuantity();
+        }
+
         try {
             $order = $this->createOrderUseCase->execute(
                 $book,
                 $user,
                 $shippingData,
-                $publicBaseUrl
+                $publicBaseUrl,
+                $pendingOrder
             );
+            if ($pendingOrder !== null) {
+                $this->printPayments->markPaid($order);
+            }
 
             $serialized = $this->serializeOrder($order, $publicBaseUrl);
 
@@ -269,6 +338,9 @@ class BookPrintApiController extends AbstractController
             'total_cost' => $order->getTotalCost(),
             'totalCost' => $order->getTotalCost(),
             'currency' => $order->getCurrency(),
+            'charged_amount' => $order->getChargedAmount(), 'chargedAmount' => $order->getChargedAmount(),
+            'charged_currency' => $order->getChargedCurrency(), 'chargedCurrency' => $order->getChargedCurrency(),
+            'payment_status' => $order->getPaymentStatus(), 'paymentStatus' => $order->getPaymentStatus(),
             'print_cost' => $order->getPrintCost(),
             'shipping_cost' => $order->getShippingCost(),
             'tax_cost' => $order->getTaxCost(),
