@@ -34,6 +34,7 @@ class BookCrudController extends BaseTenantCrudController
         yield TextField::new('title', 'Titre');
         yield TextField::new('subtitle', 'Sous-titre');
         yield TextField::new('type', 'Type (Individuel, Couple, Famille)');
+        yield ChoiceField::new('channel', 'Origine')->setChoices(['Web' => Book::CHANNEL_WEB, 'Application mobile' => Book::CHANNEL_MOBILE])->setDisabled();
         yield TextField::new('format', 'Format');
         yield ChoiceField::new('font', 'Police du livre')->setChoices(array_column(BookFontCatalog::all(), 'code', 'label'))->setRequired(false)->hideOnIndex();
         yield TextareaField::new('clientAddress', 'Adresse du client (séances)')->hideOnIndex();

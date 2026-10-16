@@ -9,6 +9,15 @@ services:
             $logger: '@logger'
         public: true
 
+    # Aucun appel réel à Whisper (OpenAI) pendant les tests : transcription fixée par les tests
+    App\Services\OpenAiService:
+        class: App\Tests\Fake\FakeOpenAiService
+        arguments:
+            $httpClient: '@http_client'
+            $openAiApiKey: 'test-sans-appel-reel'
+            $logger: '@logger'
+        public: true
+
     # Assistant IA des landing pages : client Anthropic simulé (réponses scriptées par les tests)
     App\Tests\Fake\FakeLandingAiClient:
         public: true

@@ -1,5 +1,5 @@
 {# Écran « Clés des applications » (AppKeyAdminController). Habillage EasyAdmin quand la page est ouverte depuis le menu. #}
-{% extends ea is defined ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
 
 {% block title %}Clés des applications{% endblock %}
 {% block content_title %}Clés des applications (POS, e-commerce mobile, gestion, LivingMemory){% endblock %}

@@ -589,5 +589,6 @@ class DashboardController extends AbstractDashboardController
             ->setController(MemoireChapterCrudController::class);
         yield MenuItem::linkToCrud('Commandes d\'impression', 'fas fa-print', BookPrintOrder::class)
             ->setController(BookPrintOrderCrudController::class);
+        yield MenuItem::linkToRoute('Quotas IA Mémoires Vivantes', 'fas fa-tachometer-alt', 'admin_mv_ai_quotas');
     }
 }

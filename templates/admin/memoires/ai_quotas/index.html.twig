@@ -1,0 +1,81 @@
+{# Écran « Quotas IA Mémoires Vivantes » (AiQuotaPageController). Habillage EasyAdmin quand la page est ouverte depuis le menu. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Quotas IA Mémoires Vivantes{% endblock %}
+{% block content_title %}Quotas IA Mémoires Vivantes{% endblock %}
+
+{% block main %}{{ block('ai_quotas_panel') }}{% endblock %}
+{% block body %}
+    <h1 class="mb-4">Quotas IA Mémoires Vivantes</h1>
+    {{ block('ai_quotas_panel') }}
+{% endblock %}
+
+{% block ai_quotas_panel %}
+    {% set tenant_query = app.request.query.get('tenant') ? {tenant: app.request.query.get('tenant')} : {} %}
+    {% for type, messages in app.flashes %}
+        {% for message in messages %}<div class="alert alert-{{ type }}">{{ message }}</div>{% endfor %}
+    {% endfor %}
+
+    <p class="text-muted">
+        Chaque transcription (Whisper) et chaque amélioration de réponse (IA) coûte. Ces quotas limitent, par utilisateur
+        et par jour (de minuit à minuit dans le fuseau choisi), les livres créés depuis l'application mobile Living Memory ;
+        les livres du web ne sont limités que si vous cochez l'option. Les administrateurs ne sont jamais limités, et les
+        proches invités gardent leur règle (une amélioration par question). 0 = illimité.
+        {% if settings.isDefault %}<strong>Valeurs par défaut : rien n'a encore été enregistré pour ce site.</strong>{% endif %}
+    </p>
+
+    <form action="{{ path('admin_mv_ai_quotas_save', tenant_query) }}" method="post" class="row g-3 align-items-end mb-4">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <div class="col-md-2">
+            <label class="form-label">Transcriptions / jour</label>
+            <input type="number" name="transcriptionsPerDay" class="form-control" min="0" max="100000" value="{{ settings.transcriptionsPerDay }}" required>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Améliorations / jour</label>
+            <input type="number" name="improvementsPerDay" class="form-control" min="0" max="100000" value="{{ settings.improvementsPerDay }}" required>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Enregistrement max (s)</label>
+            <input type="number" name="maxAudioSeconds" class="form-control" min="30" max="1800" value="{{ settings.maxAudioSeconds }}" required>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Fuseau horaire du site</label>
+            <select name="timezone" class="form-select">
+                {% for tz in timezones %}<option value="{{ tz }}" {{ tz == settings.timezone ? 'selected' : '' }}>{{ tz }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2 form-check mb-2 ms-3">
+            <input type="checkbox" name="applyToWebBooks" value="1" class="form-check-input" id="applyToWebBooks" {{ settings.applyToWebBooks ? 'checked' : '' }}>
+            <label class="form-check-label" for="applyToWebBooks">Appliquer aussi aux livres du web</label>
+        </div>
+        <div class="col-md-12">
+            <button type="submit" class="btn btn-primary">Enregistrer</button>
+            {% if settings.updatedAt %}<small class="text-muted ms-3">Dernière modification : {{ settings.updatedAt|date('d/m/Y H:i') }}</small>{% endif %}
+        </div>
+    </form>
+
+    <h3 class="h5">Consommation du {{ usage.date|date('d/m/Y') }} <small class="text-muted">({{ usage.timezone }})</small></h3>
+    <form method="get" class="row g-2 align-items-end mb-3">
+        {% if app.request.query.get('tenant') %}<input type="hidden" name="tenant" value="{{ app.request.query.get('tenant') }}">{% endif %}
+        <div class="col-md-3">
+            <label class="form-label">Jour</label>
+            <input type="date" name="date" class="form-control" value="{{ usage.date }}">
+        </div>
+        <div class="col-md-2"><button type="submit" class="btn btn-outline-secondary">Voir</button></div>
+    </form>
+    <table class="table table-sm">
+        <thead><tr><th>Utilisateur</th><th>E-mail</th><th>Transcriptions</th><th>Améliorations</th></tr></thead>
+        <tbody>
+        {% for row in usage.users %}
+            <tr>
+                <td>{{ row.name }}</td>
+                <td>{{ row.email }}</td>
+                <td>{{ row.transcriptions }}{% if usage.limits.transcriptionsPerDay > 0 %} / {{ usage.limits.transcriptionsPerDay }}{% endif %}</td>
+                <td>{{ row.improvements }}{% if usage.limits.improvementsPerDay > 0 %} / {{ usage.limits.improvementsPerDay }}{% endif %}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="4" class="text-muted">Aucun appel IA soumis aux quotas ce jour-là.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

@@ -51,6 +51,7 @@ class ChapterController extends AbstractController
         private readonly BookTypeResolver $bookTypeResolver,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly \Psr\Log\LoggerInterface $logger,
+        private readonly \App\MemoiresVivantes\Services\AiQuotaService $aiQuota,
         private readonly ?MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
@@ -496,6 +497,24 @@ class ChapterController extends AbstractController
         // (un enregistrement MP4 d'iPhone nommé « .webm » par le navigateur serait refusé par Whisper)
         $extension = $mimeExtensions[$mimeType] ?? (in_array($extension, $allowedExtensions, true) ? $extension : 'webm');
 
+        // Quotas IA (16/10/2026) : durée maximale (en-tête du fichier, ou durée déclarée « durationSeconds ») et
+        // transcriptions du jour, vérifiés avant d'appeler Whisper ; propriétaire d'un livre mobile (ou web si réglé)
+        $quotaUser = $this->aiQuota->isLimited($chapter->getBook(), $this->getUser()) ? $this->getUser() : null;
+        $maxSeconds = $this->aiQuota->maxAudioSeconds();
+        $declared = $request->request->get('durationSeconds');
+        $probed = \App\MemoiresVivantes\Services\AudioDurationProbe::seconds($file->getPathname());
+        $duration = max($probed ?? 0.0, is_numeric($declared) ? (float) $declared : 0.0);
+        if ($duration > $maxSeconds) {
+            return $this->json(['error' => 'AUDIO_TOO_LONG', 'message' => sprintf('L\'enregistrement dure %d s : la limite est de %d s. Découpez votre réponse en plusieurs enregistrements.', (int) round($duration), $maxSeconds), 'maxSeconds' => $maxSeconds], 400);
+        }
+        if ($quotaUser !== null) {
+            try {
+                $this->aiQuota->assertWithinQuota($quotaUser, \App\MemoiresVivantes\Entity\AiUsage::KIND_TRANSCRIPTION);
+            } catch (\App\MemoiresVivantes\Exception\AiQuotaExceededException $e) {
+                return $this->json($e->toBody(), 429, ['Retry-After' => (string) $e->retryAfterSeconds()]);
+            }
+        }
+
         // Ensure upload directory exists
         $projectDir = $this->getParameter('kernel.project_dir');
         $uploadDir = $projectDir . '/var/storage/public_bucket/uploads/audio/';
@@ -518,6 +537,10 @@ class ChapterController extends AbstractController
                 @unlink($absoluteFilePath);
 
                 return $this->json(['error' => $e->getMessage(), 'noSpeech' => true], 422);
+            }
+            // Transcription rendue : l'appel compte dans le quota du jour
+            if ($quotaUser !== null) {
+                $this->aiQuota->record($quotaUser, \App\MemoiresVivantes\Entity\AiUsage::KIND_TRANSCRIPTION, $chapter->getBook(), $chapter);
             }
 
             // Update database JSON
@@ -760,6 +783,16 @@ class ChapterController extends AbstractController
             }
         }
 
+        // Quotas IA (16/10/2026) : améliorations du jour du propriétaire d'un livre mobile (ou web si réglé), avant l'IA
+        $quotaUser = !$isGuest && $this->aiQuota->isLimited($chapter->getBook(), $user) ? $user : null;
+        if ($quotaUser !== null) {
+            try {
+                $this->aiQuota->assertWithinQuota($quotaUser, \App\MemoiresVivantes\Entity\AiUsage::KIND_IMPROVEMENT);
+            } catch (\App\MemoiresVivantes\Exception\AiQuotaExceededException $e) {
+                return $this->json($e->toBody(), 429, ['Retry-After' => (string) $e->retryAfterSeconds()]);
+            }
+        }
+
         try {
             $improvedText = $this->improveAnswerUseCase->execute($question, $answer, $model);
 
@@ -770,6 +803,10 @@ class ChapterController extends AbstractController
                     'alreadyImproved' => false,
                     'canImprove' => true,
                 ], 503);
+            }
+            // Texte amélioré rendu : l'appel compte dans le quota du jour
+            if ($quotaUser !== null) {
+                $this->aiQuota->record($quotaUser, \App\MemoiresVivantes\Entity\AiUsage::KIND_IMPROVEMENT, $chapter->getBook(), $chapter);
             }
 
             if ($isGuest && $targetContribId) {
