@@ -23,7 +23,8 @@ class PrintPaymentService
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly PricingService $pricing,
         private readonly CheckoutPaymentGatewayInterface $gateway,
-        private readonly \App\Services\TenantConnectionProvider $tenants
+        private readonly \App\Services\TenantConnectionProvider $tenants,
+        private readonly \App\MemoiresVivantes\UseCase\Print\CreateBookPrintOrderUseCase $createOrder
     ) {}
 
     /**
@@ -42,8 +43,11 @@ class PrintPaymentService
             throw new ApiErrorException('PAYMENT_UNAVAILABLE', 'Le paiement est momentanément indisponible. Réessayez dans un instant.', 503);
         }
         $address = LuluPrintService::normalizeAddress($shipping);
+        $bgColor = isset($shipping['bg_color']) && is_string($shipping['bg_color']) && trim($shipping['bg_color']) !== '' ? trim($shipping['bg_color']) : $book->getBgColor();
         $order = (new BookPrintOrder())
             ->setBook($book)->setUser($user)->setQuantity($billing['quantity'])
+            ->setCoverStyle(isset($shipping['cover_style']) && is_string($shipping['cover_style']) && trim($shipping['cover_style']) !== '' ? trim($shipping['cover_style']) : ($book->getCoverStyle() ?: 'biographic_split'))
+            ->setBgColor($bgColor !== null && !str_starts_with($bgColor, '#') && ctype_xdigit($bgColor) ? '#' . $bgColor : $bgColor)
             ->setRecipientName($address['name'] !== 'Destinataire' ? $address['name'] : trim($user->getFirstname() . ' ' . $user->getLastname()))
             ->setStreet1($address['street1'] ?: null)->setStreet2($address['street2'] ?: null)->setCity($address['city'] ?: null)
             ->setState($address['state_code'] ?: null)->setPostalCode($address['postal_code'] ?: null)->setCountryCode($address['country_code'])
@@ -80,6 +84,44 @@ class PrintPaymentService
         }
 
         return $order;
+    }
+
+    /**
+     * Paiement confirmé par le webhook Stripe alors que l'application n'a pas (encore) appelé print/order : la commande
+     * est complétée côté serveur avec les coordonnées et les choix de couverture enregistrés à l'intention (PDF, Lulu,
+     * capture). Si l'application l'a déjà fait : rien.
+     *
+     * @return array{status: string, detail: string}
+     */
+    public function completeFromWebhook(string $paymentIntentId, string $publicBaseUrl): array
+    {
+        $order = $this->emProvider->getEntityManager()->getRepository(BookPrintOrder::class)->findOneBy(['stripePaymentIntentId' => $paymentIntentId]);
+        if ($order === null) {
+            return ['status' => 'ignored', 'detail' => 'intention inconnue'];
+        }
+        if ($order->getStatus() !== self::STATUS_PENDING_PAYMENT) {
+            return ['status' => 'already_ordered', 'detail' => 'commande ' . $order->getId()->toRfc4122()];
+        }
+        $book = $order->getBook();
+        $user = $order->getUser();
+        if ($book === null || $user === null) {
+            return ['status' => 'ignored', 'detail' => 'commande sans livre ou sans utilisateur'];
+        }
+        try {
+            $this->confirm($book, $user, $paymentIntentId);
+        } catch (ApiErrorException $e) {
+            return ['status' => 'not_paid', 'detail' => $e->getMessage()];
+        }
+        $shipping = [
+            'name' => $order->getRecipientName(), 'street1' => $order->getStreet1(), 'street2' => $order->getStreet2(), 'city' => $order->getCity(),
+            'state_code' => $order->getState(), 'postal_code' => $order->getPostalCode(), 'country_code' => $order->getCountryCode(),
+            'phone_number' => $order->getPhoneNumber(), 'email' => $order->getEmail(), 'quantity' => $order->getQuantity(),
+            'cover_style' => $order->getCoverStyle(), 'bg_color' => $order->getBgColor(), 'author_name' => $book->getAuthorName(),
+        ];
+        $completed = $this->createOrder->execute($book, $user, $shipping, $publicBaseUrl, $order);
+        $this->markPaid($completed);
+
+        return ['status' => 'completed', 'detail' => 'commande ' . $completed->getId()->toRfc4122()];
     }
 
     /** Remboursement fait dans Stripe (webhook charge.refunded) : la commande passe en « refunded » ; null si l'intention est inconnue */

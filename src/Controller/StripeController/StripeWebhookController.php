@@ -114,6 +114,14 @@ class StripeWebhookController extends AbstractController
                 return $this->json(['status' => 'ignored', 'detail' => 'paiement sans site connu (hors boutique)']);
             }
             $this->emProvider->switchTenant($tenant['dbname'], $tenantCode);
+            // Impression Living Memory payée depuis l'application (17/10/2026) : complétée côté serveur si l'application
+            // n'a pas appelé print/order (téléphone fermé juste après le paiement) ; jamais traitée comme un panier
+            if (!empty($eventData['metadata']['memoires_print'])) {
+                $result = $this->printPayments->completeFromWebhook($eventData['id'], $request->getSchemeAndHttpHost());
+                $this->logger->info(sprintf('[StripeWebhook] impression %s : %s (%s)', $eventData['id'], $result['status'], $result['detail']));
+
+                return $this->json($result);
+            }
             $result = $this->finalizeCheckout->fromWebhook($eventData['id']);
             $this->logger->info(sprintf('[StripeWebhook] %s %s : %s (%s)', $eventType, $eventData['id'], $result['status'], $result['detail']));
 

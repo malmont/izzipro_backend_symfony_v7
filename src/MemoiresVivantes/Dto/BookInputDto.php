@@ -26,6 +26,10 @@ class BookInputDto
     public ?int $sessionCount = null;
     /** null : champ absent (inchangé) ; chaîne vide : adresse effacée */
     public ?string $clientAddress = null;
+    /** Choix de couverture (17/10/2026) : null = absent (inchangé), chaîne vide = effacé (retour au défaut) ; bgColor hors #rrggbb = ignoré */
+    public ?string $coverStyle = null;
+    public ?string $bgColor = null;
+    public ?string $authorName = null;
 
     public function __construct(array $data)
     {
@@ -48,6 +52,13 @@ class BookInputDto
         $sessions = $data['sessionCount'] ?? $data['session_count'] ?? null;
         $this->sessionCount = is_numeric($sessions) && (int) $sessions >= 1 && (int) $sessions <= 12 ? (int) $sessions : null;
         $this->clientAddress = self::text($data['clientAddress'] ?? $data['client_address'] ?? null);
+        $this->coverStyle = self::text($data['coverStyle'] ?? $data['cover_style'] ?? null);
+        $color = self::text($data['bgColor'] ?? $data['bg_color'] ?? null);
+        if ($color !== null && $color !== '' && !str_starts_with(trim($color), '#') && ctype_xdigit(trim($color))) {
+            $color = '#' . trim($color);
+        }
+        $this->bgColor = $color === null ? null : ($color === '' || preg_match('/^#[0-9a-fA-F]{6}$/', trim($color)) ? strtolower(trim($color)) : null);
+        $this->authorName = self::text($data['authorName'] ?? $data['author_name'] ?? null);
 
         $deceased = $data['parentsDeceased'] ?? $data['parents_deceased'] ?? $data['parentsNotParticipating'] ?? $data['parents_not_participating'] ?? null;
         $this->parentsDeceased = $deceased !== null ? (bool)$deceased : null;

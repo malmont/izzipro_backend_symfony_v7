@@ -37,7 +37,7 @@ Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`,
 | Groupe | Routes | Contrôleur |
 |---|---|---|
 | Livres | `GET, POST /books`, `GET, PUT, DELETE /books/{id}`, couverture | `BookController` |
-| Application mobile Living Memory | `POST /mobile/books`, `GET /mobile/quotas`, `GET /mobile/pricing`, `POST /mobile/chapters/{id}/unlock`, `GET /mobile/purchases/unassigned` (connexion obligatoire ; voir « Application mobile Living Memory », « Quotas des appels IA », « Rédaction payante et livre imprimé ») | `MobileBookController`, `MobileQuotaController`, `MobilePurchaseController` |
+| Application mobile Living Memory | `POST /mobile/books`, `GET /mobile/quotas`, `GET /mobile/pricing`, `POST /mobile/chapters/{id}/unlock`, `GET /mobile/purchases/unassigned`, `DELETE /mobile/account` (connexion obligatoire ; voir « Application mobile Living Memory », « Quotas des appels IA », « Rédaction payante et livre imprimé », « Suppression du compte ») | `MobileBookController`, `MobileQuotaController`, `MobilePurchaseController`, `MobileAccountController` |
 | Webhook RevenueCat | `POST /api/webhooks/revenuecat` (public, en-tête Authorization = `REVENUECAT_WEBHOOK_SECRET`) | `RevenueCatWebhookController` |
 | Chapitres | `/books/{id}/chapters`, `/chapters/{id}` (+ `status`, `generate`, `reset`, `audio`, `improve-answer`, `share-link`, `contributor-links`) | `ChapterController` |
 | Photos | `/chapters/{id}/photos`, `/photos/{id}`, mise en page | `ChapterController`, `ChapterPhotoController` |
@@ -58,7 +58,7 @@ plus qu'un dernier repli : chaque site a son frontend.
 
 | Table | Entité | Contenu |
 |---|---|---|
-| `mv_book` | `Book` | livre (propriétaire, type, origine `channel` : `web` par défaut, `mobile` pour un livre créé par l'application Living Memory, fixée à la création ; statut de paiement, nombre de séances d'entretien `session_count` / `sessionCount` de 1 à 12, adresse du client `client_address` : itinéraire Google Maps pour le biographe, `clientAddressMapsUrl` dans l'API, jamais montrée aux invités) ; identifiant UUID |
+| `mv_book` | `Book` | livre (propriétaire, type, origine `channel` : `web` par défaut, `mobile` pour un livre créé par l'application Living Memory, fixée à la création ; choix de couverture enregistrés `cover_style`, `bg_color`, `author_name` (17/10/2026, voir « Mise en page du livre ») ; statut de paiement, nombre de séances d'entretien `session_count` / `sessionCount` de 1 à 12, adresse du client `client_address` : itinéraire Google Maps pour le biographe, `clientAddressMapsUrl` dans l'API, jamais montrée aux invités) ; identifiant UUID |
 | `mv_chapter` | `Chapter` | réponses, texte généré, `generation_status` |
 | `mv_chapter_photo` | `ChapterPhoto` | photos d'un chapitre |
 | `mv_contributor` | `Contributor` | contributeurs (livres collectifs) |
@@ -202,12 +202,19 @@ simulation).
   [{copy, label, quantity, amount}], total, alreadyPrinted, paymentRequired}` ; 422 `CURRENCY_NOT_SUPPORTED`. Le
   `POST …/print/estimate` du web (avec adresse) garde sa forme et reçoit en plus `billing`, `lines`, `total`,
   `alreadyPrinted`, `paymentRequired` (`currency` reste celle de l'estimation Lulu).
-- Paiement (propriétaire d'un livre mobile) : `POST …/print/payment-intent {quantity, currency, recipient}` crée une
-  commande `pending_payment` (montant de la grille, `payment_status = pending`) et une intention Stripe (passerelle du
-  panier, capture manuelle) → `{clientSecret, amount, currency, paymentIntentId, order_id, paymentRequired: true}` ;
-  `POST …/print/order {paymentIntentId, recipient…}` exige l'intention autorisée ou réglée (402 `PRINT_NOT_PAID`
-  sinon, 409 `PRINT_ALREADY_ORDERED` si déjà convertie), complète la commande (PDF, Lulu) puis capture le paiement
-  (`payment_status = paid`). **Plus de commande Lulu avant paiement pour l'application** ; le flux web est inchangé.
+- Paiement (propriétaire d'un livre mobile) : `POST …/print/payment-intent {quantity, currency, recipient, cover_style?,
+  bg_color?, author_name?}` crée une commande `pending_payment` (montant de la grille, `payment_status = pending`,
+  coordonnées et choix de couverture mémorisés) et une intention Stripe sur le **compte Stripe du site** (celui de
+  `GET /api/stripe-config`, passerelle du panier, capture manuelle) → `{clientSecret, amount, currency,
+  paymentIntentId, order_id, paymentRequired: true, billing}` ; `POST …/print/order {paymentIntentId, recipient…}`
+  exige l'intention autorisée ou réglée (402 `PRINT_NOT_PAID` sinon, 409 `PRINT_ALREADY_ORDERED` si déjà convertie),
+  complète la commande (PDF, Lulu) puis capture le paiement (`payment_status = paid`). Si l'application ne rappelle
+  jamais `print/order` (téléphone fermé après le paiement), le webhook Stripe (`payment_intent.amount_capturable_updated`,
+  métadonnée `memoires_print`) **complète la commande côté serveur** avec les données mémorisées
+  (`PrintPaymentService::completeFromWebhook`) ; l'application reçoit alors 409 `PRINT_ALREADY_ORDERED` et bascule
+  sur le suivi des commandes. **Plus de commande Lulu avant paiement pour l'application** ; le flux web est inchangé.
+  Devise : une fois le livre doté d'une devise (premier exemplaire), `currency` est ignoré ; 422
+  `CURRENCY_NOT_SUPPORTED` seulement pour une devise hors grille.
 - Console d'administration : `payments[]` kind `chapter` (statut `paid` / `refunded`, `refundedAt`, `refundedAmount`,
   `paymentRef`, `store`, `environment`) et `print` (montant facturé, `pending` / `paid` / `refunded`, `paymentRef` =
   intention Stripe), `payments.totals` par devise (`totalAmount` = repli, devise par défaut du site),
@@ -248,6 +255,27 @@ simulation).
   paiement compte dans `orders` et `copies`, pas dans `revenue`. `biographer` est toujours null : aucun lien
   biographe-livre n'existe en base (le propriétaire est le client). Tri : net décroissant (devise par défaut du
   site) puis création décroissante. 422 `VALIDATION_FAILED` sur un paramètre invalide.
+
+## Suppression du compte (application mobile)
+
+`DELETE /api/memoires/mobile/account {password}` (connexion obligatoire, mot de passe redemandé, 17/10/2026, exigence
+App Store et Google Play ; `Controller/MobileAccountController`, `UseCase/Account/DeleteMobileAccountUseCase`,
+`Services/AccountDeletionService`). Essais limités par compte (limiteur `api_login_account` : 10 par 15 min, 429
+`TOO_MANY_ATTEMPTS` + `Retry-After`). → 200 `{deleted: true, booksDeleted, printOrdersAnonymized}` ; 401
+`PASSWORD_INVALID` (message à afficher tel quel) ; 403 `ADMIN_ACCOUNT` (un administrateur se supprime depuis la
+console, pas depuis l'application).
+- **Effacé** : le contenu de tous ses livres (chapitres, réponses, enregistrements audio, photos, proches, PDF
+  générés, couverture), ses jetons de rafraîchissement, codes à usage unique et demandes de réinitialisation, ses
+  adresses, et toute donnée personnelle du compte (e-mail remplacé par `supprime-<id>@compte-supprime.invalid`, nom
+  « Compte supprimé », mot de passe invalidé, rôles vidés, `deleted_at` posé).
+- **Conservé, anonymisé, pour la comptabilité** : la ligne du compte, les achats de chapitre (RevenueCat), les
+  commandes d'impression (montants, statut Lulu ; destinataire remplacé par « Compte supprimé »), et une coquille
+  du livre (« Livre supprimé », sans aucun contenu) seulement quand une commande ou un achat y est rattaché. Un livre
+  sans comptabilité est supprimé entièrement.
+- Après coup : plus aucune connexion (`AuthenticationService` refuse un compte `deleted_at`), l'ancien jeton JWT ne
+  désigne plus personne (l'e-mail a changé) ; le registre des paiements et la vue d'ensemble gardent les lignes sous
+  l'identité anonymisée. Tests : `MobileAccountAndCoverTest`. La page web publique « Supprimer mon compte »
+  demandée par Google est du ressort du frontend (texte + renvoi vers l'application ou l'adresse de contact du site).
 
 ## Console d'administration : populations et utilisateurs mobile
 
@@ -343,8 +371,14 @@ mobile fait son propre livre, avec des quotas et, à venir, des chapitres payant
   Catégorie `script` (écriture manuscrite) : la police ne s'applique qu'aux titres (`titleFamily` : couverture, pages de
   titre, titres de chapitre, sous-titres), sans capitales ni interlettrage ; le texte courant reste en police de lecture.
 - Auteur : texte ou objet `author` du livre (`normalizeAuthorName`) ; à l'impression, jamais le destinataire du colis.
-  À défaut (`resolveAuthorName`) : prénom(s) du narrateur, sinon prénom et nom du propriétaire, sinon le nom par défaut
-  codé en dur pour un livre `web` ; pour un livre `mobile`, jamais ce nom par défaut (propriétaire, sinon vide).
+  À défaut (`resolveAuthorName`) : nom d'auteur enregistré sur le livre (`authorName`), sinon prénom(s) du narrateur,
+  sinon prénom et nom du propriétaire, sinon le nom par défaut codé en dur pour un livre `web` ; pour un livre
+  `mobile`, jamais ce nom par défaut (propriétaire, sinon vide).
+- **Choix de couverture enregistrés** (17/10/2026) : `coverStyle`, `bgColor` (`#rrggbb`, autre valeur ignorée) et
+  `authorName` s'écrivent par `POST`/`PUT /books` (champ absent = inchangé, chaîne vide = retour au défaut) et sont
+  rendus par `BookOutputDto` (aussi en `cover_style`, `bg_color`, `author_name`). `pdf/preview-cover`,
+  `pdf/preview-interior`, `pdf/generate` et la commande d'impression les prennent par défaut quand le paramètre n'est
+  pas fourni ; un paramètre fourni garde la priorité (essai sans enregistrer).
 - Vérifier un rendu : générer le PDF et le regarder (les tests ne contrôlent que le HTML produit).
 
 ## Tester

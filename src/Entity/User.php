@@ -516,6 +516,14 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(name: 'last_login_at', type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $lastLoginAt = null;
 
+    /** Compte supprimé à la demande de l'utilisateur (17/10/2026) : ligne anonymisée, conservée pour la comptabilité */
+    #[ORM\Column(name: 'deleted_at', type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $deletedAt = null;
+
+    public function getDeletedAt(): ?\DateTimeImmutable { return $this->deletedAt; }
+    public function setDeletedAt(?\DateTimeImmutable $at): static { $this->deletedAt = $at; return $this; }
+    public function isDeleted(): bool { return $this->deletedAt !== null; }
+
     public function getSignupChannel(): ?string { return $this->signupChannel; }
     public function setSignupChannel(?string $signupChannel): static { $this->signupChannel = $signupChannel; return $this; }
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }

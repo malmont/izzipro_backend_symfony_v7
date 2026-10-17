@@ -22,6 +22,13 @@ class BookOutputDto
     public string $channel;
     /** Vrai quand les appels IA de ce livre sont soumis aux quotas pour l'utilisateur courant (16/10/2026) : le frontend affiche alors le reste du jour (GET /mobile/quotas) */
     public bool $aiQuotaLimited = false;
+    /** Choix de couverture enregistrés (17/10/2026) ; null = défaut du backend */
+    public ?string $coverStyle = null;
+    public ?string $cover_style = null;
+    public ?string $bgColor = null;
+    public ?string $bg_color = null;
+    public ?string $authorName = null;
+    public ?string $author_name = null;
     public ?string $person1FirstName;
     public ?string $person1Birthplace;
     public ?string $person2FirstName;
@@ -120,6 +127,9 @@ class BookOutputDto
         $this->updatedAt = $book->getUpdatedAt()->format(\DateTimeInterface::ATOM);
         $this->type = $book->getType();
         $this->channel = $book->getChannel();
+        $this->coverStyle = $this->cover_style = $book->getCoverStyle();
+        $this->bgColor = $this->bg_color = $book->getBgColor();
+        $this->authorName = $this->author_name = $book->getAuthorName();
         $this->person1FirstName = $book->getPerson1FirstName();
         $this->person1Birthplace = $book->getPerson1Birthplace();
         $this->person2FirstName = $book->getPerson2FirstName();

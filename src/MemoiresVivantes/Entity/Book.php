@@ -101,6 +101,20 @@ class Book
      */
     #[ORM\Column(length: 10, options: ['default' => self::CHANNEL_WEB])]
     private string $channel = self::CHANNEL_WEB;
+
+    /**
+     * Choix de couverture enregistrés (17/10/2026) : style, couleur de fond (#rrggbb) et nom d'auteur imprimé. Les
+     * aperçus, pdf/generate et la commande d'impression les prennent par défaut quand le paramètre n'est pas fourni ;
+     * un paramètre fourni garde la priorité (essai sans enregistrer). null = choix par défaut du backend.
+     */
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $coverStyle = null;
+
+    #[ORM\Column(length: 7, nullable: true)]
+    private ?string $bgColor = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $authorName = null;
  
     #[ORM\Column(length: 20)]
     #[Groups(['book:read', 'book:write', 'chapter:read'])]
@@ -351,6 +365,13 @@ class Book
     {
         return $this->channel;
     }
+
+    public function getCoverStyle(): ?string { return $this->coverStyle; }
+    public function setCoverStyle(?string $style): static { $style = trim((string) $style); $this->coverStyle = $style !== '' ? mb_substr($style, 0, 50) : null; return $this; }
+    public function getBgColor(): ?string { return $this->bgColor; }
+    public function setBgColor(?string $color): static { $color = strtolower(trim((string) $color)); $this->bgColor = preg_match('/^#[0-9a-f]{6}$/', $color) ? $color : null; return $this; }
+    public function getAuthorName(): ?string { return $this->authorName; }
+    public function setAuthorName(?string $name): static { $name = trim((string) $name); $this->authorName = $name !== '' ? mb_substr($name, 0, 255) : null; return $this; }
 
     /** Réservé à la création du livre (CreateBookUseCase) : l'origine ne change jamais ensuite */
     public function setChannel(string $channel): static

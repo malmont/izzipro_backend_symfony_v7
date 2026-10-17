@@ -101,7 +101,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/videos` | PUBLIC_ACCESS | `Controller\VideoApiController\VideoApiController::list` |
 | POST | `/api/videos` | ROLE_ADMIN | `Controller\VideoApiController\VideoApiController::create` |
 
-## Mémoires Vivantes (92)
+## Mémoires Vivantes (93)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -184,6 +184,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/memoires/contributors/{id}/approve` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::approve` |
 | DELETE | `/api/memoires/contributors/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::delete` |
 | PUT | `/api/memoires/contributors/{id}` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::update` |
+| DELETE | `/api/memoires/mobile/account` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobileAccountController::delete` |
 | POST | `/api/memoires/mobile/books` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobileBookController::create` |
 | POST | `/api/memoires/mobile/chapters/{id}/unlock` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobilePurchaseController::unlock` |
 | GET | `/api/memoires/mobile/pricing` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\MobilePurchaseController::pricing` |

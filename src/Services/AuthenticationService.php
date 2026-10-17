@@ -100,7 +100,7 @@ class AuthenticationService
 
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
 
-        if (!$user instanceof User || !$this->passwordHasher->isPasswordValid($user, $password)) {
+        if (!$user instanceof User || $user->isDeleted() || !$this->passwordHasher->isPasswordValid($user, $password)) {
             return new JsonResponse(
                 ['code' => 'LOGIN_INVALID', 'message' => 'Identifiants invalides'],
                 Response::HTTP_UNAUTHORIZED

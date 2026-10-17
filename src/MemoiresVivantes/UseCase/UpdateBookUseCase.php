@@ -35,6 +35,9 @@ class UpdateBookUseCase
         if (BookFontCatalog::has($dto->font)) $book->setFont($dto->font);
         if ($dto->sessionCount !== null) $book->setSessionCount($dto->sessionCount);
         if ($dto->parentsDeceased !== null) $book->setParentsDeceased($dto->parentsDeceased);
+        if ($dto->coverStyle !== null) $book->setCoverStyle($dto->coverStyle);
+        if ($dto->bgColor !== null) $book->setBgColor($dto->bgColor);
+        if ($dto->authorName !== null) $book->setAuthorName($dto->authorName);
 
         $em->flush();
 

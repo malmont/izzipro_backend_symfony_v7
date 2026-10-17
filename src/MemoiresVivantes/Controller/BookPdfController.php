@@ -42,7 +42,7 @@ class BookPdfController extends AbstractController
         if ($book->getChannel() === Book::CHANNEL_MOBILE && !$this->pdfService->hasPrintableContent($book)) {
             return $this->json(['error' => 'BOOK_EMPTY', 'message' => 'Aucun chapitre payé et rédigé : le livre est vide.'], 422);
         }
-        $author = BookPdfGeneratorService::normalizeAuthorName($request->query->all()['author'] ?? null);
+        $author = BookPdfGeneratorService::normalizeAuthorName($request->query->all()['author'] ?? $book->getAuthorName());
         // Police à l'essai (code du catalogue) ; absente ou inconnue : celle du livre
         $pdfBinary = $this->pdfService->generateInteriorBinary($book, $author, self::fontParam($request->query->all()['font'] ?? null));
 
@@ -67,10 +67,11 @@ class BookPdfController extends AbstractController
             return $this->json(['error' => $denied[1]], $denied[0]);
         }
 
-        $style = (string)$request->query->get('style', 'biographic_split');
-        $author = BookPdfGeneratorService::normalizeAuthorName($request->query->all()['author'] ?? null);
+        // Choix de couverture enregistrés sur le livre par défaut (17/10/2026) ; un paramètre fourni garde la priorité
+        $style = (string)$request->query->get('style', $book->getCoverStyle() ?: 'biographic_split');
+        $author = BookPdfGeneratorService::normalizeAuthorName($request->query->all()['author'] ?? $book->getAuthorName());
         $pages = max(24, (int)$request->query->get('pages', 64));
-        $color = (string)($request->query->get('color') ?: $request->query->get('bg') ?: $request->query->get('bg_color') ?: '');
+        $color = (string)($request->query->get('color') ?: $request->query->get('bg') ?: $request->query->get('bg_color') ?: $book->getBgColor() ?: '');
         if (!empty($color) && !str_starts_with($color, '#') && ctype_xdigit($color)) {
             $color = '#' . $color;
         }
@@ -102,10 +103,10 @@ class BookPdfController extends AbstractController
         }
 
         $data = json_decode($request->getContent(), true) ?: [];
-        $style = is_string($data['cover_style'] ?? null) ? $data['cover_style'] : (string) $request->query->get('style', 'biographic_split');
-        // Texte, ou objet « author » du livre renvoyé tel quel par le frontend (provoquait une erreur 500)
-        $author = BookPdfGeneratorService::normalizeAuthorName($data['author_name'] ?? $data['author'] ?? $request->query->all()['author'] ?? null);
-        $color = $data['bg_color'] ?? $data['color'] ?? $request->query->get('color') ?? $request->query->get('bg_color') ?? '';
+        $style = is_string($data['cover_style'] ?? null) ? $data['cover_style'] : (string) $request->query->get('style', $book->getCoverStyle() ?: 'biographic_split');
+        // Texte, ou objet « author » du livre renvoyé tel quel par le frontend (provoquait une erreur 500) ; sinon le nom enregistré sur le livre
+        $author = BookPdfGeneratorService::normalizeAuthorName($data['author_name'] ?? $data['author'] ?? $request->query->all()['author'] ?? $book->getAuthorName());
+        $color = $data['bg_color'] ?? $data['color'] ?? $request->query->get('color') ?? $request->query->get('bg_color') ?? $book->getBgColor() ?? '';
         $color = is_string($color) ? $color : '';
         if (!empty($color) && !str_starts_with($color, '#') && ctype_xdigit($color)) {
             $color = '#' . $color;

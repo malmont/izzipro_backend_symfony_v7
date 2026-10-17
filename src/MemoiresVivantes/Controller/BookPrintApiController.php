@@ -115,7 +115,9 @@ class BookPrintApiController extends AbstractController
             try {
                 /** @var User $payer */
                 $payer = $this->getUser();
-                $pending = $this->printPayments->createPendingOrder($book, $payer, max(1, (int) ($data['quantity'] ?? 1)), $data['currency'] ?? null, $data['recipient'] ?? $data['shipping_address'] ?? $data);
+                // Coordonnées (recipient ou shipping_address) et choix de couverture (à la racine du corps) mémorisés sur la commande en attente
+                $shipping = (array) ($data['recipient'] ?? $data['shipping_address'] ?? $data) + array_filter(['cover_style' => $data['cover_style'] ?? null, 'bg_color' => $data['bg_color'] ?? null, 'author_name' => $data['author_name'] ?? null]);
+                $pending = $this->printPayments->createPendingOrder($book, $payer, max(1, (int) ($data['quantity'] ?? 1)), $data['currency'] ?? null, $shipping);
             } catch (\App\MemoiresVivantes\Exception\ApiErrorException $e) {
                 return $this->json($e->toBody(), $e->status);
             }
@@ -183,9 +185,10 @@ class BookPrintApiController extends AbstractController
         $shippingData = $data['shipping_address'] ?? $data;
         $shippingData['quantity'] = $data['quantity'] ?? $shippingData['quantity'] ?? 1;
         $shippingData['shipping_level'] = $data['shipping_level'] ?? $shippingData['shipping_level'] ?? null;
-        $shippingData['cover_style'] = $data['cover_style'] ?? $shippingData['cover_style'] ?? 'biographic_split';
-        $shippingData['bg_color'] = $data['bg_color'] ?? $shippingData['bg_color'] ?? null;
-        $shippingData['author_name'] = $data['author_name'] ?? $shippingData['author_name'] ?? null;
+        // Choix de couverture : paramètre fourni, sinon ceux enregistrés sur le livre (17/10/2026)
+        $shippingData['cover_style'] = $data['cover_style'] ?? $shippingData['cover_style'] ?? $book->getCoverStyle() ?? 'biographic_split';
+        $shippingData['bg_color'] = $data['bg_color'] ?? $shippingData['bg_color'] ?? $book->getBgColor();
+        $shippingData['author_name'] = $data['author_name'] ?? $shippingData['author_name'] ?? $book->getAuthorName();
         $shippingData['custom_cover_pdf_url'] = $data['custom_cover_pdf_url'] ?? $shippingData['custom_cover_pdf_url'] ?? null;
         $shippingData['custom_interior_pdf_url'] = $data['custom_interior_pdf_url'] ?? $shippingData['custom_interior_pdf_url'] ?? null;
 

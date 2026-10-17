@@ -167,7 +167,7 @@ class BookPdfGeneratorService
 
     public function resolveAuthorName(Book $book, ?string $customAuthorName = null): string
     {
-        $authorName = self::normalizeAuthorName($customAuthorName);
+        $authorName = self::normalizeAuthorName($customAuthorName) ?? self::normalizeAuthorName($book->getAuthorName());
         if (empty($authorName)) {
             if ($book->getPerson1FirstName()) {
                 $authorName = $book->getPerson1FirstName();
