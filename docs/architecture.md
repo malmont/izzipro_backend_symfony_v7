@@ -30,7 +30,7 @@ Ce qui est commun à tout le backend. Chaque module a sa fiche (voir « Modules 
 | Élément | Où |
 |---|---|
 | Base maître (table `tenants` : `code`, `dbname`, `custom_domain`…) | `MASTER_DATABASE_URL` → base `app_v2_db` (l'ancienne base `master` n'est plus lue par rien : ne pas y écrire) |
-| Résolution du tenant d'une requête | `EventListener/TenantDoctrineSwitcherListener` : en-tête `X-Tenant-Host`, sinon `?tenant=`/`?t=` ou session (EasyAdmin), sinon l'hôte ; domaine principal du backend → `tenantdefaut` |
+| Résolution du tenant d'une requête | `EventListener/TenantDoctrineSwitcherListener` : en-tête `X-Tenant-Host`, sinon `?tenant=`/`?t=` ou session (EasyAdmin), sinon l'hôte ; domaine principal du backend → `tenantdefaut`. Site demandé par l'en-tête ou `?tenant=` mais inconnu → **404 `TENANT_NOT_FOUND`** avant toute lecture (17/10/2026 ; sauf `tenant/check`, `tenant/check-mobile`, `setup/new-store` et le domaine du backend) ; sans site, base maître comme avant |
 | Hôte → tenant | `TenantConnectionManager::findTenantConfigByHost` (cache Redis 1 h) : 1) `custom_domain` (avec ou sans `www.`), 2) sous-domaine = `code` (suffixe `-v2` ignoré, `-`/`_` équivalents) |
 | Base du tenant courant | `TenantConnectionProvider` (bascule la connexion Doctrine par défaut) ; code du tenant : `getTenantCode()` |
 
