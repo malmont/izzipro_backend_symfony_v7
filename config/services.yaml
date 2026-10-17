@@ -144,6 +144,9 @@ services:
             $defaultTenantUrl:  '%env(DATABASE_URL)%'
             $projectDir:        '%kernel.project_dir%'
             $connection:        '@doctrine.dbal.default_connection'
+            # Reconnaissance d'un site par son code en sous-domaine (codeFromHost, 17/10/2026)
+            $frontendBaseDomain: '%env(resolve:FRONTEND_BASE_DOMAIN)%'
+            $backendBaseDomain: '%env(resolve:BACKEND_BASE_DOMAIN)%'
 
        
     App\Services\TenantConnectionProvider:

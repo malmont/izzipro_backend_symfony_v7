@@ -445,13 +445,14 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/validate-token` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\Account\SecurityController::validateToken` |
 | GET | `/verify/email` | aucune règle | `Controller\Account\RegistrationController::verifyEmail` |
 
-## Tenants (5)
+## Tenants (6)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
 | GET | `/api/health` | PUBLIC_ACCESS | `Controller\HealthController::index` |
 | GET | `/api/tenant/check-mobile` | PUBLIC_ACCESS | `Controller\TenantSetupController\TenantController::checkMobile` |
 | GET, POST | `/api/tenant/check` | PUBLIC_ACCESS | `Controller\TenantSetupController\TenantController::check` |
+| GET | `/api/tenant/hosts` | PUBLIC_ACCESS | `Controller\TenantSetupController\TenantController::hosts` |
 | ANY | `/setup/new-store` | aucune règle | `Controller\TenantSetupController\TenantSetupController::setup` |
 | ANY | `/setup/status/{tenantCode}/{syncJobId}/{finalUrl}` | aucune règle | `App\Controller\TenantSetupController\SyncStatusController` |
 

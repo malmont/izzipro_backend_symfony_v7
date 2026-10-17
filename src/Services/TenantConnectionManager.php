@@ -37,6 +37,8 @@ class TenantConnectionManager
     private string           $pdoDsn;
     private string           $pdoUser;
     private string           $pdoPass;
+    /** Domaines dont un sous-domaine désigne un site par son code (frontend, backend) ; voir codeFromHost() */
+    private array            $siteBaseDomains;
 
     public function __construct(
         string $masterDatabaseUrl,
@@ -45,8 +47,15 @@ class TenantConnectionManager
         Connection $connection,
         LoggerInterface $logger,
         TenantConnectionProvider $connectionProvider,
-        TagAwareCacheInterface $cache // <-- Injection automatique par Symfony
+        TagAwareCacheInterface $cache, // <-- Injection automatique par Symfony
+        ?string $frontendBaseDomain = null,
+        ?string $backendBaseDomain = null
     ) {
+        $env = static fn (string $name): string => (string) ($_SERVER[$name] ?? $_ENV[$name] ?? getenv($name) ?: '');
+        $this->siteBaseDomains = array_values(array_filter(array_map(
+            static fn (string $d): string => strtolower(trim($d, " .\"'")),
+            [$frontendBaseDomain ?? $env('FRONTEND_BASE_DOMAIN'), $backendBaseDomain ?? $env('BACKEND_BASE_DOMAIN')]
+        )));
         $this->logger           = $logger;
         $this->defaultTenantUrl = $defaultTenantUrl;
         $this->projectDir       = rtrim($projectDir, '/');
@@ -392,8 +401,45 @@ class TenantConnectionManager
      * Logique de résolution du tenant (Custom Domain + Subdomain + WWW).
      * OPTIMISÉ AVEC CACHE REDIS.
      */
+    /**
+     * Code de site porté par un hôte, hors domaine personnalisé (17/10/2026). Formes reconnues, avec ou sans « www. » et
+     * port : code nu (« demo », applications mobiles et ?tenant=), <code>.<domaine du frontend>, <code>.<…>.<domaine du
+     * backend> (« lintendantprive.v2.backend-strapi.online »), <code>.localhost (développement) et le domaine du
+     * frontend lui-même (son premier segment, « arkanoa-media »). Avant, le premier segment de n'importe quel domaine
+     * valait code (« demo.nimportequoi.com » → demo) : la liste des hôtes (GET /api/tenant/hosts) n'était pas énumérable.
+     */
+    public function codeFromHost(string $host): ?string
+    {
+        $host = strtolower(trim(explode(':', trim($host))[0], '.'));
+        if (str_starts_with($host, 'www.')) {
+            $host = substr($host, 4);
+        }
+        if ($host === '') {
+            return null;
+        }
+        if (!str_contains($host, '.')) {
+            return $host;
+        }
+        foreach ([...$this->siteBaseDomains, 'localhost'] as $base) {
+            if ($host === $base || str_ends_with($host, '.' . $base)) {
+                return explode('.', $host)[0];
+            }
+        }
+
+        return null;
+    }
+
+    /** Domaines de base des sites (frontend puis backend), pour la liste publique des hôtes */
+    public function getSiteBaseDomains(): array
+    {
+        return $this->siteBaseDomains;
+    }
+
     public function findTenantConfigByHost(string $host): ?TenantConfig
     {
+        // Un nom d'hôte ne dépend pas de la casse (17/10/2026) : « WWW.Boutique.ca » = « www.boutique.ca »
+        $host = strtolower(trim($host));
+
         // 1. Clé unique basée sur le host (md5 sécurise les caractères spéciaux)
         $cacheKey = 'tenant_conf_host_' . md5($host);
 
@@ -438,19 +484,9 @@ class TenantConnectionManager
                 $this->logger->warning("Erreur SQL recherche custom domain: " . $e->getMessage());
             }
 
-            // 3. PRIORITÉ 2 : SOUS-DOMAINE
+            // 3. PRIORITÉ 2 : CODE DU SITE (règle resserrée le 17/10/2026, voir codeFromHost())
             if (!$tenantCode) {
-                $cleanHost = explode(':', $host)[0];
-                $parts = explode('.', $cleanHost);
-
-                $potentialCode = null;
-                // Si www.client.site.com -> on prend 'client' (index 1)
-                // Si client.site.com -> on prend 'client' (index 0)
-                if ($parts[0] === 'www' && isset($parts[1])) {
-                    $potentialCode = $parts[1];
-                } else {
-                    $potentialCode = $parts[0];
-                }
+                $potentialCode = $this->codeFromHost($host);
 
                 if ($potentialCode) {
                     $potentialCode = preg_replace('/-v2$/i', '', $potentialCode);

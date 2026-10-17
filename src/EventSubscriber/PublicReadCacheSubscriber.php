@@ -23,6 +23,7 @@ final class PublicReadCacheSubscriber implements EventSubscriberInterface
     public const ROUTES = [
         'api_boutique_settings_get' => 60,
         'api_tenant_check' => 300,
+        'api_tenant_hosts' => 60,
         'get_products_by_offer' => 60,
         'get_products_by_category' => 60,
         'get_product_by_slug' => 60,

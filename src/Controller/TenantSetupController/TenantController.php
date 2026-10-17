@@ -7,6 +7,8 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Contracts\Cache\ItemInterface;
+use Symfony\Contracts\Cache\TagAwareCacheInterface;
 
 class TenantController extends AbstractController
 {
@@ -27,39 +29,16 @@ class TenantController extends AbstractController
         // Nettoyage du port (ex: localhost:3000 -> localhost)
         $cleanHost = explode(':', $host)[0];
 
-        // 2. Connexion au Master (Annuaire)
+        // 2. Recherche du site : même règle que toutes les autres routes (17/10/2026,
+        // TenantConnectionManager::findTenantConfigByHost). L'ancienne recherche propre à cette route ne reconnaissait pas
+        // le domaine du frontend lui-même : arkanoa-media.com était déclaré inexistant et le visiteur envoyé vers la
+        // création de site du backend, alors que toutes les autres routes servaient le site de l'agence.
         try {
-            $pdoMaster = $tenantManager->getPdoMaster();
+            $config = $tenantManager->findTenantConfigByHost($cleanHost);
         } catch (\Throwable $e) {
             return new JsonResponse(['status' => 'error', 'message' => 'Erreur critique connexion Master.'], 500);
         }
-
-        // 3. Recherche du Tenant
-        $tenantData = null;
-
-        try {
-            $altHost = str_starts_with($cleanHost, 'www.') ? substr($cleanHost, 4) : 'www.' . $cleanHost;
-
-            // Recherche par domaine personnalisé
-            $stmt = $pdoMaster->prepare(
-                'SELECT code, name FROM tenants WHERE custom_domain = :host OR custom_domain = :altHost'
-            );
-            $stmt->execute(['host' => $cleanHost, 'altHost' => $altHost]);
-            $tenantData = $stmt->fetch(\PDO::FETCH_ASSOC);
-
-            // Recherche par sous-domaine (code)
-            if (!$tenantData) {
-                $tenantCode = $this->extractSubdomainCode($cleanHost);
-
-                if ($tenantCode) {
-                    $stmt = $pdoMaster->prepare('SELECT code, name FROM tenants WHERE code = :code');
-                    $stmt->execute(['code' => $tenantCode]);
-                    $tenantData = $stmt->fetch(\PDO::FETCH_ASSOC);
-                }
-            }
-        } catch (\Throwable $e) {
-            return new JsonResponse(['status' => 'error', 'message' => 'Erreur SQL verification.'], 500);
-        }
+        $tenantData = $config ? ['code' => $config->getCode(), 'name' => $config->getName()] : null;
 
         // --- CAS A : Le Tenant EXISTE ---
         if ($tenantData) {
@@ -74,56 +53,11 @@ class TenantController extends AbstractController
             ]);
         }
 
-        // --- CAS B : Le Tenant N'EXISTE PAS ---
-
-        // Vérification si c'est un sous-domaine valide de la plateforme (Frontend ou Backend V7)
-        $isPlatformSubdomain = str_ends_with($cleanHost, $this->frontendBaseDomain) 
-                            || str_ends_with($cleanHost, $this->backendBaseDomain);
-
-        // AJOUT : Vérification pour le développement (Localhost et sous-domaines .localhost)
-        if (!$isPlatformSubdomain) {
-            if ($cleanHost === 'localhost' || $cleanHost === '127.0.0.1' || str_ends_with($cleanHost, '.localhost')) {
-                $isPlatformSubdomain = true;
-            }
-        }
-
-        if ($isPlatformSubdomain) {
-
-            $isLocal = ($cleanHost === 'localhost' || str_ends_with($cleanHost, '.localhost'));
-            $protocol = $isLocal ? 'http://' : 'https://';
-
-            $currentSubdomain = $this->extractSubdomainCode($cleanHost);
-
-            if ($isLocal) {
-                $port = $request->getPort();
-                $portSuffix = ($port && !in_array($port, [80, 443])) ? ':' . $port : '';
-                if ($currentSubdomain && $currentSubdomain !== 'www') {
-                    $targetDomain = $currentSubdomain . '.localhost' . $portSuffix;
-                } else {
-                    $targetDomain = 'localhost' . $portSuffix;
-                }
-            } else {
-                if ($currentSubdomain && $currentSubdomain !== 'www') {
-                    $absoluteSetupUrl = $protocol . $this->backendBaseDomain . '/setup/new-store?subdomain=' . urlencode($currentSubdomain);
-                } else {
-                    $absoluteSetupUrl = $protocol . $this->backendBaseDomain . '/setup/new-store';
-                }
-            }
-
-            return new JsonResponse([
-                'exists' => false,
-                'status' => 'not_found',
-                'action' => 'redirect_create',
-                'message' => "Cette boutique n'existe pas encore. Voulez-vous la créer ?",
-                'setup_url' => $absoluteSetupUrl
-            ], 404);
-        }
-
-        return new JsonResponse([
-            'exists' => false,
-            'status' => 'error',
-            'message' => 'Domaine non reconnu.'
-        ], 400);
+        // --- CAS B : site inconnu ---
+        // Plus de proposition de création (17/10/2026, décision du propriétaire) : la réponse renvoyait le visiteur vers le
+        // formulaire de création du backend. La création de site est réservée à l'administrateur de la plateforme :
+        // bouton de la console d'édition du site de l'agence, formulaire /setup/new-store protégé par la clé de création.
+        return new JsonResponse(['exists' => false, 'status' => 'not_found', 'message' => "Ce site n'existe pas."], 404);
     }
 
     /**
@@ -161,38 +95,28 @@ class TenantController extends AbstractController
     }
 
     /**
-     * Helper pour extraire "boutique" de "boutique.mon-saas.com" ou "boutique.localhost"
+     * Hôtes de tous les sites (17/10/2026), pour le serveur du frontend : il refuse tout autre hôte avant le rendu.
+     * Publique, sans X-Tenant-Host, hôtes seulement (voir TenantPublicHostResolver::listPublicHosts). Cache d'une minute,
+     * vidé avec le tag « tenants » (création d'un site). Jamais de liste vide : 503, le frontend garde sa liste.
      */
-    private function extractSubdomainCode(string $host): ?string
+    #[Route('/api/tenant/hosts', name: 'api_tenant_hosts', methods: ['GET'])]
+    public function hosts(\App\Services\TenantPublicHostResolver $resolver, TagAwareCacheInterface $cache): JsonResponse
     {
-        if ($host === 'localhost' || $host === '127.0.0.1') {
-            return null; // Pas de sous-domaine sur la racine locale
+        try {
+            $hosts = $cache->get('tenant_public_hosts', function (ItemInterface $item) use ($resolver): array {
+                $item->expiresAfter(60);
+                $item->tag(['tenants']);
+                $hosts = $resolver->listPublicHosts();
+                if ($hosts === []) {
+                    throw new \RuntimeException('Aucun site dans la base maître');
+                }
+
+                return $hosts;
+            });
+        } catch (\Throwable $e) {
+            return new JsonResponse(['error' => 'HOSTS_UNAVAILABLE', 'message' => 'Liste des sites indisponible'], 503);
         }
 
-        // Cas Production Backend V7
-        if (str_ends_with($host, $this->backendBaseDomain)) {
-            $prefix = substr($host, 0, -strlen($this->backendBaseDomain));
-            return rtrim($prefix, '.');
-        }
-
-        // Cas Production Frontend
-        if (str_ends_with($host, $this->frontendBaseDomain)) {
-            $prefix = substr($host, 0, -strlen($this->frontendBaseDomain));
-            return rtrim($prefix, '.');
-        }
-
-        // Cas Développement (.localhost)
-        if (str_ends_with($host, '.localhost')) {
-            $prefix = substr($host, 0, -strlen('.localhost'));
-            return rtrim($prefix, '.');
-        }
-
-        // Fallback générique (ex: www.boutique.com)
-        $parts = explode('.', $host);
-        if (count($parts) >= 3) {
-            return $parts[0] === 'www' ? ($parts[1] ?? null) : $parts[0];
-        }
-
-        return null;
+        return new JsonResponse(['hosts' => $hosts]);
     }
 }

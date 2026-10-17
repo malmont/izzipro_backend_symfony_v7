@@ -74,7 +74,7 @@ class TenantCheckMobileTest extends WebTestCase
         $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/tenant/check', [], [], ['HTTP_X_TENANT_HOST' => 'inconnu-' . bin2hex(random_bytes(2)) . '.' . $this->baseDomain, 'HTTP_ACCEPT' => 'application/json']);
         $body = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertSame(404, $this->client->getResponse()->getStatusCode());
-        $this->assertSame('redirect_create', $body['action'], 'le frontend web garde sa redirection vers la création');
+        $this->assertSame(['exists' => false, 'status' => 'not_found', 'message' => "Ce site n'existe pas."], $body, 'plus de renvoi vers la création de site (17/10/2026)');
     }
 
     private function check(?string $host): Response
