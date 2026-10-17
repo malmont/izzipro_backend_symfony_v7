@@ -10,6 +10,9 @@ services:
       - .:/var/www
       - ./jwt:/var/www/config/jwt
       - ./docker/php/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+      # Performances (17/10/2026) : OPcache agrandi et pool PHP-FPM de 20 processus (voir les fichiers)
+      - ./docker/php/zz-opcache-perf.ini:/usr/local/etc/php/conf.d/zz-opcache-perf.ini:ro
+      - ./docker/php/zz-perf-pool.conf:/usr/local/etc/php-fpm.d/zz-perf-pool.conf:ro
     working_dir: /var/www
     env_file:
       - .env

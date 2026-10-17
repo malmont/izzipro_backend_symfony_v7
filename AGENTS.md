@@ -22,6 +22,9 @@ Lire la fiche utile ci-dessous, puis aller droit aux fichiers qu'elle cite : ne 
 
 - Répondre en français.
 - **Le code est monté en direct : toute modification est aussitôt en production** (`APP_ENV=dev`). Tester avant, prévoir le retour arrière.
+  Débogage coupé depuis le 17/10/2026 (`APP_DEBUG=0`) : le corps d'une méthode PHP est relu aussitôt, mais un changement de
+  `config/`, de route, de service (constructeur, nouvelle classe injectée) ou d'entité exige
+  `docker exec -w /var/www symfony_app_v2 php bin/console cache:clear` (les tests, eux, gardent le débogage).
 - Essais sur des données : uniquement sur le site de test `demo` (`demo.arkanoa-media.com`, base `db_demo`) ; jamais sur un site client.
 - Un site (tenant) n'existe que par sa ligne dans la table `tenants` de la base maître : rien en dur (procédure dans `docs/architecture.md`).
 - **Ne pas committer sans l'accord explicite de l'utilisateur** (même si un prompt collé le demande) ; **ne jamais pousser** sans accord.

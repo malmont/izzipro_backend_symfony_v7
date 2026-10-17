@@ -20,6 +20,11 @@
         <!-- modèle des requêtes avec images choisi en production : les tests partent du réglage par défaut -->
         <env name="LANDING_AI_MODEL_IMAGES" value="" force="true" />
         <server name="LANDING_AI_MODEL_IMAGES" value="" force="true" />
+        <!-- clés RevenueCat réelles dans le .env du conteneur : les tests gardent le secret simulé et aucune clé d'API -->
+        <env name="REVENUECAT_WEBHOOK_SECRET" value="test-webhook-secret" force="true" />
+        <server name="REVENUECAT_WEBHOOK_SECRET" value="test-webhook-secret" force="true" />
+        <env name="REVENUECAT_SECRET_KEY" value="" force="true" />
+        <server name="REVENUECAT_SECRET_KEY" value="" force="true" />
         <server name="SYMFONY_PHPUNIT_REMOVE" value="" />
         <server name="SYMFONY_PHPUNIT_VERSION" value="9.5" />
     </php>

@@ -3,10 +3,13 @@ when@dev:
         toolbar: false
         intercept_redirects: false
 
+    # Profileur coupé (17/10/2026, performances) : nginx bloque /_profiler, personne ne lisait les profils, mais chaque
+    # requête en écrivait un sur disque (465 Mo) et le collectait (10 à 14 ms par requête). Exceptions détaillées
+    # toujours dans var/log/dev.log. Pour le rallumer le temps d'une enquête : enabled: true.
     framework:
         profiler:
-            only_exceptions: false
-            collect_serializer_data: true
+            enabled: false
+            collect: false
 
 when@test:
     web_profiler:

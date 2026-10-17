@@ -10,8 +10,13 @@ Ce qui est commun à tout le backend. Chaque module a sa fiche (voir « Modules 
 - Frontend : autre dépôt (Next.js, `Izzipro_next`) ; il appelle `/api/*` avec l'en-tête `X-Tenant-Host`. Sa doc :
   `AGENTS.md` et `docs/architecture.md` de ce dépôt-là.
 - ⚠️ **Le code est monté en direct dans les conteneurs** (`.:/var/www`) et le serveur tourne en `APP_ENV=dev`
-  (serveur de développement, débogage voulu : ne pas passer en `prod` sans l'accord du propriétaire) :
-  **toute modification de fichier est immédiatement en production**, y compris `config/`.
+  (serveur de développement : ne pas passer en `prod` sans l'accord du propriétaire) :
+  **toute modification de fichier est immédiatement en production**.
+  Depuis le 17/10/2026, `APP_DEBUG=0` (`.env`, décision du propriétaire, lectures deux fois plus rapides) : Symfony ne
+  vérifie plus la fraîcheur de son cache. Après un changement de `config/`, de route, de service ou d'entité :
+  `docker exec -w /var/www symfony_app_v2 php bin/console cache:clear`. Retour arrière : retirer la ligne du `.env`.
+  Les tests gardent le débogage (`APP_DEBUG=1` dans `.env.test`) ; `phpunit.xml.dist` force les valeurs de test des
+  variables réelles du conteneur (code par e-mail, RevenueCat).
 - **Performances des lectures publiques** (09/10/2026) : compression gzip dans nginx (`docker/nginx/default.conf` ;
   rechargement : `docker exec symfony_nginx_v2 nginx -s reload`), cache HTTP (`EventSubscriber/PublicReadCacheSubscriber` :
   ETag et 304, `public, max-age=60` (300 pour `tenant/check`), `stale-while-revalidate=600`, `Vary: X-Tenant-Host,
@@ -307,6 +312,17 @@ chaque requête.
   Délais portés à **330 s** : `fastcgi_read_timeout` (`docker/nginx/default.conf`) et fichier personnalisé de NPM
   `/data/nginx/custom/server_proxy.conf` (inclus dans tous les hôtes, conservé par NPM).
 - Recharger nginx : `docker exec symfony_nginx_v2 nginx -t && docker exec symfony_nginx_v2 nginx -s reload`.
+- **Performances (17/10/2026)** :
+  - PHP-FPM : 20 processus, recyclés toutes les 500 requêtes (`docker/php/zz-perf-pool.conf`). Il était limité à 5,
+    et les générations IA saturaient le pool.
+  - OPcache : 256 Mo, 32 Mo de chaînes, 32 531 fichiers (`docker/php/zz-opcache-perf.ini`). Ces deux fichiers sont
+    montés par `docker-compose.yml` ; une modification demande `docker compose up -d --no-deps --force-recreate app`.
+  - État du pool, interne seulement :
+    `docker exec symfony_app_v2 sh -c 'SCRIPT_NAME=/fpm-status SCRIPT_FILENAME=/fpm-status REQUEST_METHOD=GET cgi-fcgi -bind -connect 127.0.0.1:9000'`
+    (surveiller `max children reached`).
+  - Profileur Symfony coupé en dev (`config/packages/web_profiler.yaml`) : personne ne pouvait le lire.
+  - Journal nginx minuté : IP réelle, en-tête `X-Tenant-Host`, `rt=` (durée totale) et `urt=` (durée PHP), en secondes.
+    Routes lentes : `docker logs symfony_nginx_v2 --since 1h | grep 'rt=' | sort -t= -k3 -rn | head`.
 - Pousser (`git push origin dev`) sauvegarde le code ; il tourne déjà en production.
 
 | Commande | Rôle |
