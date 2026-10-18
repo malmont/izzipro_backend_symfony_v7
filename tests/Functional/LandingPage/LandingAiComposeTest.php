@@ -1045,7 +1045,7 @@ class LandingAiComposeTest extends WebTestCase
             'titre avec balise' => ['mode' => 'site', 'pages' => [['title' => '<b>Services</b>']], 'prompt' => 'x'],
             'brief trop long' => ['mode' => 'site', 'pages' => [['title' => 'Services', 'brief' => str_repeat('a', 301)]], 'prompt' => 'x'],
             'trop d\'onglets' => ['mode' => 'site', 'pages' => array_map(fn ($i) => ['title' => "Onglet $i"], range(1, 9)), 'prompt' => 'x'],
-            'app hors du mode site' => ['mode' => 'page', 'app' => 'landingpage', 'prompt' => 'x'],
+            'app inconnue hors du mode site' => ['mode' => 'page', 'app' => 'blog', 'prompt' => 'x'],
             'onglet hors du mode page' => ['mode' => 'create', 'componentKey' => 'Contact', 'tab' => ['title' => 'Services'], 'prompt' => 'x'],
             'onglet et page système' => ['mode' => 'page', 'tab' => ['title' => 'Services'], 'system' => 'login', 'prompt' => 'x'],
             'onglet sans titre' => ['mode' => 'page', 'tab' => ['brief' => 'x'], 'prompt' => 'x'],
@@ -1056,6 +1056,22 @@ class LandingAiComposeTest extends WebTestCase
         }
         $this->assertSame([], FakeLandingAiClient::$requests);
         $this->assertSame(0, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM ai_job'));
+    }
+
+    public function testAppSentByTheEditorIsAcceptedInEveryMode(): void
+    {
+        // L'éditeur envoie app dans tous les modes (18/10/2026 : « app : seulement en mode site » cassait la console)
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]]);
+        $edit = $this->compose(['mode' => 'edit', 'app' => 'landingpage', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre en noir.']);
+        $this->assertSame(200, $edit->getStatusCode(), $edit->getContent());
+
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('contact-type-a'), null);
+        $create = $this->compose(['mode' => 'create', 'app' => 'boutique', 'componentKey' => 'Contact', 'prompt' => 'Formulaire de contact.']);
+        $this->assertSame(200, $create->getStatusCode(), $create->getContent());
+
+        FakeLandingAiClient::reset(); // composeInBackground vérifie qu'aucun appel n'a lieu avant le worker
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Contact', 'dataType' => null, 'composition' => $this->preset('contact-type-a')]]);
+        $this->assertSame('done', $this->composeInBackground(['mode' => 'page', 'app' => 'landingpage', 'prompt' => 'Rends ce site plus moderne, ajoute des effets.'])->status);
     }
 
     public function testTabPageRefusesNavbarAndFlagsShopSectionsNotAskedFor(): void

@@ -371,9 +371,8 @@ class LandingAiComposeInputDto
                 $errors[] = ['path' => 'componentKey', 'message' => 'famille absente du catalogue de l\'éditeur'];
             }
         }
-        if ($this->app !== null && $this->mode !== 'site') {
-            $errors[] = ['path' => 'app', 'message' => 'seulement en mode site'];
-        }
+        // app (landingpage ou boutique) : envoyé par l'éditeur dans tous les modes, utilisé seulement en mode site
+        // (forme des pages) ; ignoré ailleurs (18/10/2026 : le refus hors mode site cassait les demandes de la console)
         if ($this->tab !== null) {
             if ($this->mode !== 'page') {
                 $errors[] = ['path' => 'tab', 'message' => 'seulement en mode page'];
