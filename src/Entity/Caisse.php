@@ -25,7 +25,8 @@ class Caisse
     #[ORM\Column]
     private ?float $amountTotal = null;
 
-    #[ORM\Column(type: Types::DATE_MUTABLE, nullable: true)]
+    // Date ET heure d'ouverture depuis le 19/10/2026 (colonne date seule avant : l'heure était perdue)
+    #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
     private ?\DateTimeInterface $createdAt = null;
 
     /**

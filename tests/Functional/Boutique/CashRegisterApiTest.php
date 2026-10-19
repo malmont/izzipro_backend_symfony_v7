@@ -89,6 +89,33 @@ class CashRegisterApiTest extends WebTestCase
         $this->assertSame(10.0, (float) $sessions[$this->mainRegister]['amountTotal']);
     }
 
+    public function testOpeningWithACashFundKeepsItAcrossSessionsAndRecordsTheTime(): void
+    {
+        $this->loginAs(['ROLE_USER_POS']);
+        $invalid = $this->request('POST', '/api/caisse/open', json_encode(['cashRegisterId' => $this->mainRegister, 'cashFund' => -5]));
+        $this->assertSame(400, $invalid->getStatusCode());
+        $this->assertSame('INVALID_AMOUNT', json_decode($invalid->getContent(), true)['error']);
+        $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM caisse WHERE is_open AND cash_register_id = ?', [$this->mainRegister]), 'aucune session ouverte sur un montant invalide');
+
+        $before = (float) ($this->db->fetchOne('SELECT amount_total FROM caisse WHERE cash_register_id = ? AND NOT is_open ORDER BY created_at DESC, id DESC LIMIT 1', [$this->mainRegister]) ?: 0);
+        $fundBefore = (float) ($this->db->fetchOne('SELECT fon_de_caisse FROM caisse WHERE cash_register_id = ? AND NOT is_open ORDER BY created_at DESC, id DESC LIMIT 1', [$this->mainRegister]) ?: 0);
+        $opened = $this->request('POST', '/api/caisse/open', json_encode(['cashRegisterId' => $this->mainRegister, 'cashFund' => 10000]));
+        $this->assertSame(201, $opened->getStatusCode(), $opened->getContent());
+        $body = json_decode($opened->getContent(), true);
+        $this->assertSame([$before + 10000, $fundBefore + 10000], [(float) $body['amountTotal'], (float) $body['fonDeCaisse']], 'fond ajouté au solde et au fond de caisse');
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $body['createdAt']);
+        $this->assertNotSame('00:00:00', substr($this->db->fetchOne('SELECT created_at FROM caisse WHERE id = ?', [$body['caisse_id']]), 11), 'heure d\'ouverture conservée');
+        $transactions = $this->json($this->request('GET', '/api/caisse/transactions?cashRegisterId=' . $this->mainRegister));
+        $this->assertSame(['Ouverture', 'Ajout fond de caisse'], array_column($transactions, 'transactionType'));
+
+        // Fermeture puis réouverture sans cashFund : solde et fond de caisse reportés
+        $this->assertSame(200, $this->request('POST', '/api/caisse/close', json_encode(['cashRegisterId' => $this->mainRegister]))->getStatusCode());
+        $reopened = json_decode($this->request('POST', '/api/caisse/open', json_encode(['cashRegisterId' => $this->mainRegister]))->getContent(), true);
+        $this->assertSame([$before + 10000, $fundBefore + 10000], [(float) $reopened['amountTotal'], (float) $reopened['fonDeCaisse']], 'reportés de la session fermée du même poste');
+        $session = $this->json($this->request('GET', '/api/caisse?cashRegisterId=' . $this->mainRegister))[0];
+        $this->assertNotSame('00:00:00', substr((string) $session['createdAt'], 11), 'GET /api/caisse : heure d\'ouverture');
+    }
+
     public function testTheRegisterMustBeNamedWhenSeveralAreActive(): void
     {
         $second = $this->createRegister('Comptoir ' . bin2hex(random_bytes(2)));

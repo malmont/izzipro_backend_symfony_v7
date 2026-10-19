@@ -72,7 +72,7 @@ class CaisseCrudController extends BaseTenantCrudController
                     'choice_label' => 'name',
                 ]),
             MoneyField::new('amountTotal', 'Montant Total')->setCurrency('USD')->setStoredAsCents(false),
-            DateField::new('createdAt', 'Date de Création')->setFormat('dd/MM/yyyy')->hideOnForm(),
+            DateTimeField::new('createdAt', 'Ouverte le')->setFormat('dd/MM/yyyy HH:mm')->hideOnForm(),
             MoneyField::new('fonDeCaisse', 'Fond de Caisse')->setCurrency('USD')->setStoredAsCents(false),
             BooleanField::new('isOpen', 'Ouverte')->renderAsSwitch(false),
             DateTimeField::new('closedAt', 'Fermée le')->hideOnForm(),
@@ -120,6 +120,7 @@ class CaisseCrudController extends BaseTenantCrudController
             $entityInstance->setOpen(true);
             $entityInstance->setCreatedAt(new \DateTime());
             $entityInstance->setAmountTotal((float) ($entityInstance->getAmountTotal() ?? 0));
+            $entityInstance->setFonDeCaisse((float) ($entityInstance->getFonDeCaisse() ?? 0));
 
             $tenantEm->persist($entityInstance);
             $tenantEm->flush();

@@ -39,9 +39,14 @@ class CaisseController extends AbstractController
     public function openCaisse(Request $request): JsonResponse
     {
         return $this->guard(function () use ($request) {
-            $caisse = $this->operations->open($this->registerIdFromBody($request), $this->user());
+            $data = json_decode($request->getContent(), true);
+            $caisse = $this->operations->open($this->registerIdFromBody($request), $this->user(), is_array($data) ? ($data['cashFund'] ?? null) : null);
 
-            return new JsonResponse(['message' => 'Caisse opened successfully', 'caisse_id' => $caisse->getId(), 'cashRegisterId' => $caisse->getCashRegister()->getId()], 201);
+            // amountTotal, fonDeCaisse et createdAt ajoutés le 19/10/2026 (champs d'avant inchangés)
+            return new JsonResponse([
+                'message' => 'Caisse opened successfully', 'caisse_id' => $caisse->getId(), 'cashRegisterId' => $caisse->getCashRegister()->getId(),
+                'amountTotal' => $caisse->getAmountTotal(), 'fonDeCaisse' => $caisse->getFonDeCaisse(), 'createdAt' => $caisse->getCreatedAt()?->format('Y-m-d H:i:s'),
+            ], 201);
         });
     }
 

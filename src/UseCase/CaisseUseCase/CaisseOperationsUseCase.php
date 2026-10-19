@@ -27,16 +27,25 @@ class CaisseOperationsUseCase
     ) {
     }
 
-    public function open(?int $cashRegisterId, User $user): Caisse
+    /**
+     * Ouverture d'une session : solde ET fond de caisse reportés de la dernière session fermée du même poste (l'argent
+     * reste dans le tiroir). $cashFund (cents, facultatif, 19/10/2026) : fond de caisse ajouté à l'ouverture, enregistré
+     * comme un « Ajout fond de caisse » (type 8), comme POST /api/caisse/cashfunddeposit.
+     */
+    public function open(?int $cashRegisterId, User $user, mixed $cashFund = null): Caisse
     {
+        if ($cashFund !== null && (!is_numeric($cashFund) || (float) $cashFund < 0)) {
+            throw new CashRegisterException('INVALID_AMOUNT', 'cashFund : montant en cents, positif ou nul, attendu', 400);
+        }
         $register = $this->registers->resolve($cashRegisterId);
         if ($this->caisseService->getOpenCaisse($register)) {
             throw new CashRegisterException('CAISSE_ALREADY_OPEN', sprintf('Une session est déjà ouverte sur le poste « %s »', $register->getName()), 400);
         }
         $lastClosed = $this->caisseService->getLastClosedCaisse($register);
         $initialAmount = $lastClosed ? (float) $lastClosed->getAmountTotal() : 0.0;
+        $initialFund = $lastClosed ? (float) ($lastClosed->getFonDeCaisse() ?? 0) : 0.0;
 
-        $caisse = (new Caisse())->setCashRegister($register)->setAmountTotal($initialAmount)->setCreatedAt(new \DateTime())->setOpen(true);
+        $caisse = (new Caisse())->setCashRegister($register)->setAmountTotal($initialAmount)->setFonDeCaisse($initialFund)->setCreatedAt(new \DateTime())->setOpen(true);
         $em = $this->emProvider->getEntityManager();
         try {
             $em->persist($caisse);
@@ -45,6 +54,9 @@ class CaisseOperationsUseCase
             throw new CashRegisterException('CAISSE_ALREADY_OPEN', sprintf('Une session est déjà ouverte sur le poste « %s »', $register->getName()), 400);
         }
         $this->transactions->execute($caisse, null, $user, $initialAmount, HandleCaisseTransactionUseCase::OPENING);
+        if ($cashFund !== null && (float) $cashFund > 0) {
+            $this->transactions->execute($caisse, null, $user, (float) $cashFund, HandleCaisseTransactionUseCase::CASH_FUND_DEPOSIT);
+        }
 
         return $caisse;
     }
