@@ -94,6 +94,10 @@ Route distincte du tunnel web (`/api/order/create`, `create-guest`, webhook Stri
   **unités monétaires** (dollars), positif. **La somme des `paymentMethods` doit égaler le total calculé par le serveur**
   (articles au prix du serveur + livraison + taxes, tolérance 1 cent), sinon 400 et rien n'est créé. Seule la part en
   espèces (`type` 2) entre en caisse.
+- Total à encaisser : `POST /api/cart/quote` (public) avec les mêmes `items` **et le `cashRegisterId`** : sans
+  `shippingAddress`, un devis qui porte `cashRegisterId` est taxé à l'adresse de la fiche entreprise, comme la vente
+  (19/10/2026) ; `total` en cents. Sans `cashRegisterId` (boutique web), un devis sans adresse reste hors taxes
+  (`taxStatus: address_required`). Une `shippingAddress` fournie l'emporte toujours.
 - `orderSource` 2 (caisse) et `typeOrder` 1 (vente) par défaut ; `typeOrder` 2 = retour (montants négatifs).
 - `addressId` et `carrierId` **facultatifs** : une vente au comptoir n'a ni adresse de livraison ni transporteur, ni
   frais de port ; les **taxes sont alors calculées sur l'adresse de la fiche entreprise** du site (lieu de la vente,

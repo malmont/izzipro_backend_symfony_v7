@@ -25,6 +25,18 @@ class OrderTaxAddressResolver
         if ($address) {
             return ['country' => $address->getCountry(), 'province' => $address->getProvince(), 'city' => $address->getCity(), 'postalCode' => $address->getCodepostal()];
         }
+
+        return $this->forStore();
+    }
+
+    /**
+     * Adresse de la fiche entreprise du site (lieu d'une vente au comptoir) ; null si absente. Sert aussi au devis de la
+     * caisse (POST /api/cart/quote avec cashRegisterId, QuoteCartUseCase) pour obtenir le même total que la vente.
+     *
+     * @return array{country: ?string, province: ?string, city: ?string, postalCode: ?string}|null
+     */
+    public function forStore(): ?array
+    {
         $site = $this->emProvider->getEntityManager()->getRepository(Entreprise::class)->findOneBy([])?->getAddressEntreprise();
         if (!$site) {
             return null;

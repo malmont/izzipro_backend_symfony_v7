@@ -88,6 +88,30 @@ class PosOrderApiTest extends WebTestCase
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM transaction_caisse WHERE order_caisse_id = ? AND caisse_id = ? AND transaction_type_id = 1', [$orderId, $caisse]));
     }
 
+    public function testACounterQuoteIsTaxedAtTheStoreLikeTheSale(): void
+    {
+        $variant = $this->variant('DEMO-CASQUETTE');
+        $price = $this->unitPrice($variant);
+        $items = [['productVariantId' => $variant, 'quantity' => 1]];
+
+        // Caisse : cashRegisterId sans adresse → adresse du magasin (fiche entreprise, Québec), même total que la vente
+        $counter = json_decode($this->request('POST', '/api/cart/quote', json_encode(['items' => $items, 'cashRegisterId' => 1]))->getContent(), true);
+        $this->assertSame('CA', $counter['shippingAddress']['country'] ?? null, json_encode($counter));
+        $this->assertSame('QC', $counter['shippingAddress']['province']);
+        $this->assertSame($price + $this->taxesOn($price), $counter['total'], 'taxes du lieu de vente');
+        $this->assertSame(0, $counter['shipping']);
+
+        // Web et application e-commerce : sans cashRegisterId ni adresse, rien ne change (aucune taxe, address_required)
+        $web = json_decode($this->request('POST', '/api/cart/quote', json_encode(['items' => $items]))->getContent(), true);
+        $this->assertSame('address_required', $web['taxStatus']);
+        $this->assertSame($price, $web['total']);
+        $this->assertNull($web['shippingAddress']);
+
+        // Adresse fournie : elle l'emporte, même en caisse
+        $ontario = json_decode($this->request('POST', '/api/cart/quote', json_encode(['items' => $items, 'cashRegisterId' => 1, 'shippingAddress' => ['country' => 'CA', 'province' => 'ON']]))->getContent(), true);
+        $this->assertSame('ON', $ontario['shippingAddress']['province']);
+    }
+
     public function testSaleWithAddressAndCarrierKeepsTodaysBehaviour(): void
     {
         $this->openCaisse();
