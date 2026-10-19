@@ -1026,6 +1026,34 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame(4, (int) $this->db()->fetchOne('SELECT SUM(credits) FROM ai_usage WHERE status = \'success\''), 'l\'historique des crédits reste');
     }
 
+    public function testPagesOfASiteGetTheirOwnMemoryKeyAndOutcome(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([
+            ['componentKey' => 'Navbar', 'dataType' => null, 'composition' => $this->preset('boutique-navbar-type-a')],
+            ['componentKey' => 'Presentation', 'dataType' => (int) $this->availableIds('Presentation')[0], 'composition' => $this->preset('presentation-type-b')],
+            ['componentKey' => 'Footer', 'dataType' => null, 'composition' => $this->preset('boutique-footer-type-a')],
+        ], 'Accueil composé.');
+        $response = $this->compose(['mode' => 'site', 'pages' => ['login'], 'prompt' => 'Boutique sobre.', 'memoryKey' => 'boutique:site']);
+        $parentId = json_decode($response->getContent())->jobId;
+        $messages = $this->sentJobMessages();
+        $this->runWorker($messages);
+        $children = array_values(array_filter($this->sentJobMessages(), fn ($m) => $m->jobId !== $parentId));
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'AuthPage', 'dataType' => null, 'composition' => $this->preset('auth-login')]], 'Connexion composée.');
+        $this->runWorker($children);
+
+        $parent = json_decode($this->get('/api/landingpage-ai/jobs/' . $parentId)->getContent(), false);
+        $this->assertSame('boutique:site:login', $parent->result->pages->login->memoryKey);
+        $login = json_decode($this->get('/api/landingpage-ai/jobs/' . $parent->result->pages->login->jobId)->getContent(), false);
+        $this->assertNotSame($parent->result->requestId, $login->result->requestId, 'une demande par page');
+        $outcome = $this->request('POST', '/api/landingpage-ai/usage/' . $login->result->requestId . '/outcome', json_encode(['outcome' => 'applied']));
+        $this->assertSame(200, $outcome->getStatusCode(), $outcome->getContent());
+        $this->assertSame(['Connexion composée.'], array_column(json_decode($this->get('/api/landingpage-ai/memory?memoryKey=boutique:site:login')->getContent(), true)['entries'], 'summary'));
+        $this->assertSame(['Accueil composé.'], array_column(json_decode($this->get('/api/landingpage-ai/memory?memoryKey=boutique:site')->getContent(), true)['entries'], 'summary'), 'l\'accueil garde sa propre mémoire');
+
+        $long = \App\Dto\LandingAiComposeInputDto::fromRequestBody(json_decode(json_encode(['mode' => 'site', 'pages' => ['login'], 'prompt' => 'x', 'memoryKey' => str_repeat('a', 120)]), false));
+        $this->assertSame(120, strlen(\App\Services\LandingAiService\LandingAiSiteOrchestrator::childMemoryKey($long, 'login')), 'clé coupée à 120 caractères');
+    }
+
     public function testMemoryRoutesAndKeysAreValidated(): void
     {
         $this->assertSame(400, $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'x', 'memoryKey' => 'clé avec espaces'])->getStatusCode());

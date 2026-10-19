@@ -199,7 +199,14 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     réussie est gardé avec la demande (`ai_usage.memory_key`, `summary` de 1 000 caractères au plus, `outcome`), dans la
     base du site, 90 jours comme le reste de l'historique ; jamais la composition. Sans `history` dans la requête, les 10
     derniers échanges de la clé sont redonnés au modèle comme l'historique de la console (qui prime quand il est envoyé).
-    Un tour de questions n'est pas gardé ; les pages filles d'un site n'ont pas de clé. Toute réponse porte `requestId`
+    Un tour de questions n'est pas gardé. Mode site (21/10/2026) : l'issue envoyée avec le `requestId` de la tâche mère
+    ne vaut que pour l'accueil (navbar, footer, sections) ; chaque page a sa propre demande et sa propre clé, celle de
+    l'accueil suivie de « : » et de la clé de la page (ex. `landingpage:site:services`, coupée à 120 caractères), donnée
+    dans `pages[clé].memoryKey` du résultat de la mère ; son `requestId` se lit dans le résultat de sa tâche
+    (`GET /jobs/{pages[clé].jobId}` → `result.requestId`), une issue par page. Sections : les réglages gardent tel quel
+    tout champ ajouté à une section ; un identifiant stable (`uid`) posé par l'éditeur sert de clé sans changement du
+    backend. La mémoire d'une section supprimée n'est pas effacée d'office (le backend ne connaît pas la forme des clés) :
+    elle s'éteint après 90 jours, ou la console l'efface (`DELETE …/memory?memoryKey=`) à la suppression. Toute réponse porte `requestId`
     (identifiant de la demande). Routes (ROLE_ADMIN) : `POST /api/landingpage-ai/usage/{requestId}/outcome` `{ outcome:
     applied | rejected | undone }` (404 inconnue ou non réussie, 409 sans clé de mémoire) ; `GET /api/landingpage-ai/memory?
     memoryKey=` → `{ memoryKey, entries: [{ requestId, createdAt, mode, componentKey, prompt, summary, outcome }] }` ;

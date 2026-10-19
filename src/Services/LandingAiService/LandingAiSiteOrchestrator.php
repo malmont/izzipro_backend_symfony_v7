@@ -74,10 +74,26 @@ final class LandingAiSiteOrchestrator
         $titles = self::pageKeys($dto);
         $entries = [];
         foreach ($dto->children as $key => $jobId) {
-            $entries[$key] = ['jobId' => $jobId, 'status' => 'pending'] + (isset($titles[$key]) ? ['title' => $titles[$key]] : []);
+            $entries[$key] = ['jobId' => $jobId, 'status' => 'pending'] + (isset($titles[$key]) ? ['title' => $titles[$key]] : [])
+                + (($memoryKey = self::childMemoryKey($dto, $key)) !== null ? ['memoryKey' => $memoryKey] : []);
         }
 
         return $entries;
+    }
+
+    /**
+     * Clé de mémoire d'une page d'un site (21/10/2026) : celle de l'accueil suivie de « : » et de la clé de la page
+     * (ex. landingpage:site:services), coupée pour tenir en 120 caractères ; null si l'accueil n'en a pas. Chaque page
+     * garde ainsi son résumé et reçoit sa propre issue (requestId de sa tâche).
+     */
+    public static function childMemoryKey(LandingAiComposeInputDto $parent, string $pageKey): ?string
+    {
+        if ($parent->memoryKey === null) {
+            return null;
+        }
+        $suffix = ':' . substr($pageKey, 0, 60);
+
+        return substr($parent->memoryKey, 0, 120 - strlen($suffix)) . $suffix;
     }
 
     /**
@@ -93,7 +109,8 @@ final class LandingAiSiteOrchestrator
             foreach (array_keys(self::pageKeys($parent)) as $i => $key) {
                 $child = $parent->app === 'landingpage' ? $this->tabRequest($parent, $tabs[$i]) : $this->childRequest($parent, $key);
                 $label = $parent->app === 'landingpage' ? $tabs[$i]['title'] : $key;
-                $usage = $this->quota->reserve('page', '', LandingAiQuotaService::cost('page'), $user, sprintf('[site : %s] %s', $label, $parent->prompt), LandingAiQuotaService::SITE_PAGE_RESERVATION_TTL_SECONDS);
+                $child->memoryKey = self::childMemoryKey($parent, $key);
+                $usage = $this->quota->reserve('page', '', LandingAiQuotaService::cost('page'), $user, sprintf('[site : %s] %s', $label, $parent->prompt), LandingAiQuotaService::SITE_PAGE_RESERVATION_TTL_SECONDS, $child->memoryKey);
                 $children[$key] = $this->jobs->create($usage, $user, $child->toJson())->getId();
             }
         } catch (\Throwable $e) {
