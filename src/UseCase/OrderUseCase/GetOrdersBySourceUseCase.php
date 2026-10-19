@@ -11,7 +11,7 @@ class GetOrdersBySourceUseCase
 {
     private $orderService;
 
-    public function __construct(OrderService $orderService)
+    public function __construct(OrderService $orderService, private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null)
     {
         $this->orderService = $orderService;
     }
@@ -20,6 +20,10 @@ class GetOrdersBySourceUseCase
     {
         $orders = $this->orderService->getOrdersByOrderSource($orderSourceId, $days);
         $orderDTOs = [];
+        // Ventes au comptoir (source 2) : numéros de ticket et d'avoir (C2) ; aucune autre source ne change
+        $receipts = $orderSourceId === 2 && $this->emProvider
+            ? $this->emProvider->getEntityManager()->getRepository(\App\Entity\PosReceipt::class)->forOrders(array_map(fn ($o) => (int) $o->getId(), $orders))
+            : [];
 
         foreach ($orders as $order) {
             $orderItemDTOs = [];
@@ -44,6 +48,9 @@ class GetOrdersBySourceUseCase
                 $order->getStatus() ? $order->getStatus()->getName() : null,
                 $orderItemDTOs
             );
+            if ($orderSourceId === 2) {
+                $orderDTOs[array_key_last($orderDTOs)]->pos = OrderDTO::posFields($receipts[$order->getId()] ?? []);
+            }
         }
 
         return $orderDTOs;

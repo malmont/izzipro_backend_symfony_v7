@@ -30,6 +30,7 @@ class AuthenticationService
         private \App\Security\TwoFactorPolicy $twoFactor,
         private \Psr\Log\LoggerInterface $logger,
         private TenantConnectionProvider $tenantConnectionProvider,
+        private ?\App\Services\PosAuditService\PosAuditService $posAudit = null,
     ) {}
 
     /**
@@ -101,6 +102,7 @@ class AuthenticationService
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
 
         if (!$user instanceof User || $user->isDeleted() || !$this->passwordHasher->isPasswordValid($user, $password)) {
+            $this->auditPos($platform, null, $email, 'invalid_credentials');
             return new JsonResponse(
                 ['code' => 'LOGIN_INVALID', 'message' => 'Identifiants invalides'],
                 Response::HTTP_UNAUTHORIZED
@@ -108,6 +110,7 @@ class AuthenticationService
         }
 
         if (!$user->isVerified()) {
+            $this->auditPos($platform, null, $email, 'not_verified');
             return new JsonResponse(
                 ['code' => 'ACCOUNT_NOT_VERIFIED', 'message' => 'Votre compte n\'est pas vérifié. Veuillez consulter vos e-mails.'],
                 Response::HTTP_UNAUTHORIZED
@@ -115,6 +118,7 @@ class AuthenticationService
         }
 
         if ($refused = $this->platformRoleViolation($user, $platform)) {
+            $this->auditPos($platform, null, $email, 'platform_not_allowed');
             return $refused;
         }
 
@@ -131,8 +135,27 @@ class AuthenticationService
         }
 
         $this->recordLogin($user);
+        $this->auditPos($platform, $user, $email);
         $tokens = $this->tokenService->generateTokens($user, $platform);
         $host = $request->getHost();
         return $this->tokenService->createResponseWithTokens($tokens, $platform, $host);
+    }
+
+    /**
+     * Journal de caisse (C2) : connexion réussie (LOGIN) ou refusée (LOGIN_FAILED, e-mail seulement, jamais le mot de
+     * passe) sur la plateforme « pos ». Rien pour les autres plateformes. Une erreur du journal ne bloque pas la connexion.
+     */
+    public function auditPos(string $platform, ?User $user, string $email, ?string $failure = null): void
+    {
+        if ($platform !== 'pos' || $this->posAudit === null) {
+            return;
+        }
+        try {
+            $failure === null
+                ? $this->posAudit->record(\App\Services\PosAuditService\PosAuditService::LOGIN, ['email' => $email], null, null, 'user', $user?->getId(), $user)
+                : $this->posAudit->record(\App\Services\PosAuditService\PosAuditService::LOGIN_FAILED, ['email' => mb_substr($email, 0, 180), 'reason' => $failure], anonymous: true);
+        } catch (\Throwable) {
+            // journal indisponible : la connexion n'en dépend pas
+        }
     }
 }

@@ -86,7 +86,18 @@ class CaisseController extends AbstractController
     #[Route('/api/caisse/report/x', name: 'caisse_report_x', methods: ['GET'])]
     public function reportX(Request $request): JsonResponse
     {
-        return $this->guard(fn () => new JsonResponse($this->reports->x($this->registerIdFromQuery($request), $this->locale($request))));
+        return $this->guard(fn () => new JsonResponse($this->reports->x($this->registerIdFromQuery($request), $this->locale($request), $request->query->get('purpose'))));
+    }
+
+    /** Ouverture du tiroir hors encaissement {cashRegisterId?, reason} → 201 ; journalisée (C2) */
+    #[Route('/api/caisse/drawer-open', name: 'caisse_drawer_open', methods: ['POST'])]
+    public function drawerOpen(Request $request): JsonResponse
+    {
+        return $this->guard(function () use ($request) {
+            $data = json_decode($request->getContent(), true);
+
+            return new JsonResponse($this->operations->openDrawer($this->registerIdFromBody($request), $this->user(), is_array($data) ? ($data['reason'] ?? null) : null), 201);
+        });
     }
 
     /** Rapports Z d'un poste, les plus récents d'abord (?cashRegisterId=, ?from=, ?to= : AAAA-MM-JJ) */

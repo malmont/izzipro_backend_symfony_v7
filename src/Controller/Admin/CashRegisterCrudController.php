@@ -41,4 +41,23 @@ class CashRegisterCrudController extends BaseTenantCrudController
             DateTimeField::new('createdAt', 'Créé le')->hideOnForm(),
         ];
     }
+
+    public function persistEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        parent::persistEntity($entityManager, $entityInstance);
+        $this->container->get(\App\Services\PosAuditService\PosAuditService::class)->record(\App\Services\PosAuditService\PosAuditService::CASH_REGISTER_CREATED,
+            ['name' => $entityInstance->getName(), 'via' => 'easyadmin'], null, $entityInstance, 'cash_register', $entityInstance->getId());
+    }
+
+    public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        parent::updateEntity($entityManager, $entityInstance);
+        $this->container->get(\App\Services\PosAuditService\PosAuditService::class)->record(\App\Services\PosAuditService\PosAuditService::CASH_REGISTER_UPDATED,
+            ['after' => ['name' => $entityInstance->getName(), 'isActive' => $entityInstance->isActive()], 'via' => 'easyadmin'], null, $entityInstance, 'cash_register', $entityInstance->getId());
+    }
+
+    public static function getSubscribedServices(): array
+    {
+        return parent::getSubscribedServices() + [\App\Services\PosAuditService\PosAuditService::class => \App\Services\PosAuditService\PosAuditService::class];
+    }
 }

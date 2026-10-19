@@ -28,6 +28,8 @@ use Symfony\Component\HttpFoundation\RequestStack;
 // 1. On étend notre contrôleur de base
 class TransactionCaisseListController extends BaseTenantCrudController
 {
+    use CashRecordLockTrait; // données de caisse non modifiables (C2)
+
     private RequestStack $requestStack;
     private AdminUrlGenerator $adminUrlGenerator;
 
@@ -103,5 +105,26 @@ class TransactionCaisseListController extends BaseTenantCrudController
                 })->renderAsHtml(),
         ];
     }
-    
+
+    protected function isCashRecordLocked(object $entity): bool
+    {
+        return $entity instanceof \App\Entity\TransactionCaisse;
+    }
+
+    public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
+    {
+        return $this->lockCashRecordActions(parent::configureActions($actions));
+    }
+
+    public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    public function deleteEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::deleteEntity($entityManager, $entityInstance);
+    }
 }

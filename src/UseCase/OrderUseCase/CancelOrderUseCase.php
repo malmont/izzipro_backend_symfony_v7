@@ -31,7 +31,9 @@ class CancelOrderUseCase
         TenantEntityManagerProvider $emProvider,
         private readonly CaisseService $caisseService,
         private readonly CashRegisterResolver $cashRegisters,
-        private readonly \App\Services\CaisseService\CashRoundingService $cashRoundingService
+        private readonly \App\Services\CaisseService\CashRoundingService $cashRoundingService,
+        private readonly \App\Services\PosAuditService\PosReceiptService $receipts,
+        private readonly \App\Services\PosAuditService\PosAuditService $audit
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
@@ -59,6 +61,13 @@ class CancelOrderUseCase
             $paymentTypeId = 1;
             $statusPaymentId = 2;
             $refundAmount = $order->getTotalAmount();
+            // Montants d'origine (remis à 0 plus bas) : conservés au journal de caisse et sur l'avoir (C2)
+            $before = [
+                'totalAmount' => (int) round((float) $order->getTotalAmount()), 'subTotal' => (int) round((float) $order->getSubTotal()),
+                'totalTax' => (int) round((float) $order->getTotalTax()), 'status' => $order->getStatus()?->getId(),
+                'taxes' => array_values(array_map(fn ($t) => ['label' => $t->getTax()?->getName(), 'amount' => (int) round((float) $t->getAmount())], $order->getOrderTaxes()->toArray())),
+            ];
+            $creditNote = null;
 
             // Vérifier si la commande peut être annulée
             $currentStatus = $order->getStatus();
@@ -120,15 +129,29 @@ class CancelOrderUseCase
                 $caisse = $this->caisseService->getOpenCaisseOfOrder($order)
                     ?? ($cashRegisterId !== null ? $this->cashRegisters->openSession($this->cashRegisters->resolve($cashRegisterId)) : null)
                     ?? $this->cashRegisters->requireOpenSession(null, 409);
+                $this->receipts->lockRegister($caisse->getCashRegister()); // verrou du poste avant celui de la session (C2)
                 $this->handleCaisseTransactionUseCase->execute($caisse, $order, $refundedBy ?? $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount,
                     $posCashRefund ? -($cashRefund - (int) round($refundAmount)) : null);
+                // Avoir (suite continue par poste) et entrée au journal, avec les montants d'origine (C2)
+                $creditNote = $this->receipts->issue($order, $caisse, \App\Entity\PosReceipt::CREDIT_NOTE, -(int) round((float) $refundAmount));
+                $this->audit->record(\App\Services\PosAuditService\PosAuditService::REFUND, [
+                    'kind' => 'cancellation', 'reference' => $order->getReference(),
+                    'creditNoteNumber' => $creditNote->getNumber(),
+                    'refundAmount' => (int) round((float) $refundAmount), 'paymentMethod' => $paymentMethod,
+                    'cashRefund' => $posCashRefund ? $cashRefund : 0,
+                    'before' => $before, 'after' => ['totalAmount' => 0, 'subTotal' => 0, 'totalTax' => 0, 'status' => 7],
+                ], $caisse, null, 'order', $order->getId(), $refundedBy);
             }
 
             // Valider la transaction en base de données
             $em->flush();
             $em->getConnection()->commit();
 
-            return new JsonResponse(['message' => 'Order canceled and refunded successfully'], Response::HTTP_OK);
+            // Vente au comptoir : numéro d'avoir et poste en plus (C2) ; annulation web : réponse inchangée
+            return new JsonResponse(['message' => 'Order canceled and refunded successfully'] + ($creditNote ? [
+                'creditNoteNumber' => $creditNote->getNumber(),
+                'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()],
+            ] : []), Response::HTTP_OK);
         } catch (CashRegisterException $e) {
             $em->getConnection()->rollback();
 

@@ -14,7 +14,7 @@ use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
  */
 final class OrderPresenter
 {
-    public function __construct(private readonly TenantCurrencyProvider $currency)
+    public function __construct(private readonly TenantCurrencyProvider $currency, private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null)
     {
     }
 
@@ -44,6 +44,9 @@ final class OrderPresenter
         $dto->currency = $this->currency->code();
         $dto->statusId = $status?->getId();
         $dto->carrier = $order->getCarrier() ? ['id' => $order->getCarrier()->getId(), 'name' => $order->getCarrier()->getTranslation($locale)?->getName() ?? $order->getCarrier()->getName()] : null;
+        if ($order->getOrderSource()?->getId() === 2 && $this->emProvider) { // vente au comptoir : numéros (C2)
+            $dto->pos = OrderDTO::posFields($this->emProvider->getEntityManager()->getRepository(\App\Entity\PosReceipt::class)->forOrders([(int) $order->getId()])[$order->getId()] ?? []);
+        }
 
         return $dto;
     }

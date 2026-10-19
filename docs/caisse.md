@@ -14,6 +14,8 @@ n'avait de caisse ni de type de transaction : la caisse n'avait jamais servi sur
 | Mouvement `TransactionCaisse` | `transaction_caisse` | ligne d'une session : type, montant, utilisateur, commande (vente, remboursement), détail des espèces (`CashDetails`). |
 | Types `TransactionType` | `transaction_type` | 1 vente, 2 remboursement, 3 dépôt, 4 ouverture, 5 fermeture, 6 retrait, 7 retrait du fond de caisse, 8 ajout au fond de caisse (insérés par la migration dans toutes les bases). Depuis le 19/10/2026, chaque transaction porte aussi `cashAmount` (effet sur les espèces du tiroir, cents, signé) et `cashRounding` (arrondi des espèces qu'elle contient). |
 | Coupures `TypeCash` | `type_cash` | billets et pièces par devise (19/10/2026) : `valueCents`, `kind` (`bill`/`coin`), `active`, `currency`, `position`. CAD : ids 1 = 100 $, 2 = 50 $, 3 = 10 $, 4 = 5 $, 5 = 2 $, 6 = 1 $, 7 = 25 ¢, 8 = 10 ¢, 9 = 5 ¢, 10 = 1 ¢ (inactive), 11 = 20 $. Gérées dans EasyAdmin (« Type Cash »). |
+| Journal `PosAuditLog` | `pos_audit_log` | journal d'audit de la caisse (C2, 19/10/2026) : une entrée par événement, séquence continue par site, chaînée par empreinte ; **inaltérable** (un déclencheur PostgreSQL refuse modification, suppression et vidage). EasyAdmin « Journal de caisse » en lecture seule. |
+| Numéros `PosReceipt` | `pos_receipt` | numéros de **tickets** (ventes) et d'**avoirs** (remboursements, retours) : deux suites continues sans trou par poste (C2). |
 | Rapport Z `CashRegisterReport` | `cash_register_report` | clôture d'une session (19/10/2026) : `number` continu **par poste**, instantané figé (`data`) et chiffres clés en colonnes. Un par session ; jamais modifié ni supprimé. EasyAdmin « Rapports Z » en lecture seule. |
 
 Code : `Entity/CashRegister`, `Entity/Caisse`, `Repository/CashRegisterRepository`, `Repository/CaisseRepository`,
@@ -54,7 +56,8 @@ Codes de succès inchangés depuis l'origine : `close` répond **200**, les autr
 | `POST /api/caisse/open` | `cashRegisterId?`, `cashFund?` (cents, ≥ 0 : fond de caisse ajouté à l'ouverture, enregistré comme « Ajout fond de caisse ») | 201 `{message, caisse_id, cashRegisterId, amountTotal, fonDeCaisse, createdAt}` ; session déjà ouverte sur le poste → 400 `CAISSE_ALREADY_OPEN` ; `cashFund` invalide → 400 `INVALID_AMOUNT` (rien n'est ouvert) |
 | `POST /api/caisse/close` | `cashRegisterId?`, `countedCash?`, `cashDetails?`, `discrepancyReason?`, `keptFund?` (voir « Clôture ») | 200 `{message, caisse_id, cashRegisterId, report}` (`report` = rapport Z créé) ; pas de session ouverte → 400 `CASH_REGISTER_CLOSED` (+ `lastReport {id, number}`) |
 | `GET /api/caisse/denominations` | — | 200 `[{id, label, valueCents, kind, active}]` pour la devise du site |
-| `GET /api/caisse/report/x?cashRegisterId=&locale=` | poste (règle du poste) | 200 rapport X (voir « Clôture ») ; aucune session ouverte → 409 `CASH_REGISTER_CLOSED` |
+| `GET /api/caisse/report/x?cashRegisterId=&locale=&purpose=` | poste (règle du poste) ; `purpose=closing` quand le dialogue de fermeture le charge | 200 rapport X (voir « Clôture ») ; aucune session ouverte → 409 `CASH_REGISTER_CLOSED`. Journalisé : `X_REPORT_VIEWED`, ou `CLOSING_PREVIEW` avec `purpose=closing` |
+| `POST /api/caisse/drawer-open` | `{cashRegisterId?, reason}` | 201 `{auditId, sequence, occurredAt, cashRegisterId}` : ouverture du tiroir hors encaissement, journalisée (`DRAWER_OPENED`) ; motif absent → 400 `REASON_REQUIRED` ; pas de session ouverte → 400 `CASH_REGISTER_CLOSED` |
 | `GET /api/caisse/report/z?cashRegisterId=&from=&to=` | `from`/`to` : `AAAA-MM-JJ` (journées entières) ou ISO 8601 | 200 `[{id, number, cashRegister, sessionId, openedAt, closedAt, closedBy, salesTotal, expectedCash, countedCash, discrepancy}]`, plus récent d'abord ; date invalide → 400 `INVALID_DATE` |
 | `GET /api/caisse/report/z/{id}` | identifiant unique du rapport (le numéro n'est unique que par poste) | 200 rapport Z complet ; inconnu → 404 `REPORT_NOT_FOUND` |
 | `POST /api/caisse/deposit` (3), `withdraw` (6), `cashfunddeposit` (8), `cashfundwithdraw` (7) | `amount` > 0, `cashDetails?`, `cashRegisterId?` | 201 `{message, new_total, cashRegisterId}` ; `amount` invalide → 400 `INVALID_AMOUNT` ; retrait supérieur au solde → 400 `INSUFFICIENT_FUNDS` |
@@ -182,6 +185,72 @@ moment de la fermeture + `{closedAt, closedBy, countedCash, cashDetails[{typeCas
 totalCents}], discrepancy, discrepancyReason, keptFund, bankDeposit}`.
 
 Droits : toutes ces routes sont sous `/api/caisse` (caissier, responsable de caisse, administrateur).
+
+## Journal d'audit, numérotation, terminal (chantier C2, 19/10/2026)
+
+Ne concerne que l'activité de caisse ; la boutique en ligne n'écrit rien au journal et n'a pas de numéro de ticket.
+
+**Terminal.** L'activation d'une clé `pos` (`POST /api/app/activate`) rend en plus `terminal: {id, token}`. `id` est
+l'identifiant de la clé ; `token` est signé par le serveur (impossible à forger). **Réactiver la même clé rend le même
+terminal**, sans en créer un autre : c'est ainsi qu'un terminal activé avant C2 obtient son jeton (le POS rappelle
+`POST /api/app/activate` avec sa clé ; seul effet : le compteur d'utilisation de la clé). Le POS envoie
+`X-Pos-Terminal: <token>` sur chaque requête (en-tête autorisé par CORS). Facultatif pour l'instant : absent ou invalide,
+le terminal est inconnu au journal, sans refus ; il deviendra obligatoire avec le chantier S1. Une clé révoquée rend le
+terminal inconnu. Clés `mobile`, `admin`, `livingmemory` : réponse d'activation inchangée.
+
+**Journal** (`pos_audit_log`). Chaque entrée : `{id, sequence, type, occurredAt (heure du serveur), user {id, email,
+roles} | null, cashRegisterId, sessionId, terminal {id, label} | null, subject {type, id} | null, data, prevHash, hash}` ;
+`hash` = SHA-256(`prevHash` + contenu canonique). Écrite dans la même transaction SQL que l'événement : un événement
+refusé ou annulé ne laisse pas de trace, et la séquence n'a pas de trou. Types :
+
+| Type | Quand | `data` |
+|---|---|---|
+| `LOGIN` / `LOGIN_FAILED` | connexion `platform: "pos"` réussie / refusée (`/api/login`, `/api/otp-verify`) | `email` ; refus : `reason` (`invalid_credentials`, `not_verified`, `platform_not_allowed`, `invalid_otp`), jamais le mot de passe, `user` null |
+| `LOGOUT` | `POST /api/logout` d'un terminal identifié (`X-Pos-Terminal` valide) | `email` |
+| `SESSION_OPENED` / `SESSION_CLOSED` | ouverture (API ou EasyAdmin) / fermeture | montants d'ouverture ; comptage, écart, motif, fond gardé, rapport Z |
+| `CASH_DEPOSIT`, `CASH_WITHDRAWAL`, `FUND_DEPOSIT`, `FUND_WITHDRAWAL` | mouvements de caisse | `amount`, solde et fond après, `cashDetails` |
+| `SALE` | vente au comptoir (y compris créée à la main dans EasyAdmin) | numéro de ticket, totaux, arrondi, paiements, articles |
+| `REFUND` | remboursement d'une vente au comptoir (`kind: cancellation`) ou retour (`kind: return`) | numéro d'avoir ; annulation : `before` (montants d'origine, taxes) et `after` |
+| `Z_REPORT_CREATED` | fermeture | rapport, numéro, ventes, tickets et avoirs |
+| `X_REPORT_VIEWED` / `CLOSING_PREVIEW` | rapport X consulté / chargé par le dialogue de fermeture (`purpose=closing`) | espèces attendues, ventes |
+| `DRAWER_OPENED` | `POST /api/caisse/drawer-open` | `reason` |
+| `CASH_REGISTER_CREATED` / `CASH_REGISTER_UPDATED` | postes (API ou EasyAdmin) | nom, actif, avant / après |
+| `DISCOUNT_APPLIED`, `PRICE_CHANGED` | réservés (remises, changements de prix) | — |
+
+Routes (responsable de caisse et administrateur ; caissier → 403) :
+- `GET /api/pos/audit?cashRegisterId=&from=&to=&type=SALE,REFUND&page=1&pageSize=50` → `{meta {total, page, pageSize},
+  data [entrées]}`, plus récent d'abord, `pageSize` 200 au plus ; type inconnu → 400 `INVALID_TYPE` ; date invalide →
+  400 `INVALID_DATE`.
+- `GET /api/pos/audit/verify` → `{status: "intact" | "broken", checked, firstBroken: null | {sequence, id, reason}}` :
+  séquence continue depuis 1, empreintes chaînées, contenu cohérent.
+
+**Numérotation** (`pos_receipt`). Deux suites continues sans trou **par poste** : tickets (ventes) et avoirs
+(remboursements et retours), attribuées sous verrou de la ligne du poste dans la transaction de l'opération.
+- Vente `POST /api/order/create-multi-payment` (201) : `receiptNumber` et `receiptKind` (`ticket`, ou `credit_note`
+  pour un retour `typeOrder` 2).
+- Remboursement `POST /api/order/cancel/{id}` d'une vente au comptoir : `creditNoteNumber` et `cashRegister {id, name}`
+  en plus de `message` (annulation d'une commande web : réponse inchangée).
+- `GET /api/orders?orderSource=2` et `GET /api/orders/{id}` : chaque vente au comptoir porte `receiptNumber`,
+  `creditNoteNumber` et `cashRegister` (les commandes des autres sources n'ont pas ces clés).
+- Rapports X et Z : `receipts {first, last, count}` et `creditNotes {first, last, count}` de la session.
+- Les ventes antérieures au 19/10/2026 n'ont pas de numéro (aucune reprise de données).
+
+**Contre-écriture.** Aucune route ne supprime une vente au comptoir : une annulation enregistre un paiement négatif, un
+mouvement de caisse, un avoir et une entrée `REFUND`. L'annulation remet à 0 les totaux et taxes de la commande
+(comportement partagé, conservé) ; les montants d'origine restent dans l'entrée `REFUND` (`before`), l'avoir, la
+transaction de vente, les paiements et le rapport Z.
+
+**EasyAdmin** (accord du propriétaire, 19/10/2026) : ni modification ni suppression des ventes au comptoir et de leurs
+articles, taxes et paiements, ni des sessions, transactions et détails de caisse (boutons masqués, refus 403 côté
+serveur, `Controller/Admin/CashRecordLockTrait`). Consultation et création restent possibles ; les commandes web ne
+changent pas. Une vente au comptoir créée à la main (« Create order », source Pos) exige un poste de caisse, puis elle
+est numérotée et journalisée avec l'administrateur pour auteur. Conséquence : une vente au comptoir ne s'annule plus
+depuis EasyAdmin (passer par le POS).
+
+**Conservation.** Aucune tâche ne purge commandes, paiements, sessions, transactions ou rapports (vérifié le
+19/10/2026 : les commandes de nettoyage ne touchent que l'historique des migrations et les modèles de Mémoires Vivantes ;
+aucune clé étrangère ne supprime ces données en cascade ; supprimer un caissier est bloqué par ses transactions). Les
+données de caisse se gardent au moins 6 ans (Canada, France).
 
 ## Mécanique interne
 

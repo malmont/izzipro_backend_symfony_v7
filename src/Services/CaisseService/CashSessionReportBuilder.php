@@ -106,6 +106,9 @@ class CashSessionReportBuilder
             'discounts' => ['count' => 0, 'total' => 0], // pas encore de remises en caisse (chantier F1)
             'movements' => $movements,
             'cashRounding' => $rounding,
+            // Tickets et avoirs de la session (C2) : {first, last, count}
+            'receipts' => $em->getRepository(\App\Entity\PosReceipt::class)->rangeForSession($session, \App\Entity\PosReceipt::TICKET),
+            'creditNotes' => $em->getRepository(\App\Entity\PosReceipt::class)->rangeForSession($session, \App\Entity\PosReceipt::CREDIT_NOTE),
             'expectedCash' => $openingAmount + $cashFlow,
             'discrepancyThreshold' => $entreprise?->getPosDiscrepancyThreshold() ?? 0,
             'store' => StoreInfoDto::fromEntreprise($entreprise),

@@ -53,10 +53,15 @@ class AppKeyTest extends WebTestCase
         // Activation : sans X-Tenant-Host ni jeton, saisie tolérante (minuscules, sans tirets)
         $activated = $this->activate(['key' => strtolower(str_replace('-', ' ', $key)), 'app' => 'pos', 'deviceName' => 'Tablette Android']);
         $this->assertSame(200, $activated->getStatusCode(), $activated->getContent());
+        $activation = json_decode($activated->getContent(), true);
+        // Clé de caisse : terminal {id, token} en plus (C2, 19/10/2026)
+        $this->assertSame(['id' => $id], array_intersect_key($activation['terminal'], ['id' => 1]));
+        $this->assertMatchesRegularExpression('/^' . $id . '\.[0-9a-f]{32}$/', $activation['terminal']['token']);
+        unset($activation['terminal']);
         $this->assertSame([
             'tenant' => ['code' => MV_TEST_TENANT_CODE, 'name' => 'Tenant de test', 'host' => MV_TEST_TENANT_HOST],
             'app' => 'pos', 'label' => 'Tablette comptoir 1', 'expiresAt' => null, 'cashRegister' => null,
-        ], json_decode($activated->getContent(), true));
+        ], $activation);
         $this->assertSame(MV_TEST_TENANT_CODE, static::getContainer()->get(TenantConnectionManager::class)->findTenantConfigByHost(MV_TEST_TENANT_HOST)?->getCode(), 'l\'hôte rendu résout bien le site');
 
         $wrongApp = $this->activate(['key' => $key, 'app' => 'mobile']);

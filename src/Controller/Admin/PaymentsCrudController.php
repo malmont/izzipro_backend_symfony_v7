@@ -23,6 +23,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\UrlField;
 // 2. On étend notre contrôleur de base
 class PaymentsCrudController extends BaseTenantCrudController
 {
+    use CashRecordLockTrait; // données de caisse non modifiables (C2)
+
     // 3. Le constructeur est SUPPRIMÉ. Le parent s'en occupe !
 
     public static function getEntityFqcn(): string
@@ -97,4 +99,26 @@ class PaymentsCrudController extends BaseTenantCrudController
     
     // 5. Les méthodes createIndexQueryBuilder, persistEntity, updateEntity, et deleteEntity
     //    ont été SUPPRIMÉES car la logique de base du parent est suffisante.
+
+    protected function isCashRecordLocked(object $entity): bool
+    {
+        return $entity instanceof \App\Entity\Payments && self::isCounterSale($entity->getOrderPayment());
+    }
+
+    public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
+    {
+        return $this->lockCashRecordActions(parent::configureActions($actions));
+    }
+
+    public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    public function deleteEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::deleteEntity($entityManager, $entityInstance);
+    }
 }

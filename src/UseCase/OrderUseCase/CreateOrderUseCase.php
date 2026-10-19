@@ -47,7 +47,9 @@ class CreateOrderUseCase
         Security $security,
         HandleBookingUseCase $handleBookingUseCase,
         private readonly CashRegisterResolver $cashRegisters,
-        private readonly \App\Services\CaisseService\CashRoundingService $cashRoundingService
+        private readonly \App\Services\CaisseService\CashRoundingService $cashRoundingService,
+        private readonly \App\Services\PosAuditService\PosReceiptService $receipts,
+        private readonly \App\Services\PosAuditService\PosAuditService $audit
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -161,7 +163,20 @@ class CreateOrderUseCase
                 // unique du site) ; poste sans session ouverte → 409 CASH_REGISTER_CLOSED et la transaction est annulée
                 $transactionTypeId = $typeOrderId === 1 ? 1 : 2;
                 $caisse = $this->cashRegisters->requireOpenSession($orderDTO instanceof CreateOrderMultiPaymentDTO ? $orderDTO->getCashRegisterId() : null, 409);
+                $this->receipts->lockRegister($caisse->getCashRegister()); // verrou du poste avant celui de la session (C2)
                 $this->handleCaisseTransactionUseCase->execute($caisse, $order, $user, $totalAmount, $transactionTypeId, [], $caisseAmount, $orderDTO instanceof CreateOrderMultiPaymentDTO ? $cashRounding : null);
+                // Numéro de ticket (vente) ou d'avoir (retour), suite continue par poste, et entrée au journal de caisse (C2)
+                $receipt = $this->receipts->issue($order, $caisse, $typeOrderId === 1 ? \App\Entity\PosReceipt::TICKET : \App\Entity\PosReceipt::CREDIT_NOTE, (int) round($totalAmount));
+                $this->audit->record($typeOrderId === 1 ? \App\Services\PosAuditService\PosAuditService::SALE : \App\Services\PosAuditService\PosAuditService::REFUND, [
+                    'kind' => $typeOrderId === 1 ? 'sale' : 'return',
+                    'reference' => $order->getReference(),
+                    'receiptKind' => $receipt->getKind(),
+                    'receiptNumber' => $receipt->getNumber(),
+                    'subTotal' => (int) round((float) $subtotal), 'totalTax' => (int) round((float) $totalTax), 'totalAmount' => (int) round($totalAmount),
+                    'cashRounding' => $order->getCashRounding(),
+                    'payments' => array_values(array_map(fn ($p) => ['type' => $p->getPaymentMethod()?->getId(), 'amount' => (int) round((float) $p->getAmount())], $order->getPayments()->toArray())),
+                    'items' => array_values(array_map(fn ($i) => ['productVariantId' => $i->getProductVariant()?->getId(), 'quantity' => $i->getQuantity(), 'totalPrice' => (int) round((float) $i->getTotalPrice())], $order->getOrderItems()->toArray())),
+                ], $caisse, null, 'order', $order->getId(), $user instanceof \App\Entity\User ? $user : null);
             }
 
             $em->flush();

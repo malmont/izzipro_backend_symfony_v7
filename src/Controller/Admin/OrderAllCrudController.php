@@ -36,6 +36,8 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 class OrderAllCrudController extends BaseTenantCrudController
 {
+    use CashRecordLockTrait; // données de caisse non modifiables (C2)
+
     private CreateOrderUseCase $createOrderUseCase;
     private CancelOrderUseCase $cancelOrderUseCase;
 
@@ -103,6 +105,11 @@ class OrderAllCrudController extends BaseTenantCrudController
             CollectionField::new('payments', 'Payments')
                 ->setEntryType(PaymentFormType::class)->allowAdd()->allowDelete(),
             TextField::new('reference', 'Reference')->hideOnForm(),
+            // Vente au comptoir (source « Pos ») créée à la main : poste de caisse obligatoire, numérotée et journalisée (C2)
+            \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('posCashRegisterId', 'Poste de caisse (vente au comptoir)')
+                ->setChoices(array_column(array_map(fn ($r) => [$r->getName(), $r->getId()], $this->emProvider->getEntityManager()->getRepository(\App\Entity\CashRegister::class)->findAllOrdered(true)), 1, 0))
+                ->setRequired(false)->onlyWhenCreating()
+                ->setHelp('Obligatoire si la source est la caisse (Pos)'),
         ];
     }
 
@@ -157,6 +164,14 @@ class OrderAllCrudController extends BaseTenantCrudController
                 $paymentData['squareRiskLevel'] ?? null
             );
 
+            if ($entityInstance->getOrderSource()?->getId() === 2) {
+                if (!$entityInstance->getPosCashRegisterId()) {
+                    $this->addFlash('danger', 'Vente au comptoir refusée : indiquez le poste de caisse.');
+                    return;
+                }
+                $dto->setCashRegisterId($entityInstance->getPosCashRegisterId());
+            }
+
             $tenantEm = $this->emProvider->getEntityManager();
             $tenantEm->persist($entityInstance->getUserId());
 
@@ -170,10 +185,27 @@ class OrderAllCrudController extends BaseTenantCrudController
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
+        $this->denyLockedCashRecord($entityInstance);
         if ($entityInstance instanceof Order && $entityInstance->getStatus()?->getId() === 7) {
             $this->cancelOrderUseCase->execute($entityInstance->getId(), $entityInstance->getPayments()->first()->getPaymentMethod()->getId());
         }
 
         parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    protected function isCashRecordLocked(object $entity): bool
+    {
+        return $entity instanceof \App\Entity\Order && self::isCounterSale($entity);
+    }
+
+    public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
+    {
+        return $this->lockCashRecordActions(parent::configureActions($actions));
+    }
+
+    public function deleteEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::deleteEntity($entityManager, $entityInstance);
     }
 }

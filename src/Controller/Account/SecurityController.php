@@ -34,7 +34,9 @@ class SecurityController extends AbstractController
         TenantEntityManagerProvider $tenantEmProvider,
         TenantConnectionProvider $tenantConnProvider,
         TokenService $tokenService,
-        OtpService $otpService
+        OtpService $otpService,
+        private readonly ?\App\Services\PosAuditService\PosTerminalService $posTerminals = null,
+        private readonly ?\App\Services\PosAuditService\PosAuditService $posAudit = null
     ) {
         $this->tenantEmProvider = $tenantEmProvider;
         $this->tenantConnProvider = $tenantConnProvider;
@@ -224,6 +226,15 @@ class SecurityController extends AbstractController
         if (is_string($refreshValue) && $refreshValue !== '') {
             $stored = $refreshTokenManager->get($refreshValue);
             if ($stored) {
+                // Terminal de caisse identifié (en-tête X-Pos-Terminal) : déconnexion journalisée (C2)
+                if ($this->posTerminals?->current() !== null) {
+                    try {
+                        $posUser = $this->tenantEmProvider->getEntityManager()->getRepository(User::class)->findOneBy(['email' => $stored->getUsername()]);
+                        $this->posAudit?->record(\App\Services\PosAuditService\PosAuditService::LOGOUT, ['email' => $stored->getUsername()], null, null, 'user', $posUser?->getId(), $posUser);
+                    } catch (\Throwable) {
+                        // journal indisponible : la déconnexion n'en dépend pas
+                    }
+                }
                 $refreshTokenManager->delete($stored);
             }
         }

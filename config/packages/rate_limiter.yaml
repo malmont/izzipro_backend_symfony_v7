@@ -81,3 +81,9 @@ when@test:
                 limit: 10000
                 interval: '15 minutes'
                 lock_factory: null
+            # Activation des applications : toute la suite part de la même IP (tests seulement, 19/10/2026)
+            app_activation_ip:
+                policy: sliding_window
+                limit: 10000
+                interval: '15 minutes'
+                lock_factory: null

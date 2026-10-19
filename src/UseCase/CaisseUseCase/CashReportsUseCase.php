@@ -15,14 +15,22 @@ class CashReportsUseCase
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly CashRegisterResolver $registers,
-        private readonly CashSessionReportBuilder $builder
+        private readonly CashSessionReportBuilder $builder,
+        private readonly \App\Services\PosAuditService\PosAuditService $audit
     ) {
     }
 
     /** Rapport X : session ouverte du poste (409 CASH_REGISTER_CLOSED sinon), calculé à la lecture, ne modifie rien */
-    public function x(?int $cashRegisterId, string $locale): array
+    public function x(?int $cashRegisterId, string $locale, ?string $purpose = null): array
     {
-        return $this->builder->build($this->registers->requireOpenSession($cashRegisterId, 409), $locale);
+        $session = $this->registers->requireOpenSession($cashRegisterId, 409);
+        $report = $this->builder->build($session, $locale);
+        // Journal (C2) : consultation volontaire X_REPORT_VIEWED ; préparation de la fermeture (purpose=closing) CLOSING_PREVIEW
+        $Audit = \App\Services\PosAuditService\PosAuditService::class;
+        $this->audit->record($purpose === 'closing' ? $Audit::CLOSING_PREVIEW : $Audit::X_REPORT_VIEWED,
+            ['expectedCash' => $report['expectedCash'], 'salesTotal' => $report['sales']['total'], 'salesCount' => $report['sales']['count']], $session, null, 'session', $session->getId());
+
+        return $report;
     }
 
     /** @return list<array<string, mixed>> */
@@ -43,7 +51,7 @@ class CashReportsUseCase
     }
 
     /** AAAA-MM-JJ (journée entière) ou date-heure ISO 8601 ; invalide → 400 INVALID_DATE */
-    private static function date(?string $value, string $name, bool $endOfDay): ?\DateTimeImmutable
+    public static function date(?string $value, string $name, bool $endOfDay): ?\DateTimeImmutable
     {
         if ($value === null || $value === '') {
             return null;

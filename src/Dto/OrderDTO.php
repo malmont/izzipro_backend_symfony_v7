@@ -21,6 +21,8 @@ class OrderDTO
     public string $currency = 'CAD';
     public ?int $statusId = null;
     public ?array $carrier = null;
+    /** Vente au comptoir (C2) : {receiptNumber, creditNoteNumber, cashRegister} ; null pour toute autre commande (clés absentes) */
+    public ?array $pos = null;
 
     public function __construct(
         int $id,
@@ -69,6 +71,21 @@ class OrderDTO
             'orderSource' => $this->orderSource,
             'status' => $this->status,
             'orderItems' => array_map(fn($item) => $item->toArray(), $this->orderItems),
+        ] + ($this->pos ?? []);
+    }
+
+    /** @param array<string, \App\Entity\PosReceipt> $receipts genre → numéro */
+    public static function posFields(array $receipts): ?array
+    {
+        if (!$receipts) {
+            return null;
+        }
+        $any = $receipts[\App\Entity\PosReceipt::TICKET] ?? $receipts[\App\Entity\PosReceipt::CREDIT_NOTE];
+
+        return [
+            'receiptNumber' => isset($receipts[\App\Entity\PosReceipt::TICKET]) ? $receipts[\App\Entity\PosReceipt::TICKET]->getNumber() : null,
+            'creditNoteNumber' => isset($receipts[\App\Entity\PosReceipt::CREDIT_NOTE]) ? $receipts[\App\Entity\PosReceipt::CREDIT_NOTE]->getNumber() : null,
+            'cashRegister' => ['id' => $any->getCashRegister()->getId(), 'name' => $any->getCashRegister()->getName()],
         ];
     }
 }

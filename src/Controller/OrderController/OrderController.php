@@ -71,7 +71,8 @@ class OrderController extends AbstractController
         private readonly GetCustomerOrderUseCase $getCustomerOrderUseCase,
         private readonly GetOrderStatusesUseCase $getOrderStatusesUseCase,
         private readonly \App\UseCase\CheckoutUseCase\FinalizeCheckoutOrderUseCase $finalizeCheckout,
-        private readonly CaisseService $caisseService
+        private readonly CaisseService $caisseService,
+        private readonly \App\Services\PosAuditService\PosReceiptService $posReceipts
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -499,7 +500,7 @@ class OrderController extends AbstractController
                 'success' => true,
                 'orderId' => $result->getId(),
                 'message' => 'Commande créée.',
-            ] + PosReceiptDto::fromOrder($result, $tenantEm->getRepository(\App\Entity\Entreprise::class)->findOneBy([]), $this->caisseService->getCaisseOfOrder($result), $this->locale($request)), JsonResponse::HTTP_CREATED);
+            ] + PosReceiptDto::fromOrder($result, $tenantEm->getRepository(\App\Entity\Entreprise::class)->findOneBy([]), $this->caisseService->getCaisseOfOrder($result), $this->locale($request), $this->posReceipts->forOrder($result)), JsonResponse::HTTP_CREATED);
         }
         return $result;
     }

@@ -25,6 +25,8 @@ use Symfony\Bundle\SecurityBundle\Security;
  */
 class CaisseCrudController extends BaseTenantCrudController
 {
+    use CashRecordLockTrait; // données de caisse non modifiables (C2)
+
     private Security $security;
     private AdminUrlGenerator $adminUrlGenerator;
 
@@ -125,14 +127,17 @@ class CaisseCrudController extends BaseTenantCrudController
             $tenantEm->persist($entityInstance);
             $tenantEm->flush();
 
-            // Transaction d'ouverture (type 4), comme par l'API
+            // Transaction d'ouverture (type 4), comme par l'API, et journal de caisse (C2)
             $this->transactions->execute($entityInstance, null, $this->security->getUser(), 0.0, HandleCaisseTransactionUseCase::OPENING);
+            $this->container->get(\App\Services\PosAuditService\PosAuditService::class)->record(\App\Services\PosAuditService\PosAuditService::SESSION_OPENED,
+                ['openingAmount' => (int) round((float) $entityInstance->getAmountTotal()), 'via' => 'easyadmin'], $entityInstance, null, 'session', $entityInstance->getId());
         }
     }
 
     /** Fermeture depuis le formulaire (interrupteur « Ouverte ») : date de fermeture posée */
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
+        $this->denyLockedCashRecord($entityInstance);
         if ($entityInstance instanceof Caisse && !$entityInstance->isOpen() && !$entityInstance->getClosedAt()) {
             $entityInstance->setClosedAt(new \DateTime());
         }
@@ -141,4 +146,25 @@ class CaisseCrudController extends BaseTenantCrudController
     
     // Les méthodes createIndexQueryBuilder, updateEntity, et deleteEntity ne sont plus nécessaires ici,
     // car la version standard du BaseTenantCrudController est suffisante.
+
+    protected function isCashRecordLocked(object $entity): bool
+    {
+        return $entity instanceof \App\Entity\Caisse;
+    }
+
+    public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
+    {
+        return $this->lockCashRecordActions(parent::configureActions($actions));
+    }
+
+    public function deleteEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::deleteEntity($entityManager, $entityInstance);
+    }
+
+    public static function getSubscribedServices(): array
+    {
+        return parent::getSubscribedServices() + [\App\Services\PosAuditService\PosAuditService::class => \App\Services\PosAuditService\PosAuditService::class];
+    }
 }

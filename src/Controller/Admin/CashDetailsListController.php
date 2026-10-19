@@ -20,6 +20,8 @@ use Symfony\Component\HttpFoundation\RequestStack;
 
 class CashDetailsListController extends BaseTenantCrudController
 {
+    use CashRecordLockTrait; // données de caisse non modifiables (C2)
+
     private RequestStack $requestStack;
 
     public function __construct(
@@ -75,5 +77,27 @@ class CashDetailsListController extends BaseTenantCrudController
                 ]),
             IntegerField::new('nombreItems', 'Nombre d\'items'),
         ];
+    }
+
+    protected function isCashRecordLocked(object $entity): bool
+    {
+        return $entity instanceof \App\Entity\CashDetails;
+    }
+
+    public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
+    {
+        return $this->lockCashRecordActions(parent::configureActions($actions));
+    }
+
+    public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    public function deleteEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::deleteEntity($entityManager, $entityInstance);
     }
 }

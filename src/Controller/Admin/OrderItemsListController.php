@@ -20,6 +20,8 @@ use Symfony\Component\HttpFoundation\RequestStack;
 
 class OrderItemsListController extends BaseTenantCrudController
 {
+    use CashRecordLockTrait; // données de caisse non modifiables (C2)
+
     private RequestStack $requestStack;
 
     public function __construct(
@@ -38,7 +40,7 @@ class OrderItemsListController extends BaseTenantCrudController
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->disable(Action::NEW);
+        return $this->lockCashRecordActions($actions->disable(Action::NEW));
     }
 
     public function createIndexQueryBuilder(SearchDto $searchDto, EntityDto $entityDto, FieldCollection $fields, FilterCollection $filters): QueryBuilder
@@ -83,4 +85,20 @@ class OrderItemsListController extends BaseTenantCrudController
         return $tenantEm->getRepository(OrderItems::class)->findBy(['orderAssociated' => $orderId]);
     }
 
+    protected function isCashRecordLocked(object $entity): bool
+    {
+        return $entity instanceof \App\Entity\OrderItems && self::isCounterSale($entity->getOrderAssociated());
+    }
+
+    public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    public function deleteEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::deleteEntity($entityManager, $entityInstance);
+    }
 }

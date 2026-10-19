@@ -28,6 +28,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 // 2. On étend notre contrôleur de base
 class OrderCrudController extends BaseTenantCrudController
 {
+    use CashRecordLockTrait; // données de caisse non modifiables (C2)
+
     private AdminUrlGenerator $adminUrlGenerator;
     private CancelOrderUseCase $cancelOrderUseCase;
 
@@ -96,11 +98,26 @@ class OrderCrudController extends BaseTenantCrudController
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
+        $this->denyLockedCashRecord($entityInstance);
         if ($entityInstance instanceof Order && $entityInstance->getStatus()?->getId() === 7) {
             $this->cancelOrderUseCase->execute($entityInstance->getId(), /* paymentMethodId? */);
         }
         parent::updateEntity($entityManager, $entityInstance);
     }
-    
 
+    protected function isCashRecordLocked(object $entity): bool
+    {
+        return $entity instanceof \App\Entity\Order && self::isCounterSale($entity);
+    }
+
+    public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
+    {
+        return $this->lockCashRecordActions(parent::configureActions($actions));
+    }
+
+    public function deleteEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::deleteEntity($entityManager, $entityInstance);
+    }
 }

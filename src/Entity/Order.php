@@ -88,6 +88,9 @@ class Order
     #[ORM\Column(options: ['default' => 0])]
     private int $cashRounding = 0;
 
+    // Non enregistré en base : poste de caisse choisi dans EasyAdmin pour une vente au comptoir créée à la main (C2)
+    private ?int $posCashRegisterId = null;
+
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $guestLicenseNumber = null;
 
@@ -409,6 +412,18 @@ class Order
         }
 
         $this->shippingOrder = $shippingOrder;
+
+        return $this;
+    }
+
+    public function getPosCashRegisterId(): ?int
+    {
+        return $this->posCashRegisterId;
+    }
+
+    public function setPosCashRegisterId(?int $posCashRegisterId): static
+    {
+        $this->posCashRegisterId = $posCashRegisterId;
 
         return $this;
     }

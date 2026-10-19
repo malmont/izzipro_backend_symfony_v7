@@ -29,7 +29,8 @@ class CaisseOperationsUseCase
         private readonly HandleCaisseTransactionUseCase $transactions,
         private readonly TenantCacheService $cache,
         private readonly CashSessionReportBuilder $reports,
-        private readonly DenominationService $denominations
+        private readonly DenominationService $denominations,
+        private readonly \App\Services\PosAuditService\PosAuditService $audit
     ) {
     }
 
@@ -59,15 +60,29 @@ class CaisseOperationsUseCase
 
         $caisse = (new Caisse())->setCashRegister($register)->setAmountTotal($initialAmount)->setFonDeCaisse($initialFund)->setCreatedAt(new \DateTime())->setOpen(true);
         $em = $this->emProvider->getEntityManager();
+        $connection = $em->getConnection();
+        $connection->beginTransaction(); // ouverture, transactions et journal ensemble (C2)
         try {
-            $em->persist($caisse);
-            $em->flush();
-        } catch (UniqueConstraintViolationException $e) { // deux ouvertures simultanées : l'index unique partiel tranche
-            throw new CashRegisterException('CAISSE_ALREADY_OPEN', sprintf('Une session est déjà ouverte sur le poste « %s »', $register->getName()), 400);
-        }
-        $this->transactions->execute($caisse, null, $user, $initialAmount, HandleCaisseTransactionUseCase::OPENING);
-        if ($cashFund !== null && (float) $cashFund > 0) {
-            $this->transactions->execute($caisse, null, $user, (float) $cashFund, HandleCaisseTransactionUseCase::CASH_FUND_DEPOSIT);
+            try {
+                $em->persist($caisse);
+                $em->flush();
+            } catch (UniqueConstraintViolationException $e) { // deux ouvertures simultanées : l'index unique partiel tranche
+                throw new CashRegisterException('CAISSE_ALREADY_OPEN', sprintf('Une session est déjà ouverte sur le poste « %s »', $register->getName()), 400);
+            }
+            $this->transactions->execute($caisse, null, $user, $initialAmount, HandleCaisseTransactionUseCase::OPENING);
+            if ($cashFund !== null && (float) $cashFund > 0) {
+                $this->transactions->execute($caisse, null, $user, (float) $cashFund, HandleCaisseTransactionUseCase::CASH_FUND_DEPOSIT);
+            }
+            $this->audit->record(\App\Services\PosAuditService\PosAuditService::SESSION_OPENED, [
+                'openingAmount' => (int) round($initialAmount), 'openingFund' => (int) round($initialFund), 'cashFund' => $cashFund !== null ? (int) $cashFund : 0,
+                'amountTotal' => (int) round((float) $caisse->getAmountTotal()),
+            ], $caisse, null, 'session', $caisse->getId(), $user);
+            $connection->commit();
+        } catch (\Throwable $e) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+            throw $e;
         }
 
         return $caisse;
@@ -146,6 +161,17 @@ class CaisseOperationsUseCase
                 ]);
             $em->persist($report);
             $em->flush();
+            // Journal (C2) : fermeture et rapport Z, dans la même transaction
+            $Audit = \App\Services\PosAuditService\PosAuditService::class;
+            $this->audit->record($Audit::SESSION_CLOSED, [
+                'expectedCash' => $expected, 'countedCash' => $counted, 'discrepancy' => $discrepancy,
+                'discrepancyReason' => $counted !== null ? $input->discrepancyReason : null, 'keptFund' => $keptFund, 'bankDeposit' => $bankDeposit,
+                'reportId' => $report->getId(), 'reportNumber' => $report->getNumber(),
+            ], $caisse, $register, 'session', $caisse->getId(), $user);
+            $this->audit->record($Audit::Z_REPORT_CREATED, [
+                'reportId' => $report->getId(), 'number' => $report->getNumber(), 'salesCount' => $snapshot['sales']['count'], 'salesTotal' => $snapshot['sales']['total'],
+                'refundsTotal' => $snapshot['refunds']['total'], 'expectedCash' => $expected, 'receipts' => $snapshot['receipts'] ?? null, 'creditNotes' => $snapshot['creditNotes'] ?? null,
+            ], $caisse, $register, 'z_report', $report->getId(), $user);
             $connection->commit();
         } catch (\Throwable $e) {
             if ($connection->isTransactionActive()) {
@@ -165,8 +191,40 @@ class CaisseOperationsUseCase
             throw new CashRegisterException('INVALID_AMOUNT', 'Montant invalide', 400);
         }
         $caisse = $this->registers->requireOpenSession($cashRegisterId);
-        $this->transactions->execute($caisse, null, $user, (float) $amount, $transactionTypeId, is_array($cashDetails) ? $cashDetails : []);
+        $connection = $this->emProvider->getEntityManager()->getConnection();
+        $connection->beginTransaction(); // mouvement et journal ensemble (C2)
+        try {
+            $this->transactions->execute($caisse, null, $user, (float) $amount, $transactionTypeId, is_array($cashDetails) ? $cashDetails : []);
+            $Audit = \App\Services\PosAuditService\PosAuditService::class;
+            $this->audit->record(match ($transactionTypeId) {
+                HandleCaisseTransactionUseCase::DEPOSIT => $Audit::CASH_DEPOSIT,
+                HandleCaisseTransactionUseCase::WITHDRAWAL => $Audit::CASH_WITHDRAWAL,
+                HandleCaisseTransactionUseCase::CASH_FUND_DEPOSIT => $Audit::FUND_DEPOSIT,
+                default => $Audit::FUND_WITHDRAWAL,
+            }, ['amount' => (int) round((float) $amount), 'amountTotal' => (int) round((float) $caisse->getAmountTotal()),
+                'fonDeCaisse' => (int) round((float) ($caisse->getFonDeCaisse() ?? 0)), 'cashDetails' => is_array($cashDetails) ? $cashDetails : []],
+                $caisse, null, 'session', $caisse->getId(), $user);
+            $connection->commit();
+        } catch (\Throwable $e) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+            throw $e;
+        }
 
         return $caisse;
+    }
+
+    /** Ouverture du tiroir-caisse hors encaissement (C2) : session ouverte et motif obligatoires ; seulement journalisée */
+    public function openDrawer(?int $cashRegisterId, User $user, mixed $reason): array
+    {
+        $reason = is_scalar($reason) ? trim((string) $reason) : '';
+        if ($reason === '') {
+            throw new CashRegisterException('REASON_REQUIRED', 'reason : motif de l\'ouverture du tiroir requis', 400);
+        }
+        $caisse = $this->registers->requireOpenSession($cashRegisterId);
+        $entry = $this->audit->record(\App\Services\PosAuditService\PosAuditService::DRAWER_OPENED, ['reason' => mb_substr($reason, 0, 255)], $caisse, null, 'session', $caisse->getId(), $user);
+
+        return ['auditId' => $entry['id'], 'sequence' => $entry['sequence'], 'occurredAt' => $entry['occurredAt'], 'cashRegisterId' => $caisse->getCashRegister()->getId()];
     }
 }

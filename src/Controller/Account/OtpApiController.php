@@ -59,6 +59,7 @@ class OtpApiController extends AbstractController
         ]);
 
         if (!$otpCode || $otpCode->getExpiration() < new DateTime()) {
+            $this->authenticationService->auditPos($platform, null, (string) $email, 'invalid_otp');
             return $this->json([
                 'error' => 'Code OTP invalide ou expiré'
             ], Response::HTTP_UNAUTHORIZED);
@@ -74,6 +75,7 @@ class OtpApiController extends AbstractController
         $em->flush();
         if ($user instanceof User) {
             $this->authenticationService->recordLogin($user);
+            $this->authenticationService->auditPos($platform, $user, (string) $email);
         }
 
         $tokens = $this->tokenService->generateTokens($user, $platform);

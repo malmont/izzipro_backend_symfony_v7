@@ -15,6 +15,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 
 class OrderItemsCrudController extends BaseTenantCrudController
 {
+    use CashRecordLockTrait; // données de caisse non modifiables (C2)
+
 
 
     public static function getEntityFqcn(): string
@@ -52,4 +54,25 @@ class OrderItemsCrudController extends BaseTenantCrudController
         ];
     }
 
+    protected function isCashRecordLocked(object $entity): bool
+    {
+        return $entity instanceof \App\Entity\OrderItems && self::isCounterSale($entity->getOrderAssociated());
+    }
+
+    public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
+    {
+        return $this->lockCashRecordActions(parent::configureActions($actions));
+    }
+
+    public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    public function deleteEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyLockedCashRecord($entityInstance);
+        parent::deleteEntity($entityManager, $entityInstance);
+    }
 }

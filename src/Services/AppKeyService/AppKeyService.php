@@ -20,7 +20,7 @@ class AppKeyService
     public const LABELS = ['pos' => 'Caisse (POS)', 'mobile' => 'E-commerce mobile', 'admin' => 'Gestion', 'livingmemory' => 'LivingMemory (Mémoires Vivantes)'];
     private const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-    public function __construct(private readonly TenantAppKeyRepository $keys, private readonly TenantPublicHostResolver $hosts)
+    public function __construct(private readonly TenantAppKeyRepository $keys, private readonly TenantPublicHostResolver $hosts, private readonly ?\App\Services\PosAuditService\PosTerminalService $terminals = null)
     {
     }
 
@@ -103,7 +103,10 @@ class AppKeyService
             'expiresAt' => $row['expires_at'] ? (new \DateTimeImmutable($row['expires_at']))->format(\DateTimeInterface::ATOM) : null,
             // Poste de caisse rattaché à une clé POS (copie faite à la création : le POS le présélectionne et confirme par GET /api/cash-registers)
             'cashRegister' => $row['cash_register_id'] !== null ? ['id' => (int) $row['cash_register_id'], 'name' => (string) $row['cash_register_name']] : null,
-        ];
+        ] + ($row['app'] === 'pos' && $this->terminals ? [
+            // Terminal de caisse (C2) : même {id, token} à chaque activation de la même clé ; jeton à envoyer dans X-Pos-Terminal
+            'terminal' => ['id' => (int) $row['id'], 'token' => $this->terminals->token((int) $row['id'], (string) $row['tenant_code'])],
+        ] : []);
     }
 
     /** Forme canonique IZ-XXX-XXXX-XXXX-XXXX d'une saisie (minuscules, espaces et tirets tolérés) ; null si vide ou malformée */

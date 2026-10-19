@@ -9,7 +9,7 @@ use App\Services\TenantEntityManagerProvider;
 /** Postes de caisse : liste, création, modification (jamais de suppression : historique) */
 class CashRegisterService
 {
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CashRegisterResolver $resolver, private readonly TenantCacheService $cache)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CashRegisterResolver $resolver, private readonly TenantCacheService $cache, private readonly ?\App\Services\PosAuditService\PosAuditService $audit = null)
     {
     }
 
@@ -32,12 +32,14 @@ class CashRegisterService
         $em = $this->emProvider->getEntityManager();
         $em->persist($register);
         $em->flush();
+        $this->audit?->record(\App\Services\PosAuditService\PosAuditService::CASH_REGISTER_CREATED, ['name' => $name], null, $register, 'cash_register', $register->getId());
 
         return $register;
     }
 
     public function update(CashRegister $register, ?string $name, ?bool $isActive): CashRegister
     {
+        $before = ['name' => $register->getName(), 'isActive' => $register->isActive()];
         if ($name !== null) {
             $this->assertNameFree($name, $register);
             $register->setName($name);
@@ -50,6 +52,8 @@ class CashRegisterService
         }
         $this->emProvider->getEntityManager()->flush();
         $this->cache->invalidateTags(['caisses_tag']); // le nom du poste figure dans les sessions (GET /api/caisse)
+        $this->audit?->record(\App\Services\PosAuditService\PosAuditService::CASH_REGISTER_UPDATED,
+            ['before' => $before, 'after' => ['name' => $register->getName(), 'isActive' => $register->isActive()]], null, $register, 'cash_register', $register->getId());
 
         return $register;
     }

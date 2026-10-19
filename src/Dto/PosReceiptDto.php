@@ -13,7 +13,8 @@ use App\Entity\Order;
  */
 class PosReceiptDto
 {
-    public static function fromOrder(Order $order, ?Entreprise $entreprise, ?Caisse $caisse, string $locale): array
+    /** @param array<string, \App\Entity\PosReceipt> $receipts numéros de la commande (C2) */
+    public static function fromOrder(Order $order, ?Entreprise $entreprise, ?Caisse $caisse, string $locale, array $receipts = []): array
     {
         $dollars = fn (?float $cents) => round(((float) $cents) / 100, 2);
         $taxes = [];
@@ -32,7 +33,12 @@ class PosReceiptDto
         }
         $register = $caisse?->getCashRegister();
 
+        $receipt = $receipts[\App\Entity\PosReceipt::TICKET] ?? $receipts[\App\Entity\PosReceipt::CREDIT_NOTE] ?? null;
+
         return [
+            // Numéro de ticket (vente) ou d'avoir (retour), suite continue par poste (C2)
+            'receiptNumber' => $receipt?->getNumber(),
+            'receiptKind' => $receipt?->getKind(),
             'reference' => $order->getReference(),
             'createdAt' => $order->getOrderDate()?->format(\DateTimeInterface::ATOM),
             'subTotal' => $dollars($order->getSubTotal()),
