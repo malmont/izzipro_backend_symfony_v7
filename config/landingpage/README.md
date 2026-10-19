@@ -174,7 +174,9 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     de l'accueil). Questions sur l'accueil d'un site : ses pages échouent (409 `Questions en attente`), crédits libérés ;
     relancer le site avec les réponses. Contrôle : `LandingAiQuestions` (id `^[a-z0-9_-]{1,40}$` unique, question de 300
     caractères au plus) ; cas d'évaluation Q1 (demande ambiguë) et Q2 (mêmes demande et réponses), les autres cas jouent
-    avec `noQuestions`.
+    avec `noQuestions`. Joués sur `demo` le 19/10/2026 : Q1 pose 2 questions (lequel des deux boutons, avec choix ; quel
+    texte), Q2 ne change que le bouton choisi ; 0,03 $ chacun. La permission est calculée par le moteur
+    (`LandingAiComposer::questionsAllowed`), pour que l'évaluation et la console envoient la même consigne.
   - **Consignes permanentes du site** (19/10/2026) : `GET /api/landingpage-ai/instructions` → `{ instructions, updatedAt,
     maxLength: 2000 }` ; `PUT` `{ instructions: texte | null }` (ROLE_ADMIN ; texte brut de 2 000 caractères au plus, sans
     balise, sinon 400 ; vide ou null = effacées). Rangées sur la ligne des réglages de l'assistant (`ai_credit_setting.
@@ -182,7 +184,9 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     journalisées (resource `landingpage-ai-instructions`, rétablissables par `POST /api/landingpage-audit/{id}/restore`).
     Redonnées au modèle à chaque demande, dans tous les modes, encadrées `<consignes_du_site>` : préférences de
     l'administrateur, la demande du moment prime, jamais au-dessus des règles de l'assistant. Coût : quelques centaines de
-    jetons (environ 0,001 $ par demande). Les cas d'évaluation sont joués sans consignes.
+    jetons (environ 0,001 $ par demande). Les cas d'évaluation sont joués sans consignes, sauf M1 (consigne « pas
+    d'animation », rouge refusé dans l'historique ; « rends la section plus dynamique et change la couleur du titre » :
+    joué sur `demo` le 19/10/2026, aucun effet ajouté, titre en bleu de la palette, les deux raisons dites ; 0,035 $).
   - **Historique de la console** (19/10/2026, tous les modes) : `history: [{ prompt, summary, outcome?: applied | rejected |
     undone }]`, les 10 derniers échanges au plus sur la même section ou la même page, du plus ancien au plus récent
     (`prompt` 2 000 caractères, `summary` 1 000 au plus ; balises retirées). Rien n'est stocké par le serveur : la console

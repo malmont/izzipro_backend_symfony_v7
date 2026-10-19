@@ -31,6 +31,33 @@ final class LandingAiEvalCases
     {
         return [
             [
+                // Consignes du site et mémoire (19/10/2026) : pas d'animation, rouge refusé auparavant ; « plus dynamique » ne doit
+                // ni ajouter d'animation, ni remettre le rouge
+                'id' => 'M1', 'presetId' => 'group-type-s', 'prompt' => 'Rends la section plus dynamique et change la couleur du titre.',
+                'instructions' => "Pas d'animations ni d'effets au survol sur le site : nos visiteurs sont âgés. Garder un rendu sobre.",
+                'history' => [
+                    ['prompt' => 'Mets le titre en rouge vif.', 'summary' => 'Titre passé en rouge #E53935.', 'outcome' => 'rejected'],
+                ],
+                'check' => function (object $before, object $after) {
+                    $animated = [];
+                    $red = false;
+                    foreach ($this->inspector->blocks($after) as $block) {
+                        $id = $block->id ?? '?';
+                        $old = $this->inspector->blocksById($before)[$id] ?? null;
+                        foreach (['animation', 'hover', 'loop'] as $key) {
+                            if (isset($block->$key) && ($old === null || ($old->$key ?? null) !== $block->$key)) {
+                                $animated[] = "$id.$key";
+                            }
+                        }
+                        if (($block->type ?? null) === 'title' && is_string($block->color ?? null) && ($rgb = $this->rgb($block->color)) !== null && $rgb[0] > 180 && $rgb[1] < 90 && $rgb[2] < 90) {
+                            $red = true;
+                        }
+                    }
+
+                    return $this->result(!$animated && !$red, sprintf('effets ajoutés : %s ; titre rouge : %s', $animated ? implode(', ', $animated) : 'aucun', $red ? 'oui' : 'non'));
+                },
+            ],
+            [
                 // Questions (19/10/2026) : deux boutons semblables, texte à écrire non donné : l'IA doit demander, pas deviner
                 'id' => 'Q1', 'presetId' => 'video-type-d', 'questions' => true, 'prompt' => 'Change le texte du bouton.',
                 'checkQuestions' => function (LandingAiQuestionsResult $r) {

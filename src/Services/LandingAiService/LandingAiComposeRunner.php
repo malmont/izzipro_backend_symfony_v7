@@ -82,7 +82,7 @@ final class LandingAiComposeRunner
      * Options de la demande transmises au moteur : page système (description du catalogue, familles adaptées), onglet
      * d'une landing page, charte, réglages de style, DESIGN.md, style de l'accueil (page d'un site complet).
      *
-     * @return array{system: ?array, tab: ?array, charter: ?object, style: ?array, designMd: ?string, siteStyle: ?string, answers: list<array>, noQuestions: bool, history: list<array>, instructions: ?string, questionsAllowed: bool}
+     * @return array{system: ?array, tab: ?array, charter: ?object, style: ?array, designMd: ?string, siteStyle: ?string, answers: list<array>, noQuestions: bool, history: list<array>, instructions: ?string}
      */
     private function options(LandingAiComposeInputDto $dto): array
     {
@@ -94,7 +94,7 @@ final class LandingAiComposeRunner
         return ['system' => $system, 'tab' => $dto->tab, 'charter' => $dto->charter, 'style' => $dto->style, 'designMd' => $dto->designMd, 'siteStyle' => $dto->siteStyle,
             'answers' => $dto->answers, 'noQuestions' => $dto->noQuestions, 'instructions' => $this->instructions->current(),
             // historique : celui de la console s'il est envoyé, sinon la mémoire gardée pour cette section ou cette page
-            'history' => $dto->history !== [] || $dto->memoryKey === null ? $dto->history : $this->memory->history($dto->memoryKey), 'questionsAllowed' => LandingAiComposer::questionsAllowed(['answers' => $dto->answers, 'noQuestions' => $dto->noQuestions], $dto->prompt)];
+            'history' => $dto->history !== [] || $dto->memoryKey === null ? $dto->history : $this->memory->history($dto->memoryKey)];
     }
 
     /** Encodage des réponses : la composition garde ses {} et ses nombres décimaux (1.0) */

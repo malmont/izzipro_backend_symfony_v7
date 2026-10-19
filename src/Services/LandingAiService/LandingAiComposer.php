@@ -90,6 +90,7 @@ final class LandingAiComposer
      */
     public function edit(string $componentKey, object $composition, string $prompt, string $locale = 'fr', array $media = [], array $images = [], string|int|null $dataType = null, array $options = []): LandingAiEditResult|LandingAiQuestionsResult
     {
+        $options['questionsAllowed'] = self::questionsAllowed($options, $prompt); // lu par le constructeur de prompts
         $stored = $this->site->storedCompositions();
         $library = $this->content->mediaLibrary();
         $allowedMedia = $this->withLibrary($this->site->allowedMedia([...$stored, $composition], $media, $prompt), $library);
@@ -98,7 +99,7 @@ final class LandingAiComposer
 
         $removalAsked = self::asksRemoval($prompt);
 
-        $questionsAllowed = self::questionsAllowed($options, $prompt);
+        $questionsAllowed = $options['questionsAllowed'];
 
         return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia, $removalAsked, $editable, $questionsAllowed) {
             if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, ($input->operations ?? []) === [])) !== null) {
@@ -153,6 +154,7 @@ final class LandingAiComposer
      */
     public function create(string $componentKey, string $prompt, string $locale = 'fr', array $media = [], ?string $defaultDataType = null, array $images = [], array $options = []): LandingAiCreateResult|LandingAiQuestionsResult
     {
+        $options['questionsAllowed'] = self::questionsAllowed($options, $prompt); // lu par le constructeur de prompts
         $stored = $this->site->storedCompositions();
         $usesData = $this->data->familyUsesData($componentKey);
         $optional = $usesData && $this->data->dataOptional($componentKey);
@@ -163,7 +165,7 @@ final class LandingAiComposer
         $payload = $this->prompts->createPayload($this->model($images), $componentKey, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $usesData, $optional, $available, $defaultDataType, $images, $library, $options);
         $availableIds = [$componentKey => $availableIds];
 
-        $questionsAllowed = self::questionsAllowed($options, $prompt);
+        $questionsAllowed = $options['questionsAllowed'];
 
         return $this->run($payload, LandingAiPromptBuilder::CREATE_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds, $questionsAllowed) {
             if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, !is_object($input->composition ?? null))) !== null) {
@@ -197,6 +199,7 @@ final class LandingAiComposer
      */
     public function page(string $prompt, string $locale = 'fr', array $media = [], array $images = [], ?string $componentKey = null, array $options = []): LandingAiPageResult|LandingAiQuestionsResult
     {
+        $options['questionsAllowed'] = self::questionsAllowed($options, $prompt); // lu par le constructeur de prompts
         $stored = $this->site->storedCompositions();
         $families = $componentKey !== null ? [$componentKey] : $this->catalogue->componentKeys();
         $presets = array_merge(...array_map(fn ($key) => $this->site->presetCompositions($key), $families));
@@ -218,7 +221,7 @@ final class LandingAiComposer
         $landingHome = $siteHome && ($options['siteApp'] ?? 'boutique') === 'landingpage';
         $asksCommerce = self::asksCommerce($prompt . ' ' . ($tab['brief'] ?? ''));
 
-        $questionsAllowed = self::questionsAllowed($options, $prompt);
+        $questionsAllowed = $options['questionsAllowed'];
 
         return $this->run($payload, LandingAiPromptBuilder::PAGE_TOOL, true, function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds, $system, $tab, $siteHome, $landingHome, $asksCommerce, $questionsAllowed) {
             if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, !is_array($input->sections ?? null) || $input->sections === [])) !== null) {

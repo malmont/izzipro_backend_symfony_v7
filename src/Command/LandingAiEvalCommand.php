@@ -299,7 +299,8 @@ class LandingAiEvalCommand extends Command
      */
     private function questionOptions(array $case): array
     {
-        return ['noQuestions' => ($case['questions'] ?? false) !== true, 'answers' => $case['answers'] ?? []];
+        // consignes du site et historique (mémoire) propres au cas, sinon aucun : résultats comparables d'un passage à l'autre
+        return ['noQuestions' => ($case['questions'] ?? false) !== true, 'answers' => $case['answers'] ?? [], 'instructions' => $case['instructions'] ?? null, 'history' => $case['history'] ?? []];
     }
 
     /** Le modèle a posé des questions au lieu de composer : vérification propre au cas (checkQuestions), sans V1 à V10 */
