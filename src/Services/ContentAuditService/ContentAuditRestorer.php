@@ -11,6 +11,7 @@ use App\Services\BoutiqueSettingsService\BoutiqueSettingsService;
 use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\EntrepriseService\EntrepriseService;
 use App\Services\EntrepriseService\EntrepriseValidationException;
+use App\Services\LandingAiService\LandingAiInstructionsService;
 use App\Services\LandingContentService\LandingContentEditor;
 use App\Services\LandingContentService\LandingContentSpec;
 use App\Services\LandingContentService\PresentationGroupEditor;
@@ -55,7 +56,8 @@ final class ContentAuditRestorer
         private readonly TenantCacheService $cache,
         private readonly TenantCurrencyProvider $currency,
         private readonly \App\Services\LandingContentService\LandingContentOutput $outputs,
-        private readonly \App\Services\LandingContentService\BoutiqueCatalogEditor $catalog
+        private readonly \App\Services\LandingContentService\BoutiqueCatalogEditor $catalog,
+        private readonly LandingAiInstructionsService $aiInstructions
     ) {
     }
 
@@ -92,6 +94,7 @@ final class ContentAuditRestorer
                 $resource === 'boutique-settings' => $this->boutiqueSettings($entry->getBefore(), $entry->getAfter(), $force),
                 str_ends_with($resource, '-site-models') => $this->siteModel($entry, $before, $force),
                 $resource === 'media' => $this->mediaTitle((int) $id, $before, $after, $force, $host),
+                $resource === 'landingpage-ai-instructions' => $this->aiInstructions($before, $after, $force),
                 default => throw new ContentAuditException(409, 'Ressource sans retour en arrière.'),
             };
         } catch (LandingContentException|LandingSiteModelException $e) {
@@ -180,6 +183,20 @@ final class ContentAuditRestorer
         $this->boutiqueSettings->updateSettings($setting, get_object_vars($configuration));
 
         return ['resourceId' => $setting->getId(), 'before' => $current, 'after' => $before, 'result' => null];
+    }
+
+    /** Consignes permanentes de l'assistant IA (19/10/2026) : texte d'avant, recontrôlé */
+    private function aiInstructions(mixed $before, mixed $after, bool $force): array
+    {
+        $current = ['instructions' => $this->aiInstructions->current()];
+        $this->guard($current, $after, $force);
+        $text = is_object($before) && is_string($before->instructions ?? null) ? $before->instructions : null;
+        if ($errors = LandingAiInstructionsService::validate($text)) {
+            throw new ContentAuditException(422, 'Ces consignes ne passent plus les contrôles actuels : ' . $errors[0]['message'], $errors);
+        }
+        [, $restored] = $this->aiInstructions->save($text);
+
+        return ['resourceId' => null, 'before' => $current, 'after' => ['instructions' => $restored], 'result' => null];
     }
 
     private function siteModel(ContentAuditLog $entry, mixed $before, bool $force): array

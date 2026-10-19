@@ -30,6 +30,11 @@ class LandingAiComposeInputDto
     /** Onglet d'une landing page à composer : titre (sans < ni >) et brief facultatif */
     public const MAX_TAB_TITLE_LENGTH = 60;
     public const MAX_TAB_BRIEF_LENGTH = 300;
+    /** Historique de la console : nombre d'échanges, longueur de la demande et du résumé gardés, issues possibles */
+    public const MAX_HISTORY = 10;
+    public const MAX_HISTORY_PROMPT_LENGTH = 2000;
+    public const MAX_HISTORY_SUMMARY_LENGTH = 1000;
+    public const HISTORY_OUTCOMES = ['applied', 'rejected', 'undone'];
     /** Réponses aux questions de l'assistant : nombre, longueur de la question et de chaque réponse, réponses multiples */
     public const MAX_ANSWERS = 3;
     public const MAX_ANSWER_LENGTH = 500;
@@ -94,6 +99,14 @@ class LandingAiComposeInputDto
     public array $answers = [];
     /** L'administrateur ne veut pas de questions : le modèle compose avec le choix le plus sûr */
     public bool $noQuestions = false;
+    /**
+     * Historique de la console (19/10/2026) : les derniers échanges sur la même section ou la même page, du plus ancien
+     * au plus récent, gardés par la console et renvoyés à chaque demande (rien n'est stocké par le serveur). outcome :
+     * applied (appliqué), rejected (refusé par l'administrateur), undone (annulé ensuite), ou absent.
+     *
+     * @var list<array{prompt: string, summary: string, outcome: ?string}>
+     */
+    public array $history = [];
 
     /** @var list<array{path: string, message: string}> erreurs de forme relevées à la lecture */
     private array $shapeErrors = [];
@@ -180,6 +193,15 @@ class LandingAiComposeInputDto
             } else {
                 foreach ($body->answers as $i => $answer) {
                     ($read = self::readAnswer($answer, "answers[$i]", $dto->shapeErrors)) !== null ? $dto->answers[] = $read : null;
+                }
+            }
+        }
+        if (isset($body->history)) {
+            if (!is_array($body->history) || count($body->history) > self::MAX_HISTORY) {
+                $dto->shapeErrors[] = ['path' => 'history', 'message' => sprintf('liste de %d échanges au plus attendue ({ prompt, summary, outcome? })', self::MAX_HISTORY)];
+            } else {
+                foreach ($body->history as $i => $exchange) {
+                    ($read = self::readExchange($exchange, "history[$i]", $dto->shapeErrors)) !== null ? $dto->history[] = $read : null;
                 }
             }
         }
@@ -301,6 +323,39 @@ class LandingAiComposeInputDto
         return $valid ? ['id' => $id, 'question' => $question, 'answer' => $value] : null;
     }
 
+    /**
+     * Échange de l'historique de la console : { prompt, summary, outcome? }. Les balises sont retirées (données).
+     *
+     * @return array{prompt: string, summary: string, outcome: ?string}|null
+     */
+    private static function readExchange(mixed $exchange, string $path, array &$errors): ?array
+    {
+        if (!is_object($exchange)) {
+            $errors[] = ['path' => $path, 'message' => 'objet { prompt, summary, outcome? } attendu'];
+
+            return null;
+        }
+        $plain = fn (mixed $v) => is_string($v) ? trim(html_entity_decode(strip_tags($v), ENT_QUOTES | ENT_HTML5)) : null;
+        $prompt = $plain($exchange->prompt ?? null);
+        $summary = $plain($exchange->summary ?? '');
+        $outcome = $exchange->outcome ?? null;
+        $valid = true;
+        if ($prompt === null || $prompt === '' || mb_strlen($prompt) > self::MAX_HISTORY_PROMPT_LENGTH) {
+            $errors[] = ['path' => "$path.prompt", 'message' => sprintf('demande de 1 à %d caractères attendue', self::MAX_HISTORY_PROMPT_LENGTH)];
+            $valid = false;
+        }
+        if ($summary === null || mb_strlen($summary) > self::MAX_HISTORY_SUMMARY_LENGTH) {
+            $errors[] = ['path' => "$path.summary", 'message' => sprintf('résumé de %d caractères au plus attendu', self::MAX_HISTORY_SUMMARY_LENGTH)];
+            $valid = false;
+        }
+        if ($outcome !== null && !in_array($outcome, self::HISTORY_OUTCOMES, true)) {
+            $errors[] = ['path' => "$path.outcome", 'message' => 'valeur attendue : ' . implode(', ', self::HISTORY_OUTCOMES) . ' (ou absent)'];
+            $valid = false;
+        }
+
+        return $valid ? ['prompt' => $prompt, 'summary' => $summary, 'outcome' => $outcome] : null;
+    }
+
     private static function readTab(object $tab, string $path, array &$errors): ?array
     {
         $title = is_string($tab->title ?? null) ? trim($tab->title) : '';
@@ -397,6 +452,7 @@ class LandingAiComposeInputDto
             'siteStyle' => $this->siteStyle,
             'answers' => $this->answers,
             'noQuestions' => $this->noQuestions,
+            'history' => $this->history,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
     }
 

@@ -175,6 +175,21 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     relancer le site avec les réponses. Contrôle : `LandingAiQuestions` (id `^[a-z0-9_-]{1,40}$` unique, question de 300
     caractères au plus) ; cas d'évaluation Q1 (demande ambiguë) et Q2 (mêmes demande et réponses), les autres cas jouent
     avec `noQuestions`.
+  - **Consignes permanentes du site** (19/10/2026) : `GET /api/landingpage-ai/instructions` → `{ instructions, updatedAt,
+    maxLength: 2000 }` ; `PUT` `{ instructions: texte | null }` (ROLE_ADMIN ; texte brut de 2 000 caractères au plus, sans
+    balise, sinon 400 ; vide ou null = effacées). Rangées sur la ligne des réglages de l'assistant (`ai_credit_setting.
+    assistant_instructions`, créée avec les crédits par défaut si besoin ; aussi dans EasyAdmin « Assistant IA : crédits »),
+    journalisées (resource `landingpage-ai-instructions`, rétablissables par `POST /api/landingpage-audit/{id}/restore`).
+    Redonnées au modèle à chaque demande, dans tous les modes, encadrées `<consignes_du_site>` : préférences de
+    l'administrateur, la demande du moment prime, jamais au-dessus des règles de l'assistant. Coût : quelques centaines de
+    jetons (environ 0,001 $ par demande). Les cas d'évaluation sont joués sans consignes.
+  - **Historique de la console** (19/10/2026, tous les modes) : `history: [{ prompt, summary, outcome?: applied | rejected |
+    undone }]`, les 10 derniers échanges au plus sur la même section ou la même page, du plus ancien au plus récent
+    (`prompt` 2 000 caractères, `summary` 1 000 au plus ; balises retirées). Rien n'est stocké par le serveur : la console
+    les garde et les renvoie. Encadrés `<historique_console>` (chaque texte réduit à 400 caractères) : le modèle s'en sert
+    pour « encore », « comme avant », « annule ça » et pour ne pas refaire ce qui a été refusé ou annulé ; la composition
+    actuelle fait foi. Coût : environ 1 000 jetons pour 10 échanges (+0,002 $ par retouche). Les pages filles d'un site
+    reçoivent l'historique de l'accueil.
   - **Réparations sans nouvel essai** (`LandingAiOutputRepair`, détail dans la classe) : clés en double, null, style sans
     effet, média de repli inventé, stepAt tardif, containers sans fond (transparent) et, depuis le 15/10/2026, blocs sans
     `w` ni fitContent dans une pile, une grille ou un diaporama (w = 100 : une page réelle en avait 44, rendus sur deux

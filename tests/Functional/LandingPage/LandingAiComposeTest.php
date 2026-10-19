@@ -898,6 +898,93 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame([], FakeLandingAiClient::$requests);
     }
 
+    public function testSiteInstructionsAreSavedLoggedRestorableAndGivenToTheModel(): void
+    {
+        $this->db()->executeStatement('DELETE FROM content_audit_log WHERE resource = ?', ['landingpage-ai-instructions']);
+        $this->assertSame(['instructions' => null, 'updatedAt' => null, 'maxLength' => 2000], json_decode($this->get('/api/landingpage-ai/instructions')->getContent(), true));
+
+        $first = $this->request('PUT', '/api/landingpage-ai/instructions', json_encode(['instructions' => "  Garder nos couleurs.\nPas d'animations, ton chaleureux.  "]));
+        $this->assertSame(200, $first->getStatusCode(), $first->getContent());
+        $body = json_decode($first->getContent(), true);
+        $this->assertSame("Garder nos couleurs.\nPas d'animations, ton chaleureux.", $body['instructions']);
+        $this->assertNotNull($body['updatedAt']);
+        $second = $this->request('PUT', '/api/landingpage-ai/instructions', json_encode(['instructions' => 'Tutoyer le visiteur.']));
+        $this->assertSame(200, $second->getStatusCode(), $second->getContent());
+        $this->assertSame(1, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM ai_credit_setting'), 'une seule ligne de réglages');
+        $this->assertSame(100, (int) $this->db()->fetchOne('SELECT monthly_credits FROM ai_credit_setting'), 'crédits par défaut gardés');
+
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]]);
+        $this->assertSame(200, $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre en noir.'])->getStatusCode());
+        $text = FakeLandingAiClient::$requests[0]['messages'][0]['content'];
+        $this->assertStringContainsString("<consignes_du_site>\nConsignes permanentes de l'administrateur pour son site :\nTutoyer le visiteur.\n</consignes_du_site>", $text);
+        $this->assertStringContainsString('Consignes permanentes du site (<consignes_du_site>', FakeLandingAiClient::$requests[0]['system'][0]['text']);
+
+        // retour à la version d'avant par le journal
+        $entry = (int) $this->db()->fetchOne('SELECT id FROM content_audit_log WHERE resource = ? ORDER BY id DESC LIMIT 1', ['landingpage-ai-instructions']);
+        $restore = $this->request('POST', '/api/landingpage-audit/' . $entry . '/restore');
+        $this->assertSame(200, $restore->getStatusCode(), $restore->getContent());
+        $this->assertSame("Garder nos couleurs.\nPas d'animations, ton chaleureux.", json_decode($this->get('/api/landingpage-ai/instructions')->getContent(), true)['instructions']);
+
+        // effacées : plus de bloc dans le prompt
+        $this->assertSame(200, $this->request('PUT', '/api/landingpage-ai/instructions', json_encode(['instructions' => null]))->getStatusCode());
+        FakeLandingAiClient::reset();
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]]);
+        $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre en noir.']);
+        $this->assertStringNotContainsString('<consignes_du_site>', FakeLandingAiClient::$requests[0]['messages'][0]['content']);
+        $this->db()->executeStatement('DELETE FROM ai_credit_setting');
+    }
+
+    public function testInvalidSiteInstructionsAreRefused(): void
+    {
+        $cases = [
+            'champ absent' => [],
+            'pas un texte' => ['instructions' => ['garder']],
+            'trop long' => ['instructions' => str_repeat('a', 2001)],
+            'balise' => ['instructions' => 'Garder <b>nos</b> couleurs'],
+        ];
+        foreach ($cases as $name => $body) {
+            $response = $this->request('PUT', '/api/landingpage-ai/instructions', json_encode($body));
+            $this->assertSame(400, $response->getStatusCode(), "$name : " . $response->getContent());
+        }
+        $this->assertSame(200, $this->request('PUT', '/api/landingpage-ai/instructions', json_encode(['instructions' => 'Prix < 100 $ affichés en gros']))->getStatusCode(), 'un « < » qui n\'ouvre pas de balise est accepté');
+        $this->db()->executeStatement('DELETE FROM ai_credit_setting');
+    }
+
+    public function testConsoleHistoryReachesTheModelAsData(): void
+    {
+        $history = [
+            ['prompt' => 'Mets le titre en rouge.', 'summary' => 'Titre passé en rouge #C62828.', 'outcome' => 'rejected'],
+            ['prompt' => 'Alors en vert sapin.', 'summary' => 'Titre passé en vert sapin.', 'outcome' => 'applied'],
+            ['prompt' => '<script>alert(1)</script>Plus grand', 'summary' => ''],
+        ];
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['size' => 48]]]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Encore un peu plus grand.', 'history' => $history]);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $text = FakeLandingAiClient::$requests[0]['messages'][0]['content'];
+        $this->assertStringContainsString("<historique_console>\nÉchanges précédents sur cette section ou cette page, du plus ancien au plus récent :\n1. Demande : Mets le titre en rouge. → Réponse : Titre passé en rouge #C62828. (refusé par l'administrateur)\n2. Demande : Alors en vert sapin. → Réponse : Titre passé en vert sapin. (appliqué)\n3. Demande : alert(1)Plus grand → Réponse : (sans résumé)\n</historique_console>", $text, 'balises retirées');
+        $this->assertStringContainsString('Historique de la console (<historique_console>', FakeLandingAiClient::$requests[0]['system'][0]['text']);
+    }
+
+    public function testConsoleHistoryIsValidated(): void
+    {
+        $base = ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'x'];
+        $cases = [
+            'pas une liste' => ['history' => 'avant'],
+            'trop d\'échanges' => ['history' => array_fill(0, 11, ['prompt' => 'p', 'summary' => 's'])],
+            'demande absente' => ['history' => [['summary' => 's']]],
+            'demande trop longue' => ['history' => [['prompt' => str_repeat('a', 2001), 'summary' => 's']]],
+            'résumé trop long' => ['history' => [['prompt' => 'p', 'summary' => str_repeat('a', 1001)]]],
+            'issue inconnue' => ['history' => [['prompt' => 'p', 'summary' => 's', 'outcome' => 'peut-être']]],
+        ];
+        foreach ($cases as $name => $extra) {
+            $response = $this->compose($base + $extra);
+            $this->assertSame(400, $response->getStatusCode(), "$name : " . $response->getContent());
+        }
+        $this->assertSame([], FakeLandingAiClient::$requests);
+    }
+
     public function testBlocksWithoutWidthInAStackOrAGridGetFullWidthWithoutAnotherAttempt(): void
     {
         $composition = $this->preset('contact-type-a');

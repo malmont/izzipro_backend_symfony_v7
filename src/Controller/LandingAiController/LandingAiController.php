@@ -8,6 +8,7 @@ use App\Services\LandingAiService\LandingAiComposeRunner;
 use App\Services\LandingAiService\LandingAiException;
 use App\UseCase\LandingAiUseCase\ComposeLandingSectionUseCase;
 use App\UseCase\LandingAiUseCase\ExportLandingDesignMdUseCase;
+use App\UseCase\LandingAiUseCase\ManageLandingAiInstructionsUseCase;
 use App\UseCase\LandingAiUseCase\GetLandingAiJobUseCase;
 use App\UseCase\LandingAiUseCase\GetLandingAiUsageUseCase;
 use App\UseCase\LandingAiUseCase\WriteLandingVideoPromptUseCase;
@@ -28,7 +29,8 @@ class LandingAiController extends AbstractController
         private readonly GetLandingAiUsageUseCase $usageUseCase,
         private readonly GetLandingAiJobUseCase $jobUseCase,
         private readonly WriteLandingVideoPromptUseCase $videoPromptUseCase,
-        private readonly ExportLandingDesignMdUseCase $designMdUseCase
+        private readonly ExportLandingDesignMdUseCase $designMdUseCase,
+        private readonly ManageLandingAiInstructionsUseCase $instructionsUseCase
     ) {
     }
 
@@ -92,6 +94,30 @@ class LandingAiController extends AbstractController
     {
         try {
             return new Response($this->designMdUseCase->execute($request->query->get('app')), 200, ['Content-Type' => 'text/markdown; charset=UTF-8']);
+        } catch (LandingAiException $e) {
+            return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
+        }
+    }
+
+    /** Consignes permanentes de l'assistant pour le site : { instructions, updatedAt, maxLength } */
+    #[Route('/instructions', name: 'api_landingpage_ai_instructions', methods: ['GET'])]
+    public function instructions(): JsonResponse
+    {
+        return $this->json($this->instructionsUseCase->get());
+    }
+
+    /** Remplace les consignes : { instructions: texte (2 000 caractères au plus) ou null pour effacer } ; journalisé */
+    #[Route('/instructions', name: 'api_landingpage_ai_instructions_update', methods: ['PUT'])]
+    public function updateInstructions(Request $request): JsonResponse
+    {
+        try {
+            try {
+                $body = json_decode($request->getContent(), false, 8, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                throw LandingAiException::badRequest('Corps JSON invalide.');
+            }
+
+            return $this->json($this->instructionsUseCase->update($body));
         } catch (LandingAiException $e) {
             return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
         }

@@ -177,6 +177,7 @@ final class LandingAiSiteOrchestrator
         // les pages suivent l'accueil : elles reçoivent les réponses de l'administrateur mais ne posent pas de questions
         $child->answers = $parent->answers;
         $child->noQuestions = true;
+        $child->history = $parent->history;
 
         return $child;
     }

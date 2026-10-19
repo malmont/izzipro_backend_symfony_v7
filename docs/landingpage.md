@@ -14,6 +14,7 @@ Routes et rôles : `docs/endpoints.md`, section « Landing Page » ; données de
 | Lire / enregistrer les réglages du site | `GET` / `PUT /api/landingpage-settings` | public / `ROLE_ADMIN` |
 | Familles de sections et source de leurs données | `GET /api/components-config` | public |
 | Assistant IA (retouche, création, page, page système, site complet, images et PDF) | `POST /api/landingpage-ai/compose` → 200, ou 202 `{ jobId }` | `ROLE_ADMIN` |
+| Assistant IA : consignes permanentes du site (journalisées) | `GET`, `PUT /api/landingpage-ai/instructions` | `ROLE_ADMIN` |
 | Assistant IA : charte du site en texte (DESIGN.md, sans IA) | `GET /api/landingpage-ai/design-md?app=landingpage\|boutique` | `ROLE_ADMIN` |
 | Assistant IA : prompt d'une vidéo pour une scène au défilement (1 crédit, synchrone) | `POST /api/landingpage-ai/video-prompt` | `ROLE_ADMIN` |
 | Résultat d'une tâche de fond | `GET /api/landingpage-ai/jobs/{jobId}` (même tenant, 1 h) | `ROLE_ADMIN` |
@@ -190,6 +191,7 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 | Familles (`components-config`) | `Services/LandingPagesService/ComponentsConfigProvider.php` (source unique : endpoint et assistant) |
 | Assistant : moteur | `Services/LandingAiService/` : `LandingAiComposer` (appel, vérifications, 3 essais), `LandingAiPromptBuilder` (prompt système, outils, cache), `LandingAiCatalogue`, `LandingAiDataSources` (valeurs de `dataType`), `CompositionEditApplier` (opérations de retouche), `LandingAiCompositionChecker`, `AnthropicLandingAiClient`, `LandingAiContentContext` (médiathèque, contenus modifiables de la donnée affichée), `LandingAiContentProposals` (contrôle de `contentChanges`, `groupChanges`, `limits`, jamais appliqués) |
 | Assistant : réglages, réparation | `LandingAiTuning` (effort par nature de demande, durée du cache), `LandingAiOutputRepair` (clés en double du modèle, fonds et largeurs manquants) |
+| Assistant : consignes du site, historique | `LandingAiInstructionsService` (consignes sur `ai_credit_setting`, migration `Version20261019100000`, script `scripts/migrate_all_v2_landing_ai.sh`), `UseCase/LandingAiUseCase/ManageLandingAiInstructionsUseCase` ; historique : champ `history` du DTO (rien n'est stocké) |
 | Assistant : questions à l'administrateur | `LandingAiQuestions` (contrôle des questions, texte des réponses), `LandingAiQuestionsResult` ; détail dans `config/landingpage/README.md` (19/10/2026) |
 | Assistant : site complet, charte | `LandingAiSiteOrchestrator` (tâches filles : pages système de la boutique, ou onglets `{ title, brief? }` d'une landing page indexés par slug), `LandingAiCharterExtractor` (charte et style de l'accueil), `LandingAiDesignMdWriter` (export DESIGN.md) ; détail dans `config/landingpage/README.md` (15/10/2026) |
 | Assistant : quota, tâches | `LandingAiQuotaService` (réservation atomique, `pg_advisory_xact_lock`), `LandingAiJobService`, `LandingAiComposeRunner` |
@@ -205,7 +207,7 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 |---|---|---|
 | `landing_page_setting` | tenant | configuration JSON du site |
 | `ai_usage` | tenant | réservations et historique des crédits (90 jours ; jamais de composition ni de réponse du modèle) ; jetons par demande, d'où le coût estimé montré au super administrateur (`LandingAiPricing`) |
-| `ai_credit_setting` | tenant | crédits mensuels (100 par défaut) |
+| `ai_credit_setting` | tenant | crédits mensuels (100 par défaut) et consignes permanentes de l'assistant (19/10/2026) |
 | `ai_job` | tenant | tâches de fond (résultat 1 h, requête effacée au traitement) |
 | `landing_config_sync` | maître (`app_v2_db`) | historique des synchronisations |
 

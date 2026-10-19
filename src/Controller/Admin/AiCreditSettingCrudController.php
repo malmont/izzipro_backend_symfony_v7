@@ -8,6 +8,8 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
+use App\Services\LandingAiService\LandingAiInstructionsService;
 
 /**
  * Crédits mensuels de l'assistant IA du tenant : une seule ligne (création possible uniquement s'il n'y en a pas,
@@ -45,6 +47,10 @@ class AiCreditSettingCrudController extends BaseTenantCrudController
             IntegerField::new('monthlyCredits', 'Crédits par mois')
                 ->setHelp('Entre 0 (assistant désactivé) et 100 000.')
                 ->setFormTypeOption('attr', ['min' => 0, 'max' => 100000]),
+            TextareaField::new('assistantInstructions', 'Consignes de l\'assistant')
+                ->setHelp(sprintf('Consignes permanentes redonnées à l\'assistant à chaque demande (ex. « garder nos couleurs, pas d\'animations, ton chaleureux »). Texte brut, %d caractères au plus. La demande du moment prime en cas de contradiction.', LandingAiInstructionsService::MAX_LENGTH))
+                ->setFormTypeOption('attr', ['maxlength' => LandingAiInstructionsService::MAX_LENGTH, 'rows' => 6])
+                ->hideOnIndex(),
         ];
     }
 
@@ -54,6 +60,9 @@ class AiCreditSettingCrudController extends BaseTenantCrudController
         $existing = $this->emProvider->getEntityManager()->getRepository(AiCreditSetting::class)->findOneBy([], ['id' => 'ASC']);
         if ($existing !== null) {
             $existing->setMonthlyCredits($entityInstance->getMonthlyCredits());
+            if ($existing->getAssistantInstructions() !== $entityInstance->getAssistantInstructions()) {
+                $existing->setAssistantInstructions($entityInstance->getAssistantInstructions());
+            }
             $this->emProvider->getEntityManager()->flush();
 
             return;
