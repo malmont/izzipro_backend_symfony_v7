@@ -128,8 +128,8 @@ final class LandingAiSiteOrchestrator
         }
     }
 
-    /** Accueil en échec : les pages système ne seront pas composées, crédits libérés */
-    public function failChildren(LandingAiComposeInputDto $parent, LandingAiException $e): void
+    /** Accueil en échec, ou questions posées sur l'accueil : les pages ne seront pas composées, crédits libérés */
+    public function failChildren(LandingAiComposeInputDto $parent, LandingAiException $e, ?string $message = null): void
     {
         $em = $this->emProvider->getEntityManager();
         foreach ($parent->children as $jobId) {
@@ -141,8 +141,15 @@ final class LandingAiSiteOrchestrator
             if ($usage !== null && $usage->getStatus() === AiUsage::STATUS_RESERVED) {
                 $this->quota->release($usage, null);
             }
-            $this->jobs->fail($job, new LandingAiException($e->getStatusCode(), $e->getError(), 'L\'accueil du site n\'a pas pu être composé : cette page n\'a pas été composée. Aucun crédit n\'a été consommé.'));
+            $this->jobs->fail($job, new LandingAiException($e->getStatusCode(), $e->getError(), $message ?? 'L\'accueil du site n\'a pas pu être composé : cette page n\'a pas été composée. Aucun crédit n\'a été consommé.'));
         }
+    }
+
+    /** L'assistant a posé des questions sur l'accueil : les pages attendent la nouvelle demande avec les réponses */
+    public function cancelChildrenForQuestions(LandingAiComposeInputDto $parent): void
+    {
+        $this->failChildren($parent, new LandingAiException(409, 'Questions en attente', ''),
+            'L\'assistant a posé des questions sur l\'accueil : cette page sera composée quand le site sera relancé avec les réponses. Aucun crédit n\'a été consommé.');
     }
 
     /** Requête d'un onglet d'une landing page : même demande, médias, images et réglages que l'accueil */
@@ -167,6 +174,9 @@ final class LandingAiSiteOrchestrator
         $child->charter = $parent->charter;
         $child->style = $parent->style;
         $child->designMd = $parent->designMd;
+        // les pages suivent l'accueil : elles reçoivent les réponses de l'administrateur mais ne posent pas de questions
+        $child->answers = $parent->answers;
+        $child->noQuestions = true;
 
         return $child;
     }

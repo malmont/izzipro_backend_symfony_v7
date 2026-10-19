@@ -759,6 +759,145 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame('transparent', json_decode($response->getContent())->composition->blocks[$index]->background);
     }
 
+    public function testEditAsksQuestionsWhenAnInformationIsMissingAndChargesNothing(): void
+    {
+        $questions = [
+            ['id' => 'bouton', 'question' => 'Quel bouton faut-il changer ?', 'options' => ['Nous contacter', 'Voir nos services']],
+            ['id' => 'texte', 'question' => 'Quel nouveau texte ?'],
+        ];
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([], 'Je changerai le texte du bouton choisi.', [], [], ['questions' => $questions]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'Video', 'composition' => $this->preset('video-type-d'), 'prompt' => 'Change le texte du bouton.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent());
+        $this->assertTrue($body->needsAnswers);
+        $this->assertObjectNotHasProperty('composition', $body, 'rien n\'est composé');
+        $this->assertSame([
+            ['id' => 'bouton', 'question' => 'Quel bouton faut-il changer ?', 'options' => ['Nous contacter', 'Voir nos services'], 'multiple' => false],
+            ['id' => 'texte', 'question' => 'Quel nouveau texte ?', 'options' => [], 'multiple' => false],
+        ], json_decode(json_encode($body->questions), true));
+        $this->assertSame('Je changerai le texte du bouton choisi.', $body->summary);
+        $this->assertSame(0, $body->credits->used, 'questions : aucun crédit facturé');
+        $history = json_decode($this->get('/api/landingpage-ai/usage')->getContent(), true)['history'];
+        $this->assertSame(['edit', 'success', 0], [$history[0]['mode'], $history[0]['status'], $history[0]['credits']]);
+        $request = FakeLandingAiClient::$requests[0];
+        $this->assertStringContainsString('Questions : autorisées (3 au plus', $request['messages'][0]['content']);
+        $this->assertStringContainsString('Questions à l\'administrateur (questions, facultatif)', $request['system'][0]['text']);
+        $this->assertArrayHasKey('questions', $request['tools'][0]['input_schema']['properties']);
+    }
+
+    public function testAnswersReachTheModelAndForbidAnotherRoundOfQuestions(): void
+    {
+        $answers = [
+            ['id' => 'bouton', 'question' => 'Quel bouton faut-il changer ?', 'answer' => 'Voir nos services'],
+            ['id' => 'texte', 'question' => 'Quel nouveau texte ?', 'answer' => 'Découvrir nos offres'],
+        ];
+        // 1er essai : le modèle redemande, refusé ; 2e : il compose
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([], 'Encore une question.', [], [], ['questions' => [['id' => 'ton', 'question' => 'Quel ton ?']]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 'd-btn-ghost', 'set' => ['text' => 'Découvrir nos offres']]]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'Video', 'composition' => $this->preset('video-type-d'), 'prompt' => 'Change le texte du bouton.', 'answers' => $answers]);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent());
+        $this->assertObjectNotHasProperty('needsAnswers', $body);
+        $this->assertSame('Découvrir nos offres', array_column($body->composition->blocks, null, 'id')['d-btn-ghost']->text);
+        $this->assertSame(1, $body->credits->used, 'retouche facturée normalement');
+        $text = FakeLandingAiClient::$requests[0]['messages'][0]['content'];
+        $this->assertStringContainsString('Questions : non autorisées (l\'administrateur a déjà répondu).', $text);
+        $this->assertStringContainsString("<reponses_administrateur>\n", $text);
+        $this->assertStringContainsString('- Quel bouton faut-il changer ? (bouton) : Voir nos services', $text);
+        $this->assertStringContainsString('- Quel nouveau texte ? (texte) : Découvrir nos offres', $text);
+        $this->assertStringContainsString('questions non autorisées pour cette demande', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+    }
+
+    public function testNoQuestionsFlagIgnoresQuestionsWhenTheModelAlsoComposed(): void
+    {
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]], 'Titre en noir.', [], [], ['questions' => [['id' => 'teinte', 'question' => 'Noir pur ?']]]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'Titre en noir.', 'noQuestions' => true]);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertCount(1, FakeLandingAiClient::$requests, 'questions ignorées, sans nouvel essai');
+        $this->assertObjectHasProperty('composition', json_decode($response->getContent()));
+        $this->assertStringContainsString("Questions : non autorisées.\n", FakeLandingAiClient::$requests[0]['messages'][0]['content']);
+    }
+
+    public function testInvalidQuestionsAreSentBackToTheModel(): void
+    {
+        $tooMany = array_map(fn ($i) => ['id' => "q$i", 'question' => "Question $i ?"], range(1, 4));
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse(new \stdClass(), null, 'Questions.', [], ['questions' => $tooMany]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse(new \stdClass(), null, 'Questions.', [], ['questions' => [['id' => 'Bad Id', 'question' => 'Ok ?', 'options' => ['seule']]]]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse(new \stdClass(), null, 'Une question.', [], ['questions' => [['id' => 'service', 'question' => 'Quel service mettre en avant ?', 'options' => ['Conseil', 'Formation'], 'multiple' => true]]]);
+        foreach (FakeLandingAiClient::$queue as $response) {
+            unset($response->content[0]->input->composition, $response->content[0]->input->dataType); // le modèle ne compose rien quand il demande
+        }
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Contact', 'prompt' => 'Une section qui met en avant un service.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertSame([['id' => 'service', 'question' => 'Quel service mettre en avant ?', 'options' => ['Conseil', 'Formation'], 'multiple' => true]], json_decode(json_encode(json_decode($response->getContent())->questions), true));
+        $this->assertStringContainsString('3 questions au plus', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+        $retry = FakeLandingAiClient::$requests[2]['messages'][4]['content'][0]['content'];
+        $this->assertStringContainsString('questions[0].id', $retry);
+        $this->assertStringContainsString('questions[0].options', $retry);
+    }
+
+    public function testQuestionsOnTheHomeOfASiteCancelItsPagesAndReleaseTheirCredits(): void
+    {
+        $asking = FakeLandingAiClient::pageResponse([], 'Je composerai le site une fois le nom de la marque connu.');
+        $asking->content[0]->input->questions = [(object) ['id' => 'marque', 'question' => 'Quel est le nom de la marque ?']];
+        FakeLandingAiClient::$queue[] = $asking;
+
+        $response = $this->compose(['mode' => 'site', 'pages' => ['login'], 'prompt' => 'Une boutique de vêtements.']);
+        $this->assertSame(202, $response->getStatusCode(), $response->getContent());
+        $parentId = json_decode($response->getContent())->jobId;
+        $this->runWorker($this->sentJobMessages());
+
+        $parent = json_decode($this->get('/api/landingpage-ai/jobs/' . $parentId)->getContent(), false);
+        $this->assertSame('done', $parent->status, json_encode($parent));
+        $this->assertTrue($parent->result->needsAnswers);
+        $this->assertSame('marque', $parent->result->questions[0]->id);
+        $this->assertCount(0, array_filter($this->sentJobMessages(), fn ($m) => $m->jobId !== $parentId), 'aucune page envoyée au worker');
+        $child = $this->db()->fetchAssociative('SELECT status, error FROM ai_job WHERE id <> ?', [$parentId]);
+        $this->assertSame('failed', $child['status']);
+        $this->assertStringContainsString('L\'assistant a posé des questions sur l\'accueil', $child['error']);
+        $this->assertSame(0, json_decode($this->get('/api/landingpage-ai/usage')->getContent(), true)['credits']['used'], 'aucun crédit facturé, pages libérées');
+    }
+
+    public function testPagesOfASiteReceiveTheAnswersButNeverAsk(): void
+    {
+        $dto = \App\Dto\LandingAiComposeInputDto::fromRequestBody(json_decode(json_encode(['mode' => 'site', 'pages' => ['login'], 'prompt' => 'x', 'answers' => [['id' => 'marque', 'question' => 'Nom ?', 'answer' => 'ENVERS']]]), false));
+        $orchestrator = static::getContainer()->get(\App\Services\LandingAiService\LandingAiSiteOrchestrator::class);
+        $this->db();
+        $children = $orchestrator->createChildren($dto, null);
+        $child = \App\Dto\LandingAiComposeInputDto::fromStoredJob((string) $this->db()->fetchOne('SELECT input FROM ai_job WHERE id = ?', [$children['login']]));
+
+        $this->assertTrue($child->noQuestions);
+        $this->assertSame('ENVERS', $child->answers[0]['answer']);
+    }
+
+    public function testAnswersAreValidated(): void
+    {
+        $base = ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'x'];
+        $cases = [
+            'answers : pas une liste' => ['answers' => 'oui'],
+            'answers : trop de réponses' => ['answers' => array_map(fn ($i) => ['id' => "q$i", 'question' => 'Q ?', 'answer' => 'R'], range(1, 4))],
+            'answer : identifiant invalide' => ['answers' => [['id' => 'Q 1', 'question' => 'Q ?', 'answer' => 'R']]],
+            'answer : réponse trop longue' => ['answers' => [['id' => 'q1', 'question' => 'Q ?', 'answer' => str_repeat('a', 501)]]],
+            'answer : balise' => ['answers' => [['id' => 'q1', 'question' => 'Q ?', 'answer' => '<script>x</script>']]],
+            'answer : trop de choix' => ['answers' => [['id' => 'q1', 'question' => 'Q ?', 'answer' => ['a', 'b', 'c', 'd', 'e']]]],
+            'answer : absente' => ['answers' => [['id' => 'q1', 'question' => 'Q ?']]],
+            'noQuestions : pas un booléen' => ['noQuestions' => 'oui'],
+        ];
+        foreach ($cases as $name => $extra) {
+            $response = $this->compose($base + $extra);
+            $this->assertSame(400, $response->getStatusCode(), "$name : " . $response->getContent());
+        }
+        $this->assertSame([], FakeLandingAiClient::$requests);
+    }
+
     public function testBlocksWithoutWidthInAStackOrAGridGetFullWidthWithoutAnotherAttempt(): void
     {
         $composition = $this->preset('contact-type-a');
@@ -910,7 +1049,7 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame([$parent->result->pages->login->jobId, $parent->result->pages->checkout->jobId], array_map(fn ($m) => $m->jobId, $children));
         $homeRequest = FakeLandingAiClient::$requests[0]['messages'][0]['content'];
         $this->assertStringContainsString('Site complet : cette demande compose l\'accueil', $homeRequest);
-        $this->assertContains('charter', FakeLandingAiClient::$requests[0]['tools'][0]['input_schema']['required'], 'la charte est exigée du modèle pour l\'accueil');
+        $this->assertArrayHasKey('charter', FakeLandingAiClient::$requests[0]['tools'][0]['input_schema']['properties'], 'la charte est demandée au modèle pour l\'accueil');
         $this->assertEqualsWithDelta(\App\Services\LandingAiService\LandingAiComposer::SITE_CALL_TIMEOUT, FakeLandingAiClient::$timeouts[0], 1.0, 'accueil d\'un site : délai long par appel');
         $this->assertSame(\App\Services\LandingAiService\LandingAiPromptBuilder::SITE_MAX_TOKENS, FakeLandingAiClient::$requests[0]['max_tokens']);
         $this->assertStringContainsString('site complet : une section Navbar', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
@@ -1008,7 +1147,7 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertStringContainsString('Site complet (landing page) : cette demande compose l\'accueil', $home);
         $this->assertStringContainsString('reste lié à navLinks', $home);
         $this->assertStringContainsString('Les autres onglets du site (« Services », « À propos »)', $home);
-        $this->assertContains('charter', FakeLandingAiClient::$requests[0]['tools'][0]['input_schema']['required']);
+        $this->assertArrayHasKey('charter', FakeLandingAiClient::$requests[0]['tools'][0]['input_schema']['properties']);
 
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'Contact', 'dataType' => null, 'composition' => $this->preset('contact-type-a')]]);
         FakeLandingAiClient::$queue[] = FakeLandingAiClient::pageResponse([['componentKey' => 'APropos', 'dataType' => null, 'composition' => $this->preset($this->firstPresetOf('APropos'))]]);

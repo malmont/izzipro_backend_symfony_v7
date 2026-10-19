@@ -86,6 +86,7 @@ Règles :
 - Si la demande est impossible (élément absent, média manquant), ne fabrique rien : explique-le dans warnings et laisse la composition inchangée sur ce point.
 - Médiathèque du site : la demande peut désigner un média par son titre (« la photo de l'atelier », « la vidéo de présentation ») ; utilise alors sa valeur « media » (clé ou adresse) comme un média autorisé. Plusieurs médias possibles ou aucun qui corresponde : n'en choisis pas au hasard, signale-le dans warnings.
 - Contenus de la donnée affichée (retouche seulement, quand des « contenus modifiables » sont listés) : un texte, un bouton ou une image qui vient de la donnée de la section (titre, texte, bouton, image d'une présentation, d'une bannière, d'une vidéo, d'un groupe) se change par contentChanges, pas dans la composition : la liaison reste, et le nouveau contenu sera vu partout où cette donnée s'affiche. contentChanges : [{resource, id, fields: {seulement les champs à changer}}], avec la ressource, l'identifiant et les champs listés, textes dans la langue de l'administrateur (même HTML que les textes de la composition ; un lien <a href> est accepté dans un texte de contenu), médias de la liste autorisée. Groupe de présentations : groupChanges : [{groupId, add: [{fields (titre obligatoire), after: id de la présentation qui précède, ou null pour la fin}], remove: [ids], order: [toutes les présentations gardées, dans le nouvel ordre] ou null}]. Ces propositions ne sont jamais appliquées par toi : l'éditeur les montre à l'administrateur, qui les valide. Ne propose que ce que la demande vise, et dis-le dans summary (« je propose de remplacer le titre de la présentation… »).
+- Questions à l'administrateur (questions, facultatif) : seulement quand la demande indique « Questions : autorisées », et seulement quand il manque une information qui change nettement le résultat et que ni la demande, ni la composition, ni les données du site, ni la charte ne la donnent : lequel de plusieurs éléments semblables est visé (deux boutons, trois cartes), un texte, un nom, un prix ou un chiffre que tu ne peux pas inventer, un média à choisir parmi plusieurs, deux lectures opposées de la demande. Pose alors 1 à 3 questions courtes, sans jargon (pas de nom de bloc ni de propriété), chacune avec 2 à 4 réponses proposées quand c'est possible (options), et ne compose rien : aucune opération, aucune composition, aucune section ; summary dit en une phrase ce que tu feras une fois les réponses connues. Une préférence de goût (teinte exacte, taille, effet, disposition) ne justifie jamais une question : choisis et dis-le dans summary. Une demande claire, ou dont l'ambiguïté se lève par la composition, ne reçoit jamais de question. Quand la demande indique « Questions : non autorisées » ou fournit des réponses (<reponses_administrateur>) : aucune question, compose avec les réponses, et pour ce qui reste incertain choisis le plus sûr et dis-le dans summary.
 - limits : pour chaque partie de la demande que tu ne peux pas faire avec cet outil, une entrée {request: la partie de la demande, reason: pourquoi, en une phrase, howTo: comment l'administrateur peut la faire, concrètement}. Ne fabrique rien à la place. Repères :
   · tout ce qui se fait dans l'éditeur (pages et onglets, ajout, ordre ou suppression des sections et des blocs, réglages de style, données, médiathèque, modèles, historique, référencement, textes légaux, navbar, footer) : cite le chemin de <libelles_editeur> tel quel, étapes séparées par « → », libellés entre « » (ex. « Panneau → « ＋ Ajouter une section » »). N'invente jamais un libellé ni un réglage absent de cette liste ; si rien n'y correspond, dis-le simplement ;
   · une page entière se compose avec la console de l'assistant (« ✨ Console IA » → « 🧩 Sections ») ;
@@ -167,6 +168,7 @@ TXT;
             $this->json($composition),
             '</donnees_du_site>',
             ...$this->styleLines($options),
+            ...$this->questionLines($options),
             '',
             $this->imagesNote($images, $prompt),
             'Langue de l\'administrateur : ' . $locale,
@@ -240,6 +242,7 @@ TXT;
             $data,
             '</donnees_du_site>',
             ...$this->styleLines($options),
+            ...$this->questionLines($options),
             '',
             $this->imagesNote($images, $prompt),
             'Langue de l\'administrateur : ' . $locale,
@@ -280,6 +283,7 @@ TXT;
             'Données du site par famille (valeurs possibles de dataType ; facultative : null = toutes les données). Famille absente de cette liste : dataType = null ; son contenu existe quand même (il vient de l\'entreprise ou d\'une liste du site : services, coordonnées…), ne la remplace pas par une autre famille : ' . $this->json($data),
             '</donnees_du_site>',
             ...$this->styleLines($options),
+            ...$this->questionLines($options),
             '',
             $this->imagesNote($images, $prompt, true),
             $componentKey !== null ? sprintf('Famille imposée pour toutes les sections : %s.', $componentKey) : 'Familles : choisis dans le catalogue celle qui convient à chaque partie de la page.',
@@ -366,6 +370,25 @@ TXT;
 
     /** Contexte fixe d'une famille (retouche, création) */
     /** Nature des images jointes (placées avant le texte) ; vide sans image */
+    /**
+     * Questions à l'administrateur : autorisées ou non pour cette demande, et réponses du tour précédent (données).
+     *
+     * @return list<string>
+     */
+    private function questionLines(array $options): array
+    {
+        $answers = is_array($options['answers'] ?? null) ? $options['answers'] : [];
+        $allowed = ($options['questionsAllowed'] ?? false) === true && $answers === [];
+
+        return [
+            '',
+            $allowed
+                ? sprintf('Questions : autorisées (%d au plus, seulement si une information indispensable manque).', LandingAiQuestions::MAX_QUESTIONS)
+                : 'Questions : non autorisées' . ($answers !== [] ? ' (l\'administrateur a déjà répondu).' : '.'),
+            ...LandingAiQuestions::answerLines($answers),
+        ];
+    }
+
     private function imagesNote(array $images, string $prompt, bool $page = false): string
     {
         if ($images === []) {
@@ -524,6 +547,7 @@ TXT;
                         ],
                     ],
                     'limits' => self::LIMITS_SCHEMA,
+                    'questions' => LandingAiQuestions::SCHEMA,
                 ],
             ],
         ];
@@ -537,13 +561,15 @@ TXT;
                 . "et dataType : identifiant de la donnée du site affichée par la section, choisi parmi les données listées, ou null si la famille n'en utilise pas.",
             'input_schema' => [
                 'type' => 'object',
-                'required' => ['dataType', 'composition', 'summary', 'warnings'],
+                // composition et dataType manquent quand l'IA pose des questions : vérifiés par le serveur sinon
+                'required' => ['summary', 'warnings'],
                 'properties' => [
                     'dataType' => ['type' => ['string', 'integer', 'null'], 'description' => 'identifiant de la donnée affichée, ou null'],
                     'composition' => ['type' => 'object', 'description' => 'composition complète schemaVersion 2'],
                     'summary' => ['type' => 'string', 'description' => '1 à 3 phrases en français'],
                     'warnings' => ['type' => 'array', 'items' => ['type' => 'string']],
                     'limits' => self::LIMITS_SCHEMA,
+                    'questions' => LandingAiQuestions::SCHEMA,
                 ],
             ],
         ];
@@ -569,7 +595,8 @@ TXT;
                 . ($withCharter ? ' Renvoie aussi charter, la charte déduite de la page.' : ''),
             'input_schema' => [
                 'type' => 'object',
-                'required' => $withCharter ? ['sections', 'summary', 'warnings', 'charter'] : ['sections', 'summary', 'warnings'],
+                // sections (et charter) manquent quand l'IA pose des questions : vérifiées par le serveur sinon
+                'required' => ['summary', 'warnings'],
                 'properties' => [
                     ...($withCharter ? ['charter' => self::CHARTER_SCHEMA] : []),
                     'sections' => [
@@ -587,6 +614,7 @@ TXT;
                     'summary' => ['type' => 'string', 'description' => '1 à 3 phrases en français'],
                     'warnings' => ['type' => 'array', 'items' => ['type' => 'string']],
                     'limits' => self::LIMITS_SCHEMA,
+                    'questions' => LandingAiQuestions::SCHEMA,
                 ],
             ],
         ];

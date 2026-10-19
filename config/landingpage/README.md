@@ -160,6 +160,21 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     dans le message et présentée au modèle comme une donnée. `GET /api/landingpage-ai/design-md?app=landingpage|boutique`
     (ROLE_ADMIN, sans IA ni crédit) écrit le DESIGN.md du site : charte enregistrée de la boutique s'il y en a une,
     complétée par la palette et les polices des compositions (`LandingAiDesignMdWriter`), `text/markdown`.
+  - **Questions à l'administrateur** (19/10/2026, tous les modes) : quand il manque une information qui change nettement le
+    résultat (lequel de plusieurs éléments semblables, un texte, un nom ou un chiffre impossible à inventer, un média à
+    choisir, deux lectures opposées), l'IA peut poser 1 à 3 questions au lieu de composer. Réponse (200, ou résultat de la
+    tâche de fond) : `{ mode, needsAnswers: true, questions: [{ id, question, options: [0 ou 2 à 4 réponses proposées],
+    multiple }], system?, tab?, summary, warnings, contentChanges: [], groupChanges: [], limits: [], credits, usage }`,
+    sans composition ni sections ; **aucun crédit facturé** (`ai_usage.credits` = 0, statut `success`, hors plafond
+    d'échecs). La console renvoie la même demande avec `answers: [{ id, question, answer }]` (3 au plus ; `answer` :
+    texte de 500 caractères au plus, ou liste de 4 choix au plus pour une question multiple ; texte brut, sans < ni >) :
+    les réponses sont encadrées `<reponses_administrateur>` comme des données, et **un seul tour** est permis (avec des
+    réponses, une nouvelle question est renvoyée au modèle, ou ignorée s'il a aussi composé). `noQuestions: true` les
+    interdit. Jamais de questions en relecture visuelle ni sur les pages filles d'un site (elles reçoivent les réponses
+    de l'accueil). Questions sur l'accueil d'un site : ses pages échouent (409 `Questions en attente`), crédits libérés ;
+    relancer le site avec les réponses. Contrôle : `LandingAiQuestions` (id `^[a-z0-9_-]{1,40}$` unique, question de 300
+    caractères au plus) ; cas d'évaluation Q1 (demande ambiguë) et Q2 (mêmes demande et réponses), les autres cas jouent
+    avec `noQuestions`.
   - **Réparations sans nouvel essai** (`LandingAiOutputRepair`, détail dans la classe) : clés en double, null, style sans
     effet, média de repli inventé, stepAt tardif, containers sans fond (transparent) et, depuis le 15/10/2026, blocs sans
     `w` ni fitContent dans une pile, une grille ou un diaporama (w = 100 : une page réelle en avait 44, rendus sur deux

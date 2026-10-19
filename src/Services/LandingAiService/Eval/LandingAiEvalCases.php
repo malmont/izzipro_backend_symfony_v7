@@ -6,6 +6,7 @@ use App\Services\LandingAiService\CompositionInspector;
 use App\Services\LandingAiService\LandingAiCreateResult;
 use App\Services\LandingAiService\LandingAiEditResult;
 use App\Services\LandingAiService\LandingAiPageResult;
+use App\Services\LandingAiService\LandingAiQuestionsResult;
 
 /**
  * Cas de l'étape 1 (retouche) du jeu d'essai, avec leurs vérifications propres quand elles sont mesurables.
@@ -29,6 +30,33 @@ final class LandingAiEvalCases
     public function editCases(): array
     {
         return [
+            [
+                // Questions (19/10/2026) : deux boutons semblables, texte à écrire non donné : l'IA doit demander, pas deviner
+                'id' => 'Q1', 'presetId' => 'video-type-d', 'questions' => true, 'prompt' => 'Change le texte du bouton.',
+                'checkQuestions' => function (LandingAiQuestionsResult $r) {
+                    $count = count($r->questions);
+                    $withOptions = count(array_filter($r->questions, fn ($q) => $q['options'] !== []));
+
+                    return $this->result($count >= 1 && $count <= 3, sprintf('%d question(s), dont %d avec des réponses proposées : %s', $count, $withOptions, implode(' | ', array_column($r->questions, 'question'))));
+                },
+                'check' => fn (object $before, object $after) => $this->result(false, 'l\'IA a composé sans demander lequel des deux boutons ni quel texte'),
+            ],
+            [
+                // Même demande avec les réponses : l'IA compose sans reposer de question, seul le bouton choisi change
+                'id' => 'Q2', 'presetId' => 'video-type-d', 'questions' => true, 'prompt' => 'Change le texte du bouton.',
+                'answers' => [
+                    ['id' => 'bouton', 'question' => 'Quel bouton faut-il changer ?', 'answer' => 'Le bouton « Voir nos services »'],
+                    ['id' => 'texte', 'question' => 'Quel nouveau texte ?', 'answer' => 'Découvrir nos offres'],
+                ],
+                'checkQuestions' => fn (LandingAiQuestionsResult $r) => $this->result(false, 'questions reposées malgré les réponses'),
+                'check' => function (object $before, object $after) {
+                    $blocks = $this->inspector->blocksById($after);
+                    $ghost = strip_tags((string) ($blocks['d-btn-ghost']->text ?? ''));
+                    $primary = strip_tags((string) ($blocks['d-btn-primary']->text ?? ''));
+
+                    return $this->result(str_contains($ghost, 'Découvrir nos offres') && $primary === 'Nous contacter', sprintf('bouton secondaire : « %s » ; bouton principal : « %s »', $ghost, $primary));
+                },
+            ],
             [
                 'id' => 'R1', 'presetId' => 'group-type-s', 'prompt' => 'Rends la section plus aérée.',
                 'check' => function (object $before, object $after) {

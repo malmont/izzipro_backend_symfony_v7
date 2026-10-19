@@ -43,6 +43,7 @@ final class LandingAiComposer
         private readonly LandingAiContentContext $content,
         private readonly LandingAiContentProposals $proposals,
         private readonly LandingAiCharterExtractor $charters,
+        private readonly LandingAiQuestions $questions,
         #[Autowire('%env(default:landing_ai.default_model_edit:LANDING_AI_MODEL_EDIT)%')]
         private readonly string $editModel,
         #[Autowire('%env(default:landing_ai.default_model_page:LANDING_AI_MODEL_PAGE)%')]
@@ -87,7 +88,7 @@ final class LandingAiComposer
      * @param list<array{mediaType: string, data: string}> $images captures ou charte (modèle des requêtes avec images)
      * @throws LandingAiException 502 (pas de composition valide, IA indisponible) ou 504 (délai)
      */
-    public function edit(string $componentKey, object $composition, string $prompt, string $locale = 'fr', array $media = [], array $images = [], string|int|null $dataType = null, array $options = []): LandingAiEditResult
+    public function edit(string $componentKey, object $composition, string $prompt, string $locale = 'fr', array $media = [], array $images = [], string|int|null $dataType = null, array $options = []): LandingAiEditResult|LandingAiQuestionsResult
     {
         $stored = $this->site->storedCompositions();
         $library = $this->content->mediaLibrary();
@@ -97,7 +98,12 @@ final class LandingAiComposer
 
         $removalAsked = self::asksRemoval($prompt);
 
-        return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia, $removalAsked, $editable) {
+        $questionsAllowed = self::questionsAllowed($options, $prompt);
+
+        return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia, $removalAsked, $editable, $questionsAllowed) {
+            if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, ($input->operations ?? []) === [])) !== null) {
+                return $asked;
+            }
             $operations = is_array($input->operations ?? null) ? $input->operations : [];
             $applied = $this->applier->apply($composition, $operations);
             // Boutique : un bloc obligatoire d'une page système ne disparaît jamais, même si la demande le demande
@@ -145,7 +151,7 @@ final class LandingAiComposer
      * @param list<array{mediaType: string, data: string}> $images captures ou charte (modèle des requêtes avec images)
      * @throws LandingAiException 502 ou 504
      */
-    public function create(string $componentKey, string $prompt, string $locale = 'fr', array $media = [], ?string $defaultDataType = null, array $images = [], array $options = []): LandingAiCreateResult
+    public function create(string $componentKey, string $prompt, string $locale = 'fr', array $media = [], ?string $defaultDataType = null, array $images = [], array $options = []): LandingAiCreateResult|LandingAiQuestionsResult
     {
         $stored = $this->site->storedCompositions();
         $usesData = $this->data->familyUsesData($componentKey);
@@ -157,7 +163,12 @@ final class LandingAiComposer
         $payload = $this->prompts->createPayload($this->model($images), $componentKey, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $usesData, $optional, $available, $defaultDataType, $images, $library, $options);
         $availableIds = [$componentKey => $availableIds];
 
-        return $this->run($payload, LandingAiPromptBuilder::CREATE_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds) {
+        $questionsAllowed = self::questionsAllowed($options, $prompt);
+
+        return $this->run($payload, LandingAiPromptBuilder::CREATE_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds, $questionsAllowed) {
+            if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, !is_object($input->composition ?? null))) !== null) {
+                return $asked;
+            }
             [$section, $errors] = $this->checkSection($input, $componentKey, $allowedMedia, $availableIds, '');
             if ($errors) {
                 return [null, $errors];
@@ -184,7 +195,7 @@ final class LandingAiComposer
      * @param array{system?: ?array, tab?: ?array, charter?: ?object, style?: ?array, designMd?: ?string, siteHome?: bool, siteApp?: string, siteTabs?: list<string>, siteStyle?: ?string} $options
      * @throws LandingAiException 502 ou 504
      */
-    public function page(string $prompt, string $locale = 'fr', array $media = [], array $images = [], ?string $componentKey = null, array $options = []): LandingAiPageResult
+    public function page(string $prompt, string $locale = 'fr', array $media = [], array $images = [], ?string $componentKey = null, array $options = []): LandingAiPageResult|LandingAiQuestionsResult
     {
         $stored = $this->site->storedCompositions();
         $families = $componentKey !== null ? [$componentKey] : $this->catalogue->componentKeys();
@@ -207,7 +218,12 @@ final class LandingAiComposer
         $landingHome = $siteHome && ($options['siteApp'] ?? 'boutique') === 'landingpage';
         $asksCommerce = self::asksCommerce($prompt . ' ' . ($tab['brief'] ?? ''));
 
-        return $this->run($payload, LandingAiPromptBuilder::PAGE_TOOL, true, function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds, $system, $tab, $siteHome, $landingHome, $asksCommerce) {
+        $questionsAllowed = self::questionsAllowed($options, $prompt);
+
+        return $this->run($payload, LandingAiPromptBuilder::PAGE_TOOL, true, function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds, $system, $tab, $siteHome, $landingHome, $asksCommerce, $questionsAllowed) {
+            if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, !is_array($input->sections ?? null) || $input->sections === [])) !== null) {
+                return $asked;
+            }
             $sections = is_array($input->sections ?? null) ? $input->sections : [];
             if (!$sections || count($sections) > LandingAiPromptBuilder::PAGE_MAX_SECTIONS) {
                 return [null, [['path' => 'sections', 'message' => sprintf('de 1 à %d sections attendues', LandingAiPromptBuilder::PAGE_MAX_SECTIONS)]]];
@@ -353,6 +369,40 @@ final class LandingAiComposer
         }
 
         return $errors ? [null, $errors] : [['dataType' => $dataType, 'composition' => $composition], []];
+    }
+
+    /**
+     * Questions permises pour cette demande : la console ne les a pas désactivées (noQuestions), aucune réponse n'a été
+     * donnée (un seul tour), ce n'est ni une relecture visuelle ni une page fille d'un site (elles suivent l'accueil).
+     */
+    public static function questionsAllowed(array $options, string $prompt): bool
+    {
+        return ($options['noQuestions'] ?? false) !== true
+            && ($options['answers'] ?? []) === []
+            && preg_match('/^\s*relecture visuelle/iu', $prompt) !== 1;
+    }
+
+    /**
+     * Questions posées par le modèle : résultat « questions » si elles sont permises et valides (rien n'est composé) ;
+     * erreurs renvoyées au modèle si elles ne sont pas permises et qu'il n'a rien composé. Null : composition à vérifier.
+     *
+     * @return array{0: ?LandingAiQuestionsResult, 1: list<array{path: string, message: string}>}|null
+     */
+    private function askedQuestions(object $input, bool $allowed, LandingAiUsageStats $stats, bool $nothingComposed): ?array
+    {
+        if (!LandingAiQuestions::asked($input)) {
+            return null;
+        }
+        if (!$allowed) {
+            // questions non permises : ignorées si le modèle a aussi composé, sinon renvoyées au modèle
+            return $nothingComposed ? [null, [['path' => 'questions', 'message' => 'questions non autorisées pour cette demande (réponses déjà données, ou questions désactivées) : compose avec les réponses, choisis le plus sûr pour le reste et dis-le dans summary']]] : null;
+        }
+        [$questions, $errors] = $this->questions->parse($input);
+        if ($errors) {
+            return [null, $errors];
+        }
+
+        return [new LandingAiQuestionsResult($questions, $this->summary($input), $this->warnings($input->warnings ?? []), $stats), []];
     }
 
     /** @param list<string> $removed */

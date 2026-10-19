@@ -30,6 +30,10 @@ class LandingAiComposeInputDto
     /** Onglet d'une landing page à composer : titre (sans < ni >) et brief facultatif */
     public const MAX_TAB_TITLE_LENGTH = 60;
     public const MAX_TAB_BRIEF_LENGTH = 300;
+    /** Réponses aux questions de l'assistant : nombre, longueur de la question et de chaque réponse, réponses multiples */
+    public const MAX_ANSWERS = 3;
+    public const MAX_ANSWER_LENGTH = 500;
+    public const MAX_ANSWER_CHOICES = 4;
     /** Réglages de style facultatifs : clé => valeurs acceptées */
     public const STYLE_OPTIONS = [
         'tone' => ['sobre', 'equilibre', 'expressif'],
@@ -81,6 +85,15 @@ class LandingAiComposeInputDto
     public array $children = [];
     /** Mode site, usage interne : résumé du style de l'accueil composé, redonné pour chaque page système */
     public ?string $siteStyle = null;
+    /**
+     * Réponses de l'administrateur aux questions de l'assistant (19/10/2026, un seul tour : avec des réponses, le modèle
+     * ne pose plus de question). La question est renvoyée avec sa réponse : le serveur ne garde rien entre deux demandes.
+     *
+     * @var list<array{id: string, question: string, answer: string|list<string>}>
+     */
+    public array $answers = [];
+    /** L'administrateur ne veut pas de questions : le modèle compose avec le choix le plus sûr */
+    public bool $noQuestions = false;
 
     /** @var list<array{path: string, message: string}> erreurs de forme relevées à la lecture */
     private array $shapeErrors = [];
@@ -161,6 +174,20 @@ class LandingAiComposeInputDto
                 }
             }
         }
+        if (isset($body->answers)) {
+            if (!is_array($body->answers) || count($body->answers) > self::MAX_ANSWERS) {
+                $dto->shapeErrors[] = ['path' => 'answers', 'message' => sprintf('liste de %d réponses au plus attendue ({ id, question, answer })', self::MAX_ANSWERS)];
+            } else {
+                foreach ($body->answers as $i => $answer) {
+                    ($read = self::readAnswer($answer, "answers[$i]", $dto->shapeErrors)) !== null ? $dto->answers[] = $read : null;
+                }
+            }
+        }
+        if (isset($body->noQuestions)) {
+            is_bool($body->noQuestions)
+                ? $dto->noQuestions = $body->noQuestions
+                : $dto->shapeErrors[] = ['path' => 'noQuestions', 'message' => 'booléen attendu'];
+        }
         if (isset($body->designMd)) {
             is_string($body->designMd) && trim($body->designMd) !== ''
                 ? $dto->designMd = trim($body->designMd)
@@ -232,6 +259,48 @@ class LandingAiComposeInputDto
      * @param list<array{path: string, message: string}> $errors
      * @return array{title: string, brief: ?string}|null
      */
+    /**
+     * Réponse à une question de l'assistant : { id, question (texte de la question posée), answer (texte, ou liste pour
+     * une question à réponses multiples) }. Texte brut : les balises sont refusées.
+     *
+     * @return array{id: string, question: string, answer: string|list<string>}|null
+     */
+    private static function readAnswer(mixed $answer, string $path, array &$errors): ?array
+    {
+        if (!is_object($answer)) {
+            $errors[] = ['path' => $path, 'message' => 'objet { id, question, answer } attendu'];
+
+            return null;
+        }
+        $valid = true;
+        $id = is_string($answer->id ?? null) ? $answer->id : '';
+        if (!preg_match(\App\Services\LandingAiService\LandingAiQuestions::ID_PATTERN, $id)) {
+            $errors[] = ['path' => "$path.id", 'message' => 'identifiant de la question attendu (celui renvoyé par l\'assistant)'];
+            $valid = false;
+        }
+        $question = is_string($answer->question ?? null) ? trim($answer->question) : '';
+        if (mb_strlen($question) > \App\Services\LandingAiService\LandingAiQuestions::MAX_QUESTION_LENGTH || preg_match('/[<>]/', $question)) {
+            $errors[] = ['path' => "$path.question", 'message' => sprintf('texte de la question de %d caractères au plus, sans < ni >', \App\Services\LandingAiService\LandingAiQuestions::MAX_QUESTION_LENGTH)];
+            $valid = false;
+        }
+        $text = fn (mixed $v) => is_string($v) && mb_strlen(trim($v)) <= self::MAX_ANSWER_LENGTH && !preg_match('/[<>]/', $v);
+        $value = $answer->answer ?? null;
+        if (is_array($value)) {
+            if (count($value) > self::MAX_ANSWER_CHOICES || array_filter($value, fn ($v) => !$text($v)) !== []) {
+                $errors[] = ['path' => "$path.answer", 'message' => sprintf('%d réponses au plus, chacune de %d caractères au plus, sans < ni >', self::MAX_ANSWER_CHOICES, self::MAX_ANSWER_LENGTH)];
+                $valid = false;
+            }
+            $value = array_values(array_map(fn ($v) => trim((string) $v), $value));
+        } elseif (!$text($value)) {
+            $errors[] = ['path' => "$path.answer", 'message' => sprintf('réponse de %d caractères au plus, sans < ni > (texte, ou liste pour plusieurs choix)', self::MAX_ANSWER_LENGTH)];
+            $valid = false;
+        } else {
+            $value = trim($value);
+        }
+
+        return $valid ? ['id' => $id, 'question' => $question, 'answer' => $value] : null;
+    }
+
     private static function readTab(object $tab, string $path, array &$errors): ?array
     {
         $title = is_string($tab->title ?? null) ? trim($tab->title) : '';
@@ -326,6 +395,8 @@ class LandingAiComposeInputDto
             'designMd' => $this->designMd,
             'children' => $this->children,
             'siteStyle' => $this->siteStyle,
+            'answers' => $this->answers,
+            'noQuestions' => $this->noQuestions,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
     }
 

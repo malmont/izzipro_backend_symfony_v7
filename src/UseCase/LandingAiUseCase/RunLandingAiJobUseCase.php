@@ -47,7 +47,10 @@ class RunLandingAiJobUseCase
             }
             $body = $this->runner->run($dto, $usage);
             $this->jobs->succeed($job, $body);
-            if ($dto->mode === 'site') {
+            if ($dto->mode === 'site' && ($body['needsAnswers'] ?? false) === true) {
+                // questions sur l'accueil : les pages attendent la nouvelle demande, crédits libérés
+                $this->sites->cancelChildrenForQuestions($dto);
+            } elseif ($dto->mode === 'site') {
                 // accueil composé : les pages système partent au worker avec sa charte et son style
                 $this->sites->launchChildren($dto, $body);
             }

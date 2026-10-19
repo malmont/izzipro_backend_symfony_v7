@@ -21,7 +21,8 @@ final class LandingAiComposeRunner
 
     /**
      * @return array corps de la réponse : { mode, composition | sections, dataType?, summary, warnings, contentChanges,
-     *               groupChanges, limits, credits, usage } (propositions jamais appliquées : LandingAiContentProposals)
+     *               groupChanges, limits, credits, usage } (propositions jamais appliquées : LandingAiContentProposals) ;
+     *               ou, quand l'IA pose des questions : { mode, needsAnswers: true, questions, summary, warnings, credits, usage }
      * @throws LandingAiException crédits déjà libérés
      */
     public function run(LandingAiComposeInputDto $dto, AiUsage $usage): array
@@ -42,6 +43,15 @@ final class LandingAiComposeRunner
             throw $e;
         }
 
+        if ($result instanceof LandingAiQuestionsResult) {
+            // questions à l'administrateur : rien n'est composé, aucun crédit facturé (l'appel reste compté dans les jetons)
+            $this->quota->completeWithoutCharge($usage, $result->stats);
+
+            return ['mode' => $dto->mode, 'needsAnswers' => true, 'questions' => $result->questions]
+                + ($dto->system !== null ? ['system' => $dto->system] : []) + ($dto->tab !== null ? ['tab' => $dto->tab] : [])
+                + ['summary' => $result->summary, 'warnings' => $result->warnings, 'contentChanges' => [], 'groupChanges' => [], 'limits' => [],
+                    'credits' => $this->quota->credits(), 'usage' => $result->stats->toArray()];
+        }
         $this->quota->complete($usage, $result->stats);
 
         $response = match ($dto->mode) {
@@ -69,7 +79,7 @@ final class LandingAiComposeRunner
      * Options de la demande transmises au moteur : page système (description du catalogue, familles adaptées), onglet
      * d'une landing page, charte, réglages de style, DESIGN.md, style de l'accueil (page d'un site complet).
      *
-     * @return array{system: ?array, tab: ?array, charter: ?object, style: ?array, designMd: ?string, siteStyle: ?string}
+     * @return array{system: ?array, tab: ?array, charter: ?object, style: ?array, designMd: ?string, siteStyle: ?string, answers: list<array>, noQuestions: bool, questionsAllowed: bool}
      */
     private function options(LandingAiComposeInputDto $dto): array
     {
@@ -78,7 +88,8 @@ final class LandingAiComposeRunner
             $system = ['key' => $dto->system, 'route' => $page['route'], 'title' => $page['title']['fr'] ?? $dto->system, 'required' => $page['required'], 'families' => $this->catalogue->familiesForRequired($page['required'])];
         }
 
-        return ['system' => $system, 'tab' => $dto->tab, 'charter' => $dto->charter, 'style' => $dto->style, 'designMd' => $dto->designMd, 'siteStyle' => $dto->siteStyle];
+        return ['system' => $system, 'tab' => $dto->tab, 'charter' => $dto->charter, 'style' => $dto->style, 'designMd' => $dto->designMd, 'siteStyle' => $dto->siteStyle,
+            'answers' => $dto->answers, 'noQuestions' => $dto->noQuestions, 'questionsAllowed' => LandingAiComposer::questionsAllowed(['answers' => $dto->answers, 'noQuestions' => $dto->noQuestions], $dto->prompt)];
     }
 
     /** Encodage des réponses : la composition garde ses {} et ses nombres décimaux (1.0) */

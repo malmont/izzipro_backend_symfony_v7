@@ -115,6 +115,18 @@ final class LandingAiQuotaService
         $this->finish($usage, AiUsage::STATUS_SUCCESS, $stats);
     }
 
+    /**
+     * Questions posées par l'assistant (rien n'est composé) : demande réussie, sans crédit facturé (19/10/2026). Elle
+     * ne compte pas dans le plafond d'échecs ; son coût réel reste visible au super administrateur (jetons).
+     */
+    public function completeWithoutCharge(AiUsage $usage, LandingAiUsageStats $stats): void
+    {
+        $em = $this->emProvider->getEntityManager();
+        $usage = $em->contains($usage) ? $usage : ($em->find(AiUsage::class, $usage->getId()) ?? $usage);
+        $usage->setCredits(0);
+        $this->finish($usage, AiUsage::STATUS_SUCCESS, $stats);
+    }
+
     /** Échec : crédits libérés (le statut failed n'est pas compté) */
     public function release(AiUsage $usage, ?LandingAiUsageStats $stats): void
     {

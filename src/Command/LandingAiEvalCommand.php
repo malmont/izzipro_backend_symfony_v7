@@ -11,6 +11,7 @@ use App\Services\LandingAiService\LandingAiDataSources;
 use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiSiteContext;
 use App\Services\LandingAiService\LandingAiPricing;
+use App\Services\LandingAiService\LandingAiQuestionsResult;
 use App\Services\LandingAiService\LandingAiTuning;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
@@ -154,11 +155,14 @@ class LandingAiEvalCommand extends Command
         $io->writeln(sprintf(' <info>%s</info> %s/%s : « %s »', $case['id'], $componentKey, $case['presetId'], $case['prompt']));
 
         try {
-            $result = $this->composer->edit($componentKey, $before, $case['prompt']);
+            $result = $this->composer->edit($componentKey, $before, $case['prompt'], 'fr', [], [], null, $this->questionOptions($case));
         } catch (LandingAiException $e) {
             return $this->failure($case['id'], 'edit', $e);
         }
 
+        if ($result instanceof LandingAiQuestionsResult) {
+            return $this->questionsReport($case, 'edit', $result);
+        }
         $common = $this->checks->common($before, $result, $componentKey, $allowedMedia, $case['prompt']);
         $specific = ($case['check'])($before, $result->composition, $result, $palette);
 
@@ -181,11 +185,14 @@ class LandingAiEvalCommand extends Command
         $io->writeln(sprintf(' <info>%s</info> %s (création, %d donnée(s)) : « %s »', $case['id'], $componentKey, count($available), $case['prompt']));
 
         try {
-            $result = $this->composer->create($componentKey, $case['prompt'], 'fr', $case['media']);
+            $result = $this->composer->create($componentKey, $case['prompt'], 'fr', $case['media'], null, [], $this->questionOptions($case));
         } catch (LandingAiException $e) {
             return $this->failure($case['id'], 'create', $e);
         }
 
+        if ($result instanceof LandingAiQuestionsResult) {
+            return $this->questionsReport($case, 'create', $result);
+        }
         $knownText = $case['prompt'] . "\n" . implode("\n", array_map(fn ($d) => $d['title'] . ' ' . $d['details'], $available));
         $common = $this->checks->commonCreate($result->composition, $componentKey, $allowedMedia, $knownText);
         $specific = ($case['check'])($result, array_column($available, 'id'));
@@ -225,11 +232,14 @@ class LandingAiEvalCommand extends Command
             $options['system'] = ['key' => $case['system'], 'route' => $page['route'], 'title' => $page['title']['fr'] ?? $case['system'], 'required' => $page['required'], 'families' => $this->catalogue->familiesForRequired($page['required'])];
         }
         try {
-            $result = $this->composer->page($case['prompt'], 'fr', $case['media'], $images, $case['componentKey'], $options);
+            $result = $this->composer->page($case['prompt'], 'fr', $case['media'], $images, $case['componentKey'], $options + $this->questionOptions($case));
         } catch (LandingAiException $e) {
             return $this->failure($case['id'], 'page', $e);
         }
 
+        if ($result instanceof LandingAiQuestionsResult) {
+            return $this->questionsReport($case, 'page', $result);
+        }
         $sections = [...($result->navbar ? [['componentKey' => 'Navbar', 'dataType' => null, 'composition' => $result->navbar]] : []), ...$result->sections, ...($result->footer ? [['componentKey' => 'Footer', 'dataType' => null, 'composition' => $result->footer]] : [])];
         $common = $this->checks->commonPage($sections, $allowedMedia, $knownText);
         $specific = ($case['check'])($result);
@@ -258,7 +268,7 @@ class LandingAiEvalCommand extends Command
         $io->writeln(sprintf(' <info>%s</info> %s/%s (%s) : « %s »', $case['id'], $componentKey, $case['presetId'], implode(', ', $case['images']), $case['prompt']));
 
         try {
-            $result = $this->composer->edit($componentKey, $before, $case['prompt'], 'fr', [], $this->images($case['images']));
+            $result = $this->composer->edit($componentKey, $before, $case['prompt'], 'fr', [], $this->images($case['images']), null, ['noQuestions' => true]);
         } catch (LandingAiException $e) {
             return $this->failure($case['id'], 'review', $e);
         }
@@ -281,6 +291,28 @@ class LandingAiEvalCommand extends Command
             'mediaType' => str_ends_with($file, '.jpg') ? 'image/jpeg' : 'image/png',
             'data' => base64_encode(file_get_contents($this->fixturesDir . '/' . $file)),
         ], $files);
+    }
+
+    /**
+     * Questions de l'assistant (19/10/2026) : seulement pour un cas qui le prévoit (« questions » à true) ; tous les
+     * autres cas les interdisent, pour garder des résultats comparables d'un passage à l'autre.
+     */
+    private function questionOptions(array $case): array
+    {
+        return ['noQuestions' => ($case['questions'] ?? false) !== true, 'answers' => $case['answers'] ?? []];
+    }
+
+    /** Le modèle a posé des questions au lieu de composer : vérification propre au cas (checkQuestions), sans V1 à V10 */
+    private function questionsReport(array $case, string $mode, LandingAiQuestionsResult $result): array
+    {
+        $specific = isset($case['checkQuestions']) ? ($case['checkQuestions'])($result) : ['ok' => false, 'detail' => 'questions posées alors que le cas attend une composition'];
+        $common = array_fill_keys(['V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10'], ['ok' => null, 'detail' => 'questions posées : rien de composé']);
+
+        return [
+            ['id' => $case['id'], 'mode' => $mode, 'prompt' => $case['prompt'], 'status' => 'ok', 'questions' => $result->questions,
+                'checks' => $common, 'specific' => $specific, 'summary' => $result->summary, 'warnings' => $result->warnings, 'usage' => $result->stats->toArray()],
+            $this->row($case['id'], $common, $specific, $result->stats),
+        ];
     }
 
     private function failure(string $id, string $mode, LandingAiException $e): array
