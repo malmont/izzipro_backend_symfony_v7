@@ -40,8 +40,9 @@ class HandleCaisseTransactionUseCase
     /**
      * @param float $transactionAmount montant de la transaction enregistrée (vente : total de la commande)
      * @param float $caisseAmount part en espèces qui entre (vente) ou sort (remboursement) de la caisse ; 0 : $transactionAmount
+     * @param ?int $cashRounding arrondi des espèces contenu dans la transaction (cents, effet sur le tiroir)
      */
-    public function execute(Caisse $caisse, ?Order $order, User $user, float $transactionAmount, int $transactionTypeId, array $cashDetails = [], float $caisseAmount = 0): void
+    public function execute(Caisse $caisse, ?Order $order, User $user, float $transactionAmount, int $transactionTypeId, array $cashDetails = [], float $caisseAmount = 0, ?int $cashRounding = null): void
     {
         $em = $this->emProvider->getEntityManager();
         $connection = $em->getConnection();
@@ -96,9 +97,18 @@ class HandleCaisseTransactionUseCase
                     throw new \InvalidArgumentException('Unknown transaction type');
             }
 
+            // Effet sur les espèces du tiroir (cents, signé), enregistré sur la transaction pour les rapports X et Z
+            $cashAmount = match ($transactionTypeId) {
+                self::SALE => (int) round($caisseAmount),
+                self::REFUND => -(int) round(abs($caisseAmount)),
+                self::DEPOSIT, self::CASH_FUND_DEPOSIT => (int) round(abs($transactionAmount)),
+                self::WITHDRAWAL, self::CASH_FUND_WITHDRAWAL => -(int) round(abs($transactionAmount)),
+                default => 0,
+            };
+
             $em->persist($caisse);
             // createTransaction persiste et flush (session mise à jour et transaction écrites ensemble)
-            $this->caisseTransactionService->createTransaction($caisse, $user, $order, $transactionAmount, $transactionType, $cashDetails);
+            $this->caisseTransactionService->createTransaction($caisse, $user, $order, $transactionAmount, $transactionType, $cashDetails, $cashAmount, $cashRounding);
 
             if ($ownTransaction) {
                 $connection->commit();

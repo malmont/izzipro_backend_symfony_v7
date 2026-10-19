@@ -19,7 +19,24 @@ class TypeCash
     private ?string $name = null;
 
     #[ORM\Column(nullable: true)]
-    private ?float $value = null;
+    private ?float $value = null; // en unités monétaires (dollars), historique
+
+    // Coupures servies au POS (19/10/2026, GET /api/caisse/denominations) : valeur en cents, billet ou pièce, active,
+    // devise, ordre d'affichage. Ids 1 à 10 fixés par le POS (100, 50, 10, 5, 2, 1 $, 25, 10, 5, 1 ¢), 20 $ en 11.
+    #[ORM\Column(nullable: true)]
+    private ?int $valueCents = null;
+
+    #[ORM\Column(length: 4, nullable: true)]
+    private ?string $kind = null;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $active = true;
+
+    #[ORM\Column(length: 3, nullable: true)]
+    private ?string $currency = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $position = null;
 
     /**
      * @var Collection<int, CashDetails>
@@ -35,6 +52,67 @@ class TypeCash
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    /** Valeur en cents (valueCents, sinon value en dollars) */
+    public function getValueCents(): int
+    {
+        return $this->valueCents ?? (int) round(((float) $this->value) * 100);
+    }
+
+    public function setValueCents(?int $valueCents): static
+    {
+        $this->valueCents = $valueCents;
+
+        return $this;
+    }
+
+    public function getKind(): ?string
+    {
+        return $this->kind;
+    }
+
+    public function setKind(?string $kind): static
+    {
+        $this->kind = $kind;
+
+        return $this;
+    }
+
+    public function isActive(): bool
+    {
+        return $this->active;
+    }
+
+    public function setActive(bool $active): static
+    {
+        $this->active = $active;
+
+        return $this;
+    }
+
+    public function getCurrency(): ?string
+    {
+        return $this->currency;
+    }
+
+    public function setCurrency(?string $currency): static
+    {
+        $this->currency = $currency;
+
+        return $this;
+    }
+
+    public function getPosition(): ?int
+    {
+        return $this->position;
+    }
+
+    public function setPosition(?int $position): static
+    {
+        $this->position = $position;
+
+        return $this;
     }
 
     public function getName(): ?string

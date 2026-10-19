@@ -98,6 +98,14 @@ class EntrepriseCrudController extends BaseTenantCrudController
             BooleanField::new('isManagementAppActive', 'Application de gestion'),
             BooleanField::new('isLivingMemoryActive', 'LivingMemory (Mémoires Vivantes)'),
 
+            FormField::addPanel('Caisse (POS)'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posDiscrepancyThreshold', 'Écart de caisse toléré sans motif (cents)')
+                ->setHelp('À la fermeture, un écart entre espèces comptées et attendues au-delà de ce montant exige un motif. 0 : tout écart demande un motif.')
+                ->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCashRoundingStep', 'Arrondi des paiements en espèces (cents)')
+                ->setHelp('Vide : selon la devise (5 ¢ pour le dollar canadien, aucun sinon). 1 : aucun arrondi.')
+                ->setRequired(false)->hideOnIndex(),
+
             FormField::addPanel('Informations Générales'),
             TextField::new('facebookPixelId', 'Facebook Pixel ID')->hideOnIndex(),
             TextareaField::new('conditionOfUse', 'Conditions d\'utilisation'),

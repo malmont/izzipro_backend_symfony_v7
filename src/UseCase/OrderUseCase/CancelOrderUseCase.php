@@ -30,7 +30,8 @@ class CancelOrderUseCase
         HandleCaisseTransactionUseCase $handleCaisseTransactionUseCase,
         TenantEntityManagerProvider $emProvider,
         private readonly CaisseService $caisseService,
-        private readonly CashRegisterResolver $cashRegisters
+        private readonly CashRegisterResolver $cashRegisters,
+        private readonly \App\Services\CaisseService\CashRoundingService $cashRoundingService
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
@@ -76,8 +77,28 @@ class CancelOrderUseCase
             $order->setSubTotal(0);
             $order->setTotalTax(0);
 
+            // Remboursement en espèces d'une vente au comptoir (19/10/2026) : une vente payée entièrement en espèces rend
+            // exactement les espèces encaissées (arrondies ou non) ; sinon le montant rendu est arrondi comme à
+            // l'encaissement (5 ¢ en CAD). Enregistré comme paiement en espèces. Toute autre annulation : inchangée.
+            $posCashRefund = $order->getOrderSource()?->getId() === 2 && $paymentMethod == 2;
+            $cashRefund = null;
+            if ($posCashRefund) {
+                $cashReceived = $otherReceived = 0;
+                foreach ($order->getPayments() as $payment) {
+                    $amount = (int) round((float) $payment->getAmount());
+                    if ($amount > 0) {
+                        $payment->getPaymentMethod()?->getId() === 2 ? $cashReceived += $amount : $otherReceived += $amount;
+                    }
+                }
+                $cashRefund = $cashReceived > 0 && $otherReceived === 0 ? $cashReceived : $this->cashRoundingService->round((int) round($refundAmount));
+            }
+
             // Remboursement du paiement
-            $this->paymentHandlerUseCase->handlePayment($order, -$refundAmount, null, $paymentTypeId, $statusPaymentId, new \DateTime(), null);
+            if ($posCashRefund) {
+                $this->paymentHandlerUseCase->handlePayment($order, -$cashRefund, 2, $paymentTypeId, $statusPaymentId, new \DateTime(), null);
+            } else {
+                $this->paymentHandlerUseCase->handlePayment($order, -$refundAmount, null, $paymentTypeId, $statusPaymentId, new \DateTime(), null);
+            }
 
             // Mise à jour des mouvements de stock (réintégration des quantités)
             foreach ($order->getOrderItems() as $orderItem) {
@@ -91,7 +112,7 @@ class CancelOrderUseCase
             }
 
             if ($paymentMethod == 2) { // Supposons que 2 = Espèces
-                $caisseAmount += $refundAmount;
+                $caisseAmount += $posCashRefund ? $cashRefund : $refundAmount;
             }
             $transactionTypeId = 2; // Type de transaction "Remboursement"
             if ($order->getOrderSource()->getId() === 2) { // 2 = vente POS : seule à toucher une caisse (une commande web ne change pas)
@@ -99,7 +120,8 @@ class CancelOrderUseCase
                 $caisse = $this->caisseService->getOpenCaisseOfOrder($order)
                     ?? ($cashRegisterId !== null ? $this->cashRegisters->openSession($this->cashRegisters->resolve($cashRegisterId)) : null)
                     ?? $this->cashRegisters->requireOpenSession(null, 409);
-                $this->handleCaisseTransactionUseCase->execute($caisse, $order, $refundedBy ?? $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount);
+                $this->handleCaisseTransactionUseCase->execute($caisse, $order, $refundedBy ?? $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount,
+                    $posCashRefund ? -($cashRefund - (int) round($refundAmount)) : null);
             }
 
             // Valider la transaction en base de données

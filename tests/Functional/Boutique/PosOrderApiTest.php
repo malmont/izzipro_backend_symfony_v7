@@ -148,7 +148,8 @@ class PosOrderApiTest extends WebTestCase
 
         $short = $this->request('POST', '/api/order/create-multi-payment', json_encode(['items' => $items, 'paymentMethods' => [['type' => 2, 'amount' => 1.00]]]));
         $this->assertSame(400, $short->getStatusCode());
-        $this->assertStringContainsString('ne correspond pas au total', json_decode($short->getContent(), true)['error']);
+        $this->assertSame('PAYMENT_TOTAL_MISMATCH', json_decode($short->getContent(), true)['error'], 'route caisse : code d\'erreur (19/10/2026)');
+        $this->assertStringContainsString('ne correspond pas au total', json_decode($short->getContent(), true)['message']);
         $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM "order" WHERE total_amount > 0 AND status_id <> 7 AND user_id_id = (SELECT id FROM "user" WHERE email = ?)', [$this->email]), 'aucune commande créée');
 
         $this->assertSame(400, $this->request('POST', '/api/order/create-multi-payment', '{')->getStatusCode());

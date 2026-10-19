@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (185)
+## Boutique et commun (189)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -282,8 +282,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/caisse/cashfunddeposit` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundDeposit` |
 | POST | `/api/caisse/cashfundwithdraw` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::cashFundWithdraw` |
 | POST | `/api/caisse/close` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::closeCaisse` |
+| GET | `/api/caisse/denominations` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::denominations` |
 | POST | `/api/caisse/deposit` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::deposit` |
 | POST | `/api/caisse/open` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::openCaisse` |
+| GET | `/api/caisse/report/x` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::reportX` |
+| GET | `/api/caisse/report/z/{id}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::reportZ` |
+| GET | `/api/caisse/report/z` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::reportZList` |
 | GET | `/api/caisse/transactions` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::getOpenCaisseTransactions` |
 | POST | `/api/caisse/withdraw` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::withdraw` |
 | GET | `/api/caisse` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\CaisseController\CaisseController::getCaisse` |

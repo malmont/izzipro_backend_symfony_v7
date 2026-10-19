@@ -30,7 +30,6 @@ class PosReceiptDto
                 'amount' => $dollars($payment->getAmount()),
             ];
         }
-        $address = $entreprise?->getAddressEntreprise();
         $register = $caisse?->getCashRegister();
 
         return [
@@ -39,17 +38,13 @@ class PosReceiptDto
             'subTotal' => $dollars($order->getSubTotal()),
             'totalTax' => $dollars($order->getTotalTax()),
             'totalAmount' => $dollars($order->getTotalAmount()),
+            // Arrondi des espèces (19/10/2026) : montant réellement dû = totalAmount + cashRounding
+            'cashRounding' => $dollars($order->getCashRounding()),
+            'amountDue' => $dollars($order->getTotalAmount() + $order->getCashRounding()),
             'taxes' => $taxes,
             'payments' => $payments,
             'cashRegister' => $register ? ['id' => $register->getId(), 'name' => $register->getName()] : null,
-            'store' => $entreprise ? [
-                'name' => $entreprise->getName(),
-                'address' => $address
-                    ? trim(implode(', ', array_filter([$address->getStreet1(), $address->getStreet2(), trim(($address->getZip() ?? '') . ' ' . ($address->getCity() ?? '')), $address->getState(), $address->getCountry()])))
-                    : $entreprise->getAdress(),
-                'phone' => $entreprise->getTel(),
-                'taxNumber' => $entreprise->getTvaIntracommunautaire() ?: $entreprise->getEin(),
-            ] : null,
+            'store' => StoreInfoDto::fromEntreprise($entreprise),
         ];
     }
 }

@@ -84,6 +84,10 @@ class Order
     #[ORM\Column(nullable: true)]
     private ?float $shippingCost = null;
 
+    // Arrondi de la part payée en espèces (cents, signé ; vente en caisse, 19/10/2026) : somme des paiements = total + arrondi
+    #[ORM\Column(options: ['default' => 0])]
+    private int $cashRounding = 0;
+
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $guestLicenseNumber = null;
 
@@ -405,6 +409,18 @@ class Order
         }
 
         $this->shippingOrder = $shippingOrder;
+
+        return $this;
+    }
+
+    public function getCashRounding(): int
+    {
+        return $this->cashRounding;
+    }
+
+    public function setCashRounding(int $cashRounding): static
+    {
+        $this->cashRounding = $cashRounding;
 
         return $this;
     }

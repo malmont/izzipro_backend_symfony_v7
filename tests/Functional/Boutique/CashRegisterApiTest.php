@@ -49,7 +49,9 @@ class CashRegisterApiTest extends WebTestCase
         $this->assertSame([$this->mainRegister, $second], array_column($registers, 'id'), 'postes actifs, par identifiant');
         $this->assertSame([null, null], array_column($registers, 'openSession'));
 
-        $this->assertSame(201, $this->open($this->mainRegister)->getStatusCode());
+        $openA = $this->open($this->mainRegister);
+        $this->assertSame(201, $openA->getStatusCode());
+        $carried = (float) json_decode($openA->getContent(), true)['amountTotal']; // solde reporté des sessions précédentes du poste
         $openB = $this->open($second);
         $this->assertSame(201, $openB->getStatusCode(), $openB->getContent());
         $this->assertSame($second, json_decode($openB->getContent(), true)['cashRegisterId']);
@@ -59,14 +61,14 @@ class CashRegisterApiTest extends WebTestCase
 
         $deposit = $this->request('POST', '/api/caisse/deposit', json_encode(['amount' => 10, 'cashDetails' => [], 'cashRegisterId' => $this->mainRegister]));
         $this->assertSame(201, $deposit->getStatusCode(), $deposit->getContent());
-        $this->assertSame([10.0, $this->mainRegister], [(float) json_decode($deposit->getContent(), true)['new_total'], json_decode($deposit->getContent(), true)['cashRegisterId']]);
+        $this->assertSame([$carried + 10.0, $this->mainRegister], [(float) json_decode($deposit->getContent(), true)['new_total'], json_decode($deposit->getContent(), true)['cashRegisterId']]);
 
         [$variant, $total] = $this->counterSale();
         $sale = $this->sell($variant, $total, $second);
         $this->assertSame(201, $sale->getStatusCode(), $sale->getContent());
 
         $sessions = array_column($this->json($this->request('GET', '/api/cash-registers')), 'openSession', 'id');
-        $this->assertSame(10.0, (float) $sessions[$this->mainRegister]['amountTotal'], 'poste principal : son dépôt seulement');
+        $this->assertSame($carried + 10.0, (float) $sessions[$this->mainRegister]['amountTotal'], 'poste principal : son dépôt seulement');
         $this->assertSame((float) $total, (float) $sessions[$second]['amountTotal'], 'second poste : la vente en espèces');
 
         $list = $this->json($this->request('GET', "/api/caisse?cashRegisterId=$second"));
@@ -86,7 +88,7 @@ class CashRegisterApiTest extends WebTestCase
         $this->assertSame(201, $this->open($second)->getStatusCode());
         $sessions = array_column($this->json($this->request('GET', '/api/cash-registers')), 'openSession', 'id');
         $this->assertSame((float) $total, (float) $sessions[$second]['amountTotal'], 'montant initial = dernière session fermée du même poste');
-        $this->assertSame(10.0, (float) $sessions[$this->mainRegister]['amountTotal']);
+        $this->assertSame($carried + 10.0, (float) $sessions[$this->mainRegister]['amountTotal']);
     }
 
     public function testOpeningWithACashFundKeepsItAcrossSessionsAndRecordsTheTime(): void

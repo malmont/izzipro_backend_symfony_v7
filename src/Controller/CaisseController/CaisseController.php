@@ -2,8 +2,12 @@
 
 namespace App\Controller\CaisseController;
 
+use App\Dto\CashRegisterReportOutputDto;
+use App\Dto\CloseCaisseInputDto;
 use App\Entity\Caisse;
 use App\Entity\User;
+use App\Services\CaisseService\DenominationService;
+use App\UseCase\CaisseUseCase\CashReportsUseCase;
 use App\Services\CaisseService\CashRegisterException;
 use App\Services\CaisseService\CashRegisterResolver;
 use App\Services\TenantCacheService;
@@ -31,7 +35,9 @@ class CaisseController extends AbstractController
         private readonly CashRegisterResolver $registers,
         private readonly GestCaisseUseCase $gestCaisseUseCase,
         private readonly GetTransactionsForOpenCaisseUseCase $getTransactionsForOpenCaisseUseCase,
-        private readonly TenantCacheService $cache
+        private readonly TenantCacheService $cache,
+        private readonly CashReportsUseCase $reports,
+        private readonly DenominationService $denominations
     ) {
     }
 
@@ -50,14 +56,58 @@ class CaisseController extends AbstractController
         });
     }
 
+    /**
+     * Fermeture (19/10/2026 : comptage facultatif {countedCash?, cashDetails?, discrepancyReason?, keptFund?}, rapport Z
+     * créé dans tous les cas) ; champs d'avant inchangés, rapport Z complet sous « report ». Code de succès : 200.
+     */
     #[Route('/api/caisse/close', name: 'caisse_close', methods: ['POST'])]
     public function closeCaisse(Request $request): JsonResponse
     {
         return $this->guard(function () use ($request) {
-            $caisse = $this->operations->close($this->registerIdFromBody($request), $this->user());
+            $data = json_decode($request->getContent(), true);
+            $input = CloseCaisseInputDto::fromArray(is_array($data) ? $data : []);
+            $report = $this->operations->close($input->cashRegisterId, $this->user(), $input, $this->locale($request));
 
-            return new JsonResponse(['message' => 'Caisse closed successfully', 'caisse_id' => $caisse->getId(), 'cashRegisterId' => $caisse->getCashRegister()->getId()], 200);
+            return new JsonResponse([
+                'message' => 'Caisse closed successfully', 'caisse_id' => $report->getSession()->getId(), 'cashRegisterId' => $report->getCashRegister()->getId(),
+                'report' => CashRegisterReportOutputDto::detail($report),
+            ], 200);
         });
+    }
+
+    /** Coupures (billets, pièces) de la devise du site, à utiliser dans cashDetails : [{id, label, valueCents, kind, active}] */
+    #[Route('/api/caisse/denominations', name: 'caisse_denominations', methods: ['GET'])]
+    public function denominations(): JsonResponse
+    {
+        return new JsonResponse($this->denominations->list());
+    }
+
+    /** Rapport X de la session ouverte du poste (lecture seule) ; 409 CASH_REGISTER_CLOSED sans session ouverte */
+    #[Route('/api/caisse/report/x', name: 'caisse_report_x', methods: ['GET'])]
+    public function reportX(Request $request): JsonResponse
+    {
+        return $this->guard(fn () => new JsonResponse($this->reports->x($this->registerIdFromQuery($request), $this->locale($request))));
+    }
+
+    /** Rapports Z d'un poste, les plus récents d'abord (?cashRegisterId=, ?from=, ?to= : AAAA-MM-JJ) */
+    #[Route('/api/caisse/report/z', name: 'caisse_report_z_list', methods: ['GET'])]
+    public function reportZList(Request $request): JsonResponse
+    {
+        return $this->guard(fn () => new JsonResponse($this->reports->listZ($this->registerIdFromQuery($request), $request->query->get('from'), $request->query->get('to'))));
+    }
+
+    /** Détail d'un rapport Z (identifiant unique du rapport ; le numéro n'est unique que par poste) */
+    #[Route('/api/caisse/report/z/{id}', name: 'caisse_report_z', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function reportZ(int $id): JsonResponse
+    {
+        return $this->guard(fn () => new JsonResponse($this->reports->z($id)));
+    }
+
+    private function locale(Request $request): string
+    {
+        $locale = (string) $request->query->get('locale', 'fr');
+
+        return preg_match('/^[a-z]{2}$/', $locale) ? $locale : 'fr';
     }
 
     #[Route('/api/caisse/deposit', name: 'caisse_deposit', methods: ['POST'])]

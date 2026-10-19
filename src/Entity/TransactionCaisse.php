@@ -36,6 +36,14 @@ class TransactionCaisse
     #[ORM\Column]
     private ?float $amount = null;
 
+    // Effet de la transaction sur les espèces du tiroir (cents, signé : vente espèces +, remboursement espèces −,
+    // dépôt +, retrait −) et arrondi des espèces qu'elle contient (19/10/2026, rapports X et Z)
+    #[ORM\Column(nullable: true)]
+    private ?int $cashAmount = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $cashRounding = null;
+
     #[ORM\ManyToOne(inversedBy: 'transactionCaisses')]
     #[ORM\JoinColumn(nullable: false)]
     private ?TransactionType $transactionType = null;
@@ -119,6 +127,30 @@ class TransactionCaisse
     public function getAmount(): ?float
     {
         return $this->amount;
+    }
+
+    public function getCashAmount(): ?int
+    {
+        return $this->cashAmount;
+    }
+
+    public function setCashAmount(?int $cashAmount): static
+    {
+        $this->cashAmount = $cashAmount;
+
+        return $this;
+    }
+
+    public function getCashRounding(): ?int
+    {
+        return $this->cashRounding;
+    }
+
+    public function setCashRounding(?int $cashRounding): static
+    {
+        $this->cashRounding = $cashRounding;
+
+        return $this;
     }
 
     public function setAmount(float $amount): static

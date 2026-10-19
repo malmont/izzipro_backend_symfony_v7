@@ -112,6 +112,14 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private ?bool $isLivingMemoryActive = false;
 
+    // Caisse (19/10/2026) : écart de comptage toléré sans motif à la fermeture (cents, 0 = tout écart demande un motif),
+    // et pas d'arrondi des paiements en espèces (cents ; null = selon la devise : 5 pour le CAD, aucun sinon)
+    #[ORM\Column(options: ['default' => 0])]
+    private int $posDiscrepancyThreshold = 0;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $posCashRoundingStep = null;
+
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $metaTitle = null;
 
@@ -485,6 +493,30 @@ class Entreprise implements TranslatableInterface
     public function setIsManagementAppActive(bool $active): static
     {
         $this->isManagementAppActive = $active;
+
+        return $this;
+    }
+
+    public function getPosDiscrepancyThreshold(): int
+    {
+        return $this->posDiscrepancyThreshold;
+    }
+
+    public function setPosDiscrepancyThreshold(?int $cents): static
+    {
+        $this->posDiscrepancyThreshold = max(0, (int) $cents);
+
+        return $this;
+    }
+
+    public function getPosCashRoundingStep(): ?int
+    {
+        return $this->posCashRoundingStep;
+    }
+
+    public function setPosCashRoundingStep(?int $cents): static
+    {
+        $this->posCashRoundingStep = $cents !== null && $cents > 0 ? $cents : null;
 
         return $this;
     }

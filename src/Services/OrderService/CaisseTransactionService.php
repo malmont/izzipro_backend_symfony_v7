@@ -26,7 +26,9 @@ class CaisseTransactionService
         ?Order $order,
         float $amount,
         TransactionType $transactionType,
-        array $cashDetails = []
+        array $cashDetails = [],
+        ?int $cashAmount = null,
+        ?int $cashRounding = null
     ): TransactionCaisse {
 
         $em = $this->emProvider->getEntityManager();
@@ -39,11 +41,14 @@ class CaisseTransactionService
         $transactionCaisse->setTransactionDate(new \DateTime());
         $transactionCaisse->setTransactionType($transactionType);
         $transactionCaisse->setAmount($amount);
+        $transactionCaisse->setCashAmount($cashAmount);
+        $transactionCaisse->setCashRounding($cashRounding);
         
         foreach ($cashDetails as $detail) {
-            $typeCash = $typeCashRepository->find($detail['typeCash']);
-            if (!$typeCash) {
-                throw new \Exception('Invalid TypeCash ID');
+            // Coupure inconnue ou nombre invalide : 400 (500 avant le 19/10/2026, la table des coupures était vide partout)
+            $typeCash = is_array($detail) && is_numeric($detail['typeCash'] ?? null) ? $typeCashRepository->find((int) $detail['typeCash']) : null;
+            if (!$typeCash || !is_numeric($detail['nombreItems'] ?? null) || (int) $detail['nombreItems'] < 0) {
+                throw new \App\Services\CaisseService\CashRegisterException('INVALID_CASH_DETAILS', 'cashDetails : coupure inconnue ou nombre invalide (GET /api/caisse/denominations)', 400);
             }
             $cashDetail = new CashDetails();
             $cashDetail->setTransactionCaisse($transactionCaisse);

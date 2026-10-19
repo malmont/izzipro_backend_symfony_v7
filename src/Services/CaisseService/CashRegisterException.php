@@ -10,8 +10,11 @@ namespace App\Services\CaisseService;
  */
 class CashRegisterException extends \RuntimeException
 {
-    /** @param list<array{path: string, message: string}> $errors */
-    public function __construct(public readonly string $errorCode, string $message, public readonly int $status, public readonly array $errors = [])
+    /**
+     * @param list<array{path: string, message: string}> $errors
+     * @param array<string, mixed> $context champs ajoutés au corps (ex. lastReport, expectedTotal)
+     */
+    public function __construct(public readonly string $errorCode, string $message, public readonly int $status, public readonly array $errors = [], public readonly array $context = [])
     {
         parent::__construct($message);
     }
@@ -19,6 +22,6 @@ class CashRegisterException extends \RuntimeException
     /** @return array<string, mixed> corps de la réponse */
     public function toBody(): array
     {
-        return array_filter(['error' => $this->errorCode, 'message' => $this->getMessage(), 'errors' => $this->errors]);
+        return array_filter(['error' => $this->errorCode, 'message' => $this->getMessage(), 'errors' => $this->errors]) + $this->context;
     }
 }

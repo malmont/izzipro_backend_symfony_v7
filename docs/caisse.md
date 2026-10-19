@@ -12,7 +12,9 @@ n'avait de caisse ni de type de transaction : la caisse n'avait jamais servi sur
 | Poste de caisse `CashRegister` | `cash_register` | un terminal physique ou logique du site : `id`, `name` (unique, 100 caractères), `isActive`, `createdAt`. Jamais supprimé (historique) : désactivé. Chaque site a au moins « Caisse principale » (créé par la migration). |
 | Session `Caisse` | `caisse` | ouverture → fermeture d'un poste : `cashRegister`, `amountTotal` (cents, espèces en caisse), `fonDeCaisse` (cents, part du solde qui sert de fond de caisse ; 0 et non plus null), `isOpen`, `createdAt` (date **et heure** d'ouverture depuis le 19/10/2026), `closedAt`. **Une seule session ouverte par poste** (index unique partiel `uniq_caisse_open_register`). À l'ouverture, `amountTotal` **et `fonDeCaisse`** = ceux de la dernière session fermée **du même poste** (0 sinon) : l'argent reste dans le tiroir. |
 | Mouvement `TransactionCaisse` | `transaction_caisse` | ligne d'une session : type, montant, utilisateur, commande (vente, remboursement), détail des espèces (`CashDetails`). |
-| Types `TransactionType` | `transaction_type` | 1 vente, 2 remboursement, 3 dépôt, 4 ouverture, 5 fermeture, 6 retrait, 7 retrait du fond de caisse, 8 ajout au fond de caisse (insérés par la migration dans toutes les bases). |
+| Types `TransactionType` | `transaction_type` | 1 vente, 2 remboursement, 3 dépôt, 4 ouverture, 5 fermeture, 6 retrait, 7 retrait du fond de caisse, 8 ajout au fond de caisse (insérés par la migration dans toutes les bases). Depuis le 19/10/2026, chaque transaction porte aussi `cashAmount` (effet sur les espèces du tiroir, cents, signé) et `cashRounding` (arrondi des espèces qu'elle contient). |
+| Coupures `TypeCash` | `type_cash` | billets et pièces par devise (19/10/2026) : `valueCents`, `kind` (`bill`/`coin`), `active`, `currency`, `position`. CAD : ids 1 = 100 $, 2 = 50 $, 3 = 10 $, 4 = 5 $, 5 = 2 $, 6 = 1 $, 7 = 25 ¢, 8 = 10 ¢, 9 = 5 ¢, 10 = 1 ¢ (inactive), 11 = 20 $. Gérées dans EasyAdmin (« Type Cash »). |
+| Rapport Z `CashRegisterReport` | `cash_register_report` | clôture d'une session (19/10/2026) : `number` continu **par poste**, instantané figé (`data`) et chiffres clés en colonnes. Un par session ; jamais modifié ni supprimé. EasyAdmin « Rapports Z » en lecture seule. |
 
 Code : `Entity/CashRegister`, `Entity/Caisse`, `Repository/CashRegisterRepository`, `Repository/CaisseRepository`,
 `Services/CaisseService/*` (`CashRegisterResolver`, `CashRegisterService`, `CaisseService`, `CashRegisterException`),
@@ -50,7 +52,11 @@ Codes de succès inchangés depuis l'origine : `close` répond **200**, les autr
 | Méthode, route | Corps / paramètres | Réponse |
 |---|---|---|
 | `POST /api/caisse/open` | `cashRegisterId?`, `cashFund?` (cents, ≥ 0 : fond de caisse ajouté à l'ouverture, enregistré comme « Ajout fond de caisse ») | 201 `{message, caisse_id, cashRegisterId, amountTotal, fonDeCaisse, createdAt}` ; session déjà ouverte sur le poste → 400 `CAISSE_ALREADY_OPEN` ; `cashFund` invalide → 400 `INVALID_AMOUNT` (rien n'est ouvert) |
-| `POST /api/caisse/close` | `cashRegisterId?` | 200 `{message, caisse_id, cashRegisterId}` ; `closedAt` posé ; pas de session ouverte → 400 `CASH_REGISTER_CLOSED` |
+| `POST /api/caisse/close` | `cashRegisterId?`, `countedCash?`, `cashDetails?`, `discrepancyReason?`, `keptFund?` (voir « Clôture ») | 200 `{message, caisse_id, cashRegisterId, report}` (`report` = rapport Z créé) ; pas de session ouverte → 400 `CASH_REGISTER_CLOSED` (+ `lastReport {id, number}`) |
+| `GET /api/caisse/denominations` | — | 200 `[{id, label, valueCents, kind, active}]` pour la devise du site |
+| `GET /api/caisse/report/x?cashRegisterId=&locale=` | poste (règle du poste) | 200 rapport X (voir « Clôture ») ; aucune session ouverte → 409 `CASH_REGISTER_CLOSED` |
+| `GET /api/caisse/report/z?cashRegisterId=&from=&to=` | `from`/`to` : `AAAA-MM-JJ` (journées entières) ou ISO 8601 | 200 `[{id, number, cashRegister, sessionId, openedAt, closedAt, closedBy, salesTotal, expectedCash, countedCash, discrepancy}]`, plus récent d'abord ; date invalide → 400 `INVALID_DATE` |
+| `GET /api/caisse/report/z/{id}` | identifiant unique du rapport (le numéro n'est unique que par poste) | 200 rapport Z complet ; inconnu → 404 `REPORT_NOT_FOUND` |
 | `POST /api/caisse/deposit` (3), `withdraw` (6), `cashfunddeposit` (8), `cashfundwithdraw` (7) | `amount` > 0, `cashDetails?`, `cashRegisterId?` | 201 `{message, new_total, cashRegisterId}` ; `amount` invalide → 400 `INVALID_AMOUNT` ; retrait supérieur au solde → 400 `INSUFFICIENT_FUNDS` |
 | `GET /api/caisse?days=&cashRegisterId=` | `days` : sessions créées depuis N jours | 200 liste de sessions : `{id, amountTotal, fonDeCaisse, createdAt, isOpen, transactionCaisses[], cashRegister{id, name}, closedAt}` |
 | `GET /api/caisse/transactions?cashRegisterId=` | poste (règle ci-dessus) | 200 `[{id, amount, transactionDate, transactionType, cashRegisterId}]` de la session ouverte ; aucune → 404 (comme avant) |
@@ -92,12 +98,20 @@ Route distincte du tunnel web (`/api/order/create`, `create-guest`, webhook Stri
 
 - `items` et `paymentMethods` requis ; `type` = `payment_method.id` (1 carte, 2 espèces, 3 PayPal), `amount` en
   **unités monétaires** (dollars), positif. **La somme des `paymentMethods` doit égaler le total calculé par le serveur**
-  (articles au prix du serveur + livraison + taxes, tolérance 1 cent), sinon 400 et rien n'est créé. Seule la part en
-  espèces (`type` 2) entre en caisse.
+  (articles au prix du serveur + livraison + taxes, tolérance 1 cent), **ou le total plus l'arrondi des espèces** (voir
+  ci-dessous) ; sinon 400 `PAYMENT_TOTAL_MISMATCH` `{error, message, expectedTotal, cashTotal}` (cents) et rien n'est
+  créé. Seule la part en espèces (`type` 2) entre en caisse.
+- **Arrondi des espèces** (19/10/2026) : la part en espèces est envoyée **déjà arrondie** au pas du site (5 ¢ en CAD :
+  ,01 et ,02 vers le bas, ,03 à ,07 vers ,05, ,08 et ,09 vers le haut ; aucun arrondi pour les autres devises ;
+  réglable dans la fiche entreprise, « Arrondi des paiements en espèces »). Le serveur accepte `espèces = arrondi(total −
+  parts non espèces)` et enregistre l'écart (−2 à +2 ¢) dans `order.cash_rounding` (0 pour toute autre commande) et sur
+  la transaction de caisse. Le total fiscal (`totalAmount`, taxes) ne change pas ; la somme des paiements vaut total +
+  arrondi. La part espèces exacte (sans arrondi) reste acceptée.
 - Total à encaisser : `POST /api/cart/quote` (public) avec les mêmes `items` **et le `cashRegisterId`** : sans
   `shippingAddress`, un devis qui porte `cashRegisterId` est taxé à l'adresse de la fiche entreprise, comme la vente
   (19/10/2026) ; `total` en cents. Sans `cashRegisterId` (boutique web), un devis sans adresse reste hors taxes
-  (`taxStatus: address_required`). Une `shippingAddress` fournie l'emporte toujours.
+  (`taxStatus: address_required`). Une `shippingAddress` fournie l'emporte toujours. Le devis de caisse renvoie en plus
+  `cashTotal` : total à payer si tout est réglé en espèces, déjà arrondi (cents) ; absent sans `cashRegisterId`.
 - `orderSource` 2 (caisse) et `typeOrder` 1 (vente) par défaut ; `typeOrder` 2 = retour (montants négatifs).
 - `addressId` et `carrierId` **facultatifs** : une vente au comptoir n'a ni adresse de livraison ni transporteur, ni
   frais de port ; les **taxes sont alors calculées sur l'adresse de la fiche entreprise** du site (lieu de la vente,
@@ -112,7 +126,8 @@ Route distincte du tunnel web (`/api/order/create`, `create-guest`, webhook Stri
   (16/10/2026, `Dto/PosReceiptDto`), montants en dollars : `reference`, `createdAt` (ISO 8601), `subTotal`,
   `totalTax`, `totalAmount`, `taxes: [{name, rate, amount}]`, `payments: [{type, label, amount}]` (`type` =
   `payment_method.id`, `label` dans la langue `?locale=`), `cashRegister: {id, name}`, `store: {name, address, phone,
-  taxNumber}` (fiche entreprise du site ; `taxNumber` = numéro de TVA, sinon SIRET). E-mails de confirmation envoyés
+  taxNumber}` (fiche entreprise du site ; `taxNumber` = numéro de TVA, sinon SIRET), `cashRounding` et `amountDue`
+  (= `totalAmount` + `cashRounding`, montant réellement payé, 19/10/2026). E-mails de confirmation envoyés
   comme pour le web. `GET /api/orders/{id}` (client ou jeton invité) ne donne ni les taxes, ni les paiements, ni le poste.
 
 Autres refus : 400 `INVALID_BODY`, `ITEMS_REQUIRED`, `PAYMENT_METHODS_REQUIRED`, `PAYMENT_METHODS_INVALID` ;
@@ -126,15 +141,57 @@ alors celui qui rembourse). Seule
 l'annulation d'une **vente POS** (`orderSource` 2) touche une caisse : le remboursement va au **poste de la vente
 d'origine** si sa session est ouverte, sinon au poste `cashRegisterId` du corps s'il a une session ouverte, sinon au
 poste unique du site (règle du poste) ; aucune session ouverte → 409 `CASH_REGISTER_CLOSED`. `paymentMethod` 2
-(espèces) : le montant sort de la caisse (solde insuffisant → 400 `INSUFFICIENT_FUNDS`). L'annulation d'une commande
-web ne change pas.
+(espèces) : le montant sort de la caisse (solde insuffisant → 400 `INSUFFICIENT_FUNDS`) ; pour une vente au comptoir,
+une vente payée entièrement en espèces rend **exactement les espèces encaissées** (arrondies ou non) ; sinon le montant
+rendu est **arrondi comme à l'encaissement** (5 ¢ en CAD). Enregistré comme remboursement en espèces.
+L'annulation d'une commande web ne change pas.
+
+## Clôture : rapport X, comptage, rapport Z (19/10/2026)
+
+**Rapport X** (`GET /api/caisse/report/x`, session ouverte, lecture seule) et contenu du **rapport Z** (même calcul,
+figé à la fermeture), montants en cents :
+`{cashRegister{id,name}, sessionId, openedAt, openedBy{id,email,name}, openingAmount (solde reporté),
+openingFund (fond reporté), currentFund, sales{count, total, cash, byPaymentMethod[{type,label,count,total}]},
+taxes[{label, rate, amount}], refunds{count, total, cash, byPaymentMethod[…]}, discounts{count:0,total:0},
+movements{deposits, withdrawals, fundDeposits, fundWithdrawals}, cashRounding{count, total}, expectedCash,
+discrepancyThreshold, store{name, address, phone, taxNumber}}`.
+- `expectedCash` = `openingAmount` + ventes espèces − remboursements espèces + dépôts − retraits + ajouts de fond −
+  retraits de fond (arrondis compris) : c'est le solde tenu par la caisse.
+- `sales.total` = total fiscal des ventes ; `byPaymentMethod` = montants réellement reçus par moyen (espèces arrondies).
+- `taxes` : taxes des ventes de la session, nettes des annulations faites pendant la session (une annulation remet
+  aujourd'hui les taxes de la commande à 0 ; une contre-écriture viendra avec le chantier C2).
+- `fundDeposits` comprend le `cashFund` donné à l'ouverture.
+
+**Fermeture** `POST /api/caisse/close {cashRegisterId?, countedCash?, cashDetails?: [{typeCash, nombreItems}],
+discrepancyReason?, keptFund?}` :
+- `cashDetails` (coupures de `GET /api/caisse/denominations`) : le serveur calcule `countedCash` ; si `countedCash` est
+  aussi envoyé et diffère → 400 `COUNT_MISMATCH` (+ `countedFromDetails`). Coupure inconnue → 400 `INVALID_CASH_DETAILS`.
+- Écart = `countedCash` − `expectedCash`. Au-delà du seuil du site (fiche entreprise, « Écart de caisse toléré sans
+  motif », défaut 0), sans `discrepancyReason` → 400 `DISCREPANCY_REASON_REQUIRED` (+ `expectedCash`, `countedCash`,
+  `discrepancy`).
+- `keptFund` : fond laissé dans le tiroir, entre 0 et `countedCash` (défaut `countedCash`), sinon 400 `INVALID_AMOUNT` ;
+  sans comptage, `keptFund` → 400 `INVALID_AMOUNT`. **C'est lui qui est reporté** (solde et fond) à l'ouverture
+  suivante ; `bankDeposit` = `countedCash` − `keptFund`.
+- Sans comptage : fermeture comme avant (solde reporté en entier) et **rapport Z quand même**, champs de comptage à `null`.
+- Le rapport Z reçoit le numéro suivant du poste, sous verrou de la ligne du poste et dans la même transaction SQL que
+  la fermeture : suite sans trou, un seul Z par session ; un second envoi répond 400 `CASH_REGISTER_CLOSED` avec
+  `lastReport`. Le détail des coupures est aussi gardé sur la transaction « Fermeture ».
+
+**Rapport Z** (réponse de la fermeture, `GET /api/caisse/report/z/{id}`) : `{id, number}` + le contenu du rapport X au
+moment de la fermeture + `{closedAt, closedBy, countedCash, cashDetails[{typeCash, label, valueCents, count,
+totalCents}], discrepancy, discrepancyReason, keptFund, bankDeposit}`.
+
+Droits : toutes ces routes sont sous `/api/caisse` (caissier, responsable de caisse, administrateur).
 
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la
 mise à jour de `amountTotal`, puis écrit la `TransactionCaisse` ; il s'exécute dans la transaction SQL de l'appelant
 (vente, remboursement) ou dans la sienne. Les refus sont des `CashRegisterException` (`errorCode`, `status`,
-`errors`), rendues `{error, message, errors?}` par les contrôleurs.
+`errors`, `context`), rendues `{error, message, errors?, …context}` par les contrôleurs. Rapports :
+`Services/CaisseService/CashSessionReportBuilder` (calcul), `UseCase/CaisseUseCase/CashReportsUseCase` (X, liste et
+détail des Z), `CaisseOperationsUseCase::close` (comptage, Z) ; coupures : `DenominationService` ; arrondi :
+`CashRoundingService`. Schéma : `migrations/Version20261019130000.php`, `scripts/migrate_all_v2_caisse_closing.sh`.
 
 ## Connexion du POS
 

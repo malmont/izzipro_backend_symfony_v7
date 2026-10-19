@@ -412,6 +412,10 @@ class OrderController extends AbstractController
         // Les moyens de paiement doivent couvrir exactement le total calculé par le serveur (négatif pour un retour)
         $paid = (int) round(array_sum(array_map(fn (PaymentMethodDTO $m) => $m->getAmount(), $paymentMethods)) * 100);
         $dto->setVerifiedPaymentAmount($typeOrder === self::TYPE_ORDER_SALE ? $paid : -$paid);
+        // Part espèces (type 2, déjà arrondie par le POS) et le reste : contrôle avec l'arrondi des espèces (19/10/2026)
+        $sign = $typeOrder === self::TYPE_ORDER_SALE ? 1 : -1;
+        $cash = (int) round(array_sum(array_map(fn (PaymentMethodDTO $m) => $m->getType() === 2 ? $m->getAmount() : 0, $paymentMethods)) * 100);
+        $dto->setPaymentSplit($sign * $cash, $sign * ($paid - $cash));
         // Poste de caisse (facultatif : poste unique sinon) ; sans session ouverte → 409 CASH_REGISTER_CLOSED, rien n'est créé
         $dto->setCashRegisterId(is_numeric($data['cashRegisterId'] ?? null) ? (int) $data['cashRegisterId'] : null);
 

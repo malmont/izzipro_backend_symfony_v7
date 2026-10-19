@@ -15,7 +15,7 @@ use App\Services\OrderService\OrderTaxAddressResolver;
  */
 class QuoteCartUseCase
 {
-    public function __construct(private readonly CartQuoteCalculator $calculator, private readonly OrderTaxAddressResolver $taxAddress)
+    public function __construct(private readonly CartQuoteCalculator $calculator, private readonly OrderTaxAddressResolver $taxAddress, private readonly \App\Services\CaisseService\CashRoundingService $cashRounding)
     {
     }
 
@@ -26,13 +26,19 @@ class QuoteCartUseCase
      */
     public function execute(array $body): array
     {
-        if (is_numeric($body['cashRegisterId'] ?? null) && !is_array($body['shippingAddress'] ?? null)) {
+        $counter = is_numeric($body['cashRegisterId'] ?? null);
+        if ($counter && !is_array($body['shippingAddress'] ?? null)) {
             $store = $this->taxAddress->forStore();
             if ($store !== null) {
                 $body['shippingAddress'] = $store;
             }
         }
+        $quote = $this->calculator->quote(CartQuoteInputDto::fromArray($body));
+        if ($counter) {
+            // Devis de caisse seulement (19/10/2026) : total à payer si tout est réglé en espèces, déjà arrondi (cents)
+            $quote['cashTotal'] = $this->cashRounding->round((int) $quote['total']);
+        }
 
-        return $this->calculator->quote(CartQuoteInputDto::fromArray($body));
+        return $quote;
     }
 }

@@ -36,6 +36,9 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     private ?int $verifiedPaymentAmount = null;
     // Poste de caisse de la vente (15/10/2026) ; null : poste unique du site (CashRegisterResolver)
     private ?int $cashRegisterId = null;
+    // Parts espèces et non espèces des paiements (cents, signées ; route caisse, 19/10/2026) : contrôle avec arrondi
+    private ?int $cashCents = null;
+    private ?int $nonCashCents = null;
 
     public function __construct(
         int $userId,
@@ -150,6 +153,23 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     public function getCashRegisterId(): ?int
     {
         return $this->cashRegisterId;
+    }
+
+    public function setPaymentSplit(int $cashCents, int $nonCashCents): self
+    {
+        $this->cashCents = $cashCents;
+        $this->nonCashCents = $nonCashCents;
+        return $this;
+    }
+
+    public function getCashCents(): ?int
+    {
+        return $this->cashCents;
+    }
+
+    public function getNonCashCents(): ?int
+    {
+        return $this->nonCashCents;
     }
 
     // ✅ Getters pour les données de paiement Square

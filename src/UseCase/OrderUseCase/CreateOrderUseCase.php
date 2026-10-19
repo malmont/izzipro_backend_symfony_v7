@@ -46,7 +46,8 @@ class CreateOrderUseCase
         TenantEntityManagerProvider $emProvider,
         Security $security,
         HandleBookingUseCase $handleBookingUseCase,
-        private readonly CashRegisterResolver $cashRegisters
+        private readonly CashRegisterResolver $cashRegisters,
+        private readonly \App\Services\CaisseService\CashRoundingService $cashRoundingService
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -97,7 +98,13 @@ class CreateOrderUseCase
             // Paiement Stripe vérifié (web) ou somme des moyens de paiement (caisse, 15/10/2026) : le montant doit
             // correspondre au total calculé par le serveur (sinon un petit paiement pouvait valider une grosse commande).
             // Tolérance : 1 centime d'arrondi. Sans montant (EasyAdmin) : pas de contrôle, comme avant.
-            if ($orderDTO->getVerifiedPaymentAmount() !== null
+            // Vente en caisse (create-multi-payment) : part espèces arrondie acceptée (5 ¢ en CAD), arrondi gardé sur la
+            // commande (19/10/2026). Les autres parcours (web, tunnel Stripe, EasyAdmin) gardent le contrôle ci-dessous.
+            $cashRounding = 0;
+            if ($orderDTO instanceof CreateOrderMultiPaymentDTO && $orderDTO->getCashCents() !== null) {
+                $cashRounding = $this->cashRoundingService->checkCounterPayment((int) round($totalAmount), $orderDTO->getCashCents(), (int) $orderDTO->getNonCashCents());
+                $order->setCashRounding($cashRounding);
+            } elseif ($orderDTO->getVerifiedPaymentAmount() !== null
                 && abs((int) round($totalAmount) - $orderDTO->getVerifiedPaymentAmount()) > 1) {
                 throw new \Exception(sprintf(
                     'Le montant payé (%.2f) ne correspond pas au total de la commande (%.2f).',
@@ -154,7 +161,7 @@ class CreateOrderUseCase
                 // unique du site) ; poste sans session ouverte → 409 CASH_REGISTER_CLOSED et la transaction est annulée
                 $transactionTypeId = $typeOrderId === 1 ? 1 : 2;
                 $caisse = $this->cashRegisters->requireOpenSession($orderDTO instanceof CreateOrderMultiPaymentDTO ? $orderDTO->getCashRegisterId() : null, 409);
-                $this->handleCaisseTransactionUseCase->execute($caisse, $order, $user, $totalAmount, $transactionTypeId, [], $caisseAmount);
+                $this->handleCaisseTransactionUseCase->execute($caisse, $order, $user, $totalAmount, $transactionTypeId, [], $caisseAmount, $orderDTO instanceof CreateOrderMultiPaymentDTO ? $cashRounding : null);
             }
 
             $em->flush();

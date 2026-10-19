@@ -507,6 +507,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Postes de caisse', 'fas fa-store', \App\Entity\CashRegister::class);
         yield MenuItem::linkToRoute('Clés des applications', 'fas fa-key', 'admin_app_keys');
         yield MenuItem::linkToCrud('Caisse', 'fas fa-cash-register', Caisse::class);
+        yield MenuItem::linkToCrud('Rapports Z', 'fas fa-file-invoice-dollar', \App\Entity\CashRegisterReport::class)->setController(CashRegisterReportCrudController::class);
         yield MenuItem::linkToCrud('Transaction Caisse', 'fas fa-cash-register', TransactionCaisse::class)->setController(TransactionCaisseCrudController::class);
         yield MenuItem::linkToCrud('Transaction Type caisse', 'fas fa-exchange-alt', TransactionType::class);
         yield MenuItem::linkToCrud('Cash Details', 'fas fa-money-bill-wave', CashDetails::class)->setController(CashDetailsCrudController::class);

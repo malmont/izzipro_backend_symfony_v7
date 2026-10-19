@@ -23,6 +23,12 @@ class TypeCashCrudController extends BaseTenantCrudController
                 ->setHelp('Exemple : Billet 100$, Billet 50$, Pièce 2$')
                 ->setRequired(true),
             MoneyField::new('value', 'Valeur')->setCurrency('USD'),
+            // Coupures servies au POS (19/10/2026, GET /api/caisse/denominations)
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('valueCents', 'Valeur (cents)')->setHelp('Utilisée par la caisse ; vide : calculée depuis la valeur'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('kind', 'Genre')->setChoices(['Billet' => 'bill', 'Pièce' => 'coin'])->setRequired(false),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\TextField::new('currency', 'Devise (ISO)')->setHelp('CAD, EUR…'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('position', 'Ordre'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField::new('active', 'Active')->renderAsSwitch(false),
 
         ];
     }
