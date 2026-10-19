@@ -9,6 +9,7 @@ use App\Services\LandingAiService\LandingAiException;
 use App\UseCase\LandingAiUseCase\ComposeLandingSectionUseCase;
 use App\UseCase\LandingAiUseCase\ExportLandingDesignMdUseCase;
 use App\UseCase\LandingAiUseCase\ManageLandingAiInstructionsUseCase;
+use App\UseCase\LandingAiUseCase\ManageLandingAiMemoryUseCase;
 use App\UseCase\LandingAiUseCase\GetLandingAiJobUseCase;
 use App\UseCase\LandingAiUseCase\GetLandingAiUsageUseCase;
 use App\UseCase\LandingAiUseCase\WriteLandingVideoPromptUseCase;
@@ -30,7 +31,8 @@ class LandingAiController extends AbstractController
         private readonly GetLandingAiJobUseCase $jobUseCase,
         private readonly WriteLandingVideoPromptUseCase $videoPromptUseCase,
         private readonly ExportLandingDesignMdUseCase $designMdUseCase,
-        private readonly ManageLandingAiInstructionsUseCase $instructionsUseCase
+        private readonly ManageLandingAiInstructionsUseCase $instructionsUseCase,
+        private readonly ManageLandingAiMemoryUseCase $memoryUseCase
     ) {
     }
 
@@ -118,6 +120,45 @@ class LandingAiController extends AbstractController
             }
 
             return $this->json($this->instructionsUseCase->update($body));
+        } catch (LandingAiException $e) {
+            return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
+        }
+    }
+
+    /** Échanges gardés pour une section ou une page : ?memoryKey= */
+    #[Route('/memory', name: 'api_landingpage_ai_memory', methods: ['GET'])]
+    public function memory(Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->memoryUseCase->entries($request->query->get('memoryKey')));
+        } catch (LandingAiException $e) {
+            return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
+        }
+    }
+
+    /** Oublie les échanges d'une section ou d'une page : ?memoryKey= */
+    #[Route('/memory', name: 'api_landingpage_ai_memory_forget', methods: ['DELETE'])]
+    public function forgetMemory(Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->memoryUseCase->forget($request->query->get('memoryKey')));
+        } catch (LandingAiException $e) {
+            return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
+        }
+    }
+
+    /** Issue d'une proposition (applied, rejected, undone), indiquée par la console : { outcome } */
+    #[Route('/usage/{id}/outcome', name: 'api_landingpage_ai_usage_outcome', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function outcome(int $id, Request $request): JsonResponse
+    {
+        try {
+            try {
+                $body = json_decode($request->getContent(), false, 4, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                throw LandingAiException::badRequest('Corps JSON invalide.');
+            }
+
+            return $this->json($this->memoryUseCase->outcome($id, $body));
         } catch (LandingAiException $e) {
             return new JsonResponse($e->toArray(), $e->getStatusCode(), $e->getHeaders());
         }

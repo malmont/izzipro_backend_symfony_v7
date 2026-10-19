@@ -93,7 +93,7 @@ class ComposeLandingSectionUseCase
                     count($dto->pages) + 1, LandingAiSiteOrchestrator::cost($dto), $credits['remaining']
                 ));
             }
-            $usage = $this->quota->reserve($dto->mode, $dto->componentKey ?? '', $cost, $userIdentifier, $dto->prompt, LandingAiQuotaService::JOB_RESERVATION_TTL_SECONDS);
+            $usage = $this->quota->reserve($dto->mode, $dto->componentKey ?? '', $cost, $userIdentifier, $dto->prompt, LandingAiQuotaService::JOB_RESERVATION_TTL_SECONDS, $dto->memoryKey);
             $job = null;
             try {
                 if ($dto->mode === 'site') {
@@ -114,7 +114,7 @@ class ComposeLandingSectionUseCase
             return new LandingAiComposeOutputDto(202, ['jobId' => $job->getId(), 'credits' => $this->quota->credits()], ['Location' => '/api/landingpage-ai/jobs/' . $job->getId()]);
         }
 
-        $usage = $this->quota->reserve($dto->mode, $dto->componentKey ?? '', $cost, $userIdentifier, $dto->prompt);
+        $usage = $this->quota->reserve($dto->mode, $dto->componentKey ?? '', $cost, $userIdentifier, $dto->prompt, LandingAiQuotaService::RESERVATION_TTL_SECONDS, $dto->memoryKey);
 
         return new LandingAiComposeOutputDto(200, $this->runner->run($dto, $usage));
     }

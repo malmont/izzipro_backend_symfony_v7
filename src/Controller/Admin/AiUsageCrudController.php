@@ -112,6 +112,9 @@ class AiUsageCrudController extends BaseTenantCrudController
             IntegerField::new('outputTokens', 'Jetons en sortie')->onlyOnDetail(),
             DateTimeField::new('completedAt', 'Terminée le')->setFormat('dd/MM/yyyy HH:mm:ss')->onlyOnDetail(),
             TextField::new('tenant', 'Site')->onlyOnDetail(),
+            TextField::new('memoryKey', 'Clé de mémoire (section ou page)')->onlyOnDetail(),
+            TextField::new('summary', 'Résumé de la réponse (mémoire de l\'assistant)')->onlyOnDetail(),
+            TextField::new('outcome', 'Issue indiquée par la console')->onlyOnDetail(),
         ];
         if ($this->isGranted('ROLE_SUPER_ADMIN')) {
             // champ calculé : s'appuie sur une propriété existante, la valeur affichée vient de formatValue

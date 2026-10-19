@@ -16,7 +16,8 @@ final class LandingAiComposeRunner
         private readonly LandingAiQuotaService $quota,
         private readonly LandingAiCatalogue $catalogue,
         private readonly LandingAiCharterExtractor $charters,
-        private readonly LandingAiInstructionsService $instructions
+        private readonly LandingAiInstructionsService $instructions,
+        private readonly LandingAiMemoryService $memory
     ) {
     }
 
@@ -48,12 +49,12 @@ final class LandingAiComposeRunner
             // questions à l'administrateur : rien n'est composé, aucun crédit facturé (l'appel reste compté dans les jetons)
             $this->quota->completeWithoutCharge($usage, $result->stats);
 
-            return ['mode' => $dto->mode, 'needsAnswers' => true, 'questions' => $result->questions]
+            return ['mode' => $dto->mode, 'requestId' => $usage->getId(), 'needsAnswers' => true, 'questions' => $result->questions]
                 + ($dto->system !== null ? ['system' => $dto->system] : []) + ($dto->tab !== null ? ['tab' => $dto->tab] : [])
                 + ['summary' => $result->summary, 'warnings' => $result->warnings, 'contentChanges' => [], 'groupChanges' => [], 'limits' => [],
                     'credits' => $this->quota->credits(), 'usage' => $result->stats->toArray()];
         }
-        $this->quota->complete($usage, $result->stats);
+        $this->quota->complete($usage, $result->stats, $result->summary);
 
         $response = match ($dto->mode) {
             'page' => ['mode' => 'page', 'sections' => $result->sections] + ($dto->system !== null ? ['system' => $dto->system] : []) + ($dto->tab !== null ? ['tab' => $dto->tab] : []) + ($dto->charter !== null ? ['charter' => $dto->charter] : []),
@@ -66,6 +67,7 @@ final class LandingAiComposeRunner
         };
 
         return $response + [
+            'requestId' => $usage->getId(),
             'summary' => $result->summary,
             'warnings' => $result->warnings,
             'contentChanges' => $result->proposals['contentChanges'],
@@ -90,7 +92,9 @@ final class LandingAiComposeRunner
         }
 
         return ['system' => $system, 'tab' => $dto->tab, 'charter' => $dto->charter, 'style' => $dto->style, 'designMd' => $dto->designMd, 'siteStyle' => $dto->siteStyle,
-            'answers' => $dto->answers, 'noQuestions' => $dto->noQuestions, 'history' => $dto->history, 'instructions' => $this->instructions->current(), 'questionsAllowed' => LandingAiComposer::questionsAllowed(['answers' => $dto->answers, 'noQuestions' => $dto->noQuestions], $dto->prompt)];
+            'answers' => $dto->answers, 'noQuestions' => $dto->noQuestions, 'instructions' => $this->instructions->current(),
+            // historique : celui de la console s'il est envoyé, sinon la mémoire gardée pour cette section ou cette page
+            'history' => $dto->history !== [] || $dto->memoryKey === null ? $dto->history : $this->memory->history($dto->memoryKey), 'questionsAllowed' => LandingAiComposer::questionsAllowed(['answers' => $dto->answers, 'noQuestions' => $dto->noQuestions], $dto->prompt)];
     }
 
     /** Encodage des réponses : la composition garde ses {} et ses nombres décimaux (1.0) */

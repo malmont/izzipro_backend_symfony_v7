@@ -9,7 +9,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
   leurs propres vérifications : `#[IsGranted]` est signalé, les autres (voters, contrôles dans le code) sont dans les fiches.
 - Toutes les routes sont résolues pour le tenant de la requête (en-tête `X-Tenant-Host`, voir `docs/architecture.md`).
 
-## Landing Page (17)
+## Landing Page (20)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -19,6 +19,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/landingpage-ai/instructions` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::instructions` |
 | PUT | `/api/landingpage-ai/instructions` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::updateInstructions` |
 | GET | `/api/landingpage-ai/jobs/{jobId}` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::job` |
+| DELETE | `/api/landingpage-ai/memory` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::forgetMemory` |
+| GET | `/api/landingpage-ai/memory` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::memory` |
+| POST | `/api/landingpage-ai/usage/{id}/outcome` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::outcome` |
 | GET | `/api/landingpage-ai/usage` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::usage` |
 | POST | `/api/landingpage-ai/video-prompt` | ROLE_ADMIN | `Controller\LandingAiController\LandingAiController::videoPrompt` |
 | POST | `/api/landingpage-audit/{id}/restore` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ContentAuditController\ContentAuditController::restore` |

@@ -107,6 +107,12 @@ class LandingAiComposeInputDto
      * @var list<array{prompt: string, summary: string, outcome: ?string}>
      */
     public array $history = [];
+    /**
+     * Clé de mémoire de la section ou de la page (19/10/2026), choisie par la console et stable d'une session à l'autre :
+     * le résumé de la réponse est gardé sous cette clé, et sans « history » les derniers échanges gardés sont redonnés
+     * au modèle (LandingAiMemoryService).
+     */
+    public ?string $memoryKey = null;
 
     /** @var list<array{path: string, message: string}> erreurs de forme relevées à la lecture */
     private array $shapeErrors = [];
@@ -204,6 +210,11 @@ class LandingAiComposeInputDto
                     ($read = self::readExchange($exchange, "history[$i]", $dto->shapeErrors)) !== null ? $dto->history[] = $read : null;
                 }
             }
+        }
+        if (isset($body->memoryKey)) {
+            is_string($body->memoryKey) && preg_match(\App\Services\LandingAiService\LandingAiMemoryService::KEY_PATTERN, $body->memoryKey)
+                ? $dto->memoryKey = $body->memoryKey
+                : $dto->shapeErrors[] = ['path' => 'memoryKey', 'message' => 'clé de mémoire de 1 à 120 caractères attendue (lettres, chiffres, : . _ -)'];
         }
         if (isset($body->noQuestions)) {
             is_bool($body->noQuestions)
@@ -453,6 +464,7 @@ class LandingAiComposeInputDto
             'answers' => $this->answers,
             'noQuestions' => $this->noQuestions,
             'history' => $this->history,
+            'memoryKey' => $this->memoryKey,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
     }
 

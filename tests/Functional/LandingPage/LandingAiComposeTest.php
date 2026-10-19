@@ -985,6 +985,61 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertSame([], FakeLandingAiClient::$requests);
     }
 
+    public function testMemoryKeepsSummariesPerSectionAndGivesThemBackWithoutConsoleHistory(): void
+    {
+        $edit = fn (string $prompt, array $extra = []) => $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => $prompt] + $extra);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#C62828']]], 'Titre passé en rouge.');
+        $first = json_decode($edit('Mets le titre en rouge.', ['memoryKey' => 'accueil:section-3'])->getContent());
+        $this->assertIsInt($first->requestId);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['size' => 40]]], 'Titre agrandi.');
+        $edit('Titre plus grand.', ['memoryKey' => 'autre-section']);
+
+        // issue indiquée par la console
+        $outcome = $this->request('POST', '/api/landingpage-ai/usage/' . $first->requestId . '/outcome', json_encode(['outcome' => 'rejected']));
+        $this->assertSame(200, $outcome->getStatusCode(), $outcome->getContent());
+        $this->assertSame('rejected', json_decode($outcome->getContent())->outcome);
+
+        // même section, sans historique de la console : la mémoire est redonnée au modèle
+        FakeLandingAiClient::reset();
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#1B5E20']]], 'Titre en vert.');
+        $edit('Alors en vert.', ['memoryKey' => 'accueil:section-3']);
+        $text = FakeLandingAiClient::$requests[0]['messages'][0]['content'];
+        $this->assertStringContainsString("<historique_console>\nÉchanges précédents sur cette section ou cette page, du plus ancien au plus récent :\n1. Demande : Mets le titre en rouge. → Réponse : Titre passé en rouge. (refusé par l'administrateur)\n</historique_console>", $text, 'seulement les échanges de cette clé');
+
+        // l'historique de la console prime sur la mémoire
+        FakeLandingAiClient::reset();
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]]);
+        $edit('En noir.', ['memoryKey' => 'accueil:section-3', 'history' => [['prompt' => 'Échange de la console', 'summary' => 'Fait.']]]);
+        $this->assertStringContainsString('1. Demande : Échange de la console → Réponse : Fait.', FakeLandingAiClient::$requests[0]['messages'][0]['content']);
+        $this->assertStringNotContainsString('Mets le titre en rouge', FakeLandingAiClient::$requests[0]['messages'][0]['content']);
+
+        $entries = json_decode($this->get('/api/landingpage-ai/memory?memoryKey=accueil:section-3')->getContent(), true)['entries'];
+        $this->assertSame(['Titre passé en rouge.', 'Titre en vert.', 'Modification effectuée.'], array_column($entries, 'summary'));
+        $this->assertSame(['rejected', null, null], array_column($entries, 'outcome'));
+        $this->assertSame(0, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM ai_usage WHERE memory_key IS NULL AND summary IS NOT NULL'), 'sans clé de mémoire, aucun résumé gardé');
+
+        // oubli
+        $forget = $this->request('DELETE', '/api/landingpage-ai/memory?memoryKey=accueil:section-3');
+        $this->assertSame(3, json_decode($forget->getContent())->forgotten);
+        $this->assertSame([], json_decode($this->get('/api/landingpage-ai/memory?memoryKey=accueil:section-3')->getContent(), true)['entries']);
+        $this->assertCount(1, json_decode($this->get('/api/landingpage-ai/memory?memoryKey=autre-section')->getContent(), true)['entries'], 'les autres clés restent');
+        $this->assertSame(4, (int) $this->db()->fetchOne('SELECT SUM(credits) FROM ai_usage WHERE status = \'success\''), 'l\'historique des crédits reste');
+    }
+
+    public function testMemoryRoutesAndKeysAreValidated(): void
+    {
+        $this->assertSame(400, $this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'x', 'memoryKey' => 'clé avec espaces'])->getStatusCode());
+        $this->assertSame(400, $this->get('/api/landingpage-ai/memory')->getStatusCode(), 'memoryKey obligatoire');
+        $this->assertSame(400, $this->request('DELETE', '/api/landingpage-ai/memory?memoryKey=' . str_repeat('a', 121))->getStatusCode());
+        $this->assertSame(404, $this->request('POST', '/api/landingpage-ai/usage/999999/outcome', json_encode(['outcome' => 'applied']))->getStatusCode());
+
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([['op' => 'update', 'id' => 's-titre', 'set' => ['color' => '#000000']]]);
+        $plain = json_decode($this->compose(['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'x'])->getContent());
+        $this->assertNull($this->db()->fetchOne('SELECT summary FROM ai_usage WHERE id = ?', [$plain->requestId]), 'sans clé de mémoire, aucun résumé gardé');
+        $this->assertSame(409, $this->request('POST', '/api/landingpage-ai/usage/' . $plain->requestId . '/outcome', json_encode(['outcome' => 'applied']))->getStatusCode(), 'demande sans clé de mémoire');
+        $this->assertSame(400, $this->request('POST', '/api/landingpage-ai/usage/' . $plain->requestId . '/outcome', json_encode(['outcome' => 'peut-être']))->getStatusCode());
+    }
+
     public function testBlocksWithoutWidthInAStackOrAGridGetFullWidthWithoutAnotherAttempt(): void
     {
         $composition = $this->preset('contact-type-a');

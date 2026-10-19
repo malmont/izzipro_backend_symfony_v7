@@ -52,7 +52,7 @@ final class LandingAiQuotaService
     /**
      * @throws LandingAiException 402 si le quota du mois ne couvre pas le coût
      */
-    public function reserve(string $mode, string $componentKey, int $cost, ?string $user, string $prompt, int $ttlSeconds = self::RESERVATION_TTL_SECONDS): AiUsage
+    public function reserve(string $mode, string $componentKey, int $cost, ?string $user, string $prompt, int $ttlSeconds = self::RESERVATION_TTL_SECONDS, ?string $memoryKey = null): AiUsage
     {
         $em = $this->emProvider->getEntityManager();
         $connection = $em->getConnection();
@@ -93,7 +93,8 @@ final class LandingAiQuotaService
                 ->setCredits($cost)
                 ->setStatus(AiUsage::STATUS_RESERVED)
                 ->setReservedUntil($now->modify(sprintf('+%d seconds', $ttlSeconds)))
-                ->setPromptExcerpt($prompt);
+                ->setPromptExcerpt($prompt)
+                ->setMemoryKey($memoryKey);
             $em->persist($usage);
             $em->flush();
             $connection->commit();
@@ -109,10 +110,10 @@ final class LandingAiQuotaService
         }
     }
 
-    /** Succès : crédits consommés */
-    public function complete(AiUsage $usage, LandingAiUsageStats $stats): void
+    /** Succès : crédits consommés ; le résumé est gardé seulement pour une demande portant une clé de mémoire */
+    public function complete(AiUsage $usage, LandingAiUsageStats $stats, ?string $summary = null): void
     {
-        $this->finish($usage, AiUsage::STATUS_SUCCESS, $stats);
+        $this->finish($usage, AiUsage::STATUS_SUCCESS, $stats, $summary);
     }
 
     /**
@@ -183,11 +184,14 @@ final class LandingAiQuotaService
         ], $this->usages()->findLatest($limit));
     }
 
-    private function finish(AiUsage $usage, string $status, ?LandingAiUsageStats $stats): void
+    private function finish(AiUsage $usage, string $status, ?LandingAiUsageStats $stats, ?string $summary = null): void
     {
         $em = $this->emProvider->getEntityManager();
         $usage = $em->contains($usage) ? $usage : ($em->find(AiUsage::class, $usage->getId()) ?? $usage);
         $usage->setStatus($status)->setCompletedAt(new \DateTimeImmutable());
+        if ($summary !== null && $usage->getMemoryKey() !== null) {
+            $usage->setSummary($summary);
+        }
         if ($stats !== null) {
             $usage->setModel($stats->model)
                 ->setAttempts($stats->attempts)

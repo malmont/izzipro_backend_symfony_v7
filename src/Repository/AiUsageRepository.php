@@ -96,4 +96,38 @@ class AiUsageRepository extends EntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Mémoire d'une section ou d'une page : demandes réussies portant cette clé et un résumé, les plus récentes,
+     * renvoyées du plus ancien au plus récent.
+     *
+     * @return AiUsage[]
+     */
+    public function findMemory(string $memoryKey, int $limit): array
+    {
+        $latest = $this->createQueryBuilder('u')
+            ->where('u.memoryKey = :key AND u.status = :success AND u.summary IS NOT NULL')
+            ->setParameter('key', $memoryKey)
+            ->setParameter('success', AiUsage::STATUS_SUCCESS)
+            ->orderBy('u.id', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+
+        return array_reverse($latest);
+    }
+
+    /** Oublie la mémoire d'une clé : résumés et issues effacés, l'historique des crédits reste */
+    public function forgetMemory(string $memoryKey): int
+    {
+        return $this->createQueryBuilder('u')
+            ->update()
+            ->set('u.summary', 'NULL')
+            ->set('u.outcome', 'NULL')
+            ->set('u.memoryKey', 'NULL')
+            ->where('u.memoryKey = :key')
+            ->setParameter('key', $memoryKey)
+            ->getQuery()
+            ->execute();
+    }
 }

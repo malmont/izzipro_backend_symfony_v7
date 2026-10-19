@@ -190,6 +190,18 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
     pour « encore », « comme avant », « annule ça » et pour ne pas refaire ce qui a été refusé ou annulé ; la composition
     actuelle fait foi. Coût : environ 1 000 jetons pour 10 échanges (+0,002 $ par retouche). Les pages filles d'un site
     reçoivent l'historique de l'accueil.
+  - **Mémoire de l'assistant** (19/10/2026, tous les modes) : `memoryKey` (1 à 120 caractères : lettres, chiffres, `: . _ -`),
+    clé stable de la section (edit, create) ou de la page (page, site) choisie par la console. Le résumé de chaque réponse
+    réussie est gardé avec la demande (`ai_usage.memory_key`, `summary` de 1 000 caractères au plus, `outcome`), dans la
+    base du site, 90 jours comme le reste de l'historique ; jamais la composition. Sans `history` dans la requête, les 10
+    derniers échanges de la clé sont redonnés au modèle comme l'historique de la console (qui prime quand il est envoyé).
+    Un tour de questions n'est pas gardé ; les pages filles d'un site n'ont pas de clé. Toute réponse porte `requestId`
+    (identifiant de la demande). Routes (ROLE_ADMIN) : `POST /api/landingpage-ai/usage/{requestId}/outcome` `{ outcome:
+    applied | rejected | undone }` (404 inconnue ou non réussie, 409 sans clé de mémoire) ; `GET /api/landingpage-ai/memory?
+    memoryKey=` → `{ memoryKey, entries: [{ requestId, createdAt, mode, componentKey, prompt, summary, outcome }] }` ;
+    `DELETE …/memory?memoryKey=` → `{ memoryKey, forgotten }` (résumés et issues effacés, crédits gardés). Résumé, clé et
+    issue visibles dans le détail de l'historique EasyAdmin. Migration `Version20261019110000`, script
+    `scripts/migrate_all_v2_landing_ai.sh`.
   - **Réparations sans nouvel essai** (`LandingAiOutputRepair`, détail dans la classe) : clés en double, null, style sans
     effet, média de repli inventé, stepAt tardif, containers sans fond (transparent) et, depuis le 15/10/2026, blocs sans
     `w` ni fitContent dans une pile, une grille ou un diaporama (w = 100 : une page réelle en avait 44, rendus sur deux
@@ -272,7 +284,7 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
 - Variables : `ANTHROPIC_API_KEY_LANDING` (clé dédiée), `LANDING_AI_MODEL_EDIT` (défaut `claude-sonnet-5`),
   `LANDING_AI_MODEL_PAGE` (défaut `claude-opus-5-5` : mode page, avec ou sans images), `LANDING_AI_MODEL_IMAGES`
   (retouches et créations avec images, relecture visuelle comprise ; vide = le modèle du mode page).
-- Tables par tenant : `ai_usage` (historique, supprimé après 90 jours, jamais de composition ni de réponse du modèle),
+- Tables par tenant : `ai_usage` (historique, supprimé après 90 jours, jamais de composition ; depuis le 19/10/2026, le résumé de la réponse quand la demande porte une clé de mémoire),
   `ai_credit_setting` et `ai_job` (tâches de fond) — `scripts/migrate_all_v2_landing_ai.sh` / migrations
   `Version20260928200000` et `Version20260929150000`.
 - Variables de la synchronisation : `FRONTEND_CONFIG_URL`, `DEPLOY_SYNC_TOKEN`.

@@ -8,12 +8,15 @@ use Doctrine\ORM\Mapping as ORM;
 
 /**
  * Historique et réservations de crédits de l'assistant IA des landing pages.
- * Ne contient jamais la composition envoyée ou produite, ni la réponse du modèle : seulement un extrait de la demande.
+ * Ne contient jamais la composition envoyée ou produite : seulement un extrait de la demande et, depuis le 19/10/2026,
+ * le résumé de la réponse (1 à 3 phrases du modèle, SUMMARY_LENGTH caractères au plus) avec la clé de mémoire de la
+ * section ou de la page et l'issue indiquée par la console : mémoire de l'assistant (LandingAiMemoryService).
  */
 #[ORM\Entity(repositoryClass: AiUsageRepository::class)]
 #[ORM\Table(name: 'ai_usage')]
 #[ORM\Index(columns: ['created_at'], name: 'idx_ai_usage_created_at')]
 #[ORM\Index(columns: ['status'], name: 'idx_ai_usage_status')]
+#[ORM\Index(columns: ['memory_key'], name: 'idx_ai_usage_memory_key')]
 class AiUsage
 {
     public const STATUS_RESERVED = 'reserved';
@@ -22,6 +25,9 @@ class AiUsage
     public const STATUS_EXPIRED = 'expired';
 
     public const PROMPT_EXCERPT_LENGTH = 500;
+    public const SUMMARY_LENGTH = 1000;
+    public const MEMORY_KEY_LENGTH = 120;
+    public const OUTCOMES = ['applied', 'rejected', 'undone'];
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -81,6 +87,18 @@ class AiUsage
     #[ORM\Column(length: self::PROMPT_EXCERPT_LENGTH)]
     private string $promptExcerpt = '';
 
+    /** Clé de mémoire envoyée par la console (section ou page), ou null */
+    #[ORM\Column(name: 'memory_key', length: self::MEMORY_KEY_LENGTH, nullable: true)]
+    private ?string $memoryKey = null;
+
+    /** Résumé de la réponse du modèle (demande réussie avec une clé de mémoire), ou null */
+    #[ORM\Column(length: self::SUMMARY_LENGTH, nullable: true)]
+    private ?string $summary = null;
+
+    /** Issue indiquée par la console : applied, rejected, undone, ou null */
+    #[ORM\Column(length: 10, nullable: true)]
+    private ?string $outcome = null;
+
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
@@ -135,6 +153,17 @@ class AiUsage
     public function getDurationMs(): ?int { return $this->durationMs; }
     public function setDurationMs(?int $durationMs): static { $this->durationMs = $durationMs; return $this; }
 
+    public function getMemoryKey(): ?string { return $this->memoryKey; }
+    public function setMemoryKey(?string $memoryKey): static { $this->memoryKey = $memoryKey; return $this; }
+    public function getSummary(): ?string { return $this->summary; }
+    public function setSummary(?string $summary): static
+    {
+        $this->summary = $summary !== null && trim($summary) !== '' ? mb_substr(trim($summary), 0, self::SUMMARY_LENGTH) : null;
+
+        return $this;
+    }
+    public function getOutcome(): ?string { return $this->outcome; }
+    public function setOutcome(?string $outcome): static { $this->outcome = $outcome; return $this; }
     public function getPromptExcerpt(): string { return $this->promptExcerpt; }
     public function setPromptExcerpt(string $prompt): static
     {
