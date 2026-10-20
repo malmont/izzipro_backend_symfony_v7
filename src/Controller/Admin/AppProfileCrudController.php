@@ -7,7 +7,9 @@ use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use App\Form\AppProfileTranslationType;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ColorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\EmailField;
@@ -71,11 +73,16 @@ class AppProfileCrudController extends BaseTenantCrudController
         yield TextField::new('city', 'Ville')->setRequired(false)->hideOnIndex();
         yield TextField::new('province', 'Province / région')->setRequired(false)->hideOnIndex();
         yield TextField::new('country', 'Pays')->setRequired(false)->hideOnIndex();
-        yield FormField::addPanel('Textes');
+        yield FormField::addPanel('Textes (langue par défaut)')->setHelp('Utilisés quand aucune traduction n\'existe pour la langue demandée ; vides, ceux de la fiche Entreprise.');
         yield TextareaField::new('apropos', 'À propos')->setRequired(false)->hideOnIndex();
         yield TextareaField::new('privacyPolicy', 'Politique de confidentialité')->setRequired(false)->hideOnIndex();
         yield TextareaField::new('conditionOfUse', 'Conditions d\'utilisation')->setRequired(false)->hideOnIndex();
         yield TextareaField::new('legalNotice', 'Mentions légales')->setRequired(false)->hideOnIndex();
+        yield FormField::addPanel('Traductions')->setHelp('Nom affiché, accroche et textes par langue, comme les « Contenus traduits » de la fiche Entreprise. Un champ vide reprend la langue par défaut.');
+        yield CollectionField::new('translations', 'Contenus traduits')
+            ->setEntryType(AppProfileTranslationType::class)
+            ->setFormTypeOption('by_reference', false)
+            ->onlyOnForms();
         yield DateTimeField::new('updatedAt', 'Modifié le')->hideOnForm();
     }
 

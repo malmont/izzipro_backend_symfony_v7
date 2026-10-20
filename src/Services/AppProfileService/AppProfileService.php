@@ -37,14 +37,16 @@ class AppProfileService
     {
         $profile = $this->repository()->findOneByApp($app);
         $company = $this->company($host, $locale);
+        // Textes traduits : traduction de la langue demandée (sinon française), puis champ du profil, puis entreprise
+        $translation = $profile?->getTranslation($locale);
 
         $own = [
-            'name' => $profile?->getAppName(),
+            'name' => $translation?->getAppName() ?? $profile?->getAppName(),
             'logo' => EntrepriseDto::uploadUrl($profile?->getLogo(), $host),
             'icon' => EntrepriseDto::uploadUrl($profile?->getIcon(), $host),
             'email' => $profile?->getEmail(), 'phone' => $profile?->getPhone(), 'website' => $profile?->getWebsite(),
-            'apropos' => $profile?->getApropos(), 'privacyPolicy' => $profile?->getPrivacyPolicy(),
-            'conditionOfUse' => $profile?->getConditionOfUse(), 'legalNotice' => $profile?->getLegalNotice(),
+            'apropos' => $translation?->getApropos() ?? $profile?->getApropos(), 'privacyPolicy' => $translation?->getPrivacyPolicy() ?? $profile?->getPrivacyPolicy(),
+            'conditionOfUse' => $translation?->getConditionOfUse() ?? $profile?->getConditionOfUse(), 'legalNotice' => $translation?->getLegalNotice() ?? $profile?->getLegalNotice(),
         ];
         $values = [];
         $sources = [];
@@ -58,7 +60,7 @@ class AppProfileService
             }
         }
         // Sans équivalent dans la fiche entreprise
-        foreach (['tagline' => $profile?->getTagline(), 'primaryColor' => $profile?->getPrimaryColor(), 'supportUrl' => $profile?->getSupportUrl(), 'privacyPolicyUrl' => $profile?->getPrivacyPolicyUrl()] as $field => $value) {
+        foreach (['tagline' => $translation?->getTagline() ?? $profile?->getTagline(), 'primaryColor' => $profile?->getPrimaryColor(), 'supportUrl' => $profile?->getSupportUrl(), 'privacyPolicyUrl' => $profile?->getPrivacyPolicyUrl()] as $field => $value) {
             $values[$field] = $value;
             $sources[$field] = $value === null ? null : 'app';
         }
@@ -82,6 +84,8 @@ class AppProfileService
             'apropos' => $values['apropos'], 'privacyPolicy' => $values['privacyPolicy'], 'conditionOfUse' => $values['conditionOfUse'], 'legalNotice' => $values['legalNotice'],
             'sources' => $sources,
             'entreprise' => $company ? ['id' => $company->id, 'name' => $company->name] : null,
+            'locale' => $locale,
+            'translation' => $translation?->getLanguage(),
             'updatedAt' => $profile?->getUpdatedAt()->format(\DateTimeInterface::ATOM),
         ];
     }

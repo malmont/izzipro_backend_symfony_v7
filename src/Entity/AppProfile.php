@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\AppProfileRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -101,9 +103,57 @@ class AppProfile
     #[ORM\Column(name: 'updated_at', type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $updatedAt;
 
+    /** @var Collection<int, AppProfileTranslation> traductions (nom, accroche, textes) par langue */
+    #[ORM\OneToMany(mappedBy: 'appProfile', targetEntity: AppProfileTranslation::class, cascade: ['persist', 'remove'], orphanRemoval: true, fetch: 'EXTRA_LAZY')]
+    private Collection $translations;
+
     public function __construct()
     {
         $this->updatedAt = new \DateTimeImmutable();
+        $this->translations = new ArrayCollection();
+    }
+
+    /** @return Collection<int, AppProfileTranslation> */
+    public function getTranslations(): Collection
+    {
+        return $this->translations;
+    }
+
+    public function addTranslation(AppProfileTranslation $translation): static
+    {
+        if (!$this->translations->contains($translation)) {
+            $this->translations->add($translation);
+            $translation->setAppProfile($this);
+            $this->touch();
+        }
+
+        return $this;
+    }
+
+    public function removeTranslation(AppProfileTranslation $translation): static
+    {
+        if ($this->translations->removeElement($translation)) {
+            if ($translation->getAppProfile() === $this) {
+                $translation->setAppProfile(null);
+            }
+            $this->touch();
+        }
+
+        return $this;
+    }
+
+    /** Traduction dans la langue demandée, sinon en français (comme Entreprise::getTranslation) */
+    public function getTranslation(string $locale): ?AppProfileTranslation
+    {
+        foreach ([$locale, 'fr'] as $language) {
+            foreach ($this->translations as $translation) {
+                if ($translation->getLanguage() === $language) {
+                    return $translation;
+                }
+            }
+        }
+
+        return null;
     }
 
     public function __toString(): string

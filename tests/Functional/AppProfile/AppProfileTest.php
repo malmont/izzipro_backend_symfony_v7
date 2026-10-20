@@ -22,6 +22,7 @@ class AppProfileTest extends WebTestCase
     {
         $this->client = static::createClient();
         foreach ([MV_TEST_TENANT_DB, MV_TEST_TENANT2_DB] as $db) {
+            $this->db($db)->executeStatement('DELETE FROM app_profile_translation');
             $this->db($db)->executeStatement('DELETE FROM app_profile');
         }
         $this->db(MV_TEST_TENANT_DB)->executeStatement("UPDATE entreprise SET email = 'contact@mvtest.test'");
@@ -63,6 +64,27 @@ class AppProfileTest extends WebTestCase
         $this->assertSame(['livingmemory', 'memoires', 'boussole', 'pos', 'mobile', 'admin'], $body['apps']);
     }
 
+    public function testTranslatedTextsFollowTheRequestedLanguage(): void
+    {
+        $db = $this->db(MV_TEST_TENANT_DB);
+        $db->executeStatement("INSERT INTO app_profile (app, app_name, tagline, apropos) VALUES ('livingmemory', 'Living Memory', 'Accroche par défaut', 'À propos par défaut')");
+        $id = (int) $db->fetchOne("SELECT id FROM app_profile WHERE app = 'livingmemory'");
+        $db->executeStatement("INSERT INTO app_profile_translation (app_profile_id, language, tagline, apropos) VALUES ($id, 'en', 'Your memories, your book', 'About Living Memory')");
+        $db->executeStatement("INSERT INTO app_profile_translation (app_profile_id, language, apropos) VALUES ($id, 'fr', 'À propos en français')");
+
+        $en = $this->profile('livingmemory', MV_TEST_TENANT_HOST, 'en');
+        $this->assertSame(['en', 'en', 'Living Memory', 'Your memories, your book', 'About Living Memory'], [$en['locale'], $en['translation'], $en['name'], $en['tagline'], $en['apropos']], 'champ traduit, sinon celui du profil');
+        $fr = $this->profile('livingmemory', MV_TEST_TENANT_HOST, 'fr');
+        $this->assertSame(['fr', 'Accroche par défaut', 'À propos en français'], [$fr['translation'], $fr['tagline'], $fr['apropos']]);
+        $es = $this->profile('livingmemory', MV_TEST_TENANT_HOST, 'es');
+        $this->assertSame(['fr', 'À propos en français'], [$es['translation'], $es['apropos']], 'langue absente : traduction française');
+        $this->assertSame('app', $en['sources']['apropos']);
+
+        // Suppression du profil : ses traductions partent avec lui
+        $db->executeStatement("DELETE FROM app_profile WHERE id = $id");
+        $this->assertSame(0, (int) $db->fetchOne("SELECT COUNT(*) FROM app_profile_translation WHERE app_profile_id = $id"));
+    }
+
     public function testTheActivationResponseCarriesTheAppProfile(): void
     {
         $this->db(MV_TEST_TENANT_DB)->executeStatement("INSERT INTO app_profile (app, app_name) VALUES ('livingmemory', 'Living Memory')");
@@ -80,8 +102,16 @@ class AppProfileTest extends WebTestCase
         $crawler = $this->admin('new');
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
         $form = $crawler->filter('form[name="AppProfile"]')->form();
-        $this->client->submit($form, ['AppProfile[app]' => 'boussole', 'AppProfile[appName]' => 'Boussole ESG', 'AppProfile[primaryColor]' => '#0a7f5a']);
+        $values = $form->getPhpValues();
+        $values['AppProfile']['app'] = 'boussole';
+        $values['AppProfile']['appName'] = 'Boussole ESG';
+        $values['AppProfile']['primaryColor'] = '#0a7f5a';
+        // Traduction ajoutée comme dans l'écran (collection « Contenus traduits »)
+        $values['AppProfile']['translations'] = [['language' => 'en', 'appName' => 'ESG Compass', 'tagline' => 'Measure your impact']];
+        $this->client->request($form->getMethod(), $form->getUri(), $values, $form->getPhpFiles());
         $this->assertContains($this->client->getResponse()->getStatusCode(), [302, 303], (string) $this->client->getResponse()->getContent());
+        $this->assertSame(['en', 'ESG Compass', 'Measure your impact'], array_values($this->db(MV_TEST_TENANT_DB)->fetchAssociative("SELECT t.language, t.app_name, t.tagline FROM app_profile_translation t JOIN app_profile p ON p.id = t.app_profile_id WHERE p.app = 'boussole'")));
+        $this->assertSame('ESG Compass', $this->profile('boussole', MV_TEST_TENANT_HOST, 'en')['name']);
         $this->assertSame(['Boussole ESG', '#0a7f5a'], array_values($this->db(MV_TEST_TENANT_DB)->fetchAssociative("SELECT app_name, primary_color FROM app_profile WHERE app = 'boussole'")));
         $this->assertSame('Boussole ESG', $this->profile('boussole')['name']);
 
@@ -99,9 +129,9 @@ class AppProfileTest extends WebTestCase
         $this->assertContains($this->client->getResponse()->getStatusCode(), [302, 403], 'non-admin refusé');
     }
 
-    private function profile(string $app, string $host = MV_TEST_TENANT_HOST): array
+    private function profile(string $app, string $host = MV_TEST_TENANT_HOST, string $locale = 'fr'): array
     {
-        $this->client->request('GET', 'https://' . $host . "/api/app-profile/$app?locale=fr", [], [], ['HTTP_X_TENANT_HOST' => $host]);
+        $this->client->request('GET', 'https://' . $host . "/api/app-profile/$app?locale=$locale", [], [], ['HTTP_X_TENANT_HOST' => $host]);
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $this->client->getResponse()->getContent());
 
         return json_decode($this->client->getResponse()->getContent(), true);
