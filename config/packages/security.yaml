@@ -130,6 +130,8 @@ security:
         # 🔹 Clés d'activation des applications mobiles (15/10/2026) : activation publique (hors pare-feu JWT, limitée en
         #    débit), gestion des clés du site par ses administrateurs.
         - { path: ^/api/app/activate$, roles: PUBLIC_ACCESS }
+        # Profil public d'une application du site (20/10/2026) : lecture sans connexion
+        - { path: ^/api/app-profile/, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/app-keys(/|$), roles: ROLE_ADMIN }
         - { path: ^/api/statistiques/(chiffre-affaires|nombre-commandes|panier-moyen)/pos$, roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         - { path: ^/api/payments/statistics/pos$, roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }

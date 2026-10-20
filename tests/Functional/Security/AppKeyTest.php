@@ -58,6 +58,8 @@ class AppKeyTest extends WebTestCase
         $this->assertSame(['id' => $id], array_intersect_key($activation['terminal'], ['id' => 1]));
         $this->assertMatchesRegularExpression('/^' . $id . '\.[0-9a-f]{32}$/', $activation['terminal']['token']);
         unset($activation['terminal']);
+        $this->assertSame(['pos', false], [$activation['profile']['app'], $activation['profile']['hasProfile']], 'profil de l\'application ajouté (20/10/2026)');
+        unset($activation['profile']);
         $this->assertSame([
             'tenant' => ['code' => MV_TEST_TENANT_CODE, 'name' => 'Tenant de test', 'host' => MV_TEST_TENANT_HOST],
             'app' => 'pos', 'label' => 'Tablette comptoir 1', 'expiresAt' => null, 'cashRegister' => null,

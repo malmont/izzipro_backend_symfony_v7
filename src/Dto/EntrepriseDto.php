@@ -117,7 +117,7 @@ class EntrepriseDto
      * disparu du stockage : null plutôt qu'une adresse en 404 (13/10/2026 : le frontend affiche alors le nom ou les
      * initiales du site).
      */
-    private static function uploadUrl(?string $stored, string $host): ?string
+    public static function uploadUrl(?string $stored, string $host): ?string
     {
         if ($stored === null || $stored === '') {
             return null;

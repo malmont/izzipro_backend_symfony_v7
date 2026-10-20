@@ -28,7 +28,7 @@ class AppActivationController extends AbstractController
             return $this->json(['error' => 'APP_KEY_MISSING', 'message' => 'Corps JSON attendu : {"key", "app"?, "deviceName"?}'], 400);
         }
         try {
-            return $this->json($this->activate->execute($data));
+            return $this->json($this->activate->execute($data, $request->getSchemeAndHttpHost(), (string) $request->query->get('locale', 'fr')));
         } catch (AppKeyException $e) {
             return $this->json($e->toBody(), $e->status);
         }

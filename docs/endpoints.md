@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (198)
+## Boutique et commun (199)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -276,6 +276,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PUT | `/api/app-keys/{id}` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::update` |
 | GET | `/api/app-keys` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::list` |
 | POST | `/api/app-keys` | ROLE_ADMIN | `Controller\AppKeyController\AppKeyController::create` |
+| GET | `/api/app-profile/{app}` | PUBLIC_ACCESS | `Controller\AppProfileController\AppProfileController::show` |
 | POST | `/api/app/activate` | PUBLIC_ACCESS | `Controller\AppKeyController\AppActivationController::activate` |
 | GET | `/api/boutique-settings` | PUBLIC_ACCESS | `Controller\BoutiqueSettingsController\BoutiqueSettingsController::getSettings` |
 | PUT | `/api/boutique-settings` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\BoutiqueSettingsController\BoutiqueSettingsController::updateSettings` |

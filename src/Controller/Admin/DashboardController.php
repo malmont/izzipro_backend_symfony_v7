@@ -464,6 +464,7 @@ class DashboardController extends AbstractDashboardController
 
         yield MenuItem::section('Entreprise');
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
+        yield MenuItem::linkToCrud('Profils des applications', 'fas fa-id-card', \App\Entity\AppProfile::class)->setController(AppProfileCrudController::class);
         yield MenuItem::linkToCrud('AddressEntreprise', 'fa fa-map-marker', AddressEntreprise::class);
         yield MenuItem::linkToCrud('Réseaux Sociaux', 'fa fa-share-alt', SocialNetwork::class);
         yield MenuItem::linkToCrud('Équipes', 'fa fa-users', Team::class);
