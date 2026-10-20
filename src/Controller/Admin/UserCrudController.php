@@ -22,12 +22,15 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 class UserCrudController extends BaseTenantCrudController
 {
+    use CsrfProtectedActionTrait;
     private UserPasswordHasherInterface $userPasswordHasher;
 
     public function __construct(
         UserPasswordHasherInterface $userPasswordHasher,
         TenantEntityManagerProvider $emProvider,
-        private readonly RoleAssignmentPolicy $rolePolicy
+        private readonly RoleAssignmentPolicy $rolePolicy,
+        private readonly ?\App\Services\PosAuditService\PosPinService $posPins = null,
+        private readonly ?\App\Services\PosAuditService\PosAuditService $posAudit = null
     ) {
         parent::__construct($emProvider);
         $this->userPasswordHasher = $userPasswordHasher;
@@ -114,5 +117,33 @@ class UserCrudController extends BaseTenantCrudController
             $entityInstance->setPassword($hashedPassword);
             $entityInstance->setPlainPassword(null);
         }
+    }
+
+    /** Action « Réinitialiser le PIN de caisse » (C3) : efface le PIN et lève le blocage ; le caissier en recrée un avec son mot de passe */
+    public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
+    {
+        $reset = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('resetPosPin', 'Réinitialiser le PIN de caisse', 'fas fa-key')
+            ->linkToUrl(fn (User $user) => $this->csrfActionUrl('resetPosPin', (string) $user->getId()))
+            ->displayIf(fn ($user) => $user instanceof User && array_intersect(['ROLE_USER_POS', 'ROLE_POS_MANAGER', 'ROLE_ADMIN'], $user->getRoles()) !== [])
+            ->setHtmlAttributes(['onclick' => 'return confirm(' . json_encode('Effacer le PIN de caisse de cet utilisateur ? Il devra en recréer un.', JSON_UNESCAPED_UNICODE) . ');']);
+
+        return parent::configureActions($actions)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $reset)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $reset);
+    }
+
+    public function resetPosPin(\EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext $context): \Symfony\Component\HttpFoundation\Response
+    {
+        $user = $context->getEntity()->getInstance();
+        if (!$user instanceof User || !$this->isCsrfActionValid($context, 'resetPosPin') || !$this->posPins) {
+            $this->addFlash('danger', 'Lien invalide ou expiré : action annulée.');
+        } else {
+            $hadPin = $this->posPins->reset($user);
+            $this->posAudit?->record(\App\Services\PosAuditService\PosAuditService::PIN_RESET, ['userId' => $user->getId(), 'email' => $user->getEmail(), 'hadPin' => $hadPin], subjectType: 'user', subjectId: $user->getId());
+            $this->addFlash('success', $hadPin ? 'PIN de caisse réinitialisé : l\'utilisateur en recréera un avec son mot de passe.' : 'Cet utilisateur n\'avait pas de PIN de caisse.');
+        }
+        $url = $this->container->get(\EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator::class)->unsetAll()->setController(self::class)->setAction(\EasyCorp\Bundle\EasyAdminBundle\Config\Action::INDEX);
+
+        return $this->redirect($url->generateUrl());
     }
 }

@@ -30,7 +30,8 @@ class CaisseOperationsUseCase
         private readonly TenantCacheService $cache,
         private readonly CashSessionReportBuilder $reports,
         private readonly DenominationService $denominations,
-        private readonly \App\Services\PosAuditService\PosAuditService $audit
+        private readonly \App\Services\PosAuditService\PosAuditService $audit,
+        private readonly \App\Services\PosAuditService\PosApprovalService $approvals
     ) {
     }
 
@@ -141,6 +142,9 @@ class CaisseOperationsUseCase
             } elseif ($input->keptFund !== null) {
                 throw new CashRegisterException('INVALID_AMOUNT', 'keptFund exige un comptage (countedCash ou cashDetails)', 400);
             }
+            if ($counted === null) { // fermeture sans comptage : validation d'un responsable selon les réglages (C3)
+                $this->approvals->requireFor(\App\Services\PosAuditService\PosApprovalService::CLOSE_WITHOUT_COUNT, $user, ['cashRegisterId' => (int) $register->getId()]);
+            }
 
             $closedAt = new \DateTimeImmutable();
             $closingDetails = array_map(fn (array $line) => ['typeCash' => $line['typeCash'], 'nombreItems' => $line['count']], $countLines ?? []);
@@ -194,6 +198,12 @@ class CaisseOperationsUseCase
         $connection = $this->emProvider->getEntityManager()->getConnection();
         $connection->beginTransaction(); // mouvement et journal ensemble (C2)
         try {
+            // Retraits : validation d'un responsable selon les réglages, consommée dans cette transaction (C3)
+            if (in_array($transactionTypeId, [HandleCaisseTransactionUseCase::WITHDRAWAL, HandleCaisseTransactionUseCase::CASH_FUND_WITHDRAWAL], true)) {
+                $this->approvals->requireFor(
+                    $transactionTypeId === HandleCaisseTransactionUseCase::WITHDRAWAL ? \App\Services\PosAuditService\PosApprovalService::WITHDRAWAL : \App\Services\PosAuditService\PosApprovalService::FUND_WITHDRAWAL,
+                    $user, ['amount' => (int) round((float) $amount), 'cashRegisterId' => (int) $caisse->getCashRegister()->getId()], (int) round((float) $amount));
+            }
             $this->transactions->execute($caisse, null, $user, (float) $amount, $transactionTypeId, is_array($cashDetails) ? $cashDetails : []);
             $Audit = \App\Services\PosAuditService\PosAuditService::class;
             $this->audit->record(match ($transactionTypeId) {
@@ -223,7 +233,18 @@ class CaisseOperationsUseCase
             throw new CashRegisterException('REASON_REQUIRED', 'reason : motif de l\'ouverture du tiroir requis', 400);
         }
         $caisse = $this->registers->requireOpenSession($cashRegisterId);
-        $entry = $this->audit->record(\App\Services\PosAuditService\PosAuditService::DRAWER_OPENED, ['reason' => mb_substr($reason, 0, 255)], $caisse, null, 'session', $caisse->getId(), $user);
+        $connection = $this->emProvider->getEntityManager()->getConnection();
+        $connection->beginTransaction(); // validation (C3) et journal ensemble
+        try {
+            $this->approvals->requireFor(\App\Services\PosAuditService\PosApprovalService::DRAWER_OPEN, $user, ['cashRegisterId' => (int) $caisse->getCashRegister()->getId()]);
+            $entry = $this->audit->record(\App\Services\PosAuditService\PosAuditService::DRAWER_OPENED, ['reason' => mb_substr($reason, 0, 255)], $caisse, null, 'session', $caisse->getId(), $user);
+            $connection->commit();
+        } catch (\Throwable $e) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+            throw $e;
+        }
 
         return ['auditId' => $entry['id'], 'sequence' => $entry['sequence'], 'occurredAt' => $entry['occurredAt'], 'cashRegisterId' => $caisse->getCashRegister()->getId()];
     }

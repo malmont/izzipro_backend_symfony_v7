@@ -252,6 +252,72 @@ depuis EasyAdmin (passer par le POS).
 aucune clé étrangère ne supprime ces données en cascade ; supprimer un caissier est bloqué par ses transactions). Les
 données de caisse se gardent au moins 6 ans (Canada, France).
 
+
+## PIN, déverrouillage, connexion par PIN, validation d'un responsable (chantier C3, 20/10/2026)
+
+Une tablette de caisse est partagée et reste allumée : le POS verrouille son écran après un délai d'inactivité, et le
+serveur vérifie tout ce qui touche au PIN et aux droits. Le PIN n'est jamais stocké sur l'appareil. Erreurs :
+`{error, message, …contexte}`.
+
+**PIN** (table `pos_user_pin`, la table `user` n'est pas touchée) : 4 à 6 chiffres, **envoyé en chaîne** (`"0123"`),
+pour les caissiers, responsables et administrateurs. Empreinte = hacheur des mots de passe appliqué à HMAC-SHA256(PIN,
+secret du serveur). Anti-force brute **par compte**, toutes routes confondues : 5 essais faux → PIN bloqué 15 minutes
+(**423 `PIN_LOCKED` `{retryAfter}`** en secondes, et en-tête `Retry-After`) ; un PIN juste remet le compteur à 0 ; un
+PIN faux renvoie `attemptsLeft`.
+- `POST /api/pos/pin {password, newPin}` (connecté) → 204. Mot de passe faux → 400 `PASSWORD_INVALID` ; PIN mal formé →
+  422 `VALIDATION_FAILED`.
+- EasyAdmin, fiche ou liste d'un utilisateur de caisse : action « Réinitialiser le PIN de caisse » (efface le PIN et le
+  blocage ; l'utilisateur en recrée un avec son mot de passe).
+
+**Déverrouillage** : `POST /api/pos/unlock {pin}` (PIN de l'utilisateur du jeton) → 200 `{unlockedAt}` ; 400
+`PIN_INVALID` ; 423 `PIN_LOCKED` ; 409 `PIN_NOT_SET` (le POS propose d'en créer un). Pas de nouveau jeton.
+
+**Changement rapide de caissier** (routes de connexion : hors pare-feu JWT, **`X-Pos-Terminal` valide exigé**, sinon
+403 `TERMINAL_REQUIRED` ; 30 essais de connexion par PIN par terminal et par 15 minutes, en plus du blocage par compte) :
+- `GET /api/pos/users` → `[{id, name, initials, roles}]` : comptes vérifiés `ROLE_USER_POS` ou `ROLE_POS_MANAGER` qui
+  ont un PIN, **sans** les administrateurs ni les comptes soumis au code e-mail.
+- `POST /api/pos/pin-login {userId, pin}` → mêmes jetons que `/api/login` en `pos` (`{token, refresh_token}`) ; 401
+  `PIN_INVALID` ; 423 `PIN_LOCKED` ; 409 `PIN_NOT_SET` ; **403 `PIN_LOGIN_NOT_ALLOWED`** pour `ROLE_ADMIN`,
+  `ROLE_SUPER_ADMIN`, tout compte dont le code e-mail est exigé (le PIN ne contourne jamais l'OTP) et tout compte sans
+  rôle de caisse.
+
+**Réglages** (fiche entreprise, panneau EasyAdmin « Caisse (POS) ») : `GET /api/pos/settings` →
+`{lockAfterMinutes, approvals: {refund: {required, threshold}, withdrawal: {…}, fundWithdrawal: {…}, drawerOpen:
+{required}, closeWithoutCount: {required}, discount: {required: false, threshold: null}}, pin: {minLength: 4,
+maxLength: 6, maxAttempts: 5, lockMinutes: 15}}`. **`lockAfterMinutes` : 0 = jamais de verrouillage** (défaut 5).
+Seuils en cents : 0 = validation toujours (défaut), N = au-delà de N cents, vide = jamais. Tiroir sans vente et
+fermeture sans comptage : validation exigée par défaut.
+
+**Validation d'un responsable** (droits vérifiés côté serveur), pour un utilisateur qui n'est ni `ROLE_POS_MANAGER` ni
+`ROLE_ADMIN` (eux n'en ont jamais besoin) :
+
+| Action (`action`) | Route protégée | Contexte qui doit correspondre |
+|---|---|---|
+| `refund` | `POST /api/order/cancel/{id}` d'une **vente au comptoir** (commande web : inchangé) | `orderId` (seuil comparé au montant remboursé) |
+| `withdrawal` | `POST /api/caisse/withdraw` | `amount`, `cashRegisterId` |
+| `fund_withdrawal` | `POST /api/caisse/cashfundwithdraw` | `amount`, `cashRegisterId` |
+| `drawer_open` | `POST /api/caisse/drawer-open` | `cashRegisterId` |
+| `close_without_count` | `POST /api/caisse/close` sans `countedCash` ni `cashDetails` | `cashRegisterId` |
+| `discount` | réservé (chantier F1) | — |
+
+1. Sans validation : **403 `APPROVAL_REQUIRED` `{action, context}`** (le POS sait quoi demander).
+2. Le responsable saisit son PIN sur la tablette du caissier : `POST /api/pos/approvals {action, managerId, pin, context
+   {orderId?, amount?, cashRegisterId?}}` (connecté en tant que caissier, terminal exigé) → **201 `{approvalToken,
+   expiresAt}`**. Refus : 403 `APPROVER_NOT_ALLOWED` (ni responsable ni administrateur), **409 `PIN_NOT_SET`
+   `{managerId}`**, 400 `PIN_INVALID` (compte dans le blocage du responsable), 423 `PIN_LOCKED`, 422 `VALIDATION_FAILED`
+   (action inconnue, contexte incomplet), 403 `TERMINAL_REQUIRED`.
+3. Le POS rejoue la requête protégée avec **`X-Pos-Approval: <approvalToken>`** (en-tête autorisé par CORS). Jeton :
+   2 minutes, usage unique, lié à l'action, au contexte, au terminal et au caissier demandeur ; sinon **403
+   `APPROVAL_INVALID`**.
+4. Le jeton est consommé **dans la transaction SQL de l'action** : si l'action échoue (fonds insuffisants, etc.), la
+   consommation est annulée et le jeton reste utilisable jusqu'à son expiration.
+
+Journal : `PIN_SET`, `PIN_FAILED` (jamais le PIN), `PIN_LOCKED`, `PIN_RESET`, `UNLOCK`, `LOGIN` / `LOGIN_FAILED` avec
+`data.method = "pin"`, `APPROVAL_GRANTED`, `APPROVAL_FAILED` ; l'entrée de l'action validée porte `data.approvedBy {id,
+name}`. Code : `Services/PosAuditService/PosPinService`, `PosApprovalService`, `PosSettingsService`,
+`UseCase/PosAuditUseCase/PosPinUseCase`, `Controller/PosController/PosPinController` ; schéma
+`migrations/Version20261020100000.php`, `scripts/migrate_all_v2_pos_pin.sh`.
+
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la

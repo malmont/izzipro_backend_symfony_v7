@@ -34,15 +34,26 @@ class PosAuditService
     public const CASH_REGISTER_UPDATED = 'CASH_REGISTER_UPDATED';
     public const DISCOUNT_APPLIED = 'DISCOUNT_APPLIED'; // réservé (chantier F1)
     public const PRICE_CHANGED = 'PRICE_CHANGED';       // réservé
+    // PIN et validations (C3, 20/10/2026)
+    public const PIN_SET = 'PIN_SET';
+    public const PIN_FAILED = 'PIN_FAILED';
+    public const PIN_LOCKED = 'PIN_LOCKED';
+    public const PIN_RESET = 'PIN_RESET';
+    public const UNLOCK = 'UNLOCK';
+    public const APPROVAL_GRANTED = 'APPROVAL_GRANTED';
+    public const APPROVAL_FAILED = 'APPROVAL_FAILED';
+    /** Entrées d'une action qui peut avoir été validée par un responsable : elles portent data.approvedBy */
+    private const APPROVABLE = [self::REFUND, self::CASH_WITHDRAWAL, self::FUND_WITHDRAWAL, self::DRAWER_OPENED, self::SESSION_CLOSED, self::DISCOUNT_APPLIED];
 
     public const TYPES = [self::LOGIN, self::LOGIN_FAILED, self::LOGOUT, self::SESSION_OPENED, self::SESSION_CLOSED, self::CASH_DEPOSIT,
         self::CASH_WITHDRAWAL, self::FUND_DEPOSIT, self::FUND_WITHDRAWAL, self::SALE, self::REFUND, self::Z_REPORT_CREATED, self::X_REPORT_VIEWED,
-        self::CLOSING_PREVIEW, self::DRAWER_OPENED, self::CASH_REGISTER_CREATED, self::CASH_REGISTER_UPDATED, self::DISCOUNT_APPLIED, self::PRICE_CHANGED];
+        self::CLOSING_PREVIEW, self::DRAWER_OPENED, self::CASH_REGISTER_CREATED, self::CASH_REGISTER_UPDATED, self::DISCOUNT_APPLIED, self::PRICE_CHANGED,
+        self::PIN_SET, self::PIN_FAILED, self::PIN_LOCKED, self::PIN_RESET, self::UNLOCK, self::APPROVAL_GRANTED, self::APPROVAL_FAILED];
 
     /** Clé du verrou consultatif (par base, donc par site) */
     private const LOCK_KEY = 7461002;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly Security $security, private readonly PosTerminalService $terminals)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly Security $security, private readonly PosTerminalService $terminals, private readonly ?PosApprovalContext $approvals = null)
     {
     }
 
@@ -54,6 +65,9 @@ class PosAuditService
     public function record(string $type, array $data = [], ?Caisse $session = null, ?CashRegister $register = null, ?string $subjectType = null, ?int $subjectId = null, ?User $user = null, bool $anonymous = false): array
     {
         $user ??= $anonymous ? null : ($this->security->getUser() instanceof User ? $this->security->getUser() : null);
+        if (in_array($type, self::APPROVABLE, true) && $this->approvals?->approvedBy() !== null && !array_key_exists('approvedBy', $data)) {
+            $data['approvedBy'] = $this->approvals->approvedBy(); // validation d'un responsable consommée par cette action (C3)
+        }
         $register ??= $session?->getCashRegister();
         $terminal = $this->terminals->current();
         $connection = $this->emProvider->getEntityManager()->getConnection();

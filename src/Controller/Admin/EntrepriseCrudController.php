@@ -105,6 +105,17 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCashRoundingStep', 'Arrondi des paiements en espèces (cents)')
                 ->setHelp('Vide : selon la devise (5 ¢ pour le dollar canadien, aucun sinon). 1 : aucun arrondi.')
                 ->setRequired(false)->hideOnIndex(),
+            // Validation d'un responsable pour un caissier (C3) : seuil en cents, 0 = toujours, vide = jamais
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posApprovalRefund', 'Validation : remboursement au-delà de (cents)')
+                ->setHelp('0 : toujours ; vide : jamais')->setRequired(false)->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posApprovalWithdrawal', 'Validation : retrait d\'espèces au-delà de (cents)')
+                ->setHelp('0 : toujours ; vide : jamais')->setRequired(false)->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posApprovalFundWithdrawal', 'Validation : retrait de fond au-delà de (cents)')
+                ->setHelp('0 : toujours ; vide : jamais')->setRequired(false)->hideOnIndex(),
+            BooleanField::new('posApprovalDrawerOpen', 'Validation : ouverture du tiroir sans vente')->hideOnIndex(),
+            BooleanField::new('posApprovalCloseWithoutCount', 'Validation : fermeture sans comptage')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posLockMinutes', 'Verrouillage du POS après (minutes)')
+                ->setHelp('Inactivité avant verrouillage de l\'écran ; 0 : jamais')->hideOnIndex(),
 
             FormField::addPanel('Informations Générales'),
             TextField::new('facebookPixelId', 'Facebook Pixel ID')->hideOnIndex(),

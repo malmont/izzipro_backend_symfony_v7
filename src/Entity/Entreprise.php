@@ -120,6 +120,26 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(nullable: true)]
     private ?int $posCashRoundingStep = null;
 
+    // Validation d'un responsable (C3, 20/10/2026) : seuil en cents (0 = toujours, N = au-delà de N cents, null = jamais)
+    // ou oui / non ; délai de verrouillage du POS en minutes (0 = jamais)
+    #[ORM\Column(nullable: true, options: ['default' => 0])]
+    private ?int $posApprovalRefund = 0;
+
+    #[ORM\Column(nullable: true, options: ['default' => 0])]
+    private ?int $posApprovalWithdrawal = 0;
+
+    #[ORM\Column(nullable: true, options: ['default' => 0])]
+    private ?int $posApprovalFundWithdrawal = 0;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posApprovalDrawerOpen = true;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posApprovalCloseWithoutCount = true;
+
+    #[ORM\Column(options: ['default' => 5])]
+    private int $posLockMinutes = 5;
+
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $metaTitle = null;
 
@@ -520,6 +540,19 @@ class Entreprise implements TranslatableInterface
 
         return $this;
     }
+
+    public function getPosApprovalRefund(): ?int { return $this->posApprovalRefund; }
+    public function setPosApprovalRefund(?int $cents): static { $this->posApprovalRefund = $cents !== null ? max(0, $cents) : null; return $this; }
+    public function getPosApprovalWithdrawal(): ?int { return $this->posApprovalWithdrawal; }
+    public function setPosApprovalWithdrawal(?int $cents): static { $this->posApprovalWithdrawal = $cents !== null ? max(0, $cents) : null; return $this; }
+    public function getPosApprovalFundWithdrawal(): ?int { return $this->posApprovalFundWithdrawal; }
+    public function setPosApprovalFundWithdrawal(?int $cents): static { $this->posApprovalFundWithdrawal = $cents !== null ? max(0, $cents) : null; return $this; }
+    public function isPosApprovalDrawerOpen(): bool { return $this->posApprovalDrawerOpen; }
+    public function setPosApprovalDrawerOpen(bool $required): static { $this->posApprovalDrawerOpen = $required; return $this; }
+    public function isPosApprovalCloseWithoutCount(): bool { return $this->posApprovalCloseWithoutCount; }
+    public function setPosApprovalCloseWithoutCount(bool $required): static { $this->posApprovalCloseWithoutCount = $required; return $this; }
+    public function getPosLockMinutes(): int { return $this->posLockMinutes; }
+    public function setPosLockMinutes(?int $minutes): static { $this->posLockMinutes = max(0, (int) $minutes); return $this; }
 
     public function isLivingMemoryActive(): bool
     {

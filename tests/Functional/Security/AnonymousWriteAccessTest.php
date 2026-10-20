@@ -37,6 +37,7 @@ class AnonymousWriteAccessTest extends WebTestCase
         '#^/setup/new-store$#' => 'création de boutique : jeton de création (à vérifier)',
         '#^/api/landingpage-config/#' => 'ROLE_SUPER_ADMIN ou jeton de déploiement, vérifiés par LandingConfigController',
         '#^/api/tenant/#' => 'vérification de tenant',
+        '#^/api/pos/pin-login$#' => 'connexion par PIN : terminal activé exigé, blocage du compte après 5 essais, limite par terminal',
         '#^/api/app/activate$#' => 'activation d\'une application mobile par clé (empreinte en base maître, 20 essais par IP et 15 min, aucune donnée de site écrite)',
         '#^/(cgu/|product/|shop$|setup/status/)#' => 'pages d\'affichage sans restriction de méthode (aucune écriture)',
     ];

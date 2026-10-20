@@ -36,6 +36,7 @@ class CashRegisterApiTest extends WebTestCase
         $this->db->executeStatement('DELETE FROM boutique_setting');
         $this->db->executeStatement("UPDATE address_entreprise SET country = 'CA', state = 'QC', city = 'Montréal', zip = 'H1M 0A9'");
         $this->db->executeStatement('UPDATE caisse SET is_open = false, closed_at = NOW() WHERE is_open = true');
+        $this->db->executeStatement('UPDATE entreprise SET pos_approval_refund = NULL, pos_approval_withdrawal = NULL, pos_approval_fund_withdrawal = NULL, pos_approval_drawer_open = false, pos_approval_close_without_count = false'); // validations du responsable : PosPinApiTest
         $this->db->executeStatement('UPDATE cash_register SET is_active = (id = (SELECT MIN(id) FROM cash_register))');
         $this->mainRegister = (int) $this->db->fetchOne('SELECT MIN(id) FROM cash_register');
         FakeCheckoutPaymentGateway::reset();

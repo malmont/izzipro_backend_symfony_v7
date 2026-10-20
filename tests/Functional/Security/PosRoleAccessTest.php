@@ -28,6 +28,7 @@ class PosRoleAccessTest extends WebTestCase
         $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         static::getContainer()->get(BoutiqueDemoSeeder::class)->seed('client-caisse@example.invalid', false, false); // référentiels de caisse
         $provider->getEntityManager()->getConnection()->executeStatement('UPDATE caisse SET is_open = false, closed_at = NOW() WHERE is_open = true');
+        $provider->getEntityManager()->getConnection()->executeStatement('UPDATE entreprise SET pos_approval_refund = NULL, pos_approval_withdrawal = NULL, pos_approval_fund_withdrawal = NULL, pos_approval_drawer_open = false, pos_approval_close_without_count = false'); // validations du responsable : PosPinApiTest
         $provider->getEntityManager()->getConnection()->executeStatement('UPDATE cash_register SET is_active = (id = (SELECT MIN(id) FROM cash_register))'); // un seul poste actif
     }
 

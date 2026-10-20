@@ -42,6 +42,7 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
         #[Autowire(service: 'limiter.public_form_ip')] private readonly RateLimiterFactory $publicFormIp,
         #[Autowire(service: 'limiter.public_form_attempts_ip')] private readonly RateLimiterFactory $publicFormAttemptsIp,
         #[Autowire(service: 'limiter.app_activation_ip')] private readonly RateLimiterFactory $appActivationIp,
+        #[Autowire(service: 'limiter.pos_pin_login')] private readonly RateLimiterFactory $posPinLogin,
     ) {}
 
     public static function getSubscribedEvents(): array
@@ -74,6 +75,10 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
             // Clé d'activation d'une application mobile : essais par IP
             $path === '/api/app/activate' => [
                 [$this->appActivationIp, $ip],
+            ],
+            // Connexion par PIN : essais par terminal (à défaut par IP)
+            $path === '/api/pos/pin-login' => [
+                [$this->posPinLogin, 'terminal:' . ($request->headers->get('X-Pos-Terminal') ?: $ip)],
             ],
             $path === '/api/password-reset/request', $path === '/api/password-reset/confirm' => [
                 [$this->resetAccount, $this->accountKey($request, ['email'])],

@@ -33,7 +33,8 @@ class CancelOrderUseCase
         private readonly CashRegisterResolver $cashRegisters,
         private readonly \App\Services\CaisseService\CashRoundingService $cashRoundingService,
         private readonly \App\Services\PosAuditService\PosReceiptService $receipts,
-        private readonly \App\Services\PosAuditService\PosAuditService $audit
+        private readonly \App\Services\PosAuditService\PosAuditService $audit,
+        private readonly \App\Services\PosAuditService\PosApprovalService $approvals
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
@@ -56,6 +57,11 @@ class CancelOrderUseCase
             $order = $em->getRepository(Order::class)->find($orderId);
             if (!$order) {
                 throw new Exception('Order not found');
+            }
+            // Vente au comptoir remboursée par un caissier : validation d'un responsable selon les réglages, consommée dans
+            // cette transaction (C3). Commande web : inchangé.
+            if ($order->getOrderSource()?->getId() === 2 && $refundedBy instanceof \App\Entity\User) {
+                $this->approvals->requireFor(\App\Services\PosAuditService\PosApprovalService::REFUND, $refundedBy, ['orderId' => (int) $order->getId()], (int) round((float) $order->getTotalAmount()));
             }
 
             $paymentTypeId = 1;
