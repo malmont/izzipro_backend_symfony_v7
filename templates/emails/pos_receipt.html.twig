@@ -1,0 +1,17 @@
+{# Reçu de caisse envoyé par courriel (F3, 24/10/2026). Variables : receipt, profile, duplicate ; ajoutées par EmailSenderService : fromName, signature, logoUrl, domain #}
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Votre reçu</title></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;color:#2c2c2c;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f4f4;padding:24px 8px;">
+    <tr><td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background:#ffffff;border-radius:8px;padding:24px;border-top:6px solid {{ profile.primaryColor ?? '#1f2d34' }};">
+            <tr><td style="font-size:15px;line-height:1.6;padding-bottom:12px;">Bonjour,<br>voici votre reçu de <strong>{{ profile.name ?? receipt.store.name }}</strong>. Il est aussi joint en PDF.</td></tr>
+            <tr><td>{{ include('pos/_receipt_body.html.twig') }}</td></tr>
+            {% if receipt.receiptUrl %}<tr><td style="font-size:12px;color:#666;padding-top:14px;">Ce reçu reste consultable en ligne : <a href="{{ receipt.receiptUrl }}" style="color:{{ profile.primaryColor ?? '#1f2d34' }};">{{ receipt.receiptUrl }}</a></td></tr>{% endif %}
+            <tr><td style="font-size:11px;color:#888;padding-top:14px;">Votre adresse courriel n'a servi qu'à cet envoi et n'est pas conservée.</td></tr>
+        </table>
+    </td></tr>
+</table>
+</body>
+</html>

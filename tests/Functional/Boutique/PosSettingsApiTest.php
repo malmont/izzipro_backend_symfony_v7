@@ -63,7 +63,7 @@ class PosSettingsApiTest extends WebTestCase
         $this->assertSame(['minLength' => 4, 'maxLength' => 6, 'maxAttempts' => 5, 'lockMinutes' => 15], $s['pin'], 'bloc pin inchangé');
         $this->assertSame(['openingSuggested' => null, 'closingKeptSuggested' => null], $s['cashFund']);
         $this->assertSame(['cash' => true, 'declaredCard' => true, 'paypal' => true, 'multiPayment' => true, 'declaredCardBlockedWithTerminal' => false], $s['paymentMethods']);
-        $this->assertSame(['header' => null, 'footer' => null, 'showTaxNumbers' => true], $s['receipt']);
+        $this->assertSame(['header' => null, 'footer' => null, 'showTaxNumbers' => true, 'emailEnabled' => true, 'qrEnabled' => true, 'linkDays' => 90, 'qrPrintDefault' => true], $s['receipt']); // ajouts F3
         $this->assertSame(['max' => 10, 'alertHours' => 24], $s['heldCarts']);
         $this->assertNull($s['cashAlertThreshold']);
         $this->assertFalse($s['terminalRequired']);

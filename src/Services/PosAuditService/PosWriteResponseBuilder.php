@@ -20,7 +20,7 @@ use App\Services\TenantEntityManagerProvider;
  */
 class PosWriteResponseBuilder
 {
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CaisseService $caisseService, private readonly PosReceiptService $receipts, private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments, private readonly \App\Services\PosReturnService\PosReturnService $returns)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CaisseService $caisseService, private readonly PosReceiptService $receipts, private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments, private readonly \App\Services\PosReturnService\PosReturnService $returns, private readonly PosReceiptLinkService $links)
     {
     }
 
@@ -29,8 +29,18 @@ class PosWriteResponseBuilder
     {
         $em = $this->emProvider->getEntityManager();
 
-        return ['success' => true, 'orderId' => $order->getId(), 'message' => 'Commande créée.']
-            + PosReceiptDto::fromOrder($order, $em->getRepository(Entreprise::class)->findOneBy([]), $this->caisseService->getCaisseOfOrder($order), $locale, $this->receipts->forOrder($order));
+        return ['success' => true, 'orderId' => $order->getId(), 'message' => 'Commande créée.'] + $this->receiptBlock($order, $locale);
+    }
+
+    /** Bloc ticket complet d'une commande (F3) : ticket de vente par défaut, ou le reçu donné (avoir), duplicata ou non */
+    public function receiptBlock(Order $order, string $locale = 'fr', ?PosReceipt $receipt = null, bool $duplicate = false): array
+    {
+        $em = $this->emProvider->getEntityManager();
+        $receipts = $this->receipts->forOrder($order);
+        $receipt ??= $receipts[PosReceipt::TICKET] ?? $receipts[PosReceipt::CREDIT_NOTE] ?? null;
+
+        return PosReceiptDto::fromOrder($order, $em->getRepository(Entreprise::class)->findOneBy([]), $this->caisseService->getCaisseOfOrder($order), $locale, $receipts,
+            $this->terminalPayments->findByOrder((int) $order->getId()), $receipt ? $this->links->url($receipt) : null, $duplicate, $receipt);
     }
 
     /** POST /api/order/cancel/{id} d'une vente au comptoir (200) : dernier avoir de la commande */
@@ -96,6 +106,8 @@ class PosWriteResponseBuilder
             // Retour partiel et échange (F2) : réponse reconstituée depuis le retour (et la vente d'échange)
             'return' => ($r = $em->find(\App\Entity\PosReturn::class, $subjectId)) ? ['status' => 201, 'body' => $this->returns->toArray($r, $locale)] : null,
             'exchange' => ($r = $em->find(\App\Entity\PosReturn::class, $subjectId)) && $r->getExchangeOrder() ? ['status' => 201, 'body' => ['return' => $this->returns->toArray($r, $locale), 'sale' => $this->sale($r->getExchangeOrder(), $locale)]] : null,
+            // Reçu envoyé par courriel (F3) : rejeu sans second courriel
+            'receipt_email' => ($rc = $em->find(PosReceipt::class, $subjectId)) ? ['status' => 200, 'body' => ['sent' => true, 'barcode' => \App\Services\PosReturnService\PosReturnService::barcode($rc), 'replayed' => true]] : null,
             default => null,
         };
     }

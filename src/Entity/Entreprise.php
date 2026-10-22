@@ -278,6 +278,19 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $posDiscountReasons = null;
 
+    // Ticket numérique (F3, 24/10/2026) : reçu par courriel, reçu par QR (lien public signé), durée du lien (jours), QR imprimé par défaut
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posReceiptEmailEnabled = true;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posReceiptQrEnabled = true;
+
+    #[ORM\Column(options: ['default' => 90])]
+    private int $posReceiptLinkDays = 90;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posReceiptQrPrintDefault = true;
+
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $metaTitle = null;
 
@@ -751,6 +764,14 @@ class Entreprise implements TranslatableInterface
 
     public const RETURN_REASONS_DEFAULT = ['Taille ou modèle', 'Défectueux', 'Ne convient pas', 'Erreur de caisse', 'Autre'];
     public const DISCOUNT_REASONS_DEFAULT = ['Article abîmé', 'Fidélité', 'Prix affiché', 'Geste commercial', 'Autre'];
+    public function isPosReceiptEmailEnabled(): bool { return $this->posReceiptEmailEnabled; }
+    public function setPosReceiptEmailEnabled(bool $v): static { $this->posReceiptEmailEnabled = $v; return $this; }
+    public function isPosReceiptQrEnabled(): bool { return $this->posReceiptQrEnabled; }
+    public function setPosReceiptQrEnabled(bool $v): static { $this->posReceiptQrEnabled = $v; return $this; }
+    public function getPosReceiptLinkDays(): int { return $this->posReceiptLinkDays; }
+    public function setPosReceiptLinkDays(?int $d): static { $this->posReceiptLinkDays = min(3650, max(1, (int) $d)); return $this; }
+    public function isPosReceiptQrPrintDefault(): bool { return $this->posReceiptQrPrintDefault; }
+    public function setPosReceiptQrPrintDefault(bool $v): static { $this->posReceiptQrPrintDefault = $v; return $this; }
     public function isPosDiscountEnabled(): bool { return $this->posDiscountEnabled; }
     public function setPosDiscountEnabled(bool $v): static { $this->posDiscountEnabled = $v; return $this; }
     public function isPosDiscountTicketEnabled(): bool { return $this->posDiscountTicketEnabled; }

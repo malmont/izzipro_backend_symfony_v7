@@ -49,6 +49,16 @@ class PosReceipt
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
 
+    // Ticket numérique (F3, 24/10/2026) : réimpressions, version du lien public (révocation = version suivante)
+    #[ORM\Column(options: ['default' => 0])]
+    private int $reprintCount = 0;
+
+    #[ORM\Column(options: ['default' => 1])]
+    private int $linkVersion = 1;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $linkRevokedAt = null;
+
     public function __construct(CashRegister $cashRegister, string $kind, int $number, Order $order, ?Caisse $session, int $amount)
     {
         $this->cashRegister = $cashRegister;
@@ -68,4 +78,10 @@ class PosReceipt
     public function getSession(): ?Caisse { return $this->session; }
     public function getAmount(): int { return $this->amount; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+    public function getReprintCount(): int { return $this->reprintCount; }
+    public function addReprint(): static { $this->reprintCount++; return $this; }
+    public function getLinkVersion(): int { return $this->linkVersion; }
+    public function getLinkRevokedAt(): ?\DateTimeImmutable { return $this->linkRevokedAt; }
+    /** Révoque les liens déjà imprimés (version suivante) ; le prochain lien émis sera valide */
+    public function revokeLink(): static { $this->linkVersion++; $this->linkRevokedAt = new \DateTimeImmutable(); return $this; }
 }

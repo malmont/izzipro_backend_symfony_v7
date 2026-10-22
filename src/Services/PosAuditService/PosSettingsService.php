@@ -41,7 +41,9 @@ class PosSettingsService
             // Lot R1 (23/10/2026) : réglages par site, défauts = comportement d'avant (ajouts seulement)
             'cashFund' => ['openingSuggested' => $e?->getPosOpeningFundSuggested(), 'closingKeptSuggested' => $e?->getPosClosingKeptFundSuggested()],
             'paymentMethods' => $this->paymentMethods(),
-            'receipt' => ['header' => $e?->getPosReceiptHeader(), 'footer' => $e?->getPosReceiptFooter(), 'showTaxNumbers' => $e?->isPosReceiptShowTaxNumbers() ?? true],
+            'receipt' => ['header' => $e?->getPosReceiptHeader(), 'footer' => $e?->getPosReceiptFooter(), 'showTaxNumbers' => $e?->isPosReceiptShowTaxNumbers() ?? true,
+                // Ticket numérique (F3, 24/10/2026)
+                'emailEnabled' => $e?->isPosReceiptEmailEnabled() ?? true, 'qrEnabled' => $e?->isPosReceiptQrEnabled() ?? true, 'linkDays' => $e?->getPosReceiptLinkDays() ?? 90, 'qrPrintDefault' => $e?->isPosReceiptQrPrintDefault() ?? true],
             'heldCarts' => ['max' => $e?->getPosHeldCartsMax() ?? 10, 'alertHours' => $e?->getPosHeldCartsAlertHours() ?? 24],
             'cashAlertThreshold' => $e?->getPosCashAlertThreshold(),
             'terminalRequired' => $e?->isPosTerminalHeaderRequired() ?? false,

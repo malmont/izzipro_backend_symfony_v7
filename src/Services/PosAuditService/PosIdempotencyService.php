@@ -30,7 +30,7 @@ class PosIdempotencyService implements ResetInterface
     public const REPLAYED_HEADER = 'Idempotent-Replayed';
     public const ROUTES = ['order_create_multi_payment', 'order_cancel', 'caisse_open', 'caisse_close', 'caisse_deposit', 'caisse_withdraw',
         'caisse_cash_funddeposit', 'caisse_cash_fund_withdraw', 'caisse_drawer_open',
-        'pos_terminal_payment_create', 'pos_terminal_payment_cancel', 'pos_terminal_payment_refund', 'pos_return_create', 'pos_exchange_create'];
+        'pos_terminal_payment_create', 'pos_terminal_payment_cancel', 'pos_terminal_payment_refund', 'pos_return_create', 'pos_exchange_create', 'pos_receipt_email'];
     private const STALE_SECONDS = 60;
     private const RETENTION_DAYS = 7;
 

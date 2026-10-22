@@ -1,0 +1,55 @@
+{# Corps d'un reçu de caisse (F3, 24/10/2026) : page publique, PDF et courriel. Variables : receipt (bloc ticket), profile (app-profile pos), duplicate #}
+{% set store = receipt.store %}
+{% set kindLabel = {'sale': 'Ticket de vente', 'exchange': 'Ticket d\'échange', 'return': 'Avoir (retour)', 'cancellation': 'Avoir (annulation)'}[receipt.kind] ?? 'Ticket' %}
+<div class="receipt" style="font-family:'DejaVu Sans',Arial,Helvetica,sans-serif;font-size:12px;color:#222;max-width:360px;margin:0 auto;">
+    {% if duplicate %}<div style="text-align:center;font-weight:bold;letter-spacing:2px;border:1px solid #222;padding:4px;margin-bottom:8px;">DUPLICATA</div>{% endif %}
+    <div style="text-align:center;margin-bottom:8px;">
+        {% if profile.logo is defined and profile.logo %}<img src="{{ profile.logo }}" alt="" style="max-height:48px;max-width:160px;"><br>{% endif %}
+        <div style="font-size:15px;font-weight:bold;color:{{ profile.primaryColor ?? '#222' }};">{{ store.name }}</div>
+        {% if store.address %}<div>{{ store.address }}</div>{% endif %}
+        {% if store.phone %}<div>{{ store.phone }}</div>{% endif %}
+        {% if store.showTaxNumbers %}
+            {% if store.taxNumbers and store.taxNumbers.gst %}<div>N° TPS : {{ store.taxNumbers.gst }}</div>{% endif %}
+            {% if store.taxNumbers and store.taxNumbers.qst %}<div>N° TVQ : {{ store.taxNumbers.qst }}</div>{% endif %}
+            {% if store.taxNumber %}<div>N° fiscal / TVA : {{ store.taxNumber }}</div>{% endif %}
+        {% endif %}
+        {% if store.receiptHeader %}<div style="margin-top:6px;white-space:pre-line;">{{ store.receiptHeader }}</div>{% endif %}
+    </div>
+    <div style="border-top:1px dashed #999;padding-top:6px;margin-bottom:6px;">
+        <div><strong>{{ kindLabel }}</strong> n° {{ receipt.receiptReference ?? receipt.receiptNumber }}</div>
+        <div>{{ receipt.createdAt ? receipt.createdAt|date('d/m/Y H:i') : '' }}{% if receipt.cashRegister %} · {{ receipt.cashRegister.name }}{% endif %}</div>
+        {% if receipt.cashier %}<div>Servi par {{ receipt.cashier.name }}</div>{% endif %}
+        <div style="color:#666;">Réf. {{ receipt.reference }}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        {% for line in receipt.lines %}
+            <tr><td colspan="2" style="padding-top:4px;">{{ line.name }}</td></tr>
+            <tr>
+                <td style="color:#555;">{{ line.quantity }} × {{ line.unitPrice|number_format(2, ',', ' ') }}{% if line.saleUnit %} /{{ line.saleUnit }}{% endif %}</td>
+                <td style="text-align:right;">{{ (line.gross)|number_format(2, ',', ' ') }}</td>
+            </tr>
+            {% for d in line.discounts %}
+                <tr><td style="color:#555;padding-left:8px;">Remise{% if d.scope == 'ticket' %} (ticket){% endif %}{% if d.reason.code or d.reason.text %} · {{ d.reason.text ?? d.reason.code }}{% endif %}</td><td style="text-align:right;">−{{ d.amount|number_format(2, ',', ' ') }}</td></tr>
+            {% endfor %}
+        {% endfor %}
+    </table>
+    <table style="width:100%;border-top:1px dashed #999;margin-top:6px;padding-top:6px;border-collapse:collapse;font-size:12px;">
+        {% if receipt.discounts is defined and receipt.discounts.total > 0 %}
+            <tr><td>Sous-total avant remises</td><td style="text-align:right;">{{ receipt.grossSubTotal|number_format(2, ',', ' ') }}</td></tr>
+            <tr><td>Remises</td><td style="text-align:right;">−{{ receipt.discounts.total|number_format(2, ',', ' ') }}</td></tr>
+        {% endif %}
+        <tr><td>Sous-total</td><td style="text-align:right;">{{ receipt.subTotal|number_format(2, ',', ' ') }}</td></tr>
+        {% for tax in receipt.taxes %}
+            <tr><td>{{ tax.name }}{% if tax.rate %} ({{ (tax.rate * 100)|number_format(3, ',', ' ')|replace({',000': '', '0': '0'}) }} %){% endif %}</td><td style="text-align:right;">{{ tax.amount|number_format(2, ',', ' ') }}</td></tr>
+        {% endfor %}
+        {% if receipt.cashRounding %}<tr><td>Arrondi espèces</td><td style="text-align:right;">{{ receipt.cashRounding|number_format(2, ',', ' ') }}</td></tr>{% endif %}
+        {% if receipt.creditApplied is defined and receipt.creditApplied > 0 %}<tr><td>Crédit du retour</td><td style="text-align:right;">−{{ receipt.creditApplied|number_format(2, ',', ' ') }}</td></tr>{% endif %}
+        <tr style="font-weight:bold;font-size:14px;"><td>TOTAL {{ receipt.currency }}</td><td style="text-align:right;">{{ receipt.amountDue|number_format(2, ',', ' ') }}</td></tr>
+        {% for p in receipt.payments %}
+            <tr><td>{{ p.label }}{% if p.paymentMethodType == 'interac_present' %} Interac{% endif %}{% if p.cardBrand %} {{ p.cardBrand|upper }}{% endif %}{% if p.last4 %} •••• {{ p.last4 }}{% endif %}</td><td style="text-align:right;">{{ p.amount|number_format(2, ',', ' ') }}</td></tr>
+        {% endfor %}
+        {% if receipt.change %}<tr><td>Monnaie rendue</td><td style="text-align:right;">{{ receipt.change|number_format(2, ',', ' ') }}</td></tr>{% endif %}
+    </table>
+    {% if store.receiptFooter %}<div style="text-align:center;margin-top:10px;white-space:pre-line;">{{ store.receiptFooter }}</div>{% endif %}
+    {% if receipt.barcode %}<div style="text-align:center;color:#666;margin-top:8px;font-size:11px;">{{ receipt.barcode }}</div>{% endif %}
+</div>

@@ -14,28 +14,62 @@ use App\Entity\Order;
 class PosReceiptDto
 {
     /** @param array<string, \App\Entity\PosReceipt> $receipts numéros de la commande (C2) */
-    public static function fromOrder(Order $order, ?Entreprise $entreprise, ?Caisse $caisse, string $locale, array $receipts = []): array
+    public static function fromOrder(Order $order, ?Entreprise $entreprise, ?Caisse $caisse, string $locale, array $receipts = [],
+        ?\App\Entity\PosTerminalPayment $terminal = null, ?string $receiptUrl = null, bool $duplicate = false, ?\App\Entity\PosReceipt $receiptOverride = null): array
     {
         $dollars = fn (?float $cents) => round(((float) $cents) / 100, 2);
+        // Ticket complet (F3, 24/10/2026) : lignes, caissier, devise, monnaie rendue, détail des cartes, nature, lien public, duplicata
+        $lines = [];
+        foreach ($order->getOrderItems() as $item) {
+            $lines[] = [
+                'productVariantId' => $item->getProductVariant()?->getId(), 'name' => $item->getProductVariant()?->getProduct()?->getName(), 'saleUnit' => $item->getSaleUnit(),
+                'quantity' => $item->getQuantity(), 'unitPrice' => $dollars($item->getUnitPrice()), 'gross' => $dollars($item->grossTotal()),
+                'discountAmount' => $dollars($item->getDiscountAmount()), 'total' => $dollars($item->getTotalPrice()),
+                'discounts' => array_map(fn ($d) => ['type' => $d['type'], 'value' => $d['value'], 'amount' => $dollars($d['amount']), 'scope' => $d['scope'], 'reason' => ['code' => $d['reasonCode'] ?? null, 'text' => $d['reasonText'] ?? null]], $item->getDiscounts()),
+            ];
+        }
+        $cashier = $order->getUserId();
         $taxes = [];
         foreach ($order->getOrderTaxes() as $orderTax) {
             $tax = $orderTax->getTax();
             $taxes[] = ['name' => $tax?->getName() ?? 'Taxe', 'rate' => $tax ? (float) $tax->getRate() : null, 'amount' => $dollars($orderTax->getAmount())];
         }
         $payments = [];
+        $paid = 0;
         foreach ($order->getPayments() as $payment) {
             $method = $payment->getPaymentMethod();
+            $amount = (int) round((float) $payment->getAmount());
+            $paid += max(0, $amount);
+            $card = $method?->getId() === 1;
             $payments[] = [
                 'type' => $method?->getId(),
                 'label' => $method ? ($method->getTranslation($locale)?->getName() ?? $method->getName()) : null,
                 'amount' => $dollars($payment->getAmount()),
+                // Détail carte (F3) : marque et 4 derniers chiffres, type card_present | interac_present (terminal) ou declared (carte déclarée)
+                'cardBrand' => $card ? ($payment->getStripeCardBrand() ?? $terminal?->getCardBrand()) : null,
+                'last4' => $card ? ($payment->getStripeLast4() ?? $terminal?->getLast4()) : null,
+                'paymentMethodType' => $card ? ($terminal && $payment->getStripePaymentId() === $terminal->getStripePaymentIntentId() ? $terminal->getPaymentMethodType() : ($payment->getStripePaymentId() ? ($terminal?->getPaymentMethodType() ?? 'card') : 'declared')) : null,
             ];
         }
         $register = $caisse?->getCashRegister();
 
-        $receipt = $receipts[\App\Entity\PosReceipt::TICKET] ?? $receipts[\App\Entity\PosReceipt::CREDIT_NOTE] ?? null;
+        $receipt = $receiptOverride ?? $receipts[\App\Entity\PosReceipt::TICKET] ?? $receipts[\App\Entity\PosReceipt::CREDIT_NOTE] ?? null;
+        $isCreditNote = $receipt?->getKind() === \App\Entity\PosReceipt::CREDIT_NOTE;
+        $kind = $isCreditNote ? ($order->getOrderType()?->getId() === 2 ? 'return' : 'cancellation') : ($order->getCreditApplied() > 0 ? 'exchange' : 'sale');
+        $amountDueCents = (int) round($order->getTotalAmount() + $order->getCashRounding() - $order->getCreditApplied());
 
         return [
+            // Ticket numérique (F3) : nature du document, duplicata, lien public (QR), réimpressions, émission
+            'kind' => $kind,
+            'duplicate' => $duplicate,
+            'reprintCount' => $receipt?->getReprintCount() ?? 0,
+            'issuedAt' => $receipt?->getCreatedAt()->format(\DateTimeInterface::ATOM),
+            'receiptUrl' => $receiptUrl,
+            'cashier' => $cashier ? ['id' => $cashier->getId(), 'name' => trim($cashier->getFirstname() . ' ' . $cashier->getLastname())] : null,
+            'currency' => $entreprise?->getCurrency() ?? 'CAD',
+            'lines' => $lines,
+            // Monnaie rendue (vente) : espèces reçues au-delà du montant dû
+            'change' => $kind === 'sale' || $kind === 'exchange' ? $dollars(max(0, $paid - $amountDueCents)) : null,
             // Numéro de ticket (vente) ou d'avoir (retour), suite continue par poste (C2)
             'receiptNumber' => $receipt?->getNumber(),
             'receiptKind' => $receipt?->getKind(),

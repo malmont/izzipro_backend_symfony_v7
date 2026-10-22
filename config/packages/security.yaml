@@ -12,7 +12,7 @@ security:
 
 
         api:
-            pattern:   ^/api(?!/(login|logout|health|currencies|tenant/check|tenant/hosts|app/activate|pos/pin-login|pos/users|order/create-guest|cart/quote|subscription-plans$|stripe-config|stripe/create-intent|stripe/webhook|webhooks|adresses/autocomplete|adresses/details|transporteurs|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement|shared-media))
+            pattern:   ^/api(?!/(login|logout|health|currencies|tenant/check|tenant/hosts|app/activate|pos/pin-login|pos/users|r/|order/create-guest|cart/quote|subscription-plans$|stripe-config|stripe/create-intent|stripe/webhook|webhooks|adresses/autocomplete|adresses/details|transporteurs|Carrier|shipping/rates|shipping/summary|contact/submit|team|vehicles|vehicle_products|vehicle-products|financement|shared-media))
             stateless: true
             provider:  tenant_user_provider
             jwt: ~
@@ -134,6 +134,9 @@ security:
         - { path: ^/api/pos/(returns|exchanges)(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Devis de caisse avec remises (24/10/2026, F1) : caisse
         - { path: ^/api/pos/quote$, roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
+        # 🔹 Ticket numérique (24/10/2026, F3) : page publique du reçu par jeton signé (QR), réimpression et envoi par courriel pour la caisse
+        - { path: ^/api/r/, roles: PUBLIC_ACCESS }
+        - { path: ^/api/pos/receipts(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Clés d'activation des applications mobiles (15/10/2026) : activation publique (hors pare-feu JWT, limitée en
         #    débit), gestion des clés du site par ses administrateurs.
         - { path: ^/api/app/activate$, roles: PUBLIC_ACCESS }

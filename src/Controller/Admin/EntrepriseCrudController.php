@@ -133,6 +133,11 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField::new('posReceiptHeader', 'Ticket : texte d\'en-tête')->setRequired(false)->setHelp('Texte simple, retours à la ligne conservés, 500 caractères')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField::new('posReceiptFooter', 'Ticket : texte de pied')->setRequired(false)->setHelp('Par exemple « Merci » ou la politique de retour')->hideOnIndex(),
             BooleanField::new('posReceiptShowTaxNumbers', 'Ticket : afficher les numéros de taxes')->hideOnIndex(),
+            // Ticket numérique (F3, 24/10/2026)
+            BooleanField::new('posReceiptEmailEnabled', 'Ticket : reçu par courriel')->setHelp('Envoi par le SMTP du site ; sans configuration SMTP, le POS reçoit 503 EMAIL_NOT_CONFIGURED')->hideOnIndex(),
+            BooleanField::new('posReceiptQrEnabled', 'Ticket : reçu par QR code (lien public signé)')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posReceiptLinkDays', 'Ticket : validité du lien du reçu (jours)')->setHelp('défaut 90')->hideOnIndex(),
+            BooleanField::new('posReceiptQrPrintDefault', 'Ticket : QR imprimé par défaut')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posHeldCartsMax', 'Paniers en attente : nombre maximal')->setHelp('défaut 10')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posHeldCartsAlertHours', 'Paniers en attente : alerte après (heures)')->setHelp('défaut 24')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCashAlertThreshold', 'Alerte « trop d\'espèces » au-delà de (cents)')->setRequired(false)->setHelp('Vide : aucune alerte ; le POS invite à un retrait')->hideOnIndex(),

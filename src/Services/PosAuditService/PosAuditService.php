@@ -50,6 +50,10 @@ class PosAuditService
     public const CARD_REFUND = 'CARD_REFUND';
     public const CARD_SIMULATED = 'CARD_SIMULATED';
     public const TERMINAL_CONFIGURED = 'TERMINAL_CONFIGURED';
+    // Ticket numérique (F3, 24/10/2026) : réimpression, envoi par courriel (adresse masquée seulement), révocation du lien public
+    public const RECEIPT_REPRINTED = 'RECEIPT_REPRINTED';
+    public const RECEIPT_EMAILED = 'RECEIPT_EMAILED';
+    public const RECEIPT_LINK_REVOKED = 'RECEIPT_LINK_REVOKED';
     /** Entrées d'une action qui peut avoir été validée par un responsable : elles portent data.approvedBy */
     private const APPROVABLE = [self::REFUND, self::CASH_WITHDRAWAL, self::FUND_WITHDRAWAL, self::DRAWER_OPENED, self::SESSION_CLOSED, self::DISCOUNT_APPLIED];
 
@@ -57,7 +61,8 @@ class PosAuditService
         self::CASH_WITHDRAWAL, self::FUND_DEPOSIT, self::FUND_WITHDRAWAL, self::SALE, self::REFUND, self::Z_REPORT_CREATED, self::X_REPORT_VIEWED,
         self::CLOSING_PREVIEW, self::DRAWER_OPENED, self::CASH_REGISTER_CREATED, self::CASH_REGISTER_UPDATED, self::DISCOUNT_APPLIED, self::PRICE_CHANGED,
         self::PIN_SET, self::PIN_FAILED, self::PIN_LOCKED, self::PIN_RESET, self::UNLOCK, self::APPROVAL_GRANTED, self::APPROVAL_FAILED,
-        self::CARD_PAYMENT_STARTED, self::CARD_PAYMENT_SUCCEEDED, self::CARD_PAYMENT_FAILED, self::CARD_PAYMENT_CANCELED, self::CARD_REFUND, self::CARD_SIMULATED, self::TERMINAL_CONFIGURED];
+        self::CARD_PAYMENT_STARTED, self::CARD_PAYMENT_SUCCEEDED, self::CARD_PAYMENT_FAILED, self::CARD_PAYMENT_CANCELED, self::CARD_REFUND, self::CARD_SIMULATED, self::TERMINAL_CONFIGURED,
+        self::RECEIPT_REPRINTED, self::RECEIPT_EMAILED, self::RECEIPT_LINK_REVOKED];
 
     /** Clé du verrou consultatif (par base, donc par site) */
     private const LOCK_KEY = 7461002;

@@ -643,6 +643,54 @@ Prix affiché, Geste commercial, Autre). `settings.approvals.discount` = `{requi
 réglages, contrôle, devis), `Controller/PosController/PosQuoteController` ; schéma `migrations/Version20261024120000.php`,
 `scripts/migrate_all_v2_pos_discounts.sh` ; tests `tests/Functional/Boutique/PosDiscountApiTest.php`.
 
+## Ticket numérique : réimpression, courriel, QR code (lot F3, 24/10/2026)
+
+**Ticket complet côté serveur.** Le bloc ticket de la vente, de l'annulation, du retour et de l'échange porte en plus :
+`kind` (`sale | exchange | return | cancellation`), `duplicate` (faux à l'émission), `reprintCount`, `issuedAt`,
+`receiptUrl` (lien public du reçu, null si le QR est désactivé), `cashier {id, name}`, `currency`, `lines
+[{productVariantId, name, saleUnit, quantity, unitPrice (brut), gross, discountAmount, total (net), discounts}]`, `change`
+(monnaie rendue, ventes), et pour chaque paiement `cardBrand`, `last4`, `paymentMethodType` (`card_present`,
+`interac_present`, `declared`). Mentions légales présentes (Québec, France) : raison sociale, adresse, téléphone, numéros de
+TPS et TVQ (`store.taxNumbers`, R1) ou numéro fiscal / TVA intracom (`store.taxNumber`), date et heure, numéro et nature du
+document, poste, caissier, détail des articles (quantité, prix unitaire, remises avec motif), sous-total, chaque taxe
+séparément avec son taux, arrondi des espèces, total et devise, moyens de paiement détaillés, monnaie rendue, en-tête et pied.
+
+**SMS** : aucun fournisseur n'est configuré (Notifier Symfony en courriel seulement) ; rien n'est codé. Plus tard : Twilio
+ou Vonage par le Notifier, un réglage « reçu par SMS », coût par message.
+
+### Routes
+
+| Méthode, route | Corps | Réponse |
+|---|---|---|
+| `GET /api/pos/receipts?barcode=IZ-T-1-123` ou `?orderId=[&kind=ticket\|credit_note]` ou `?kind=&number=&cashRegisterId=` (caisse) | — | 200 bloc ticket complet avec **`duplicate: true`** (mention « DUPLICATA » à imprimer), `reprintCount` incrémenté ; pour un échange, `exchange {returnId, returnOrderId, saleOrderId, other}` (l'autre document) ; journal `RECEIPT_REPRINTED`. 404 `RECEIPT_NOT_FOUND`, 422 `BARCODE_INVALID` |
+| `POST /api/pos/receipts/email {barcode \| orderId, email}` (caisse, `Idempotency-Key` acceptée) | — | 200 `{sent: true, barcode, to}` (`to` masqué `j***@domaine`) : courriel HTML aux couleurs du profil `pos` (nom, logo, couleur) avec le reçu complet et **le PDF joint** (rouleau 80 mm), envoyé par le SMTP du site via la file `email`. Refus : 409 `RECEIPT_EMAIL_DISABLED`, 422 `EMAIL_INVALID`, 503 `EMAIL_NOT_CONFIGURED` (site sans configuration d'envoi), 502 `EMAIL_SEND_FAILED`. Rejeu : même réponse, aucun second courriel |
+| `POST /api/pos/receipts/revoke-link {barcode \| orderId}` (responsable, administrateur) | — | 200 `{revoked: true, barcode, receiptUrl}` : les liens déjà imprimés du ticket cessent de fonctionner (version du lien), un nouveau lien est émis ; journal `RECEIPT_LINK_REVOKED` |
+| `GET /api/r/{jeton}` (**public**, `?format=pdf`) | — | page HTML simple du reçu (ou PDF), `X-Robots-Tag: noindex, nofollow, noarchive`, `Cache-Control: private, no-store` ; 404 jeton invalide, 410 lien expiré ou révoqué (message clair). Aucune donnée au-delà du ticket |
+
+**Lien public et QR.** `receiptUrl` = `https://<hôte public du site>/api/r/<jeton>` : servi **sous `/api/`** parce que l'hôte public
+d'un site (ex. `demo.arkanoa-media.com`) sert le site Next.js et ne route vers le backend que `/api/` ; rien ne change donc
+sur le site web. Le jeton (`base64url(ticket.version.expiration)` + HMAC SHA-256 tronqué, secret de l'application, lié au
+site) est non devinable et sans table de jetons ; expiration en fin de journée après la durée réglée (même QR toute la
+journée). Le POS imprime `receiptUrl` en QR code sur le ticket (si `settings.receipt.qrPrintDefault`) ou l'affiche à l'écran.
+
+**Données personnelles (Loi 25, RGPD).** L'adresse courriel saisie ne sert qu'à l'envoi : elle n'est enregistrée nulle
+part (ni base, ni journal, ni empreinte), elle ne transite que dans le message de la file `email` le temps de l'expédition ;
+le journal `RECEIPT_EMAILED` garde l'adresse masquée (`j***@domaine`), le ticket et le caissier. Aucun usage marketing.
+
+### Réglages (`settings.receipt`, ajouts)
+
+| Réglage (fiche Entreprise, panneau « Caisse (POS) ») | Défaut | Clé |
+|---|---|---|
+| Reçu par courriel | oui | `emailEnabled` |
+| Reçu par QR code (lien public) | oui | `qrEnabled` |
+| Validité du lien (jours) | 90 | `linkDays` |
+| QR imprimé par défaut sur le ticket | oui | `qrPrintDefault` |
+
+Code : `Services/PosAuditService/PosReceiptLinkService` (jeton, URL), `PosReceiptMailer` (HTML, PDF dompdf, envoi),
+`UseCase/PosReceiptUseCase/PosReceiptUseCase`, `Controller/PosController/PosReceiptController`, `PosPublicReceiptController`,
+gabarits `templates/pos/` et `templates/emails/pos_receipt.html.twig` ; schéma `migrations/Version20261024140000.php`,
+`scripts/migrate_all_v2_pos_receipt_digital.sh` ; tests `tests/Functional/Boutique/PosReceiptApiTest.php`.
+
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la
