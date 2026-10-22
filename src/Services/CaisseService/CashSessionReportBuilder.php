@@ -119,7 +119,28 @@ class CashSessionReportBuilder
             'cardTerminal' => $this->cardTerminal($saleOrders, $register),
             // Retours partiels et échanges (F2, 24/10/2026) : ajout ; les remboursements correspondants sont déjà dans refunds
             'returns' => $em->getRepository(\App\Entity\PosReturn::class)->totalsForSession((int) $session->getId()),
+            // Ventes hors ligne synchronisées (C5 partie 2, 25/10/2026) : ajout
+            'offline' => $this->offline($saleOrders),
         ];
+    }
+
+    /** @return array{count: int, total: int, priceDrift: int, stockShortfalls: int, lateEntries: int} ventes hors ligne de la session */
+    private function offline(array $saleOrders): array
+    {
+        $out = ['count' => 0, 'total' => 0, 'priceDrift' => 0, 'stockShortfalls' => 0, 'lateEntries' => 0];
+        $ids = array_keys(array_filter($saleOrders, fn (Order $o) => $o->getSyncedAt() !== null));
+        if ($ids === []) {
+            return $out;
+        }
+        foreach ($this->emProvider->getEntityManager()->getRepository(\App\Entity\PosOfflineSale::class)->findBy(['orderId' => $ids]) as $sale) {
+            $out['count']++;
+            $out['total'] += (int) round((float) $saleOrders[$sale->getOrderId()]->getTotalAmount());
+            $out['priceDrift'] += abs($sale->getPriceDrift());
+            $out['stockShortfalls'] += $sale->getStockShortfall();
+            $out['lateEntries'] += $sale->isLateEntry() ? 1 : 0;
+        }
+
+        return $out;
     }
 
     /** @return array{count: int, total: int} ventes remisées et total des remises (lignes, remise de ticket répartie comprise) */

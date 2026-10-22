@@ -73,6 +73,8 @@ class PosReceiptDto
             // Numéro de ticket (vente) ou d'avoir (retour), suite continue par poste (C2)
             'receiptNumber' => $receipt?->getNumber(),
             'receiptKind' => $receipt?->getKind(),
+            // Vente hors ligne (C5 partie 2) : numéro provisoire imprimé par la tablette, conservé à côté du numéro officiel
+            'provisionalNumber' => $receipt?->getProvisionalNumber(),
             // Numéro présenté avec le préfixe du poste (R1) ; receiptNumber reste l'entier de la suite continue
             'receiptReference' => $receipt ? $receipt->getCashRegister()->receiptReference($receipt->getNumber()) : null,
             // Code-barres Code 128 du ticket ou de l'avoir (F2) : IZ-T-<poste>-<numéro> / IZ-A-<poste>-<numéro>

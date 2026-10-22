@@ -291,6 +291,26 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => true])]
     private bool $posReceiptQrPrintDefault = true;
 
+    // Mode hors ligne du POS (C5 partie 2, 25/10/2026) : désactivé par défaut ; durée maximale hors ligne (h), file (nombre, cents),
+    // écart de prix toléré par vente (cents), validité du pack (h)
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posOfflineEnabled = false;
+
+    #[ORM\Column(options: ['default' => 24])]
+    private int $posOfflineMaxHours = 24;
+
+    #[ORM\Column(options: ['default' => 100])]
+    private int $posOfflineMaxQueuedSales = 100;
+
+    #[ORM\Column(options: ['default' => 500000])]
+    private int $posOfflineMaxQueuedAmount = 500000;
+
+    #[ORM\Column(options: ['default' => 5])]
+    private int $posOfflinePriceTolerance = 5;
+
+    #[ORM\Column(options: ['default' => 24])]
+    private int $posOfflinePackValidityHours = 24;
+
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $metaTitle = null;
 
@@ -764,6 +784,18 @@ class Entreprise implements TranslatableInterface
 
     public const RETURN_REASONS_DEFAULT = ['Taille ou modèle', 'Défectueux', 'Ne convient pas', 'Erreur de caisse', 'Autre'];
     public const DISCOUNT_REASONS_DEFAULT = ['Article abîmé', 'Fidélité', 'Prix affiché', 'Geste commercial', 'Autre'];
+    public function isPosOfflineEnabled(): bool { return $this->posOfflineEnabled; }
+    public function setPosOfflineEnabled(bool $v): static { $this->posOfflineEnabled = $v; return $this; }
+    public function getPosOfflineMaxHours(): int { return $this->posOfflineMaxHours; }
+    public function setPosOfflineMaxHours(?int $h): static { $this->posOfflineMaxHours = min(24 * 30, max(1, (int) $h)); return $this; }
+    public function getPosOfflineMaxQueuedSales(): int { return $this->posOfflineMaxQueuedSales; }
+    public function setPosOfflineMaxQueuedSales(?int $n): static { $this->posOfflineMaxQueuedSales = min(5000, max(1, (int) $n)); return $this; }
+    public function getPosOfflineMaxQueuedAmount(): int { return $this->posOfflineMaxQueuedAmount; }
+    public function setPosOfflineMaxQueuedAmount(?int $c): static { $this->posOfflineMaxQueuedAmount = max(0, (int) $c); return $this; }
+    public function getPosOfflinePriceTolerance(): int { return $this->posOfflinePriceTolerance; }
+    public function setPosOfflinePriceTolerance(?int $c): static { $this->posOfflinePriceTolerance = max(0, (int) $c); return $this; }
+    public function getPosOfflinePackValidityHours(): int { return $this->posOfflinePackValidityHours; }
+    public function setPosOfflinePackValidityHours(?int $h): static { $this->posOfflinePackValidityHours = min(24 * 30, max(1, (int) $h)); return $this; }
     public function isPosReceiptEmailEnabled(): bool { return $this->posReceiptEmailEnabled; }
     public function setPosReceiptEmailEnabled(bool $v): static { $this->posReceiptEmailEnabled = $v; return $this; }
     public function isPosReceiptQrEnabled(): bool { return $this->posReceiptQrEnabled; }

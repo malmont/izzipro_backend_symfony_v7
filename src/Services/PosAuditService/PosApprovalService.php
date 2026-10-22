@@ -25,6 +25,7 @@ class PosApprovalService
     public const CLOSE_WITHOUT_COUNT = 'close_without_count';
     public const DISCOUNT = 'discount'; // réservé (chantier F1)
     public const RETURN = 'return'; // retour partiel ou échange (F2, 24/10/2026)
+    public const OFFLINE_FORCE = 'offline_force'; // acceptation forcée d'une vente hors ligne (C5 partie 2, 25/10/2026)
     /** action → clés de contexte qui doivent correspondre */
     public const CONTEXT = [
         self::REFUND => ['orderId'],
@@ -34,6 +35,7 @@ class PosApprovalService
         self::CLOSE_WITHOUT_COUNT => ['cashRegisterId'],
         self::DISCOUNT => ['amount', 'percent', 'scope'], // remises (F1) : montant (cents), pourcentage (centièmes de %), scope line | ticket | mixed
         self::RETURN => ['orderId', 'amount'],
+        self::OFFLINE_FORCE => ['terminalId', 'counter', 'amount'],
     ];
     /** Clés de contexte textuelles (les autres sont numériques) */
     public const STRING_CONTEXT = ['scope'];
@@ -102,12 +104,13 @@ class PosApprovalService
         return $this->current->approvedBy();
     }
 
-    public function requireFor(string $action, User $actor, array $context, ?int $amount = null): void
+    public function requireFor(string $action, User $actor, array $context, ?int $amount = null, ?string $token = null): void
     {
         if (self::isManager($actor) || !$this->settings->requiresApproval($action, $amount)) {
             return;
         }
-        $token = (string) $this->requestStack->getMainRequest()?->headers->get(self::HEADER, '');
+        // Jeton : en-tête X-Pos-Approval, ou passé par l'appelant (ventes hors ligne : un jeton par vente dans le corps)
+        $token ??= (string) $this->requestStack->getMainRequest()?->headers->get(self::HEADER, '');
         if ($token === '') {
             throw new CashRegisterException('APPROVAL_REQUIRED', 'Validation d\'un responsable requise', 403, [], ['action' => $action, 'context' => $context]);
         }

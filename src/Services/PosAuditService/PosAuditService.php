@@ -54,6 +54,7 @@ class PosAuditService
     public const RECEIPT_REPRINTED = 'RECEIPT_REPRINTED';
     public const RECEIPT_EMAILED = 'RECEIPT_EMAILED';
     public const RECEIPT_LINK_REVOKED = 'RECEIPT_LINK_REVOKED';
+    public const OFFLINE_SYNC = 'OFFLINE_SYNC'; // lot de ventes hors ligne synchronisé (C5 partie 2, 25/10/2026)
     /** Entrées d'une action qui peut avoir été validée par un responsable : elles portent data.approvedBy */
     private const APPROVABLE = [self::REFUND, self::CASH_WITHDRAWAL, self::FUND_WITHDRAWAL, self::DRAWER_OPENED, self::SESSION_CLOSED, self::DISCOUNT_APPLIED];
 
@@ -62,7 +63,7 @@ class PosAuditService
         self::CLOSING_PREVIEW, self::DRAWER_OPENED, self::CASH_REGISTER_CREATED, self::CASH_REGISTER_UPDATED, self::DISCOUNT_APPLIED, self::PRICE_CHANGED,
         self::PIN_SET, self::PIN_FAILED, self::PIN_LOCKED, self::PIN_RESET, self::UNLOCK, self::APPROVAL_GRANTED, self::APPROVAL_FAILED,
         self::CARD_PAYMENT_STARTED, self::CARD_PAYMENT_SUCCEEDED, self::CARD_PAYMENT_FAILED, self::CARD_PAYMENT_CANCELED, self::CARD_REFUND, self::CARD_SIMULATED, self::TERMINAL_CONFIGURED,
-        self::RECEIPT_REPRINTED, self::RECEIPT_EMAILED, self::RECEIPT_LINK_REVOKED];
+        self::RECEIPT_REPRINTED, self::RECEIPT_EMAILED, self::RECEIPT_LINK_REVOKED, self::OFFLINE_SYNC];
 
     /** Clé du verrou consultatif (par base, donc par site) */
     private const LOCK_KEY = 7461002;

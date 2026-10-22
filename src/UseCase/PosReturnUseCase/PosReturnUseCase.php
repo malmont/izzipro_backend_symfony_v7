@@ -25,6 +25,8 @@ class PosReturnUseCase
         private readonly PosReturnService $returns,
         private readonly CreateOrderUseCase $createOrder,
         private readonly PosWriteResponseBuilder $responses,
+        private readonly \App\Services\PosDiscountService\PosDiscountService $discounts,
+        private readonly \App\Services\CaisseService\CashRoundingService $rounding,
     ) {
     }
 
@@ -90,6 +92,35 @@ class PosReturnUseCase
 
             return ['return' => $return, 'sale' => $sale];
         });
+    }
+
+    /**
+     * Simulation d'un échange, sans écriture (25/10/2026) : exactement le calcul de createExchange.
+     * {return: {orderId, lines}, sale: {items (remises F1), ticketDiscount?, cashRegisterId?}} → montants à encaisser ou à rendre.
+     */
+    public function quoteExchange(array $body): array
+    {
+        $returnInput = is_array($body['return'] ?? null) ? $body['return'] : [];
+        $saleInput = is_array($body['sale'] ?? null) ? $body['sale'] : [];
+        if (empty($saleInput['items']) || !is_array($saleInput['items'])) {
+            throw new CashRegisterException('VALIDATION_FAILED', 'sale.items : au moins un article', 422, [['path' => 'sale.items', 'message' => 'au moins un article attendu']]);
+        }
+        $ticketDiscount = is_array($saleInput['ticketDiscount'] ?? null) ? $saleInput['ticketDiscount'] : null;
+        $returnTotal = $this->returns->preview($returnInput);
+        $quote = $this->discounts->quote(array_values($saleInput['items']), $ticketDiscount);
+        $credit = min($returnTotal, (int) $quote['total']);
+        $amountDue = (int) $quote['total'] - $credit;
+        $refundDue = $returnTotal - $credit;
+
+        return [
+            'returnAmount' => $returnTotal,
+            'sale' => ['subtotal' => $quote['subtotal'], 'grossSubtotal' => $quote['grossSubtotal'] ?? $quote['subtotal'], 'discounts' => $quote['discounts'], 'taxes' => $quote['taxes'], 'total' => $quote['total'], 'cashTotal' => $quote['cashTotal']],
+            'creditApplied' => $credit,
+            'amountDue' => $amountDue,
+            'cashAmountDue' => $this->rounding->round($amountDue),
+            'refundDue' => $refundDue,
+            'cashRefundDue' => $this->rounding->round($refundDue),
+        ];
     }
 
     public function returnBody(PosReturn $return, string $locale): array

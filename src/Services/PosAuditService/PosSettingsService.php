@@ -15,7 +15,7 @@ class PosSettingsService
     /** Règles du PIN par défaut (lot R1 : modifiables par site, voir pinRules()) */
     public const PIN = ['minLength' => 4, 'maxLength' => 6, 'maxAttempts' => PosPinService::MAX_ATTEMPTS, 'lockMinutes' => PosPinService::LOCK_MINUTES];
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly \App\Services\PosTerminalService\PosTerminalSettingsService $terminal)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly \App\Services\PosTerminalService\PosTerminalSettingsService $terminal, private readonly \App\Services\PosOfflineService\PosOfflineSettings $offline)
     {
     }
 
@@ -49,6 +49,7 @@ class PosSettingsService
             'terminalRequired' => $e?->isPosTerminalHeaderRequired() ?? false,
             // Retours partiels et échanges (F2, 24/10/2026)
             'discounts' => $discounts, // remises de caisse (F1, 24/10/2026)
+            'offline' => $this->offline->settings(), // mode hors ligne (C5 partie 2, 25/10/2026)
             'returns' => ['maxDays' => $e?->getPosReturnMaxDays(), 'withoutReceipt' => $e?->isPosReturnWithoutReceipt() ?? false, 'restockDefault' => $e?->isPosReturnRestockDefault() ?? true,
                 'cashRefundForCardSale' => $e?->isPosReturnCashForCardSale() ?? false, 'reasons' => $e ? $e->returnReasons() : []],
             // Terminal de paiement Stripe (C4) : réglages utiles au POS (les commissions restent côté serveur)
@@ -118,6 +119,7 @@ class PosSettingsService
             PosApprovalService::CLOSE_WITHOUT_COUNT => $e?->isPosApprovalCloseWithoutCount() ?? true,
             PosApprovalService::RETURN => $threshold($e ? $e->effectivePosApprovalReturn() : 0),
             PosApprovalService::DISCOUNT => $e?->isPosDiscountEnabled() ?? true, // plafonds par rôle dans PosDiscountService
+            PosApprovalService::OFFLINE_FORCE => true, // toujours un responsable (C5 partie 2)
             default => false,
         };
     }

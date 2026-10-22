@@ -36,6 +36,11 @@ class ProductVariant
     #[ORM\Column(nullable: true)]
     private ?int $price = null;
 
+    // Code-barres de la variante (C5 hors ligne, 25/10/2026) : EAN/UPC propre à la variante, saisissable dans EasyAdmin ;
+    // le POS cherche la variante puis le produit (code-barres produit existant)
+    #[ORM\Column(length: 32, nullable: true)]
+    private ?string $barcode = null;
+
     /**
      * @var Collection<int, OrderItems>
      */
@@ -286,4 +291,6 @@ class ProductVariant
 
         return $this;
     }
+    public function getBarcode(): ?string { return $this->barcode; }
+    public function setBarcode(?string $barcode): static { $b = $barcode !== null ? trim($barcode) : ''; $this->barcode = $b === '' ? null : mb_substr($b, 0, 32); return $this; }
 }

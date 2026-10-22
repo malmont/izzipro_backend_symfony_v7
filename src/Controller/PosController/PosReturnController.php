@@ -41,6 +41,13 @@ class PosReturnController extends AbstractController
         });
     }
 
+    /** Simulation d'échange sans écriture (lecture) : {return: {orderId, lines}, sale: {items, ticketDiscount?, cashRegisterId?}} → montants */
+    #[Route('/api/pos/exchanges/quote', name: 'pos_exchange_quote', methods: ['POST'])]
+    public function exchangeQuote(Request $request): JsonResponse
+    {
+        return $this->guard(fn () => $this->json($this->returns->quoteExchange($this->body($request))));
+    }
+
     /** {return: {…}, sale: {items, paymentMethods?, cashRegisterId?}} → 201 {return, sale} dans une seule transaction */
     #[Route('/api/pos/exchanges', name: 'pos_exchange_create', methods: ['POST'])]
     public function exchange(Request $request): JsonResponse

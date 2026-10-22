@@ -142,6 +142,15 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posHeldCartsAlertHours', 'Paniers en attente : alerte après (heures)')->setHelp('défaut 24')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCashAlertThreshold', 'Alerte « trop d\'espèces » au-delà de (cents)')->setRequired(false)->setHelp('Vide : aucune alerte ; le POS invite à un retrait')->hideOnIndex(),
             BooleanField::new('posTerminalHeaderRequired', 'Exiger un terminal identifié (X-Pos-Terminal) sur les routes de caisse')->setHelp('Désactivé par défaut ; à activer quand toutes les tablettes envoient l\'en-tête')->hideOnIndex(),
+            // Mode hors ligne (C5 partie 2, 25/10/2026) : désactivé par défaut
+            FormField::addPanel('Mode hors ligne (caisse)')->setHelp('Ventes en espèces sans réseau, synchronisées ensuite ; désactivé d\'office si les taxes du site viennent de Stripe Tax.'),
+            BooleanField::new('posOfflineEnabled', 'Mode hors ligne autorisé')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflineMaxHours', 'Durée maximale hors ligne (heures)')->setHelp('défaut 24')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflineMaxQueuedSales', 'Ventes en file au plus')->setHelp('défaut 100')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflineMaxQueuedAmount', 'Montant en file au plus (cents)')->setHelp('défaut 500000 = 5 000,00')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflinePriceTolerance', 'Écart de prix toléré par vente (cents)')->setHelp('Recalcul au pack déclaré ; au-delà, vente refusée sauf acceptation forcée par un responsable ; défaut 5')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflinePackValidityHours', 'Validité du pack hors ligne (heures)')->setHelp('défaut 24')->hideOnIndex(),
+
             // Remises de caisse (F1, 24/10/2026)
             FormField::addPanel('Remises (caisse)')->setHelp('Remises de ligne et de ticket accordées par le caissier, calculées par le serveur (taxes sur le net). Plafonds par rôle ; au-delà du plafond caissier, validation d\'un responsable ; l\'administrateur n\'a pas de plafond.'),
             BooleanField::new('posDiscountEnabled', 'Remises autorisées')->hideOnIndex(),

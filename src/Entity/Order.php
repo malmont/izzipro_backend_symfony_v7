@@ -111,6 +111,10 @@ class Order
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $discountReasonText = null;
 
+    // Vente hors ligne synchronisée (C5 partie 2, 25/10/2026) : order_date = heure de vente corrigée, synced_at = enregistrement au serveur
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $syncedAt = null;
+
     // Non enregistré en base : poste de caisse choisi dans EasyAdmin pour une vente au comptoir créée à la main (C2)
     private ?int $posCashRegisterId = null;
 
@@ -456,6 +460,8 @@ class Order
         return $this->cashRounding;
     }
 
+    public function getSyncedAt(): ?\DateTimeImmutable { return $this->syncedAt; }
+    public function setSyncedAt(?\DateTimeImmutable $at): static { $this->syncedAt = $at; return $this; }
     public function getDiscountAmount(): int { return $this->discountAmount; }
     public function setDiscountAmount(int $cents): static { $this->discountAmount = max(0, $cents); return $this; }
     public function getDiscountPercentBp(): ?int { return $this->discountPercentBp; }

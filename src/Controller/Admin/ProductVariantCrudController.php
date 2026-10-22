@@ -17,6 +17,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
@@ -70,6 +71,7 @@ class ProductVariantCrudController extends BaseTenantCrudController
                 ]),
             IntegerField::new('stockQuantity', 'Stock Quantity'),
             IntegerField::new('price', 'Prix de la variante (cents)')->setHelp('Vide : prix du produit. 2 499 $ = 249900.')->hideOnIndex(),
+            TextField::new('barcode', 'Code-barres de la variante (EAN/UPC)')->setRequired(false)->setHelp('Facultatif (C5 hors ligne) : le POS cherche d\'abord la variante, puis le code-barres du produit.')->hideOnIndex(),
             AssociationField::new('optionValues', 'Valeurs de cette variante')
                 ->setHelp('Sélectionnez la combinaison exacte de valeurs pour cette variante (ex: "Rouge" et "XL").')
                 ->setFormTypeOption('by_reference', false) 

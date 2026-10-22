@@ -59,6 +59,10 @@ class PosReceipt
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $linkRevokedAt = null;
 
+    // Vente hors ligne (C5 partie 2, 25/10/2026) : numéro provisoire imprimé par la tablette (P-<terminal>-<compteur>)
+    #[ORM\Column(length: 40, nullable: true)]
+    private ?string $provisionalNumber = null;
+
     public function __construct(CashRegister $cashRegister, string $kind, int $number, Order $order, ?Caisse $session, int $amount)
     {
         $this->cashRegister = $cashRegister;
@@ -78,6 +82,8 @@ class PosReceipt
     public function getSession(): ?Caisse { return $this->session; }
     public function getAmount(): int { return $this->amount; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+    public function getProvisionalNumber(): ?string { return $this->provisionalNumber; }
+    public function setProvisionalNumber(?string $n): static { $this->provisionalNumber = $n; return $this; }
     public function getReprintCount(): int { return $this->reprintCount; }
     public function addReprint(): static { $this->reprintCount++; return $this; }
     public function getLinkVersion(): int { return $this->linkVersion; }

@@ -1,0 +1,738 @@
+{
+  "rule": "pos-offline-v1",
+  "description": "Jeu de cas partagé backend / POS : le total hors ligne calculé par la tablette doit être identique, au cent, au résultat attendu. Montants en cents ; rate = taux décimal ; step = pas d'arrondi des espèces (1 = aucun).",
+  "cases": [
+    {
+      "id": "simple-une-ligne-qc",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 4000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 2900,
+            "discountAmount": 0,
+            "net": 2900
+          }
+        ],
+        "subtotal": 2900,
+        "discountTotal": 0,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 145
+          },
+          {
+            "label": "TVQ",
+            "amount": 289
+          }
+        ],
+        "total": 3334,
+        "cashTotal": 3335,
+        "cashRounding": 1,
+        "change": 665
+      }
+    },
+    {
+      "id": "deux-casquettes-qc",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 2
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 7000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 5800,
+            "discountAmount": 0,
+            "net": 5800
+          }
+        ],
+        "subtotal": 5800,
+        "discountTotal": 0,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 290
+          },
+          {
+            "label": "TVQ",
+            "amount": 579
+          }
+        ],
+        "total": 6669,
+        "cashTotal": 6670,
+        "cashRounding": 1,
+        "change": 330
+      }
+    },
+    {
+      "id": "remise-ligne-10-pourcent-et-ticket-3",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 2,
+          "discounts": [
+            {
+              "type": "percent",
+              "value": 10
+            }
+          ]
+        }
+      ],
+      "ticketDiscount": {
+        "type": "amount",
+        "value": 300
+      },
+      "cashReceived": 6000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 5800,
+            "discountAmount": 880,
+            "net": 4920
+          }
+        ],
+        "subtotal": 4920,
+        "discountTotal": 880,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 246
+          },
+          {
+            "label": "TVQ",
+            "amount": 491
+          }
+        ],
+        "total": 5657,
+        "cashTotal": 5655,
+        "cashRounding": -2,
+        "change": 345
+      }
+    },
+    {
+      "id": "remise-ticket-prorata-ecart-derniere-ligne",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 2,
+          "discounts": [
+            {
+              "type": "percent",
+              "value": 10
+            }
+          ]
+        },
+        {
+          "unitPrice": 1900,
+          "quantity": 1,
+          "discounts": [
+            {
+              "type": "amount",
+              "value": 200
+            }
+          ]
+        }
+      ],
+      "ticketDiscount": {
+        "type": "percent",
+        "value": 5
+      },
+      "cashReceived": 10000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 5800,
+            "discountAmount": 841,
+            "net": 4959
+          },
+          {
+            "gross": 1900,
+            "discountAmount": 285,
+            "net": 1615
+          }
+        ],
+        "subtotal": 6574,
+        "discountTotal": 1126,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 329
+          },
+          {
+            "label": "TVQ",
+            "amount": 656
+          }
+        ],
+        "total": 7559,
+        "cashTotal": 7560,
+        "cashRounding": 1,
+        "change": 2440
+      }
+    },
+    {
+      "id": "deux-remises-sur-une-ligne-dans-l-ordre",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 10000,
+          "quantity": 1,
+          "discounts": [
+            {
+              "type": "percent",
+              "value": 10
+            },
+            {
+              "type": "amount",
+              "value": 500
+            }
+          ]
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 10000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 10000,
+            "discountAmount": 1500,
+            "net": 8500
+          }
+        ],
+        "subtotal": 8500,
+        "discountTotal": 1500,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 425
+          },
+          {
+            "label": "TVQ",
+            "amount": 848
+          }
+        ],
+        "total": 9773,
+        "cashTotal": 9775,
+        "cashRounding": 2,
+        "change": 225
+      }
+    },
+    {
+      "id": "remise-montant-plancher-zero",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 500,
+          "quantity": 1,
+          "discounts": [
+            {
+              "type": "amount",
+              "value": 900
+            }
+          ]
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 0,
+      "expected": {
+        "lines": [
+          {
+            "gross": 500,
+            "discountAmount": 500,
+            "net": 0
+          }
+        ],
+        "subtotal": 0,
+        "discountTotal": 500,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 0
+          },
+          {
+            "label": "TVQ",
+            "amount": 0
+          }
+        ],
+        "total": 0,
+        "cashTotal": 0,
+        "cashRounding": 0,
+        "change": 0
+      }
+    },
+    {
+      "id": "arrondi-vers-le-bas",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1000,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 1150,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1000,
+            "discountAmount": 0,
+            "net": 1000
+          }
+        ],
+        "subtotal": 1000,
+        "discountTotal": 0,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 50
+          },
+          {
+            "label": "TVQ",
+            "amount": 100
+          }
+        ],
+        "total": 1150,
+        "cashTotal": 1150,
+        "cashRounding": 0,
+        "change": 0
+      }
+    },
+    {
+      "id": "arrondi-demi-pas-vers-le-haut",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1898,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 2200,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1898,
+            "discountAmount": 0,
+            "net": 1898
+          }
+        ],
+        "subtotal": 1898,
+        "discountTotal": 0,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 95
+          },
+          {
+            "label": "TVQ",
+            "amount": 189
+          }
+        ],
+        "total": 2182,
+        "cashTotal": 2180,
+        "cashRounding": -2,
+        "change": 20
+      }
+    },
+    {
+      "id": "sans-arrondi-euro-tva-unique",
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA",
+          "rate": 0.2
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1999,
+          "quantity": 3
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 8000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 5997,
+            "discountAmount": 0,
+            "net": 5997
+          }
+        ],
+        "subtotal": 5997,
+        "discountTotal": 0,
+        "taxes": [
+          {
+            "label": "TVA",
+            "amount": 1199
+          }
+        ],
+        "total": 7196,
+        "cashTotal": 7196,
+        "cashRounding": 0,
+        "change": 804
+      }
+    },
+    {
+      "id": "aucune-taxe",
+      "step": 1,
+      "taxes": [],
+      "lines": [
+        {
+          "unitPrice": 1250,
+          "quantity": 2
+        },
+        {
+          "unitPrice": 333,
+          "quantity": 3
+        }
+      ],
+      "ticketDiscount": {
+        "type": "percent",
+        "value": 12.5
+      },
+      "cashReceived": 4000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 2500,
+            "discountAmount": 312,
+            "net": 2188
+          },
+          {
+            "gross": 999,
+            "discountAmount": 125,
+            "net": 874
+          }
+        ],
+        "subtotal": 3062,
+        "discountTotal": 437,
+        "taxes": [],
+        "total": 3062,
+        "cashTotal": 3062,
+        "cashRounding": 0,
+        "change": 938
+      }
+    },
+    {
+      "id": "remise-ticket-montant-sur-trois-lignes",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1000,
+          "quantity": 1
+        },
+        {
+          "unitPrice": 1000,
+          "quantity": 1
+        },
+        {
+          "unitPrice": 1000,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": {
+        "type": "amount",
+        "value": 100
+      },
+      "cashReceived": 3500,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1000,
+            "discountAmount": 33,
+            "net": 967
+          },
+          {
+            "gross": 1000,
+            "discountAmount": 33,
+            "net": 967
+          },
+          {
+            "gross": 1000,
+            "discountAmount": 34,
+            "net": 966
+          }
+        ],
+        "subtotal": 2900,
+        "discountTotal": 100,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 145
+          },
+          {
+            "label": "TVQ",
+            "amount": 289
+          }
+        ],
+        "total": 3334,
+        "cashTotal": 3335,
+        "cashRounding": 1,
+        "change": 165
+      }
+    },
+    {
+      "id": "remise-pourcentage-decimales",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 4999,
+          "quantity": 1,
+          "discounts": [
+            {
+              "type": "percent",
+              "value": 7.5
+            }
+          ]
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 6000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 4999,
+            "discountAmount": 375,
+            "net": 4624
+          }
+        ],
+        "subtotal": 4624,
+        "discountTotal": 375,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 231
+          },
+          {
+            "label": "TVQ",
+            "amount": 461
+          }
+        ],
+        "total": 5316,
+        "cashTotal": 5315,
+        "cashRounding": -1,
+        "change": 685
+      }
+    },
+    {
+      "id": "grande-quantite",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 199,
+          "quantity": 37
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 9000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 7363,
+            "discountAmount": 0,
+            "net": 7363
+          }
+        ],
+        "subtotal": 7363,
+        "discountTotal": 0,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 368
+          },
+          {
+            "label": "TVQ",
+            "amount": 734
+          }
+        ],
+        "total": 8465,
+        "cashTotal": 8465,
+        "cashRounding": 0,
+        "change": 535
+      }
+    },
+    {
+      "id": "ticket-pourcent-100",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 1
+        },
+        {
+          "unitPrice": 1900,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": {
+        "type": "percent",
+        "value": 100
+      },
+      "cashReceived": 0,
+      "expected": {
+        "lines": [
+          {
+            "gross": 2900,
+            "discountAmount": 2900,
+            "net": 0
+          },
+          {
+            "gross": 1900,
+            "discountAmount": 1900,
+            "net": 0
+          }
+        ],
+        "subtotal": 0,
+        "discountTotal": 4800,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 0
+          },
+          {
+            "label": "TVQ",
+            "amount": 0
+          }
+        ],
+        "total": 0,
+        "cashTotal": 0,
+        "cashRounding": 0,
+        "change": 0
+      }
+    }
+  ]
+}

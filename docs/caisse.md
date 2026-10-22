@@ -691,6 +691,101 @@ Code : `Services/PosAuditService/PosReceiptLinkService` (jeton, URL), `PosReceip
 gabarits `templates/pos/` et `templates/emails/pos_receipt.html.twig` ; schéma `migrations/Version20261024140000.php`,
 `scripts/migrate_all_v2_pos_receipt_digital.sh` ; tests `tests/Functional/Boutique/PosReceiptApiTest.php`.
 
+## Mode hors ligne (chantier C5 partie 2, 25/10/2026)
+
+Hors ligne, la tablette vend **en espèces seulement**, calcule avec la règle publiée ci-dessous et le **pack** reçu du
+serveur, imprime un ticket **provisoire** `P-<terminal>-<compteur>` (mention « provisoire »), puis synchronise par lots.
+Carte, remboursements, retours, échanges, retraits, clôture : interdits hors ligne. Le verrouillage par inactivité reste
+actif et le déverrouillage attend le réseau (décision du propriétaire). Désactivé par défaut (`settings.offline.enabled`),
+et désactivé d'office quand les taxes du site viennent de Stripe Tax (`reason: TAX_PROVIDER_STRIPE`).
+
+### Pack : `GET /api/pos/offline-pack?cashRegisterId=` (caisse)
+
+En-tête `ETag` ; `If-None-Match` identique → **304** sans corps. À rafraîchir au démarrage et toutes les heures ; au-delà de
+`validUntil`, la tablette ne vend plus hors ligne. Corps : `packVersion`, `generatedAt`, `serverTime`, `validUntil`,
+`site {code, name, currency, taxProvider, cashRoundingStep, country, province}`, `cashRegisters [{id, name, receiptPrefix,
+terminalEnabled}]`, `taxes [{id, label, rate}]`, `paymentMethods [{type, label, offline}]` (espèces seules `offline: true`),
+`denominations`, `products [{id, code, barcode (produit, celui scanné aujourd'hui), name, saleUnit, categoryIds, price,
+specialPrice, specialPriceFrom, specialPriceTo, variants [{id, label, price, barcode (variante, facultatif), stock,
+customizable}]}]` (produits `isPos` vendables, sans location ; `customizable` : vendu hors ligne au prix de base), `discounts`
+(réglages F1), `settings {pin, lockAfterMinutes, receipt, paymentMethods, cashFund, cashAlertThreshold, offline}`,
+`calculationRule: "pos-offline-v1"`, `testCases: "/api/pos/offline-cases"`. Chaque pack émis est conservé sous sa version
+(`pos_offline_pack` : prix, taxes, pas d'arrondi) pour recalculer les ventes aux conditions connues de la tablette. Scan
+hors ligne : d'abord `variants[].barcode`, puis `products[].barcode`.
+
+### Règle de calcul « pos-offline-v1 » et jeu de cas partagé
+
+Cents entiers ; `round` = entier le plus proche, demi-cent vers le haut en valeur absolue (`round()` de PHP).
+
+1. Prix unitaire = `variant.price` sinon `product.specialPrice` si la date de vente (corrigée) est dans la plage, sinon `product.price`.
+2. Brut de ligne = prix unitaire × quantité.
+3. Remises de ligne dans l'ordre : `percent` → `round(netCourant × valeur / 100)`, `amount` → `min(valeur, netCourant)` ; plancher 0.
+4. Remise de ticket : base = Σ nets ; montant idem ; répartie au prorata des nets (`round(montant × net_i / base)`), la **dernière ligne** porte l'écart.
+5. Sous-total = Σ nets. 6. Pour chaque taxe du pack : `amount_i = round(sousTotal × rate_i)` (sur le total net). 7. Total = sousTotal + Σ amount_i.
+8. `cashTotal = round(total / pas) × pas` ; `cashRounding = cashTotal − total`. 9. Monnaie = espèces reçues − cashTotal.
+
+Le jeu de cas `config/pos/offline-cases.json` (servi par `GET /api/pos/offline-cases`) donne pour chaque cas les lignes,
+remises, taxes, pas et le résultat attendu ; le serveur le rejoue dans ses tests (`PosOfflineApiTest`) et le POS doit le
+rejouer à l'identique : c'est la garantie que le total hors ligne égale le total serveur. Code : `Services/PosOfflineService/PosOfflineCalculator`
+(même code de remises que F1 : `PosDiscountCalculator`).
+
+### Synchronisation : `POST /api/pos/offline-sales` (caisse, `X-Pos-Terminal` obligatoire, 1 à 200 ventes)
+
+Corps : `{packVersion, deviceTime (ISO 8601, heure de la tablette à l'envoi), clockOffsetSeconds, sales: [{idempotencyKey (UUID),
+provisionalNumber "P-<terminal>-<compteur>", cashRegisterId, sellerId (vendeur réel), soldAt (heure tablette), items [{productVariantId,
+quantity, discounts?}], ticketDiscount?, payments [{type: 2, amount}], cashReceived, totals {subtotal, taxes [{label, amount}], total,
+cashTotal, cashRounding}, packVersion?, chain {seq, prevHash, hash}}], approvals?: {"P-12-7": "<jeton X-Pos-Approval>"}}`.
+
+Réponse 200 `{syncId, serverTime, clockOffsetSeconds, chainBroken, results: [...]}`, une entrée par vente dans l'ordre :
+
+| `status` | Contenu |
+|---|---|
+| `accepted` | `orderId`, `receiptNumber`, `receiptReference`, `barcode`, `soldAt` (heure corrigée retenue), `priceDrift {amount, taxes [{label, expected, declared, drift}], within}`, `currentPriceDrift` (information : écart avec le prix courant), `stockShortfall [{productVariantId, shortBy, stockBefore}]`, `lateEntry`, `chainBroken`, `forced`, `totals {expected, declared, cashTotal}` |
+| `duplicate` | même `idempotencyKey` déjà acceptée pour ce terminal : même contenu que la première réponse, aucune seconde commande |
+| `rejected` | `error`, `message`, `forceable`, contexte ; la vente **reste en file** : `OFFLINE_DISABLED`, `OFFLINE_LIMIT_EXCEEDED`, `OFFLINE_SALE_INVALID` (structure, variante inconnue du pack, moyen non espèces, remise au-delà du plafond du vendeur, paiements ≠ cashTotal), `SELLER_INVALID`, `PACK_UNKNOWN`, `CASH_REGISTER_CLOSED`, et les trois cas **forçables** : `PRICE_DRIFT_EXCEEDED {drift, tolerance, expected, declared, taxes}`, `PACK_EXPIRED`, `OFFLINE_TOO_OLD` |
+
+Règles : heure retenue = `soldAt` + décalage (le plus grand, en valeur absolue, du décalage déclaré et de celui mesuré entre
+`deviceTime` et l'heure du serveur) ; `order_date` = heure corrigée, `synced_at` = enregistrement. Vendeur = `sellerId` (droit
+de caisse exigé), le compte qui synchronise est journalisé (`data.syncedBy`). Session : celle ouverte sur le poste à la
+synchronisation ; vente datée avant son ouverture → `lateEntry`. **Recalcul au pack déclaré** (prix et taxes de `packVersion`,
+prix spécial selon la date de vente) : `priceDrift` = total perçu − recalcul ; au-delà de `priceTolerance` → `PRICE_DRIFT_EXCEEDED`,
+sauf **acceptation forcée** : jeton de validation C3 (`POST /api/pos/approvals`, action **`offline_force`**, contexte
+`{terminalId, counter, amount}` = compteur du numéro provisoire et `cashTotal` perçu), un jeton par vente dans `approvals`,
+journalisé (`forced {code, approvedBy}`). La vente est enregistrée **aux montants perçus et aux taxes imprimées** ; un
+changement de prix légitime pendant la coupure ne crée aucun écart (`currentPriceDrift` l'indique à titre d'information).
+Stock décrémenté même sous zéro (`stockShortfall`). Remises hors ligne : plafond du vendeur du pack, sans validation possible.
+Chaînage : `hash = sha256(prevHash + JSON canonique de la vente sans chain)` (clés triées, sans espaces, UTF-8 et `/` non
+échappés) ; rupture (prevHash ≠ dernier hash connu du terminal, ou hash faux) → `chainBroken: true`, signalée, jamais bloquante.
+Chaque vente est traitée dans sa propre transaction.
+
+Journal : `SALE` avec `data.offline {provisionalNumber, soldAt, deviceSoldAt, clockOffsetSeconds, packVersion, chain, chainBroken,
+priceDrift, currentPriceDrift, stockShortfall, lateEntry, forced, cashReceived}` et `data.syncedBy` ; `OFFLINE_SYNC` par lot.
+Ticket : `provisionalNumber` à côté du numéro officiel (vente, réimpression F3). Rapports X et Z : bloc **`offline {count,
+total, priceDrift, stockShortfalls, lateEntries}`**. Historique : `GET /api/pos/offline-sales?terminalId=&limit=` (responsable).
+
+### Réglages (`settings.offline`)
+
+| Réglage (fiche Entreprise, panneau « Mode hors ligne (caisse) ») | Défaut | Clé |
+|---|---|---|
+| Mode hors ligne autorisé | **non** | `enabled` (+ `reason`: `DISABLED` \| `TAX_PROVIDER_STRIPE`) |
+| Durée maximale hors ligne (h) | 24 | `maxOfflineHours` |
+| Ventes en file au plus | 100 | `maxQueuedSales` |
+| Montant en file au plus (cents) | 500 000 | `maxQueuedAmount` |
+| Écart de prix toléré par vente (cents) | 5 | `priceTolerance` |
+| Validité du pack (h) | 24 | `packValidityHours` |
+
+Code : `Services/PosOfflineService/` (`PosOfflineCalculator`, `PosOfflinePackService`, `PosOfflineSyncService`, `PosOfflineSettings`),
+`Controller/PosController/PosOfflineController`, entités `PosOfflinePack`, `PosOfflineSale`, `PosOfflineSync` ; colonnes
+`product_variant.barcode`, `pos_receipt.provisional_number`, `order.synced_at` ; schéma `migrations/Version20261025100000.php`,
+`scripts/migrate_all_v2_pos_offline.sh` ; tests `tests/Functional/Boutique/PosOfflineApiTest.php`.
+
+### Simulation d'échange (complément F2, 25/10/2026)
+
+`POST /api/pos/exchanges/quote {return: {orderId, lines}, sale: {items (remises F1), ticketDiscount?, cashRegisterId?}}` (lecture,
+sans `Idempotency-Key`) → `{returnAmount, sale {subtotal, grossSubtotal, discounts, taxes, total, cashTotal}, creditApplied,
+amountDue, cashAmountDue (arrondi des espèces), refundDue, cashRefundDue}` : exactement le calcul de `POST /api/pos/exchanges`,
+sans écriture ; les paiements de l'échange doivent couvrir `amountDue` (`cashAmountDue` en espèces). Mêmes erreurs de validation.
+
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la
