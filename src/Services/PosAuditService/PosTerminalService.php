@@ -31,6 +31,45 @@ class PosTerminalService
         return $keyId . '.' . substr(hash_hmac('sha256', $tenantCode . '|' . $keyId, $this->secret), 0, 32);
     }
 
+    /**
+     * État de l'en-tête X-Pos-Terminal de la requête (R1) : none (absent), invalid (signature ou clé inconnue),
+     * revoked (clé « pos » révoquée : {id, label, revokedAt}), valid ({id, label, lastUsedAt}).
+     *
+     * @return array{status: string, id?: int, label?: string, lastUsedAt?: ?string, revokedAt?: ?string}
+     */
+    public function state(): array
+    {
+        $header = $this->requestStack->getMainRequest()?->headers->get(self::HEADER);
+        $tenantCode = $this->tenant->getTenantCode();
+        if (!is_string($header) || $header === '') {
+            return ['status' => 'none'];
+        }
+        if (!$tenantCode || !preg_match('/^(\d+)\.([0-9a-f]{32})$/', $header, $m) || !hash_equals($this->token((int) $m[1], $tenantCode), $header)) {
+            return ['status' => 'invalid'];
+        }
+        $row = $this->keys->findOneForTenant((int) $m[1], $tenantCode);
+        if (!$row || $row['app'] !== 'pos') {
+            return ['status' => 'invalid'];
+        }
+        if ($row['revoked_at'] !== null) {
+            return ['status' => 'revoked', 'id' => (int) $row['id'], 'label' => (string) $row['label'], 'revokedAt' => $row['revoked_at']];
+        }
+
+        return ['status' => 'valid', 'id' => (int) $row['id'], 'label' => (string) $row['label'], 'lastUsedAt' => $row['last_used_at']];
+    }
+
+    /** Dernière activité du terminal (R1) : mise à jour au plus une fois toutes les 5 minutes */
+    public function touchIfStale(array $state): void
+    {
+        if (($state['status'] ?? null) !== 'valid') {
+            return;
+        }
+        $last = $state['lastUsedAt'] ? new \DateTimeImmutable($state['lastUsedAt']) : null;
+        if ($last === null || $last < new \DateTimeImmutable('-5 minutes')) {
+            $this->keys->touch((int) $state['id'], null);
+        }
+    }
+
     /** Terminal de la requête en cours : {id, label} si l'en-tête est valide (signature et clé « pos » non révoquée), sinon null */
     public function current(): ?array
     {

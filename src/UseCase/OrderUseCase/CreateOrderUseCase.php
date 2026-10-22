@@ -51,7 +51,8 @@ class CreateOrderUseCase
         private readonly \App\Services\PosAuditService\PosReceiptService $receipts,
         private readonly \App\Services\PosAuditService\PosAuditService $audit,
         private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency,
-        private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments
+        private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments,
+        private readonly \App\Services\PosAuditService\PosSettingsService $posSettings
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -170,6 +171,8 @@ class CreateOrderUseCase
                 // capture de l'autorisation (carte de crédit) DANS cette transaction, puis rattachement à la vente
                 $terminalPayments = [];
                 if ($orderDTO instanceof CreateOrderMultiPaymentDTO && $typeOrderId === 1) {
+                    // Moyens de paiement autorisés sur le site (R1) : 422 PAYMENT_METHOD_DISABLED, MULTI_PAYMENT_DISABLED, DECLARED_CARD_BLOCKED
+                    $this->posSettings->checkPaymentMethods($orderDTO->getPaymentMethods(), $caisse->getCashRegister());
                     $cardPayments = $em->getRepository(\App\Entity\Payments::class)->findBy(['orderPayment' => $order, 'paymentMethod' => 1], ['id' => 'ASC']);
                     foreach ($orderDTO->getPaymentMethods() as $i => $method) {
                         if ($method->getTerminalPaymentId() === null) {

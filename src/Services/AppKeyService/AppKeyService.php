@@ -88,6 +88,11 @@ class AppKeyService
             throw new AppKeyException('APP_KEY_MISSING', 'Indiquez la clé d\'activation', 400);
         }
         $row = $this->keys->findByHash(self::hash($key));
+        if ($row && $row['revoked_at'] !== null && $row['app'] === 'pos') {
+            // Clé « pos » révoquée (R1, 23/10/2026) : refus explicite, une tablette gardant la clé en mémoire ne retrouve pas de
+            // jeton. Les autres applications (LivingMemory, e-commerce, gestion) gardent la réponse d'avant ci-dessous.
+            throw new AppKeyException('APP_KEY_REVOKED', 'Clé d\'activation révoquée : demandez une nouvelle clé à l\'administrateur du site', 403);
+        }
         if (!$row || $row['revoked_at'] !== null || ($row['expires_at'] !== null && new \DateTimeImmutable($row['expires_at']) < new \DateTimeImmutable())) {
             throw new AppKeyException('APP_KEY_INVALID', 'Clé d\'activation inconnue, révoquée ou expirée', 404);
         }

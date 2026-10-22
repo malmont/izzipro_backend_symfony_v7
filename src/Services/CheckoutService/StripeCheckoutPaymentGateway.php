@@ -30,7 +30,7 @@ final class StripeCheckoutPaymentGateway implements CheckoutPaymentGatewayInterf
         }
         $params = ['amount' => $amount, 'currency' => strtolower($currency), 'payment_method_types' => ['card'], 'capture_method' => 'manual', 'metadata' => $metadata];
         if (isset($options['stripe_account'])) {
-            $params['application_fee_amount'] = StripeService::applicationFee($amount);
+            $params['application_fee_amount'] = $this->stripe->onlineFee($amount);
         }
 
         return $this->call(fn (StripeClient $c) => $c->paymentIntents->create($params, $options), 'création');
@@ -53,7 +53,7 @@ final class StripeCheckoutPaymentGateway implements CheckoutPaymentGatewayInterf
             return $current;
         }
         $options = $this->stripe->accountOptions() ?? [];
-        $params = ['amount' => $amount] + (isset($options['stripe_account']) ? ['application_fee_amount' => StripeService::applicationFee($amount)] : []);
+        $params = ['amount' => $amount] + (isset($options['stripe_account']) ? ['application_fee_amount' => $this->stripe->onlineFee($amount)] : []);
 
         return $this->call(fn (StripeClient $c) => $c->paymentIntents->update($id, $params, $options), 'mise à jour');
     }

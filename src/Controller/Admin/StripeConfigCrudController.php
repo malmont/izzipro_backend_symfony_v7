@@ -56,6 +56,8 @@ class StripeConfigCrudController extends BaseTenantCrudController
             BooleanField::new('isActive', 'Paiements Actifs')
                 ->renderAsSwitch(false)
                 ->setHelp('Indique si les paiements par carte bancaire sont autorisés et fonctionnels.'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('onlineFeeBp', 'Commission plateforme en ligne (centièmes de %)')
+                ->setHelp('100 = 1 %, valeur par défaut : aucun changement tant qu\'elle n\'est pas modifiée. Les paiements en magasin ont leurs propres taux (fiche entreprise).')->hideOnIndex(),
         ];
     }
 }

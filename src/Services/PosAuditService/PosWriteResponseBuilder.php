@@ -43,6 +43,7 @@ class PosWriteResponseBuilder
 
         return ['message' => 'Order canceled and refunded successfully'] + ($creditNote ? [
             'creditNoteNumber' => $creditNote->getNumber(),
+            'creditNoteReference' => $creditNote->getCashRegister()->receiptReference($creditNote->getNumber()),
             'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()],
         ] : []);
     }

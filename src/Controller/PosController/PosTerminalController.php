@@ -71,12 +71,10 @@ class PosTerminalController extends AbstractController
         });
     }
 
-    /** {amount?} : remboursement d'un paiement débité (responsable) ; Interac présenté sur le lecteur, suivi par GET → 200 */
+    /** {amount?} : remboursement d'un paiement débité ; caissier : validation d'un responsable (C3, action refund) ; Interac présenté sur le lecteur, suivi par GET → 200 */
     #[Route('/api/pos/terminal/payments/{id}/refund', name: 'pos_terminal_payment_refund', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function refund(int $id, Request $request): JsonResponse
     {
-        $this->denyUnlessManager();
-
         return $this->guard(function () use ($id, $request) {
             $payment = $this->terminal->refund($id, $this->body($request), $this->user());
             $body = $this->terminal->toArray($payment);

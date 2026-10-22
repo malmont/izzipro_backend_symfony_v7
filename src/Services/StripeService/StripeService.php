@@ -245,10 +245,15 @@ class StripeService
         return $stripeConfig && $stripeConfig->isActive() ? ['stripe_account' => $stripeConfig->getAccountId()] : null;
     }
 
-    /** Commission de la plateforme sur un paiement d'un site connecté (1 %) */
-    public static function applicationFee(int $amount): int
+    /**
+     * Commission de la plateforme sur un paiement en ligne d'un site connecté : centièmes de % réglés par site
+     * (stripe_config.online_fee_bp, 100 = 1 %, lot R1 23/10/2026), même troncature qu'avant ; 0 pour un site interne.
+     */
+    public function onlineFee(int $amount): int
     {
-        return (int) (($amount * 1) / 100);
+        $bp = $this->getStripeConfigForCurrentTenant()?->getOnlineFeeBp() ?? 100;
+
+        return (int) (($amount * $bp) / 10000);
     }
 
     public function secretKey(): string
@@ -288,9 +293,8 @@ class StripeService
                 if ($stripeConfig && $stripeConfig->isActive()) {
                     $stripeOptions['stripe_account'] = $stripeConfig->getAccountId();
 
-                    // Calcul de la commission de 1% pour la plateforme (V2V)
-                    $platformFeePercent = 1;
-                    $applicationFeeAmount = (int) (($amount * $platformFeePercent) / 100);
+                    // Commission de la plateforme (V2V) : 1 % par défaut, réglable par site (R1)
+                    $applicationFeeAmount = $this->onlineFee($amount);
                     $options['application_fee_amount'] = $applicationFeeAmount;
 
                     $this->logger->info("Paiement externe (Connect) pour le tenant: $tenantCode avec commission V2V de $applicationFeeAmount cents.");

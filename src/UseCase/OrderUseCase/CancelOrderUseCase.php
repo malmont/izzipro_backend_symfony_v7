@@ -158,7 +158,7 @@ class CancelOrderUseCase
                 ], $caisse, null, 'order', $order->getId(), $refundedBy);
                 // Clé d'idempotence validée avec le remboursement, réponse gardée dans le même ordre SQL (C5)
                 $this->idempotency->attach('cancel', $order->getId(), ['message' => 'Order canceled and refunded successfully',
-                    'creditNoteNumber' => $creditNote->getNumber(), 'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()]], 200);
+                    'creditNoteNumber' => $creditNote->getNumber(), 'creditNoteReference' => $creditNote->getCashRegister()->receiptReference($creditNote->getNumber()), 'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()]], 200);
             }
 
             // Valider la transaction en base de données
@@ -168,6 +168,7 @@ class CancelOrderUseCase
             // Vente au comptoir : numéro d'avoir et poste en plus (C2) ; annulation web : réponse inchangée
             return new JsonResponse(['message' => 'Order canceled and refunded successfully'] + ($creditNote ? [
                 'creditNoteNumber' => $creditNote->getNumber(),
+                'creditNoteReference' => $creditNote->getCashRegister()->receiptReference($creditNote->getNumber()), // préfixe du poste (R1)
                 'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()],
             ] : []), Response::HTTP_OK);
         } catch (CashRegisterException $e) {

@@ -81,6 +81,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
             UrlField::new('website', 'Site web'),
             TextField::new('ein', 'SIRET'),
             TextField::new('tvaIntracommunautaire', 'TVA intracommunautaire'),
+            TextField::new('gstNumber', 'Numéro de TPS (Canada)')->setRequired(false)->hideOnIndex()->setHelp('Imprimé sur les tickets de caisse (store.taxNumbers.gst)'),
+            TextField::new('qstNumber', 'Numéro de TVQ (Québec)')->setRequired(false)->hideOnIndex()->setHelp('Imprimé sur les tickets de caisse (store.taxNumbers.qst)'),
             FormField::addPanel('Activation des Applications (Multi-Module)'),
             BooleanField::new('isBoutiqueActive', 'Boutique / e-Commerce')
                 ->setHelp('Activer la boutique et le catalogue e-commerce pour ce tenant'),
@@ -116,6 +118,26 @@ class EntrepriseCrudController extends BaseTenantCrudController
             BooleanField::new('posApprovalCloseWithoutCount', 'Validation : fermeture sans comptage')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posLockMinutes', 'Verrouillage du POS après (minutes)')
                 ->setHelp('Inactivité avant verrouillage de l\'écran ; 0 : jamais')->hideOnIndex(),
+            // Lot R1 (23/10/2026) : réglages de caisse par site, défauts = comportement livré
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posPinMinLength', 'PIN : longueur minimale')->setHelp('4 à 8 chiffres ; défaut 4')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posPinMaxLength', 'PIN : longueur maximale')->setHelp('jusqu\'à 12 chiffres ; défaut 6')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posPinMaxAttempts', 'PIN : essais avant blocage')->setHelp('3 à 10 ; défaut 5')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posPinLockMinutes', 'PIN : durée du blocage (minutes)')->setHelp('défaut 15')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOpeningFundSuggested', 'Fond de caisse suggéré à l\'ouverture (cents)')->setRequired(false)->setHelp('Vide : aucune suggestion')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posClosingKeptFundSuggested', 'Fond laissé suggéré à la fermeture (cents)')->setRequired(false)->setHelp('Vide : le fond courant, comme aujourd\'hui')->hideOnIndex(),
+            BooleanField::new('posPayCash', 'POS : espèces')->hideOnIndex(),
+            BooleanField::new('posPayDeclaredCard', 'POS : carte déclarée (sans terminal)')->hideOnIndex(),
+            BooleanField::new('posPayPaypal', 'POS : PayPal')->hideOnIndex(),
+            BooleanField::new('posPayMulti', 'POS : paiement en plusieurs parts')->hideOnIndex(),
+            BooleanField::new('posDeclaredCardBlockedWithTerminal', 'Refuser la carte déclarée sur un poste à terminal actif')->setHelp('Anti-fraude ; désactivé par défaut')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField::new('posReceiptHeader', 'Ticket : texte d\'en-tête')->setRequired(false)->setHelp('Texte simple, retours à la ligne conservés, 500 caractères')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField::new('posReceiptFooter', 'Ticket : texte de pied')->setRequired(false)->setHelp('Par exemple « Merci » ou la politique de retour')->hideOnIndex(),
+            BooleanField::new('posReceiptShowTaxNumbers', 'Ticket : afficher les numéros de taxes')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posHeldCartsMax', 'Paniers en attente : nombre maximal')->setHelp('défaut 10')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posHeldCartsAlertHours', 'Paniers en attente : alerte après (heures)')->setHelp('défaut 24')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCashAlertThreshold', 'Alerte « trop d\'espèces » au-delà de (cents)')->setRequired(false)->setHelp('Vide : aucune alerte ; le POS invite à un retrait')->hideOnIndex(),
+            BooleanField::new('posTerminalHeaderRequired', 'Exiger un terminal identifié (X-Pos-Terminal) sur les routes de caisse')->setHelp('Désactivé par défaut ; à activer quand toutes les tablettes envoient l\'en-tête')->hideOnIndex(),
+
             // Terminal de paiement Stripe (C4, 23/10/2026) : valeurs par défaut = comportement livré (1 %, Interac selon le pays, 120 s, 30 min, 5 min)
             FormField::addPanel('Terminal de paiement Stripe (caisse)')
                 ->setHelp('Lecteur par poste : menu Postes de caisse. Commissions de la plateforme en centièmes de pour cent (100 = 1 %). Les paiements en ligne gardent leur commission actuelle.'),

@@ -110,6 +110,9 @@ class CashSessionReportBuilder
             'receipts' => $em->getRepository(\App\Entity\PosReceipt::class)->rangeForSession($session, \App\Entity\PosReceipt::TICKET),
             'creditNotes' => $em->getRepository(\App\Entity\PosReceipt::class)->rangeForSession($session, \App\Entity\PosReceipt::CREDIT_NOTE),
             'expectedCash' => $openingAmount + $cashFlow,
+            // Lot R1 (23/10/2026) : alerte « trop d'espèces » selon le seuil du site (null sans seuil), préfixe des numéros du poste
+            'cashAlert' => ($entreprise?->getPosCashAlertThreshold() ?? null) !== null ? ($openingAmount + $cashFlow) > $entreprise->getPosCashAlertThreshold() : null,
+            'receiptPrefix' => $register?->getReceiptPrefix(),
             'discrepancyThreshold' => $entreprise?->getPosDiscrepancyThreshold() ?? 0,
             'store' => StoreInfoDto::fromEntreprise($entreprise),
             // Terminal de paiement Stripe (C4, 23/10/2026) : ajout, ventilation par moyen inchangée

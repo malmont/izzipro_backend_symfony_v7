@@ -48,6 +48,10 @@ class CashRegister
     #[ORM\Column(options: ['default' => false])]
     private bool $stripeReaderSimulated = false;
 
+    // Préfixe de présentation des numéros de ticket et d'avoir (R1, 23/10/2026) ; la suite numérique par poste reste inchangée
+    #[ORM\Column(length: 10, nullable: true)]
+    private ?string $receiptPrefix = null;
+
     /** Saisies EasyAdmin non persistées : code d'appairage d'un lecteur réel, création d'un lecteur simulé (clé de test) */
     public ?string $pairingCode = null;
     public bool $createSimulatedReader = false;
@@ -106,6 +110,11 @@ class CashRegister
     public function setStripeReaderLabel(?string $label): static { $this->stripeReaderLabel = $label !== null ? mb_substr($label, 0, 100) : null; return $this; }
     public function isStripeReaderSimulated(): bool { return $this->stripeReaderSimulated; }
     public function setStripeReaderSimulated(bool $simulated): static { $this->stripeReaderSimulated = $simulated; return $this; }
+    public function getReceiptPrefix(): ?string { return $this->receiptPrefix; }
+    public function setReceiptPrefix(?string $prefix): static { $prefix = $prefix !== null ? trim($prefix) : null; $this->receiptPrefix = $prefix !== null && $prefix !== '' ? mb_substr($prefix, 0, 10) : null; return $this; }
+    /** Numéro présenté : préfixe du poste + numéro (ex. « C1-123 ») ; sans préfixe, le numéro seul */
+    public function receiptReference(int $number): string { return ($this->receiptPrefix ?? '') . $number; }
+
     /** Terminal utilisable : activé et lecteur rattaché */
     public function hasTerminal(): bool { return $this->terminalEnabled && $this->stripeReaderId !== null; }
 

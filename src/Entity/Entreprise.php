@@ -166,6 +166,68 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => false])]
     private bool $posTerminalCartDisplay = false;
 
+    // Réglages de caisse R1 (23/10/2026) : défauts = comportement livré. PIN (C3), fond suggéré, moyens de paiement du POS,
+    // ticket (en-tête, pied, numéros de taxes), paniers en attente, alerte espèces, terminal exigé
+    #[ORM\Column(options: ['default' => 4])]
+    private int $posPinMinLength = 4;
+
+    #[ORM\Column(options: ['default' => 6])]
+    private int $posPinMaxLength = 6;
+
+    #[ORM\Column(options: ['default' => 5])]
+    private int $posPinMaxAttempts = 5;
+
+    #[ORM\Column(options: ['default' => 15])]
+    private int $posPinLockMinutes = 15;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $posOpeningFundSuggested = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $posClosingKeptFundSuggested = null;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posPayCash = true;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posPayDeclaredCard = true;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posPayPaypal = true;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posPayMulti = true;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posDeclaredCardBlockedWithTerminal = false;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $posReceiptHeader = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $posReceiptFooter = null;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posReceiptShowTaxNumbers = true;
+
+    #[ORM\Column(length: 30, nullable: true)]
+    private ?string $gstNumber = null;
+
+    #[ORM\Column(length: 30, nullable: true)]
+    private ?string $qstNumber = null;
+
+    #[ORM\Column(options: ['default' => 10])]
+    private int $posHeldCartsMax = 10;
+
+    #[ORM\Column(options: ['default' => 24])]
+    private int $posHeldCartsAlertHours = 24;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $posCashAlertThreshold = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posTerminalHeaderRequired = false;
+
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $metaTitle = null;
 
@@ -596,6 +658,58 @@ class Entreprise implements TranslatableInterface
     public function setPosTerminalCustomerCancel(bool $enabled): static { $this->posTerminalCustomerCancel = $enabled; return $this; }
     public function isPosTerminalCartDisplay(): bool { return $this->posTerminalCartDisplay; }
     public function setPosTerminalCartDisplay(bool $enabled): static { $this->posTerminalCartDisplay = $enabled; return $this; }
+
+    public function getPosPinMinLength(): int { return $this->posPinMinLength; }
+    public function setPosPinMinLength(?int $n): static { $this->posPinMinLength = min(8, max(4, (int) $n)); $this->posPinMaxLength = max($this->posPinMaxLength, $this->posPinMinLength); return $this; }
+    public function getPosPinMaxLength(): int { return $this->posPinMaxLength; }
+    public function setPosPinMaxLength(?int $n): static { $this->posPinMaxLength = min(12, max($this->posPinMinLength, (int) $n)); return $this; }
+    public function getPosPinMaxAttempts(): int { return $this->posPinMaxAttempts; }
+    public function setPosPinMaxAttempts(?int $n): static { $this->posPinMaxAttempts = min(10, max(3, (int) $n)); return $this; }
+    public function getPosPinLockMinutes(): int { return $this->posPinLockMinutes; }
+    public function setPosPinLockMinutes(?int $n): static { $this->posPinLockMinutes = min(1440, max(1, (int) $n)); return $this; }
+    public function getPosOpeningFundSuggested(): ?int { return $this->posOpeningFundSuggested; }
+    public function setPosOpeningFundSuggested(?int $cents): static { $this->posOpeningFundSuggested = $cents !== null && $cents >= 0 ? $cents : null; return $this; }
+    public function getPosClosingKeptFundSuggested(): ?int { return $this->posClosingKeptFundSuggested; }
+    public function setPosClosingKeptFundSuggested(?int $cents): static { $this->posClosingKeptFundSuggested = $cents !== null && $cents >= 0 ? $cents : null; return $this; }
+    public function isPosPayCash(): bool { return $this->posPayCash; }
+    public function setPosPayCash(bool $v): static { $this->posPayCash = $v; return $this; }
+    public function isPosPayDeclaredCard(): bool { return $this->posPayDeclaredCard; }
+    public function setPosPayDeclaredCard(bool $v): static { $this->posPayDeclaredCard = $v; return $this; }
+    public function isPosPayPaypal(): bool { return $this->posPayPaypal; }
+    public function setPosPayPaypal(bool $v): static { $this->posPayPaypal = $v; return $this; }
+    public function isPosPayMulti(): bool { return $this->posPayMulti; }
+    public function setPosPayMulti(bool $v): static { $this->posPayMulti = $v; return $this; }
+    public function isPosDeclaredCardBlockedWithTerminal(): bool { return $this->posDeclaredCardBlockedWithTerminal; }
+    public function setPosDeclaredCardBlockedWithTerminal(bool $v): static { $this->posDeclaredCardBlockedWithTerminal = $v; return $this; }
+    public function getPosReceiptHeader(): ?string { return $this->posReceiptHeader; }
+    public function setPosReceiptHeader(?string $text): static { $this->posReceiptHeader = self::plainText($text); return $this; }
+    public function getPosReceiptFooter(): ?string { return $this->posReceiptFooter; }
+    public function setPosReceiptFooter(?string $text): static { $this->posReceiptFooter = self::plainText($text); return $this; }
+    public function isPosReceiptShowTaxNumbers(): bool { return $this->posReceiptShowTaxNumbers; }
+    public function setPosReceiptShowTaxNumbers(bool $v): static { $this->posReceiptShowTaxNumbers = $v; return $this; }
+    public function getGstNumber(): ?string { return $this->gstNumber; }
+    public function setGstNumber(?string $n): static { $this->gstNumber = $n !== null && trim($n) !== '' ? mb_substr(trim($n), 0, 30) : null; return $this; }
+    public function getQstNumber(): ?string { return $this->qstNumber; }
+    public function setQstNumber(?string $n): static { $this->qstNumber = $n !== null && trim($n) !== '' ? mb_substr(trim($n), 0, 30) : null; return $this; }
+    public function getPosHeldCartsMax(): int { return $this->posHeldCartsMax; }
+    public function setPosHeldCartsMax(?int $n): static { $this->posHeldCartsMax = min(200, max(1, (int) $n)); return $this; }
+    public function getPosHeldCartsAlertHours(): int { return $this->posHeldCartsAlertHours; }
+    public function setPosHeldCartsAlertHours(?int $n): static { $this->posHeldCartsAlertHours = min(24 * 30, max(1, (int) $n)); return $this; }
+    public function getPosCashAlertThreshold(): ?int { return $this->posCashAlertThreshold; }
+    public function setPosCashAlertThreshold(?int $cents): static { $this->posCashAlertThreshold = $cents !== null && $cents > 0 ? $cents : null; return $this; }
+    public function isPosTerminalHeaderRequired(): bool { return $this->posTerminalHeaderRequired; }
+    public function setPosTerminalHeaderRequired(bool $v): static { $this->posTerminalHeaderRequired = $v; return $this; }
+
+    /** Texte simple des tickets : balises retirées, retours à la ligne conservés, 500 caractères au plus */
+    private static function plainText(?string $text): ?string
+    {
+        if ($text === null) {
+            return null;
+        }
+        $clean = trim(preg_replace("/[ \t]+/", ' ', strip_tags(str_replace(["\r\n", "\r"], "\n", $text))));
+
+        return $clean === '' ? null : mb_substr($clean, 0, 500);
+    }
 
     public function isLivingMemoryActive(): bool
     {

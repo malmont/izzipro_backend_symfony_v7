@@ -394,7 +394,7 @@ Les paiements en ligne gardent leur commission actuelle (1 %, lot R1). `GET /api
 `terminal {interac, cardWaitSeconds, customerCancel, orphanMinutes, authCancelMinutes, currency}` ; `GET /api/cash-registers`
 expose `terminal: null | {readerId, label, simulated}`.
 
-### Routes (`/api/pos/terminal`, caisse ; remboursement, paiements sans vente et carte simulée : responsable ou administrateur)
+### Routes (`/api/pos/terminal`, caisse ; paiements sans vente et carte simulée : responsable ou administrateur ; remboursement : validation C3)
 
 | Méthode, route | Corps | Réponse |
 |---|---|---|
@@ -402,7 +402,7 @@ expose `terminal: null | {readerId, label, simulated}`.
 | `POST /api/pos/terminal/payments` | `{cashRegisterId?, amount (cents, part carte), items (comme la vente), otherPayments?: [{type (2 espèces…), amount (cents)}]}` | 201 paiement (ci-dessous), `status: waiting_for_card`. Refus : 409 `TERMINAL_UNAVAILABLE`, 409 `CASH_REGISTER_CLOSED`, 422 `AMOUNT_MISMATCH {quoteTotal, otherPayments, expectedCard, amount}` (part carte ≠ devis du serveur, arrondi des espèces admis), 400 `AMOUNT_TOO_SMALL`, 409 `READER_BUSY {paymentId}`, 409 `READER_OFFLINE`, 409 `READER_NOT_FOUND`, 504 `READER_TIMEOUT` (réessayer), 503 `STRIPE_UNAVAILABLE`, 502 `STRIPE_ERROR` |
 | `GET /api/pos/terminal/payments/{id}` | — | 200 paiement relu chez Stripe ; le POS interroge toutes les 1 à 2 s |
 | `POST /api/pos/terminal/payments/{id}/cancel` | — | 200 paiement `canceled` (`failureCode: canceled_by_cashier`) ; 409 `READER_BUSY` pendant une autorisation (attendre puis réessayer) ; 409 `PAYMENT_ALREADY_CAPTURED` (passer par le remboursement) ; rejeu sans effet |
-| `POST /api/pos/terminal/payments/{id}/refund` | `{amount?}` cents (partiel possible) | 200 paiement avec `refund` ; carte de crédit : remboursement en ligne aussitôt ; Interac : `refund.status: waiting_for_card`, le client présente sa carte, suivi par `GET` ; autorisation non capturée : libérée (`canceled`, `voided_by_manager`) ; 409 `PAYMENT_NOT_CAPTURED`, 400 `REFUND_AMOUNT_INVALID`, 502 `TERMINAL_REFUND_FAILED` |
+| `POST /api/pos/terminal/payments/{id}/refund` | `{amount?}` cents (partiel possible) | Caissier : **403 `APPROVAL_REQUIRED`** (C3, action `refund`, contexte `{orderId}` du paiement rattaché, sinon `{orderId: 0, terminalPaymentId}`), puis rejeu avec `X-Pos-Approval` ; responsable : direct. 200 paiement avec `refund` ; carte de crédit : remboursement en ligne aussitôt ; Interac : `refund.status: waiting_for_card`, le client présente sa carte, suivi par `GET` ; autorisation non capturée : libérée (`canceled`, `voided_by_manager`) ; 409 `PAYMENT_NOT_CAPTURED`, 400 `REFUND_AMOUNT_INVALID`, 502 `TERMINAL_REFUND_FAILED` |
 | `GET /api/pos/terminal/payments?orphans=1&cashRegisterId=` | — | 200 `{payments: [...]}` paiements réussis **sans vente** depuis plus du délai réglé (débits et autorisations) : rembourser (`/refund`) ou rattacher en réessayant la vente avec `terminalPaymentId` |
 | `POST /api/pos/terminal/payments/{id}/simulate` | `{type: card_present \| interac_present, cardNumber?}` | 200 paiement après carte simulée (lecteur simulé et clé Stripe de test seulement ; 403 `SIMULATION_FORBIDDEN` sinon, même appelée en production) ; journalisée `CARD_SIMULATED`. Cartes de test : 4242 4242 4242 4242 acceptée, 4000 0000 0000 0002 refusée, 4000 0000 0000 9995 fonds insuffisants, 4506 4450 0693 1933 Interac |
 
@@ -467,6 +467,59 @@ créée au premier appairage) ; lecteur réel commandé chez Stripe, appairé pa
 le poste ; clés `sk_live` (la route de simulation refuse alors toute carte simulée) ; cron de réconciliation installé ;
 vérifier dans le tableau de bord Stripe que Terminal est disponible pour la plateforme et le pays du site (CA : CAD,
 Interac) ; carte de test physique Stripe pour la recette en magasin.
+
+## Réglages de caisse par site (lot R1, 23/10/2026)
+
+Règle : les réglages importants se modifient **par site dans EasyAdmin** (fiche Entreprise, panneau « Caisse (POS) »,
+sauf mention), jamais en constantes ; valeurs par défaut = comportement d'avant. Le POS les lit dans
+`GET /api/pos/settings` (blocs ajoutés, blocs existants inchangés) :
+
+```json
+{
+  "lockAfterMinutes": 5,
+  "approvals": { "refund": {"required": true, "threshold": 0}, "withdrawal": {}, "fundWithdrawal": {}, "drawerOpen": {"required": true}, "closeWithoutCount": {"required": true}, "discount": {} },
+  "pin": { "minLength": 4, "maxLength": 6, "maxAttempts": 5, "lockMinutes": 15 },
+  "terminal": { "interac": true, "cardWaitSeconds": 120, "customerCancel": true, "orphanMinutes": 5, "authCancelMinutes": 30, "currency": "cad" },
+  "cashFund": { "openingSuggested": null, "closingKeptSuggested": null },
+  "paymentMethods": { "cash": true, "declaredCard": true, "paypal": true, "multiPayment": true, "declaredCardBlockedWithTerminal": false },
+  "receipt": { "header": null, "footer": null, "showTaxNumbers": true },
+  "heldCarts": { "max": 10, "alertHours": 24 },
+  "cashAlertThreshold": null,
+  "terminalRequired": false
+}
+```
+
+| Réglage (EasyAdmin) | Défaut | Effet |
+|---|---|---|
+| PIN : longueur min (4 à 8), max (jusqu'à 12), essais avant blocage (3 à 10), durée du blocage (min) | 4, 6, 5, 15 | `settings.pin` ; `POST /api/pos/pin` refuse hors longueur (422 `VALIDATION_FAILED`), blocage `PIN_LOCKED` selon essais et durée |
+| Fond suggéré à l'ouverture, fond laissé suggéré à la fermeture (cents) | vides | `settings.cashFund` : suggestions pour les écrans du POS ; `open` et `close` inchangés |
+| Moyens du POS : espèces, carte déclarée, PayPal, plusieurs parts ; refuser la carte déclarée sur un poste à terminal actif | tous actifs ; refus désactivé | `settings.paymentMethods` ; `create-multi-payment` (vente de caisse seulement) : 422 `PAYMENT_METHOD_DISABLED {type}`, 422 `MULTI_PAYMENT_DISABLED`, 422 `DECLARED_CARD_BLOCKED {cashRegisterId}` (part carte sans `terminalPaymentId` sur un poste dont le terminal est actif). Retours, annulations, web, EasyAdmin : non concernés |
+| Ticket : texte d'en-tête, texte de pied (texte simple, balises retirées, retours à la ligne conservés, 500 caractères), afficher les numéros de taxes | vides ; affichés | bloc `store` de la vente et des rapports : ajouts `receiptHeader`, `receiptFooter`, `showTaxNumbers`, `taxNumbers {gst, qst}` ; masqués : `taxNumber` et `taxNumbers` à `null` |
+| Numéros de TPS et de TVQ (fiche Entreprise, « Informations générales ») | vides | `store.taxNumbers {gst, qst}` (obligatoires sur les reçus au Québec) |
+| Préfixe des numéros de ticket (fiche du poste, 10 caractères) | vide | présentation seulement : `receiptReference` (« C1-123 ») à côté de `receiptNumber` dans la vente, `creditNoteReference` dans l'annulation, `receiptPrefix` dans les rapports X et Z. La suite numérique par poste et par genre (C2) et les numéros déjà attribués ne changent pas |
+| Paniers en attente : nombre maximal, délai d'alerte (heures) | 10, 24 | `settings.heldCarts` (POS seulement) |
+| Alerte « trop d'espèces » : seuil en cents | vide | `settings.cashAlertThreshold` ; rapports X et Z : `cashAlert` (`true` si `expectedCash` dépasse le seuil, `null` sans seuil) |
+| Exiger un terminal identifié (X-Pos-Terminal) sur les routes de caisse | désactivé | voir « Terminaux » ci-dessous |
+| Commission plateforme en ligne (page Stripe, centièmes de %) | 100 (1 %) | `application_fee_amount` des paiements de la **boutique en ligne** (`create-intent`, mise à jour du montant, tunnel) : même troncature qu'avant (`(montant × bp) / 10000` tronqué) ; 0 pour un site interne |
+
+### Terminaux (prolongement S1)
+
+La page EasyAdmin `/admin/app-keys` liste les clés par site (libellé, poste, créée, expire, **dernier usage**, état) et
+révoque. Depuis R1 : chaque requête portant un `X-Pos-Terminal` valide met à jour le dernier usage (au plus toutes les
+5 minutes) ; une requête portant l'en-tête d'une clé **révoquée** reçoit **403 `TERMINAL_REVOKED {terminalId}`** sur
+toute route (le POS revient à l'écran d'activation) ; `POST /api/app/activate` avec une clé **`pos`** révoquée répond **403
+`APP_KEY_REVOKED`** (une tablette gardant la clé en mémoire ne retrouve pas de jeton) ; clé inconnue ou expirée, et clés des
+autres applications (LivingMemory, e-commerce, gestion) : 404 `APP_KEY_INVALID`, réponse et message inchangés. Avec le réglage « exiger un terminal », les routes `/api/caisse`, `/api/pos`,
+`/api/cash-registers` et `create-multi-payment` sans terminal valide reçoivent **403 `TERMINAL_REQUIRED`** ; à activer
+site par site quand toutes les tablettes envoient l'en-tête. Seules les clés `pos` portent cet en-tête : LivingMemory, la
+boutique et l'application de gestion ne sont jamais concernés. Code : `EventSubscriber/PosTerminalGuardSubscriber`,
+`PosTerminalService::state()`.
+
+Constantes conservées dans le code (paramètres de sécurité) : jeton de validation 120 s (`PosApprovalService`),
+idempotence 60 s et 7 jours (`PosIdempotencyService`), limites d'appels (`config/packages/rate_limiter.yaml`). Code :
+`Services/PosAuditService/PosSettingsService` (`pinRules`, `paymentMethods`, `checkPaymentMethods`, `terminalRequired`),
+`StripeService::onlineFee`, `Dto/StoreInfoDto` ; schéma `migrations/Version20261023120000.php`,
+`scripts/migrate_all_v2_pos_settings.sh` ; tests `tests/Functional/Boutique/PosSettingsApiTest.php`.
 
 ## Mécanique interne
 

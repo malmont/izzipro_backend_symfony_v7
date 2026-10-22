@@ -82,8 +82,17 @@ class AppKeyTest extends WebTestCase
         $revoked = $this->request('DELETE', "/api/app-keys/$id");
         $this->assertSame(200, $revoked->getStatusCode(), $revoked->getContent());
         $this->assertNotNull(json_decode($revoked->getContent(), true)['revokedAt']);
-        $this->assertSame(404, $this->activate(['key' => $key, 'app' => 'pos'])->getStatusCode(), 'clé révoquée');
+        $revokedPos = $this->activate(['key' => $key, 'app' => 'pos']);
+        $this->assertSame([403, 'APP_KEY_REVOKED'], [$revokedPos->getStatusCode(), json_decode($revokedPos->getContent(), true)['error']], 'clé pos révoquée : refus explicite (R1, 23/10/2026)');
         $this->assertSame(404, $this->request('DELETE', '/api/app-keys/999999')->getStatusCode());
+
+        // LivingMemory (et toute autre application) : clé révoquée → réponse d'avant, inchangée
+        $lm = json_decode($this->request('POST', '/api/app-keys', json_encode(['app' => 'livingmemory', 'label' => 'Téléphone test']))->getContent(), true);
+        $this->assertSame(200, $this->request('DELETE', '/api/app-keys/' . $lm['id'])->getStatusCode());
+        $revokedLm = $this->activate(['key' => $lm['key'], 'app' => 'livingmemory']);
+        $this->assertSame([404, 'APP_KEY_INVALID', 'Clé d\'activation inconnue, révoquée ou expirée'], [$revokedLm->getStatusCode(), json_decode($revokedLm->getContent(), true)['error'], json_decode($revokedLm->getContent(), true)['message']], 'LivingMemory : réponse d\'avant');
+        $unknownLm = $this->activate(['key' => 'IZ-LMV-AAAA-BBBB-CCCC', 'app' => 'livingmemory']);
+        $this->assertSame([404, 'Clé d\'activation inconnue, révoquée ou expirée'], [$unknownLm->getStatusCode(), json_decode($unknownLm->getContent(), true)['message']], 'clé inconnue : ancien message');
     }
 
     public function testExpiryValidationAndRoles(): void

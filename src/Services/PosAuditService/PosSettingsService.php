@@ -12,6 +12,7 @@ use App\Services\TenantEntityManagerProvider;
  */
 class PosSettingsService
 {
+    /** Règles du PIN par défaut (lot R1 : modifiables par site, voir pinRules()) */
     public const PIN = ['minLength' => 4, 'maxLength' => 6, 'maxAttempts' => PosPinService::MAX_ATTEMPTS, 'lockMinutes' => PosPinService::LOCK_MINUTES];
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly \App\Services\PosTerminalService\PosTerminalSettingsService $terminal)
@@ -33,10 +34,65 @@ class PosSettingsService
                 'closeWithoutCount' => ['required' => $e?->isPosApprovalCloseWithoutCount() ?? true],
                 'discount' => ['required' => false, 'threshold' => null], // réservé (chantier F1)
             ],
-            'pin' => self::PIN,
+            'pin' => $this->pinRules(),
+            // Lot R1 (23/10/2026) : réglages par site, défauts = comportement d'avant (ajouts seulement)
+            'cashFund' => ['openingSuggested' => $e?->getPosOpeningFundSuggested(), 'closingKeptSuggested' => $e?->getPosClosingKeptFundSuggested()],
+            'paymentMethods' => $this->paymentMethods(),
+            'receipt' => ['header' => $e?->getPosReceiptHeader(), 'footer' => $e?->getPosReceiptFooter(), 'showTaxNumbers' => $e?->isPosReceiptShowTaxNumbers() ?? true],
+            'heldCarts' => ['max' => $e?->getPosHeldCartsMax() ?? 10, 'alertHours' => $e?->getPosHeldCartsAlertHours() ?? 24],
+            'cashAlertThreshold' => $e?->getPosCashAlertThreshold(),
+            'terminalRequired' => $e?->isPosTerminalHeaderRequired() ?? false,
             // Terminal de paiement Stripe (C4) : réglages utiles au POS (les commissions restent côté serveur)
             'terminal' => array_intersect_key($this->terminal->settings(), array_flip(['interac', 'cardWaitSeconds', 'customerCancel', 'orphanMinutes', 'authCancelMinutes', 'currency'])),
         ];
+    }
+
+    /** @return array{minLength: int, maxLength: int, maxAttempts: int, lockMinutes: int} règles du PIN du site (R1) */
+    public function pinRules(): array
+    {
+        $e = $this->entreprise();
+
+        return $e ? ['minLength' => $e->getPosPinMinLength(), 'maxLength' => $e->getPosPinMaxLength(), 'maxAttempts' => $e->getPosPinMaxAttempts(), 'lockMinutes' => $e->getPosPinLockMinutes()] : self::PIN;
+    }
+
+    /** @return array{cash: bool, declaredCard: bool, paypal: bool, multiPayment: bool, declaredCardBlockedWithTerminal: bool} */
+    public function paymentMethods(): array
+    {
+        $e = $this->entreprise();
+
+        return ['cash' => $e?->isPosPayCash() ?? true, 'declaredCard' => $e?->isPosPayDeclaredCard() ?? true, 'paypal' => $e?->isPosPayPaypal() ?? true,
+            'multiPayment' => $e?->isPosPayMulti() ?? true, 'declaredCardBlockedWithTerminal' => $e?->isPosDeclaredCardBlockedWithTerminal() ?? false];
+    }
+
+    /**
+     * Vente en caisse (R1) : refus des moyens désactivés sur le site. Types : 1 carte (déclarée sans terminalPaymentId),
+     * 2 espèces, 3 PayPal ; plusieurs parts = multi-paiement.
+     *
+     * @param list<\App\Dto\PaymentMethodDTO> $methods
+     */
+    public function checkPaymentMethods(array $methods, \App\Entity\CashRegister $register): void
+    {
+        $allowed = $this->paymentMethods();
+        if (count($methods) > 1 && !$allowed['multiPayment']) {
+            throw new \App\Services\CaisseService\CashRegisterException('MULTI_PAYMENT_DISABLED', 'Le paiement en plusieurs parts est désactivé sur ce site', 422);
+        }
+        foreach ($methods as $method) {
+            $type = $method->getType();
+            $declaredCard = $type === 1 && $method->getTerminalPaymentId() === null;
+            $disabled = match ($type) { 2 => !$allowed['cash'], 3 => !$allowed['paypal'], 1 => $declaredCard && !$allowed['declaredCard'], default => false };
+            if ($disabled) {
+                throw new \App\Services\CaisseService\CashRegisterException('PAYMENT_METHOD_DISABLED', 'Ce moyen de paiement est désactivé sur ce site', 422, [], ['type' => $type]);
+            }
+            if ($declaredCard && $allowed['declaredCardBlockedWithTerminal'] && $register->hasTerminal()) {
+                throw new \App\Services\CaisseService\CashRegisterException('DECLARED_CARD_BLOCKED', 'Carte déclarée refusée : ce poste a un terminal de paiement, utilisez-le', 422, [], ['cashRegisterId' => $register->getId()]);
+            }
+        }
+    }
+
+    /** L'en-tête X-Pos-Terminal est-il exigé sur les routes de caisse de ce site (R1, désactivé par défaut) ? */
+    public function terminalRequired(): bool
+    {
+        return $this->entreprise()?->isPosTerminalHeaderRequired() ?? false;
     }
 
     /** L'action exige-t-elle la validation d'un responsable (pour un utilisateur qui n'est ni responsable ni administrateur) ? */

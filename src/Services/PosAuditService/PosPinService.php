@@ -23,13 +23,28 @@ class PosPinService
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly PasswordHasherFactoryInterface $hashers,
         private readonly PosAuditService $audit,
-        #[Autowire('%kernel.secret%')] private readonly string $secret
+        #[Autowire('%kernel.secret%')] private readonly string $secret,
+        private readonly ?PosSettingsService $settings = null
     ) {
     }
 
+    /** Format par défaut (4 à 6 chiffres) ; les règles du site sont dans validForSite() (R1) */
     public static function validFormat(mixed $pin): bool
     {
         return is_string($pin) && preg_match('/^\d{4,6}$/', $pin) === 1;
+    }
+
+    /** @return array{minLength: int, maxLength: int, maxAttempts: int, lockMinutes: int} */
+    private function rules(): array
+    {
+        return $this->settings?->pinRules() ?? PosSettingsService::PIN;
+    }
+
+    private function validForSite(mixed $pin): bool
+    {
+        $r = $this->rules();
+
+        return is_string($pin) && preg_match('/^\d{' . $r['minLength'] . ',' . $r['maxLength'] . '}$/', $pin) === 1;
     }
 
     public function hasPin(User $user): bool
@@ -39,8 +54,9 @@ class PosPinService
 
     public function set(User $user, mixed $pin): void
     {
-        if (!self::validFormat($pin)) {
-            throw new CashRegisterException('VALIDATION_FAILED', 'newPin : 4 à 6 chiffres attendus (chaîne)', 422, [['path' => 'newPin', 'message' => '4 à 6 chiffres attendus']]);
+        if (!$this->validForSite($pin)) {
+            $r = $this->rules();
+            throw new CashRegisterException('VALIDATION_FAILED', sprintf('newPin : %d à %d chiffres attendus (chaîne)', $r['minLength'], $r['maxLength']), 422, [['path' => 'newPin', 'message' => sprintf('%d à %d chiffres attendus', $r['minLength'], $r['maxLength'])]]);
         }
         $em = $this->emProvider->getEntityManager();
         $user = $em->contains($user) ? $user : ($em->find(User::class, $user->getId()) ?? $user); // utilisateur suivi par l'EntityManager du site
@@ -75,21 +91,22 @@ class PosPinService
         $row = $this->row($user) ?? throw new CashRegisterException('PIN_NOT_SET', 'Aucun PIN de caisse défini pour cet utilisateur', 409, [], $context);
         $now = new \DateTimeImmutable();
         if ($row->getLockedUntil() && $row->getLockedUntil() > $now) {
-            throw self::locked($row->getLockedUntil()->getTimestamp() - $now->getTimestamp(), $context);
+            throw self::locked($row->getLockedUntil()->getTimestamp() - $now->getTimestamp(), $context, $this->rules()['maxAttempts']);
         }
         $em = $this->emProvider->getEntityManager();
-        if (!self::validFormat($pin) || !$this->hasher()->verify($row->getPinHash(), $this->peppered($pin))) {
+        $rules = $this->rules();
+        if (!is_string($pin) || !preg_match('/^\d{4,12}$/', $pin) || !$this->hasher()->verify($row->getPinHash(), $this->peppered($pin))) {
             $attempts = $row->getFailedAttempts() + 1;
             $this->audit->record(PosAuditService::PIN_FAILED, ['userId' => $user->getId(), 'email' => $user->getEmail(), 'attempts' => $attempts, 'via' => $via], subjectType: 'user', subjectId: $user->getId());
-            if ($attempts >= self::MAX_ATTEMPTS) {
-                $row->setFailedAttempts(0)->setLockedUntil($now->modify('+' . self::LOCK_MINUTES . ' minutes'));
+            if ($attempts >= $rules['maxAttempts']) {
+                $row->setFailedAttempts(0)->setLockedUntil($now->modify('+' . $rules['lockMinutes'] . ' minutes'));
                 $em->flush();
-                $this->audit->record(PosAuditService::PIN_LOCKED, ['userId' => $user->getId(), 'email' => $user->getEmail(), 'minutes' => self::LOCK_MINUTES, 'via' => $via], subjectType: 'user', subjectId: $user->getId());
-                throw self::locked(self::LOCK_MINUTES * 60, $context);
+                $this->audit->record(PosAuditService::PIN_LOCKED, ['userId' => $user->getId(), 'email' => $user->getEmail(), 'minutes' => $rules['lockMinutes'], 'via' => $via], subjectType: 'user', subjectId: $user->getId());
+                throw self::locked($rules['lockMinutes'] * 60, $context, $rules['maxAttempts']);
             }
             $row->setFailedAttempts($attempts);
             $em->flush();
-            throw new CashRegisterException('PIN_INVALID', 'PIN incorrect', $invalidStatus, [], $context + ['attemptsLeft' => self::MAX_ATTEMPTS - $attempts]);
+            throw new CashRegisterException('PIN_INVALID', 'PIN incorrect', $invalidStatus, [], $context + ['attemptsLeft' => $rules['maxAttempts'] - $attempts]);
         }
         if ($row->getFailedAttempts() > 0 || $row->getLockedUntil() !== null) {
             $row->setFailedAttempts(0)->setLockedUntil(null);
@@ -97,11 +114,11 @@ class PosPinService
         }
     }
 
-    private static function locked(int $seconds, array $context): CashRegisterException
+    private static function locked(int $seconds, array $context, int $maxAttempts = self::MAX_ATTEMPTS): CashRegisterException
     {
         $seconds = max(1, $seconds);
 
-        return new CashRegisterException('PIN_LOCKED', sprintf('PIN bloqué après %d essais : réessayez dans %d minute(s)', self::MAX_ATTEMPTS, (int) ceil($seconds / 60)), 423, [], $context + ['retryAfter' => $seconds]);
+        return new CashRegisterException('PIN_LOCKED', sprintf('PIN bloqué après %d essais : réessayez dans %d minute(s)', $maxAttempts, (int) ceil($seconds / 60)), 423, [], $context + ['retryAfter' => $seconds]);
     }
 
     private function row(User $user): ?PosUserPin

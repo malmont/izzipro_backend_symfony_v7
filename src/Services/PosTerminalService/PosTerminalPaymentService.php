@@ -44,6 +44,7 @@ class PosTerminalPaymentService
         private readonly OrderTaxAddressResolver $taxAddress,
         private readonly CashRoundingService $rounding,
         private readonly PosAuditService $audit,
+        private readonly \App\Services\PosAuditService\PosApprovalService $approvals,
         private readonly PosTerminalService $posTerminals,
         private readonly StripeService $stripe,
         private readonly StripeConnectSetupService $connect,
@@ -335,6 +336,10 @@ class PosTerminalPaymentService
     /** POST /api/pos/terminal/payments/{id}/refund : remboursement d'un paiement débité (paiement sans vente, Interac avant annulation) */
     public function startRefund(PosTerminalPayment $payment, ?int $amount, User $user): PosTerminalPayment
     {
+        // Caissier : validation d'un responsable (C3) comme pour l'annulation d'une vente, action « refund », contexte
+        // {orderId} du paiement rattaché, sinon {orderId: 0, terminalPaymentId} pour un paiement sans vente
+        $this->approvals->requireFor(\App\Services\PosAuditService\PosApprovalService::REFUND, $user,
+            $payment->getOrderId() !== null ? ['orderId' => $payment->getOrderId()] : ['orderId' => 0, 'terminalPaymentId' => (int) $payment->getId()], $amount ?? $payment->getAmount());
         $this->refresh($payment, $user);
         if ($payment->getStatus() === PosTerminalPayment::AUTHORIZED) {
             // Autorisation jamais capturée : libérée, rien à rembourser

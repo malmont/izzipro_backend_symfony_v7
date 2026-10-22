@@ -33,6 +33,8 @@ class PosApprovalService
         self::CLOSE_WITHOUT_COUNT => ['cashRegisterId'],
         self::DISCOUNT => [],
     ];
+    /** Clés de contexte facultatives, comparées si elles figurent dans la validation (remboursement d'un paiement par terminal sans vente, C4) */
+    public const EXTRA_CONTEXT = [self::REFUND => ['terminalPaymentId']];
     public const TTL_SECONDS = 120;
     private const MANAGER_ROLES = ['ROLE_POS_MANAGER', 'ROLE_ADMIN'];
 
@@ -137,13 +139,24 @@ class PosApprovalService
             }
             $out[$key] = (int) $context[$key];
         }
+        foreach (self::EXTRA_CONTEXT[$action] ?? [] as $key) {
+            if (isset($context[$key]) && is_numeric($context[$key])) {
+                $out[$key] = (int) $context[$key];
+            }
+        }
 
         return $out;
     }
 
     private static function sameContext(string $action, array $approved, array $actual): bool
     {
-        foreach (self::CONTEXT[$action] as $key) {
+        $keys = self::CONTEXT[$action];
+        foreach (self::EXTRA_CONTEXT[$action] ?? [] as $extra) {
+            if (array_key_exists($extra, $approved) || array_key_exists($extra, $actual)) {
+                $keys[] = $extra;
+            }
+        }
+        foreach ($keys as $key) {
             if ((int) ($approved[$key] ?? -1) !== (int) ($actual[$key] ?? -2)) {
                 return false;
             }

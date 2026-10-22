@@ -39,6 +39,8 @@ class PosReceiptDto
             // Numéro de ticket (vente) ou d'avoir (retour), suite continue par poste (C2)
             'receiptNumber' => $receipt?->getNumber(),
             'receiptKind' => $receipt?->getKind(),
+            // Numéro présenté avec le préfixe du poste (R1) ; receiptNumber reste l'entier de la suite continue
+            'receiptReference' => $receipt ? $receipt->getCashRegister()->receiptReference($receipt->getNumber()) : null,
             'reference' => $order->getReference(),
             'createdAt' => $order->getOrderDate()?->format(\DateTimeInterface::ATOM),
             'subTotal' => $dollars($order->getSubTotal()),

@@ -23,6 +23,10 @@ class StripeConfig
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $terminalLocationId = null;
 
+    // Commission plateforme des paiements en ligne (R1, 23/10/2026), centièmes de % ; 100 = 1 %, comme avant
+    #[ORM\Column(options: ['default' => 100])]
+    private int $onlineFeeBp = 100;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -54,4 +58,6 @@ class StripeConfig
 
     public function getTerminalLocationId(): ?string { return $this->terminalLocationId; }
     public function setTerminalLocationId(?string $id): static { $this->terminalLocationId = $id; return $this; }
+    public function getOnlineFeeBp(): int { return $this->onlineFeeBp; }
+    public function setOnlineFeeBp(?int $bp): static { $this->onlineFeeBp = min(10000, max(0, (int) $bp)); return $this; }
 }

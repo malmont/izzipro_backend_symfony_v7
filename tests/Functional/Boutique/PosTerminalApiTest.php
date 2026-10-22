@@ -42,7 +42,7 @@ class PosTerminalApiTest extends WebTestCase
         static::getContainer()->get(BoutiqueDemoSeeder::class)->seed('client-terminal@example.invalid', false, false);
         $this->db->executeStatement('DELETE FROM boutique_setting');
         $this->db->executeStatement("UPDATE address_entreprise SET country = 'CA', state = 'QC', city = 'Montréal', zip = 'H1M 0A9'");
-        $this->db->executeStatement("UPDATE entreprise SET currency = 'CAD', pos_discrepancy_threshold = 0, pos_cash_rounding_step = NULL, pos_approval_refund = NULL, pos_approval_withdrawal = NULL, pos_approval_fund_withdrawal = NULL, pos_approval_drawer_open = false, pos_approval_close_without_count = false, pos_terminal_interac = NULL, pos_terminal_fee_card_bp = 100, pos_terminal_fee_interac_bp = 150, pos_terminal_card_wait_seconds = 120, pos_terminal_auth_cancel_minutes = 30, pos_terminal_orphan_minutes = 5");
+        $this->db->executeStatement("UPDATE entreprise SET currency = 'CAD', pos_discrepancy_threshold = 0, pos_cash_rounding_step = NULL, pos_approval_refund = NULL, pos_approval_withdrawal = NULL, pos_approval_fund_withdrawal = NULL, pos_approval_drawer_open = false, pos_approval_close_without_count = false, pos_terminal_header_required = false, pos_terminal_interac = NULL, pos_terminal_fee_card_bp = 100, pos_terminal_fee_interac_bp = 150, pos_terminal_card_wait_seconds = 120, pos_terminal_auth_cancel_minutes = 30, pos_terminal_orphan_minutes = 5");
         $this->db->executeStatement('UPDATE caisse SET is_open = false, closed_at = NOW() WHERE is_open = true');
         $this->db->executeStatement('UPDATE cash_register SET is_active = (id = (SELECT MIN(id) FROM cash_register)), terminal_enabled = false, stripe_reader_id = NULL, stripe_reader_label = NULL, stripe_reader_simulated = false');
         $this->db->executeStatement('UPDATE stripe_config SET terminal_location_id = NULL');
@@ -222,7 +222,8 @@ class PosTerminalApiTest extends WebTestCase
         $this->loginAs(['ROLE_USER_POS']);
         $this->assertSame(403, $this->request('POST', "/api/pos/terminal/payments/$id4/simulate", ['type' => 'card_present'])->getStatusCode(), 'caissier : pas de simulation');
         $this->assertSame(403, $this->request('GET', '/api/pos/terminal/payments?orphans=1')->getStatusCode(), 'caissier : pas de liste des paiements sans vente');
-        $this->assertSame(403, $this->request('POST', "/api/pos/terminal/payments/$id4/refund", [])->getStatusCode());
+        // Remboursement par un caissier : passe par la validation C3 (désactivée ici), donc traité : 409 car rien n'est débité
+        $this->assertSame([409, 'PAYMENT_NOT_CAPTURED'], [$this->request('POST', "/api/pos/terminal/payments/$id4/refund", [])->getStatusCode(), json_decode($this->request('POST', "/api/pos/terminal/payments/$id4/refund", [])->getContent(), true)['error']]);
     }
 
     public function testCapturedAtStripeThenDatabaseFailureIsRecoveredByRetryOrListedWithoutSale(): void
@@ -313,7 +314,61 @@ class PosTerminalApiTest extends WebTestCase
         $this->assertSame('paiement sans panier enregistré', json_decode($this->client->getResponse()->getContent(), true)['detail']);
     }
 
+    public function testCashierRefundNeedsManagerApprovalLikeACancel(): void
+    {
+        $this->configureSimulatedReader();
+        $this->db->executeStatement('UPDATE entreprise SET pos_approval_refund = 0');
+        $manager = $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        static::getContainer()->get(\App\Services\PosAuditService\PosPinService::class)->set($manager, '7531');
+        $terminal = $this->posTerminal();
+        $this->loginAs(['ROLE_USER_POS']);
+        $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register]);
+        // Paiement Interac débité, vente enregistrée
+        $id = $this->json($this->request('POST', '/api/pos/terminal/payments', ['cashRegisterId' => $this->register, 'amount' => $this->total, 'items' => $this->items()]), 201)['paymentId'];
+        $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        $this->request('POST', "/api/pos/terminal/payments/$id/simulate", ['type' => 'interac_present']);
+        $cashier = $this->loginAs(['ROLE_USER_POS']);
+        $orderId = $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => $this->items(), 'paymentMethods' => [['type' => 1, 'amount' => $this->total / 100, 'terminalPaymentId' => $id]], 'cashRegisterId' => $this->register]), 201)['orderId'];
+        // Caissier sans validation : 403 APPROVAL_REQUIRED (action refund, contexte de l'annulation)
+        $refused = $this->request('POST', "/api/pos/terminal/payments/$id/refund", [], $terminal);
+        $body = json_decode($refused->getContent(), true);
+        $this->assertSame([403, 'APPROVAL_REQUIRED', 'refund', ['orderId' => $orderId]], [$refused->getStatusCode(), $body['error'], $body['action'], $body['context']], $refused->getContent());
+        $this->assertNull($this->db->fetchOne('SELECT refund_status FROM pos_terminal_payment WHERE id = ?', [$id]), 'rien envoyé au lecteur');
+        // Validation par le PIN du responsable sur la tablette du caissier, puis rejeu
+        $granted = $this->request('POST', '/api/pos/approvals', ['action' => 'refund', 'managerId' => $manager->getId(), 'pin' => '7531', 'context' => ['orderId' => $orderId]], $terminal);
+        $this->assertSame(201, $granted->getStatusCode(), $granted->getContent());
+        $approved = $this->request('POST', "/api/pos/terminal/payments/$id/refund", [], $terminal, json_decode($granted->getContent(), true)['approvalToken']);
+        $this->assertSame(200, $approved->getStatusCode(), $approved->getContent());
+        $this->assertSame('waiting_for_card', json_decode($approved->getContent(), true)['refund']['status']);
+        $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        $this->assertSame('succeeded', $this->json($this->request('POST', "/api/pos/terminal/payments/$id/simulate", ['type' => 'interac_present']))['refund']['status'], 'le client présente sa carte : lecteur libéré');
+        $this->loginAs(['ROLE_USER_POS']);
+        // Paiement sans vente : contexte {orderId: 0, terminalPaymentId}
+        $id2 = $this->json($this->request('POST', '/api/pos/terminal/payments', ['cashRegisterId' => $this->register, 'amount' => $this->total, 'items' => $this->items()]), 201)['paymentId'];
+        $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        $this->request('POST', "/api/pos/terminal/payments/$id2/simulate", ['type' => 'card_present']);
+        $this->token = null;
+        $this->loginAs(['ROLE_USER_POS']);
+        $orphan = json_decode($this->request('POST', "/api/pos/terminal/payments/$id2/refund", [], $terminal)->getContent(), true);
+        $this->assertSame(['refund', ['orderId' => 0, 'terminalPaymentId' => $id2]], [$orphan['action'], $orphan['context']]);
+        $wrong = $this->request('POST', '/api/pos/approvals', ['action' => 'refund', 'managerId' => $manager->getId(), 'pin' => '7531', 'context' => ['orderId' => 0, 'terminalPaymentId' => $id2 + 1]], $terminal);
+        $invalid = $this->request('POST', "/api/pos/terminal/payments/$id2/refund", [], $terminal, json_decode($wrong->getContent(), true)['approvalToken']);
+        $this->assertSame('APPROVAL_INVALID', json_decode($invalid->getContent(), true)['error'], 'validation d\'un autre paiement refusée');
+        $this->db->executeStatement('UPDATE entreprise SET pos_approval_refund = NULL');
+    }
+
     // ---------------------------------------------------------------- aides
+
+    private function posTerminal(): string
+    {
+        $saved = $this->token;
+        $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_POS']);
+        $key = $this->json($this->request('POST', '/api/app-keys', ['app' => 'pos', 'label' => 'Tablette terminal', 'sendEmail' => false]), 201)['key'];
+        $this->token = $saved;
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/api/app/activate', [], [], ['CONTENT_TYPE' => 'application/json'], json_encode(['key' => $key, 'app' => 'pos']));
+
+        return json_decode($this->client->getResponse()->getContent(), true)['terminal']['token'];
+    }
 
     private function configureSimulatedReader(): void
     {
@@ -360,13 +415,15 @@ class PosTerminalApiTest extends WebTestCase
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
     }
 
-    private function request(string $method, string $path, ?array $body = null): Response
+    private function request(string $method, string $path, ?array $body = null, ?string $terminal = null, ?string $approval = null): Response
     {
         $this->client->getCookieJar()->clear();
         $this->client->request($method, 'https://' . MV_TEST_TENANT_HOST . $path, [], [], array_filter([
             'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
             'HTTP_AUTHORIZATION' => $this->token ? 'Bearer ' . $this->token : null,
             'HTTP_IDEMPOTENCY_KEY' => $this->key,
+            'HTTP_X_POS_TERMINAL' => $terminal,
+            'HTTP_X_POS_APPROVAL' => $approval,
         ]), $body !== null ? json_encode($body) : null);
 
         return $this->client->getResponse();
