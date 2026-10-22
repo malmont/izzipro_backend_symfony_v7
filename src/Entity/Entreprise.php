@@ -140,6 +140,32 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => 5])]
     private int $posLockMinutes = 5;
 
+    // Terminal de paiement Stripe (C4, 23/10/2026) : commissions plateforme en magasin en centièmes de % (100 = 1 %),
+    // Interac accepté (null = selon le pays du site : oui pour CA), délais en secondes / minutes, options du lecteur
+    #[ORM\Column(options: ['default' => 100])]
+    private int $posTerminalFeeCardBp = 100;
+
+    #[ORM\Column(options: ['default' => 100])]
+    private int $posTerminalFeeInteracBp = 100;
+
+    #[ORM\Column(nullable: true)]
+    private ?bool $posTerminalInterac = null;
+
+    #[ORM\Column(options: ['default' => 120])]
+    private int $posTerminalCardWaitSeconds = 120;
+
+    #[ORM\Column(options: ['default' => 30])]
+    private int $posTerminalAuthCancelMinutes = 30;
+
+    #[ORM\Column(options: ['default' => 5])]
+    private int $posTerminalOrphanMinutes = 5;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posTerminalCustomerCancel = true;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posTerminalCartDisplay = false;
+
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $metaTitle = null;
 
@@ -553,6 +579,23 @@ class Entreprise implements TranslatableInterface
     public function setPosApprovalCloseWithoutCount(bool $required): static { $this->posApprovalCloseWithoutCount = $required; return $this; }
     public function getPosLockMinutes(): int { return $this->posLockMinutes; }
     public function setPosLockMinutes(?int $minutes): static { $this->posLockMinutes = max(0, (int) $minutes); return $this; }
+
+    public function getPosTerminalFeeCardBp(): int { return $this->posTerminalFeeCardBp; }
+    public function setPosTerminalFeeCardBp(?int $bp): static { $this->posTerminalFeeCardBp = min(10000, max(0, (int) $bp)); return $this; }
+    public function getPosTerminalFeeInteracBp(): int { return $this->posTerminalFeeInteracBp; }
+    public function setPosTerminalFeeInteracBp(?int $bp): static { $this->posTerminalFeeInteracBp = min(10000, max(0, (int) $bp)); return $this; }
+    public function getPosTerminalInterac(): ?bool { return $this->posTerminalInterac; }
+    public function setPosTerminalInterac(?bool $interac): static { $this->posTerminalInterac = $interac; return $this; }
+    public function getPosTerminalCardWaitSeconds(): int { return $this->posTerminalCardWaitSeconds; }
+    public function setPosTerminalCardWaitSeconds(?int $seconds): static { $this->posTerminalCardWaitSeconds = min(600, max(15, (int) $seconds)); return $this; }
+    public function getPosTerminalAuthCancelMinutes(): int { return $this->posTerminalAuthCancelMinutes; }
+    public function setPosTerminalAuthCancelMinutes(?int $minutes): static { $this->posTerminalAuthCancelMinutes = min(2 * 24 * 60, max(1, (int) $minutes)); return $this; }
+    public function getPosTerminalOrphanMinutes(): int { return $this->posTerminalOrphanMinutes; }
+    public function setPosTerminalOrphanMinutes(?int $minutes): static { $this->posTerminalOrphanMinutes = min(24 * 60, max(1, (int) $minutes)); return $this; }
+    public function isPosTerminalCustomerCancel(): bool { return $this->posTerminalCustomerCancel; }
+    public function setPosTerminalCustomerCancel(bool $enabled): static { $this->posTerminalCustomerCancel = $enabled; return $this; }
+    public function isPosTerminalCartDisplay(): bool { return $this->posTerminalCartDisplay; }
+    public function setPosTerminalCartDisplay(bool $enabled): static { $this->posTerminalCartDisplay = $enabled; return $this; }
 
     public function isLivingMemoryActive(): bool
     {

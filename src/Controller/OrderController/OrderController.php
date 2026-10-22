@@ -351,7 +351,12 @@ class OrderController extends AbstractController
             if (!is_array($method) || !is_numeric($method['type'] ?? null) || !is_numeric($method['amount'] ?? null) || (float) $method['amount'] < 0) {
                 return $this->json(['error' => 'PAYMENT_METHODS_INVALID', 'message' => 'Chaque moyen de paiement doit avoir un type et un montant positif'], JsonResponse::HTTP_BAD_REQUEST);
             }
-            $paymentMethods[] = new PaymentMethodDTO((int) $method['type'], (float) $method['amount']);
+            // Part carte payée sur le terminal Stripe (C4) : terminalPaymentId (identifiant du paiement) ou stripePaymentId (PaymentIntent)
+            $terminalRef = $method['terminalPaymentId'] ?? $method['stripePaymentId'] ?? null;
+            if ($terminalRef !== null && (!is_scalar($terminalRef) || (int) $method['type'] !== 1)) {
+                return $this->json(['error' => 'PAYMENT_METHODS_INVALID', 'message' => 'terminalPaymentId ne s\'applique qu\'à une part carte (type 1)'], JsonResponse::HTTP_BAD_REQUEST);
+            }
+            $paymentMethods[] = new PaymentMethodDTO((int) $method['type'], (float) $method['amount'], $terminalRef !== null ? (string) $terminalRef : null);
         }
         if (!$paymentMethods) {
             return $this->json(['error' => 'PAYMENT_METHODS_REQUIRED', 'message' => 'Au moins un moyen de paiement est requis'], JsonResponse::HTTP_BAD_REQUEST);
@@ -526,8 +531,10 @@ class OrderController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $data = is_array($data) ? $data : [];
         // cashRegisterId (15/10/2026) : poste du remboursement d'une vente POS si la session d'origine est fermée ; ignoré pour une commande web
+        // terminalRefundId (C4) : remboursement Interac déjà présenté sur le terminal, exigé avant l'annulation d'une vente payée par Interac
         return $this->cancelOrderUseCase->execute($id, is_numeric($data['paymentMethod'] ?? null) ? (int) $data['paymentMethod'] : null,
-            is_numeric($data['cashRegisterId'] ?? null) ? (int) $data['cashRegisterId'] : null, $user instanceof User ? $user : null);
+            is_numeric($data['cashRegisterId'] ?? null) ? (int) $data['cashRegisterId'] : null, $user instanceof User ? $user : null,
+            is_string($data['terminalRefundId'] ?? null) ? $data['terminalRefundId'] : null);
     }
 
     /**

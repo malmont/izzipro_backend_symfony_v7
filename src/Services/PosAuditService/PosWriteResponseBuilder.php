@@ -20,7 +20,7 @@ use App\Services\TenantEntityManagerProvider;
  */
 class PosWriteResponseBuilder
 {
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CaisseService $caisseService, private readonly PosReceiptService $receipts)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CaisseService $caisseService, private readonly PosReceiptService $receipts, private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments)
     {
     }
 
@@ -88,6 +88,9 @@ class PosWriteResponseBuilder
             'session_open' => ($c = $em->find(Caisse::class, $subjectId)) ? ['status' => 201, 'body' => $this->open($c)] : null,
             'session_close' => ($z = $em->find(CashRegisterReport::class, $subjectId)) ? ['status' => 200, 'body' => $this->close($z)] : null,
             'drawer' => ($a = $em->find(PosAuditLog::class, $subjectId)) ? ['status' => 201, 'body' => $this->drawer($a)] : null,
+            // Paiement par terminal (C4) : état courant du paiement (création 201, annulation ou remboursement 200)
+            'terminal_payment' => ($t = $em->find(\App\Entity\PosTerminalPayment::class, $subjectId)) ? ['status' => 201, 'body' => $this->terminalPayments->toArray($t)] : null,
+            'terminal_update' => ($t = $em->find(\App\Entity\PosTerminalPayment::class, $subjectId)) ? ['status' => 200, 'body' => $this->terminalPayments->toArray($t)] : null,
             default => null,
         };
     }

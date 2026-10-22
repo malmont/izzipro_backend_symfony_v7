@@ -29,11 +29,13 @@ class PosIdempotencyService implements ResetInterface
     public const HEADER = 'Idempotency-Key';
     public const REPLAYED_HEADER = 'Idempotent-Replayed';
     public const ROUTES = ['order_create_multi_payment', 'order_cancel', 'caisse_open', 'caisse_close', 'caisse_deposit', 'caisse_withdraw',
-        'caisse_cash_funddeposit', 'caisse_cash_fund_withdraw', 'caisse_drawer_open'];
+        'caisse_cash_funddeposit', 'caisse_cash_fund_withdraw', 'caisse_drawer_open',
+        'pos_terminal_payment_create', 'pos_terminal_payment_cancel', 'pos_terminal_payment_refund'];
     private const STALE_SECONDS = 60;
     private const RETENTION_DAYS = 7;
 
     private ?int $rowId = null;
+    private ?string $currentKey = null;
     private string $locale = 'fr';
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly PosTerminalService $terminals, private readonly PosWriteResponseBuilder $responses)
@@ -51,6 +53,7 @@ class PosIdempotencyService implements ResetInterface
             return $this->error('IDEMPOTENCY_KEY_INVALID', 'Idempotency-Key : UUID attendu', 422);
         }
         $key = strtolower($key);
+        $this->currentKey = $key;
         $this->locale = preg_match('/^[a-z]{2}$/', (string) $request->query->get('locale', 'fr')) ? (string) $request->query->get('locale') : 'fr';
         $route = (string) $request->attributes->get('_route') . ' ' . $request->getPathInfo();
         $hash = self::bodyHash($request->getContent());
@@ -139,6 +142,12 @@ class PosIdempotencyService implements ResetInterface
         $connection->executeStatement("DELETE FROM pos_idempotency_key WHERE id = ? AND status = 'in_progress'", [$id]);
     }
 
+    /** Clé POS de la requête en cours (UUID en minuscules), même si la route n'est pas idempotente ; null sans en-tête */
+    public function currentKey(): ?string
+    {
+        return $this->currentKey;
+    }
+
     public function isActive(): bool
     {
         return $this->rowId !== null;
@@ -147,6 +156,7 @@ class PosIdempotencyService implements ResetInterface
     public function reset(): void
     {
         $this->rowId = null;
+        $this->currentKey = null;
         $this->locale = 'fr';
     }
 

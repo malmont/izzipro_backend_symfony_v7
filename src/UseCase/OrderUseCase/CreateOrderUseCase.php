@@ -50,7 +50,8 @@ class CreateOrderUseCase
         private readonly \App\Services\CaisseService\CashRoundingService $cashRoundingService,
         private readonly \App\Services\PosAuditService\PosReceiptService $receipts,
         private readonly \App\Services\PosAuditService\PosAuditService $audit,
-        private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency
+        private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency,
+        private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -165,6 +166,24 @@ class CreateOrderUseCase
                 $transactionTypeId = $typeOrderId === 1 ? 1 : 2;
                 $caisse = $this->cashRegisters->requireOpenSession($orderDTO instanceof CreateOrderMultiPaymentDTO ? $orderDTO->getCashRegisterId() : null, 409);
                 $this->receipts->lockRegister($caisse->getCashRegister()); // verrou du poste avant celui de la session (C2)
+                // Parts carte payées sur le terminal Stripe (C4) : paiement réussi, même montant, même poste, jamais rattaché ;
+                // capture de l'autorisation (carte de crédit) DANS cette transaction, puis rattachement à la vente
+                $terminalPayments = [];
+                if ($orderDTO instanceof CreateOrderMultiPaymentDTO && $typeOrderId === 1) {
+                    $cardPayments = $em->getRepository(\App\Entity\Payments::class)->findBy(['orderPayment' => $order, 'paymentMethod' => 1], ['id' => 'ASC']);
+                    foreach ($orderDTO->getPaymentMethods() as $i => $method) {
+                        if ($method->getTerminalPaymentId() === null) {
+                            continue;
+                        }
+                        $terminal = $this->terminalPayments->verifyForSale($method->getTerminalPaymentId(), (int) round($method->getAmount() * 100), $caisse->getCashRegister());
+                        $this->terminalPayments->captureForSale($terminal, $order);
+                        $terminalPayments[] = $terminal;
+                        if ($cardPayment = array_shift($cardPayments)) {
+                            $cardPayment->setStripePaymentId($terminal->getStripePaymentIntentId())->setStripeStatus('succeeded')
+                                ->setStripeCardBrand($terminal->getCardBrand())->setStripeLast4($terminal->getLast4());
+                        }
+                    }
+                }
                 $this->handleCaisseTransactionUseCase->execute($caisse, $order, $user, $totalAmount, $transactionTypeId, [], $caisseAmount, $orderDTO instanceof CreateOrderMultiPaymentDTO ? $cashRounding : null);
                 // Numéro de ticket (vente) ou d'avoir (retour), suite continue par poste, et entrée au journal de caisse (C2)
                 $receipt = $this->receipts->issue($order, $caisse, $typeOrderId === 1 ? \App\Entity\PosReceipt::TICKET : \App\Entity\PosReceipt::CREDIT_NOTE, (int) round($totalAmount));
@@ -176,6 +195,7 @@ class CreateOrderUseCase
                     'subTotal' => (int) round((float) $subtotal), 'totalTax' => (int) round((float) $totalTax), 'totalAmount' => (int) round($totalAmount),
                     'cashRounding' => $order->getCashRounding(),
                     'payments' => array_values(array_map(fn ($p) => ['type' => $p->getPaymentMethod()?->getId(), 'amount' => (int) round((float) $p->getAmount())], $order->getPayments()->toArray())),
+                    'terminalPayments' => array_map(fn ($t) => ['paymentId' => $t->getId(), 'stripePaymentIntentId' => $t->getStripePaymentIntentId(), 'amount' => $t->getAmount(), 'paymentMethodType' => $t->getPaymentMethodType(), 'cardBrand' => $t->getCardBrand(), 'last4' => $t->getLast4(), 'applicationFee' => $t->getApplicationFee()], $terminalPayments),
                     'items' => array_values(array_map(fn ($i) => ['productVariantId' => $i->getProductVariant()?->getId(), 'quantity' => $i->getQuantity(), 'totalPrice' => (int) round((float) $i->getTotalPrice())], $order->getOrderItems()->toArray())),
                 ], $caisse, null, 'order', $order->getId(), $user instanceof \App\Entity\User ? $user : null);
                 $this->idempotency->attach('sale', $order->getId()); // clé d'idempotence validée avec la vente (C5)

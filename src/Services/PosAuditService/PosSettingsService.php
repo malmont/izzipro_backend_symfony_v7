@@ -14,7 +14,7 @@ class PosSettingsService
 {
     public const PIN = ['minLength' => 4, 'maxLength' => 6, 'maxAttempts' => PosPinService::MAX_ATTEMPTS, 'lockMinutes' => PosPinService::LOCK_MINUTES];
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly \App\Services\PosTerminalService\PosTerminalSettingsService $terminal)
     {
     }
 
@@ -34,6 +34,8 @@ class PosSettingsService
                 'discount' => ['required' => false, 'threshold' => null], // réservé (chantier F1)
             ],
             'pin' => self::PIN,
+            // Terminal de paiement Stripe (C4) : réglages utiles au POS (les commissions restent côté serveur)
+            'terminal' => array_intersect_key($this->terminal->settings(), array_flip(['interac', 'cardWaitSeconds', 'customerCancel', 'orphanMinutes', 'authCancelMinutes', 'currency'])),
         ];
     }
 

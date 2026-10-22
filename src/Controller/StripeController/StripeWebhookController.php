@@ -102,6 +102,11 @@ class StripeWebhookController extends AbstractController
 
         // Paiement d'un panier autorisé (capture manuelle : amount_capturable_updated ; capture automatique : succeeded) :
         // la commande est créée si le navigateur ne l'a pas fait (onglet fermé juste après le paiement), 09/10/2026
+        // Terminal de paiement de la caisse (C4, 23/10/2026) : ses PaymentIntent portent metadata.pos_terminal = "1" et son état est relu
+        // par le POS ; jamais traités comme un paiement de la boutique, un abonnement ou un paiement Mémoires Vivantes
+        if (!empty($eventData['metadata']['pos_terminal']) || str_starts_with((string) $eventType, 'terminal.')) {
+            return $this->json(['status' => 'ignored', 'detail' => 'paiement par terminal de caisse (suivi par le POS)', 'type' => $eventType]);
+        }
         if (in_array($eventType, ['payment_intent.amount_capturable_updated', 'payment_intent.succeeded'], true)) {
             if (!is_object($event) && $this->environment !== 'test') {
                 $this->logger->error('[StripeWebhook] Paiement sans signature vérifiée : ignoré');

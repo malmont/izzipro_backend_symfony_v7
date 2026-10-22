@@ -19,6 +19,10 @@ class StripeConfig
     #[ORM\Column]
     private ?bool $isActive = null;
 
+    // Location Stripe Terminal du site (C4, 23/10/2026), créée sur le compte connecté depuis l'adresse de l'entreprise
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $terminalLocationId = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -47,4 +51,7 @@ class StripeConfig
 
         return $this;
     }
+
+    public function getTerminalLocationId(): ?string { return $this->terminalLocationId; }
+    public function setTerminalLocationId(?string $id): static { $this->terminalLocationId = $id; return $this; }
 }

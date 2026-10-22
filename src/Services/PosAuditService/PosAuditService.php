@@ -42,13 +42,22 @@ class PosAuditService
     public const UNLOCK = 'UNLOCK';
     public const APPROVAL_GRANTED = 'APPROVAL_GRANTED';
     public const APPROVAL_FAILED = 'APPROVAL_FAILED';
+    // Terminal de paiement Stripe (C4, 23/10/2026) : jamais de donnée de carte au-delà de la marque et des 4 derniers chiffres
+    public const CARD_PAYMENT_STARTED = 'CARD_PAYMENT_STARTED';
+    public const CARD_PAYMENT_SUCCEEDED = 'CARD_PAYMENT_SUCCEEDED';
+    public const CARD_PAYMENT_FAILED = 'CARD_PAYMENT_FAILED';
+    public const CARD_PAYMENT_CANCELED = 'CARD_PAYMENT_CANCELED';
+    public const CARD_REFUND = 'CARD_REFUND';
+    public const CARD_SIMULATED = 'CARD_SIMULATED';
+    public const TERMINAL_CONFIGURED = 'TERMINAL_CONFIGURED';
     /** Entrées d'une action qui peut avoir été validée par un responsable : elles portent data.approvedBy */
     private const APPROVABLE = [self::REFUND, self::CASH_WITHDRAWAL, self::FUND_WITHDRAWAL, self::DRAWER_OPENED, self::SESSION_CLOSED, self::DISCOUNT_APPLIED];
 
     public const TYPES = [self::LOGIN, self::LOGIN_FAILED, self::LOGOUT, self::SESSION_OPENED, self::SESSION_CLOSED, self::CASH_DEPOSIT,
         self::CASH_WITHDRAWAL, self::FUND_DEPOSIT, self::FUND_WITHDRAWAL, self::SALE, self::REFUND, self::Z_REPORT_CREATED, self::X_REPORT_VIEWED,
         self::CLOSING_PREVIEW, self::DRAWER_OPENED, self::CASH_REGISTER_CREATED, self::CASH_REGISTER_UPDATED, self::DISCOUNT_APPLIED, self::PRICE_CHANGED,
-        self::PIN_SET, self::PIN_FAILED, self::PIN_LOCKED, self::PIN_RESET, self::UNLOCK, self::APPROVAL_GRANTED, self::APPROVAL_FAILED];
+        self::PIN_SET, self::PIN_FAILED, self::PIN_LOCKED, self::PIN_RESET, self::UNLOCK, self::APPROVAL_GRANTED, self::APPROVAL_FAILED,
+        self::CARD_PAYMENT_STARTED, self::CARD_PAYMENT_SUCCEEDED, self::CARD_PAYMENT_FAILED, self::CARD_PAYMENT_CANCELED, self::CARD_REFUND, self::CARD_SIMULATED, self::TERMINAL_CONFIGURED];
 
     /** Clé du verrou consultatif (par base, donc par site) */
     private const LOCK_KEY = 7461002;

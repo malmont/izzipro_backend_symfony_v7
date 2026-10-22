@@ -59,3 +59,8 @@ services:
     App\Tests\Fake\FakeCheckoutPaymentGateway:
         autowire: true
     App\Services\CheckoutService\CheckoutPaymentGatewayInterface: '@App\Tests\Fake\FakeCheckoutPaymentGateway'
+    # Terminal de paiement Stripe de la caisse : lecteur et cartes simulés (aucun appel réseau)
+    App\Tests\Fake\FakeTerminalGateway:
+        autowire: true
+        public: true
+    App\Services\PosTerminalService\PosTerminalGatewayInterface: '@App\Tests\Fake\FakeTerminalGateway'

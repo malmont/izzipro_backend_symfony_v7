@@ -15,6 +15,8 @@ class CashRegisterOutputDto
             'name' => $register->getName(),
             'isActive' => $register->isActive(),
             'createdAt' => $register->getCreatedAt()->format('Y-m-d H:i:s'),
+            // Terminal de paiement Stripe du poste (C4, 23/10/2026) : ajout, null sans terminal
+            'terminal' => $register->hasTerminal() ? ['readerId' => $register->getStripeReaderId(), 'label' => $register->getStripeReaderLabel(), 'simulated' => $register->isStripeReaderSimulated()] : null,
             'openSession' => $openSession ? [
                 'id' => $openSession->getId(),
                 'amountTotal' => $openSession->getAmountTotal(),

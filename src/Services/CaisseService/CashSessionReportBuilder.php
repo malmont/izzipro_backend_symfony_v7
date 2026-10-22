@@ -112,7 +112,36 @@ class CashSessionReportBuilder
             'expectedCash' => $openingAmount + $cashFlow,
             'discrepancyThreshold' => $entreprise?->getPosDiscrepancyThreshold() ?? 0,
             'store' => StoreInfoDto::fromEntreprise($entreprise),
+            // Terminal de paiement Stripe (C4, 23/10/2026) : ajout, ventilation par moyen inchangée
+            'cardTerminal' => $this->cardTerminal($saleOrders, $register),
         ];
+    }
+
+    /** Parts carte des ventes de la session : terminal (carte de crédit), Interac, carte déclarée ; paiements sans vente du poste */
+    private function cardTerminal(array $saleOrders, ?\App\Entity\CashRegister $register): array
+    {
+        $em = $this->emProvider->getEntityManager();
+        $out = ['terminal' => 0, 'interac' => 0, 'declared' => 0, 'count' => 0, 'withoutSale' => 0];
+        $byOrder = [];
+        foreach ($em->getRepository(\App\Entity\PosTerminalPayment::class)->findByOrderIds(array_keys($saleOrders)) as $p) {
+            $byOrder[$p->getOrderId()] = ($byOrder[$p->getOrderId()] ?? 0) + $p->getAmount();
+            $out[$p->isInterac() ? 'interac' : 'terminal'] += $p->getAmount();
+            $out['count']++;
+        }
+        foreach ($saleOrders as $id => $order) {
+            foreach ($order->getPayments() as $payment) {
+                $amount = (int) round((float) $payment->getAmount());
+                if ($payment->getPaymentMethod()?->getId() === 1 && $amount > 0) {
+                    $out['declared'] += max(0, $amount - ($byOrder[$id] ?? 0));
+                    $byOrder[$id] = max(0, ($byOrder[$id] ?? 0) - $amount);
+                }
+            }
+        }
+        if ($register) {
+            $out['withoutSale'] = count($em->getRepository(\App\Entity\PosTerminalPayment::class)->findOrphans($em->getRepository(Entreprise::class)->findOneBy([])?->getPosTerminalOrphanMinutes() ?? 5, $register));
+        }
+
+        return $out;
     }
 
     public static function user(?User $user): ?array

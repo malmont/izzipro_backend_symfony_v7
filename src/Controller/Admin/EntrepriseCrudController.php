@@ -116,6 +116,21 @@ class EntrepriseCrudController extends BaseTenantCrudController
             BooleanField::new('posApprovalCloseWithoutCount', 'Validation : fermeture sans comptage')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posLockMinutes', 'Verrouillage du POS après (minutes)')
                 ->setHelp('Inactivité avant verrouillage de l\'écran ; 0 : jamais')->hideOnIndex(),
+            // Terminal de paiement Stripe (C4, 23/10/2026) : valeurs par défaut = comportement livré (1 %, Interac selon le pays, 120 s, 30 min, 5 min)
+            FormField::addPanel('Terminal de paiement Stripe (caisse)')
+                ->setHelp('Lecteur par poste : menu Postes de caisse. Commissions de la plateforme en centièmes de pour cent (100 = 1 %). Les paiements en ligne gardent leur commission actuelle.'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalFeeCardBp', 'Commission en magasin, carte de crédit (centièmes de %)')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalFeeInteracBp', 'Commission en magasin, Interac (centièmes de %)')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('posTerminalInterac', 'Interac accepté sur le terminal')
+                ->setChoices(['Oui' => true, 'Non' => false])->setFormTypeOption('placeholder', 'Selon le pays du site (oui au Canada)')->setRequired(false)->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalCardWaitSeconds', 'Attente de la carte sur le terminal (secondes)')
+                ->setHelp('Au-delà, le paiement est annulé (15 à 600)')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalAuthCancelMinutes', 'Annulation d\'une autorisation carte sans vente après (minutes)')
+                ->setHelp('Carte de crédit autorisée mais vente jamais enregistrée ; Stripe libère de toute façon sous 2 jours')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalOrphanMinutes', 'Paiement considéré sans vente après (minutes)')
+                ->setHelp('Liste des paiements réussis sans vente pour le responsable')->hideOnIndex(),
+            BooleanField::new('posTerminalCustomerCancel', 'Annulation par le client sur l\'écran du lecteur')->hideOnIndex(),
+            BooleanField::new('posTerminalCartDisplay', 'Afficher le panier sur le lecteur')->hideOnIndex(),
 
             FormField::addPanel('Informations Générales'),
             TextField::new('facebookPixelId', 'Facebook Pixel ID')->hideOnIndex(),

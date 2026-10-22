@@ -127,6 +127,9 @@ security:
         #    validations : utilisateurs de caisse connectés.
         - { path: ^/api/pos/(pin-login|users)$, roles: PUBLIC_ACCESS }
         - { path: ^/api/pos/(pin|unlock|settings|approvals)$, roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
+        # 🔹 Terminal de paiement Stripe (23/10/2026, C4) : état, paiements, annulation pour la caisse ; paiements sans vente,
+        #    remboursement et carte simulée réservés au responsable et à l'administrateur (contrôle dans le contrôleur).
+        - { path: ^/api/pos/terminal(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Clés d'activation des applications mobiles (15/10/2026) : activation publique (hors pare-feu JWT, limitée en
         #    débit), gestion des clés du site par ses administrateurs.
         - { path: ^/api/app/activate$, roles: PUBLIC_ACCESS }

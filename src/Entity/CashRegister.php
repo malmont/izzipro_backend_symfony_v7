@@ -35,6 +35,24 @@ class CashRegister
     #[ORM\OneToMany(mappedBy: 'cashRegister', targetEntity: Caisse::class)]
     private Collection $sessions;
 
+    // Terminal de paiement Stripe du poste (C4, 23/10/2026) : lecteur rattaché (Reader sur le compte connecté du site)
+    #[ORM\Column(options: ['default' => false])]
+    private bool $terminalEnabled = false;
+
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $stripeReaderId = null;
+
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $stripeReaderLabel = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $stripeReaderSimulated = false;
+
+    /** Saisies EasyAdmin non persistées : code d'appairage d'un lecteur réel, création d'un lecteur simulé (clé de test) */
+    public ?string $pairingCode = null;
+    public bool $createSimulatedReader = false;
+    public bool $detachReader = false;
+
     public function __construct()
     {
         $this->createdAt = new \DateTime();
@@ -80,6 +98,17 @@ class CashRegister
     }
 
     /** @return Collection<int, Caisse> */
+    public function isTerminalEnabled(): bool { return $this->terminalEnabled; }
+    public function setTerminalEnabled(bool $enabled): static { $this->terminalEnabled = $enabled; return $this; }
+    public function getStripeReaderId(): ?string { return $this->stripeReaderId; }
+    public function setStripeReaderId(?string $id): static { $this->stripeReaderId = $id; return $this; }
+    public function getStripeReaderLabel(): ?string { return $this->stripeReaderLabel; }
+    public function setStripeReaderLabel(?string $label): static { $this->stripeReaderLabel = $label !== null ? mb_substr($label, 0, 100) : null; return $this; }
+    public function isStripeReaderSimulated(): bool { return $this->stripeReaderSimulated; }
+    public function setStripeReaderSimulated(bool $simulated): static { $this->stripeReaderSimulated = $simulated; return $this; }
+    /** Terminal utilisable : activé et lecteur rattaché */
+    public function hasTerminal(): bool { return $this->terminalEnabled && $this->stripeReaderId !== null; }
+
     public function getSessions(): Collection
     {
         return $this->sessions;

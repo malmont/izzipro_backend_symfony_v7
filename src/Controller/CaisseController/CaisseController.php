@@ -38,8 +38,20 @@ class CaisseController extends AbstractController
         private readonly TenantCacheService $cache,
         private readonly CashReportsUseCase $reports,
         private readonly DenominationService $denominations,
-        private readonly \App\Services\PosAuditService\PosWriteResponseBuilder $responses
+        private readonly \App\Services\PosAuditService\PosWriteResponseBuilder $responses,
+        private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments,
+        private readonly \Psr\Log\LoggerInterface $logger
     ) {
+    }
+
+    /** Réconciliation des paiements par terminal (C4) à l'ouverture et à la fermeture : jamais d'effet sur la réponse */
+    private function reconcileTerminal(): void
+    {
+        try {
+            $this->terminalPayments->reconcile();
+        } catch (\Throwable $e) {
+            $this->logger->warning('[PosTerminal] réconciliation à l\'ouverture/fermeture : ' . $e->getMessage());
+        }
     }
 
     #[Route('/api/caisse/open', name: 'caisse_open', methods: ['POST'])]
@@ -48,6 +60,7 @@ class CaisseController extends AbstractController
         return $this->guard(function () use ($request) {
             $data = json_decode($request->getContent(), true);
             $caisse = $this->operations->open($this->registerIdFromBody($request), $this->user(), is_array($data) ? ($data['cashFund'] ?? null) : null);
+            $this->reconcileTerminal();
 
             // amountTotal, fonDeCaisse et createdAt ajoutés le 19/10/2026 (champs d'avant inchangés) ; corps partagé avec le rejeu d'idempotence (C5)
             return new JsonResponse($this->responses->open($caisse), 201);
@@ -65,6 +78,7 @@ class CaisseController extends AbstractController
             $data = json_decode($request->getContent(), true);
             $input = CloseCaisseInputDto::fromArray(is_array($data) ? $data : []);
             $report = $this->operations->close($input->cashRegisterId, $this->user(), $input, $this->locale($request));
+            $this->reconcileTerminal();
 
             return new JsonResponse($this->responses->close($report), 200);
         });

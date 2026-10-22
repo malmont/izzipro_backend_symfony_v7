@@ -356,6 +356,118 @@ Code : `Services/PosAuditService/PosIdempotencyService` (réservation, rejeu, pu
 `pos_idempotency_key` ; schéma `migrations/Version20261022100000.php`, `scripts/migrate_all_v2_pos_idempotency.sh` ;
 tests `tests/Functional/Boutique/PosIdempotencyApiTest.php`.
 
+## Terminal de paiement Stripe (chantier C4, 23/10/2026)
+
+Intégration **pilotée par le serveur** (WisePOS E, Stripe Reader S700) : la caisse demande le paiement au backend, qui le
+transmet au lecteur par Internet et relit son état chez Stripe à chaque interrogation. La tablette ne parle jamais au
+lecteur et ne voit aucun numéro de carte (PCI DSS). Le mode « carte déclarée » (part `type: 1` sans
+`terminalPaymentId`) reste disponible et inchangé pour les boutiques sans terminal.
+
+**Compte Stripe.** Location, lecteurs et PaymentIntent sont sur le **compte connecté du site** (charge directe, comme la
+boutique en ligne). PaymentIntent `card_present` + `interac_present` (si Interac accepté) avec
+`payment_method_options.card_present.capture_method = manual_preferred` : une **carte de crédit est autorisée** sur le
+lecteur puis **capturée dans la transaction SQL de `create-multi-payment`** ; **Interac** (réseau à message unique) est
+**débité aussitôt**, jamais capturé par le serveur. `metadata.pos_terminal = "1"` : le webhook ignore ces intentions
+(branche placée avant celle de la boutique) et les événements `terminal.*`. Commission plateforme : créée au taux Interac,
+remplacée par le taux carte de crédit à la capture (réglages ci-dessous).
+
+**Clés d'idempotence Stripe.** Création : la clé POS `Idempotency-Key` (C5) de la requête, sinon un UUID gardé avec le
+paiement ; envoi au lecteur `pos-process-<pi>`, capture `pos-capture-<pi>`, annulation `pos-cancel-<pi>`, remboursement
+`pos-refund-<pi>-<montant>`. Un réessai après une erreur de base retrouve la même capture et ne débite ni ne rembourse
+deux fois.
+
+### Réglages par site (EasyAdmin, fiche entreprise, panneau « Terminal de paiement Stripe (caisse) »)
+
+| Réglage | Défaut | Effet |
+|---|---|---|
+| Lecteur par poste (menu Postes de caisse : code d'appairage, lecteur simulé en clé de test, détacher) et « Terminal activé » | désactivé | `available` de `GET /api/pos/terminal` |
+| Commission en magasin, carte de crédit (centièmes de %) | 100 (1 %) | `application_fee_amount` à la capture |
+| Commission en magasin, Interac (centièmes de %) | 100 (1 %) | `application_fee_amount` à la création |
+| Interac accepté | selon le pays du site (oui pour CA) | types du PaymentIntent |
+| Attente de la carte sur le terminal (s) | 120 | au-delà : action du lecteur et intention annulées, `failureCode: timeout` |
+| Annulation d'une autorisation carte sans vente (min) | 30 | réconciliation ; Stripe libère de toute façon sous 2 jours |
+| Paiement considéré sans vente (min) | 5 | liste des paiements sans vente |
+| Annulation par le client sur l'écran du lecteur | oui | `process_config.enable_customer_cancellation` |
+| Afficher le panier sur le lecteur | non | `set_reader_display` avant le paiement |
+
+Les paiements en ligne gardent leur commission actuelle (1 %, lot R1). `GET /api/pos/settings` expose en plus
+`terminal {interac, cardWaitSeconds, customerCancel, orphanMinutes, authCancelMinutes, currency}` ; `GET /api/cash-registers`
+expose `terminal: null | {readerId, label, simulated}`.
+
+### Routes (`/api/pos/terminal`, caisse ; remboursement, paiements sans vente et carte simulée : responsable ou administrateur)
+
+| Méthode, route | Corps | Réponse |
+|---|---|---|
+| `GET /api/pos/terminal?cashRegisterId=` | — | 200 `{available, cashRegisterId, reader: null \| {id, label, simulated, status: online \| offline, error}, paymentMethods: ["card_present", "interac_present"?], currentPayment, simulationAllowed, settings {cardWaitSeconds, customerCancel, interac}}` ; `available: false` sans terminal (garder la carte déclarée) |
+| `POST /api/pos/terminal/payments` | `{cashRegisterId?, amount (cents, part carte), items (comme la vente), otherPayments?: [{type (2 espèces…), amount (cents)}]}` | 201 paiement (ci-dessous), `status: waiting_for_card`. Refus : 409 `TERMINAL_UNAVAILABLE`, 409 `CASH_REGISTER_CLOSED`, 422 `AMOUNT_MISMATCH {quoteTotal, otherPayments, expectedCard, amount}` (part carte ≠ devis du serveur, arrondi des espèces admis), 400 `AMOUNT_TOO_SMALL`, 409 `READER_BUSY {paymentId}`, 409 `READER_OFFLINE`, 409 `READER_NOT_FOUND`, 504 `READER_TIMEOUT` (réessayer), 503 `STRIPE_UNAVAILABLE`, 502 `STRIPE_ERROR` |
+| `GET /api/pos/terminal/payments/{id}` | — | 200 paiement relu chez Stripe ; le POS interroge toutes les 1 à 2 s |
+| `POST /api/pos/terminal/payments/{id}/cancel` | — | 200 paiement `canceled` (`failureCode: canceled_by_cashier`) ; 409 `READER_BUSY` pendant une autorisation (attendre puis réessayer) ; 409 `PAYMENT_ALREADY_CAPTURED` (passer par le remboursement) ; rejeu sans effet |
+| `POST /api/pos/terminal/payments/{id}/refund` | `{amount?}` cents (partiel possible) | 200 paiement avec `refund` ; carte de crédit : remboursement en ligne aussitôt ; Interac : `refund.status: waiting_for_card`, le client présente sa carte, suivi par `GET` ; autorisation non capturée : libérée (`canceled`, `voided_by_manager`) ; 409 `PAYMENT_NOT_CAPTURED`, 400 `REFUND_AMOUNT_INVALID`, 502 `TERMINAL_REFUND_FAILED` |
+| `GET /api/pos/terminal/payments?orphans=1&cashRegisterId=` | — | 200 `{payments: [...]}` paiements réussis **sans vente** depuis plus du délai réglé (débits et autorisations) : rembourser (`/refund`) ou rattacher en réessayant la vente avec `terminalPaymentId` |
+| `POST /api/pos/terminal/payments/{id}/simulate` | `{type: card_present \| interac_present, cardNumber?}` | 200 paiement après carte simulée (lecteur simulé et clé Stripe de test seulement ; 403 `SIMULATION_FORBIDDEN` sinon, même appelée en production) ; journalisée `CARD_SIMULATED`. Cartes de test : 4242 4242 4242 4242 acceptée, 4000 0000 0000 0002 refusée, 4000 0000 0000 9995 fonds insuffisants, 4506 4450 0693 1933 Interac |
+
+Paiement : `{paymentId, stripePaymentIntentId, status: waiting_for_card | processing | succeeded | failed | canceled,
+captured, amount, currency, paymentMethodType: card_present | interac_present | null, cardBrand, last4, failureCode,
+failureMessage, cashRegisterId, orderId, refund: null | {id, status: waiting_for_card | succeeded | failed, amount,
+failureMessage}, createdAt, updatedAt}`. `succeeded` + `captured: false` : carte de crédit autorisée (débit à la vente) ;
+`succeeded` + `captured: true` : Interac débité (ou carte capturée). `failureCode` : `insufficient_funds`,
+`generic_decline`, `expired_card`… (refus), `timeout`, `canceled_by_cashier`, `authorization_expired`, `reader_offline`.
+`Idempotency-Key` (C5) acceptée sur la création, l'annulation et le remboursement.
+
+### Vente et annulation
+
+- `POST /api/order/create-multi-payment` : une part `{type: 1, amount, terminalPaymentId}` (ou `stripePaymentId` =
+  PaymentIntent) est vérifiée **puis capturée dans la transaction** : paiement réussi, même montant, même poste, jamais
+  rattaché. Refus (rien n'est créé, rien n'est capturé) : 404 `TERMINAL_PAYMENT_NOT_FOUND`, 402
+  `TERMINAL_PAYMENT_NOT_SUCCEEDED {status, failureCode}`, 400 `TERMINAL_PAYMENT_AMOUNT_MISMATCH {paid, expected}`, 409
+  `TERMINAL_PAYMENT_WRONG_REGISTER`, 409 `TERMINAL_PAYMENT_ALREADY_USED {orderId}`, 402/502 `TERMINAL_CAPTURE_FAILED`.
+  Sans `terminalPaymentId` : carte déclarée, comportement d'avant. `payments` garde `stripe_payment_id`, marque et 4
+  derniers chiffres ; l'entrée `SALE` du journal porte `data.terminalPayments`.
+- **Aucun argent perdu** : capture réussie chez Stripe puis erreur de base → le POS réessaie la vente avec la **même
+  clé d'idempotence** : même capture (clé Stripe `pos-capture-<pi>`), vente enregistrée une fois. Sans réessai, la
+  réconciliation relit Stripe : le paiement passe « débité » et apparaît dans les **paiements sans vente** ; une
+  autorisation capturée n'est jamais annulée.
+- `POST /api/order/cancel/{id}` d'une vente payée sur le terminal, remboursée autrement qu'en espèces
+  (`paymentMethod ≠ 2`) : **carte de crédit** → remboursement Stripe en ligne dans la transaction de l'annulation
+  (`refund_application_fee`, la plateforme rend sa commission) ; **Interac** → le remboursement doit d'abord être
+  présenté sur le lecteur : **409 `TERMINAL_REFUND_REQUIRED {terminalPaymentId, amount, paymentMethodType, refund}`**,
+  puis `POST /api/pos/terminal/payments/{id}/refund`, suivi par `GET` jusqu'à `refund.status: succeeded`, puis
+  l'annulation est rejouée avec **`terminalRefundId`** (= `refund.id`). Remboursement en espèces (`paymentMethod: 2`) :
+  repli autorisé, aucun appel Stripe. Validation d'un responsable (C3) inchangée.
+
+### Journal, rapports, réconciliation
+
+Journal (C2) : `CARD_PAYMENT_STARTED`, `CARD_PAYMENT_SUCCEEDED` (autorisation ou débit), `CARD_PAYMENT_FAILED`,
+`CARD_PAYMENT_CANCELED`, `CARD_REFUND` (`data.onReader`), `CARD_SIMULATED`, `TERMINAL_CONFIGURED` ; données : montant,
+lecteur, poste, PaymentIntent, type, marque et 4 derniers chiffres seulement. Rapports X et Z : ventilation par moyen
+inchangée, bloc ajouté **`cardTerminal {terminal, interac, declared, count, withoutSale}`** (cents ; `declared` = parts
+carte sans terminal ; `withoutSale` = paiements sans vente du poste).
+
+Réconciliation (`PosTerminalPaymentService::reconcile`) : relit chaque paiement en attente, annule les cartes jamais
+présentées (délai d'attente), libère les autorisations sans vente (délai réglé), suit les remboursements Interac. Lancée
+à l'ouverture et à la fermeture de session (sans effet sur la réponse), à chaque `GET /api/pos/terminal`, et par la
+commande **`app:pos:terminal-reconcile`** : seuls les sites ayant un terminal activé sont parcourus, sortie immédiate
+sans paiement en attente (une requête indexée, aucun appel Stripe), verrou fichier + verrou consultatif PostgreSQL par
+base, options `--from=HH:MM --to=HH:MM` (plage horaire) et `--tenant=<code>`. **Installation du cron** (hôte, toutes les
+15 minutes ; fréquence et plage à ajuster) :
+
+```
+*/15 * * * * docker exec -w /var/www symfony_app_v2 php bin/console app:pos:terminal-reconcile --from=07:00 --to=23:59 >> /var/log/pos-terminal-reconcile.log 2>&1
+```
+
+Code : `Services/PosTerminalService/` (`PosTerminalGatewayInterface` + `StripeTerminalGateway`, `PosTerminalPaymentService`,
+`PosTerminalSettingsService`), `UseCase/PosTerminalUseCase/PosTerminalUseCase`, `Controller/PosController/PosTerminalController`,
+`Command/PosTerminalReconcileCommand`, `Entity/PosTerminalPayment` (table `pos_terminal_payment`), colonnes ajoutées sur
+`cash_register` (lecteur), `stripe_config` (`terminal_location_id`), `entreprise` (réglages) ; schéma
+`migrations/Version20261023100000.php`, `scripts/migrate_all_v2_pos_terminal.sh` ; tests
+`tests/Functional/Boutique/PosTerminalApiTest.php` (passerelle simulée `tests/Fake/FakeTerminalGateway`).
+
+**Reste pour la production** (par site réel) : compte Stripe connecté actif et adresse complète de l'entreprise (Location
+créée au premier appairage) ; lecteur réel commandé chez Stripe, appairé par son code dans EasyAdmin, terminal activé sur
+le poste ; clés `sk_live` (la route de simulation refuse alors toute carte simulée) ; cron de réconciliation installé ;
+vérifier dans le tableau de bord Stripe que Terminal est disponible pour la plateforme et le pays du site (CA : CAD,
+Interac) ; carte de test physique Stripe pour la recette en magasin.
+
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la

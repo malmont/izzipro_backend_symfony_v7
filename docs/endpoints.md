@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (199)
+## Boutique et commun (206)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -359,6 +359,13 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/pos/pin-login` | PUBLIC_ACCESS | `Controller\PosController\PosPinController::pinLogin` |
 | POST | `/api/pos/pin` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::setPin` |
 | GET | `/api/pos/settings` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::settings` |
+| POST | `/api/pos/terminal/payments/{id}/cancel` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::cancel` |
+| POST | `/api/pos/terminal/payments/{id}/refund` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::refund` |
+| POST | `/api/pos/terminal/payments/{id}/simulate` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::simulate` |
+| GET | `/api/pos/terminal/payments/{id}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::get` |
+| GET | `/api/pos/terminal/payments` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::list` |
+| POST | `/api/pos/terminal/payments` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::create` |
+| GET | `/api/pos/terminal` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::status` |
 | POST | `/api/pos/unlock` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::unlock` |
 | GET | `/api/pos/users` | PUBLIC_ACCESS | `Controller\PosController\PosPinController::users` |
 | POST | `/api/product-variants/{id}/customization-combinations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::addCombination` |

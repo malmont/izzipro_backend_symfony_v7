@@ -35,7 +35,8 @@ class CancelOrderUseCase
         private readonly \App\Services\PosAuditService\PosReceiptService $receipts,
         private readonly \App\Services\PosAuditService\PosAuditService $audit,
         private readonly \App\Services\PosAuditService\PosApprovalService $approvals,
-        private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency
+        private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency,
+        private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
@@ -44,7 +45,7 @@ class CancelOrderUseCase
     }
 
     /** @param ?int $cashRegisterId poste du remboursement d'une vente POS si la session d'origine est fermée (15/10/2026) */
-    public function execute(int $orderId, ?int $paymentMethod = null, ?int $cashRegisterId = null, ?\App\Entity\User $refundedBy = null): JsonResponse
+    public function execute(int $orderId, ?int $paymentMethod = null, ?int $cashRegisterId = null, ?\App\Entity\User $refundedBy = null, ?string $terminalRefundId = null): JsonResponse
     {
         // On récupère l'EM du tenant une seule fois
         $em = $this->emProvider->getEntityManager();
@@ -137,6 +138,12 @@ class CancelOrderUseCase
                     ?? ($cashRegisterId !== null ? $this->cashRegisters->openSession($this->cashRegisters->resolve($cashRegisterId)) : null)
                     ?? $this->cashRegisters->requireOpenSession(null, 409);
                 $this->receipts->lockRegister($caisse->getCashRegister()); // verrou du poste avant celui de la session (C2)
+                // Vente payée sur le terminal Stripe (C4), remboursée autrement qu'en espèces : remboursement Stripe de la part
+                // carte dans cette transaction (carte de crédit en ligne ; Interac : déjà présenté sur le lecteur, sinon 409)
+                $terminal = $this->terminalPayments->findByOrder((int) $order->getId());
+                if ($terminal !== null && $terminal->getStatus() === \App\Entity\PosTerminalPayment::CAPTURED && $paymentMethod != 2) {
+                    $this->terminalPayments->refundForCancel($terminal, $terminalRefundId, $refundedBy);
+                }
                 $this->handleCaisseTransactionUseCase->execute($caisse, $order, $refundedBy ?? $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount,
                     $posCashRefund ? -($cashRefund - (int) round($refundAmount)) : null);
                 // Avoir (suite continue par poste) et entrée au journal, avec les montants d'origine (C2)
@@ -146,6 +153,7 @@ class CancelOrderUseCase
                     'creditNoteNumber' => $creditNote->getNumber(),
                     'refundAmount' => (int) round((float) $refundAmount), 'paymentMethod' => $paymentMethod,
                     'cashRefund' => $posCashRefund ? $cashRefund : 0,
+                    'terminalRefund' => isset($terminal) && $terminal !== null && $terminal->getRefundStatus() !== null ? ['paymentId' => $terminal->getId(), 'refundId' => $terminal->getRefundId(), 'amount' => $terminal->getRefundAmount(), 'paymentMethodType' => $terminal->getPaymentMethodType()] : null,
                     'before' => $before, 'after' => ['totalAmount' => 0, 'subTotal' => 0, 'totalTax' => 0, 'status' => 7],
                 ], $caisse, null, 'order', $order->getId(), $refundedBy);
                 // Clé d'idempotence validée avec le remboursement, réponse gardée dans le même ordre SQL (C5)
