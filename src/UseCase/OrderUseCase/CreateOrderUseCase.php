@@ -49,7 +49,8 @@ class CreateOrderUseCase
         private readonly CashRegisterResolver $cashRegisters,
         private readonly \App\Services\CaisseService\CashRoundingService $cashRoundingService,
         private readonly \App\Services\PosAuditService\PosReceiptService $receipts,
-        private readonly \App\Services\PosAuditService\PosAuditService $audit
+        private readonly \App\Services\PosAuditService\PosAuditService $audit,
+        private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -177,6 +178,7 @@ class CreateOrderUseCase
                     'payments' => array_values(array_map(fn ($p) => ['type' => $p->getPaymentMethod()?->getId(), 'amount' => (int) round((float) $p->getAmount())], $order->getPayments()->toArray())),
                     'items' => array_values(array_map(fn ($i) => ['productVariantId' => $i->getProductVariant()?->getId(), 'quantity' => $i->getQuantity(), 'totalPrice' => (int) round((float) $i->getTotalPrice())], $order->getOrderItems()->toArray())),
                 ], $caisse, null, 'order', $order->getId(), $user instanceof \App\Entity\User ? $user : null);
+                $this->idempotency->attach('sale', $order->getId()); // clé d'idempotence validée avec la vente (C5)
             }
 
             $em->flush();

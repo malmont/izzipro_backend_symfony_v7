@@ -31,7 +31,9 @@ class CaisseOperationsUseCase
         private readonly CashSessionReportBuilder $reports,
         private readonly DenominationService $denominations,
         private readonly \App\Services\PosAuditService\PosAuditService $audit,
-        private readonly \App\Services\PosAuditService\PosApprovalService $approvals
+        private readonly \App\Services\PosAuditService\PosApprovalService $approvals,
+        private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency,
+        private readonly \App\Services\PosAuditService\PosWriteResponseBuilder $responses
     ) {
     }
 
@@ -78,6 +80,7 @@ class CaisseOperationsUseCase
                 'openingAmount' => (int) round($initialAmount), 'openingFund' => (int) round($initialFund), 'cashFund' => $cashFund !== null ? (int) $cashFund : 0,
                 'amountTotal' => (int) round((float) $caisse->getAmountTotal()),
             ], $caisse, null, 'session', $caisse->getId(), $user);
+            $this->idempotency->attach('session_open', $caisse->getId(), $this->responses->open($caisse), 201); // C5
             $connection->commit();
         } catch (\Throwable $e) {
             if ($connection->isTransactionActive()) {
@@ -176,6 +179,7 @@ class CaisseOperationsUseCase
                 'reportId' => $report->getId(), 'number' => $report->getNumber(), 'salesCount' => $snapshot['sales']['count'], 'salesTotal' => $snapshot['sales']['total'],
                 'refundsTotal' => $snapshot['refunds']['total'], 'expectedCash' => $expected, 'receipts' => $snapshot['receipts'] ?? null, 'creditNotes' => $snapshot['creditNotes'] ?? null,
             ], $caisse, $register, 'z_report', $report->getId(), $user);
+            $this->idempotency->attach('session_close', $report->getId(), $this->responses->close($report), 200); // C5
             $connection->commit();
         } catch (\Throwable $e) {
             if ($connection->isTransactionActive()) {
@@ -214,6 +218,7 @@ class CaisseOperationsUseCase
             }, ['amount' => (int) round((float) $amount), 'amountTotal' => (int) round((float) $caisse->getAmountTotal()),
                 'fonDeCaisse' => (int) round((float) ($caisse->getFonDeCaisse() ?? 0)), 'cashDetails' => is_array($cashDetails) ? $cashDetails : []],
                 $caisse, null, 'session', $caisse->getId(), $user);
+            $this->idempotency->attach('session_move', $caisse->getId(), $this->responses->move($caisse, self::moveMessage($transactionTypeId)), 201); // C5
             $connection->commit();
         } catch (\Throwable $e) {
             if ($connection->isTransactionActive()) {
@@ -223,6 +228,12 @@ class CaisseOperationsUseCase
         }
 
         return $caisse;
+    }
+
+    /** Message de la réponse d'un mouvement (inchangé depuis l'origine) */
+    public static function moveMessage(int $transactionTypeId): string
+    {
+        return in_array($transactionTypeId, [HandleCaisseTransactionUseCase::WITHDRAWAL, HandleCaisseTransactionUseCase::CASH_FUND_WITHDRAWAL], true) ? 'Withdrawal successful' : 'Deposit successful';
     }
 
     /** Ouverture du tiroir-caisse hors encaissement (C2) : session ouverte et motif obligatoires ; seulement journalisée */
@@ -238,6 +249,7 @@ class CaisseOperationsUseCase
         try {
             $this->approvals->requireFor(\App\Services\PosAuditService\PosApprovalService::DRAWER_OPEN, $user, ['cashRegisterId' => (int) $caisse->getCashRegister()->getId()]);
             $entry = $this->audit->record(\App\Services\PosAuditService\PosAuditService::DRAWER_OPENED, ['reason' => mb_substr($reason, 0, 255)], $caisse, null, 'session', $caisse->getId(), $user);
+            $this->idempotency->attach('drawer', $entry['id'], ['auditId' => $entry['id'], 'sequence' => $entry['sequence'], 'occurredAt' => $entry['occurredAt'], 'cashRegisterId' => $caisse->getCashRegister()->getId()], 201); // C5
             $connection->commit();
         } catch (\Throwable $e) {
             if ($connection->isTransactionActive()) {

@@ -34,7 +34,8 @@ class CancelOrderUseCase
         private readonly \App\Services\CaisseService\CashRoundingService $cashRoundingService,
         private readonly \App\Services\PosAuditService\PosReceiptService $receipts,
         private readonly \App\Services\PosAuditService\PosAuditService $audit,
-        private readonly \App\Services\PosAuditService\PosApprovalService $approvals
+        private readonly \App\Services\PosAuditService\PosApprovalService $approvals,
+        private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
@@ -147,6 +148,9 @@ class CancelOrderUseCase
                     'cashRefund' => $posCashRefund ? $cashRefund : 0,
                     'before' => $before, 'after' => ['totalAmount' => 0, 'subTotal' => 0, 'totalTax' => 0, 'status' => 7],
                 ], $caisse, null, 'order', $order->getId(), $refundedBy);
+                // Clé d'idempotence validée avec le remboursement, réponse gardée dans le même ordre SQL (C5)
+                $this->idempotency->attach('cancel', $order->getId(), ['message' => 'Order canceled and refunded successfully',
+                    'creditNoteNumber' => $creditNote->getNumber(), 'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()]], 200);
             }
 
             // Valider la transaction en base de données

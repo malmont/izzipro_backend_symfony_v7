@@ -318,6 +318,44 @@ name}`. Code : `Services/PosAuditService/PosPinService`, `PosApprovalService`, `
 `UseCase/PosAuditUseCase/PosPinUseCase`, `Controller/PosController/PosPinController` ; schéma
 `migrations/Version20261020100000.php`, `scripts/migrate_all_v2_pos_pin.sh`.
 
+## Idempotence des écritures : en-tête `Idempotency-Key` (chantier C5 partie 1, 22/10/2026)
+
+Une coupure réseau entre l'envoi d'une écriture et la réception de sa réponse ne doit jamais produire de doublon
+(deux ventes, deux tickets, deux dépôts). Le POS envoie sur chaque écriture un en-tête **`Idempotency-Key: <UUID v4>`**
+(un nouvel UUID par opération, le même sur tous les réessais de cette opération). Sans en-tête, le comportement est
+exactement celui d'avant (web, MAUI, EasyAdmin inchangés).
+
+Routes couvertes (toutes `POST`) : `/api/order/create-multi-payment`, `/api/order/cancel/{id}`, `/api/caisse/open`,
+`/api/caisse/close`, `/api/caisse/deposit`, `/api/caisse/withdraw`, `/api/caisse/cashfunddeposit`,
+`/api/caisse/cashfundwithdraw`, `/api/caisse/drawer-open`. Sur les autres routes l'en-tête est ignoré.
+
+| Cas | Réponse |
+|---|---|
+| Première requête | exécutée normalement, réponse habituelle (201 ou 200) |
+| Réessai, même clé, même corps, même utilisateur | **même statut et même corps** que la première réponse, en-tête **`Idempotent-Replayed: true`**, aucune écriture (ni commande, ni ticket, ni mouvement, ni entrée de journal) |
+| Même clé, corps différent, autre route ou autre utilisateur | **422 `IDEMPOTENCY_KEY_REUSED`** |
+| Clé qui n'est pas un UUID | **422 `IDEMPOTENCY_KEY_INVALID`** |
+| Première requête encore en cours (moins de 60 s) | **409 `IDEMPOTENCY_IN_PROGRESS`**, en-tête **`Retry-After: 2`** : réessayer avec la même clé |
+| Première requête refusée (4xx : 403 `APPROVAL_REQUIRED`, 400 fonds insuffisants, etc.) ou tombée en erreur | la clé est libérée : le réessai avec la même clé (par exemple avec `X-Pos-Approval`) s'exécute |
+| Écriture validée mais réponse perdue (coupure juste après la transaction) | réessai → réponse **reconstituée** depuis l'objet créé (ticket, avoir, session, rapport Z, mouvement, ouverture de tiroir), `Idempotent-Replayed: true` |
+
+Règles : la clé est **liée à l'utilisateur connecté** ; conservation **7 jours** (purge automatique) ; la clé est
+marquée comme réussie **dans la même transaction SQL que l'écriture** (une écriture validée ne peut donc jamais être
+rejouée, et une réservation périmée sans écriture peut être reprise sans risque) ; CORS : `Idempotency-Key` accepté,
+`Idempotent-Replayed` et `Retry-After` exposés. Une annulation web (`/api/order/cancel/{id}` depuis le site, sans
+en-tête) n'est pas concernée.
+
+Côté POS : générer l'UUID **avant** l'envoi et le conserver avec l'opération en attente ; en cas de délai dépassé ou de
+coupure, renvoyer la même requête avec la même clé jusqu'à obtenir une réponse ; traiter une réponse `Idempotent-Replayed`
+comme la réponse normale ; sur 409, attendre `Retry-After` secondes et réessayer ; sur 422 `IDEMPOTENCY_KEY_REUSED`,
+c'est un bogue du POS (clé réutilisée pour une autre opération) : générer une nouvelle clé.
+
+Code : `Services/PosAuditService/PosIdempotencyService` (réservation, rejeu, purge), `PosWriteResponseBuilder`
+(réponses des écritures et reconstitution), `EventSubscriber/PosIdempotencySubscriber` (requête, réponse, exception),
+`attach()` appelé dans les cas d'usage (`CreateOrderUseCase`, `CancelOrderUseCase`, `CaisseOperationsUseCase`) ; table
+`pos_idempotency_key` ; schéma `migrations/Version20261022100000.php`, `scripts/migrate_all_v2_pos_idempotency.sh` ;
+tests `tests/Functional/Boutique/PosIdempotencyApiTest.php`.
+
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la

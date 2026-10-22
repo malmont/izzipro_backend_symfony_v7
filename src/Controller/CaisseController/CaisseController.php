@@ -37,7 +37,8 @@ class CaisseController extends AbstractController
         private readonly GetTransactionsForOpenCaisseUseCase $getTransactionsForOpenCaisseUseCase,
         private readonly TenantCacheService $cache,
         private readonly CashReportsUseCase $reports,
-        private readonly DenominationService $denominations
+        private readonly DenominationService $denominations,
+        private readonly \App\Services\PosAuditService\PosWriteResponseBuilder $responses
     ) {
     }
 
@@ -48,11 +49,8 @@ class CaisseController extends AbstractController
             $data = json_decode($request->getContent(), true);
             $caisse = $this->operations->open($this->registerIdFromBody($request), $this->user(), is_array($data) ? ($data['cashFund'] ?? null) : null);
 
-            // amountTotal, fonDeCaisse et createdAt ajoutés le 19/10/2026 (champs d'avant inchangés)
-            return new JsonResponse([
-                'message' => 'Caisse opened successfully', 'caisse_id' => $caisse->getId(), 'cashRegisterId' => $caisse->getCashRegister()->getId(),
-                'amountTotal' => $caisse->getAmountTotal(), 'fonDeCaisse' => $caisse->getFonDeCaisse(), 'createdAt' => $caisse->getCreatedAt()?->format('Y-m-d H:i:s'),
-            ], 201);
+            // amountTotal, fonDeCaisse et createdAt ajoutés le 19/10/2026 (champs d'avant inchangés) ; corps partagé avec le rejeu d'idempotence (C5)
+            return new JsonResponse($this->responses->open($caisse), 201);
         });
     }
 
@@ -68,10 +66,7 @@ class CaisseController extends AbstractController
             $input = CloseCaisseInputDto::fromArray(is_array($data) ? $data : []);
             $report = $this->operations->close($input->cashRegisterId, $this->user(), $input, $this->locale($request));
 
-            return new JsonResponse([
-                'message' => 'Caisse closed successfully', 'caisse_id' => $report->getSession()->getId(), 'cashRegisterId' => $report->getCashRegister()->getId(),
-                'report' => CashRegisterReportOutputDto::detail($report),
-            ], 200);
+            return new JsonResponse($this->responses->close($report), 200);
         });
     }
 
@@ -201,7 +196,7 @@ class CaisseController extends AbstractController
             $data = is_array($data) ? $data : [];
             $caisse = $this->operations->move($this->registerIdFromBody($request), $this->user(), $data['amount'] ?? null, $transactionTypeId, $data['cashDetails'] ?? []);
 
-            return new JsonResponse(['message' => $message, 'new_total' => $caisse->getAmountTotal(), 'cashRegisterId' => $caisse->getCashRegister()->getId()], 201);
+            return new JsonResponse($this->responses->move($caisse, $message), 201);
         });
     }
 
