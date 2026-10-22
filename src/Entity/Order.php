@@ -97,6 +97,20 @@ class Order
     #[ORM\Column(nullable: true)]
     private ?int $creditApplied = null;
 
+    // Remise de ticket de caisse (F1, 24/10/2026) : montant total réparti sur les lignes, pourcentage en centièmes de % si remise en
+    // pourcentage, motif ; 0 / null : aucune remise, comme avant
+    #[ORM\Column(options: ['default' => 0])]
+    private int $discountAmount = 0;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $discountPercentBp = null;
+
+    #[ORM\Column(length: 40, nullable: true)]
+    private ?string $discountReasonCode = null;
+
+    #[ORM\Column(length: 500, nullable: true)]
+    private ?string $discountReasonText = null;
+
     // Non enregistré en base : poste de caisse choisi dans EasyAdmin pour une vente au comptoir créée à la main (C2)
     private ?int $posCashRegisterId = null;
 
@@ -442,6 +456,14 @@ class Order
         return $this->cashRounding;
     }
 
+    public function getDiscountAmount(): int { return $this->discountAmount; }
+    public function setDiscountAmount(int $cents): static { $this->discountAmount = max(0, $cents); return $this; }
+    public function getDiscountPercentBp(): ?int { return $this->discountPercentBp; }
+    public function setDiscountPercentBp(?int $bp): static { $this->discountPercentBp = $bp; return $this; }
+    public function getDiscountReasonCode(): ?string { return $this->discountReasonCode; }
+    public function setDiscountReasonCode(?string $c): static { $this->discountReasonCode = $c !== null ? mb_substr($c, 0, 40) : null; return $this; }
+    public function getDiscountReasonText(): ?string { return $this->discountReasonText; }
+    public function setDiscountReasonText(?string $t): static { $t = $t !== null ? trim(strip_tags($t)) : ''; $this->discountReasonText = $t === '' ? null : mb_substr($t, 0, 500); return $this; }
     public function getReturnedFrom(): ?Order { return $this->returnedFrom; }
     public function setReturnedFrom(?Order $order): static { $this->returnedFrom = $order; return $this; }
     public function getCreditApplied(): int { return $this->creditApplied ?? 0; }

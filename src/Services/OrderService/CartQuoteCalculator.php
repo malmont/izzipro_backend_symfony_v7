@@ -119,11 +119,22 @@ final class CartQuoteCalculator
 
         [$shipping, $carrier] = $this->shipping($input);
         $currency = $this->currency->code();
-        $tax = $this->taxes->compute($input->address, array_map(fn ($line, $i) => [
+        // Remises de caisse (F1, 24/10/2026) : seulement si des remises sont demandées (le web n'en envoie jamais : calcul inchangé) ;
+        // taxes calculées sur le NET de chaque ligne
+        $discounts = null;
+        if (\App\Services\PosDiscountService\PosDiscountCalculator::hasDiscounts($input->items, $input->ticketDiscount)) {
+            $applied = \App\Services\PosDiscountService\PosDiscountCalculator::apply($lines, array_values($input->items), $input->ticketDiscount);
+            $lines = $applied['lines'];
+            $discounts = $applied['summary'];
+            $subtotal = (int) array_sum(array_map(fn ($l) => (int) $l['total'], $lines));
+        }
+        $tax = $this->taxes->compute($input->address, array_map(fn ($line, $i) => $discounts !== null && ($line['kind'] ?? 'sale') === 'sale' ? [
+            'amount' => (int) $line['total'], 'quantity' => 1, 'kind' => $line['kind'], 'reference' => sprintf('line-%d-variant-%d', $i, $line['productVariantId']),
+        ] : [
             'amount' => (int) $line['unitPrice'], 'quantity' => (int) $line['quantity'], 'kind' => $line['kind'], 'reference' => sprintf('line-%d-variant-%d', $i, $line['productVariantId']),
         ], $lines, array_keys($lines)), $shipping, $currency);
 
-        return [
+        return ($discounts !== null ? ['discounts' => $discounts, 'grossSubtotal' => $discounts['gross']] : []) + [
             'lines' => $lines, 'subtotal' => $subtotal, 'shipping' => $shipping,
             'taxes' => $tax['taxes'], 'taxStatus' => $tax['status'], 'taxProvider' => $tax['provider'],
             'taxCalculationId' => $tax['calculationId'], 'deposit' => $deposit,

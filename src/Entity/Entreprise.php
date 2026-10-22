@@ -252,6 +252,32 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(nullable: true)]
     private ?int $posApprovalReturn = null;
 
+    // Remises de caisse (F1, 24/10/2026) : autorisées, remise de ticket, plafonds caissier et responsable (centièmes de % et cents),
+    // motif obligatoire, motifs (un par ligne, null = liste par défaut) ; l'administrateur n'a pas de plafond
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posDiscountEnabled = true;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posDiscountTicketEnabled = true;
+
+    #[ORM\Column(options: ['default' => 1000])]
+    private int $posDiscountCashierMaxPercentBp = 1000;
+
+    #[ORM\Column(options: ['default' => 2000])]
+    private int $posDiscountCashierMaxAmount = 2000;
+
+    #[ORM\Column(options: ['default' => 5000])]
+    private int $posDiscountManagerMaxPercentBp = 5000;
+
+    #[ORM\Column(options: ['default' => 20000])]
+    private int $posDiscountManagerMaxAmount = 20000;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posDiscountReasonRequired = true;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $posDiscountReasons = null;
+
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $metaTitle = null;
 
@@ -724,6 +750,25 @@ class Entreprise implements TranslatableInterface
     public function isPosTerminalHeaderRequired(): bool { return $this->posTerminalHeaderRequired; }
 
     public const RETURN_REASONS_DEFAULT = ['Taille ou modèle', 'Défectueux', 'Ne convient pas', 'Erreur de caisse', 'Autre'];
+    public const DISCOUNT_REASONS_DEFAULT = ['Article abîmé', 'Fidélité', 'Prix affiché', 'Geste commercial', 'Autre'];
+    public function isPosDiscountEnabled(): bool { return $this->posDiscountEnabled; }
+    public function setPosDiscountEnabled(bool $v): static { $this->posDiscountEnabled = $v; return $this; }
+    public function isPosDiscountTicketEnabled(): bool { return $this->posDiscountTicketEnabled; }
+    public function setPosDiscountTicketEnabled(bool $v): static { $this->posDiscountTicketEnabled = $v; return $this; }
+    public function getPosDiscountCashierMaxPercentBp(): int { return $this->posDiscountCashierMaxPercentBp; }
+    public function setPosDiscountCashierMaxPercentBp(?int $bp): static { $this->posDiscountCashierMaxPercentBp = min(10000, max(0, (int) $bp)); return $this; }
+    public function getPosDiscountCashierMaxAmount(): int { return $this->posDiscountCashierMaxAmount; }
+    public function setPosDiscountCashierMaxAmount(?int $c): static { $this->posDiscountCashierMaxAmount = max(0, (int) $c); return $this; }
+    public function getPosDiscountManagerMaxPercentBp(): int { return $this->posDiscountManagerMaxPercentBp; }
+    public function setPosDiscountManagerMaxPercentBp(?int $bp): static { $this->posDiscountManagerMaxPercentBp = min(10000, max(0, (int) $bp)); return $this; }
+    public function getPosDiscountManagerMaxAmount(): int { return $this->posDiscountManagerMaxAmount; }
+    public function setPosDiscountManagerMaxAmount(?int $c): static { $this->posDiscountManagerMaxAmount = max(0, (int) $c); return $this; }
+    public function isPosDiscountReasonRequired(): bool { return $this->posDiscountReasonRequired; }
+    public function setPosDiscountReasonRequired(bool $v): static { $this->posDiscountReasonRequired = $v; return $this; }
+    public function getPosDiscountReasons(): ?string { return $this->posDiscountReasons; }
+    public function setPosDiscountReasons(?string $text): static { $t = $text !== null ? trim(strip_tags($text)) : ''; $this->posDiscountReasons = $t === '' ? null : mb_substr($t, 0, 2000); return $this; }
+    /** @return list<array{code: string, label: string}> */
+    public function discountReasons(): array { return self::reasonList($this->posDiscountReasons, self::DISCOUNT_REASONS_DEFAULT); }
     public function getPosReturnMaxDays(): ?int { return $this->posReturnMaxDays; }
     public function setPosReturnMaxDays(?int $days): static { $this->posReturnMaxDays = $days !== null && $days > 0 ? min(3650, $days) : null; return $this; }
     public function isPosReturnWithoutReceipt(): bool { return $this->posReturnWithoutReceipt; }
@@ -735,11 +780,14 @@ class Entreprise implements TranslatableInterface
     public function getPosReturnReasons(): ?string { return $this->posReturnReasons; }
     public function setPosReturnReasons(?string $text): static { $t = $text !== null ? trim(strip_tags($text)) : ''; $this->posReturnReasons = $t === '' ? null : mb_substr($t, 0, 2000); return $this; }
     /** @return list<array{code: string, label: string}> motifs du site (liste par défaut si vide) */
-    public function returnReasons(): array
+    public function returnReasons(): array { return self::reasonList($this->posReturnReasons, self::RETURN_REASONS_DEFAULT); }
+
+    /** @return list<array{code: string, label: string}> motifs d'un réglage (un par ligne), liste par défaut si vide */
+    public static function reasonList(?string $text, array $defaults): array
     {
-        $labels = array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string) $this->posReturnReasons) ?: [])));
+        $labels = array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string) $text) ?: [])));
         $out = [];
-        foreach ($labels ?: self::RETURN_REASONS_DEFAULT as $label) {
+        foreach ($labels ?: $defaults as $label) {
             $ascii = class_exists(\Normalizer::class) ? preg_replace('/\p{Mn}/u', '', (string) \Normalizer::normalize($label, \Normalizer::FORM_D)) : strtr($label, ['é' => 'e', 'è' => 'e', 'ê' => 'e', 'à' => 'a', 'â' => 'a', 'ç' => 'c', 'ô' => 'o', 'î' => 'i', 'ï' => 'i', 'ù' => 'u', 'û' => 'u', 'É' => 'E', 'È' => 'E', 'À' => 'A', 'Ç' => 'C']);
             $code = trim(preg_replace('/[^a-z0-9]+/', '_', strtolower($ascii ?: $label)), '_');
             $out[] = ['code' => $code !== '' ? $code : 'motif_' . (count($out) + 1), 'label' => mb_substr($label, 0, 80)];

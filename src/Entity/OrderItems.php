@@ -40,6 +40,14 @@ class OrderItems
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $saleUnit = null;
 
+    // Remises de caisse (F1, 24/10/2026) : remises de la ligne [{type, value, amount, reason {code, text}, scope: line|ticket}] et leur
+    // total en cents ; total_price est alors le NET (unit_price reste le brut). Null / 0 : aucune remise, comme avant.
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $discounts = null;
+
+    #[ORM\Column(options: ['default' => 0])]
+    private int $discountAmount = 0;
+
     // Retour partiel (F2, 24/10/2026) : ligne de la vente d'origine dont cette ligne de retour provient
     #[ORM\ManyToOne(targetEntity: OrderItems::class)]
     #[ORM\JoinColumn(name: 'returned_from_item_id', nullable: true, onDelete: 'SET NULL')]
@@ -164,6 +172,12 @@ class OrderItems
         return $this;
     }
 
+    public function getDiscounts(): array { return $this->discounts ?? []; }
+    public function setDiscounts(?array $discounts): static { $this->discounts = $discounts ?: null; return $this; }
+    public function getDiscountAmount(): int { return $this->discountAmount; }
+    public function setDiscountAmount(int $cents): static { $this->discountAmount = max(0, $cents); return $this; }
+    /** Montant brut de la ligne (avant remises) en cents */
+    public function grossTotal(): int { return (int) round((float) $this->totalPrice) + $this->discountAmount; }
     public function getReturnedFromItem(): ?OrderItems { return $this->returnedFromItem; }
     public function setReturnedFromItem(?OrderItems $item): static { $this->returnedFromItem = $item; return $this; }
 

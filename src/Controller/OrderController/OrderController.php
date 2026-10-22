@@ -425,6 +425,8 @@ class OrderController extends AbstractController
         $dto->setPaymentSplit($sign * $cash, $sign * ($paid - $cash));
         // Poste de caisse (facultatif : poste unique sinon) ; sans session ouverte → 409 CASH_REGISTER_CLOSED, rien n'est créé
         $dto->setCashRegisterId(is_numeric($data['cashRegisterId'] ?? null) ? (int) $data['cashRegisterId'] : null);
+        // Remises de caisse (F1) : remises de ligne dans items[].discounts (déjà dans items), remise de ticket ici ; contrôlées par le serveur
+        $dto->setTicketDiscount(is_array($data['ticketDiscount'] ?? null) ? $data['ticketDiscount'] : null);
 
         $result = $this->createOrderUseCase->execute($dto);
         if (!$result instanceof Order && $paymentIntent !== null) {

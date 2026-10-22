@@ -34,7 +34,7 @@ class ProcessOrderItemsUseCase
      * @return float sous-total (articles + livraison, cents) ; négatif pour un retour (typeOrderId ≠ 1)
      * @throws BadRequestHttpException devis refusé (stock, règle de réservation, article inconnu)
      */
-    public function execute(Order $order, array $items, UpdateStockAndInventoryUseCase $updateStockAndInventory, int $typeOrderId, ?float $priceShipping, ?int $carrierId = null): float
+    public function execute(Order $order, array $items, UpdateStockAndInventoryUseCase $updateStockAndInventory, int $typeOrderId, ?float $priceShipping, ?int $carrierId = null, ?array $ticketDiscount = null): float
     {
         $em = $this->emProvider->getEntityManager();
         $isCancel = $typeOrderId !== 1;
@@ -42,7 +42,13 @@ class ProcessOrderItemsUseCase
         try {
             // Taxes selon l'adresse de livraison, sinon l'adresse du site (vente au comptoir sans adresse, 15/10/2026)
             $quote = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'carrierId' => $carrierId, 'shippingPrice' => $priceShipping,
-                'shippingAddress' => $this->taxAddress->forOrder($order)]));
+                'shippingAddress' => $this->taxAddress->forOrder($order), 'ticketDiscount' => $ticketDiscount], $order->getOrderSource()?->getId() === 2)); // remises : caisse seulement (F1)
+            // Remise de ticket de caisse (F1) : montant, pourcentage et motif gardés sur la commande ; lignes nettes ci-dessous
+            if (!empty($quote['discounts']['ticket'])) {
+                $t = $quote['discounts']['ticket'];
+                $order->setDiscountAmount((int) $t['amount'])->setDiscountPercentBp($t['type'] === 'percent' ? (int) round($t['value'] * 100) : null)
+                    ->setDiscountReasonCode($t['reasonCode'] ?? null)->setDiscountReasonText($t['reasonText'] ?? null);
+            }
             $order->setPendingTaxCalculationId($quote['taxCalculationId']); // transaction Stripe Tax enregistrée après le paiement
             $order->setPendingTaxes($quote['taxes']); // mêmes taxes que le devis et que le montant autorisé
         } catch (CartQuoteException $e) {
@@ -61,6 +67,9 @@ class ProcessOrderItemsUseCase
             }
 
             $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $line['quantity'], (float) $line['unitPrice']);
+            if (!empty($line['discountAmount'])) { // remises de caisse (F1) : unit_price brut, total_price net
+                $orderItem->setDiscounts($line['discounts'])->setDiscountAmount((int) $line['discountAmount'])->setTotalPrice((float) $line['total']);
+            }
             if (!empty($line['customizationId'])) { // combinaison vérifiée par le devis
                 $orderItem->setCustomization($em->getRepository(\App\Entity\ProductCustomizationImage::class)->find((int) $line['customizationId']));
             }

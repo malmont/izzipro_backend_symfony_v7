@@ -137,6 +137,17 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posHeldCartsAlertHours', 'Paniers en attente : alerte après (heures)')->setHelp('défaut 24')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCashAlertThreshold', 'Alerte « trop d\'espèces » au-delà de (cents)')->setRequired(false)->setHelp('Vide : aucune alerte ; le POS invite à un retrait')->hideOnIndex(),
             BooleanField::new('posTerminalHeaderRequired', 'Exiger un terminal identifié (X-Pos-Terminal) sur les routes de caisse')->setHelp('Désactivé par défaut ; à activer quand toutes les tablettes envoient l\'en-tête')->hideOnIndex(),
+            // Remises de caisse (F1, 24/10/2026)
+            FormField::addPanel('Remises (caisse)')->setHelp('Remises de ligne et de ticket accordées par le caissier, calculées par le serveur (taxes sur le net). Plafonds par rôle ; au-delà du plafond caissier, validation d\'un responsable ; l\'administrateur n\'a pas de plafond.'),
+            BooleanField::new('posDiscountEnabled', 'Remises autorisées')->hideOnIndex(),
+            BooleanField::new('posDiscountTicketEnabled', 'Remise sur le ticket entier autorisée')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posDiscountCashierMaxPercentBp', 'Caissier : pourcentage maximal (centièmes de %)')->setHelp('1000 = 10 %')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posDiscountCashierMaxAmount', 'Caissier : montant maximal par vente (cents)')->setHelp('2000 = 20,00')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posDiscountManagerMaxPercentBp', 'Responsable : pourcentage maximal (centièmes de %)')->setHelp('5000 = 50 %')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posDiscountManagerMaxAmount', 'Responsable : montant maximal par vente (cents)')->setHelp('20000 = 200,00')->hideOnIndex(),
+            BooleanField::new('posDiscountReasonRequired', 'Motif obligatoire')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField::new('posDiscountReasons', 'Motifs de remise (un par ligne)')->setRequired(false)->setHelp('Vide : Article abîmé, Fidélité, Prix affiché, Geste commercial, Autre')->hideOnIndex(),
+
             // Retours partiels et échanges (F2, 24/10/2026)
             FormField::addPanel('Retours et échanges (caisse)')->setHelp('Retour d\'un ou plusieurs articles d\'une vente retrouvée par son ticket, et échanges. Défauts = comportement livré.'),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posReturnMaxDays', 'Délai maximal de retour (jours)')->setRequired(false)->setHelp('Vide : aucun délai')->hideOnIndex(),

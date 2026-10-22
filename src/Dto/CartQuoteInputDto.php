@@ -22,7 +22,9 @@ final class CartQuoteInputDto
         public readonly array $items,
         public readonly ?int $carrierId = null,
         public readonly ?int $shippingPrice = null,
-        public readonly ?array $address = null
+        public readonly ?array $address = null,
+        /** Remise de ticket de caisse (F1) {type, value, reasonCode?, reasonText?} ; null pour le web */
+        public readonly ?array $ticketDiscount = null
     ) {
     }
 
@@ -31,7 +33,7 @@ final class CartQuoteInputDto
      *                                  priceShipping et booking global)
      * @throws CartQuoteException 400
      */
-    public static function fromArray(array $data): self
+    public static function fromArray(array $data, bool $allowDiscounts = false): self
     {
         $items = $data['items'] ?? null;
         if (!is_array($items) || $items === []) {
@@ -46,6 +48,9 @@ final class CartQuoteInputDto
             if (!isset($item['booking']) && !isset($item['rental']) && is_array($globalBooking) && $globalBooking !== []) {
                 $item['booking'] = $globalBooking;
             }
+            if (!$allowDiscounts) {
+                unset($item['discounts']); // remises de caisse (F1) : jamais honorées hors des chemins de caisse
+            }
             $lines[] = $item;
         }
         $carrierId = $data['carrierId'] ?? null;
@@ -56,6 +61,8 @@ final class CartQuoteInputDto
 
         $address = is_array($data['shippingAddress'] ?? null) ? TaxEngine::normalizeAddress($data['shippingAddress']) : null;
 
-        return new self($lines, is_numeric($carrierId) && (int) $carrierId > 0 ? (int) $carrierId : null, $shipping !== null ? (int) round((float) $shipping) : null, $address);
+        $ticketDiscount = $allowDiscounts && is_array($data['ticketDiscount'] ?? null) && $data['ticketDiscount'] !== [] ? $data['ticketDiscount'] : null;
+
+        return new self($lines, is_numeric($carrierId) && (int) $carrierId > 0 ? (int) $carrierId : null, $shipping !== null ? (int) round((float) $shipping) : null, $address, $ticketDiscount);
     }
 }

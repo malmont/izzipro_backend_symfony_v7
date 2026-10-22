@@ -32,9 +32,11 @@ class PosApprovalService
         self::FUND_WITHDRAWAL => ['amount', 'cashRegisterId'],
         self::DRAWER_OPEN => ['cashRegisterId'],
         self::CLOSE_WITHOUT_COUNT => ['cashRegisterId'],
-        self::DISCOUNT => [],
+        self::DISCOUNT => ['amount', 'percent', 'scope'], // remises (F1) : montant (cents), pourcentage (centièmes de %), scope line | ticket | mixed
         self::RETURN => ['orderId', 'amount'],
     ];
+    /** Clés de contexte textuelles (les autres sont numériques) */
+    public const STRING_CONTEXT = ['scope'];
     /** Clés de contexte facultatives, comparées si elles figurent dans la validation (remboursement d'un paiement par terminal sans vente, C4) */
     public const EXTRA_CONTEXT = [self::REFUND => ['terminalPaymentId']];
     public const TTL_SECONDS = 120;
@@ -142,6 +144,13 @@ class PosApprovalService
         $context = is_array($context) ? $context : [];
         $out = [];
         foreach (self::CONTEXT[$action] as $key) {
+            if (in_array($key, self::STRING_CONTEXT, true)) {
+                if (!is_string($context[$key] ?? null) || !preg_match('/^[a-z_]{1,20}$/', $context[$key])) {
+                    throw new CashRegisterException('VALIDATION_FAILED', sprintf('context.%s requis pour l\'action %s', $key, $action), 422, [['path' => "context.$key", 'message' => 'requis']]);
+                }
+                $out[$key] = $context[$key];
+                continue;
+            }
             if (!isset($context[$key]) || !is_numeric($context[$key])) {
                 throw new CashRegisterException('VALIDATION_FAILED', sprintf('context.%s requis pour l\'action %s', $key, $action), 422, [['path' => "context.$key", 'message' => 'requis']]);
             }
@@ -165,7 +174,7 @@ class PosApprovalService
             }
         }
         foreach ($keys as $key) {
-            if ((int) ($approved[$key] ?? -1) !== (int) ($actual[$key] ?? -2)) {
+            if (in_array($key, self::STRING_CONTEXT, true) ? (string) ($approved[$key] ?? '') !== (string) ($actual[$key] ?? '-') : (int) ($approved[$key] ?? -1) !== (int) ($actual[$key] ?? -2)) {
                 return false;
             }
         }

@@ -226,7 +226,7 @@ class PosPinApiTest extends WebTestCase
         $settings = $this->json($this->request('GET', '/api/pos/settings'));
         $this->assertSame(5, $settings['lockAfterMinutes']);
         $this->assertSame(['required' => true, 'threshold' => 0], $settings['approvals']['refund']);
-        $this->assertSame(['required' => false, 'threshold' => null], $settings['approvals']['discount']);
+        $this->assertEquals(['required' => true, 'threshold' => 2000, 'maxPercent' => 10], $settings['approvals']['discount'], 'remises (F1, 24/10/2026) : validation au-delà du plafond caissier');
         $this->assertSame(['minLength' => 4, 'maxLength' => 6, 'maxAttempts' => 5, 'lockMinutes' => 15], $settings['pin']);
         $this->db->executeStatement('UPDATE entreprise SET pos_lock_minutes = 0, pos_approval_refund = NULL');
         $settings = $this->json($this->request('GET', '/api/pos/settings'));

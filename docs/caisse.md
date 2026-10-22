@@ -599,6 +599,50 @@ Code : `Services/PosReturnService/PosReturnService`, `UseCase/PosReturnUseCase/P
 `Controller/PosController/PosReturnController`, `Entity/PosReturn` ; schéma `migrations/Version20261024100000.php`,
 `scripts/migrate_all_v2_pos_returns.sh` ; tests `tests/Functional/Boutique/PosReturnApiTest.php`.
 
+## Remises de caisse (lot F1, 24/10/2026)
+
+État des lieux : la boutique en ligne n'a aucun système de remise ni de code promo (seul le prix spécial daté du produit,
+`specialPrice`, existe) ; la remise F1 est propre à la caisse, **jamais honorée sur les chemins web** (`cart/quote`,
+`create-intent`, `order/create` ignorent `discounts` et `ticketDiscount`). Coupons du fabricant (base taxable non réduite
+au Québec) : hors F1, lot ultérieur.
+
+**Calcul par le serveur, seule source de vérité.** Remises de ligne (`items[].discounts`, plusieurs, appliquées dans
+l'ordre sur le net restant, plancher 0) : `{type: percent | amount, value, reasonCode?, reasonText?}` (`percent` : 0,01 à
+100, deux décimales ; `amount` : cents). Remise de ticket (`ticketDiscount`, une seule, même forme) répartie au **prorata
+des nets de ligne**, l'écart d'arrondi sur la dernière ligne. **Taxes calculées sur le net** de chaque ligne (remise du
+commerçant = base taxable réduite). Total et `cashTotal` (arrondi des espèces, C1). Les lignes de commande gardent le prix
+unitaire **brut** (`unit_price`), le **net** en `total_price`, les remises (`discounts` JSON avec `scope: line | ticket`,
+`discount_amount`) ; la commande garde la remise de ticket (`discount_amount`, `discount_percent_bp`, motif).
+
+### Routes
+
+| Méthode, route | Corps | Réponse |
+|---|---|---|
+| `POST /api/pos/quote` (caisse, lecture, sans `Idempotency-Key`) | `{items: [{productVariantId, quantity, customizationId?, discounts?}], ticketDiscount?, cashRegisterId?}` | 200 comme `cart/quote` (taxes du magasin) plus `grossSubtotal`, `discounts {lines, ticket: null \| {type, value, amount, reasonCode, reasonText, scope}, total, gross}`, `cashTotal` ; lignes : `gross`, `discounts [{type, value, amount, reason…, scope}]`, `discountAmount`, `total` (net). Refus : 422 `DISCOUNT_INVALID`, 409 `DISCOUNT_NOT_ALLOWED {scope?}`, 422 `DISCOUNT_REASON_REQUIRED`, 422 `DISCOUNT_REASON_INVALID {reasons}`, 422/404 `QUOTE_INVALID` |
+| `POST /api/order/create-multi-payment`, `sale` de `POST /api/pos/exchanges`, `POST /api/pos/terminal/payments` | mêmes `items[].discounts` et `ticketDiscount` (facultatifs : rien ne change sans eux) | la vente recalcule tout : paiements = net (sinon 400 `PAYMENT_TOTAL_MISMATCH`), part carte du terminal sur le net ; réponse et bloc ticket : `grossSubTotal`, `discounts {total, ticket, lines: [{productVariantId, quantity, gross, net, amount, discounts}]}` (dollars) ; mêmes refus que le devis plus 403 `APPROVAL_REQUIRED {action: "discount", context: {amount, percent, scope}}` et 403 `DISCOUNT_EXCEEDS_LIMIT {limit, amount, percent}` |
+
+Journal `DISCOUNT_APPLIED` (une entrée par vente remisée : `gross`, `total`, `ticket`, `lines`, `approvedBy` si validation).
+Rapports X et Z : `discounts {count, total}` (ventes remisées, remises de ligne et de ticket comprises). Retours F2 : le
+remboursable d'une ligne est son **net payé** ; dans `GET /api/pos/returns/lookup`, **`unitPrice` est désormais le net payé
+de la prochaine unité** (remises déduites), **`unitGross`** le prix unitaire brut et **`discountAmount`** la remise de la
+ligne ; sans remise, `unitPrice` = `unitGross` comme avant.
+
+### Droits, validation (C3) et réglages
+
+| Rôle | Règle |
+|---|---|
+| Caissier | remise totale de la vente ≤ plafond caissier (pourcentage du brut **et** montant) ; au-delà : 403 `APPROVAL_REQUIRED {action: "discount", context: {amount (cents), percent (centièmes de %), scope: line \| ticket \| mixed}}`, `POST /api/pos/approvals` puis rejeu avec `X-Pos-Approval` ; la validation porte le plafond au plafond responsable |
+| Responsable | ≤ plafond responsable, sans validation ; au-delà : 403 `DISCOUNT_EXCEEDS_LIMIT` |
+| Administrateur | sans plafond |
+
+Réglages (fiche Entreprise, panneau « Remises (caisse) ») et `settings.discounts` : remises autorisées (`enabled`, oui),
+remise de ticket (`ticketEnabled`, oui), caissier `{maxPercent: 10, maxAmount: 2000}`, responsable `{maxPercent: 50,
+maxAmount: 20000}`, motif obligatoire (`reasonRequired`, oui), motifs `reasons [{code, label}]` (Article abîmé, Fidélité,
+Prix affiché, Geste commercial, Autre). `settings.approvals.discount` = `{required: enabled, threshold: plafond caissier
+(cents), maxPercent}`. Code : `Services/PosDiscountService/` (`PosDiscountCalculator` calcul pur, `PosDiscountService`
+réglages, contrôle, devis), `Controller/PosController/PosQuoteController` ; schéma `migrations/Version20261024120000.php`,
+`scripts/migrate_all_v2_pos_discounts.sh` ; tests `tests/Functional/Boutique/PosDiscountApiTest.php`.
+
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la

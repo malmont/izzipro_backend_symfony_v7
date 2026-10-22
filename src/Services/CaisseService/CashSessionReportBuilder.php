@@ -103,7 +103,7 @@ class CashSessionReportBuilder
             'sales' => $sales,
             'taxes' => $this->taxes($saleOrders + $refundOrders),
             'refunds' => $refunds,
-            'discounts' => ['count' => 0, 'total' => 0], // pas encore de remises en caisse (chantier F1)
+            'discounts' => $this->discounts($saleOrders), // remises de caisse (F1, 24/10/2026)
             'movements' => $movements,
             'cashRounding' => $rounding,
             // Tickets et avoirs de la session (C2) : {first, last, count}
@@ -120,6 +120,21 @@ class CashSessionReportBuilder
             // Retours partiels et échanges (F2, 24/10/2026) : ajout ; les remboursements correspondants sont déjà dans refunds
             'returns' => $em->getRepository(\App\Entity\PosReturn::class)->totalsForSession((int) $session->getId()),
         ];
+    }
+
+    /** @return array{count: int, total: int} ventes remisées et total des remises (lignes, remise de ticket répartie comprise) */
+    private function discounts(array $saleOrders): array
+    {
+        $count = $total = 0;
+        foreach ($saleOrders as $order) {
+            $sum = (int) array_sum(array_map(fn ($i) => $i->getDiscountAmount(), $order->getOrderItems()->toArray()));
+            if ($sum > 0) {
+                $count++;
+                $total += $sum;
+            }
+        }
+
+        return ['count' => $count, 'total' => $total];
     }
 
     /** Parts carte des ventes de la session : terminal (carte de crédit), Interac, carte déclarée ; paiements sans vente du poste */

@@ -52,7 +52,8 @@ class CreateOrderUseCase
         private readonly \App\Services\PosAuditService\PosAuditService $audit,
         private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency,
         private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments,
-        private readonly \App\Services\PosAuditService\PosSettingsService $posSettings
+        private readonly \App\Services\PosAuditService\PosSettingsService $posSettings,
+        private readonly \App\Services\PosDiscountService\PosDiscountService $discounts
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -67,10 +68,10 @@ class CreateOrderUseCase
     }
 
     /** Total (cents) d'une vente au comptoir d'après le devis du serveur, sans rien créer (échange F2) */
-    public function quoteTotal(array $items): int
+    public function quoteTotal(array $items, ?array $ticketDiscount = null): int
     {
         try {
-            return (int) $this->terminalPayments->quoteTotal($items);
+            return (int) $this->terminalPayments->quoteTotal($items, $ticketDiscount);
         } catch (\App\Services\OrderService\CartQuoteException $e) {
             throw new CashRegisterException('QUOTE_INVALID', $e->getMessage(), 400);
         }
@@ -89,12 +90,22 @@ class CreateOrderUseCase
             $typeOrderId = $orderDTO->getTypeOrder();
             $statusPaymentId = 2;
 
+            // Remises de caisse (F1) : vente au comptoir seulement ; structure, motifs, plafonds par rôle et validation C3 AVANT toute écriture
+            $ticketDiscount = $orderDTO instanceof CreateOrderMultiPaymentDTO ? $orderDTO->getTicketDiscount() : null;
+            $discountSummary = null;
+            if ($orderDTO instanceof CreateOrderMultiPaymentDTO && $orderDTO->getOrderSource() === 2 && $typeOrderId === 1
+                && \App\Services\PosDiscountService\PosDiscountCalculator::hasDiscounts($orderDTO->getItems(), $ticketDiscount)) {
+                $discountSummary = $this->discounts->quote($orderDTO->getItems(), $ticketDiscount)['discounts'];
+                $this->discounts->authorize($user, $discountSummary);
+            } elseif (\App\Services\PosDiscountService\PosDiscountCalculator::hasDiscounts($orderDTO->getItems(), $ticketDiscount)) {
+                throw new CashRegisterException('DISCOUNT_NOT_ALLOWED', 'Les remises ne s\'appliquent qu\'aux ventes au comptoir', 409);
+            }
             $order = $this->createOrderCommandUseCase->execute($orderDTO, $user);
             if ($order instanceof JsonResponse) {
                 throw new \Exception($order->getContent());
             }
             try {
-                $subtotal = $this->processOrderItemsUseCase->execute($order, $orderDTO->getItems(), $this->updateStockAndInventoryUseCase, $typeOrderId, $orderDTO->getPriceShipping(), $orderDTO->getCarrierId());
+                $subtotal = $this->processOrderItemsUseCase->execute($order, $orderDTO->getItems(), $this->updateStockAndInventoryUseCase, $typeOrderId, $orderDTO->getPriceShipping(), $orderDTO->getCarrierId(), $ticketDiscount);
             } catch (BadRequestHttpException $e) {
                 throw new \Exception($e->getMessage());
             } catch (\Exception $e) {
@@ -213,10 +224,17 @@ class CreateOrderUseCase
                     'subTotal' => (int) round((float) $subtotal), 'totalTax' => (int) round((float) $totalTax), 'totalAmount' => (int) round($totalAmount),
                     'cashRounding' => $order->getCashRounding(),
                     'creditApplied' => $order->getCreditApplied(),
+                    'discountTotal' => $discountSummary['total'] ?? 0,
                     'payments' => array_values(array_map(fn ($p) => ['type' => $p->getPaymentMethod()?->getId(), 'amount' => (int) round((float) $p->getAmount())], $order->getPayments()->toArray())),
                     'terminalPayments' => array_map(fn ($t) => ['paymentId' => $t->getId(), 'stripePaymentIntentId' => $t->getStripePaymentIntentId(), 'amount' => $t->getAmount(), 'paymentMethodType' => $t->getPaymentMethodType(), 'cardBrand' => $t->getCardBrand(), 'last4' => $t->getLast4(), 'applicationFee' => $t->getApplicationFee()], $terminalPayments),
                     'items' => array_values(array_map(fn ($i) => ['productVariantId' => $i->getProductVariant()?->getId(), 'quantity' => $i->getQuantity(), 'totalPrice' => (int) round((float) $i->getTotalPrice())], $order->getOrderItems()->toArray())),
                 ], $caisse, null, 'order', $order->getId(), $user instanceof \App\Entity\User ? $user : null);
+                if ($discountSummary !== null && $discountSummary['total'] > 0) { // remises accordées (F1) : entrée dédiée, approvedBy si validation
+                    $this->audit->record(\App\Services\PosAuditService\PosAuditService::DISCOUNT_APPLIED, [
+                        'reference' => $order->getReference(), 'receiptNumber' => $receipt->getNumber(), 'gross' => $discountSummary['gross'], 'total' => $discountSummary['total'],
+                        'ticket' => $discountSummary['ticket'], 'lines' => array_values(array_map(fn ($i) => ['productVariantId' => $i->getProductVariant()?->getId(), 'quantity' => $i->getQuantity(), 'gross' => $i->grossTotal(), 'discountAmount' => $i->getDiscountAmount(), 'discounts' => $i->getDiscounts()], array_filter($order->getOrderItems()->toArray(), fn ($i) => $i->getDiscountAmount() > 0))),
+                    ], $caisse, null, 'order', $order->getId(), $user instanceof \App\Entity\User ? $user : null);
+                }
                 $this->idempotency->attach('sale', $order->getId()); // clé d'idempotence validée avec la vente (C5)
             }
 

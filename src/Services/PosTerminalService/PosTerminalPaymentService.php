@@ -88,9 +88,9 @@ class PosTerminalPaymentService
     }
 
     /** Total (cents) du devis au comptoir pour des articles (taxes du magasin) */
-    public function quoteTotal(array $items): int
+    public function quoteTotal(array $items, ?array $ticketDiscount = null): int
     {
-        return (int) $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'shippingAddress' => $this->taxAddress->forStore()]))['total'];
+        return (int) $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'shippingAddress' => $this->taxAddress->forStore(), 'ticketDiscount' => $ticketDiscount], true))['total'];
     }
 
     // ---------------------------------------------------------------- paiement
@@ -103,7 +103,7 @@ class PosTerminalPaymentService
      * @param int $amount part carte en cents
      * @param ?string $posKey Idempotency-Key POS de la requête (clé Stripe de la création)
      */
-    public function start(User $user, ?int $cashRegisterId, array $items, array $otherPayments, int $amount, ?string $posKey): PosTerminalPayment
+    public function start(User $user, ?int $cashRegisterId, array $items, array $otherPayments, int $amount, ?string $posKey, ?array $ticketDiscount = null): PosTerminalPayment
     {
         $register = $this->registers->resolve($cashRegisterId);
         if (!$register->hasTerminal()) {
@@ -115,11 +115,11 @@ class PosTerminalPaymentService
         }
         // Devis du serveur : la part carte doit compléter exactement les autres parts (arrondi des espèces admis)
         try {
-            $quote = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'shippingAddress' => $this->taxAddress->forStore()]));
+            $quote = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'shippingAddress' => $this->taxAddress->forStore(), 'ticketDiscount' => $ticketDiscount], true));
         } catch (CartQuoteException $e) {
             throw new CashRegisterException('QUOTE_INVALID', $e->getMessage(), 400);
         }
-        $total = (int) $quote['total'];
+        $total = (int) $quote['total']; // net des remises de caisse (F1)
         $cash = $nonCash = 0;
         foreach ($otherPayments as $other) {
             (int) ($other['type'] ?? 0) === 2 ? $cash += (int) $other['amount'] : $nonCash += (int) $other['amount'];

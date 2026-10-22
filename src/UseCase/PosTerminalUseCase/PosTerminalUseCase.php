@@ -42,7 +42,7 @@ class PosTerminalUseCase
             throw new CashRegisterException('VALIDATION_FAILED', 'Corps invalide', 422, $errors);
         }
 
-        return $this->payments->start($user, is_numeric($body['cashRegisterId'] ?? null) ? (int) $body['cashRegisterId'] : null, $body['items'], $others, (int) $body['amount'], $posKey);
+        return $this->payments->start($user, is_numeric($body['cashRegisterId'] ?? null) ? (int) $body['cashRegisterId'] : null, $body['items'], $others, (int) $body['amount'], $posKey, is_array($body['ticketDiscount'] ?? null) ? $body['ticketDiscount'] : null);
     }
 
     public function get(int $id, ?User $user = null): PosTerminalPayment

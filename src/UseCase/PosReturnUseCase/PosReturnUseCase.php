@@ -65,7 +65,8 @@ class PosReturnUseCase
         return $this->transaction(function () use ($user, $returnInput, $saleInput, $methods, $posKey, $cashRegisterId) {
             // 1. Montants : retour (prix payés) et vente (devis du serveur) → crédit appliqué
             $returnTotal = $this->returns->preview($returnInput);
-            $saleTotal = $this->createOrder->quoteTotal($saleInput['items']);
+            $ticketDiscount = is_array($saleInput['ticketDiscount'] ?? null) ? $saleInput['ticketDiscount'] : null;
+            $saleTotal = $this->createOrder->quoteTotal($saleInput['items'], $ticketDiscount);
             $credit = min($returnTotal, $saleTotal);
             // 2. Retour : seul le reste (retour − crédit) est remboursé au client
             $return = $this->returns->create($user, $returnInput, $posKey, $credit);
@@ -75,6 +76,7 @@ class PosReturnUseCase
             $dto = new CreateOrderMultiPaymentDTO($user->getId(), PosReturnService::ORDER_SOURCE_POS, $methods, null, null, PosReturnService::ORDER_TYPE_SALE, $saleInput['items'], null,
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
             $dto->setCreditApplied($credit);
+            $dto->setTicketDiscount($ticketDiscount);
             $dto->setVerifiedPaymentAmount($paid);
             $dto->setPaymentSplit($cash, $paid - $cash);
             $dto->setCashRegisterId($cashRegisterId);

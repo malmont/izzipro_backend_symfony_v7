@@ -23,6 +23,7 @@ class PosSettingsService
     {
         $e = $this->entreprise();
         $threshold = fn (?int $value) => ['required' => $value !== null, 'threshold' => $value];
+        $discounts = \App\Services\PosDiscountService\PosDiscountService::settingsOf($e);
 
         return [
             'lockAfterMinutes' => $e?->getPosLockMinutes() ?? 5,
@@ -32,7 +33,8 @@ class PosSettingsService
                 'fundWithdrawal' => $threshold($e ? $e->getPosApprovalFundWithdrawal() : 0),
                 'drawerOpen' => ['required' => $e?->isPosApprovalDrawerOpen() ?? true],
                 'closeWithoutCount' => ['required' => $e?->isPosApprovalCloseWithoutCount() ?? true],
-                'discount' => ['required' => false, 'threshold' => null], // réservé (chantier F1)
+                // Remises (F1) : validation d'un responsable au-delà du plafond caissier (montant en cents ou pourcentage)
+                'discount' => ['required' => $discounts['enabled'], 'threshold' => $discounts['cashier']['maxAmount'], 'maxPercent' => $discounts['cashier']['maxPercent']],
                 'return' => $threshold($e ? $e->effectivePosApprovalReturn() : 0), // retour partiel ou échange (F2) : seuil du remboursement par défaut
             ],
             'pin' => $this->pinRules(),
@@ -44,6 +46,7 @@ class PosSettingsService
             'cashAlertThreshold' => $e?->getPosCashAlertThreshold(),
             'terminalRequired' => $e?->isPosTerminalHeaderRequired() ?? false,
             // Retours partiels et échanges (F2, 24/10/2026)
+            'discounts' => $discounts, // remises de caisse (F1, 24/10/2026)
             'returns' => ['maxDays' => $e?->getPosReturnMaxDays(), 'withoutReceipt' => $e?->isPosReturnWithoutReceipt() ?? false, 'restockDefault' => $e?->isPosReturnRestockDefault() ?? true,
                 'cashRefundForCardSale' => $e?->isPosReturnCashForCardSale() ?? false, 'reasons' => $e ? $e->returnReasons() : []],
             // Terminal de paiement Stripe (C4) : réglages utiles au POS (les commissions restent côté serveur)
@@ -112,6 +115,7 @@ class PosSettingsService
             PosApprovalService::DRAWER_OPEN => $e?->isPosApprovalDrawerOpen() ?? true,
             PosApprovalService::CLOSE_WITHOUT_COUNT => $e?->isPosApprovalCloseWithoutCount() ?? true,
             PosApprovalService::RETURN => $threshold($e ? $e->effectivePosApprovalReturn() : 0),
+            PosApprovalService::DISCOUNT => $e?->isPosDiscountEnabled() ?? true, // plafonds par rôle dans PosDiscountService
             default => false,
         };
     }

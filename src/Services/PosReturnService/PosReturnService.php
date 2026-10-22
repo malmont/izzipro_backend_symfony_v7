@@ -184,9 +184,10 @@ class PosReturnService
         $itemsTotal = $this->itemsTotal($order);
         $lines = [];
         foreach ($order->getOrderItems() as $item) {
-            $unit = (int) round((float) $item->getUnitPrice());
             $qty = (int) $item->getQuantity();
             $before = $returned[$item->getId()] ?? 0;
+            // Net payé de la prochaine unité (F1 : total_price est le net des remises ; cumul exact comme pour les taxes)
+            $unit = self::taxForQuantity((int) round((float) $item->getTotalPrice()), $qty, $before, 1);
             // Taxes de la prochaine unité retournée (méthode cumulative : la somme des retours égale la part de la ligne)
             $taxes = array_map(fn ($t) => ['label' => $t['label'], 'tax' => $t['tax'], 'amount' => self::taxForQuantity($t['amount'], $qty, $before, 1)], $this->lineTaxShare($order, $item, $itemsTotal));
             $variant = $item->getProductVariant();
@@ -194,7 +195,9 @@ class PosReturnService
                 'orderItemId' => $item->getId(), 'productVariantId' => $variant?->getId(), 'name' => $variant?->getProduct()?->getName(),
                 'saleUnit' => $item->getSaleUnit(), 'quantity' => $qty, 'returnedQuantity' => $returned[$item->getId()] ?? 0,
                 'returnableQuantity' => max(0, $qty - ($returned[$item->getId()] ?? 0)),
-                'unitPrice' => $unit, 'unitTaxes' => array_sum(array_column($taxes, 'amount')), 'unitRefundable' => $unit + array_sum(array_column($taxes, 'amount')),
+                // unitPrice = NET payé de la prochaine unité (remises déduites, F1) ; unitGross = prix unitaire brut ; discountAmount = remises de la ligne
+                'unitPrice' => $unit, 'unitGross' => (int) round((float) $item->getUnitPrice()), 'discountAmount' => $item->getDiscountAmount(),
+                'unitTaxes' => array_sum(array_column($taxes, 'amount')), 'unitRefundable' => $unit + array_sum(array_column($taxes, 'amount')),
                 'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'rate' => $t['tax'] ? (float) $t['tax']->getRate() : null, 'amount' => $t['amount']], $taxes), // jamais l'entité (sérialisation)
             ];
         }
@@ -262,6 +265,9 @@ class PosReturnService
         foreach ($lines as $line) {
             $item = $this->orderItems->createOrderItem($returnOrder, $line['variant'], $line['quantity'], (float) $line['unitPrice']);
             $item->setReturnedFromItem($line['item']);
+            if (isset($line['net'])) {
+                $item->setTotalPrice((float) $line['net']); // net exact (cumul), le prix unitaire étant le net moyen
+            }
             $em->persist($item);
             if ($restock) {
                 $this->stock->execute($line['variant'], $line['quantity'], true);
@@ -405,9 +411,10 @@ class PosReturnService
             if ($qty > $returnable) {
                 throw new CashRegisterException('RETURN_QUANTITY_EXCEEDED', 'Quantité retournée supérieure à la quantité vendue moins le déjà retourné', 422, [], ['orderItemId' => $itemId, 'requested' => $qty, 'returnable' => $returnable]);
             }
-            $unit = (int) round((float) $item->getUnitPrice());
-            $lines[] = ['item' => $item, 'variant' => $item->getProductVariant(), 'quantity' => $qty, 'unitPrice' => $unit];
-            $subtotal += $unit * $qty;
+            // Net payé des unités retournées (F1 : total_price net, cumul exact) ; prix unitaire de la ligne de retour = net moyen
+            $net = self::taxForQuantity((int) round((float) $item->getTotalPrice()), (int) $item->getQuantity(), $returned[$itemId] ?? 0, $qty);
+            $lines[] = ['item' => $item, 'variant' => $item->getProductVariant(), 'quantity' => $qty, 'unitPrice' => intdiv($net, $qty), 'net' => $net];
+            $subtotal += $net;
             // Taxes : part de la ligne dans la vente, répartie en cumul (déjà retourné + ce retour) : la somme des retours d'une
             // ligne égale exactement sa part, sans dérive d'arrondi
             foreach ($this->lineTaxShare($original, $item, $itemsTotal) as $tax) {
@@ -436,7 +443,7 @@ class PosReturnService
             if (($line['kind'] ?? 'sale') !== 'sale') {
                 continue;
             }
-            $lines[] = ['item' => null, 'variant' => $em->find(ProductVariant::class, (int) $line['productVariantId']), 'quantity' => (int) $line['quantity'], 'unitPrice' => (int) $line['unitPrice']];
+            $lines[] = ['item' => null, 'variant' => $em->find(ProductVariant::class, (int) $line['productVariantId']), 'quantity' => (int) $line['quantity'], 'unitPrice' => (int) $line['unitPrice'], 'net' => (int) $line['total']];
         }
         $taxes = array_map(fn ($t) => ['label' => (string) ($t['label'] ?? 'Taxe'), 'amount' => (int) $t['amount'], 'tax' => isset($t['taxId']) ? $em->find(Tax::class, (int) $t['taxId']) : null], $quote['taxes'] ?? []);
 

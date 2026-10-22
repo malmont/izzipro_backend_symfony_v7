@@ -46,6 +46,15 @@ class PosReceiptDto
             'reference' => $order->getReference(),
             'createdAt' => $order->getOrderDate()?->format(\DateTimeInterface::ATOM),
             'subTotal' => $dollars($order->getSubTotal()),
+            // Remises de caisse (F1) : brut avant remises, remises par ligne et de ticket avec motif (0 / vide sans remise)
+            'grossSubTotal' => $dollars($order->getSubTotal() + array_sum(array_map(fn ($i) => $i->getDiscountAmount(), $order->getOrderItems()->toArray()))),
+            'discounts' => [
+                'total' => $dollars(array_sum(array_map(fn ($i) => $i->getDiscountAmount(), $order->getOrderItems()->toArray()))),
+                'ticket' => $order->getDiscountAmount() > 0 ? ['amount' => $dollars($order->getDiscountAmount()), 'percent' => $order->getDiscountPercentBp() !== null ? $order->getDiscountPercentBp() / 100 : null, 'reason' => ['code' => $order->getDiscountReasonCode(), 'text' => $order->getDiscountReasonText()]] : null,
+                'lines' => array_values(array_map(fn ($i) => ['productVariantId' => $i->getProductVariant()?->getId(), 'quantity' => $i->getQuantity(), 'gross' => $dollars($i->grossTotal()), 'net' => $dollars($i->getTotalPrice()), 'amount' => $dollars($i->getDiscountAmount()),
+                    'discounts' => array_map(fn ($d) => ['type' => $d['type'], 'value' => $d['value'], 'amount' => $dollars($d['amount']), 'scope' => $d['scope'], 'reason' => ['code' => $d['reasonCode'] ?? null, 'text' => $d['reasonText'] ?? null]], $i->getDiscounts())],
+                    array_filter($order->getOrderItems()->toArray(), fn ($i) => $i->getDiscountAmount() > 0))),
+            ],
             'totalTax' => $dollars($order->getTotalTax()),
             'totalAmount' => $dollars($order->getTotalAmount()),
             // Arrondi des espèces (19/10/2026) : montant réellement dû = totalAmount + cashRounding

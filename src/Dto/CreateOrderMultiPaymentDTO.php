@@ -40,6 +40,8 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     private ?int $cashCents = null;
     /** Échange (F2) : crédit d'un retour appliqué à la vente (cents) ; les paiements couvrent total + arrondi - crédit */
     private int $creditApplied = 0;
+    /** Remise de ticket de caisse (F1) {type, value, reasonCode?, reasonText?} */
+    private ?array $ticketDiscount = null;
     private ?int $nonCashCents = null;
 
     public function __construct(
@@ -241,4 +243,6 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     }
     public function getCreditApplied(): int { return $this->creditApplied; }
     public function setCreditApplied(int $cents): static { $this->creditApplied = max(0, $cents); return $this; }
+    public function getTicketDiscount(): ?array { return $this->ticketDiscount; }
+    public function setTicketDiscount(?array $discount): static { $this->ticketDiscount = $discount !== null && $discount !== [] ? $discount : null; return $this; }
 }
