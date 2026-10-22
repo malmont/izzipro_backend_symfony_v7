@@ -20,7 +20,7 @@ use App\Services\TenantEntityManagerProvider;
  */
 class PosWriteResponseBuilder
 {
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CaisseService $caisseService, private readonly PosReceiptService $receipts, private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CaisseService $caisseService, private readonly PosReceiptService $receipts, private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments, private readonly \App\Services\PosReturnService\PosReturnService $returns)
     {
     }
 
@@ -44,6 +44,7 @@ class PosWriteResponseBuilder
         return ['message' => 'Order canceled and refunded successfully'] + ($creditNote ? [
             'creditNoteNumber' => $creditNote->getNumber(),
             'creditNoteReference' => $creditNote->getCashRegister()->receiptReference($creditNote->getNumber()),
+            'barcode' => \App\Services\PosReturnService\PosReturnService::barcode($creditNote),
             'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()],
         ] : []);
     }
@@ -92,6 +93,9 @@ class PosWriteResponseBuilder
             // Paiement par terminal (C4) : état courant du paiement (création 201, annulation ou remboursement 200)
             'terminal_payment' => ($t = $em->find(\App\Entity\PosTerminalPayment::class, $subjectId)) ? ['status' => 201, 'body' => $this->terminalPayments->toArray($t)] : null,
             'terminal_update' => ($t = $em->find(\App\Entity\PosTerminalPayment::class, $subjectId)) ? ['status' => 200, 'body' => $this->terminalPayments->toArray($t)] : null,
+            // Retour partiel et échange (F2) : réponse reconstituée depuis le retour (et la vente d'échange)
+            'return' => ($r = $em->find(\App\Entity\PosReturn::class, $subjectId)) ? ['status' => 201, 'body' => $this->returns->toArray($r, $locale)] : null,
+            'exchange' => ($r = $em->find(\App\Entity\PosReturn::class, $subjectId)) && $r->getExchangeOrder() ? ['status' => 201, 'body' => ['return' => $this->returns->toArray($r, $locale), 'sale' => $this->sale($r->getExchangeOrder(), $locale)]] : null,
             default => null,
         };
     }

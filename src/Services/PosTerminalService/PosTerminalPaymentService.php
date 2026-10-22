@@ -87,6 +87,12 @@ class PosTerminalPaymentService
         ];
     }
 
+    /** Total (cents) du devis au comptoir pour des articles (taxes du magasin) */
+    public function quoteTotal(array $items): int
+    {
+        return (int) $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'shippingAddress' => $this->taxAddress->forStore()]))['total'];
+    }
+
     // ---------------------------------------------------------------- paiement
 
     /**
@@ -327,10 +333,37 @@ class PosTerminalPaymentService
             throw new CashRegisterException('TERMINAL_REFUND_REQUIRED', 'Paiement Interac : le remboursement doit être présenté sur le terminal (POST /api/pos/terminal/payments/{id}/refund) avant d\'annuler la vente', 409, [],
                 ['terminalPaymentId' => $payment->getId(), 'amount' => $payment->getAmount(), 'paymentMethodType' => 'interac_present', 'refund' => $this->refundArray($payment)]);
         }
-        if ($payment->getRefundStatus() === PosTerminalPayment::REFUND_SUCCEEDED) {
+        if ($payment->getRefundable() <= 0) {
             return;
         }
-        $this->refundOnline($payment, $payment->getAmount(), $user);
+        $this->refundOnline($payment, $payment->getRefundable(), $user);
+    }
+
+    /**
+     * Part carte d'un retour partiel (F2, dans la transaction du retour) : carte de crédit remboursée en ligne (clé Stripe
+     * dérivée de la clé POS du retour : un réessai ne rembourse pas deux fois) ; Interac : remboursement déjà présenté sur
+     * le lecteur pour ce montant exact (terminalRefundId), sinon 409 TERMINAL_REFUND_REQUIRED.
+     *
+     * @return string identifiant du remboursement Stripe
+     */
+    public function refundForReturn(PosTerminalPayment $payment, int $amount, ?string $terminalRefundId, User $user, ?string $posKey): string
+    {
+        if ($payment->getStatus() !== PosTerminalPayment::CAPTURED) {
+            throw new CashRegisterException('PAYMENT_NOT_CAPTURED', 'Le paiement par terminal de cette vente n\'a pas été débité', 409, [], ['terminalPaymentId' => $payment->getId()]);
+        }
+        if ($payment->isInterac()) {
+            if ($terminalRefundId !== null && $payment->getRefundId() === $terminalRefundId && $payment->getRefundStatus() === PosTerminalPayment::REFUND_SUCCEEDED && (int) $payment->getRefundAmount() === $amount) {
+                return $terminalRefundId;
+            }
+            throw new CashRegisterException('TERMINAL_REFUND_REQUIRED', 'Paiement Interac : présentez d\'abord le remboursement de ce montant sur le terminal (POST /api/pos/terminal/payments/{id}/refund {amount}), puis rejouez le retour avec terminalRefundId', 409, [],
+                ['terminalPaymentId' => $payment->getId(), 'amount' => $amount, 'paymentMethodType' => 'interac_present', 'refund' => $this->refundArray($payment)]);
+        }
+        if ($amount > $payment->getRefundable()) {
+            throw new CashRegisterException('REFUND_AMOUNT_INVALID', 'Montant carte remboursable insuffisant', 422, [], ['max' => $payment->getRefundable(), 'amount' => $amount]);
+        }
+        $this->refundOnline($payment, $amount, $user, 'r' . ($posKey ?? self::uuid()));
+
+        return (string) $payment->getRefundId();
     }
 
     /** POST /api/pos/terminal/payments/{id}/refund : remboursement d'un paiement débité (paiement sans vente, Interac avant annulation) */
@@ -340,6 +373,8 @@ class PosTerminalPaymentService
         // {orderId} du paiement rattaché, sinon {orderId: 0, terminalPaymentId} pour un paiement sans vente
         $this->approvals->requireFor(\App\Services\PosAuditService\PosApprovalService::REFUND, $user,
             $payment->getOrderId() !== null ? ['orderId' => $payment->getOrderId()] : ['orderId' => 0, 'terminalPaymentId' => (int) $payment->getId()], $amount ?? $payment->getAmount());
+        // Qui a validé (ou fait) ce remboursement : repris par l'annulation rejouée avec terminalRefundId (C4, 24/10/2026)
+        $approvedBy = $this->approvals->approvedBy() ?? (\App\Services\PosAuditService\PosApprovalService::isManager($user) ? ['id' => $user->getId(), 'name' => trim($user->getFirstname() . ' ' . $user->getLastname())] : null);
         $this->refresh($payment, $user);
         if ($payment->getStatus() === PosTerminalPayment::AUTHORIZED) {
             // Autorisation jamais capturée : libérée, rien à rembourser
@@ -353,21 +388,25 @@ class PosTerminalPaymentService
         if ($payment->getStatus() !== PosTerminalPayment::CAPTURED) {
             throw new CashRegisterException('PAYMENT_NOT_CAPTURED', 'Ce paiement n\'a pas été débité : rien à rembourser', 409, [], ['status' => $this->publicStatus($payment)]);
         }
-        if (in_array($payment->getRefundStatus(), [PosTerminalPayment::REFUND_WAITING, PosTerminalPayment::REFUND_SUCCEEDED], true)) {
-            return $this->refreshRefund($payment, $user); // rejeu
+        if ($payment->getRefundStatus() === PosTerminalPayment::REFUND_WAITING) {
+            return $this->refreshRefund($payment, $user); // remboursement en cours sur le lecteur
         }
-        $amount ??= $payment->getAmount();
-        if ($amount <= 0 || $amount > $payment->getAmount()) {
-            throw new CashRegisterException('REFUND_AMOUNT_INVALID', 'Montant de remboursement invalide', 400, [], ['max' => $payment->getAmount()]);
+        $amount ??= $payment->getRefundable();
+        if ($payment->getRefundable() <= 0) {
+            throw new CashRegisterException('ALREADY_REFUNDED', 'Paiement déjà entièrement remboursé', 409, [], ['refunded' => $payment->getRefundedTotal()]);
         }
+        if ($amount <= 0 || $amount > $payment->getRefundable()) {
+            throw new CashRegisterException('REFUND_AMOUNT_INVALID', 'Montant de remboursement invalide', 400, [], ['max' => $payment->getRefundable()]);
+        }
+        $payment->setRefundApprovedBy($approvedBy);
         if ($payment->isInterac()) {
-            $this->guard(fn () => $this->gateway->refundOnReader($payment->getReaderId(), $payment->getStripePaymentIntentId(), $amount, 'pos-refund-' . $payment->getStripePaymentIntentId() . '-' . $amount));
-            $payment->setRefundStatus(PosTerminalPayment::REFUND_WAITING)->setRefundAmount($amount)->setRefundFailureMessage(null);
+            $this->guard(fn () => $this->gateway->refundOnReader($payment->getReaderId(), $payment->getStripePaymentIntentId(), $amount, 'pos-refund-' . $payment->getStripePaymentIntentId() . '-' . $amount . '-' . $payment->getRefundedTotal()));
+            $payment->setRefundStatus(PosTerminalPayment::REFUND_WAITING)->setRefundAmount($amount)->setRefundId(null)->setRefundFailureMessage(null);
             $this->emProvider->getEntityManager()->flush();
 
             return $payment;
         }
-        $this->refundOnline($payment, $amount, $user);
+        $this->refundOnline($payment, $amount, $user, (string) $payment->getRefundedTotal());
 
         return $payment;
     }
@@ -383,7 +422,7 @@ class PosTerminalPaymentService
             $action = $reader['action'] ?? null;
             $mine = $action !== null && $action['type'] === 'refund_payment' && ($action['paymentIntent'] ?? null) === $payment->getStripePaymentIntentId();
             if ($mine && $action['status'] === 'succeeded') {
-                $payment->setRefundId($action['refund'])->setRefundStatus(PosTerminalPayment::REFUND_SUCCEEDED);
+                $payment->setRefundId($action['refund'])->setRefundStatus(PosTerminalPayment::REFUND_SUCCEEDED)->addRefunded((int) $payment->getRefundAmount());
                 $this->emProvider->getEntityManager()->flush();
                 $this->record(PosAuditService::CARD_REFUND, $payment, $user, ['refundAmount' => $payment->getRefundAmount(), 'refundId' => $payment->getRefundId(), 'onReader' => true]);
             } elseif ($mine && $action['status'] === 'failed') {
@@ -570,17 +609,21 @@ class PosTerminalPaymentService
         return $p->getRefundStatus() === null ? null : ['id' => $p->getRefundId(), 'status' => $p->getRefundStatus(), 'amount' => $p->getRefundAmount(), 'failureMessage' => $p->getRefundFailureMessage()];
     }
 
-    private function refundOnline(PosTerminalPayment $payment, int $amount, ?User $user): void
+    private function refundOnline(PosTerminalPayment $payment, int $amount, ?User $user, ?string $keySuffix = null): void
     {
         try {
-            $refund = $this->gateway->refundOnline($payment->getStripePaymentIntentId(), $amount, 'pos-refund-' . $payment->getStripePaymentIntentId() . '-' . $amount);
+            $refund = $this->gateway->refundOnline($payment->getStripePaymentIntentId(), $amount, 'pos-refund-' . $payment->getStripePaymentIntentId() . '-' . $amount . ($keySuffix !== null && $keySuffix !== '' ? '-' . $keySuffix : ''));
         } catch (PosTerminalGatewayException $e) {
             $payment->setRefundStatus(PosTerminalPayment::REFUND_FAILED)->setRefundAmount($amount)->setRefundFailureMessage($e->getMessage());
             $this->emProvider->getEntityManager()->flush();
             throw new CashRegisterException('TERMINAL_REFUND_FAILED', 'Remboursement Stripe refusé : ' . $e->getMessage(), $e->status >= 500 ? 502 : 409, [], ['terminalPaymentId' => $payment->getId(), 'stripeCode' => $e->stripeCode]);
         }
+        $ok = in_array($refund['status'], ['succeeded', 'pending'], true);
         $payment->setRefundId($refund['id'])->setRefundAmount($amount)->setRefundFailureMessage($refund['failureReason'])
-            ->setRefundStatus(in_array($refund['status'], ['succeeded', 'pending'], true) ? PosTerminalPayment::REFUND_SUCCEEDED : PosTerminalPayment::REFUND_FAILED);
+            ->setRefundStatus($ok ? PosTerminalPayment::REFUND_SUCCEEDED : PosTerminalPayment::REFUND_FAILED);
+        if ($ok) {
+            $payment->addRefunded($amount);
+        }
         $this->emProvider->getEntityManager()->flush();
         $this->record(PosAuditService::CARD_REFUND, $payment, $user, ['refundAmount' => $amount, 'refundId' => $refund['id'], 'onReader' => false]);
     }

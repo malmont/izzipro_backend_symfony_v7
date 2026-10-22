@@ -66,6 +66,16 @@ class CreateOrderUseCase
         $this->handleBookingUseCase = $handleBookingUseCase;
     }
 
+    /** Total (cents) d'une vente au comptoir d'après le devis du serveur, sans rien créer (échange F2) */
+    public function quoteTotal(array $items): int
+    {
+        try {
+            return (int) $this->terminalPayments->quoteTotal($items);
+        } catch (\App\Services\OrderService\CartQuoteException $e) {
+            throw new CashRegisterException('QUOTE_INVALID', $e->getMessage(), 400);
+        }
+    }
+
     public function execute(ICreateOrderDTO $orderDTO, ?\App\Entity\User $user = null)
     {
         $em = $this->emProvider->getEntityManager();
@@ -106,8 +116,13 @@ class CreateOrderUseCase
             // Vente en caisse (create-multi-payment) : part espèces arrondie acceptée (5 ¢ en CAD), arrondi gardé sur la
             // commande (19/10/2026). Les autres parcours (web, tunnel Stripe, EasyAdmin) gardent le contrôle ci-dessous.
             $cashRounding = 0;
+            // Échange (F2) : le crédit du retour réduit le montant à payer
+            $credit = $orderDTO instanceof CreateOrderMultiPaymentDTO ? min($orderDTO->getCreditApplied(), max(0, (int) round($totalAmount))) : 0;
+            if ($credit > 0) {
+                $order->setCreditApplied($credit);
+            }
             if ($orderDTO instanceof CreateOrderMultiPaymentDTO && $orderDTO->getCashCents() !== null) {
-                $cashRounding = $this->cashRoundingService->checkCounterPayment((int) round($totalAmount), $orderDTO->getCashCents(), (int) $orderDTO->getNonCashCents());
+                $cashRounding = $this->cashRoundingService->checkCounterPayment((int) round($totalAmount) - $credit, $orderDTO->getCashCents(), (int) $orderDTO->getNonCashCents());
                 $order->setCashRounding($cashRounding);
             } elseif ($orderDTO->getVerifiedPaymentAmount() !== null
                 && abs((int) round($totalAmount) - $orderDTO->getVerifiedPaymentAmount()) > 1) {
@@ -197,6 +212,7 @@ class CreateOrderUseCase
                     'receiptNumber' => $receipt->getNumber(),
                     'subTotal' => (int) round((float) $subtotal), 'totalTax' => (int) round((float) $totalTax), 'totalAmount' => (int) round($totalAmount),
                     'cashRounding' => $order->getCashRounding(),
+                    'creditApplied' => $order->getCreditApplied(),
                     'payments' => array_values(array_map(fn ($p) => ['type' => $p->getPaymentMethod()?->getId(), 'amount' => (int) round((float) $p->getAmount())], $order->getPayments()->toArray())),
                     'terminalPayments' => array_map(fn ($t) => ['paymentId' => $t->getId(), 'stripePaymentIntentId' => $t->getStripePaymentIntentId(), 'amount' => $t->getAmount(), 'paymentMethodType' => $t->getPaymentMethodType(), 'cardBrand' => $t->getCardBrand(), 'last4' => $t->getLast4(), 'applicationFee' => $t->getApplicationFee()], $terminalPayments),
                     'items' => array_values(array_map(fn ($i) => ['productVariantId' => $i->getProductVariant()?->getId(), 'quantity' => $i->getQuantity(), 'totalPrice' => (int) round((float) $i->getTotalPrice())], $order->getOrderItems()->toArray())),

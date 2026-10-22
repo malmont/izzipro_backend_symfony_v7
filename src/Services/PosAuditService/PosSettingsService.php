@@ -33,6 +33,7 @@ class PosSettingsService
                 'drawerOpen' => ['required' => $e?->isPosApprovalDrawerOpen() ?? true],
                 'closeWithoutCount' => ['required' => $e?->isPosApprovalCloseWithoutCount() ?? true],
                 'discount' => ['required' => false, 'threshold' => null], // réservé (chantier F1)
+                'return' => $threshold($e ? $e->effectivePosApprovalReturn() : 0), // retour partiel ou échange (F2) : seuil du remboursement par défaut
             ],
             'pin' => $this->pinRules(),
             // Lot R1 (23/10/2026) : réglages par site, défauts = comportement d'avant (ajouts seulement)
@@ -42,6 +43,9 @@ class PosSettingsService
             'heldCarts' => ['max' => $e?->getPosHeldCartsMax() ?? 10, 'alertHours' => $e?->getPosHeldCartsAlertHours() ?? 24],
             'cashAlertThreshold' => $e?->getPosCashAlertThreshold(),
             'terminalRequired' => $e?->isPosTerminalHeaderRequired() ?? false,
+            // Retours partiels et échanges (F2, 24/10/2026)
+            'returns' => ['maxDays' => $e?->getPosReturnMaxDays(), 'withoutReceipt' => $e?->isPosReturnWithoutReceipt() ?? false, 'restockDefault' => $e?->isPosReturnRestockDefault() ?? true,
+                'cashRefundForCardSale' => $e?->isPosReturnCashForCardSale() ?? false, 'reasons' => $e ? $e->returnReasons() : []],
             // Terminal de paiement Stripe (C4) : réglages utiles au POS (les commissions restent côté serveur)
             'terminal' => array_intersect_key($this->terminal->settings(), array_flip(['interac', 'cardWaitSeconds', 'customerCancel', 'orphanMinutes', 'authCancelMinutes', 'currency'])),
         ];
@@ -107,6 +111,7 @@ class PosSettingsService
             PosApprovalService::FUND_WITHDRAWAL => $threshold($e ? $e->getPosApprovalFundWithdrawal() : 0),
             PosApprovalService::DRAWER_OPEN => $e?->isPosApprovalDrawerOpen() ?? true,
             PosApprovalService::CLOSE_WITHOUT_COUNT => $e?->isPosApprovalCloseWithoutCount() ?? true,
+            PosApprovalService::RETURN => $threshold($e ? $e->effectivePosApprovalReturn() : 0),
             default => false,
         };
     }

@@ -88,6 +88,15 @@ class Order
     #[ORM\Column(options: ['default' => 0])]
     private int $cashRounding = 0;
 
+    // Retours partiels et échanges en caisse (F2, 24/10/2026) : vente d'origine d'une commande de retour ; crédit d'un retour
+    // appliqué à une nouvelle vente (cents) : les paiements couvrent total + arrondi - crédit
+    #[ORM\ManyToOne(targetEntity: Order::class)]
+    #[ORM\JoinColumn(name: 'returned_from_id', nullable: true, onDelete: 'SET NULL')]
+    private ?Order $returnedFrom = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $creditApplied = null;
+
     // Non enregistré en base : poste de caisse choisi dans EasyAdmin pour une vente au comptoir créée à la main (C2)
     private ?int $posCashRegisterId = null;
 
@@ -432,6 +441,11 @@ class Order
     {
         return $this->cashRounding;
     }
+
+    public function getReturnedFrom(): ?Order { return $this->returnedFrom; }
+    public function setReturnedFrom(?Order $order): static { $this->returnedFrom = $order; return $this; }
+    public function getCreditApplied(): int { return $this->creditApplied ?? 0; }
+    public function setCreditApplied(?int $cents): static { $this->creditApplied = $cents !== null && $cents > 0 ? $cents : null; return $this; }
 
     public function setCashRounding(int $cashRounding): static
     {

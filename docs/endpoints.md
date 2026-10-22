@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (206)
+## Boutique et commun (209)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -356,8 +356,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/pos/approvals` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::approve` |
 | GET | `/api/pos/audit/verify` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosAuditController::verify` |
 | GET | `/api/pos/audit` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosAuditController::list` |
+| POST | `/api/pos/exchanges` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::exchange` |
 | POST | `/api/pos/pin-login` | PUBLIC_ACCESS | `Controller\PosController\PosPinController::pinLogin` |
 | POST | `/api/pos/pin` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::setPin` |
+| GET | `/api/pos/returns/lookup` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::lookup` |
+| POST | `/api/pos/returns` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::create` |
 | GET | `/api/pos/settings` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::settings` |
 | POST | `/api/pos/terminal/payments/{id}/cancel` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::cancel` |
 | POST | `/api/pos/terminal/payments/{id}/refund` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::refund` |

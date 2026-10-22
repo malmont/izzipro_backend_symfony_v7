@@ -116,6 +116,13 @@ class PosTerminalPayment
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $refundFailureMessage = null;
 
+    // F2 (24/10/2026) : cumul remboursé (remboursements partiels des retours) et validation C3 du dernier remboursement {id, name}
+    #[ORM\Column(options: ['default' => 0])]
+    private int $refundedTotal = 0;
+
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    private ?array $refundApprovedBy = null;
+
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
 
@@ -190,6 +197,11 @@ class PosTerminalPayment
     public function getRefundAmount(): ?int { return $this->refundAmount; }
     public function setRefundAmount(?int $amount): static { $this->refundAmount = $amount; return $this; }
     public function getRefundFailureMessage(): ?string { return $this->refundFailureMessage; }
+    public function getRefundedTotal(): int { return $this->refundedTotal; }
+    public function addRefunded(int $amount): static { $this->refundedTotal += max(0, $amount); return $this; }
+    public function getRefundable(): int { return max(0, $this->amount - $this->refundedTotal); }
+    public function getRefundApprovedBy(): ?array { return $this->refundApprovedBy; }
+    public function setRefundApprovedBy(?array $who): static { $this->refundApprovedBy = $who; return $this; }
     public function setRefundFailureMessage(?string $message): static { $this->refundFailureMessage = $message !== null ? mb_substr($message, 0, 255) : null; return $this; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getUpdatedAt(): \DateTimeImmutable { return $this->updatedAt; }

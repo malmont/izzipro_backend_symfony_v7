@@ -41,6 +41,8 @@ class PosReceiptDto
             'receiptKind' => $receipt?->getKind(),
             // Numéro présenté avec le préfixe du poste (R1) ; receiptNumber reste l'entier de la suite continue
             'receiptReference' => $receipt ? $receipt->getCashRegister()->receiptReference($receipt->getNumber()) : null,
+            // Code-barres Code 128 du ticket ou de l'avoir (F2) : IZ-T-<poste>-<numéro> / IZ-A-<poste>-<numéro>
+            'barcode' => $receipt ? \App\Services\PosReturnService\PosReturnService::barcode($receipt) : null,
             'reference' => $order->getReference(),
             'createdAt' => $order->getOrderDate()?->format(\DateTimeInterface::ATOM),
             'subTotal' => $dollars($order->getSubTotal()),
@@ -48,7 +50,9 @@ class PosReceiptDto
             'totalAmount' => $dollars($order->getTotalAmount()),
             // Arrondi des espèces (19/10/2026) : montant réellement dû = totalAmount + cashRounding
             'cashRounding' => $dollars($order->getCashRounding()),
-            'amountDue' => $dollars($order->getTotalAmount() + $order->getCashRounding()),
+            'amountDue' => $dollars($order->getTotalAmount() + $order->getCashRounding() - $order->getCreditApplied()),
+            // Échange (F2) : crédit du retour appliqué à la vente ; amountDue en tient compte (0 sans échange)
+            'creditApplied' => $dollars($order->getCreditApplied()),
             'taxes' => $taxes,
             'payments' => $payments,
             'cashRegister' => $register ? ['id' => $register->getId(), 'name' => $register->getName()] : null,

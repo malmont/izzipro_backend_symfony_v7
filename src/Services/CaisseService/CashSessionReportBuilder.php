@@ -117,6 +117,8 @@ class CashSessionReportBuilder
             'store' => StoreInfoDto::fromEntreprise($entreprise),
             // Terminal de paiement Stripe (C4, 23/10/2026) : ajout, ventilation par moyen inchangée
             'cardTerminal' => $this->cardTerminal($saleOrders, $register),
+            // Retours partiels et échanges (F2, 24/10/2026) : ajout ; les remboursements correspondants sont déjà dans refunds
+            'returns' => $em->getRepository(\App\Entity\PosReturn::class)->totalsForSession((int) $session->getId()),
         ];
     }
 

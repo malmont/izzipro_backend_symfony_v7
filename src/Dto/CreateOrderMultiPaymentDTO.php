@@ -38,6 +38,8 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     private ?int $cashRegisterId = null;
     // Parts espèces et non espèces des paiements (cents, signées ; route caisse, 19/10/2026) : contrôle avec arrondi
     private ?int $cashCents = null;
+    /** Échange (F2) : crédit d'un retour appliqué à la vente (cents) ; les paiements couvrent total + arrondi - crédit */
+    private int $creditApplied = 0;
     private ?int $nonCashCents = null;
 
     public function __construct(
@@ -237,4 +239,6 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     {
         return $this->guestLicenseExpirationDate;
     }
+    public function getCreditApplied(): int { return $this->creditApplied; }
+    public function setCreditApplied(int $cents): static { $this->creditApplied = max(0, $cents); return $this; }
 }

@@ -24,6 +24,7 @@ class PosApprovalService
     public const DRAWER_OPEN = 'drawer_open';
     public const CLOSE_WITHOUT_COUNT = 'close_without_count';
     public const DISCOUNT = 'discount'; // réservé (chantier F1)
+    public const RETURN = 'return'; // retour partiel ou échange (F2, 24/10/2026)
     /** action → clés de contexte qui doivent correspondre */
     public const CONTEXT = [
         self::REFUND => ['orderId'],
@@ -32,6 +33,7 @@ class PosApprovalService
         self::DRAWER_OPEN => ['cashRegisterId'],
         self::CLOSE_WITHOUT_COUNT => ['cashRegisterId'],
         self::DISCOUNT => [],
+        self::RETURN => ['orderId', 'amount'],
     ];
     /** Clés de contexte facultatives, comparées si elles figurent dans la validation (remboursement d'un paiement par terminal sans vente, C4) */
     public const EXTRA_CONTEXT = [self::REFUND => ['terminalPaymentId']];
@@ -92,6 +94,12 @@ class PosApprovalService
      *
      * @param array<string, int> $context
      */
+    /** Validation consommée pendant la requête en cours ({id, name} du responsable), sinon null */
+    public function approvedBy(): ?array
+    {
+        return $this->current->approvedBy();
+    }
+
     public function requireFor(string $action, User $actor, array $context, ?int $amount = null): void
     {
         if (self::isManager($actor) || !$this->settings->requiresApproval($action, $amount)) {

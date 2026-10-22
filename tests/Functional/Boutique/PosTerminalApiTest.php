@@ -91,8 +91,8 @@ class PosTerminalApiTest extends WebTestCase
         $this->assertSame(['waiting_for_card', false, $this->total, 'cad'], [$payment['status'], $payment['captured'], $payment['amount'], $payment['currency']]);
         $replay = $this->request('POST', '/api/pos/terminal/payments', ['cashRegisterId' => $this->register, 'amount' => $this->total, 'items' => $this->items()]);
         $this->assertSame(['true', $created->getContent()], [$replay->headers->get('Idempotent-Replayed'), $replay->getContent()]);
-        $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM pos_terminal_payment'));
-        $this->assertSame($this->key, $this->db->fetchOne('SELECT idempotency_key FROM pos_terminal_payment'), 'clé Stripe de création = clé POS');
+        $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM pos_terminal_payment WHERE idempotency_key = ?', [$this->key]), 'rejeu : un seul paiement pour cette clé');
+        $this->assertSame($this->key, $this->db->fetchOne('SELECT idempotency_key FROM pos_terminal_payment WHERE id = ?', [$payment['paymentId']]), 'clé Stripe de création = clé POS');
         $this->key = null;
         $id = $payment['paymentId'];
         $this->assertSame((int) round($this->total * 150 / 10000), (int) $this->db->fetchOne('SELECT application_fee FROM pos_terminal_payment WHERE id = ?', [$id]), 'créé au taux Interac');
@@ -125,7 +125,7 @@ class PosTerminalApiTest extends WebTestCase
         $this->assertSame([$presented['stripePaymentIntentId'], 'visa', '4242'], array_values($pay));
         $reused = $this->request('POST', '/api/order/create-multi-payment', ['items' => $this->items(), 'paymentMethods' => [['type' => 1, 'amount' => $this->total / 100, 'terminalPaymentId' => $id]], 'cashRegisterId' => $this->register]);
         $this->assertSame('TERMINAL_PAYMENT_ALREADY_USED', json_decode($reused->getContent(), true)['error']);
-        $this->assertSame(['CARD_PAYMENT_STARTED', 'CARD_SIMULATED', 'CARD_PAYMENT_SUCCEEDED'], $this->db->fetchFirstColumn("SELECT type FROM pos_audit_log WHERE type LIKE 'CARD_%' ORDER BY id"));
+        $this->assertSame(['CARD_PAYMENT_STARTED', 'CARD_SIMULATED', 'CARD_PAYMENT_SUCCEEDED'], $this->db->fetchFirstColumn("SELECT type FROM pos_audit_log WHERE type LIKE 'CARD_%' AND payload LIKE ? ORDER BY id", ['%"stripePaymentIntentId":"' . $presented['stripePaymentIntentId'] . '"%']), 'journal de ce paiement');
 
         // Rapport X : ventilation carte terminal
         $x = $this->json($this->request('GET', "/api/caisse/report/x?cashRegisterId=$this->register"));

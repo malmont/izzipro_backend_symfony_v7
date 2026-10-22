@@ -40,6 +40,11 @@ class OrderItems
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $saleUnit = null;
 
+    // Retour partiel (F2, 24/10/2026) : ligne de la vente d'origine dont cette ligne de retour provient
+    #[ORM\ManyToOne(targetEntity: OrderItems::class)]
+    #[ORM\JoinColumn(name: 'returned_from_item_id', nullable: true, onDelete: 'SET NULL')]
+    private ?OrderItems $returnedFromItem = null;
+
     /** Combinaison de personnalisation choisie (GET /api/customization/config/{variantId}), gardée pour la fiche de commande */
     #[ORM\ManyToOne(targetEntity: ProductCustomizationImage::class)]
     #[ORM\JoinColumn(name: 'customization_id', nullable: true, onDelete: 'SET NULL')]
@@ -158,6 +163,9 @@ class OrderItems
         $this->licenseExpirationDate = $licenseExpirationDate;
         return $this;
     }
+
+    public function getReturnedFromItem(): ?OrderItems { return $this->returnedFromItem; }
+    public function setReturnedFromItem(?OrderItems $item): static { $this->returnedFromItem = $item; return $this; }
 
     public function getSaleUnit(): ?string
     {

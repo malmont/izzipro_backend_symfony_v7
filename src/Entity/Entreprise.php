@@ -228,6 +228,30 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => false])]
     private bool $posTerminalHeaderRequired = false;
 
+    // Retours partiels et échanges (F2, 24/10/2026) : délai (jours, null = aucun), retour sans ticket, remise en stock par défaut,
+    // remboursement en espèces d'une vente carte, motifs (un par ligne, null = liste par défaut), validation (mode refund = seuil
+    // du remboursement, custom = seuil propre : 0 toujours, N au-delà, null jamais)
+    #[ORM\Column(nullable: true)]
+    private ?int $posReturnMaxDays = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posReturnWithoutReceipt = false;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posReturnRestockDefault = true;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posReturnCashForCardSale = false;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $posReturnReasons = null;
+
+    #[ORM\Column(length: 10, options: ['default' => 'refund'])]
+    private string $posApprovalReturnMode = 'refund';
+
+    #[ORM\Column(nullable: true)]
+    private ?int $posApprovalReturn = null;
+
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $metaTitle = null;
 
@@ -698,6 +722,37 @@ class Entreprise implements TranslatableInterface
     public function getPosCashAlertThreshold(): ?int { return $this->posCashAlertThreshold; }
     public function setPosCashAlertThreshold(?int $cents): static { $this->posCashAlertThreshold = $cents !== null && $cents > 0 ? $cents : null; return $this; }
     public function isPosTerminalHeaderRequired(): bool { return $this->posTerminalHeaderRequired; }
+
+    public const RETURN_REASONS_DEFAULT = ['Taille ou modèle', 'Défectueux', 'Ne convient pas', 'Erreur de caisse', 'Autre'];
+    public function getPosReturnMaxDays(): ?int { return $this->posReturnMaxDays; }
+    public function setPosReturnMaxDays(?int $days): static { $this->posReturnMaxDays = $days !== null && $days > 0 ? min(3650, $days) : null; return $this; }
+    public function isPosReturnWithoutReceipt(): bool { return $this->posReturnWithoutReceipt; }
+    public function setPosReturnWithoutReceipt(bool $v): static { $this->posReturnWithoutReceipt = $v; return $this; }
+    public function isPosReturnRestockDefault(): bool { return $this->posReturnRestockDefault; }
+    public function setPosReturnRestockDefault(bool $v): static { $this->posReturnRestockDefault = $v; return $this; }
+    public function isPosReturnCashForCardSale(): bool { return $this->posReturnCashForCardSale; }
+    public function setPosReturnCashForCardSale(bool $v): static { $this->posReturnCashForCardSale = $v; return $this; }
+    public function getPosReturnReasons(): ?string { return $this->posReturnReasons; }
+    public function setPosReturnReasons(?string $text): static { $t = $text !== null ? trim(strip_tags($text)) : ''; $this->posReturnReasons = $t === '' ? null : mb_substr($t, 0, 2000); return $this; }
+    /** @return list<array{code: string, label: string}> motifs du site (liste par défaut si vide) */
+    public function returnReasons(): array
+    {
+        $labels = array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string) $this->posReturnReasons) ?: [])));
+        $out = [];
+        foreach ($labels ?: self::RETURN_REASONS_DEFAULT as $label) {
+            $ascii = class_exists(\Normalizer::class) ? preg_replace('/\p{Mn}/u', '', (string) \Normalizer::normalize($label, \Normalizer::FORM_D)) : strtr($label, ['é' => 'e', 'è' => 'e', 'ê' => 'e', 'à' => 'a', 'â' => 'a', 'ç' => 'c', 'ô' => 'o', 'î' => 'i', 'ï' => 'i', 'ù' => 'u', 'û' => 'u', 'É' => 'E', 'È' => 'E', 'À' => 'A', 'Ç' => 'C']);
+            $code = trim(preg_replace('/[^a-z0-9]+/', '_', strtolower($ascii ?: $label)), '_');
+            $out[] = ['code' => $code !== '' ? $code : 'motif_' . (count($out) + 1), 'label' => mb_substr($label, 0, 80)];
+        }
+
+        return $out;
+    }
+    public function getPosApprovalReturnMode(): string { return $this->posApprovalReturnMode; }
+    public function setPosApprovalReturnMode(?string $mode): static { $this->posApprovalReturnMode = $mode === 'custom' ? 'custom' : 'refund'; return $this; }
+    public function getPosApprovalReturn(): ?int { return $this->posApprovalReturn; }
+    public function setPosApprovalReturn(?int $cents): static { $this->posApprovalReturn = $cents !== null ? max(0, $cents) : null; return $this; }
+    /** Seuil effectif de validation d'un retour : celui du remboursement, ou le seuil propre */
+    public function effectivePosApprovalReturn(): ?int { return $this->posApprovalReturnMode === 'custom' ? $this->posApprovalReturn : $this->posApprovalRefund; }
     public function setPosTerminalHeaderRequired(bool $v): static { $this->posTerminalHeaderRequired = $v; return $this; }
 
     /** Texte simple des tickets : balises retirées, retours à la ligne conservés, 500 caractères au plus */

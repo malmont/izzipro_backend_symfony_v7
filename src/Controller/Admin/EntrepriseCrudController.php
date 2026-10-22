@@ -137,6 +137,15 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posHeldCartsAlertHours', 'Paniers en attente : alerte après (heures)')->setHelp('défaut 24')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCashAlertThreshold', 'Alerte « trop d\'espèces » au-delà de (cents)')->setRequired(false)->setHelp('Vide : aucune alerte ; le POS invite à un retrait')->hideOnIndex(),
             BooleanField::new('posTerminalHeaderRequired', 'Exiger un terminal identifié (X-Pos-Terminal) sur les routes de caisse')->setHelp('Désactivé par défaut ; à activer quand toutes les tablettes envoient l\'en-tête')->hideOnIndex(),
+            // Retours partiels et échanges (F2, 24/10/2026)
+            FormField::addPanel('Retours et échanges (caisse)')->setHelp('Retour d\'un ou plusieurs articles d\'une vente retrouvée par son ticket, et échanges. Défauts = comportement livré.'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posReturnMaxDays', 'Délai maximal de retour (jours)')->setRequired(false)->setHelp('Vide : aucun délai')->hideOnIndex(),
+            BooleanField::new('posReturnWithoutReceipt', 'Retour sans ticket autorisé')->setHelp('Articles repris aux prix actuels, sans vente d\'origine ; désactivé par défaut')->hideOnIndex(),
+            BooleanField::new('posReturnRestockDefault', 'Remise en stock par défaut')->hideOnIndex(),
+            BooleanField::new('posReturnCashForCardSale', 'Remboursement en espèces d\'une vente payée par carte')->setHelp('Désactivé par défaut (carte volée remboursée en espèces) ; l\'annulation complète n\'est pas concernée')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField::new('posReturnReasons', 'Motifs de retour (un par ligne)')->setRequired(false)->setHelp('Vide : Taille ou modèle, Défectueux, Ne convient pas, Erreur de caisse, Autre')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('posApprovalReturnMode', 'Validation d\'un retour')->setChoices(['Même seuil que le remboursement' => 'refund', 'Seuil propre ci-dessous' => 'custom'])->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posApprovalReturn', 'Validation : retour au-delà de (cents)')->setHelp('Seuil propre : 0 toujours ; vide : jamais')->setRequired(false)->hideOnIndex(),
 
             // Terminal de paiement Stripe (C4, 23/10/2026) : valeurs par défaut = comportement livré (1 %, Interac selon le pays, 120 s, 30 min, 5 min)
             FormField::addPanel('Terminal de paiement Stripe (caisse)')

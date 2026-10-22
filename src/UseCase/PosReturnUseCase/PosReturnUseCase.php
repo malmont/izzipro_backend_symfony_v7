@@ -1,0 +1,120 @@
+<?php
+
+namespace App\UseCase\PosReturnUseCase;
+
+use App\Dto\CreateOrderMultiPaymentDTO;
+use App\Dto\PaymentMethodDTO;
+use App\Entity\Order;
+use App\Entity\PosReturn;
+use App\Entity\User;
+use App\Services\CaisseService\CashRegisterException;
+use App\Services\PosAuditService\PosWriteResponseBuilder;
+use App\Services\PosReturnService\PosReturnService;
+use App\Services\TenantEntityManagerProvider;
+use App\UseCase\OrderUseCase\CreateOrderUseCase;
+use Symfony\Component\HttpFoundation\JsonResponse;
+
+/**
+ * Retours partiels et échanges (F2, 24/10/2026) : orchestration et transaction SQL. Un échange = retour (avoir) puis
+ * nouvelle vente (ticket) dans la même transaction, le retour venant en crédit de la vente.
+ */
+class PosReturnUseCase
+{
+    public function __construct(
+        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly PosReturnService $returns,
+        private readonly CreateOrderUseCase $createOrder,
+        private readonly PosWriteResponseBuilder $responses,
+    ) {
+    }
+
+    public function lookup(array $query): array
+    {
+        return $this->returns->lookup($this->returns->findSale($query['orderId'] ?? null, $query['barcode'] ?? null, $query['receipt'] ?? null, $query['cashRegisterId'] ?? null));
+    }
+
+    public function createReturn(User $user, array $body, ?string $posKey): PosReturn
+    {
+        return $this->transaction(fn () => $this->returns->create($user, $body, $posKey));
+    }
+
+    /**
+     * {return: {…}, sale: {items, paymentMethods?, cashRegisterId?, …}} : la vente est d'abord chiffrée (devis du serveur) pour
+     * fixer le crédit = min(retour, vente) ; le client paie total − crédit par les moyens indiqués, ou reçoit retour − crédit.
+     *
+     * @return array{return: PosReturn, sale: Order}
+     */
+    public function createExchange(User $user, array $body, ?string $posKey): array
+    {
+        $returnInput = is_array($body['return'] ?? null) ? $body['return'] : [];
+        $saleInput = is_array($body['sale'] ?? null) ? $body['sale'] : [];
+        if (empty($saleInput['items']) || !is_array($saleInput['items'])) {
+            throw new CashRegisterException('VALIDATION_FAILED', 'sale.items : au moins un article', 422, [['path' => 'sale.items', 'message' => 'au moins un article attendu']]);
+        }
+        $cashRegisterId = is_numeric($saleInput['cashRegisterId'] ?? $returnInput['cashRegisterId'] ?? null) ? (int) ($saleInput['cashRegisterId'] ?? $returnInput['cashRegisterId']) : null;
+        $returnInput['cashRegisterId'] = $saleInput['cashRegisterId'] = $cashRegisterId;
+        $methods = [];
+        foreach (is_array($saleInput['paymentMethods'] ?? null) ? $saleInput['paymentMethods'] : [] as $i => $method) {
+            if (!is_array($method) || !is_numeric($method['type'] ?? null) || !is_numeric($method['amount'] ?? null) || (float) $method['amount'] < 0) {
+                throw new CashRegisterException('PAYMENT_METHODS_INVALID', 'Chaque moyen de paiement doit avoir un type et un montant positif', 400, [['path' => "sale.paymentMethods[$i]", 'message' => '{type, amount}']]);
+            }
+            $ref = $method['terminalPaymentId'] ?? $method['stripePaymentId'] ?? null;
+            $methods[] = new PaymentMethodDTO((int) $method['type'], (float) $method['amount'], $ref !== null && is_scalar($ref) ? (string) $ref : null);
+        }
+
+        return $this->transaction(function () use ($user, $returnInput, $saleInput, $methods, $posKey, $cashRegisterId) {
+            // 1. Montants : retour (prix payés) et vente (devis du serveur) → crédit appliqué
+            $returnTotal = $this->returns->preview($returnInput);
+            $saleTotal = $this->createOrder->quoteTotal($saleInput['items']);
+            $credit = min($returnTotal, $saleTotal);
+            // 2. Retour : seul le reste (retour − crédit) est remboursé au client
+            $return = $this->returns->create($user, $returnInput, $posKey, $credit);
+            // 3. Vente : les paiements couvrent vente − crédit (aucun paiement si le crédit couvre tout)
+            $paid = (int) round(array_sum(array_map(fn (PaymentMethodDTO $m) => $m->getAmount(), $methods)) * 100);
+            $cash = (int) round(array_sum(array_map(fn (PaymentMethodDTO $m) => $m->getType() === 2 ? $m->getAmount() : 0, $methods)) * 100);
+            $dto = new CreateOrderMultiPaymentDTO($user->getId(), PosReturnService::ORDER_SOURCE_POS, $methods, null, null, PosReturnService::ORDER_TYPE_SALE, $saleInput['items'], null,
+                null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            $dto->setCreditApplied($credit);
+            $dto->setVerifiedPaymentAmount($paid);
+            $dto->setPaymentSplit($cash, $paid - $cash);
+            $dto->setCashRegisterId($cashRegisterId);
+            $sale = $this->createOrder->execute($dto, $user);
+            if ($sale instanceof JsonResponse) {
+                $body = json_decode($sale->getContent(), true) ?: [];
+                throw new CashRegisterException((string) ($body['error'] ?? 'SALE_FAILED'), (string) ($body['message'] ?? $body['error'] ?? 'Vente d\'échange refusée'), $sale->getStatusCode(), $body['errors'] ?? [], array_diff_key($body, array_flip(['error', 'message', 'errors'])));
+            }
+            $return->setExchangeOrder($sale);
+            $this->emProvider->getEntityManager()->flush();
+
+            return ['return' => $return, 'sale' => $sale];
+        });
+    }
+
+    public function returnBody(PosReturn $return, string $locale): array
+    {
+        return $this->returns->toArray($return, $locale);
+    }
+
+    public function exchangeBody(PosReturn $return, Order $sale, string $locale): array
+    {
+        return ['return' => $this->returns->toArray($return, $locale), 'sale' => $this->responses->sale($sale, $locale)];
+    }
+
+    /** @template T @param callable(): T $work @return T */
+    private function transaction(callable $work): mixed
+    {
+        $connection = $this->emProvider->getEntityManager()->getConnection();
+        $connection->beginTransaction();
+        try {
+            $result = $work();
+            $connection->commit();
+
+            return $result;
+        } catch (\Throwable $e) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+            throw $e;
+        }
+    }
+}

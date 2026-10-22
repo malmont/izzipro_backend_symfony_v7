@@ -36,7 +36,8 @@ class CancelOrderUseCase
         private readonly \App\Services\PosAuditService\PosAuditService $audit,
         private readonly \App\Services\PosAuditService\PosApprovalService $approvals,
         private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency,
-        private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments
+        private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments,
+        private readonly \App\Services\PosAuditService\PosApprovalContext $approvalContext
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
@@ -63,7 +64,14 @@ class CancelOrderUseCase
             // Vente au comptoir remboursée par un caissier : validation d'un responsable selon les réglages, consommée dans
             // cette transaction (C3). Commande web : inchangé.
             if ($order->getOrderSource()?->getId() === 2 && $refundedBy instanceof \App\Entity\User) {
-                $this->approvals->requireFor(\App\Services\PosAuditService\PosApprovalService::REFUND, $refundedBy, ['orderId' => (int) $order->getId()], (int) round((float) $order->getTotalAmount()));
+                // Remboursement Interac déjà présenté sur le terminal pour cette vente et validé par (ou fait par) un responsable (C4,
+                // 24/10/2026) : l'annulation rejouée avec ce terminalRefundId n'exige pas une seconde validation ; approvedBy repris
+                $priorRefund = $terminalRefundId !== null ? $this->terminalPayments->findByOrder((int) $order->getId()) : null;
+                if ($priorRefund && $priorRefund->getRefundId() === $terminalRefundId && $priorRefund->getRefundStatus() === \App\Entity\PosTerminalPayment::REFUND_SUCCEEDED && $priorRefund->getRefundApprovedBy() !== null) {
+                    $this->approvalContext->set($priorRefund->getRefundApprovedBy());
+                } else {
+                    $this->approvals->requireFor(\App\Services\PosAuditService\PosApprovalService::REFUND, $refundedBy, ['orderId' => (int) $order->getId()], (int) round((float) $order->getTotalAmount()));
+                }
             }
 
             $paymentTypeId = 1;
@@ -158,7 +166,7 @@ class CancelOrderUseCase
                 ], $caisse, null, 'order', $order->getId(), $refundedBy);
                 // Clé d'idempotence validée avec le remboursement, réponse gardée dans le même ordre SQL (C5)
                 $this->idempotency->attach('cancel', $order->getId(), ['message' => 'Order canceled and refunded successfully',
-                    'creditNoteNumber' => $creditNote->getNumber(), 'creditNoteReference' => $creditNote->getCashRegister()->receiptReference($creditNote->getNumber()), 'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()]], 200);
+                    'creditNoteNumber' => $creditNote->getNumber(), 'creditNoteReference' => $creditNote->getCashRegister()->receiptReference($creditNote->getNumber()), 'barcode' => \App\Services\PosReturnService\PosReturnService::barcode($creditNote), 'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()]], 200);
             }
 
             // Valider la transaction en base de données
@@ -169,6 +177,7 @@ class CancelOrderUseCase
             return new JsonResponse(['message' => 'Order canceled and refunded successfully'] + ($creditNote ? [
                 'creditNoteNumber' => $creditNote->getNumber(),
                 'creditNoteReference' => $creditNote->getCashRegister()->receiptReference($creditNote->getNumber()), // préfixe du poste (R1)
+                'barcode' => \App\Services\PosReturnService\PosReturnService::barcode($creditNote), // code-barres de l'avoir (F2)
                 'cashRegister' => ['id' => $creditNote->getCashRegister()->getId(), 'name' => $creditNote->getCashRegister()->getName()],
             ] : []), Response::HTTP_OK);
         } catch (CashRegisterException $e) {

@@ -521,6 +521,84 @@ idempotence 60 s et 7 jours (`PosIdempotencyService`), limites d'appels (`config
 `StripeService::onlineFee`, `Dto/StoreInfoDto` ; schéma `migrations/Version20261023120000.php`,
 `scripts/migrate_all_v2_pos_settings.sh` ; tests `tests/Functional/Boutique/PosSettingsApiTest.php`.
 
+## Retours partiels et échanges (lot F2, 24/10/2026)
+
+Un client rapporte un ou plusieurs articles d'une vente, ou les échange. L'annulation complète
+(`POST /api/order/cancel/{id}`) est inchangée ; le retour libre `typeOrder: 2` de `create-multi-payment` aussi (il sera
+soumis au réglage « retour sans ticket » dans un lot ultérieur).
+
+**Code-barres des tickets.** Chaque ticket et chaque avoir porte `barcode` (Code 128 à imprimer) : `IZ-T-<posteId>-<numéro>`
+pour un ticket, `IZ-A-<posteId>-<numéro>` pour un avoir (ex. `IZ-T-1-123`) ; renvoyé par la vente, l'annulation et le
+retour. La référence imprimée (`receiptReference`, ex. « C1-123 ») reste utilisable pour retrouver la vente.
+
+**Modèle.** Un retour est une commande « RetourClient » liée à la vente d'origine (`order.returned_from_id`) dont chaque
+ligne pointe la ligne vendue (`order_items.returned_from_item_id`), aux **prix payés** ; la table `pos_return` garde
+motif, remise en stock, moyen et montants du remboursement, paiement terminal et vente d'échange. Taxes : part de chaque
+taxe de la vente revenant à la ligne au prorata de son total, répartie en **cumul** sur les unités retournées (la somme
+des retours d'une ligne égale exactement sa part, sans dérive d'arrondi). Le montant d'un retour peut donc différer d'un
+cent du prix unitaire taxes comprises d'une vente à l'unité.
+
+### Routes (`/api/pos/returns`, caisse ; validation d'un responsable selon le seuil du site)
+
+| Méthode, route | Corps | Réponse |
+|---|---|---|
+| `GET /api/pos/returns/lookup?orderId=` ou `?barcode=IZ-T-1-123` ou `?receipt=C1-123[&cashRegisterId=]` | — | 200 `{orderId, reference, soldAt, receiptNumber, receiptReference, barcode, cashRegister, totalAmount, cashRounding, payments {cash, card, other, terminal: null \| {paymentId, paymentMethodType, cardBrand, last4, refundable}}, refunded {cash, card, total}, lines: [{orderItemId, productVariantId, name, saleUnit, quantity, returnedQuantity, returnableQuantity, unitPrice, unitTaxes, unitRefundable, taxes}], eligible {allowed, reason: null \| ORDER_NOT_RETURNABLE \| ORDER_CANCELED \| RETURN_DEADLINE_EXCEEDED \| NOTHING_LEFT_TO_RETURN}, returnDeadline, reasons, restockDefault}` ; 404 `ORDER_NOT_FOUND` / `RECEIPT_NOT_FOUND`, 422 `BARCODE_INVALID`, 409 `RECEIPT_AMBIGUOUS {cashRegisterIds}` (même numéro sur plusieurs postes sans préfixe : préciser le poste ou scanner) |
+| `POST /api/pos/returns` | `{orderId, lines: [{orderItemId, quantity}], reasonCode? (settings.returns.reasons), reasonText?, restock? (défaut du site), refund?: {method: original \| cash \| card \| declared_card, terminalRefundId?}, cashRegisterId?}` ; sans ticket (réglage) : `{items: [{productVariantId, quantity}], …}` aux prix actuels | 201 retour (ci-dessous). Refus : 404 `ORDER_NOT_FOUND`, 409 `ORDER_NOT_RETURNABLE`, 409 `ORDER_CANCELED`, 409 `RETURN_DEADLINE_EXCEEDED {days}`, 409 `RETURN_WITHOUT_RECEIPT_FORBIDDEN`, 422 `RETURN_LINE_UNKNOWN`, 422 `RETURN_QUANTITY_EXCEEDED {orderItemId, requested, returnable}`, 422 `RETURN_REASON_REQUIRED`, 422 `RETURN_REASON_INVALID {reasons}`, 422 `REFUND_METHOD_INVALID {cardAvailable}`, 409 `CASH_REFUND_FORBIDDEN {cardPaid}`, 409 `TERMINAL_REFUND_REQUIRED {terminalPaymentId, amount}` (Interac), 409 `TERMINAL_REFUND_ALREADY_USED`, 409 `CASH_REGISTER_CLOSED`, 403 `APPROVAL_REQUIRED` |
+| `POST /api/pos/exchanges` | `{return: {…comme ci-dessus…}, sale: {items, paymentMethods?, cashRegisterId?}}` | 201 `{return, sale}` : `sale` = réponse de `create-multi-payment` (ticket) ; mêmes refus, plus ceux de la vente |
+
+Retour : `{returnId, returnOrderId, orderId, exchangeOrderId, creditNoteNumber, creditNoteReference, barcode, cashRegister,
+amount, subTotal, totalTax, creditApplied, refund {method, amount, cash, card, cashRounding, terminal: null | {paymentId,
+refundId, paymentMethodType, cardBrand, last4}}, reason {code, text}, restock, lines, taxes, createdAt, store}`. Montants
+en cents. `Idempotency-Key` (C5) acceptée sur les deux `POST` (rejeu : même réponse, aucun second retour ni remboursement).
+
+### Remboursement
+
+- **Moyen d'origine** (défaut) : la **carte d'abord**, jusqu'au montant payé par carte non encore remboursé, puis les
+  espèces pour le reste (les espèces restent dans le tiroir). Espèces arrondies au pas du site (5 ¢ en CAD, C1) ;
+  `refund.cashRounding` = écart. `cash` : tout en espèces, refusé si la vente a une part carte sauf réglage
+  « remboursement en espèces d'une vente carte » (désactivé par défaut). `card` / `declared_card` : tout sur la carte si
+  la part carte remboursable suffit.
+- **Carte de crédit payée sur le terminal** : remboursement partiel Stripe en ligne, dans la transaction du retour, clé
+  Stripe `pos-refund-<pi>-<montant>-r<clé POS>` (un réessai ne rembourse pas deux fois). **Interac** : flux en deux
+  temps comme C4 : 409 `TERMINAL_REFUND_REQUIRED {terminalPaymentId, amount}`, `POST /api/pos/terminal/payments/{id}/refund
+  {amount}` (le client présente sa carte, suivi par `GET`), puis rejeu du retour avec `refund.terminalRefundId` (= `refund.id`,
+  même montant, utilisable une seule fois). **Carte déclarée** : remboursement déclaré. Un paiement par terminal garde le
+  cumul remboursé (`payments.terminal.refundable` dans la recherche).
+- Écritures : commande de retour, paiements négatifs, transaction de caisse REFUND (rapports X et Z : `refunds`, plus un
+  bloc **`returns {count, total, restocked}`**), **avoir** dans la suite du poste (C2), stock remis si `restock`, journal
+  `REFUND` `kind: return` (`lines`, `reason`, `refundMethod`, montants, `terminal`, `creditApplied`).
+
+### Échange (opération unique)
+
+Le retour est créé, puis la nouvelle vente, dans **une seule transaction** : un avoir et un ticket. Crédit appliqué =
+min(retour, vente) : la vente porte `creditApplied` et `amountDue` = total + arrondi − crédit ; `sale.paymentMethods`
+couvre exactement cette différence (aucun paiement si le crédit couvre tout) ; si le retour dépasse la vente, le reste est
+remboursé selon `return.refund.method`. Journal : `REFUND kind return` puis `SALE` avec `creditApplied` ; `pos_return`
+lie les deux (`exchangeOrderId`).
+
+### Validation (C3) et réglages
+
+Action **`return`**, contexte `{orderId, amount}` (`orderId: 0` pour un retour sans ticket) : 403 `APPROVAL_REQUIRED` pour
+un caissier au-delà du seuil, `POST /api/pos/approvals` puis rejeu avec `X-Pos-Approval` ; `settings.approvals.return
+{required, threshold}`. Réglages (fiche Entreprise, panneau « Retours et échanges (caisse) ») et `settings.returns` :
+
+| Réglage | Défaut | Clé |
+|---|---|---|
+| Délai maximal de retour (jours) | aucun | `maxDays` |
+| Retour sans ticket autorisé | non | `withoutReceipt` |
+| Remise en stock par défaut | oui | `restockDefault` |
+| Remboursement en espèces d'une vente payée par carte | non | `cashRefundForCardSale` |
+| Motifs (un par ligne) | Taille ou modèle, Défectueux, Ne convient pas, Erreur de caisse, Autre | `reasons: [{code, label}]` |
+| Validation d'un retour : même seuil que le remboursement, ou seuil propre (0 toujours, vide jamais) | même seuil que le remboursement | `approvals.return` |
+
+**Annulation après remboursement Interac validé (C4, 24/10/2026)** : `POST /api/order/cancel/{id}` rejouée avec un
+`terminalRefundId` dont le remboursement a été validé par un responsable (ou fait par lui) n'exige pas une seconde
+validation ; le journal porte `approvedBy` repris de cette validation. Toute autre annulation garde la règle C3.
+
+Code : `Services/PosReturnService/PosReturnService`, `UseCase/PosReturnUseCase/PosReturnUseCase`,
+`Controller/PosController/PosReturnController`, `Entity/PosReturn` ; schéma `migrations/Version20261024100000.php`,
+`scripts/migrate_all_v2_pos_returns.sh` ; tests `tests/Functional/Boutique/PosReturnApiTest.php`.
+
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la

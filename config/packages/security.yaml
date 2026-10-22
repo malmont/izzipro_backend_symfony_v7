@@ -130,6 +130,8 @@ security:
         # 🔹 Terminal de paiement Stripe (23/10/2026, C4) : état, paiements, annulation pour la caisse ; paiements sans vente,
         #    remboursement et carte simulée réservés au responsable et à l'administrateur (contrôle dans le contrôleur).
         - { path: ^/api/pos/terminal(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
+        # 🔹 Retours partiels et échanges (24/10/2026, F2) : caisse ; validation d'un responsable selon le seuil du site (C3)
+        - { path: ^/api/pos/(returns|exchanges)(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Clés d'activation des applications mobiles (15/10/2026) : activation publique (hors pare-feu JWT, limitée en
         #    débit), gestion des clés du site par ses administrateurs.
         - { path: ^/api/app/activate$, roles: PUBLIC_ACCESS }
