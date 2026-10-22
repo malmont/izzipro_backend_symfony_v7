@@ -1,5 +1,5 @@
-# 📦 Utilise PHP 8.3 avec FPM
-FROM php:8.3-fpm
+# 📦 Utilise PHP 8.3.36 avec FPM (correctif CVE-2026-109618, CVE-2026-109619)
+FROM php:8.3.36-fpm
 
 # 🔧 Installer les dépendances système nécessaires
 RUN apt-get update && apt-get install -y \
