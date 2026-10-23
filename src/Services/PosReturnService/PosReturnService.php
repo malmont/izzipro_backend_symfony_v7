@@ -66,6 +66,7 @@ class PosReturnService
         private readonly PosAuditService $audit,
         private readonly PosApprovalService $approvals,
         private readonly PosTerminalPaymentService $terminalPayments,
+        private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards, // cartes-cadeaux et avoirs (F9, 27/10/2026)
     ) {
     }
 
@@ -74,7 +75,7 @@ class PosReturnService
     /** Valeur du code-barres (Code 128) imprimé sur un ticket ou un avoir : IZ-T-<poste>-<numéro>, IZ-A-<poste>-<numéro> */
     public static function barcode(PosReceipt $receipt): string
     {
-        return sprintf('IZ-%s-%d-%d', $receipt->getKind() === PosReceipt::CREDIT_NOTE ? 'A' : 'T', $receipt->getCashRegister()->getId(), $receipt->getNumber());
+        return sprintf('IZ-%s-%d-%d', match ($receipt->getKind()) { PosReceipt::CREDIT_NOTE => 'A', PosReceipt::GIFT_CARD => 'C', default => 'T' }, $receipt->getCashRegister()->getId(), $receipt->getNumber());
     }
 
     /** Vente d'origine par ?orderId=, ?barcode=IZ-T-1-123 ou ?receipt=C1-123 (référence imprimée, préfixe du poste) */
@@ -168,6 +169,8 @@ class PosReturnService
             'cashRegister' => $receipt ? ['id' => $receipt->getCashRegister()->getId(), 'name' => $receipt->getCashRegister()->getName()] : null,
             'totalAmount' => (int) round((float) $order->getTotalAmount()), 'cashRounding' => $order->getCashRounding(),
             'payments' => ['cash' => $paid['cash'], 'card' => $paid['card'], 'other' => $paid['other'],
+                // Cartes-cadeaux et avoirs (F9) : part réglée par carte ou avoir et part encore recréditable
+                'giftCard' => $order->getGiftCardApplied(), 'giftCardRefundable' => (int) array_sum($em->getRepository(\App\Entity\PosGiftCardTransaction::class)->redeemedAvailable((int) $order->getId())),
                 'terminal' => $terminal ? ['paymentId' => $terminal->getId(), 'paymentMethodType' => $terminal->getPaymentMethodType(), 'cardBrand' => $terminal->getCardBrand(), 'last4' => $terminal->getLast4(), 'refundable' => $terminal->getRefundable()] : null],
             'refunded' => $refunded,
             'lines' => $lines,
@@ -231,7 +234,7 @@ class PosReturnService
         $restock = array_key_exists('restock', $input) ? (bool) $input['restock'] : $settings['restockDefault'];
         $method = (string) ($input['refund']['method'] ?? PosReturn::METHOD_ORIGINAL);
         if (!in_array($method, PosReturn::METHODS, true)) {
-            throw new CashRegisterException('REFUND_METHOD_INVALID', 'refund.method : original, cash, card ou declared_card attendu', 422, [['path' => 'refund.method', 'message' => 'original, cash, card ou declared_card']]);
+            throw new CashRegisterException('REFUND_METHOD_INVALID', 'refund.method : original, cash, card, declared_card ou store_credit attendu', 422, [['path' => 'refund.method', 'message' => 'original, cash, card, declared_card ou store_credit']]);
         }
 
         // Lignes et montants
@@ -247,8 +250,27 @@ class PosReturnService
         // Validation d'un responsable (C3) : action return, contexte {orderId, amount}
         $this->approvals->requireFor(PosApprovalService::RETURN, $user, ['orderId' => $original?->getId() ?? 0, 'amount' => $total], $total);
 
-        // Répartition du remboursement : carte d'abord (jusqu'au payé par carte non remboursé), puis espèces
-        [$cardRefund, $cashExact, $terminal] = $this->split($original, $method, $toRefund, $settings);
+        // Cartes-cadeaux et avoirs (F9) : part de la vente réglée par carte ou avoir encore recréditable ; « original » la recrédite
+        // d'abord, puis carte bancaire, puis espèces ; espèces interdites pour cette part sauf réglage ; « store_credit » = avoir
+        $giftSettings = $this->giftCards->settings();
+        $giftAvailable = $original ? $em->getRepository(\App\Entity\PosGiftCardTransaction::class)->redeemedAvailable((int) $original->getId()) : [];
+        $giftPart = 0;
+        $storeCreditAmount = 0;
+        if ($method === PosReturn::METHOD_STORE_CREDIT) {
+            if (!$giftSettings['storeCredits']['enabled']) {
+                throw new CashRegisterException('STORE_CREDIT_DISABLED', 'Les avoirs sont désactivés sur ce site', 409);
+            }
+            $storeCreditAmount = $toRefund;
+            [$cardRefund, $cashExact, $terminal] = [0, 0, null];
+        } else {
+            if ($method === PosReturn::METHOD_ORIGINAL) {
+                $giftPart = min($toRefund, (int) array_sum($giftAvailable));
+            } elseif ($method === PosReturn::METHOD_CASH && array_sum($giftAvailable) > 0 && !$giftSettings['cashRefundBeyond']) {
+                throw new CashRegisterException('CASH_REFUND_FORBIDDEN', 'Remboursement en espèces de la part réglée par carte-cadeau ou avoir refusé sur ce site (recrédit sur la carte)', 409, [], ['giftCardPaid' => (int) array_sum($giftAvailable)]);
+            }
+            // Répartition du reste : carte d'abord (jusqu'au payé par carte non remboursé), puis espèces
+            [$cardRefund, $cashExact, $terminal] = $this->split($original, $method, $toRefund - $giftPart, $settings);
+        }
         $cashRefund = $cashExact > 0 ? $this->rounding->round($cashExact) : 0;
         $cashRounding = $cashRefund - $cashExact;
         $terminalRefundId = null;
@@ -291,6 +313,9 @@ class PosReturnService
         $returnOrder->setCreditApplied($creditApplied);
         $em->persist($returnOrder);
         $em->flush();
+        // Cartes-cadeaux (F9) : recrédit des cartes de la vente d'origine, ou avoir pour tout le remboursement
+        $giftRefund = $giftPart > 0 ? $this->giftCards->refundToCards($giftAvailable, $giftPart, $returnOrder, (int) $original->getId(), $caisse, $user) : ['amount' => 0, 'cards' => []];
+        $storeCredit = $storeCreditAmount > 0 ? $this->giftCards->issueStoreCredit($storeCreditAmount, $returnOrder, $caisse, $user) : null;
         if ($cashRefund > 0) {
             $this->payments->handlePayment($returnOrder, -$cashRefund, 2, 1, 2, new \DateTime(), null);
         }
@@ -309,9 +334,13 @@ class PosReturnService
         $return = (new PosReturn())->setOrder($original)->setReturnOrder($returnOrder)->setCashRegister($register)->setCaisseId($caisse->getId())->setUserId((int) $user->getId())
             ->setReasonCode($reason['code'])->setReasonText($reason['text'])->setRestock($restock)->setRefundMethod($method)
             ->setAmount($total)->setCashRefund($cashRefund)->setCardRefund($cardRefund)->setCashRounding($cashRounding)->setCreditApplied($creditApplied)
-            ->setTerminalPaymentId($terminal?->getId())->setTerminalRefundId($terminalRefundId);
+            ->setTerminalPaymentId($terminal?->getId())->setTerminalRefundId($terminalRefundId)
+            ->setGiftCardRefund($giftRefund['amount'])->setStoreCreditId($storeCredit !== null ? $storeCredit['card']->getId() : null);
         $em->persist($return);
         $em->flush();
+        if ($storeCredit !== null) {
+            $this->giftCards->attachReturn($storeCredit['card'], (int) $return->getId());
+        }
 
         $this->audit->record(PosAuditService::REFUND, [
             'kind' => 'return', 'returnId' => $return->getId(), 'reference' => $returnOrder->getReference(), 'originalOrderId' => $original?->getId(),
@@ -319,6 +348,7 @@ class PosReturnService
             'lines' => array_map(fn ($l) => ['orderItemId' => $l['item']?->getId(), 'productVariantId' => $l['variant']?->getId(), 'quantity' => $l['quantity'], 'unitPrice' => $l['unitPrice']], $lines),
             'reason' => $reason, 'restock' => $restock, 'refundMethod' => $method,
             'amount' => $total, 'creditApplied' => $creditApplied, 'cashRefund' => $cashRefund, 'cardRefund' => $cardRefund, 'cashRounding' => $cashRounding,
+            'giftCardRefund' => $giftRefund, 'storeCredit' => $storeCredit ? ['giftCardId' => $storeCredit['card']->getId(), 'last4' => $storeCredit['card']->getLast4(), 'amount' => $storeCreditAmount] : null,
             'terminal' => $terminal ? ['paymentId' => $terminal->getId(), 'refundId' => $terminalRefundId, 'paymentMethodType' => $terminal->getPaymentMethodType()] : null,
             'subTotal' => $subtotal, 'totalTax' => $taxTotal, 'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'amount' => $t['amount']], $taxes),
         ], $caisse, null, 'order', $returnOrder->getId(), $user);
@@ -346,7 +376,10 @@ class PosReturnService
             'amount' => $return->getAmount(), 'subTotal' => -(int) round((float) $returnOrder->getSubTotal()), 'totalTax' => -(int) round((float) $returnOrder->getTotalTax()),
             'creditApplied' => $return->getCreditApplied(),
             'refund' => ['method' => $return->getRefundMethod(), 'amount' => $return->getAmount() - $return->getCreditApplied(), 'cash' => $return->getCashRefund(), 'card' => $return->getCardRefund(), 'cashRounding' => $return->getCashRounding(),
-                'terminal' => $terminal ? ['paymentId' => $terminal->getId(), 'refundId' => $return->getTerminalRefundId(), 'paymentMethodType' => $terminal->getPaymentMethodType(), 'cardBrand' => $terminal->getCardBrand(), 'last4' => $terminal->getLast4()] : null],
+                'terminal' => $terminal ? ['paymentId' => $terminal->getId(), 'refundId' => $return->getTerminalRefundId(), 'paymentMethodType' => $terminal->getPaymentMethodType(), 'cardBrand' => $terminal->getCardBrand(), 'last4' => $terminal->getLast4()] : null,
+                // Cartes-cadeaux et avoirs (F9) : part recréditée sur les cartes de la vente, avoir émis (code en clair une seule fois, à la création)
+                'giftCard' => $return->getGiftCardRefund(),
+                'storeCredit' => ($credit = $return->getStoreCreditId() ? $this->emProvider->getEntityManager()->find(\App\Entity\PosGiftCard::class, $return->getStoreCreditId()) : null) ? $this->giftCards->toArray($credit, $this->giftCards->issuedCode($credit->getId())) : null],
             'reason' => ['code' => $return->getReasonCode(), 'text' => $return->getReasonText()], 'restock' => $return->isRestock(),
             'lines' => $lines,
             'taxes' => array_values(array_map(fn (OrderTax $t) => ['label' => $t->getTax()?->getName(), 'amount' => -(int) round((float) $t->getAmount())], $returnOrder->getOrderTaxes()->toArray())),

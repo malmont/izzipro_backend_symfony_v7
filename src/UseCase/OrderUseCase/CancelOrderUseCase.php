@@ -61,6 +61,9 @@ class CancelOrderUseCase
             if (!$order) {
                 throw new Exception('Order not found');
             }
+            if ($order->getOrderType()?->getId() === 3) { // vente d'une carte-cadeau (F9) : annulation par POST /api/pos/gift-cards/{code}/cancel (carte jamais utilisée)
+                throw new CashRegisterException('GIFT_CARD_ORDER', 'Vente d\'une carte-cadeau : utilisez l\'annulation de la carte (POST /api/pos/gift-cards/{code}/cancel)', 409, [], ['orderId' => $order->getId()]);
+            }
             // Vente au comptoir remboursée par un caissier : validation d'un responsable selon les réglages, consommée dans
             // cette transaction (C3). Commande web : inchangé.
             if ($order->getOrderSource()?->getId() === 2 && $refundedBy instanceof \App\Entity\User) {

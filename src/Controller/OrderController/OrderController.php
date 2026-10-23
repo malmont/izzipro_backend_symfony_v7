@@ -356,7 +356,15 @@ class OrderController extends AbstractController
             if ($terminalRef !== null && (!is_scalar($terminalRef) || (int) $method['type'] !== 1)) {
                 return $this->json(['error' => 'PAYMENT_METHODS_INVALID', 'message' => 'terminalPaymentId ne s\'applique qu\'à une part carte (type 1)'], JsonResponse::HTTP_BAD_REQUEST);
             }
-            $paymentMethods[] = new PaymentMethodDTO((int) $method['type'], (float) $method['amount'], $terminalRef !== null ? (string) $terminalRef : null);
+            // Carte-cadeau (type 4) ou avoir (type 5), caisse seulement (F9) : code requis, vérifié et débité dans la transaction de la vente
+            $giftCode = in_array((int) $method['type'], [PaymentMethodDTO::GIFT_CARD, PaymentMethodDTO::STORE_CREDIT], true) ? ($method['code'] ?? null) : null;
+            if ($giftCode !== null && !is_string($giftCode)) {
+                return $this->json(['error' => 'PAYMENT_METHODS_INVALID', 'message' => 'code : code de la carte-cadeau ou de l\'avoir attendu'], JsonResponse::HTTP_BAD_REQUEST);
+            }
+            if (in_array((int) $method['type'], [PaymentMethodDTO::GIFT_CARD, PaymentMethodDTO::STORE_CREDIT], true) && ($giftCode === null || $giftCode === '')) {
+                return $this->json(['error' => 'PAYMENT_METHODS_INVALID', 'message' => 'code : code de la carte-cadeau ou de l\'avoir requis pour les types 4 et 5'], JsonResponse::HTTP_BAD_REQUEST);
+            }
+            $paymentMethods[] = new PaymentMethodDTO((int) $method['type'], (float) $method['amount'], $terminalRef !== null ? (string) $terminalRef : null, $giftCode);
         }
         if (!$paymentMethods) {
             return $this->json(['error' => 'PAYMENT_METHODS_REQUIRED', 'message' => 'Au moins un moyen de paiement est requis'], JsonResponse::HTTP_BAD_REQUEST);

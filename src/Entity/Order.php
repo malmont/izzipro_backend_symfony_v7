@@ -97,6 +97,10 @@ class Order
     #[ORM\Column(nullable: true)]
     private ?int $creditApplied = null;
 
+    /** Part réglée par carte-cadeau ou avoir (F9, 27/10/2026, cents) : aucune ligne dans payments, comme le crédit d'échange */
+    #[ORM\Column(nullable: true)]
+    private ?int $giftCardApplied = null;
+
     // Remise de ticket de caisse (F1, 24/10/2026) : montant total réparti sur les lignes, pourcentage en centièmes de % si remise en
     // pourcentage, motif ; 0 / null : aucune remise, comme avant
     #[ORM\Column(options: ['default' => 0])]
@@ -474,6 +478,8 @@ class Order
     public function setReturnedFrom(?Order $order): static { $this->returnedFrom = $order; return $this; }
     public function getCreditApplied(): int { return $this->creditApplied ?? 0; }
     public function setCreditApplied(?int $cents): static { $this->creditApplied = $cents !== null && $cents > 0 ? $cents : null; return $this; }
+    public function getGiftCardApplied(): int { return $this->giftCardApplied ?? 0; }
+    public function setGiftCardApplied(?int $cents): static { $this->giftCardApplied = $cents !== null && $cents > 0 ? $cents : null; return $this; }
 
     public function setCashRounding(int $cashRounding): static
     {

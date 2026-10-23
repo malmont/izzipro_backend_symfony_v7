@@ -81,6 +81,7 @@ Pas de `DELETE` : un poste se désactive.
 ## Vente en caisse : `POST /api/order/create-multi-payment`
 
 > Ajouts P2-a (26/10/2026) : `items[].custom` (article libre) et `items[].priceOverride` (prix manuel), voir « Article libre et prix manuel » ; `typeOrder: 2` soumis au réglage « retour sans ticket ».
+> Ajout F9 (27/10/2026) : `paymentMethods[] {type: 4 | 5, amount, code}` (carte-cadeau, avoir), voir « Cartes-cadeaux et avoirs ».
 
 Route distincte du tunnel web (`/api/order/create`, `create-guest`, webhook Stripe), réservée à `ROLE_USER_POS` et
 `ROLE_ADMIN`. Corps :
@@ -880,6 +881,94 @@ autres sources (e-commerce, application mobile) ne changent pas. Le parcours à 
 `GET /api/payments/statistics/{source}` : `current_week.*.daily` cumule désormais **par jour** (lundi 00:00:00 → dimanche
 23:59:59). Avant : regroupement par horodatage exact (deux paiements du même jour n'en comptaient qu'un) et semaine commençant
 le lundi à l'heure courante. Changement visible (administration, application MAUI), voulu ; les autres statistiques ne changent pas.
+
+## Cartes-cadeaux et avoirs (lot F9, 27/10/2026)
+
+Deux moyens de paiement de magasin, propres à la caisse. Code : `Services/PosGiftCardService/PosGiftCardService`,
+`UseCase/PosGiftCardUseCase`, `Controller/PosController/PosGiftCardController`. Désactivés par défaut.
+
+### Modèle et comptabilité
+
+- `pos_gift_card` : `kind` (`gift_card` | `store_credit`), **empreinte SHA-256 du code seule** (`code_hash`) et `last4`,
+  `initial_amount`, `balance`, `status` (`active`, `depleted`, `canceled`, `replaced`), `expires_at` (null = jamais),
+  vente d'émission (`issued_order_id`), retour d'émission (`issued_return_id`, avoir), poste, remplacement
+  (`replaces_id`, `replaced_by_id`). `pos_gift_card_transaction` : `issue`, `redeem`, `refund` (recrédit d'un retour),
+  `cash_out`, `adjust`, `cancel`, `replace_out`, `replace_in`, montant signé, solde après, commande, retour, session,
+  utilisateur, terminal, `approved_by`, motif.
+- Codes `GC-XXXX-XXXX-XXXX` (carte) et `AV-XXXX-XXXX-XXXX` (avoir) : alphabet `23456789ABCDEFGHJKLMNPQRSTUVWXYZ`, 60 bits
+  d'aléa. Le code en clair est renvoyé **une seule fois** (émission, remplacement) ; code-barres Code 128 `IZ-G-<code>` et QR =
+  le code. Le serveur accepte le code en minuscules, sans tirets, ou avec le préfixe `IZ-G-`. Carte physique pré-imprimée :
+  code fourni à la vente, même format, 409 `GIFT_CARD_CODE_TAKEN` s'il existe.
+- **La vente d'une carte est un passif, pas un chiffre d'affaires** : commande de **type 3 « CarteCadeau »** (source caisse,
+  statut complétée), une ligne libre non taxable « Carte-cadeau •••• 1234 », total = montant, aucune taxe ; paiements
+  enregistrés normalement (espèces, carte déclarée, terminal C4 ; jamais une carte-cadeau) ; transaction de caisse de **type 9
+  « Vente carte-cadeau »** (espèces dans la caisse attendue, hors bloc ventes) ; ticket de genre **`gift_card`**, numérotation
+  propre par poste, code-barres `IZ-C-<poste>-<n°>`. Les taxes sont perçues **à l'utilisation** (vente ordinaire).
+  Statistiques : chiffre d'affaires, panier moyen et nombre de commandes ne comptent que les types 1 et 2 (résultat identique
+  sur les données existantes) ; les statistiques de paiement comptent l'argent encaissé à la vente de la carte et non
+  l'utilisation (aucune ligne `payments`) : pas de double compte.
+- Utilisation : `paymentMethods[] {type: 4 (carte-cadeau) | 5 (avoir), amount (dollars), code}` dans
+  `POST /api/order/create-multi-payment`, `POST /api/pos/exchanges` et le paiement mixte. **Aucune ligne dans la table des moyens
+  de paiement ni dans `payments`** (web, EasyAdmin, MAUI inchangés) : la part est portée par `order.gift_card_applied`
+  (comme `credit_applied` pour un échange) ; contrôle : paiements + crédit + carte-cadeau = total ; l'arrondi des espèces porte
+  sur la part espèces seule. Débit **dans la transaction de la vente** (ligne verrouillée), journal `GIFT_CARD_REDEEMED`.
+  Erreurs 409 : `GIFT_CARD_DISABLED`, `GIFT_CARD_KIND_MISMATCH` (type 4 avec un code AV, ou l'inverse), `GIFT_CARD_INACTIVE`,
+  `GIFT_CARD_EXPIRED`, `GIFT_CARD_INSUFFICIENT {balance, requested}`, `GIFT_CARD_PAYMENT_INVALID` (hors caisse, ou pour acheter
+  une carte) ; 400 `PAYMENT_METHODS_INVALID` sans `code` ; 404 `GIFT_CARD_NOT_FOUND` ; 422 `GIFT_CARD_CODE_INVALID`.
+
+### Routes (`/api/pos/gift-cards`, caisse)
+
+| Route | Corps | Réponse |
+|---|---|---|
+| `POST /api/pos/gift-cards` (`Idempotency-Key`) | `{amount (cents), code? (carte pré-imprimée), paymentMethods [{type 1|2|3, amount (dollars), terminalPaymentId?}], cashRegisterId?}` | 201 `{giftCard {id, kind, code (une fois), last4, barcode, balance, initialAmount, status, usable, expiresAt, issuedAt, issuedOrderId}, orderId, …ticket (kind gift_card, receiptKind gift_card, barcode IZ-C-…, giftCard masqué)}` ; 409 `GIFT_CARD_DISABLED`, `GIFT_CARD_CODE_TAKEN`, `GIFT_CARD_PAYMENT_INVALID` ; 400 `PAYMENT_TOTAL_MISMATCH` ; 422 `GIFT_CARD_CODE_INVALID` |
+| `GET /api/pos/gift-cards/{code}` | — | 200 carte (sans code) ; 404 `GIFT_CARD_NOT_FOUND` ; 429 **`GIFT_CARD_LOOKUP_LIMIT`** `{retryAfterSeconds}` (20 consultations par terminal et 60 par adresse IP par 10 minutes) ; chaque consultation, réussie ou non, est journalisée (`GIFT_CARD_LOOKUP`) |
+| `POST /api/pos/gift-cards/{code}/cancel` (`Idempotency-Key`) | `{terminalRefundId?, cashRegisterId?}` | 200 `{giftCard (canceled), orderId, refunds [{type, amount}], cash, …avoir (kind gift_card_cancellation)}` ; validation C3 **`gift_card_cancel`** `{amount}` ; carte jamais utilisée seulement : 409 `GIFT_CARD_USED`, `GIFT_CARD_INACTIVE`, `GIFT_CARD_NOT_CANCELABLE` (avoir). Remboursement par le moyen d'origine (terminal : en ligne ou Interac déjà présenté sur le lecteur), transaction de caisse **type 10**, commande d'émission au statut Annulation |
+| `POST /api/pos/gift-cards/{code}/adjust` (`Idempotency-Key`) | `{amount (cents, signé, non nul), reason, cashRegisterId?}` | 200 `{giftCard}` ; validation C3 **`gift_card_adjust`** `{amount}` (valeur absolue) ; 409 `GIFT_CARD_INSUFFICIENT` si le solde deviendrait négatif |
+| `POST /api/pos/gift-cards/{code}/cash-out` (`Idempotency-Key`) | `{cashRegisterId?}` | 200 `{giftCard (depleted), amount, cash (arrondi), cashRounding}` : de droit jusqu'au seuil du site (Québec : 5,00 $) ; au-delà, 409 `GIFT_CARD_CASH_OUT_FORBIDDEN` sauf réglage, alors validation C3 `gift_card_adjust` ; transaction de caisse type 10 |
+| `POST /api/pos/gift-cards/replace` (`Idempotency-Key`) | `{orderId | barcode (IZ-C-<poste>-<n°>) | returnId, last4, cashRegisterId?}` | 201 `{giftCard (nouveau code, une fois), replaced (ancienne carte, status replaced)}` ; validation C3 **`gift_card_replace`** `{amount}` ; carte perdue retrouvée par sa vente d'émission (ticket) et ses 4 derniers caractères |
+
+Listes de commandes (`GET /api/orders?orderSource=2`) : la vente d'une carte apparaît comme une commande de type 3 avec sa ligne
+libre et, en plus des clés habituelles, `giftCardReceiptNumber` ; aucune clé existante ne change.
+
+Un rejeu idempotent reconstitue l'état de la carte **sans le code en clair** (empreinte seule en base) : le POS garde le code
+reçu à la première réponse. `POST /api/order/cancel/{id}` sur une vente de carte : 409 `GIFT_CARD_ORDER`.
+
+### Devis, retours, avoirs, ticket, rapports
+
+- Devis `POST /api/pos/quote` et `POST /api/pos/exchanges/quote` : `giftCards: [{code, amount?}]` → `giftCards [{…carte, applied,
+  reason}]`, `giftCardApplied`, `amountDue` (reste après cartes), `cashAmountDue` ; aucun débit. Sans `giftCards`, réponses inchangées.
+- Retours F2 : `lookup.payments.giftCard` (part réglée par carte) et `giftCardRefundable` ; `refund.method` **`original`** recrédite
+  **d'abord les cartes de la vente**, puis la carte bancaire, puis les espèces ; **`cash`** refusé pour la part carte-cadeau
+  (409 `CASH_REFUND_FORBIDDEN {giftCardPaid}`) sauf réglage « remboursement au-delà du seuil » ; **`store_credit`** : tout le
+  remboursement devient un avoir (409 `STORE_CREDIT_DISABLED` si désactivé). Réponse : `refund.giftCard` (recrédité),
+  `refund.storeCredit {code (une fois), last4, balance, expiresAt, barcode}` ; base `pos_return.gift_card_refund`,
+  `pos_return.store_credit_id`. Échange : la vente d'échange accepte les types 4 et 5.
+- Ticket (vente, réimpression, lien public) : `giftCardApplied`, `giftCardPayments [{kind, last4, amount}]`, `amountDue` déduit de la
+  part carte-cadeau, `giftCard` (carte émise, masquée) sur un ticket `gift_card`, `storeCredit` (masqué) sur un avoir ; natures
+  `gift_card` et `gift_card_cancellation`.
+- Rapports X et Z : **`giftCards {sold, redeemed, creditsIssued, refunded (annulations + soldes remboursés), adjusted : {count,
+  amount}, outstanding}`** (`outstanding` = solde actif du site, passif) ; `sales.giftCards` (part réglée par carte ou avoir :
+  espèces + cartes + giftCards = total des ventes). Les ventes de cartes ne comptent ni dans `sales` ni dans `refunds`.
+- Journal : `GIFT_CARD_SOLD`, `GIFT_CARD_REDEEMED`, `GIFT_CARD_REFUNDED`, `STORE_CREDIT_ISSUED`, `GIFT_CARD_LOOKUP`, `GIFT_CARD_CANCELED`,
+  `GIFT_CARD_ADJUSTED`, `GIFT_CARD_CASH_OUT`, `GIFT_CARD_REPLACED` (`approvedBy` sur les actions validées).
+- Hors ligne (C5 partie 2) : **jamais** (solde inconnu sans réseau) ; `settings.giftCards.offline = false` dans le pack ; une vente
+  hors ligne avec un paiement de type 4 ou 5 est rejetée `OFFLINE_SALE_INVALID` (« carte-cadeau et avoir indisponibles hors ligne »),
+  la vente d'une carte hors ligne n'existe pas.
+
+### Réglages (`settings.giftCards`, fiche Entreprise, panneau « Cartes-cadeaux et avoirs (caisse) »)
+
+| Réglage | Défaut | Clé |
+|---|---|---|
+| Cartes-cadeaux activées | **non** | `enabled` |
+| Montants proposés (cents) | 2500, 5000, 10000 (montant libre toujours possible) | `suggestedAmounts` |
+| Expiration des cartes (mois) | **vide = jamais** (Québec : aucune date d'expiration sur une carte prépayée vendue contre de l'argent ; la règle dépend du pays) | `expiryMonths` |
+| Avoirs activés | non | `storeCredits.enabled` |
+| Expiration des avoirs (mois) | vide = jamais | `storeCredits.expiryMonths` |
+| Remboursement en espèces d'un solde : seuil (cents) | **500** (Québec : 5,00 $ ou moins sur demande) | `cashRefundMaxBalance` |
+| Remboursement en espèces au-delà du seuil (validation) | non | `cashRefundBeyond` |
+
+`settings.approvals.giftCardCancel`, `giftCardAdjust`, `giftCardReplace` : `{required: true}` (toujours un responsable). Références :
+Loi sur la protection du consommateur du Québec, art. 187.3 (expiration) et OPC (remboursement d'un solde ≤ 5 $).
 
 ## Mécanique interne
 

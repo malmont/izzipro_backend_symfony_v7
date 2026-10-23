@@ -296,6 +296,30 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => false])]
     private bool $posOfflineEnabled = false;
 
+    // Cartes-cadeaux et avoirs (F9, 27/10/2026) : désactivés par défaut ; montants proposés (cents, séparés par des virgules) ;
+    // expiration en mois (null = jamais : règle du Québec pour une carte vendue contre de l'argent) ; seuil de remboursement en
+    // espèces d'un solde (cents, défaut 500 = 5,00 $ : droit du client au Québec) ; remboursement au-delà avec validation
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posGiftCardEnabled = false;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $posGiftCardAmounts = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $posGiftCardExpiryMonths = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posStoreCreditEnabled = false;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $posStoreCreditExpiryMonths = null;
+
+    #[ORM\Column(options: ['default' => 500])]
+    private int $posGiftCardCashRefundMax = 500;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posGiftCardCashRefundBeyond = false;
+
     // Article libre et prix manuel (F7, 26/10/2026) : désactivés par défaut ; montant maximal sans validation d'un responsable
     // (cents, null = jamais de validation, 0 = toujours) ; motif du prix manuel obligatoire, motifs (un par ligne)
     #[ORM\Column(options: ['default' => false])]
@@ -855,6 +879,25 @@ class Entreprise implements TranslatableInterface
     public function setPosReturnReasons(?string $text): static { $t = $text !== null ? trim(strip_tags($text)) : ''; $this->posReturnReasons = $t === '' ? null : mb_substr($t, 0, 2000); return $this; }
     /** @return list<array{code: string, label: string}> motifs du site (liste par défaut si vide) */
     public function returnReasons(): array { return self::reasonList($this->posReturnReasons, self::RETURN_REASONS_DEFAULT); }
+
+    // Cartes-cadeaux et avoirs (F9, 27/10/2026)
+    public const GIFT_CARD_AMOUNTS_DEFAULT = [2500, 5000, 10000];
+    public function isPosGiftCardEnabled(): bool { return $this->posGiftCardEnabled; }
+    public function setPosGiftCardEnabled(bool $v): static { $this->posGiftCardEnabled = $v; return $this; }
+    public function getPosGiftCardAmounts(): ?string { return $this->posGiftCardAmounts; }
+    public function setPosGiftCardAmounts(?string $text): static { $t = $text !== null ? trim($text) : ''; $this->posGiftCardAmounts = $t === '' ? null : mb_substr($t, 0, 255); return $this; }
+    /** @return list<int> montants proposés (cents), liste par défaut si vide */
+    public function giftCardAmounts(): array { $list = array_values(array_filter(array_map(fn ($v) => (int) trim($v), explode(',', (string) $this->posGiftCardAmounts)), fn ($v) => $v > 0)); return $list ?: self::GIFT_CARD_AMOUNTS_DEFAULT; }
+    public function getPosGiftCardExpiryMonths(): ?int { return $this->posGiftCardExpiryMonths; }
+    public function setPosGiftCardExpiryMonths(?int $m): static { $this->posGiftCardExpiryMonths = $m !== null && $m > 0 ? min(600, $m) : null; return $this; }
+    public function isPosStoreCreditEnabled(): bool { return $this->posStoreCreditEnabled; }
+    public function setPosStoreCreditEnabled(bool $v): static { $this->posStoreCreditEnabled = $v; return $this; }
+    public function getPosStoreCreditExpiryMonths(): ?int { return $this->posStoreCreditExpiryMonths; }
+    public function setPosStoreCreditExpiryMonths(?int $m): static { $this->posStoreCreditExpiryMonths = $m !== null && $m > 0 ? min(600, $m) : null; return $this; }
+    public function getPosGiftCardCashRefundMax(): int { return $this->posGiftCardCashRefundMax; }
+    public function setPosGiftCardCashRefundMax(?int $c): static { $this->posGiftCardCashRefundMax = max(0, (int) $c); return $this; }
+    public function isPosGiftCardCashRefundBeyond(): bool { return $this->posGiftCardCashRefundBeyond; }
+    public function setPosGiftCardCashRefundBeyond(bool $v): static { $this->posGiftCardCashRefundBeyond = $v; return $this; }
 
     // Article libre et prix manuel (F7, 26/10/2026)
     public function isPosCustomItemEnabled(): bool { return $this->posCustomItemEnabled; }

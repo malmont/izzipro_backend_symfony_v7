@@ -29,6 +29,8 @@ class OrderRepository extends EntityRepository
         $qb = $this->createQueryBuilder('o')
             ->select('SUM(o.totalAmount) as totalRevenue')
             ->where('o.orderDate BETWEEN :startDate AND :endDate')
+            ->andWhere('o.orderType IN (:revenueTypes)') // ventes et retours ; la vente d'une carte-cadeau (type 3, F9) est un passif, pas un chiffre d'affaires
+            ->setParameter('revenueTypes', [1, 2])
             ->setParameter('startDate', $startDate->format('Y-m-d 00:00:00'))
             ->setParameter('endDate', $endDate->format('Y-m-d 23:59:59'));
     
@@ -47,6 +49,8 @@ class OrderRepository extends EntityRepository
         $qb = $this->createQueryBuilder('o')
             ->select('COUNT(o.id) as orderCount')
             ->where('o.orderDate BETWEEN :startDate AND :endDate')
+            ->andWhere('o.orderType IN (:revenueTypes)') // ventes et retours ; hors ventes de cartes-cadeaux (type 3, F9)
+            ->setParameter('revenueTypes', [1, 2])
             ->setParameter('startDate', $startDate->format('Y-m-d 00:00:00'))
         ->setParameter('endDate', $endDate->format('Y-m-d 23:59:59'));
 
@@ -88,6 +92,8 @@ class OrderRepository extends EntityRepository
         $qb = $this->createQueryBuilder('o')
             ->select('AVG(o.totalAmount) as averageOrderValue')
             ->where('o.orderDate BETWEEN :startDate AND :endDate')
+            ->andWhere('o.orderType IN (:revenueTypes)') // hors ventes de cartes-cadeaux (type 3, F9)
+            ->setParameter('revenueTypes', [1, 2])
             ->andWhere('o.totalAmount > 0')
             ->setParameter('startDate', $startDate)
             ->setParameter('endDate', $endDate);

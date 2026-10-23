@@ -39,6 +39,8 @@ class PosSettingsService
                 'return' => $threshold($e ? $e->effectivePosApprovalReturn() : 0), // retour partiel ou échange (F2) : seuil du remboursement par défaut
                 // Article libre et prix manuel (F7) : au-delà du montant maximal (null = jamais, 0 = toujours)
                 'customItem' => ['required' => $lines['customItems']['enabled'] && $lines['customItems']['maxAmount'] !== null, 'threshold' => $lines['customItems']['maxAmount']],
+                // Cartes-cadeaux (F9) : toujours un responsable
+                'giftCardCancel' => ['required' => true], 'giftCardAdjust' => ['required' => true], 'giftCardReplace' => ['required' => true],
                 'priceOverride' => ['required' => $lines['priceOverride']['enabled'] && $lines['priceOverride']['maxAmount'] !== null, 'threshold' => $lines['priceOverride']['maxAmount']],
             ],
             'pin' => $this->pinRules(),
@@ -55,6 +57,7 @@ class PosSettingsService
             'discounts' => $discounts, // remises de caisse (F1, 24/10/2026)
             'customItems' => $lines['customItems'], // article libre (F7, 26/10/2026)
             'priceOverride' => $lines['priceOverride'], // prix manuel (F7, 26/10/2026)
+            'giftCards' => \App\Services\PosGiftCardService\PosGiftCardService::settingsOf($e), // cartes-cadeaux et avoirs (F9, 27/10/2026)
             'offline' => $this->offline->settings(), // mode hors ligne (C5 partie 2, 25/10/2026)
             'returns' => ['maxDays' => $e?->getPosReturnMaxDays(), 'withoutReceipt' => $e?->isPosReturnWithoutReceipt() ?? false, 'restockDefault' => $e?->isPosReturnRestockDefault() ?? true,
                 'cashRefundForCardSale' => $e?->isPosReturnCashForCardSale() ?? false, 'reasons' => $e ? $e->returnReasons() : []],
@@ -94,6 +97,9 @@ class PosSettingsService
         }
         foreach ($methods as $method) {
             $type = $method->getType();
+            if ($type === \App\Dto\PaymentMethodDTO::GIFT_CARD || $type === \App\Dto\PaymentMethodDTO::STORE_CREDIT) { // F9 : vérifiés et débités par PosGiftCardService
+                continue;
+            }
             $declaredCard = $type === 1 && $method->getTerminalPaymentId() === null;
             $disabled = match ($type) { 2 => !$allowed['cash'], 3 => !$allowed['paypal'], 1 => $declaredCard && !$allowed['declaredCard'], default => false };
             if ($disabled) {
@@ -129,6 +135,8 @@ class PosSettingsService
             // Article libre et prix manuel (F7) : au-delà du montant maximal du site (null = jamais, 0 = toujours)
             PosApprovalService::CUSTOM_ITEM => ($e?->isPosCustomItemEnabled() ?? false) && \App\Services\PosLineService\PosLineService::beyond((int) $amount, $e?->getPosCustomItemMaxAmount()),
             PosApprovalService::PRICE_OVERRIDE => ($e?->isPosPriceOverrideEnabled() ?? false) && \App\Services\PosLineService\PosLineService::beyond((int) $amount, $e?->getPosPriceOverrideMaxAmount()),
+            // Cartes-cadeaux (F9) : annulation, ajustement et remplacement toujours validés par un responsable
+            PosApprovalService::GIFT_CARD_CANCEL, PosApprovalService::GIFT_CARD_ADJUST, PosApprovalService::GIFT_CARD_REPLACE => true,
             default => false,
         };
     }

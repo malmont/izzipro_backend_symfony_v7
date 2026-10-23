@@ -19,6 +19,7 @@ class PosReceipt
 {
     public const TICKET = 'ticket';
     public const CREDIT_NOTE = 'credit_note';
+    public const GIFT_CARD = 'gift_card'; // ticket de vente d'une carte-cadeau (F9, 27/10/2026), suite propre par poste
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

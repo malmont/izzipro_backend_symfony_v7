@@ -55,15 +55,27 @@ class PosAuditService
     public const RECEIPT_EMAILED = 'RECEIPT_EMAILED';
     public const RECEIPT_LINK_REVOKED = 'RECEIPT_LINK_REVOKED';
     public const OFFLINE_SYNC = 'OFFLINE_SYNC'; // lot de ventes hors ligne synchronisé (C5 partie 2, 25/10/2026)
+    // Cartes-cadeaux et avoirs (F9, 27/10/2026)
+    public const GIFT_CARD_SOLD = 'GIFT_CARD_SOLD';
+    public const GIFT_CARD_REDEEMED = 'GIFT_CARD_REDEEMED';
+    public const GIFT_CARD_LOOKUP = 'GIFT_CARD_LOOKUP';
+    public const GIFT_CARD_CANCELED = 'GIFT_CARD_CANCELED';
+    public const GIFT_CARD_ADJUSTED = 'GIFT_CARD_ADJUSTED';
+    public const GIFT_CARD_CASH_OUT = 'GIFT_CARD_CASH_OUT';
+    public const GIFT_CARD_REPLACED = 'GIFT_CARD_REPLACED';
+    public const GIFT_CARD_REFUNDED = 'GIFT_CARD_REFUNDED'; // recrédit lors d'un retour
+    public const STORE_CREDIT_ISSUED = 'STORE_CREDIT_ISSUED';
     /** Entrées d'une action qui peut avoir été validée par un responsable : elles portent data.approvedBy */
-    private const APPROVABLE = [self::REFUND, self::CASH_WITHDRAWAL, self::FUND_WITHDRAWAL, self::DRAWER_OPENED, self::SESSION_CLOSED, self::DISCOUNT_APPLIED, self::PRICE_CHANGED];
+    private const APPROVABLE = [self::REFUND, self::CASH_WITHDRAWAL, self::FUND_WITHDRAWAL, self::DRAWER_OPENED, self::SESSION_CLOSED, self::DISCOUNT_APPLIED, self::PRICE_CHANGED,
+        self::GIFT_CARD_CANCELED, self::GIFT_CARD_ADJUSTED, self::GIFT_CARD_CASH_OUT, self::GIFT_CARD_REPLACED];
 
     public const TYPES = [self::LOGIN, self::LOGIN_FAILED, self::LOGOUT, self::SESSION_OPENED, self::SESSION_CLOSED, self::CASH_DEPOSIT,
         self::CASH_WITHDRAWAL, self::FUND_DEPOSIT, self::FUND_WITHDRAWAL, self::SALE, self::REFUND, self::Z_REPORT_CREATED, self::X_REPORT_VIEWED,
         self::CLOSING_PREVIEW, self::DRAWER_OPENED, self::CASH_REGISTER_CREATED, self::CASH_REGISTER_UPDATED, self::DISCOUNT_APPLIED, self::PRICE_CHANGED,
         self::PIN_SET, self::PIN_FAILED, self::PIN_LOCKED, self::PIN_RESET, self::UNLOCK, self::APPROVAL_GRANTED, self::APPROVAL_FAILED,
         self::CARD_PAYMENT_STARTED, self::CARD_PAYMENT_SUCCEEDED, self::CARD_PAYMENT_FAILED, self::CARD_PAYMENT_CANCELED, self::CARD_REFUND, self::CARD_SIMULATED, self::TERMINAL_CONFIGURED,
-        self::RECEIPT_REPRINTED, self::RECEIPT_EMAILED, self::RECEIPT_LINK_REVOKED, self::OFFLINE_SYNC];
+        self::RECEIPT_REPRINTED, self::RECEIPT_EMAILED, self::RECEIPT_LINK_REVOKED, self::OFFLINE_SYNC,
+        self::GIFT_CARD_SOLD, self::GIFT_CARD_REDEEMED, self::GIFT_CARD_LOOKUP, self::GIFT_CARD_CANCELED, self::GIFT_CARD_ADJUSTED, self::GIFT_CARD_CASH_OUT, self::GIFT_CARD_REPLACED, self::GIFT_CARD_REFUNDED, self::STORE_CREDIT_ISSUED];
 
     /** Clé du verrou consultatif (par base, donc par site) */
     private const LOCK_KEY = 7461002;

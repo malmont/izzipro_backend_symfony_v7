@@ -29,6 +29,8 @@ class HandleCaisseTransactionUseCase
     public const WITHDRAWAL = 6;
     public const CASH_FUND_WITHDRAWAL = 7;
     public const CASH_FUND_DEPOSIT = 8;
+    public const GIFT_CARD_SALE = 9; // vente d'une carte-cadeau (F9, 27/10/2026) : espèces encaissées, hors bloc ventes des rapports
+    public const GIFT_CARD_REFUND = 10; // annulation d'une carte ou remboursement d'un solde en espèces (F9)
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -93,14 +95,24 @@ class HandleCaisseTransactionUseCase
                     $caisse->setAmountTotal($caisse->getAmountTotal() + $transactionAmount);
                     $caisse->setFonDeCaisse(($caisse->getFonDeCaisse() ?? 0) + $transactionAmount);
                     break;
+                case self::GIFT_CARD_SALE: // F9 : seule la part espèces entre dans le tiroir
+                    $caisse->setAmountTotal($caisse->getAmountTotal() + $caisseAmount);
+                    break;
+                case self::GIFT_CARD_REFUND: // F9 : espèces rendues au client
+                    if ($caisse->getAmountTotal() < $caisseAmount) {
+                        throw new CashRegisterException('INSUFFICIENT_FUNDS', 'Fonds insuffisants dans la caisse', 400);
+                    }
+                    $caisse->setAmountTotal($caisse->getAmountTotal() - abs($caisseAmount));
+                    $transactionAmount = -abs($transactionAmount);
+                    break;
                 default:
                     throw new \InvalidArgumentException('Unknown transaction type');
             }
 
             // Effet sur les espèces du tiroir (cents, signé), enregistré sur la transaction pour les rapports X et Z
             $cashAmount = match ($transactionTypeId) {
-                self::SALE => (int) round($caisseAmount),
-                self::REFUND => -(int) round(abs($caisseAmount)),
+                self::SALE, self::GIFT_CARD_SALE => (int) round($caisseAmount),
+                self::REFUND, self::GIFT_CARD_REFUND => -(int) round(abs($caisseAmount)),
                 self::DEPOSIT, self::CASH_FUND_DEPOSIT => (int) round(abs($transactionAmount)),
                 self::WITHDRAWAL, self::CASH_FUND_WITHDRAWAL => -(int) round(abs($transactionAmount)),
                 default => 0,

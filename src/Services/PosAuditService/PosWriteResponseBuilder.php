@@ -20,7 +20,8 @@ use App\Services\TenantEntityManagerProvider;
  */
 class PosWriteResponseBuilder
 {
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CaisseService $caisseService, private readonly PosReceiptService $receipts, private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments, private readonly \App\Services\PosReturnService\PosReturnService $returns, private readonly PosReceiptLinkService $links)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CaisseService $caisseService, private readonly PosReceiptService $receipts, private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments, private readonly \App\Services\PosReturnService\PosReturnService $returns, private readonly PosReceiptLinkService $links,
+        private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards) // cartes-cadeaux et avoirs (F9, 27/10/2026)
     {
     }
 
@@ -39,8 +40,21 @@ class PosWriteResponseBuilder
         $receipts = $this->receipts->forOrder($order);
         $receipt ??= $receipts[PosReceipt::TICKET] ?? $receipts[PosReceipt::CREDIT_NOTE] ?? null;
 
+        $receipt ??= $receipts[PosReceipt::GIFT_CARD] ?? null;
+        // Cartes-cadeaux (F9) : parts réglées par carte ou avoir, carte émise par cette commande (type 3), avoir émis par ce retour (4 derniers caractères seulement)
+        $giftCards = ['redemptions' => $this->giftCards->redemptionsOf($order), 'issued' => null, 'storeCredit' => null];
+        if ($order->getOrderType()?->getId() === 3) {
+            $issued = $em->getRepository(\App\Entity\PosGiftCard::class)->findOneBy(['issuedOrderId' => $order->getId()], ['id' => 'ASC']);
+            $giftCards['issued'] = $issued ? $this->giftCards->toArray($issued) : null;
+        }
+        $return = $em->getRepository(\App\Entity\PosReturn::class)->findOneBy(['returnOrder' => $order]);
+        if ($return?->getStoreCreditId()) {
+            $credit = $em->find(\App\Entity\PosGiftCard::class, $return->getStoreCreditId());
+            $giftCards['storeCredit'] = $credit ? $this->giftCards->toArray($credit) : null;
+        }
+
         return PosReceiptDto::fromOrder($order, $em->getRepository(Entreprise::class)->findOneBy([]), $this->caisseService->getCaisseOfOrder($order), $locale, $receipts,
-            $this->terminalPayments->findByOrder((int) $order->getId()), $receipt ? $this->links->url($receipt) : null, $duplicate, $receipt);
+            $this->terminalPayments->findByOrder((int) $order->getId()), $receipt ? $this->links->url($receipt) : null, $duplicate, $receipt, $giftCards);
     }
 
     /** POST /api/order/cancel/{id} d'une vente au comptoir (200) : dernier avoir de la commande */
@@ -108,6 +122,9 @@ class PosWriteResponseBuilder
             'exchange' => ($r = $em->find(\App\Entity\PosReturn::class, $subjectId)) && $r->getExchangeOrder() ? ['status' => 201, 'body' => ['return' => $this->returns->toArray($r, $locale), 'sale' => $this->sale($r->getExchangeOrder(), $locale)]] : null,
             // Reçu envoyé par courriel (F3) : rejeu sans second courriel
             'receipt_email' => ($rc = $em->find(PosReceipt::class, $subjectId)) ? ['status' => 200, 'body' => ['sent' => true, 'barcode' => \App\Services\PosReturnService\PosReturnService::barcode($rc), 'replayed' => true]] : null,
+            // Cartes-cadeaux et avoirs (F9) : état courant de la carte (le code en clair n'est jamais rejoué : empreinte seule en base)
+            'gift_card' => ($g = $em->find(\App\Entity\PosGiftCard::class, $subjectId)) ? ['status' => 201, 'body' => ['giftCard' => $this->giftCards->toArray($g), 'replayed' => true]] : null,
+            'gift_card_update' => ($g = $em->find(\App\Entity\PosGiftCard::class, $subjectId)) ? ['status' => 200, 'body' => ['giftCard' => $this->giftCards->toArray($g), 'replayed' => true]] : null,
             default => null,
         };
     }

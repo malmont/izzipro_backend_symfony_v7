@@ -22,7 +22,8 @@ class PosReturn
     public const METHOD_CASH = 'cash';
     public const METHOD_CARD = 'card';
     public const METHOD_DECLARED_CARD = 'declared_card';
-    public const METHODS = [self::METHOD_ORIGINAL, self::METHOD_CASH, self::METHOD_CARD, self::METHOD_DECLARED_CARD];
+    public const METHOD_STORE_CREDIT = 'store_credit'; // avoir réutilisable (F9, 27/10/2026)
+    public const METHODS = [self::METHOD_ORIGINAL, self::METHOD_CASH, self::METHOD_CARD, self::METHOD_DECLARED_CARD, self::METHOD_STORE_CREDIT];
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -87,6 +88,13 @@ class PosReturn
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
 
+    // Cartes-cadeaux et avoirs (F9, 27/10/2026) : part recréditée sur les cartes de la vente d'origine, avoir émis par ce retour
+    #[ORM\Column(options: ['default' => 0])]
+    private int $giftCardRefund = 0;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $storeCreditId = null;
+
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
@@ -125,6 +133,10 @@ class PosReturn
     public function setCreditApplied(int $a): static { $this->creditApplied = $a; return $this; }
     public function getTerminalPaymentId(): ?int { return $this->terminalPaymentId; }
     public function setTerminalPaymentId(?int $id): static { $this->terminalPaymentId = $id; return $this; }
+    public function getGiftCardRefund(): int { return $this->giftCardRefund; }
+    public function setGiftCardRefund(int $cents): static { $this->giftCardRefund = max(0, $cents); return $this; }
+    public function getStoreCreditId(): ?int { return $this->storeCreditId; }
+    public function setStoreCreditId(?int $id): static { $this->storeCreditId = $id; return $this; }
     public function getTerminalRefundId(): ?string { return $this->terminalRefundId; }
     public function setTerminalRefundId(?string $id): static { $this->terminalRefundId = $id; return $this; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }

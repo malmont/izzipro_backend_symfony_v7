@@ -137,6 +137,8 @@ security:
         # 🔹 Ticket numérique (24/10/2026, F3) : page publique du reçu par jeton signé (QR), réimpression et envoi par courriel pour la caisse
         - { path: ^/api/r/, roles: PUBLIC_ACCESS }
         - { path: ^/api/pos/receipts(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
+        # 🔹 Cartes-cadeaux et avoirs (27/10/2026, F9) : caisse ; annulation, ajustement et remplacement validés par un responsable (C3, dans le service)
+        - { path: ^/api/pos/gift-cards(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Mode hors ligne (25/10/2026, C5 partie 2) : pack, jeu de cas, synchronisation des ventes (terminal exigé dans le contrôleur)
         - { path: ^/api/pos/offline-(pack|cases|sales)(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Clés d'activation des applications mobiles (15/10/2026) : activation publique (hors pare-feu JWT, limitée en

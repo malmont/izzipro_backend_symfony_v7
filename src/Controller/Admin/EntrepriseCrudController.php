@@ -151,6 +151,16 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflinePriceTolerance', 'Écart de prix toléré par vente (cents)')->setHelp('Recalcul au pack déclaré ; au-delà, vente refusée sauf acceptation forcée par un responsable ; défaut 5')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflinePackValidityHours', 'Validité du pack hors ligne (heures)')->setHelp('défaut 24')->hideOnIndex(),
 
+            // Cartes-cadeaux et avoirs (F9, 27/10/2026) : désactivés par défaut
+            FormField::addPanel('Cartes-cadeaux et avoirs (caisse)')->setHelp('Carte-cadeau vendue en caisse (code unique non devinable, ticket Code 128 et QR, ou carte physique pré-imprimée) et avoir émis par un retour, utilisables comme moyen de paiement. La vente d\'une carte est un passif, pas un chiffre d\'affaires : taxes à l\'utilisation. Expiration : la règle dépend du pays. Au Québec, une carte prépayée vendue contre de l\'argent ne peut pas expirer et un solde de 5,00 $ ou moins doit être remboursé en espèces sur demande (vide = jamais d\'expiration, seuil 500). La France ou d\'autres pays ont d\'autres règles : ajustez ces valeurs.'),
+            BooleanField::new('posGiftCardEnabled', 'Cartes-cadeaux activées')->hideOnIndex(),
+            TextField::new('posGiftCardAmounts', 'Montants proposés (cents, séparés par des virgules)')->setRequired(false)->setHelp('Vide : 2500, 5000, 10000 (25, 50 et 100 $) ; le montant libre reste possible')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posGiftCardExpiryMonths', 'Expiration des cartes (mois)')->setRequired(false)->setHelp('Vide = jamais (Québec)')->hideOnIndex(),
+            BooleanField::new('posStoreCreditEnabled', 'Avoirs activés (remboursement d\'un retour en avoir)')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posStoreCreditExpiryMonths', 'Expiration des avoirs (mois)')->setRequired(false)->setHelp('Vide = jamais')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posGiftCardCashRefundMax', 'Remboursement en espèces d\'un solde : seuil (cents)')->setHelp('Jusqu\'à ce solde, le client peut exiger les espèces ; défaut 500 = 5,00 $ (Québec)')->hideOnIndex(),
+            BooleanField::new('posGiftCardCashRefundBeyond', 'Remboursement en espèces au-delà du seuil (avec validation d\'un responsable)')->hideOnIndex(),
+
             // Article libre et prix manuel (F7, 26/10/2026) : désactivés par défaut
             FormField::addPanel('Article libre et prix manuel (caisse)')->setHelp('Article libre : vente d\'un article absent du catalogue (libellé, prix saisi, taxable ou non), sans mouvement de stock. Prix manuel : prix catalogue remplacé sur une ligne, avec motif. Au-delà du montant maximal, validation d\'un responsable ; vide = jamais, 0 = toujours.'),
             BooleanField::new('posCustomItemEnabled', 'Article libre autorisé')->hideOnIndex(),

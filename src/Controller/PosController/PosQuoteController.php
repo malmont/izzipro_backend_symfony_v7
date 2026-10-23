@@ -16,7 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class PosQuoteController extends AbstractController
 {
-    public function __construct(private readonly PosDiscountService $discounts)
+    public function __construct(private readonly PosDiscountService $discounts, private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards)
     {
     }
 
@@ -29,7 +29,14 @@ class PosQuoteController extends AbstractController
             return $this->json(['error' => 'VALIDATION_FAILED', 'message' => 'items : au moins un article attendu', 'errors' => [['path' => 'items', 'message' => 'au moins un article attendu']]], 422);
         }
         try {
-            return $this->json($this->discounts->quote(array_values($data['items']), is_array($data['ticketDiscount'] ?? null) ? $data['ticketDiscount'] : null));
+            $quote = $this->discounts->quote(array_values($data['items']), is_array($data['ticketDiscount'] ?? null) ? $data['ticketDiscount'] : null);
+            // Cartes-cadeaux et avoirs présentés (F9) : solde, part applicable et reste à payer, sans débit ; clés ajoutées seulement si giftCards est envoyé
+            if (!empty($data['giftCards'])) {
+                $gift = $this->giftCards->preview($data['giftCards'], (int) $quote['total']);
+                $quote += ['giftCards' => $gift['giftCards'], 'giftCardApplied' => $gift['giftCardApplied'], 'amountDue' => $gift['amountDue'], 'cashAmountDue' => $gift['cashAmountDue']];
+            }
+
+            return $this->json($quote);
         } catch (CashRegisterException $e) {
             return $this->json($e->toBody(), $e->status);
         }

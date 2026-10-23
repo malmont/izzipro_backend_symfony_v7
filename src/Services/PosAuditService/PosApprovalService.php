@@ -28,6 +28,9 @@ class PosApprovalService
     public const OFFLINE_FORCE = 'offline_force'; // acceptation forcée d'une vente hors ligne (C5 partie 2, 25/10/2026)
     public const CUSTOM_ITEM = 'custom_item'; // article libre au-delà du montant maximal (F7, 26/10/2026)
     public const PRICE_OVERRIDE = 'price_override'; // prix manuel : baisse au-delà du maximum (F7, 26/10/2026)
+    public const GIFT_CARD_CANCEL = 'gift_card_cancel'; // annulation d'une carte-cadeau vendue, jamais utilisée (F9, 27/10/2026)
+    public const GIFT_CARD_ADJUST = 'gift_card_adjust'; // ajustement manuel de solde ou remboursement en espèces au-delà du seuil (F9)
+    public const GIFT_CARD_REPLACE = 'gift_card_replace'; // remplacement d'une carte perdue (F9)
     /** action → clés de contexte qui doivent correspondre */
     public const CONTEXT = [
         self::REFUND => ['orderId'],
@@ -40,6 +43,9 @@ class PosApprovalService
         self::OFFLINE_FORCE => ['terminalId', 'counter', 'amount'],
         self::CUSTOM_ITEM => ['amount'], // total des articles libres de la vente (cents)
         self::PRICE_OVERRIDE => ['amount'], // somme des baisses par rapport au prix catalogue (cents)
+        self::GIFT_CARD_CANCEL => ['amount'], // montant remboursé (cents)
+        self::GIFT_CARD_ADJUST => ['amount'], // valeur absolue de l'ajustement ou du solde remboursé (cents)
+        self::GIFT_CARD_REPLACE => ['amount'], // solde reporté (cents)
     ];
     /** Clés de contexte textuelles (les autres sont numériques) */
     public const STRING_CONTEXT = ['scope'];

@@ -55,7 +55,8 @@ class CreateOrderUseCase
         private readonly \App\Services\PosAuditService\PosSettingsService $posSettings,
         private readonly \App\Services\PosDiscountService\PosDiscountService $discounts,
         private readonly \App\Services\PosLineService\PosLineService $posLines, // article libre et prix manuel (F7)
-        private readonly \App\Services\PosAuditService\PosApprovalService $approvals // validations groupées (P2-a)
+        private readonly \App\Services\PosAuditService\PosApprovalService $approvals, // validations groupées (P2-a)
+        private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards // cartes-cadeaux et avoirs (F9)
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -165,10 +166,18 @@ class CreateOrderUseCase
             }
             $paymentTypeId = $typeOrderId === 1 ? 2 : 1;
 
+            $giftParts = [];
             if ($orderDTO instanceof CreateOrderMultiPaymentDTO) {
                 foreach ($orderDTO->getPaymentMethods() as $paymentMethod) {
                     $orderDtoValue = $orderDTO;
 
+                    if ($paymentMethod->isGiftCard()) { // carte-cadeau ou avoir (F9) : débité plus bas, dans la transaction, aucune ligne dans payments
+                        if ($orderDTO->getOrderSource() !== 2 || $typeOrderId !== 1) {
+                            throw new CashRegisterException('GIFT_CARD_PAYMENT_INVALID', 'Une carte-cadeau ou un avoir ne règle qu\'une vente au comptoir', 409);
+                        }
+                        $giftParts[] = $paymentMethod;
+                        continue;
+                    }
                     if ($paymentMethod->getType() == 2) {
                         $caisseAmount += $paymentMethod->getAmount();
                         $orderDtoValue = null;
@@ -233,6 +242,10 @@ class CreateOrderUseCase
                         }
                     }
                 }
+                // Cartes-cadeaux et avoirs (F9) : vérifiés et débités ici (ligne verrouillée) ; part portée par order.gift_card_applied
+                foreach ($giftParts as $part) {
+                    $this->giftCards->redeem($part, $order, $user, $caisse);
+                }
                 $this->handleCaisseTransactionUseCase->execute($caisse, $order, $user, $totalAmount, $transactionTypeId, [], $caisseAmount, $orderDTO instanceof CreateOrderMultiPaymentDTO ? $cashRounding : null);
                 // Numéro de ticket (vente) ou d'avoir (retour), suite continue par poste, et entrée au journal de caisse (C2)
                 $receipt = $this->receipts->issue($order, $caisse, $typeOrderId === 1 ? \App\Entity\PosReceipt::TICKET : \App\Entity\PosReceipt::CREDIT_NOTE, (int) round($totalAmount));
@@ -244,6 +257,7 @@ class CreateOrderUseCase
                     'subTotal' => (int) round((float) $subtotal), 'totalTax' => (int) round((float) $totalTax), 'totalAmount' => (int) round($totalAmount),
                     'cashRounding' => $order->getCashRounding(),
                     'creditApplied' => $order->getCreditApplied(),
+                    'giftCardApplied' => $order->getGiftCardApplied(), // cartes-cadeaux et avoirs (F9)
                     'discountTotal' => $discountSummary['total'] ?? 0,
                     'payments' => array_values(array_map(fn ($p) => ['type' => $p->getPaymentMethod()?->getId(), 'amount' => (int) round((float) $p->getAmount())], $order->getPayments()->toArray())),
                     'terminalPayments' => array_map(fn ($t) => ['paymentId' => $t->getId(), 'stripePaymentIntentId' => $t->getStripePaymentIntentId(), 'amount' => $t->getAmount(), 'paymentMethodType' => $t->getPaymentMethodType(), 'cardBrand' => $t->getCardBrand(), 'last4' => $t->getLast4(), 'applicationFee' => $t->getApplicationFee()], $terminalPayments),

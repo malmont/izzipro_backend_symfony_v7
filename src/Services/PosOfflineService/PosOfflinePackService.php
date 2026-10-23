@@ -87,7 +87,7 @@ class PosOfflinePackService
             'denominations' => $this->denominations->list(),
             'products' => $products,
             'discounts' => $posSettings['discounts'] ?? [],
-            'settings' => array_intersect_key($posSettings, array_flip(['pin', 'lockAfterMinutes', 'receipt', 'paymentMethods', 'cashFund', 'cashAlertThreshold', 'customItems', 'priceOverride'])) + ['offline' => $settings],
+            'settings' => array_intersect_key($posSettings, array_flip(['pin', 'lockAfterMinutes', 'receipt', 'paymentMethods', 'cashFund', 'cashAlertThreshold', 'customItems', 'priceOverride', 'giftCards'])) + ['offline' => $settings],
             'calculationRule' => PosOfflineCalculator::RULE,
             'testCases' => '/api/pos/offline-cases',
         ];

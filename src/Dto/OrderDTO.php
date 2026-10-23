@@ -80,12 +80,13 @@ class OrderDTO
         if (!$receipts) {
             return null;
         }
-        $any = $receipts[\App\Entity\PosReceipt::TICKET] ?? $receipts[\App\Entity\PosReceipt::CREDIT_NOTE];
+        // Ticket, avoir ou ticket carte-cadeau (F9, 27/10/2026 : vente d'une carte, commande de type 3)
+        $any = $receipts[\App\Entity\PosReceipt::TICKET] ?? $receipts[\App\Entity\PosReceipt::CREDIT_NOTE] ?? $receipts[\App\Entity\PosReceipt::GIFT_CARD] ?? reset($receipts);
 
         return [
             'receiptNumber' => isset($receipts[\App\Entity\PosReceipt::TICKET]) ? $receipts[\App\Entity\PosReceipt::TICKET]->getNumber() : null,
             'creditNoteNumber' => isset($receipts[\App\Entity\PosReceipt::CREDIT_NOTE]) ? $receipts[\App\Entity\PosReceipt::CREDIT_NOTE]->getNumber() : null,
             'cashRegister' => ['id' => $any->getCashRegister()->getId(), 'name' => $any->getCashRegister()->getName()],
-        ];
+        ] + (isset($receipts[\App\Entity\PosReceipt::GIFT_CARD]) ? ['giftCardReceiptNumber' => $receipts[\App\Entity\PosReceipt::GIFT_CARD]->getNumber()] : []);
     }
 }

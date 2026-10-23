@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (219)
+## Boutique et commun (225)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -358,6 +358,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/pos/audit` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosAuditController::list` |
 | POST | `/api/pos/exchanges/quote` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::exchangeQuote` |
 | POST | `/api/pos/exchanges` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::exchange` |
+| POST | `/api/pos/gift-cards/replace` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::replace` |
+| POST | `/api/pos/gift-cards/{code}/adjust` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::adjust` |
+| POST | `/api/pos/gift-cards/{code}/cancel` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::cancel` |
+| POST | `/api/pos/gift-cards/{code}/cash-out` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::cashOut` |
+| GET | `/api/pos/gift-cards/{code}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::lookup` |
+| POST | `/api/pos/gift-cards` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::create` |
 | GET | `/api/pos/offline-cases` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosOfflineController::cases` |
 | GET | `/api/pos/offline-pack` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosOfflineController::pack` |
 | GET | `/api/pos/offline-sales` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosOfflineController::history` |

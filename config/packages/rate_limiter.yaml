@@ -64,6 +64,18 @@ framework:
             interval: '15 minutes'
             lock_factory: null
 
+        # Consultation du solde d'une carte-cadeau ou d'un avoir (27/10/2026, F9) : anti-balayage des codes, par terminal et par IP
+        pos_gift_card_lookup_terminal:
+            policy: sliding_window
+            limit: 20
+            interval: '10 minutes'
+            lock_factory: null
+        pos_gift_card_lookup_ip:
+            policy: sliding_window
+            limit: 60
+            interval: '10 minutes'
+            lock_factory: null
+
         # Avis clients : dépôts par client connecté (09/10/2026)
         review_submit:
             policy: sliding_window
@@ -87,6 +99,12 @@ when@test:
                 policy: sliding_window
                 limit: 10000
                 interval: '15 minutes'
+                lock_factory: null
+            # Consultation des cartes-cadeaux (F9) : la suite consulte depuis la même IP ; la limite par terminal reste celle de production (testée)
+            pos_gift_card_lookup_ip:
+                policy: sliding_window
+                limit: 10000
+                interval: '10 minutes'
                 lock_factory: null
             # Activation des applications : toute la suite part de la même IP (tests seulement, 19/10/2026)
             app_activation_ip:

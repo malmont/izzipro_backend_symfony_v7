@@ -15,7 +15,8 @@ class PosReceiptDto
 {
     /** @param array<string, \App\Entity\PosReceipt> $receipts numéros de la commande (C2) */
     public static function fromOrder(Order $order, ?Entreprise $entreprise, ?Caisse $caisse, string $locale, array $receipts = [],
-        ?\App\Entity\PosTerminalPayment $terminal = null, ?string $receiptUrl = null, bool $duplicate = false, ?\App\Entity\PosReceipt $receiptOverride = null): array
+        ?\App\Entity\PosTerminalPayment $terminal = null, ?string $receiptUrl = null, bool $duplicate = false, ?\App\Entity\PosReceipt $receiptOverride = null,
+        array $giftCards = ['redemptions' => [], 'issued' => null, 'storeCredit' => null]): array
     {
         $dollars = fn (?float $cents) => round(((float) $cents) / 100, 2);
         // Ticket complet (F3, 24/10/2026) : lignes, caissier, devise, monnaie rendue, détail des cartes, nature, lien public, duplicata
@@ -57,10 +58,13 @@ class PosReceiptDto
         }
         $register = $caisse?->getCashRegister();
 
-        $receipt = $receiptOverride ?? $receipts[\App\Entity\PosReceipt::TICKET] ?? $receipts[\App\Entity\PosReceipt::CREDIT_NOTE] ?? null;
+        $receipt = $receiptOverride ?? $receipts[\App\Entity\PosReceipt::TICKET] ?? $receipts[\App\Entity\PosReceipt::CREDIT_NOTE] ?? $receipts[\App\Entity\PosReceipt::GIFT_CARD] ?? null;
         $isCreditNote = $receipt?->getKind() === \App\Entity\PosReceipt::CREDIT_NOTE;
-        $kind = $isCreditNote ? ($order->getOrderType()?->getId() === 2 ? 'return' : 'cancellation') : ($order->getCreditApplied() > 0 ? 'exchange' : 'sale');
-        $amountDueCents = (int) round($order->getTotalAmount() + $order->getCashRounding() - $order->getCreditApplied());
+        // Nature : vente, échange, retour, annulation ; carte-cadeau vendue (F9) ou annulation d'une carte (avoir sur une commande de type 3)
+        $kind = $isCreditNote ? ($order->getOrderType()?->getId() === 2 ? 'return' : ($order->getOrderType()?->getId() === 3 ? 'gift_card_cancellation' : 'cancellation'))
+            : ($receipt?->getKind() === \App\Entity\PosReceipt::GIFT_CARD ? 'gift_card' : ($order->getCreditApplied() > 0 ? 'exchange' : 'sale'));
+        // Montant dû = total + arrondi − crédit d'échange − part carte-cadeau (F9 : 0 sans carte, comme avant)
+        $amountDueCents = (int) round($order->getTotalAmount() + $order->getCashRounding() - $order->getCreditApplied() - $order->getGiftCardApplied());
 
         return [
             // Ticket numérique (F3) : nature du document, duplicata, lien public (QR), réimpressions, émission
@@ -73,7 +77,7 @@ class PosReceiptDto
             'currency' => $entreprise?->getCurrency() ?? 'CAD',
             'lines' => $lines,
             // Monnaie rendue (vente) : espèces reçues au-delà du montant dû
-            'change' => $kind === 'sale' || $kind === 'exchange' ? $dollars(max(0, $paid - $amountDueCents)) : null,
+            'change' => $kind === 'sale' || $kind === 'exchange' || $kind === 'gift_card' ? $dollars(max(0, $paid - $amountDueCents)) : null,
             // Numéro de ticket (vente) ou d'avoir (retour), suite continue par poste (C2)
             'receiptNumber' => $receipt?->getNumber(),
             'receiptKind' => $receipt?->getKind(),
@@ -81,7 +85,7 @@ class PosReceiptDto
             'provisionalNumber' => $receipt?->getProvisionalNumber(),
             // Numéro présenté avec le préfixe du poste (R1) ; receiptNumber reste l'entier de la suite continue
             'receiptReference' => $receipt ? $receipt->getCashRegister()->receiptReference($receipt->getNumber()) : null,
-            // Code-barres Code 128 du ticket ou de l'avoir (F2) : IZ-T-<poste>-<numéro> / IZ-A-<poste>-<numéro>
+            // Code-barres Code 128 du ticket, de l'avoir (F2) ou du ticket carte-cadeau (F9) : IZ-T- / IZ-A- / IZ-C-<poste>-<numéro>
             'barcode' => $receipt ? \App\Services\PosReturnService\PosReturnService::barcode($receipt) : null,
             'reference' => $order->getReference(),
             'createdAt' => $order->getOrderDate()?->format(\DateTimeInterface::ATOM),
@@ -99,9 +103,15 @@ class PosReceiptDto
             'totalAmount' => $dollars($order->getTotalAmount()),
             // Arrondi des espèces (19/10/2026) : montant réellement dû = totalAmount + cashRounding
             'cashRounding' => $dollars($order->getCashRounding()),
-            'amountDue' => $dollars($order->getTotalAmount() + $order->getCashRounding() - $order->getCreditApplied()),
+            'amountDue' => $dollars($amountDueCents),
             // Échange (F2) : crédit du retour appliqué à la vente ; amountDue en tient compte (0 sans échange)
             'creditApplied' => $dollars($order->getCreditApplied()),
+            // Cartes-cadeaux et avoirs (F9, 27/10/2026) : part réglée par carte ou avoir [{kind, last4, amount}], carte émise par ce ticket
+            // (type gift_card, code masqué : le code en clair n'est donné qu'à l'émission), avoir émis par ce retour
+            'giftCardApplied' => $dollars($order->getGiftCardApplied()),
+            'giftCardPayments' => array_map(fn ($g) => ['kind' => $g['kind'], 'last4' => $g['last4'], 'amount' => $dollars($g['amount'])], $giftCards['redemptions'] ?? []),
+            'giftCard' => $giftCards['issued'] ?? null,
+            'storeCredit' => $giftCards['storeCredit'] ?? null,
             'taxes' => $taxes,
             'payments' => $payments,
             'cashRegister' => $register ? ['id' => $register->getId(), 'name' => $register->getName()] : null,

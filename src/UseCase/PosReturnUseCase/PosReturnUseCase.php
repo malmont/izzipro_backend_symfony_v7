@@ -27,6 +27,7 @@ class PosReturnUseCase
         private readonly PosWriteResponseBuilder $responses,
         private readonly \App\Services\PosDiscountService\PosDiscountService $discounts,
         private readonly \App\Services\CaisseService\CashRoundingService $rounding,
+        private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards, // cartes-cadeaux et avoirs (F9)
     ) {
     }
 
@@ -61,7 +62,11 @@ class PosReturnUseCase
                 throw new CashRegisterException('PAYMENT_METHODS_INVALID', 'Chaque moyen de paiement doit avoir un type et un montant positif', 400, [['path' => "sale.paymentMethods[$i]", 'message' => '{type, amount}']]);
             }
             $ref = $method['terminalPaymentId'] ?? $method['stripePaymentId'] ?? null;
-            $methods[] = new PaymentMethodDTO((int) $method['type'], (float) $method['amount'], $ref !== null && is_scalar($ref) ? (string) $ref : null);
+            $gift = in_array((int) $method['type'], [PaymentMethodDTO::GIFT_CARD, PaymentMethodDTO::STORE_CREDIT], true); // carte-cadeau ou avoir (F9) : code requis
+            if ($gift && (!is_string($method['code'] ?? null) || $method['code'] === '')) {
+                throw new CashRegisterException('PAYMENT_METHODS_INVALID', 'code : code de la carte-cadeau ou de l\'avoir requis pour les types 4 et 5', 400, [['path' => "sale.paymentMethods[$i].code", 'message' => 'requis']]);
+            }
+            $methods[] = new PaymentMethodDTO((int) $method['type'], (float) $method['amount'], $ref !== null && is_scalar($ref) ? (string) $ref : null, $gift ? $method['code'] : null);
         }
 
         return $this->transaction(function () use ($user, $returnInput, $saleInput, $methods, $posKey, $cashRegisterId) {
@@ -111,16 +116,18 @@ class PosReturnUseCase
         $credit = min($returnTotal, (int) $quote['total']);
         $amountDue = (int) $quote['total'] - $credit;
         $refundDue = $returnTotal - $credit;
+        // Cartes-cadeaux et avoirs présentés (F9) : part applicable au montant dû, sans débit
+        $gift = !empty($saleInput['giftCards']) ? $this->giftCards->preview($saleInput['giftCards'], $amountDue) : null;
 
         return [
             'returnAmount' => $returnTotal,
             'sale' => ['subtotal' => $quote['subtotal'], 'grossSubtotal' => $quote['grossSubtotal'] ?? $quote['subtotal'], 'discounts' => $quote['discounts'], 'taxes' => $quote['taxes'], 'total' => $quote['total'], 'cashTotal' => $quote['cashTotal']],
             'creditApplied' => $credit,
-            'amountDue' => $amountDue,
-            'cashAmountDue' => $this->rounding->round($amountDue),
+            'amountDue' => $gift ? $gift['amountDue'] : $amountDue,
+            'cashAmountDue' => $this->rounding->round($gift ? $gift['amountDue'] : $amountDue),
             'refundDue' => $refundDue,
             'cashRefundDue' => $this->rounding->round($refundDue),
-        ];
+        ] + ($gift ? ['giftCards' => $gift['giftCards'], 'giftCardApplied' => $gift['giftCardApplied'], 'amountDueBeforeGiftCards' => $amountDue] : []);
     }
 
     public function returnBody(PosReturn $return, string $locale): array

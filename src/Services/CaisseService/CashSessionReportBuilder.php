@@ -83,6 +83,9 @@ class CashSessionReportBuilder
                 case Tx::CASH_FUND_WITHDRAWAL:
                     $movements['fundWithdrawals'] += -$cash;
                     break;
+                case Tx::GIFT_CARD_SALE: // cartes-cadeaux (F9) : espèces déjà dans cashFlow ; détail dans le bloc giftCards
+                case Tx::GIFT_CARD_REFUND:
+                    break;
             }
         }
 
@@ -90,6 +93,7 @@ class CashSessionReportBuilder
         $register = $session->getCashRegister();
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
         $sales['byPaymentMethod'] = $this->byPaymentMethod($saleOrders, fn (float $amount) => $amount > 0, $locale);
+        $sales['giftCards'] = (int) array_sum(array_map(fn (Order $o) => $o->getGiftCardApplied(), $saleOrders)); // part réglée par carte-cadeau ou avoir (F9) : espèces + cartes + giftCards = total
         $refunds['byPaymentMethod'] = $this->byPaymentMethod($refundOrders, fn (float $amount) => $amount < 0, $locale);
 
         return [
@@ -123,6 +127,8 @@ class CashSessionReportBuilder
             'offline' => $this->offline($saleOrders),
             'customItems' => $this->customItems($saleOrders), // articles libres (F7, 26/10/2026)
             'priceOverrides' => $this->priceOverrides($saleOrders), // prix modifiés (F7)
+            // Cartes-cadeaux et avoirs (F9, 27/10/2026) : vendu, utilisé, avoirs émis, remboursé, ajusté (session) ; solde en cours du site (passif)
+            'giftCards' => $em->getRepository(\App\Entity\PosGiftCardTransaction::class)->totalsForSession((int) $session->getId()) + ['outstanding' => $em->getRepository(\App\Entity\PosGiftCard::class)->outstanding()],
         ];
     }
 
