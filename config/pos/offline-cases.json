@@ -1,6 +1,6 @@
 {
   "rule": "pos-offline-v1",
-  "description": "Jeu de cas partagé backend / POS : le total hors ligne calculé par la tablette doit être identique, au cent, au résultat attendu. Montants en cents ; rate = taux décimal ; step = pas d'arrondi des espèces (1 = aucun).",
+  "description": "Jeu de cas partagé backend / POS : le total hors ligne calculé par la tablette doit être identique, au cent, au résultat attendu. Montants en cents ; rate = taux décimal ; step = pas d'arrondi des espèces (1 = aucun). Lignes facultatives (F7) : custom {label, unitPrice, taxable} = article libre (unitPrice de la ligne ignoré), priceOverride {unitPrice} = prix manuel ; taxes sur taxableSubtotal.",
   "cases": [
     {
       "id": "simple-une-ligne-qc",
@@ -732,6 +732,191 @@
         "cashTotal": 0,
         "cashRounding": 0,
         "change": 0
+      }
+    },
+    {
+      "id": "article-libre-taxable",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 1
+        },
+        {
+          "custom": {
+            "label": "Retouche ourlet",
+            "unitPrice": 1500,
+            "taxable": true
+          },
+          "unitPrice": 0,
+          "quantity": 2
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": null,
+      "expected": {
+        "lines": [
+          {
+            "gross": 2900,
+            "discountAmount": 0,
+            "net": 2900
+          },
+          {
+            "gross": 3000,
+            "discountAmount": 0,
+            "net": 3000
+          }
+        ],
+        "subtotal": 5900,
+        "discountTotal": 0,
+        "taxableSubtotal": 5900,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 295
+          },
+          {
+            "label": "TVQ",
+            "amount": 589
+          }
+        ],
+        "total": 6784,
+        "cashTotal": 6785,
+        "cashRounding": 1,
+        "change": null
+      }
+    },
+    {
+      "id": "article-libre-detaxe-et-remise-ticket",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1900,
+          "quantity": 1
+        },
+        {
+          "custom": {
+            "label": "Pain (détaxé)",
+            "unitPrice": 450,
+            "taxable": false
+          },
+          "unitPrice": 0,
+          "quantity": 2
+        }
+      ],
+      "ticketDiscount": {
+        "type": "percent",
+        "value": 10
+      },
+      "cashReceived": 3000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1900,
+            "discountAmount": 190,
+            "net": 1710
+          },
+          {
+            "gross": 900,
+            "discountAmount": 90,
+            "net": 810,
+            "taxable": false
+          }
+        ],
+        "subtotal": 2520,
+        "discountTotal": 280,
+        "taxableSubtotal": 1710,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 86
+          },
+          {
+            "label": "TVQ",
+            "amount": 171
+          }
+        ],
+        "total": 2777,
+        "cashTotal": 2775,
+        "cashRounding": -2,
+        "change": 225
+      }
+    },
+    {
+      "id": "prix-manuel-et-remise-ligne",
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 2,
+          "priceOverride": {
+            "unitPrice": 2500
+          },
+          "discounts": [
+            {
+              "type": "amount",
+              "value": 500
+            }
+          ]
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": null,
+      "expected": {
+        "lines": [
+          {
+            "gross": 5000,
+            "discountAmount": 500,
+            "net": 4500
+          }
+        ],
+        "subtotal": 4500,
+        "discountTotal": 500,
+        "taxableSubtotal": 4500,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 225
+          },
+          {
+            "label": "TVQ",
+            "amount": 449
+          }
+        ],
+        "total": 5174,
+        "cashTotal": 5174,
+        "cashRounding": 0,
+        "change": null
       }
     }
   ]

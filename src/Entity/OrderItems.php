@@ -58,6 +58,24 @@ class OrderItems
     #[ORM\JoinColumn(name: 'customization_id', nullable: true, onDelete: 'SET NULL')]
     private ?ProductCustomizationImage $customization = null;
 
+    // Article libre (F7, 26/10/2026) : ligne sans variante du catalogue (product_variant_id null), libellé saisi en caisse,
+    // taxable ou non (exonéré / détaxé) ; aucun mouvement de stock. Prix manuel (F7) : prix catalogue remplacé sur la ligne,
+    // catalog_unit_price garde le prix catalogue (null = prix catalogue appliqué, comme avant) et le motif est conservé.
+    #[ORM\Column(length: 120, nullable: true)]
+    private ?string $customLabel = null;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $taxable = true;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $catalogUnitPrice = null;
+
+    #[ORM\Column(length: 40, nullable: true)]
+    private ?string $priceReasonCode = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $priceReasonText = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -135,7 +153,7 @@ class OrderItems
             $unit = 'pcs';
         }
             
-        return $this->productVariant ? $this->productVariant->getProduct()->getName() . ' - ' . $this->quantity . ' ' . $unit : '';
+        return $this->displayName() !== null ? $this->displayName() . ' - ' . $this->quantity . ' ' . $unit : '';
     }
     public function getBooking(): ?Booking
     {
@@ -178,6 +196,21 @@ class OrderItems
     public function setDiscountAmount(int $cents): static { $this->discountAmount = max(0, $cents); return $this; }
     /** Montant brut de la ligne (avant remises) en cents */
     public function grossTotal(): int { return (int) round((float) $this->totalPrice) + $this->discountAmount; }
+    // Article libre et prix manuel (F7, 26/10/2026)
+    public function getCustomLabel(): ?string { return $this->customLabel; }
+    public function setCustomLabel(?string $label): static { $this->customLabel = $label !== null ? mb_substr(trim($label), 0, 120) : null; return $this; }
+    public function isCustom(): bool { return $this->customLabel !== null && $this->productVariant === null; }
+    public function isTaxable(): bool { return $this->taxable; }
+    public function setTaxable(bool $taxable): static { $this->taxable = $taxable; return $this; }
+    public function getCatalogUnitPrice(): ?int { return $this->catalogUnitPrice; }
+    public function setCatalogUnitPrice(?int $cents): static { $this->catalogUnitPrice = $cents; return $this; }
+    public function hasPriceOverride(): bool { return $this->catalogUnitPrice !== null; }
+    public function getPriceReasonCode(): ?string { return $this->priceReasonCode; }
+    public function setPriceReasonCode(?string $code): static { $this->priceReasonCode = $code !== null ? mb_substr($code, 0, 40) : null; return $this; }
+    public function getPriceReasonText(): ?string { return $this->priceReasonText; }
+    public function setPriceReasonText(?string $text): static { $this->priceReasonText = $text !== null ? mb_substr(trim($text), 0, 255) : null; return $this; }
+    /** Nom affiché : produit du catalogue, sinon libellé de l'article libre */
+    public function displayName(): ?string { return $this->productVariant?->getProduct()?->getName() ?? $this->customLabel; }
     public function getReturnedFromItem(): ?OrderItems { return $this->returnedFromItem; }
     public function setReturnedFromItem(?OrderItems $item): static { $this->returnedFromItem = $item; return $this; }
 

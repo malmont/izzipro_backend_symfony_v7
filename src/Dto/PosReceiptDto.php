@@ -22,10 +22,14 @@ class PosReceiptDto
         $lines = [];
         foreach ($order->getOrderItems() as $item) {
             $lines[] = [
-                'productVariantId' => $item->getProductVariant()?->getId(), 'name' => $item->getProductVariant()?->getProduct()?->getName(), 'saleUnit' => $item->getSaleUnit(),
+                'productVariantId' => $item->getProductVariant()?->getId(), 'name' => $item->displayName(), 'saleUnit' => $item->getSaleUnit(),
                 'quantity' => $item->getQuantity(), 'unitPrice' => $dollars($item->getUnitPrice()), 'gross' => $dollars($item->grossTotal()),
                 'discountAmount' => $dollars($item->getDiscountAmount()), 'total' => $dollars($item->getTotalPrice()),
                 'discounts' => array_map(fn ($d) => ['type' => $d['type'], 'value' => $d['value'], 'amount' => $dollars($d['amount']), 'scope' => $d['scope'], 'reason' => ['code' => $d['reasonCode'] ?? null, 'text' => $d['reasonText'] ?? null]], $item->getDiscounts()),
+                // Article libre et prix manuel (F7, 26/10/2026) : le ticket montre le prix modifié ET le prix catalogue
+                'custom' => $item->isCustom(), 'taxable' => $item->isTaxable(),
+                'catalogUnitPrice' => $item->getCatalogUnitPrice() !== null ? $dollars($item->getCatalogUnitPrice()) : null,
+                'priceReason' => $item->hasPriceOverride() ? ['code' => $item->getPriceReasonCode(), 'text' => $item->getPriceReasonText()] : null,
             ];
         }
         $cashier = $order->getUserId();

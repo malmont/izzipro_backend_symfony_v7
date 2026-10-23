@@ -25,6 +25,7 @@ use App\Services\PosAuditService\PosAuditService;
 use App\Services\PosAuditService\PosReceiptService;
 use App\Services\PosDiscountService\PosDiscountCalculator;
 use App\Services\PosDiscountService\PosDiscountService;
+use App\Services\PosLineService\PosLineService;
 use App\Services\TenantEntityManagerProvider;
 use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase;
 use App\UseCase\OrderUseCase\PaymentHandlerUseCase;
@@ -39,7 +40,7 @@ use App\Dto\CartQuoteInputDto;
  */
 class PosOfflineSyncService
 {
-    public const FORCEABLE = ['PRICE_DRIFT_EXCEEDED', 'PACK_EXPIRED', 'OFFLINE_TOO_OLD'];
+    public const FORCEABLE = ['PRICE_DRIFT_EXCEEDED', 'PACK_EXPIRED', 'OFFLINE_TOO_OLD', 'CUSTOM_ITEM_LIMIT_EXCEEDED', 'PRICE_OVERRIDE_LIMIT_EXCEEDED'];
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
@@ -56,6 +57,7 @@ class PosOfflineSyncService
         private readonly PosAuditService $audit,
         private readonly PosApprovalService $approvals,
         private readonly PosDiscountService $discounts,
+        private readonly PosLineService $posLines, // article libre et prix manuel (F7)
     ) {
     }
 
@@ -205,9 +207,23 @@ class PosOfflineSyncService
         $snapshot = $pack->getSnapshot();
         $lines = [];
         $variants = [];
+        $lineSettings = $this->posLines->settings(); // article libre et prix manuel (F7) : permis hors ligne si activés, plafond sans validation
         foreach ($items as $i => $item) {
-            $variant = is_numeric($item['productVariantId'] ?? null) ? $em->find(ProductVariant::class, (int) $item['productVariantId']) : null;
             $qty = (int) ($item['quantity'] ?? 0);
+            $lineErrors = [];
+            if (is_array($item['custom'] ?? null)) { // article libre : prix saisi par la tablette, taxable ou non, sans variante ni stock
+                if (!$lineSettings['customItems']['enabled']) {
+                    throw new CashRegisterException('OFFLINE_SALE_INVALID', "items[$i] : l'article libre est désactivé sur ce site", 422, [['path' => "items[$i].custom", 'message' => 'article libre désactivé']]);
+                }
+                $custom = $qty > 0 ? PosLineService::customLine($item['custom'], "items[$i]", $lineErrors) : null;
+                if ($custom === null) {
+                    throw new CashRegisterException('OFFLINE_SALE_INVALID', "items[$i] : article libre invalide", 422, $lineErrors ?: [['path' => "items[$i].quantity", 'message' => 'quantité invalide']]);
+                }
+                $lines[] = ['unitPrice' => $custom['unitPrice'], 'quantity' => $qty, 'discounts' => is_array($item['discounts'] ?? null) ? $item['discounts'] : [], 'custom' => ['label' => $custom['custom']['label'], 'unitPrice' => $custom['unitPrice'], 'taxable' => $custom['custom']['taxable']]];
+                $variants[] = null;
+                continue;
+            }
+            $variant = is_numeric($item['productVariantId'] ?? null) ? $em->find(ProductVariant::class, (int) $item['productVariantId']) : null;
             if (!$variant || $qty <= 0 || !isset($snapshot['prices'][$variant->getId()])) {
                 throw new CashRegisterException('OFFLINE_SALE_INVALID', "items[$i] : variante inconnue du pack ou quantité invalide", 422, [['path' => "items[$i]", 'message' => 'variante inconnue du pack']]);
             }
@@ -216,9 +232,22 @@ class PosOfflineSyncService
             if (!$price['variantPrice'] && $price['special'] !== null && ($price['from'] === null || $soldAtCorrected >= new \DateTimeImmutable($price['from'])) && ($price['to'] === null || $soldAtCorrected <= new \DateTimeImmutable($price['to']))) {
                 $unit = $price['special'];
             }
-            $lines[] = ['unitPrice' => $unit, 'quantity' => $qty, 'discounts' => is_array($item['discounts'] ?? null) ? $item['discounts'] : []];
+            $line = ['unitPrice' => $unit, 'quantity' => $qty, 'discounts' => is_array($item['discounts'] ?? null) ? $item['discounts'] : []];
+            if (is_array($item['priceOverride'] ?? null)) { // prix manuel : remplace le prix du pack, prix du pack gardé comme prix catalogue
+                if (!$lineSettings['priceOverride']['enabled']) {
+                    throw new CashRegisterException('OFFLINE_SALE_INVALID', "items[$i] : le prix manuel est désactivé sur ce site", 422, [['path' => "items[$i].priceOverride", 'message' => 'prix manuel désactivé']]);
+                }
+                $override = PosLineService::priceOverride($item['priceOverride'], $unit, $qty, "items[$i]", $lineErrors);
+                if ($override === null) {
+                    throw new CashRegisterException('OFFLINE_SALE_INVALID', "items[$i] : prix manuel invalide", 422, $lineErrors);
+                }
+                $line['priceOverride'] = $override;
+                $line['catalogUnitPrice'] = $unit;
+            }
+            $lines[] = $line;
             $variants[] = $variant;
         }
+        $this->posLines->check(array_map(fn ($l) => array_intersect_key($l, ['custom' => 1, 'priceOverride' => 1]), $lines)); // motifs du prix manuel
         $ticketDiscount = is_array($sale['ticketDiscount'] ?? null) && $sale['ticketDiscount'] !== [] ? $sale['ticketDiscount'] : null;
         $this->discounts->check(array_map(fn ($l) => ['discounts' => $l['discounts']], $lines), $ticketDiscount);
         $expected = PosOfflineCalculator::compute($lines, $ticketDiscount, $snapshot['taxes'], (int) $snapshot['step'], $cashPaid);
@@ -242,7 +271,8 @@ class PosOfflineSyncService
         // Écart avec le prix courant (information)
         $currentDrift = null;
         try {
-            $current = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => array_map(fn ($l, $v) => ['productVariantId' => $v->getId(), 'quantity' => $l['quantity'], 'discounts' => $l['discounts']], $lines, $variants),
+            $current = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => array_map(fn ($l, $v) => ($v !== null ? ['productVariantId' => $v->getId()] : ['custom' => $l['custom']]) + ['quantity' => $l['quantity'], 'discounts' => $l['discounts']]
+                + (isset($l['priceOverride']) ? ['priceOverride' => ['unitPrice' => $l['priceOverride']['unitPrice']]] : []), $lines, $variants),
                 'shippingAddress' => $this->taxAddress->forStore(), 'ticketDiscount' => $ticketDiscount], true));
             $currentDrift = $declaredTotal - (int) $current['total'];
         } catch (\Throwable) {
@@ -251,14 +281,25 @@ class PosOfflineSyncService
         $forced = null;
         $packExpired = $soldAtCorrected > $pack->getValidUntil();
         $tooOld = $soldAtCorrected < $now->modify('-' . $settings['maxOfflineHours'] . ' hours');
-        if (!$within || $packExpired || $tooOld) {
-            $code = !$within ? 'PRICE_DRIFT_EXCEEDED' : ($packExpired ? 'PACK_EXPIRED' : 'OFFLINE_TOO_OLD');
+        // Article libre et prix manuel (F7) : au-delà du montant maximal sans validation → refus forçable (aucune validation possible hors ligne)
+        $customTotal = (int) array_sum(array_map(fn ($l, $e) => isset($l['custom']) ? (int) $e['net'] : 0, $lines, $expected['lines']));
+        $reduction = (int) array_sum(array_map(fn ($l) => isset($l['priceOverride']) ? max(0, (int) $l['priceOverride']['difference']) : 0, $lines));
+        $capCode = match (true) {
+            $customTotal > 0 && !PosApprovalService::isManager($seller) && PosLineService::beyond($customTotal, $lineSettings['customItems']['maxAmount']) => 'CUSTOM_ITEM_LIMIT_EXCEEDED',
+            $reduction > 0 && !PosApprovalService::isManager($seller) && PosLineService::beyond($reduction, $lineSettings['priceOverride']['maxAmount']) => 'PRICE_OVERRIDE_LIMIT_EXCEEDED',
+            default => null,
+        };
+        if (!$within || $packExpired || $tooOld || $capCode !== null) {
+            $code = !$within ? 'PRICE_DRIFT_EXCEEDED' : ($packExpired ? 'PACK_EXPIRED' : ($tooOld ? 'OFFLINE_TOO_OLD' : $capCode));
             if ($forceToken === null) {
                 throw new CashRegisterException($code, match ($code) {
                     'PRICE_DRIFT_EXCEEDED' => 'Écart entre le total perçu et le recalcul au pack déclaré au-delà de la tolérance',
                     'PACK_EXPIRED' => 'Vente datée après la fin de validité du pack déclaré',
+                    'CUSTOM_ITEM_LIMIT_EXCEEDED' => 'Articles libres au-delà du montant maximal sans validation',
+                    'PRICE_OVERRIDE_LIMIT_EXCEEDED' => 'Baisse de prix manuelle au-delà du maximum sans validation',
                     default => 'Vente trop ancienne pour la durée hors ligne autorisée',
-                }, 409, [], ['drift' => $driftAmount, 'tolerance' => $settings['priceTolerance'], 'expected' => $expected['total'], 'declared' => $declaredTotal, 'taxes' => $taxDrift, 'packValidUntil' => $pack->getValidUntil()->format(\DateTimeInterface::ATOM)]);
+                }, 409, [], ['drift' => $driftAmount, 'tolerance' => $settings['priceTolerance'], 'expected' => $expected['total'], 'declared' => $declaredTotal, 'taxes' => $taxDrift, 'packValidUntil' => $pack->getValidUntil()->format(\DateTimeInterface::ATOM),
+                    'customItemsTotal' => $customTotal, 'customItemsMax' => $lineSettings['customItems']['maxAmount'], 'priceOverrideReduction' => $reduction, 'priceOverrideMax' => $lineSettings['priceOverride']['maxAmount']]);
             }
             // Acceptation forcée par un responsable (C3) : jeton par vente, contexte {terminalId, counter, amount}
             preg_match('/^P-(\d+)-(\d+)$/', $sale['provisionalNumber'], $pn);
@@ -277,10 +318,25 @@ class PosOfflineSyncService
         $stockShortfall = [];
         foreach ($lines as $i => $line) {
             $variant = $variants[$i];
-            $item = $this->orderItems->createOrderItem($order, $variant, $line['quantity'], (float) $line['unitPrice']);
             $computed = $expected['lines'][$i];
+            if ($variant === null) { // article libre (F7) : ligne sans variante, aucun stock
+                $item = (new \App\Entity\OrderItems())->setOrderAssociated($order)->setQuantity($line['quantity'])->setUnitPrice((float) $line['unitPrice'])->setTotalPrice((float) $computed['net'])
+                    ->setCustomLabel($line['custom']['label'])->setTaxable($line['custom']['taxable']);
+                $order->addOrderItem($item);
+                if ($computed['discountAmount'] > 0) {
+                    $applied = PosDiscountCalculator::apply([['kind' => 'sale', 'unitPrice' => $line['unitPrice'], 'quantity' => $line['quantity'], 'total' => $line['unitPrice'] * $line['quantity']]], [['discounts' => $line['discounts']]], null);
+                    $item->setDiscounts($applied['lines'][0]['discounts'])->setDiscountAmount($computed['discountAmount']);
+                }
+                $em->persist($item);
+                continue;
+            }
+            $unitPrice = isset($line['priceOverride']) ? (int) $line['priceOverride']['unitPrice'] : (int) $line['unitPrice'];
+            $item = $this->orderItems->createOrderItem($order, $variant, $line['quantity'], (float) $unitPrice);
+            if (isset($line['priceOverride'])) { // prix manuel (F7) : prix du pack gardé comme prix catalogue, motif
+                $item->setCatalogUnitPrice((int) $line['catalogUnitPrice'])->setPriceReasonCode($line['priceOverride']['reasonCode'])->setPriceReasonText($line['priceOverride']['reasonText']);
+            }
             if ($computed['discountAmount'] > 0) {
-                $applied = PosDiscountCalculator::apply([['kind' => 'sale', 'unitPrice' => $line['unitPrice'], 'quantity' => $line['quantity'], 'total' => $line['unitPrice'] * $line['quantity']]], [['discounts' => $line['discounts']]], null);
+                $applied = PosDiscountCalculator::apply([['kind' => 'sale', 'unitPrice' => $unitPrice, 'quantity' => $line['quantity'], 'total' => $unitPrice * $line['quantity']]], [['discounts' => $line['discounts']]], null);
                 $item->setDiscounts($applied['lines'][0]['discounts'])->setDiscountAmount($computed['discountAmount'])->setTotalPrice((float) $computed['net']);
             }
             $em->persist($item);
@@ -321,9 +377,19 @@ class PosOfflineSyncService
         $this->audit->record(PosAuditService::SALE, [
             'kind' => 'sale', 'reference' => $order->getReference(), 'receiptKind' => $receipt->getKind(), 'receiptNumber' => $receipt->getNumber(),
             'subTotal' => $declaredSubtotal, 'totalTax' => $declaredTaxTotal, 'totalAmount' => $declaredTotal, 'cashRounding' => $cashRounding, 'discountTotal' => $expected['discountTotal'],
-            'payments' => [['type' => 2, 'amount' => $declaredCash]], 'items' => array_map(fn ($l, $v) => ['productVariantId' => $v->getId(), 'quantity' => $l['quantity'], 'unitPrice' => $l['unitPrice']], $lines, $variants),
+            'payments' => [['type' => 2, 'amount' => $declaredCash]], 'items' => array_map(fn ($l, $v) => ['productVariantId' => $v?->getId(), 'quantity' => $l['quantity'], 'unitPrice' => isset($l['priceOverride']) ? $l['priceOverride']['unitPrice'] : $l['unitPrice']] + (isset($l['custom']) ? ['custom' => $l['custom']] : []), $lines, $variants),
             'offline' => $offline, 'syncedBy' => ['id' => $syncedBy->getId(), 'name' => trim($syncedBy->getFirstname() . ' ' . $syncedBy->getLastname())],
-        ], $caisse, null, 'order', $order->getId(), $seller);
+        ] + ($customTotal > 0 ? ['customItemsTotal' => $customTotal] : []), $caisse, null, 'order', $order->getId(), $seller);
+        foreach ($order->getOrderItems() as $i) { // prix manuels (F7) : une entrée PRICE_CHANGED par ligne, comme en ligne
+            if ($i->hasPriceOverride()) {
+                $this->audit->record(PosAuditService::PRICE_CHANGED, [
+                    'reference' => $order->getReference(), 'receiptNumber' => $receipt->getNumber(), 'orderItemId' => $i->getId(), 'productVariantId' => $i->getProductVariant()?->getId(),
+                    'name' => $i->displayName(), 'quantity' => $i->getQuantity(), 'before' => $i->getCatalogUnitPrice(), 'after' => (int) round((float) $i->getUnitPrice()),
+                    'difference' => ($i->getCatalogUnitPrice() - (int) round((float) $i->getUnitPrice())) * $i->getQuantity(), 'reason' => ['code' => $i->getPriceReasonCode(), 'text' => $i->getPriceReasonText()],
+                    'offline' => ['provisionalNumber' => $sale['provisionalNumber']], 'approvedBy' => $forced['approvedBy'] ?? null,
+                ], $caisse, null, 'order', $order->getId(), $seller);
+            }
+        }
 
         return ['provisionalNumber' => $sale['provisionalNumber'], 'idempotencyKey' => $key, 'orderId' => $order->getId(), 'cashRegisterId' => $register->getId(), 'packVersion' => $packVersion,
             'receiptNumber' => $receipt->getNumber(), 'receiptReference' => $register->receiptReference($receipt->getNumber()), 'barcode' => sprintf('IZ-T-%d-%d', $register->getId(), $receipt->getNumber()),

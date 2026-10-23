@@ -13,7 +13,7 @@ class OrderItemDTO
     public int $quantity;
     public float $unitPrice;
     public float $totalPrice;
-    public int $productId;
+    public int $productId = 0; // 0 pour un article libre de caisse (F7) : même structure, aucune clé retirée
     public ?int $productVariantId = null;
     public string $productVariantName;
     
@@ -36,6 +36,16 @@ class OrderItemDTO
         $this->totalPrice = $orderItem->getTotalPrice();
 
         $variant = $orderItem->getProductVariant();
+        if ($variant === null) {
+            // Article libre de caisse (F7, 26/10/2026) : ligne sans variante ; le libellé tient lieu de nom de produit, les champs
+            // de variante déjà nullables restent null, options vides, image null : les lecteurs (admin, MAUI) gardent la même structure
+            $this->productVariantName = (string) $orderItem->getCustomLabel();
+            $this->productSaleUnit = $orderItem->getSaleUnit();
+            $this->productImage = null;
+            $this->customizationId = null;
+
+            return;
+        }
         $product = $variant->getProduct();
         
         $this->productId = $product->getId();

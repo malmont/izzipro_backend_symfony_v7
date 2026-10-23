@@ -296,6 +296,26 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => false])]
     private bool $posOfflineEnabled = false;
 
+    // Article libre et prix manuel (F7, 26/10/2026) : désactivés par défaut ; montant maximal sans validation d'un responsable
+    // (cents, null = jamais de validation, 0 = toujours) ; motif du prix manuel obligatoire, motifs (un par ligne)
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posCustomItemEnabled = false;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $posCustomItemMaxAmount = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posPriceOverrideEnabled = false;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $posPriceOverrideMaxAmount = null;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posPriceOverrideReasonRequired = true;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $posPriceOverrideReasons = null;
+
     #[ORM\Column(options: ['default' => 24])]
     private int $posOfflineMaxHours = 24;
 
@@ -782,6 +802,7 @@ class Entreprise implements TranslatableInterface
     public function setPosCashAlertThreshold(?int $cents): static { $this->posCashAlertThreshold = $cents !== null && $cents > 0 ? $cents : null; return $this; }
     public function isPosTerminalHeaderRequired(): bool { return $this->posTerminalHeaderRequired; }
 
+    public const PRICE_OVERRIDE_REASONS_DEFAULT = ['Article abîmé', 'Prix concurrent', 'Prix négocié', 'Erreur d\'étiquette', 'Autre'];
     public const RETURN_REASONS_DEFAULT = ['Taille ou modèle', 'Défectueux', 'Ne convient pas', 'Erreur de caisse', 'Autre'];
     public const DISCOUNT_REASONS_DEFAULT = ['Article abîmé', 'Fidélité', 'Prix affiché', 'Geste commercial', 'Autre'];
     public function isPosOfflineEnabled(): bool { return $this->posOfflineEnabled; }
@@ -834,6 +855,22 @@ class Entreprise implements TranslatableInterface
     public function setPosReturnReasons(?string $text): static { $t = $text !== null ? trim(strip_tags($text)) : ''; $this->posReturnReasons = $t === '' ? null : mb_substr($t, 0, 2000); return $this; }
     /** @return list<array{code: string, label: string}> motifs du site (liste par défaut si vide) */
     public function returnReasons(): array { return self::reasonList($this->posReturnReasons, self::RETURN_REASONS_DEFAULT); }
+
+    // Article libre et prix manuel (F7, 26/10/2026)
+    public function isPosCustomItemEnabled(): bool { return $this->posCustomItemEnabled; }
+    public function setPosCustomItemEnabled(bool $v): static { $this->posCustomItemEnabled = $v; return $this; }
+    public function getPosCustomItemMaxAmount(): ?int { return $this->posCustomItemMaxAmount; }
+    public function setPosCustomItemMaxAmount(?int $c): static { $this->posCustomItemMaxAmount = $c !== null ? max(0, $c) : null; return $this; }
+    public function isPosPriceOverrideEnabled(): bool { return $this->posPriceOverrideEnabled; }
+    public function setPosPriceOverrideEnabled(bool $v): static { $this->posPriceOverrideEnabled = $v; return $this; }
+    public function getPosPriceOverrideMaxAmount(): ?int { return $this->posPriceOverrideMaxAmount; }
+    public function setPosPriceOverrideMaxAmount(?int $c): static { $this->posPriceOverrideMaxAmount = $c !== null ? max(0, $c) : null; return $this; }
+    public function isPosPriceOverrideReasonRequired(): bool { return $this->posPriceOverrideReasonRequired; }
+    public function setPosPriceOverrideReasonRequired(bool $v): static { $this->posPriceOverrideReasonRequired = $v; return $this; }
+    public function getPosPriceOverrideReasons(): ?string { return $this->posPriceOverrideReasons; }
+    public function setPosPriceOverrideReasons(?string $text): static { $t = $text !== null ? trim(strip_tags($text)) : ''; $this->posPriceOverrideReasons = $t === '' ? null : mb_substr($t, 0, 2000); return $this; }
+    /** @return list<array{code: string, label: string}> motifs de prix manuel du site (liste par défaut si vide) */
+    public function priceOverrideReasons(): array { return self::reasonList($this->posPriceOverrideReasons, self::PRICE_OVERRIDE_REASONS_DEFAULT); }
 
     /** @return list<array{code: string, label: string}> motifs d'un réglage (un par ligne), liste par défaut si vide */
     public static function reasonList(?string $text, array $defaults): array

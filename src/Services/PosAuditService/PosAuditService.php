@@ -33,7 +33,7 @@ class PosAuditService
     public const CASH_REGISTER_CREATED = 'CASH_REGISTER_CREATED';
     public const CASH_REGISTER_UPDATED = 'CASH_REGISTER_UPDATED';
     public const DISCOUNT_APPLIED = 'DISCOUNT_APPLIED'; // réservé (chantier F1)
-    public const PRICE_CHANGED = 'PRICE_CHANGED';       // réservé
+    public const PRICE_CHANGED = 'PRICE_CHANGED';       // prix manuel sur une ligne de vente (F7, 26/10/2026) : avant / après, motif
     // PIN et validations (C3, 20/10/2026)
     public const PIN_SET = 'PIN_SET';
     public const PIN_FAILED = 'PIN_FAILED';
@@ -56,7 +56,7 @@ class PosAuditService
     public const RECEIPT_LINK_REVOKED = 'RECEIPT_LINK_REVOKED';
     public const OFFLINE_SYNC = 'OFFLINE_SYNC'; // lot de ventes hors ligne synchronisé (C5 partie 2, 25/10/2026)
     /** Entrées d'une action qui peut avoir été validée par un responsable : elles portent data.approvedBy */
-    private const APPROVABLE = [self::REFUND, self::CASH_WITHDRAWAL, self::FUND_WITHDRAWAL, self::DRAWER_OPENED, self::SESSION_CLOSED, self::DISCOUNT_APPLIED];
+    private const APPROVABLE = [self::REFUND, self::CASH_WITHDRAWAL, self::FUND_WITHDRAWAL, self::DRAWER_OPENED, self::SESSION_CLOSED, self::DISCOUNT_APPLIED, self::PRICE_CHANGED];
 
     public const TYPES = [self::LOGIN, self::LOGIN_FAILED, self::LOGOUT, self::SESSION_OPENED, self::SESSION_CLOSED, self::CASH_DEPOSIT,
         self::CASH_WITHDRAWAL, self::FUND_DEPOSIT, self::FUND_WITHDRAWAL, self::SALE, self::REFUND, self::Z_REPORT_CREATED, self::X_REPORT_VIEWED,

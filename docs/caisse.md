@@ -80,6 +80,8 @@ Pas de `DELETE` : un poste se désactive.
 
 ## Vente en caisse : `POST /api/order/create-multi-payment`
 
+> Ajouts P2-a (26/10/2026) : `items[].custom` (article libre) et `items[].priceOverride` (prix manuel), voir « Article libre et prix manuel » ; `typeOrder: 2` soumis au réglage « retour sans ticket ».
+
 Route distincte du tunnel web (`/api/order/create`, `create-guest`, webhook Stripe), réservée à `ROLE_USER_POS` et
 `ROLE_ADMIN`. Corps :
 
@@ -785,6 +787,99 @@ Code : `Services/PosOfflineService/` (`PosOfflineCalculator`, `PosOfflinePackSer
 sans `Idempotency-Key`) → `{returnAmount, sale {subtotal, grossSubtotal, discounts, taxes, total, cashTotal}, creditApplied,
 amountDue, cashAmountDue (arrondi des espèces), refundDue, cashRefundDue}` : exactement le calcul de `POST /api/pos/exchanges`,
 sans écriture ; les paiements de l'échange doivent couvrir `amountDue` (`cashAmountDue` en espèces). Mêmes erreurs de validation.
+
+## Article libre et prix manuel (lot P2-a, F7, 26/10/2026)
+
+Chemins de caisse seulement (`POST /api/pos/quote`, vente `create-multi-payment` source 2, échange et son devis, retours F2,
+paiement terminal C4 via le devis, hors ligne C5-2). Le web (`/api/cart/quote`, `create-intent`, `order/create`) ignore ces
+clés : réponses inchangées. Désactivés par défaut (réglages par site). Code : `Services/PosLineService/PosLineService`.
+
+### Article libre
+
+Vendre un article absent du catalogue (« Divers », retouche, service) : `items[].custom {label (≤ 120), unitPrice (cents),
+taxable?: true}` **sans** `productVariantId`. Modèle : **ligne de commande sans variante** (`order_items.product_variant_id`
+null, `custom_label`, `taxable`) ; aucun mouvement de stock, ni à la vente ni au retour ; aucun produit « Divers » créé.
+`taxable: false` (exonéré / détaxé, p. ex. produits de base au Québec) : la ligne est exclue de l'assiette (table) ou envoyée
+avec le code Stripe « non taxable ». Les remises F1 s'appliquent aussi aux lignes libres.
+
+Lecteurs des listes de commandes (admin, MAUI, `GET /api/orders`) : une ligne libre garde **exactement** la structure d'une
+ligne normale : `productId: 0`, `productVariantId: null`, `productVariantName` = libellé, `productVariantColor/Size/Image:
+null`, `options: []`. Statistiques : les totaux de commande comptent la ligne, les classements par produit l'ignorent.
+
+### Prix manuel
+
+Remplacer le prix d'un article du catalogue sur une ligne : `items[].priceOverride {unitPrice (cents), reasonCode?,
+reasonText?}` avec `productVariantId`. Distinct d'une remise F1 (qui s'applique après, sur le prix manuel) : la ligne garde
+`catalogUnitPrice` (prix catalogue, supplément de personnalisation compris) et le ticket montre les deux. Base :
+`order_items.catalog_unit_price` (null = prix catalogue appliqué, comme avant), `price_reason_code`, `price_reason_text`.
+Une **hausse** de prix est journalisée mais jamais soumise à validation.
+
+### Devis, ticket, retours, rapports (ajouts facultatifs)
+
+- Devis (`/api/pos/quote`, échange, `exchanges/quote`) : `lines[].custom {label, taxable}`, `lines[].catalogUnitPrice`,
+  `lines[].priceOverride {unitPrice, reasonCode, reasonText, difference}` (`difference` = (catalogue − manuel) × quantité,
+  positive pour une baisse) ; résumés **`customItems {count, total}`** et **`priceOverrides {count, catalogTotal, total,
+  difference, reduction}`** (toujours présents sur le devis de caisse ; sur les devis partagés, seulement si la vente en contient).
+- Ticket (vente, réimpression, lien public) : `lines[].name` = libellé pour un article libre, `custom`, `taxable`,
+  `catalogUnitPrice` (dollars, null sinon), `priceReason {code, text}`.
+- Retours F2 : `lookup.lines[].custom`, `lookup.lines[].catalogUnitPrice` ; retour **au prix payé** (prix manuel ou prix
+  saisi) ; un article libre n'est jamais remis en stock (`restock` sans effet) ; une ligne libre non taxable n'a aucune part
+  de taxe (les lignes taxables se partagent les taxes de la vente).
+- Rapports X et Z : **`customItems {count, total}`** (lignes, total net) et **`priceOverrides {count, catalogTotal, total,
+  difference}`**.
+- Journal : **`PRICE_CHANGED`** par ligne {reference, receiptNumber, orderItemId, productVariantId, name, quantity, before, after,
+  difference, reason {code, text}, approvedBy?} ; `SALE.data.customItems [{label, quantity, unitPrice, totalPrice, taxable}]`,
+  `customItemsTotal`, `approvedBy` si validation.
+
+### Droits, validation (C3) et réglages
+
+| Réglage (fiche Entreprise, panneau « Article libre et prix manuel (caisse) ») | Défaut | Clé `GET /api/pos/settings` |
+|---|---|---|
+| Article libre autorisé | **non** | `customItems.enabled` |
+| Article libre : montant maximal par vente sans validation (cents) | vide (jamais) | `customItems.maxAmount` (null = jamais, 0 = toujours) |
+| Prix manuel autorisé | **non** | `priceOverride.enabled` |
+| Prix manuel : baisse maximale par vente sans validation (cents) | vide (jamais) | `priceOverride.maxAmount` |
+| Prix manuel : motif obligatoire | oui | `priceOverride.reasonRequired` |
+| Motifs de prix manuel (un par ligne) | Article abîmé, Prix concurrent, Prix négocié, Erreur d'étiquette, Autre | `priceOverride.reasons [{code, label}]` |
+
+`settings.approvals.customItem` et `settings.approvals.priceOverride` : `{required, threshold}`. Erreurs : 409
+`CUSTOM_ITEM_NOT_ALLOWED` / `PRICE_OVERRIDE_NOT_ALLOWED` (désactivé, ou hors caisse), 422 `PRICE_OVERRIDE_REASON_REQUIRED`,
+`PRICE_OVERRIDE_REASON_INVALID {reasonCode, reasons}`, `QUOTE_INVALID` (libellé, prix, `taxable` invalides).
+
+Au-delà du montant maximal, pour un caissier : 403 `APPROVAL_REQUIRED` action **`custom_item`** contexte `{amount}` (total net
+des articles libres de la vente) ou **`price_override`** contexte `{amount}` (somme des baisses). Responsable et
+administrateur : jamais de validation.
+
+**Validation groupée (P2-a).** Quand une vente cumule plusieurs actions soumises à validation (remise F1, article libre, prix
+manuel), le serveur les demande **en une fois** : 403 `APPROVAL_REQUIRED {action, context, actions: [{action, context}, …]}`
+(`action`/`context` = la première, compatibilité C3). `POST /api/pos/approvals {actions: [{action, context}, …], managerId,
+pin}` renvoie **un** jeton couvrant toutes ces actions (le responsable saisit son PIN une seule fois) ; `{action, context,
+managerId, pin}` reste accepté. Le jeton (`X-Pos-Approval`) doit couvrir chaque action demandée avec son contexte (sinon 403
+`APPROVAL_INVALID {action, actions}` : « jeton d'une autre action » ou « contexte différent », jeton non consommé) ; il est
+consommé une fois pour toute la vente. Base : `pos_approval.actions` (json, null = jeton d'une seule action).
+
+### Hors ligne (C5 partie 2)
+
+Permis hors ligne quand le réglage est activé, dans la limite du montant maximal (aucune validation possible hors ligne) ;
+au-delà : vente refusée **forçable** (`CUSTOM_ITEM_LIMIT_EXCEEDED`, `PRICE_OVERRIDE_LIMIT_EXCEEDED`, contexte
+`customItemsTotal`, `customItemsMax`, `priceOverrideReduction`, `priceOverrideMax`) par `offline_force` ; désactivé sur le
+site : `OFFLINE_SALE_INVALID` non forçable. Le pack porte `settings.customItems` et `settings.priceOverride`. Vente
+synchronisée : `items[].custom {label, unitPrice, taxable}` (sans `productVariantId`) et `items[].priceOverride {unitPrice,
+reasonCode?, reasonText?}` ; recalcul au pack déclaré avec le prix saisi ou le prix manuel (le prix du pack devient le prix
+catalogue), `PRICE_CHANGED` journalisé. Règle « pos-offline-v1 » étendue de façon additive : taxes sur `taxableSubtotal`
+(= sous-total sans ligne libre, résultats des cas existants inchangés) ; trois cas ajoutés au jeu partagé.
+
+## Retour libre et réglage « retour sans ticket » (lot P2-a, point C, 26/10/2026)
+
+`POST /api/order/create-multi-payment` avec `typeOrder: 2` (retour libre, ancien parcours du POS) et `orderSource: 2` est soumis
+à `settings.returns.withoutReceipt` (défaut non) : 409 **`RETURN_WITHOUT_RECEIPT_FORBIDDEN`** avant toute écriture. Les
+autres sources (e-commerce, application mobile) ne changent pas. Le parcours à jour est le retour F2 sur la vente d'origine.
+
+## Statistiques de paiement : répartition journalière (lot P2-a, point B, 26/10/2026)
+
+`GET /api/payments/statistics/{source}` : `current_week.*.daily` cumule désormais **par jour** (lundi 00:00:00 → dimanche
+23:59:59). Avant : regroupement par horodatage exact (deux paiements du même jour n'en comptaient qu'un) et semaine commençant
+le lundi à l'heure courante. Changement visible (administration, application MAUI), voulu ; les autres statistiques ne changent pas.
 
 ## Mécanique interne
 

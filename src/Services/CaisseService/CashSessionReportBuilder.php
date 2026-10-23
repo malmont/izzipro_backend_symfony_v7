@@ -121,6 +121,8 @@ class CashSessionReportBuilder
             'returns' => $em->getRepository(\App\Entity\PosReturn::class)->totalsForSession((int) $session->getId()),
             // Ventes hors ligne synchronisées (C5 partie 2, 25/10/2026) : ajout
             'offline' => $this->offline($saleOrders),
+            'customItems' => $this->customItems($saleOrders), // articles libres (F7, 26/10/2026)
+            'priceOverrides' => $this->priceOverrides($saleOrders), // prix modifiés (F7)
         ];
     }
 
@@ -138,6 +140,41 @@ class CashSessionReportBuilder
             $out['priceDrift'] += abs($sale->getPriceDrift());
             $out['stockShortfalls'] += $sale->getStockShortfall();
             $out['lateEntries'] += $sale->isLateEntry() ? 1 : 0;
+        }
+
+        return $out;
+    }
+
+    /** @return array{count: int, total: int} lignes d'articles libres et leur total net (F7) */
+    private function customItems(array $saleOrders): array
+    {
+        $count = $total = 0;
+        foreach ($saleOrders as $order) {
+            foreach ($order->getOrderItems() as $item) {
+                if ($item->isCustom()) {
+                    $count++;
+                    $total += (int) round((float) $item->getTotalPrice());
+                }
+            }
+        }
+
+        return ['count' => $count, 'total' => $total];
+    }
+
+    /** @return array{count: int, catalogTotal: int, total: int, difference: int} lignes à prix manuel : prix catalogue, prix appliqué (brut × quantité), écart (F7) */
+    private function priceOverrides(array $saleOrders): array
+    {
+        $out = ['count' => 0, 'catalogTotal' => 0, 'total' => 0, 'difference' => 0];
+        foreach ($saleOrders as $order) {
+            foreach ($order->getOrderItems() as $item) {
+                if ($item->hasPriceOverride()) {
+                    $qty = (int) $item->getQuantity();
+                    $out['count']++;
+                    $out['catalogTotal'] += (int) $item->getCatalogUnitPrice() * $qty;
+                    $out['total'] += (int) round((float) $item->getUnitPrice()) * $qty;
+                    $out['difference'] += ((int) $item->getCatalogUnitPrice() - (int) round((float) $item->getUnitPrice())) * $qty;
+                }
+            }
         }
 
         return $out;

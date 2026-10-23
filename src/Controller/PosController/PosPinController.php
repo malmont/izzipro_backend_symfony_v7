@@ -64,14 +64,14 @@ class PosPinController extends AbstractController
         return new JsonResponse($this->settings->settings());
     }
 
-    /** {action, managerId, pin, context} → 201 {approvalToken, expiresAt} ; jeton à rejouer dans X-Pos-Approval */
+    /** {action, managerId, pin, context} ou {actions: [{action, context}, …], managerId, pin} (jeton groupé, P2-a) → 201 {approvalToken, expiresAt} ; jeton à rejouer dans X-Pos-Approval */
     #[Route('/api/pos/approvals', name: 'pos_approvals', methods: ['POST'])]
     public function approve(Request $request): Response
     {
         return $this->guard(function () use ($request) {
             $data = $this->body($request);
 
-            return new JsonResponse($this->approvals->grant($data['action'] ?? null, $data['managerId'] ?? null, $data['pin'] ?? null, $data['context'] ?? null, $this->user()), 201);
+            return new JsonResponse($this->approvals->grant($data['action'] ?? null, $data['managerId'] ?? null, $data['pin'] ?? null, $data['context'] ?? null, $this->user(), $data['actions'] ?? null), 201);
         });
     }
 

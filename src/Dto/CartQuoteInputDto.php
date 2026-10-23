@@ -49,7 +49,7 @@ final class CartQuoteInputDto
                 $item['booking'] = $globalBooking;
             }
             if (!$allowDiscounts) {
-                unset($item['discounts']); // remises de caisse (F1) : jamais honorées hors des chemins de caisse
+                unset($item['discounts'], $item['custom'], $item['priceOverride']); // remises (F1), article libre et prix manuel (F7) : chemins de caisse seulement
             }
             $lines[] = $item;
         }

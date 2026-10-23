@@ -53,7 +53,9 @@ class CreateOrderUseCase
         private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency,
         private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments,
         private readonly \App\Services\PosAuditService\PosSettingsService $posSettings,
-        private readonly \App\Services\PosDiscountService\PosDiscountService $discounts
+        private readonly \App\Services\PosDiscountService\PosDiscountService $discounts,
+        private readonly \App\Services\PosLineService\PosLineService $posLines, // article libre et prix manuel (F7)
+        private readonly \App\Services\PosAuditService\PosApprovalService $approvals // validations groupées (P2-a)
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -90,15 +92,33 @@ class CreateOrderUseCase
             $typeOrderId = $orderDTO->getTypeOrder();
             $statusPaymentId = 2;
 
-            // Remises de caisse (F1) : vente au comptoir seulement ; structure, motifs, plafonds par rôle et validation C3 AVANT toute écriture
+            // Retour libre en caisse (create-multi-payment avec typeOrder 2, lot P2-a) : soumis au réglage « retour sans ticket » ;
+            // les autres sources (e-commerce, application mobile) sont inchangées
+            if ($orderDTO instanceof CreateOrderMultiPaymentDTO && $orderDTO->getOrderSource() === 2 && $typeOrderId !== 1 && !$this->posSettings->settings()['returns']['withoutReceipt']) {
+                throw new CashRegisterException('RETURN_WITHOUT_RECEIPT_FORBIDDEN', 'Retour sans ticket refusé sur ce site : passez par le retour sur la vente d\'origine (POST /api/pos/returns)', 409);
+            }
+            // Remises de caisse (F1), article libre et prix manuel (F7) : vente au comptoir seulement ; structure, motifs, plafonds
+            // par rôle et validation C3 AVANT toute écriture ; toutes les validations de la vente demandées en une fois (P2-a)
             $ticketDiscount = $orderDTO instanceof CreateOrderMultiPaymentDTO ? $orderDTO->getTicketDiscount() : null;
             $discountSummary = null;
-            if ($orderDTO instanceof CreateOrderMultiPaymentDTO && $orderDTO->getOrderSource() === 2 && $typeOrderId === 1
-                && \App\Services\PosDiscountService\PosDiscountCalculator::hasDiscounts($orderDTO->getItems(), $ticketDiscount)) {
-                $discountSummary = $this->discounts->quote($orderDTO->getItems(), $ticketDiscount)['discounts'];
-                $this->discounts->authorize($user, $discountSummary);
-            } elseif (\App\Services\PosDiscountService\PosDiscountCalculator::hasDiscounts($orderDTO->getItems(), $ticketDiscount)) {
+            $posQuote = null;
+            $hasDiscounts = \App\Services\PosDiscountService\PosDiscountCalculator::hasDiscounts($orderDTO->getItems(), $ticketDiscount);
+            $hasLines = \App\Services\PosLineService\PosLineService::hasLines($orderDTO->getItems());
+            if ($orderDTO instanceof CreateOrderMultiPaymentDTO && $orderDTO->getOrderSource() === 2 && $typeOrderId === 1 && ($hasDiscounts || $hasLines)) {
+                $posQuote = $this->discounts->quote($orderDTO->getItems(), $ticketDiscount);
+                $discountSummary = $hasDiscounts ? $posQuote['discounts'] : null;
+                $demands = $this->posLines->demands($user, $posQuote);
+                if ($discountSummary !== null && ($d = $this->discounts->demand($user, $discountSummary)) !== null) {
+                    array_unshift($demands, $d);
+                }
+                $this->approvals->requireAll($demands, $user);
+                if ($discountSummary !== null) {
+                    $this->discounts->checkManagerCap($user, $discountSummary);
+                }
+            } elseif ($hasDiscounts) {
                 throw new CashRegisterException('DISCOUNT_NOT_ALLOWED', 'Les remises ne s\'appliquent qu\'aux ventes au comptoir', 409);
+            } elseif ($hasLines) {
+                throw new CashRegisterException('CUSTOM_ITEM_NOT_ALLOWED', 'L\'article libre et le prix manuel ne s\'appliquent qu\'aux ventes au comptoir', 409);
             }
             $order = $this->createOrderCommandUseCase->execute($orderDTO, $user);
             if ($order instanceof JsonResponse) {
@@ -228,7 +248,20 @@ class CreateOrderUseCase
                     'payments' => array_values(array_map(fn ($p) => ['type' => $p->getPaymentMethod()?->getId(), 'amount' => (int) round((float) $p->getAmount())], $order->getPayments()->toArray())),
                     'terminalPayments' => array_map(fn ($t) => ['paymentId' => $t->getId(), 'stripePaymentIntentId' => $t->getStripePaymentIntentId(), 'amount' => $t->getAmount(), 'paymentMethodType' => $t->getPaymentMethodType(), 'cardBrand' => $t->getCardBrand(), 'last4' => $t->getLast4(), 'applicationFee' => $t->getApplicationFee()], $terminalPayments),
                     'items' => array_values(array_map(fn ($i) => ['productVariantId' => $i->getProductVariant()?->getId(), 'quantity' => $i->getQuantity(), 'totalPrice' => (int) round((float) $i->getTotalPrice())], $order->getOrderItems()->toArray())),
-                ], $caisse, null, 'order', $order->getId(), $user instanceof \App\Entity\User ? $user : null);
+                ] + ($posQuote !== null && ($posQuote['customItems']['count'] ?? 0) > 0 ? [ // articles libres (F7) : libellé, prix saisi, taxable
+                    'customItems' => array_values(array_map(fn ($i) => ['label' => $i->getCustomLabel(), 'quantity' => $i->getQuantity(), 'unitPrice' => (int) round((float) $i->getUnitPrice()), 'totalPrice' => (int) round((float) $i->getTotalPrice()), 'taxable' => $i->isTaxable()], array_filter($order->getOrderItems()->toArray(), fn ($i) => $i->isCustom()))),
+                    'customItemsTotal' => $posQuote['customItems']['total'],
+                ] + ($this->approvals->approvedBy() !== null ? ['approvedBy' => $this->approvals->approvedBy()] : []) : []), $caisse, null, 'order', $order->getId(), $user instanceof \App\Entity\User ? $user : null);
+                // Prix manuels (F7) : une entrée PRICE_CHANGED par ligne, avant / après, motif, approvedBy si validation
+                foreach ($order->getOrderItems() as $i) {
+                    if ($i->hasPriceOverride()) {
+                        $this->audit->record(\App\Services\PosAuditService\PosAuditService::PRICE_CHANGED, [
+                            'reference' => $order->getReference(), 'receiptNumber' => $receipt->getNumber(), 'orderItemId' => $i->getId(), 'productVariantId' => $i->getProductVariant()?->getId(),
+                            'name' => $i->displayName(), 'quantity' => $i->getQuantity(), 'before' => $i->getCatalogUnitPrice(), 'after' => (int) round((float) $i->getUnitPrice()),
+                            'difference' => ($i->getCatalogUnitPrice() - (int) round((float) $i->getUnitPrice())) * $i->getQuantity(), 'reason' => ['code' => $i->getPriceReasonCode(), 'text' => $i->getPriceReasonText()],
+                        ], $caisse, null, 'order', $order->getId(), $user instanceof \App\Entity\User ? $user : null);
+                    }
+                }
                 if ($discountSummary !== null && $discountSummary['total'] > 0) { // remises accordées (F1) : entrée dédiée, approvedBy si validation
                     $this->audit->record(\App\Services\PosAuditService\PosAuditService::DISCOUNT_APPLIED, [
                         'reference' => $order->getReference(), 'receiptNumber' => $receipt->getNumber(), 'gross' => $discountSummary['gross'], 'total' => $discountSummary['total'],

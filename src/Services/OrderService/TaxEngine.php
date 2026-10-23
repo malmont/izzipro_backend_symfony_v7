@@ -41,6 +41,8 @@ final class TaxEngine
     public const TAX_CODE_GOODS = 'txcd_99999999';
     public const TAX_CODE_SERVICE = 'txcd_20030000';
     public const TAX_CODE_SHIPPING = 'txcd_92010001';
+    /** Article libre non taxable (exonéré / détaxé, F7) : code Stripe « non taxable » */
+    public const TAX_CODE_NONTAXABLE = 'txcd_00000000';
     private const CACHE_TTL = 600;
 
     private const PROVINCES = [
@@ -62,7 +64,7 @@ final class TaxEngine
 
     /**
      * @param array{country?: ?string, province?: ?string, city?: ?string, postalCode?: ?string}|null $address adresse normalisée (normalizeAddress)
-     * @param list<array{amount: int, quantity: int, kind: string, reference: string}> $lines lignes (montant unitaire en cents)
+     * @param list<array{amount: int, quantity: int, kind: string, reference: string, taxable?: bool}> $lines lignes (montant unitaire en cents ; taxable false = exclue de l'assiette, F7)
      * @return array{taxes: list<array{label: string, rate: float, amount: int, jurisdiction?: string}>, total: int, status: string, provider: string, calculationId: ?string}
      */
     public function compute(?array $address, array $lines, int $shipping, string $currency): array
@@ -149,6 +151,9 @@ final class TaxEngine
     {
         $taxable = $shipping;
         foreach ($lines as $line) {
+            if (($line['taxable'] ?? true) === false) {
+                continue; // article libre exonéré / détaxé (F7)
+            }
             $taxable += $line['amount'] * $line['quantity'];
         }
         $taxes = [];
@@ -173,7 +178,7 @@ final class TaxEngine
             ],
             'line_items' => array_map(fn ($line) => [
                 'amount' => $line['amount'] * $line['quantity'], 'quantity' => $line['quantity'], 'reference' => $line['reference'],
-                'tax_code' => $line['kind'] === 'rental' ? self::TAX_CODE_SERVICE : self::TAX_CODE_GOODS, 'tax_behavior' => 'exclusive',
+                'tax_code' => ($line['taxable'] ?? true) === false ? self::TAX_CODE_NONTAXABLE : ($line['kind'] === 'rental' ? self::TAX_CODE_SERVICE : self::TAX_CODE_GOODS), 'tax_behavior' => 'exclusive',
             ], array_values($lines)),
             'expand' => ['line_items'],
         ];

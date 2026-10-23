@@ -60,6 +60,18 @@ class ProcessOrderItemsUseCase
 
         foreach ($quote['lines'] as $i => $line) {
             $itemData = $items[$i];
+            if (isset($line['custom'])) { // article libre (F7) : ligne sans variante, libellé, taxable ou non, aucun mouvement de stock
+                $orderItem = (new \App\Entity\OrderItems())->setOrderAssociated($order)->setQuantity($line['quantity'])->setUnitPrice((float) $line['unitPrice'])->setTotalPrice((float) $line['total'])
+                    ->setCustomLabel($line['custom']['label'])->setTaxable($line['custom']['taxable']);
+                $order->addOrderItem($orderItem);
+                if (!empty($line['discountAmount'])) {
+                    $orderItem->setDiscounts($line['discounts'])->setDiscountAmount((int) $line['discountAmount']);
+                }
+                $em->persist($order);
+                $em->persist($orderItem);
+                $subtotal += $orderItem->getTotalPrice();
+                continue;
+            }
             $productVariant = $this->entityRetrieverService->findOrFail(ProductVariant::class, $line['productVariantId'], 'Product variant not found');
 
             if ($line['kind'] === 'sale') {
@@ -69,6 +81,9 @@ class ProcessOrderItemsUseCase
             $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $line['quantity'], (float) $line['unitPrice']);
             if (!empty($line['discountAmount'])) { // remises de caisse (F1) : unit_price brut, total_price net
                 $orderItem->setDiscounts($line['discounts'])->setDiscountAmount((int) $line['discountAmount'])->setTotalPrice((float) $line['total']);
+            }
+            if (isset($line['priceOverride'])) { // prix manuel (F7) : prix catalogue et motif gardés sur la ligne
+                $orderItem->setCatalogUnitPrice((int) $line['catalogUnitPrice'])->setPriceReasonCode($line['priceOverride']['reasonCode'])->setPriceReasonText($line['priceOverride']['reasonText']);
             }
             if (!empty($line['customizationId'])) { // combinaison vérifiée par le devis
                 $orderItem->setCustomization($em->getRepository(\App\Entity\ProductCustomizationImage::class)->find((int) $line['customizationId']));

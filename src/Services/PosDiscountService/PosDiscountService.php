@@ -26,6 +26,7 @@ class PosDiscountService
         private readonly OrderTaxAddressResolver $taxAddress,
         private readonly CashRoundingService $rounding,
         private readonly PosApprovalService $approvals,
+        private readonly \App\Services\PosLineService\PosLineService $lines,
     ) {
     }
 
@@ -55,12 +56,15 @@ class PosDiscountService
     public function quote(array $items, ?array $ticketDiscount): array
     {
         $this->check($items, $ticketDiscount);
+        $this->lines->check($items); // article libre et prix manuel (F7) : autorisés sur le site, motifs
         try {
             $quote = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'shippingAddress' => $this->taxAddress->forStore(), 'ticketDiscount' => $ticketDiscount], true));
         } catch (CartQuoteException $e) {
             throw new CashRegisterException(str_contains($e->getMessage(), 'remise') || str_contains($e->getMessage(), 'iscount') ? 'DISCOUNT_INVALID' : 'QUOTE_INVALID', $e->getMessage(), $e->getCode() === 404 ? 404 : 422, $e->errors);
         }
         $quote['discounts'] ??= ['lines' => 0, 'ticket' => null, 'total' => 0, 'gross' => $quote['subtotal']];
+        $quote['customItems'] ??= ['count' => 0, 'total' => 0]; // (F7) toujours présents sur le devis de caisse
+        $quote['priceOverrides'] ??= ['count' => 0, 'catalogTotal' => 0, 'total' => 0, 'difference' => 0, 'reduction' => 0];
         $quote['cashTotal'] = $this->rounding->round((int) $quote['total']);
 
         return $quote;
@@ -112,25 +116,51 @@ class PosDiscountService
      */
     public function authorize(User $user, array $summary): void
     {
-        if ($summary['total'] <= 0) {
+        $demand = $this->demand($user, $summary);
+        if ($demand !== null) {
+            // Au-delà du plafond caissier : validation d'un responsable (403 APPROVAL_REQUIRED sans jeton, jeton consommé sinon)
+            $this->approvals->requireFor(PosApprovalService::DISCOUNT, $user, $demand['context'], $demand['amount']);
+        }
+        $this->checkManagerCap($user, $summary);
+    }
+
+    /** 403 DISCOUNT_EXCEEDS_LIMIT au-delà du plafond responsable (après la validation, comme en F1) ; l'administrateur n'a pas de plafond */
+    public function checkManagerCap(User $user, array $summary): void
+    {
+        if ($summary['total'] <= 0 || in_array('ROLE_ADMIN', $user->getRoles(), true) || in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true)) {
             return;
         }
+        $settings = $this->settings();
+        $percent = $summary['gross'] > 0 ? round($summary['total'] * 100 / $summary['gross'], 2) : 0.0;
+        if (!self::within($summary['total'], $percent, $settings['manager'])) {
+            throw new CashRegisterException('DISCOUNT_EXCEEDS_LIMIT', 'Remise au-delà du plafond autorisé (responsable) : seul un administrateur peut l\'accorder', 403, [],
+                ['limit' => $settings['manager'], 'amount' => $summary['total'], 'percent' => $percent]);
+        }
+    }
+
+    /**
+     * Validation à demander pour la remise (action discount, au-delà du plafond caissier), ou null. Combinée aux autres
+     * validations de la vente par PosApprovalService::requireAll (P2-a) ; checkManagerCap() ensuite.
+     *
+     * @return array{action: string, context: array, amount: int}|null
+     */
+    public function demand(User $user, array $summary): ?array
+    {
+        if ($summary['total'] <= 0) {
+            return null;
+        }
         if (in_array('ROLE_ADMIN', $user->getRoles(), true) || in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true)) {
-            return;
+            return null;
         }
         $settings = $this->settings();
         $percent = $summary['gross'] > 0 ? round($summary['total'] * 100 / $summary['gross'], 2) : 0.0;
         $scope = $summary['lines'] > 0 && $summary['ticket'] ? 'mixed' : ($summary['ticket'] ? 'ticket' : 'line');
         $context = ['amount' => $summary['total'], 'percent' => (int) round($percent * 100), 'scope' => $scope];
-        $manager = PosApprovalService::isManager($user);
-        if (!$manager && !self::within($summary['total'], $percent, $settings['cashier'])) {
-            // Au-delà du plafond caissier : validation d'un responsable (403 APPROVAL_REQUIRED sans jeton, jeton consommé sinon)
-            $this->approvals->requireFor(PosApprovalService::DISCOUNT, $user, $context, $summary['total']);
+        if (!PosApprovalService::isManager($user) && !self::within($summary['total'], $percent, $settings['cashier'])) {
+            return ['action' => PosApprovalService::DISCOUNT, 'context' => $context, 'amount' => $summary['total']];
         }
-        if (!self::within($summary['total'], $percent, $settings['manager'])) {
-            throw new CashRegisterException('DISCOUNT_EXCEEDS_LIMIT', 'Remise au-delà du plafond autorisé (responsable) : seul un administrateur peut l\'accorder', 403, [],
-                ['limit' => $settings['manager'], 'amount' => $summary['total'], 'percent' => $percent]);
-        }
+
+        return null;
     }
 
     public static function within(int $amount, float $percent, array $cap): bool

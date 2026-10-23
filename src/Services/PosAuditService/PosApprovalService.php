@@ -26,6 +26,8 @@ class PosApprovalService
     public const DISCOUNT = 'discount'; // réservé (chantier F1)
     public const RETURN = 'return'; // retour partiel ou échange (F2, 24/10/2026)
     public const OFFLINE_FORCE = 'offline_force'; // acceptation forcée d'une vente hors ligne (C5 partie 2, 25/10/2026)
+    public const CUSTOM_ITEM = 'custom_item'; // article libre au-delà du montant maximal (F7, 26/10/2026)
+    public const PRICE_OVERRIDE = 'price_override'; // prix manuel : baisse au-delà du maximum (F7, 26/10/2026)
     /** action → clés de contexte qui doivent correspondre */
     public const CONTEXT = [
         self::REFUND => ['orderId'],
@@ -36,6 +38,8 @@ class PosApprovalService
         self::DISCOUNT => ['amount', 'percent', 'scope'], // remises (F1) : montant (cents), pourcentage (centièmes de %), scope line | ticket | mixed
         self::RETURN => ['orderId', 'amount'],
         self::OFFLINE_FORCE => ['terminalId', 'counter', 'amount'],
+        self::CUSTOM_ITEM => ['amount'], // total des articles libres de la vente (cents)
+        self::PRICE_OVERRIDE => ['amount'], // somme des baisses par rapport au prix catalogue (cents)
     ];
     /** Clés de contexte textuelles (les autres sont numériques) */
     public const STRING_CONTEXT = ['scope'];
@@ -60,13 +64,30 @@ class PosApprovalService
         return $user !== null && array_intersect(self::MANAGER_ROLES, $user->getRoles()) !== [];
     }
 
-    /** @return array{approvalToken: string, expiresAt: string} */
-    public function grant(mixed $action, mixed $managerId, mixed $pin, mixed $context, User $requester): array
+    /**
+     * Jeton pour une action {action, context}, ou groupé pour plusieurs actions d'une même vente (P2-a, 26/10/2026 :
+     * actions: [{action, context}, …] ; le responsable saisit son PIN une seule fois).
+     *
+     * @return array{approvalToken: string, expiresAt: string}
+     */
+    public function grant(mixed $action, mixed $managerId, mixed $pin, mixed $context, User $requester, mixed $actions = null): array
     {
+        $group = null;
+        if (is_array($actions) && $actions !== []) {
+            $group = [];
+            foreach (array_values($actions) as $i => $one) {
+                if (!is_array($one) || !is_string($one['action'] ?? null) || !array_key_exists($one['action'], self::CONTEXT)) {
+                    throw new CashRegisterException('VALIDATION_FAILED', "actions[$i].action : " . implode(', ', array_keys(self::CONTEXT)) . ' attendue', 422, [['path' => "actions[$i].action", 'message' => 'action inconnue']]);
+                }
+                $group[] = ['action' => $one['action'], 'context' => self::normalizeContext($one['action'], $one['context'] ?? null)];
+            }
+            $action = $group[0]['action'];
+            $context = $group[0]['context'];
+        }
         if (!is_string($action) || !array_key_exists($action, self::CONTEXT)) {
             throw new CashRegisterException('VALIDATION_FAILED', 'action : ' . implode(', ', array_keys(self::CONTEXT)) . ' attendue', 422, [['path' => 'action', 'message' => 'action inconnue']]);
         }
-        $context = self::normalizeContext($action, $context);
+        $context = $group !== null ? $context : self::normalizeContext($action, $context);
         $terminal = $this->terminals->current() ?? throw new CashRegisterException('TERMINAL_REQUIRED', 'Terminal de caisse non identifié (en-tête X-Pos-Terminal)', 403);
         $em = $this->emProvider->getEntityManager();
         $manager = is_numeric($managerId) ? $em->find(User::class, (int) $managerId) : null;
@@ -76,16 +97,17 @@ class PosApprovalService
             }
             $this->pins->verify($manager, $pin, 400, ['managerId' => $manager->getId()], 'approval');
         } catch (CashRegisterException $e) {
-            $this->audit->record(PosAuditService::APPROVAL_FAILED, ['action' => $action, 'context' => $context, 'managerId' => is_numeric($managerId) ? (int) $managerId : null, 'reason' => $e->errorCode], subjectType: 'approval');
+            $this->audit->record(PosAuditService::APPROVAL_FAILED, ['action' => $action, 'context' => $context, 'actions' => $group, 'managerId' => is_numeric($managerId) ? (int) $managerId : null, 'reason' => $e->errorCode], subjectType: 'approval');
             throw $e;
         }
 
         $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
         $expiresAt = new \DateTimeImmutable('+' . self::TTL_SECONDS . ' seconds');
         $approval = new PosApproval(hash('sha256', $token), $action, (int) $manager->getId(), (int) $requester->getId(), $terminal['id'], $context, $expiresAt);
+        $approval->setActions($group !== null && count($group) > 1 ? $group : null);
         $em->persist($approval);
         $em->flush();
-        $this->audit->record(PosAuditService::APPROVAL_GRANTED, ['action' => $action, 'context' => $context, 'approver' => self::person($manager), 'expiresAt' => $expiresAt->format(\DateTimeInterface::ATOM)],
+        $this->audit->record(PosAuditService::APPROVAL_GRANTED, ['action' => $action, 'context' => $context, 'actions' => $group, 'approver' => self::person($manager), 'expiresAt' => $expiresAt->format(\DateTimeInterface::ATOM)],
             subjectType: 'approval', subjectId: $approval->getId(), user: $requester);
 
         return ['approvalToken' => $token, 'expiresAt' => $expiresAt->format(\DateTimeInterface::ATOM)];
@@ -109,36 +131,101 @@ class PosApprovalService
         if (self::isManager($actor) || !$this->settings->requiresApproval($action, $amount)) {
             return;
         }
-        // Jeton : en-tête X-Pos-Approval, ou passé par l'appelant (ventes hors ligne : un jeton par vente dans le corps)
+        $this->consume([['action' => $action, 'context' => $context]], $actor, $token, false);
+    }
+
+    /**
+     * Plusieurs actions d'une même vente (remise, article libre, prix manuel ; P2-a, 26/10/2026) : celles que le site soumet
+     * à validation sont demandées EN UNE FOIS (403 APPROVAL_REQUIRED {action, context, actions: [{action, context}, …]}) et
+     * couvertes par UN jeton (POST /api/pos/approvals avec actions: [...]). Un jeton d'une seule action reste valable
+     * quand une seule action est requise (compatibilité C3).
+     *
+     * @param list<array{action: string, context: array<string, int|string>, amount?: ?int}> $demands
+     */
+    public function requireAll(array $demands, User $actor, ?string $token = null): void
+    {
+        if (self::isManager($actor)) {
+            return;
+        }
+        $required = array_values(array_filter($demands, fn ($d) => $this->settings->requiresApproval($d['action'], $d['amount'] ?? null)));
+        if ($required === []) {
+            return;
+        }
+        $this->consume(array_map(fn ($d) => ['action' => $d['action'], 'context' => $d['context']], $required), $actor, $token, true);
+    }
+
+    /**
+     * Consomme le jeton (en-tête X-Pos-Approval, ou passé par l'appelant : ventes hors ligne, un jeton par vente dans le corps)
+     * pour les actions demandées ; un jeton déjà consommé par cette requête reste valable pour ses autres actions.
+     *
+     * @param list<array{action: string, context: array}> $wanted
+     */
+    private function consume(array $wanted, User $actor, ?string $token, bool $listActions): void
+    {
+        $first = $wanted[0];
+        $extra = $listActions ? ['actions' => $wanted] : [];
         $token ??= (string) $this->requestStack->getMainRequest()?->headers->get(self::HEADER, '');
         if ($token === '') {
-            throw new CashRegisterException('APPROVAL_REQUIRED', 'Validation d\'un responsable requise', 403, [], ['action' => $action, 'context' => $context]);
+            throw new CashRegisterException('APPROVAL_REQUIRED', 'Validation d\'un responsable requise', 403, [], ['action' => $first['action'], 'context' => $first['context']] + $extra);
         }
         $em = $this->emProvider->getEntityManager();
         /** @var ?PosApproval $approval */
         $approval = $em->getRepository(PosApproval::class)->findOneBy(['tokenHash' => hash('sha256', $token)]);
         $now = new \DateTimeImmutable();
         $terminal = $this->terminals->current();
+        $already = $approval !== null && ($this->current->consumed()['id'] ?? null) === $approval->getId();
+        $uncovered = $approval !== null ? self::uncovered($approval->getActions(), $wanted) : null;
         $reason = match (true) {
             $approval === null => 'jeton inconnu',
-            $approval->getUsedAt() !== null => 'jeton déjà utilisé',
+            $approval->getUsedAt() !== null && !$already => 'jeton déjà utilisé',
             $approval->getExpiresAt() <= $now => 'jeton expiré',
-            $approval->getAction() !== $action => 'jeton d\'une autre action',
             $approval->getRequestedById() !== $actor->getId() => 'jeton demandé par un autre utilisateur',
             $terminal === null || $approval->getTerminalId() !== $terminal['id'] => 'jeton d\'un autre terminal',
-            !self::sameContext($action, $approval->getContext(), $context) => 'contexte différent',
+            $uncovered !== null && $uncovered['why'] === 'action' => 'jeton d\'une autre action',
+            $uncovered !== null => 'contexte différent',
             default => null,
         };
         if ($reason !== null) {
-            throw new CashRegisterException('APPROVAL_INVALID', 'Validation invalide : ' . $reason, 403, [], ['action' => $action]);
+            throw new CashRegisterException('APPROVAL_INVALID', 'Validation invalide : ' . $reason, 403, [], ['action' => $uncovered['action'] ?? $first['action']] + $extra);
         }
-        $consumed = $em->getConnection()->executeStatement('UPDATE pos_approval SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?',
-            [$now->format('Y-m-d H:i:s'), $approval->getId(), $now->format('Y-m-d H:i:s')]);
-        if ($consumed !== 1) {
-            throw new CashRegisterException('APPROVAL_INVALID', 'Validation invalide : jeton déjà utilisé ou expiré', 403, [], ['action' => $action]);
+        if (!$already) {
+            $consumed = $em->getConnection()->executeStatement('UPDATE pos_approval SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?',
+                [$now->format('Y-m-d H:i:s'), $approval->getId(), $now->format('Y-m-d H:i:s')]);
+            if ($consumed !== 1) {
+                throw new CashRegisterException('APPROVAL_INVALID', 'Validation invalide : jeton déjà utilisé ou expiré', 403, [], ['action' => $first['action']] + $extra);
+            }
+            $manager = $em->find(User::class, $approval->getManagerId());
+            $this->current->set(self::person($manager) ?? ['id' => $approval->getManagerId(), 'name' => null]);
+            $this->current->setConsumed(['id' => $approval->getId(), 'actions' => $approval->getActions()]);
         }
-        $manager = $em->find(User::class, $approval->getManagerId());
-        $this->current->set(self::person($manager) ?? ['id' => $approval->getManagerId(), 'name' => null]);
+    }
+
+    /**
+     * Première action demandée que le jeton ne couvre pas : {action, why: action|context}, ou null si tout est couvert.
+     *
+     * @param list<array{action: string, context: array}> $covered actions du jeton
+     * @param list<array{action: string, context: array}> $wanted
+     */
+    private static function uncovered(array $covered, array $wanted): ?array
+    {
+        foreach ($wanted as $w) {
+            $sameAction = array_values(array_filter($covered, fn ($c) => $c['action'] === $w['action']));
+            if ($sameAction === []) {
+                return ['action' => $w['action'], 'why' => 'action'];
+            }
+            $match = false;
+            foreach ($sameAction as $c) {
+                if (self::sameContext($w['action'], $c['context'], $w['context'])) {
+                    $match = true;
+                    break;
+                }
+            }
+            if (!$match) {
+                return ['action' => $w['action'], 'why' => 'context'];
+            }
+        }
+
+        return null;
     }
 
     /** @return array<string, int> */

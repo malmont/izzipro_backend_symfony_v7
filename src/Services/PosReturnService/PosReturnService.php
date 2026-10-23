@@ -192,7 +192,8 @@ class PosReturnService
             $taxes = array_map(fn ($t) => ['label' => $t['label'], 'tax' => $t['tax'], 'amount' => self::taxForQuantity($t['amount'], $qty, $before, 1)], $this->lineTaxShare($order, $item, $itemsTotal));
             $variant = $item->getProductVariant();
             $lines[] = [
-                'orderItemId' => $item->getId(), 'productVariantId' => $variant?->getId(), 'name' => $variant?->getProduct()?->getName(),
+                'orderItemId' => $item->getId(), 'productVariantId' => $variant?->getId(), 'name' => $item->displayName(),
+                'custom' => $item->isCustom(), 'catalogUnitPrice' => $item->getCatalogUnitPrice(), // article libre et prix manuel (F7) : retour au prix payé
                 'saleUnit' => $item->getSaleUnit(), 'quantity' => $qty, 'returnedQuantity' => $returned[$item->getId()] ?? 0,
                 'returnableQuantity' => max(0, $qty - ($returned[$item->getId()] ?? 0)),
                 // unitPrice = NET payé de la prochaine unité (remises déduites, F1) ; unitGross = prix unitaire brut ; discountAmount = remises de la ligne
@@ -263,13 +264,19 @@ class PosReturnService
             $em->getReference(StatusCommande::class, self::STATUS_COMPLETED), $em->getReference(OrderType::class, self::ORDER_TYPE_RETURN));
         $returnOrder->setReturnedFrom($original);
         foreach ($lines as $line) {
-            $item = $this->orderItems->createOrderItem($returnOrder, $line['variant'], $line['quantity'], (float) $line['unitPrice']);
+            if ($line['variant'] === null) { // article libre (F7) : ligne sans variante, au prix payé, aucun stock
+                $item = (new OrderItems())->setOrderAssociated($returnOrder)->setQuantity($line['quantity'])->setUnitPrice((float) $line['unitPrice'])->setTotalPrice((float) ($line['net'] ?? $line['unitPrice'] * $line['quantity']))
+                    ->setCustomLabel($line['item']?->getCustomLabel())->setTaxable($line['item']?->isTaxable() ?? true);
+                $returnOrder->addOrderItem($item);
+            } else {
+                $item = $this->orderItems->createOrderItem($returnOrder, $line['variant'], $line['quantity'], (float) $line['unitPrice']);
+            }
             $item->setReturnedFromItem($line['item']);
             if (isset($line['net'])) {
                 $item->setTotalPrice((float) $line['net']); // net exact (cumul), le prix unitaire étant le net moyen
             }
             $em->persist($item);
-            if ($restock) {
+            if ($restock && $line['variant'] !== null) {
                 $this->stock->execute($line['variant'], $line['quantity'], true);
             }
         }
@@ -309,7 +316,7 @@ class PosReturnService
         $this->audit->record(PosAuditService::REFUND, [
             'kind' => 'return', 'returnId' => $return->getId(), 'reference' => $returnOrder->getReference(), 'originalOrderId' => $original?->getId(),
             'creditNoteNumber' => $creditNote->getNumber(), 'creditNoteReference' => $register->receiptReference($creditNote->getNumber()),
-            'lines' => array_map(fn ($l) => ['orderItemId' => $l['item']?->getId(), 'productVariantId' => $l['variant']->getId(), 'quantity' => $l['quantity'], 'unitPrice' => $l['unitPrice']], $lines),
+            'lines' => array_map(fn ($l) => ['orderItemId' => $l['item']?->getId(), 'productVariantId' => $l['variant']?->getId(), 'quantity' => $l['quantity'], 'unitPrice' => $l['unitPrice']], $lines),
             'reason' => $reason, 'restock' => $restock, 'refundMethod' => $method,
             'amount' => $total, 'creditApplied' => $creditApplied, 'cashRefund' => $cashRefund, 'cardRefund' => $cardRefund, 'cashRounding' => $cashRounding,
             'terminal' => $terminal ? ['paymentId' => $terminal->getId(), 'refundId' => $terminalRefundId, 'paymentMethodType' => $terminal->getPaymentMethodType()] : null,
@@ -327,7 +334,7 @@ class PosReturnService
         $terminal = $return->getTerminalPaymentId() ? $this->emProvider->getEntityManager()->find(PosTerminalPayment::class, $return->getTerminalPaymentId()) : null;
         $lines = [];
         foreach ($returnOrder->getOrderItems() as $item) {
-            $lines[] = ['orderItemId' => $item->getReturnedFromItem()?->getId(), 'productVariantId' => $item->getProductVariant()?->getId(), 'name' => $item->getProductVariant()?->getProduct()?->getName(),
+            $lines[] = ['orderItemId' => $item->getReturnedFromItem()?->getId(), 'productVariantId' => $item->getProductVariant()?->getId(), 'name' => $item->displayName(),
                 'quantity' => $item->getQuantity(), 'unitPrice' => (int) round((float) $item->getUnitPrice()), 'totalPrice' => (int) round((float) $item->getTotalPrice())];
         }
 
@@ -453,7 +460,8 @@ class PosReturnService
     /** Part de chaque taxe de la vente revenant à une ligne (au prorata de son total dans les articles) */
     private function lineTaxShare(Order $order, OrderItems $item, int $itemsTotal): array
     {
-        $lineTotal = (int) round((float) $item->getTotalPrice());
+        // Article libre non taxable (F7) : aucune part de taxe ; les autres lignes se partagent les taxes de la vente
+        $lineTotal = $item->isTaxable() ? (int) round((float) $item->getTotalPrice()) : 0;
         $out = [];
         foreach ($order->getOrderTaxes() as $orderTax) {
             $amount = (int) round((float) $orderTax->getAmount());
@@ -473,9 +481,10 @@ class PosReturnService
         return (int) round($lineTax * min($sold, $before + $qty) / $sold) - (int) round($lineTax * min($sold, $before) / $sold);
     }
 
+    /** Total des lignes taxables (assiette des taxes ; une ligne libre non taxable, F7, n'en fait pas partie) */
     private function itemsTotal(Order $order): int
     {
-        return (int) array_sum(array_map(fn (OrderItems $i) => (int) round((float) $i->getTotalPrice()), $order->getOrderItems()->toArray()));
+        return (int) array_sum(array_map(fn (OrderItems $i) => $i->isTaxable() ? (int) round((float) $i->getTotalPrice()) : 0, $order->getOrderItems()->toArray()));
     }
 
     /** @return array{0: int, 1: int, 2: ?PosTerminalPayment} part carte, part espèces exacte, paiement terminal à rembourser */

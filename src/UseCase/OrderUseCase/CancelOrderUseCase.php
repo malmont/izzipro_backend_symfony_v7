@@ -127,6 +127,9 @@ class CancelOrderUseCase
 
             // Mise à jour des mouvements de stock (réintégration des quantités)
             foreach ($order->getOrderItems() as $orderItem) {
+                if ($orderItem->getProductVariant() === null) {
+                    continue; // article libre (F7) : aucun stock à réintégrer
+                }
                 $this->updateStockAndInventoryUseCase->execute($orderItem->getProductVariant(), $orderItem->getQuantity(), true);
             }
 

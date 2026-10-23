@@ -61,6 +61,16 @@ final class CartQuoteCalculator
                 continue;
             }
             $quantity = (int) $quantity;
+            // Article libre (F7, caisse seulement : la clé est retirée hors caisse par CartQuoteInputDto) : libellé, prix saisi, taxable ou non, sans variante ni stock
+            if (is_array($item['custom'] ?? null)) {
+                $custom = \App\Services\PosLineService\PosLineService::customLine($item['custom'], $path, $errors);
+                if ($custom === null) {
+                    continue;
+                }
+                $lines[] = $custom + ['productVariantId' => null, 'productId' => null, 'kind' => 'sale', 'quantity' => $quantity, 'total' => $custom['unitPrice'] * $quantity];
+                $subtotal += $custom['unitPrice'] * $quantity;
+                continue;
+            }
             $variant = is_numeric($item['productVariantId'] ?? null) ? $em->getRepository(ProductVariant::class)->find((int) $item['productVariantId']) : null;
             $product = $variant?->getProduct();
             if ($variant === null || $product === null) {
@@ -108,6 +118,16 @@ final class CartQuoteCalculator
                 $line['customizationId'] = $customizationId;
                 $line['customizationPrice'] = $combination ? $combination->priceDeltaCents() : 0;
                 $line['unitPrice'] += $line['customizationPrice'];
+                // Prix manuel (F7, caisse seulement) : prix catalogue remplacé sur la ligne, prix catalogue et motif gardés
+                if (is_array($item['priceOverride'] ?? null)) {
+                    $override = \App\Services\PosLineService\PosLineService::priceOverride($item['priceOverride'], $line['unitPrice'], $quantity, $path, $errors);
+                    if ($override === null) {
+                        continue;
+                    }
+                    $line['catalogUnitPrice'] = $line['unitPrice'];
+                    $line['unitPrice'] = $override['unitPrice'];
+                    $line['priceOverride'] = $override;
+                }
             }
             $line['total'] = $line['unitPrice'] * $quantity;
             $subtotal += $line['total'];
@@ -128,13 +148,15 @@ final class CartQuoteCalculator
             $discounts = $applied['summary'];
             $subtotal = (int) array_sum(array_map(fn ($l) => (int) $l['total'], $lines));
         }
-        $tax = $this->taxes->compute($input->address, array_map(fn ($line, $i) => $discounts !== null && ($line['kind'] ?? 'sale') === 'sale' ? [
+        // Article libre non taxable (F7) : ligne exclue de l'assiette ; les lignes du catalogue restent taxables comme avant
+        $tax = $this->taxes->compute($input->address, array_map(fn ($line, $i) => ($discounts !== null && ($line['kind'] ?? 'sale') === 'sale' ? [
             'amount' => (int) $line['total'], 'quantity' => 1, 'kind' => $line['kind'], 'reference' => sprintf('line-%d-variant-%d', $i, $line['productVariantId']),
         ] : [
             'amount' => (int) $line['unitPrice'], 'quantity' => (int) $line['quantity'], 'kind' => $line['kind'], 'reference' => sprintf('line-%d-variant-%d', $i, $line['productVariantId']),
-        ], $lines, array_keys($lines)), $shipping, $currency);
+        ]) + (isset($line['custom']) && !$line['custom']['taxable'] ? ['taxable' => false] : []), $lines, array_keys($lines)), $shipping, $currency);
+        $posLines = \App\Services\PosLineService\PosLineService::summary($lines); // résumés (F7) présents seulement si la vente en contient
 
-        return ($discounts !== null ? ['discounts' => $discounts, 'grossSubtotal' => $discounts['gross']] : []) + [
+        return ($discounts !== null ? ['discounts' => $discounts, 'grossSubtotal' => $discounts['gross']] : []) + $posLines + [
             'lines' => $lines, 'subtotal' => $subtotal, 'shipping' => $shipping,
             'taxes' => $tax['taxes'], 'taxStatus' => $tax['status'], 'taxProvider' => $tax['provider'],
             'taxCalculationId' => $tax['calculationId'], 'deposit' => $deposit,

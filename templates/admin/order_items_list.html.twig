@@ -7,7 +7,7 @@
     <ul>
         {% for item in orderItems %}
             <li>
-                {{ item.productVariant.product.name }} - {{ item.quantity }} unités à {{ item.unitPrice }} $
+                {{ item.productVariant ? item.productVariant.product.name : item.customLabel }} - {{ item.quantity }} unités à {{ item.unitPrice }} $
             </li>
         {% endfor %}
     </ul>

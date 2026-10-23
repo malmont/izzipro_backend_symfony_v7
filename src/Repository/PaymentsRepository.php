@@ -47,41 +47,45 @@ class PaymentsRepository extends EntityRepository
         return (float) ($result ?? 0.0);
     }
 
+    /**
+     * Montants par jour de la semaine courante (lundi 00:00:00 → dimanche 23:59:59), un cumul par JOUR.
+     * Correctif 26/10/2026 (lot P2-a, point B) : le regroupement se faisait par horodatage exact (deux paiements du même jour
+     * n'en comptaient qu'un) et la semaine commençait le lundi à l'heure courante.
+     *
+     * @return array<string, float> 'Y-m-d' → total
+     */
     public function getDailyPaymentsForCurrentWeek(string $paymentType, ?int $orderSource = null): array
     {
         $now = new DateTime();
-        $startOfWeek = (clone $now)->modify('monday this week');
-        $endOfWeek = (clone $startOfWeek)->modify('+6 days');
+        $startOfWeek = (clone $now)->modify('monday this week')->setTime(0, 0, 0);
+        $endOfWeek = (clone $startOfWeek)->modify('+6 days')->setTime(23, 59, 59);
 
         $qb = $this->createQueryBuilder('p')
-            ->select('p.paymentDate as date, SUM(p.amount) as total')
+            ->select('p.paymentDate as date, p.amount as amount')
             ->join('p.paymentType', 'pt')
             ->join('p.orderPayment', 'o') // Jointure avec Order
             ->where('pt.name = :type')
             ->andWhere('p.paymentDate BETWEEN :start AND :end')
             ->setParameter('type', $paymentType)
             ->setParameter('start', $startOfWeek)
-            ->setParameter('end', $endOfWeek)
-            ->groupBy('p.paymentDate');
+            ->setParameter('end', $endOfWeek);
 
         if ($orderSource !== null) {
             $qb->andWhere('o.orderSource = :orderSource')
                ->setParameter('orderSource', $orderSource);
         }
 
-        $results = $qb->getQuery()->getResult();
         $dailyPayments = [];
-        $period = new \DatePeriod($startOfWeek, new \DateInterval('P1D'), $endOfWeek->modify('+1 day'));
-
+        $period = new \DatePeriod($startOfWeek, new \DateInterval('P1D'), (clone $endOfWeek)->modify('+1 second'));
         foreach ($period as $date) {
-            $formattedDate = $date->format('Y-m-d');
-            $dailyPayments[$formattedDate] = 0;
+            $dailyPayments[$date->format('Y-m-d')] = 0;
         }
-
-        foreach ($results as $result) {
-            $date = $result['date'];
-            $formattedDate = $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : $date;
-            $dailyPayments[$formattedDate] = (float) $result['total'];
+        foreach ($qb->getQuery()->getResult() as $row) {
+            $date = $row['date'];
+            $day = $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : substr((string) $date, 0, 10);
+            if (array_key_exists($day, $dailyPayments)) {
+                $dailyPayments[$day] = (float) $dailyPayments[$day] + (float) $row['amount'];
+            }
         }
 
         return $dailyPayments;

@@ -24,6 +24,7 @@ class PosSettingsService
         $e = $this->entreprise();
         $threshold = fn (?int $value) => ['required' => $value !== null, 'threshold' => $value];
         $discounts = \App\Services\PosDiscountService\PosDiscountService::settingsOf($e);
+        $lines = \App\Services\PosLineService\PosLineService::settingsOf($e); // article libre et prix manuel (F7, 26/10/2026)
 
         return [
             'lockAfterMinutes' => $e?->getPosLockMinutes() ?? 5,
@@ -36,6 +37,9 @@ class PosSettingsService
                 // Remises (F1) : validation d'un responsable au-delà du plafond caissier (montant en cents ou pourcentage)
                 'discount' => ['required' => $discounts['enabled'], 'threshold' => $discounts['cashier']['maxAmount'], 'maxPercent' => $discounts['cashier']['maxPercent']],
                 'return' => $threshold($e ? $e->effectivePosApprovalReturn() : 0), // retour partiel ou échange (F2) : seuil du remboursement par défaut
+                // Article libre et prix manuel (F7) : au-delà du montant maximal (null = jamais, 0 = toujours)
+                'customItem' => ['required' => $lines['customItems']['enabled'] && $lines['customItems']['maxAmount'] !== null, 'threshold' => $lines['customItems']['maxAmount']],
+                'priceOverride' => ['required' => $lines['priceOverride']['enabled'] && $lines['priceOverride']['maxAmount'] !== null, 'threshold' => $lines['priceOverride']['maxAmount']],
             ],
             'pin' => $this->pinRules(),
             // Lot R1 (23/10/2026) : réglages par site, défauts = comportement d'avant (ajouts seulement)
@@ -49,6 +53,8 @@ class PosSettingsService
             'terminalRequired' => $e?->isPosTerminalHeaderRequired() ?? false,
             // Retours partiels et échanges (F2, 24/10/2026)
             'discounts' => $discounts, // remises de caisse (F1, 24/10/2026)
+            'customItems' => $lines['customItems'], // article libre (F7, 26/10/2026)
+            'priceOverride' => $lines['priceOverride'], // prix manuel (F7, 26/10/2026)
             'offline' => $this->offline->settings(), // mode hors ligne (C5 partie 2, 25/10/2026)
             'returns' => ['maxDays' => $e?->getPosReturnMaxDays(), 'withoutReceipt' => $e?->isPosReturnWithoutReceipt() ?? false, 'restockDefault' => $e?->isPosReturnRestockDefault() ?? true,
                 'cashRefundForCardSale' => $e?->isPosReturnCashForCardSale() ?? false, 'reasons' => $e ? $e->returnReasons() : []],
@@ -120,6 +126,9 @@ class PosSettingsService
             PosApprovalService::RETURN => $threshold($e ? $e->effectivePosApprovalReturn() : 0),
             PosApprovalService::DISCOUNT => $e?->isPosDiscountEnabled() ?? true, // plafonds par rôle dans PosDiscountService
             PosApprovalService::OFFLINE_FORCE => true, // toujours un responsable (C5 partie 2)
+            // Article libre et prix manuel (F7) : au-delà du montant maximal du site (null = jamais, 0 = toujours)
+            PosApprovalService::CUSTOM_ITEM => ($e?->isPosCustomItemEnabled() ?? false) && \App\Services\PosLineService\PosLineService::beyond((int) $amount, $e?->getPosCustomItemMaxAmount()),
+            PosApprovalService::PRICE_OVERRIDE => ($e?->isPosPriceOverrideEnabled() ?? false) && \App\Services\PosLineService\PosLineService::beyond((int) $amount, $e?->getPosPriceOverrideMaxAmount()),
             default => false,
         };
     }

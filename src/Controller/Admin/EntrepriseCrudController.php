@@ -151,6 +151,15 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflinePriceTolerance', 'Écart de prix toléré par vente (cents)')->setHelp('Recalcul au pack déclaré ; au-delà, vente refusée sauf acceptation forcée par un responsable ; défaut 5')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflinePackValidityHours', 'Validité du pack hors ligne (heures)')->setHelp('défaut 24')->hideOnIndex(),
 
+            // Article libre et prix manuel (F7, 26/10/2026) : désactivés par défaut
+            FormField::addPanel('Article libre et prix manuel (caisse)')->setHelp('Article libre : vente d\'un article absent du catalogue (libellé, prix saisi, taxable ou non), sans mouvement de stock. Prix manuel : prix catalogue remplacé sur une ligne, avec motif. Au-delà du montant maximal, validation d\'un responsable ; vide = jamais, 0 = toujours.'),
+            BooleanField::new('posCustomItemEnabled', 'Article libre autorisé')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCustomItemMaxAmount', 'Article libre : montant maximal par vente sans validation (cents)')->setRequired(false)->setHelp('Total des articles libres de la vente ; vide = jamais de validation')->hideOnIndex(),
+            BooleanField::new('posPriceOverrideEnabled', 'Prix manuel autorisé')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posPriceOverrideMaxAmount', 'Prix manuel : baisse maximale par vente sans validation (cents)')->setRequired(false)->setHelp('Somme des baisses par rapport au prix catalogue ; une hausse n\'est jamais soumise à validation ; vide = jamais')->hideOnIndex(),
+            BooleanField::new('posPriceOverrideReasonRequired', 'Prix manuel : motif obligatoire')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField::new('posPriceOverrideReasons', 'Motifs de prix manuel (un par ligne)')->setRequired(false)->setHelp('Vide : Article abîmé, Prix concurrent, Prix négocié, Erreur d\'étiquette, Autre')->hideOnIndex(),
+
             // Remises de caisse (F1, 24/10/2026)
             FormField::addPanel('Remises (caisse)')->setHelp('Remises de ligne et de ticket accordées par le caissier, calculées par le serveur (taxes sur le net). Plafonds par rôle ; au-delà du plafond caissier, validation d\'un responsable ; l\'administrateur n\'a pas de plafond.'),
             BooleanField::new('posDiscountEnabled', 'Remises autorisées')->hideOnIndex(),

@@ -127,6 +127,9 @@ class OrderAllCrudController extends BaseTenantCrudController
             $items = [];
             foreach ($entityInstance->getOrderItems() as $orderItem) {
                 $productVariant = $orderItem->getProductVariant();
+                if ($productVariant === null) {
+                    continue; // article libre de caisse (F7) : pas de variante
+                }
                 $items[] = [
                     'productVariantId' => $productVariant->getId(),
                     'quantity'         => $orderItem->getQuantity(),

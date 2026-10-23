@@ -64,7 +64,13 @@ class PosOfflineApiTest extends WebTestCase
             $r = PosOfflineCalculator::compute($case['lines'], $case['ticketDiscount'], $case['taxes'], $case['step'], $case['cashReceived']);
             $got = ['lines' => $r['lines'], 'subtotal' => $r['subtotal'], 'discountTotal' => $r['discountTotal'], 'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'amount' => $t['amount']], $r['taxes']),
                 'total' => $r['total'], 'cashTotal' => $r['cashTotal'], 'cashRounding' => $r['cashRounding'], 'change' => $r['change']];
-            $this->assertSame($case['expected'], $got, 'cas ' . $case['id']);
+            if (array_key_exists('taxableSubtotal', $case['expected'])) { // cas F7 (article libre, prix manuel) : assiette taxable exposée
+                $got['taxableSubtotal'] = $r['taxableSubtotal'];
+            }
+            ksort($got);
+            $expected = $case['expected'];
+            ksort($expected);
+            $this->assertSame($expected, $got, 'cas ' . $case['id']);
         }
         // La règle hors ligne donne le même total que le devis de caisse du serveur (même site, mêmes taxes)
         $quote = $this->json($this->request('POST', '/api/pos/quote', ['items' => [['productVariantId' => $this->cap, 'quantity' => 2, 'discounts' => [['type' => 'percent', 'value' => 10, 'reasonCode' => 'fidelite']]]], 'ticketDiscount' => ['type' => 'amount', 'value' => 300, 'reasonCode' => 'autre'], 'cashRegisterId' => $this->register]));
@@ -104,6 +110,7 @@ class PosOfflineApiTest extends WebTestCase
         // Synchronisation refusée tant que le mode est désactivé ; terminal obligatoire
         $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register, 'cashFund' => 10000]);
         $sale = $this->offlineSale($seller, 'P-' . $this->terminalId . '-1', [['productVariantId' => $this->cap, 'quantity' => 2]], $pack);
+        $syncLogsBefore = (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'OFFLINE_SYNC'"); // base partagée entre tests
         $batch = ['packVersion' => $pack['packVersion'], 'deviceTime' => (new \DateTimeImmutable('-37 seconds'))->format(\DateTimeInterface::ATOM), 'clockOffsetSeconds' => 37]; // sans 'sales' : ajouté par lot ($batch + [...])
         $first = $batch + ['sales' => [$sale]];
         $this->assertSame('TERMINAL_REQUIRED', json_decode($this->requestNoTerminal('POST', '/api/pos/offline-sales', $first)->getContent(), true)['error']);
@@ -128,7 +135,7 @@ class PosOfflineApiTest extends WebTestCase
         $journal = json_decode($this->db->fetchOne("SELECT payload FROM pos_audit_log WHERE type = 'SALE' AND payload LIKE ? ORDER BY id DESC LIMIT 1", ['%"provisionalNumber":"' . $a['provisionalNumber'] . '"%']), true);
         $data = $journal['data'] ?? $journal;
         $this->assertSame(['P-' . $this->terminalId . '-1', $pack['packVersion'], $cashier->getId()], [$data['offline']['provisionalNumber'], $data['offline']['packVersion'], $data['syncedBy']['id']]);
-        $this->assertSame(2, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'OFFLINE_SYNC'"), 'un lot journalisé par synchronisation, refusée ou acceptée');
+        $this->assertSame($syncLogsBefore + 2, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'OFFLINE_SYNC'"), 'un lot journalisé par synchronisation, refusée ou acceptée');
 
         // Doublon : même clé → même réponse, aucune seconde commande
         $orders = (int) $this->db->fetchOne('SELECT COUNT(*) FROM "order"');

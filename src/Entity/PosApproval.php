@@ -48,6 +48,10 @@ class PosApproval
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
 
+    /** Jeton groupé (P2-a, 26/10/2026) : toutes les actions couvertes [{action, context}] ; null = la seule action ci-dessus */
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    private ?array $actions = null;
+
     public function __construct(string $tokenHash, string $action, int $managerId, int $requestedById, int $terminalId, array $context, \DateTimeImmutable $expiresAt)
     {
         $this->tokenHash = $tokenHash;
@@ -69,4 +73,7 @@ class PosApproval
     public function getContext(): array { return json_decode($this->context, true) ?? []; }
     public function getExpiresAt(): \DateTimeImmutable { return $this->expiresAt; }
     public function getUsedAt(): ?\DateTimeImmutable { return $this->usedAt; }
+    /** @return list<array{action: string, context: array<string, int|string>}> actions couvertes (une seule sans jeton groupé) */
+    public function getActions(): array { return $this->actions ?? [['action' => $this->action, 'context' => $this->getContext()]]; }
+    public function setActions(?array $actions): static { $this->actions = $actions; return $this; }
 }
