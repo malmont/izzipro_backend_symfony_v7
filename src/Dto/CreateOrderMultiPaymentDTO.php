@@ -245,4 +245,11 @@ class CreateOrderMultiPaymentDTO implements ICreateOrderDTO
     public function setCreditApplied(int $cents): static { $this->creditApplied = max(0, $cents); return $this; }
     public function getTicketDiscount(): ?array { return $this->ticketDiscount; }
     public function setTicketDiscount(?array $discount): static { $this->ticketDiscount = $discount !== null && $discount !== [] ? $discount : null; return $this; }
+    // Fiche client et fidélité (F8, 28/10/2026) : client rattaché à la vente, points rachetés en remise de ticket calculée par le serveur
+    private ?int $customerId = null;
+    private int $loyaltyRedeemPoints = 0;
+    public function getCustomerId(): ?int { return $this->customerId; }
+    public function setCustomerId(?int $id): static { $this->customerId = $id !== null && $id > 0 ? $id : null; return $this; }
+    public function getLoyaltyRedeemPoints(): int { return $this->loyaltyRedeemPoints; }
+    public function setLoyaltyRedeemPoints(int $points): static { $this->loyaltyRedeemPoints = max(0, $points); return $this; }
 }

@@ -67,6 +67,8 @@ class PosReturnService
         private readonly PosApprovalService $approvals,
         private readonly PosTerminalPaymentService $terminalPayments,
         private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards, // cartes-cadeaux et avoirs (F9, 27/10/2026)
+        private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client (F8, 28/10/2026)
+        private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
     ) {
     }
 
@@ -285,6 +287,10 @@ class PosReturnService
         $returnOrder = $this->orders->createOrder($user, $em->getReference(OrderSource::class, self::ORDER_SOURCE_POS), null, null,
             $em->getReference(StatusCommande::class, self::STATUS_COMPLETED), $em->getReference(OrderType::class, self::ORDER_TYPE_RETURN));
         $returnOrder->setReturnedFrom($original);
+        // Fiche client (F8) : client du corps (retour sans ticket) ou de la vente d'origine
+        $customer = is_numeric($input['customerId'] ?? null) ? $this->customers->find((int) $input['customerId']) : null;
+        $customerId = $customer?->getId() ?? $original?->getCustomerId();
+        $returnOrder->setCustomerId($customerId);
         foreach ($lines as $line) {
             if ($line['variant'] === null) { // article libre (F7) : ligne sans variante, au prix payé, aucun stock
                 $item = (new OrderItems())->setOrderAssociated($returnOrder)->setQuantity($line['quantity'])->setUnitPrice((float) $line['unitPrice'])->setTotalPrice((float) ($line['net'] ?? $line['unitPrice'] * $line['quantity']))
@@ -340,7 +346,13 @@ class PosReturnService
         $em->flush();
         if ($storeCredit !== null) {
             $this->giftCards->attachReturn($storeCredit['card'], (int) $return->getId());
+            if ($customerId !== null) {
+                $storeCredit['card']->setCustomerId($customerId);
+            }
         }
+        // Fidélité (F8) : reprise des points de la vente d'origine au prorata du net remboursé
+        $loyaltyReturned = $original !== null ? $this->loyalty->onReturn($original, $subtotal, (int) $returnOrder->getId(), $caisse, $user) : ['points' => 0, 'shortfall' => 0];
+        $em->flush();
 
         $this->audit->record(PosAuditService::REFUND, [
             'kind' => 'return', 'returnId' => $return->getId(), 'reference' => $returnOrder->getReference(), 'originalOrderId' => $original?->getId(),
@@ -349,6 +361,7 @@ class PosReturnService
             'reason' => $reason, 'restock' => $restock, 'refundMethod' => $method,
             'amount' => $total, 'creditApplied' => $creditApplied, 'cashRefund' => $cashRefund, 'cardRefund' => $cardRefund, 'cashRounding' => $cashRounding,
             'giftCardRefund' => $giftRefund, 'storeCredit' => $storeCredit ? ['giftCardId' => $storeCredit['card']->getId(), 'last4' => $storeCredit['card']->getLast4(), 'amount' => $storeCreditAmount] : null,
+            'customerId' => $customerId, 'loyaltyReturned' => $loyaltyReturned,
             'terminal' => $terminal ? ['paymentId' => $terminal->getId(), 'refundId' => $terminalRefundId, 'paymentMethodType' => $terminal->getPaymentMethodType()] : null,
             'subTotal' => $subtotal, 'totalTax' => $taxTotal, 'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'amount' => $t['amount']], $taxes),
         ], $caisse, null, 'order', $returnOrder->getId(), $user);
@@ -381,6 +394,8 @@ class PosReturnService
                 'giftCard' => $return->getGiftCardRefund(),
                 'storeCredit' => ($credit = $return->getStoreCreditId() ? $this->emProvider->getEntityManager()->find(\App\Entity\PosGiftCard::class, $return->getStoreCreditId()) : null) ? $this->giftCards->toArray($credit, $this->giftCards->issuedCode($credit->getId())) : null],
             'reason' => ['code' => $return->getReasonCode(), 'text' => $return->getReasonText()], 'restock' => $return->isRestock(),
+            'customerId' => $returnOrder->getCustomerId(), // fiche client (F8)
+            'loyalty' => $this->loyalty->returnSummary((int) $returnOrder->getId()), // points repris {returned, shortfall (déjà dépensés), balance} ou null
             'lines' => $lines,
             'taxes' => array_values(array_map(fn (OrderTax $t) => ['label' => $t->getTax()?->getName(), 'amount' => -(int) round((float) $t->getAmount())], $returnOrder->getOrderTaxes()->toArray())),
             'createdAt' => $return->getCreatedAt()->format(\DateTimeInterface::ATOM),

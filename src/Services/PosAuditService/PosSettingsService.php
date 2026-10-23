@@ -41,6 +41,7 @@ class PosSettingsService
                 'customItem' => ['required' => $lines['customItems']['enabled'] && $lines['customItems']['maxAmount'] !== null, 'threshold' => $lines['customItems']['maxAmount']],
                 // Cartes-cadeaux (F9) : toujours un responsable
                 'giftCardCancel' => ['required' => true], 'giftCardAdjust' => ['required' => true], 'giftCardReplace' => ['required' => true],
+                'loyaltyAdjust' => ['required' => true], 'customerErase' => ['required' => true], // fiche client et fidélité (F8)
                 'priceOverride' => ['required' => $lines['priceOverride']['enabled'] && $lines['priceOverride']['maxAmount'] !== null, 'threshold' => $lines['priceOverride']['maxAmount']],
             ],
             'pin' => $this->pinRules(),
@@ -58,6 +59,8 @@ class PosSettingsService
             'customItems' => $lines['customItems'], // article libre (F7, 26/10/2026)
             'priceOverride' => $lines['priceOverride'], // prix manuel (F7, 26/10/2026)
             'giftCards' => \App\Services\PosGiftCardService\PosGiftCardService::settingsOf($e), // cartes-cadeaux et avoirs (F9, 27/10/2026)
+            'customers' => \App\Services\PosCustomerService\PosCustomerService::settingsOf($e), // fiche client (F8, 28/10/2026)
+            'loyalty' => \App\Services\PosCustomerService\PosLoyaltyService::settingsOf($e), // fidélité (F8)
             'offline' => $this->offline->settings(), // mode hors ligne (C5 partie 2, 25/10/2026)
             'returns' => ['maxDays' => $e?->getPosReturnMaxDays(), 'withoutReceipt' => $e?->isPosReturnWithoutReceipt() ?? false, 'restockDefault' => $e?->isPosReturnRestockDefault() ?? true,
                 'cashRefundForCardSale' => $e?->isPosReturnCashForCardSale() ?? false, 'reasons' => $e ? $e->returnReasons() : []],
@@ -137,6 +140,7 @@ class PosSettingsService
             PosApprovalService::PRICE_OVERRIDE => ($e?->isPosPriceOverrideEnabled() ?? false) && \App\Services\PosLineService\PosLineService::beyond((int) $amount, $e?->getPosPriceOverrideMaxAmount()),
             // Cartes-cadeaux (F9) : annulation, ajustement et remplacement toujours validés par un responsable
             PosApprovalService::GIFT_CARD_CANCEL, PosApprovalService::GIFT_CARD_ADJUST, PosApprovalService::GIFT_CARD_REPLACE => true,
+            PosApprovalService::LOYALTY_ADJUST, PosApprovalService::CUSTOMER_ERASE => true, // fiche client et fidélité (F8) : toujours un responsable
             default => false,
         };
     }

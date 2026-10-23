@@ -37,7 +37,8 @@ class CancelOrderUseCase
         private readonly \App\Services\PosAuditService\PosApprovalService $approvals,
         private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency,
         private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments,
-        private readonly \App\Services\PosAuditService\PosApprovalContext $approvalContext
+        private readonly \App\Services\PosAuditService\PosApprovalContext $approvalContext,
+        private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty // fidélité (F8)
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
@@ -128,6 +129,10 @@ class CancelOrderUseCase
                 $this->paymentHandlerUseCase->handlePayment($order, -$refundAmount, null, $paymentTypeId, $statusPaymentId, new \DateTime(), null);
             }
 
+            // Fidélité (F8) : reprise de tous les points gagnés par une vente de caisse annulée
+            if ($order->getOrderSource()?->getId() === 2 && $order->getCustomerId() !== null) {
+                $this->loyalty->onReturn($order, null, null, null, $refundedBy);
+            }
             // Mise à jour des mouvements de stock (réintégration des quantités)
             foreach ($order->getOrderItems() as $orderItem) {
                 if ($orderItem->getProductVariant() === null) {

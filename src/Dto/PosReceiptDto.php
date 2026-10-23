@@ -16,7 +16,7 @@ class PosReceiptDto
     /** @param array<string, \App\Entity\PosReceipt> $receipts numéros de la commande (C2) */
     public static function fromOrder(Order $order, ?Entreprise $entreprise, ?Caisse $caisse, string $locale, array $receipts = [],
         ?\App\Entity\PosTerminalPayment $terminal = null, ?string $receiptUrl = null, bool $duplicate = false, ?\App\Entity\PosReceipt $receiptOverride = null,
-        array $giftCards = ['redemptions' => [], 'issued' => null, 'storeCredit' => null]): array
+        array $giftCards = ['redemptions' => [], 'issued' => null, 'storeCredit' => null], ?array $customer = null): array
     {
         $dollars = fn (?float $cents) => round(((float) $cents) / 100, 2);
         // Ticket complet (F3, 24/10/2026) : lignes, caissier, devise, monnaie rendue, détail des cartes, nature, lien public, duplicata
@@ -112,6 +112,8 @@ class PosReceiptDto
             'giftCardPayments' => array_map(fn ($g) => ['kind' => $g['kind'], 'last4' => $g['last4'], 'amount' => $dollars($g['amount'])], $giftCards['redemptions'] ?? []),
             'giftCard' => $giftCards['issued'] ?? null,
             'storeCredit' => $giftCards['storeCredit'] ?? null,
+            // Fiche client et fidélité (F8, 28/10/2026) : client rattaché (prénom et initiale), points de la vente et solde ; null sans client
+            'customer' => $customer,
             'taxes' => $taxes,
             'payments' => $payments,
             'cashRegister' => $register ? ['id' => $register->getId(), 'name' => $register->getName()] : null,

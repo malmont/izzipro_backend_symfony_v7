@@ -56,7 +56,9 @@ class CreateOrderUseCase
         private readonly \App\Services\PosDiscountService\PosDiscountService $discounts,
         private readonly \App\Services\PosLineService\PosLineService $posLines, // article libre et prix manuel (F7)
         private readonly \App\Services\PosAuditService\PosApprovalService $approvals, // validations groupées (P2-a)
-        private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards // cartes-cadeaux et avoirs (F9)
+        private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards, // cartes-cadeaux et avoirs (F9)
+        private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client (F8)
+        private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty // fidélité (F8)
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -101,6 +103,30 @@ class CreateOrderUseCase
             // Remises de caisse (F1), article libre et prix manuel (F7) : vente au comptoir seulement ; structure, motifs, plafonds
             // par rôle et validation C3 AVANT toute écriture ; toutes les validations de la vente demandées en une fois (P2-a)
             $ticketDiscount = $orderDTO instanceof CreateOrderMultiPaymentDTO ? $orderDTO->getTicketDiscount() : null;
+            // Fiche client et fidélité (F8) : client rattaché (vente au comptoir seulement) ; points rachetés → remise de ticket calculée
+            // par le serveur (valeur du site), hors plafonds caissier ; incompatible avec une remise de ticket saisie
+            $customer = null;
+            $loyaltyReward = null;
+            if ($orderDTO instanceof CreateOrderMultiPaymentDTO && $orderDTO->getCustomerId() !== null) {
+                if ($orderDTO->getOrderSource() !== 2) {
+                    throw new CashRegisterException('CUSTOMER_NOT_ALLOWED', 'Le rattachement d\'un client de caisse ne s\'applique qu\'aux ventes au comptoir', 409);
+                }
+                $this->customers->assertEnabled();
+                $customer = $this->customers->find($orderDTO->getCustomerId());
+            }
+            if ($orderDTO instanceof CreateOrderMultiPaymentDTO && $orderDTO->getLoyaltyRedeemPoints() > 0) {
+                if ($customer === null || $typeOrderId !== 1) {
+                    throw new CashRegisterException('LOYALTY_CUSTOMER_REQUIRED', 'Le rachat de points exige un client rattaché à une vente', 422, [['path' => 'customerId', 'message' => 'requis']]);
+                }
+                if ($ticketDiscount !== null) {
+                    throw new CashRegisterException('LOYALTY_TICKET_DISCOUNT_CONFLICT', 'Un rachat de points et une remise de ticket ne se cumulent pas', 409);
+                }
+                $points = $orderDTO->getLoyaltyRedeemPoints();
+                $amount = $this->loyalty->rewardFor($customer, $points, $this->customers);
+                $ticketDiscount = ['type' => 'amount', 'value' => $amount, 'reasonText' => sprintf('Récompense fidélité (%d points)', $points)];
+                $orderDTO->setTicketDiscount($ticketDiscount);
+                $loyaltyReward = ['points' => $points, 'amount' => $amount];
+            }
             $discountSummary = null;
             $posQuote = null;
             $hasDiscounts = \App\Services\PosDiscountService\PosDiscountCalculator::hasDiscounts($orderDTO->getItems(), $ticketDiscount);
@@ -109,12 +135,16 @@ class CreateOrderUseCase
                 $posQuote = $this->discounts->quote($orderDTO->getItems(), $ticketDiscount);
                 $discountSummary = $hasDiscounts ? $posQuote['discounts'] : null;
                 $demands = $this->posLines->demands($user, $posQuote);
-                if ($discountSummary !== null && ($d = $this->discounts->demand($user, $discountSummary)) !== null) {
+                // Récompense fidélité (F8) : hors plafonds et validations des remises caissier (règle du programme)
+                $capSummary = $discountSummary !== null && $loyaltyReward !== null
+                    ? ['lines' => $discountSummary['lines'], 'ticket' => null, 'total' => max(0, $discountSummary['total'] - (int) ($discountSummary['ticket']['amount'] ?? 0)), 'gross' => $discountSummary['gross']]
+                    : $discountSummary;
+                if ($capSummary !== null && ($d = $this->discounts->demand($user, $capSummary)) !== null) {
                     array_unshift($demands, $d);
                 }
                 $this->approvals->requireAll($demands, $user);
-                if ($discountSummary !== null) {
-                    $this->discounts->checkManagerCap($user, $discountSummary);
+                if ($capSummary !== null) {
+                    $this->discounts->checkManagerCap($user, $capSummary);
                 }
             } elseif ($hasDiscounts) {
                 throw new CashRegisterException('DISCOUNT_NOT_ALLOWED', 'Les remises ne s\'appliquent qu\'aux ventes au comptoir', 409);
@@ -246,6 +276,19 @@ class CreateOrderUseCase
                 foreach ($giftParts as $part) {
                     $this->giftCards->redeem($part, $order, $user, $caisse);
                 }
+                // Fiche client et fidélité (F8) : client rattaché, points rachetés puis points gagnés sur le net (après remises, hors carte-cadeau)
+                $loyalty = ['earned' => 0, 'redeemed' => 0, 'redeemedAmount' => 0];
+                if ($customer !== null) {
+                    $order->setCustomerId($customer->getId());
+                    if ($loyaltyReward !== null) {
+                        $this->loyalty->redeem($customer, $loyaltyReward['points'], $loyaltyReward['amount'], $order, $caisse, $user instanceof \App\Entity\User ? $user : null);
+                        $loyalty['redeemed'] = $loyaltyReward['points'];
+                        $loyalty['redeemedAmount'] = $loyaltyReward['amount'];
+                    }
+                    if ($typeOrderId === 1) {
+                        $loyalty['earned'] = $this->loyalty->earn($order, $customer, $caisse, $user instanceof \App\Entity\User ? $user : null, $this->customers);
+                    }
+                }
                 $this->handleCaisseTransactionUseCase->execute($caisse, $order, $user, $totalAmount, $transactionTypeId, [], $caisseAmount, $orderDTO instanceof CreateOrderMultiPaymentDTO ? $cashRounding : null);
                 // Numéro de ticket (vente) ou d'avoir (retour), suite continue par poste, et entrée au journal de caisse (C2)
                 $receipt = $this->receipts->issue($order, $caisse, $typeOrderId === 1 ? \App\Entity\PosReceipt::TICKET : \App\Entity\PosReceipt::CREDIT_NOTE, (int) round($totalAmount));
@@ -258,6 +301,7 @@ class CreateOrderUseCase
                     'cashRounding' => $order->getCashRounding(),
                     'creditApplied' => $order->getCreditApplied(),
                     'giftCardApplied' => $order->getGiftCardApplied(), // cartes-cadeaux et avoirs (F9)
+                    'customerId' => $customer?->getId(), 'loyalty' => $customer !== null ? $loyalty : null, // fiche client et fidélité (F8)
                     'discountTotal' => $discountSummary['total'] ?? 0,
                     'payments' => array_values(array_map(fn ($p) => ['type' => $p->getPaymentMethod()?->getId(), 'amount' => (int) round((float) $p->getAmount())], $order->getPayments()->toArray())),
                     'terminalPayments' => array_map(fn ($t) => ['paymentId' => $t->getId(), 'stripePaymentIntentId' => $t->getStripePaymentIntentId(), 'amount' => $t->getAmount(), 'paymentMethodType' => $t->getPaymentMethodType(), 'cardBrand' => $t->getCardBrand(), 'last4' => $t->getLast4(), 'applicationFee' => $t->getApplicationFee()], $terminalPayments),

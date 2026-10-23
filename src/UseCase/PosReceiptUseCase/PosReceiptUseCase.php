@@ -25,6 +25,7 @@ class PosReceiptUseCase
         private readonly PosReceiptMailer $mailer,
         private readonly PosReceiptLinkService $links,
         private readonly PosAuditService $audit,
+        private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client (F8) : courriel du client consentant
     ) {
     }
 
@@ -85,13 +86,21 @@ class PosReceiptUseCase
             throw new CashRegisterException('RECEIPT_EMAIL_DISABLED', 'Le reçu par courriel est désactivé sur ce site', 409);
         }
         $to = is_string($email) ? trim($email) : '';
+        $source = 'provided';
+        if ($to === '' && $receipt->getOrder()->getCustomerId() !== null) { // fiche client (F8) : adresse du client rattaché s'il a consenti aux reçus par courriel
+            $customer = $this->emProvider->getEntityManager()->find(\App\Entity\PosCustomer::class, $receipt->getOrder()->getCustomerId());
+            if ($customer && $customer->isActive() && $customer->getEmail() !== null && $this->customers->consentGranted($customer, \App\Entity\PosCustomerConsent::RECEIPTS)) {
+                $to = $customer->getEmail();
+                $source = 'customer';
+            }
+        }
         if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL) || mb_strlen($to) > 254) {
             throw new CashRegisterException('EMAIL_INVALID', 'Adresse courriel invalide', 422, [['path' => 'email', 'message' => 'adresse invalide']]);
         }
         $block = $this->block($receipt, $locale, false);
         $this->mailer->send($receipt, $block, $to, $locale, false);
         $masked = PosReceiptMailer::mask($to);
-        $this->audit->record(PosAuditService::RECEIPT_EMAILED, ['barcode' => PosReturnService::barcode($receipt), 'kind' => $receipt->getKind(), 'number' => $receipt->getNumber(), 'orderId' => $receipt->getOrder()->getId(), 'to' => $masked],
+        $this->audit->record(PosAuditService::RECEIPT_EMAILED, ['barcode' => PosReturnService::barcode($receipt), 'kind' => $receipt->getKind(), 'number' => $receipt->getNumber(), 'orderId' => $receipt->getOrder()->getId(), 'to' => $masked, 'source' => $source],
             $receipt->getSession(), $receipt->getCashRegister(), 'receipt', $receipt->getId(), $user);
 
         return ['sent' => true, 'barcode' => PosReturnService::barcode($receipt), 'to' => $masked];

@@ -78,6 +78,10 @@ class PosGiftCard
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $canceledAt = null;
 
+    /** Client de caisse rattaché (F8) */
+    #[ORM\Column(nullable: true)]
+    private ?int $customerId = null;
+
     public function __construct(string $kind, string $codeHash, string $last4, int $amount)
     {
         $this->kind = $kind;
@@ -114,6 +118,8 @@ class PosGiftCard
     public function setReplacedById(?int $id): static { $this->replacedById = $id; return $this; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
     public function getCanceledAt(): ?\DateTimeImmutable { return $this->canceledAt; }
+    public function getCustomerId(): ?int { return $this->customerId; }
+    public function setCustomerId(?int $id): static { $this->customerId = $id; return $this; }
     public function setCanceledAt(?\DateTimeImmutable $at): static { $this->canceledAt = $at; return $this; }
     /** Utilisable comme moyen de paiement : active, solde positif, non expirée */
     public function isUsable(?\DateTimeImmutable $now = null): bool { return $this->status === self::ACTIVE && $this->balance > 0 && !$this->isExpired($now); }

@@ -121,7 +121,7 @@ class PosGiftCardApiTest extends WebTestCase
         $this->assertEquals([10.0, 23.35, [['kind' => 'gift_card', 'last4' => substr($code, -4), 'amount' => 10.0]], 33.34], [$sale1['giftCardApplied'], $sale1['amountDue'], $sale1['giftCardPayments'], $sale1['totalAmount']]);
         $this->assertSame([1000, 1], [(int) $this->db->fetchOne('SELECT gift_card_applied FROM "order" WHERE id = ?', [$sale1['orderId']]), (int) $this->db->fetchOne('SELECT COUNT(*) FROM payments WHERE order_payment_id = ?', [$sale1['orderId']])]);
         $this->assertSame(4000, $this->json($this->request('GET', '/api/pos/gift-cards/' . $code))['balance']);
-        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'GIFT_CARD_REDEEMED'"));
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'GIFT_CARD_REDEEMED' AND payload LIKE ?", ['%"reference":"' . $this->db->fetchOne('SELECT reference FROM "order" WHERE id = ?', [$sale1['orderId']]) . '"%']), 'utilisation journalisée (base partagée entre tests : filtre sur la vente)');
 
         // Rapport X : bloc giftCards, part carte-cadeau des ventes ; les ventes de cartes ne sont pas des ventes
         $x = $this->json($this->request('GET', "/api/caisse/report/x?cashRegisterId=$this->register"));
@@ -136,7 +136,7 @@ class PosGiftCardApiTest extends WebTestCase
         $ret = $this->json($this->request('POST', '/api/pos/returns', ['orderId' => $sale1['orderId'], 'lines' => [['orderItemId' => $look1['lines'][0]['orderItemId'], 'quantity' => 1]], 'reasonCode' => 'autre', 'cashRegisterId' => $this->register]), 201);
         $this->assertSame([3334, 1000, 2335, 0], [$ret['amount'], $ret['refund']['giftCard'], $ret['refund']['cash'], $ret['refund']['card']], 'carte recréditée en premier, reste en espèces');
         $this->assertSame(5000, $this->json($this->request('GET', '/api/pos/gift-cards/' . $code))['balance'], 'solde rétabli');
-        $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'GIFT_CARD_REFUNDED'") - 1);
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'GIFT_CARD_REFUNDED' AND payload LIKE ?", ['%"returnOrderId":' . $ret['returnOrderId'] . ',%']), 'recrédit journalisé pour ce retour (base partagée entre tests)');
 
         // Avoir : vente en espèces puis retour remboursé « store_credit » ; l'avoir paie une vente (type 5)
         $base = $this->json($pay([['type' => 2, 'amount' => 33.35]]), 201);

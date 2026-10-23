@@ -65,9 +65,23 @@ class PosAuditService
     public const GIFT_CARD_REPLACED = 'GIFT_CARD_REPLACED';
     public const GIFT_CARD_REFUNDED = 'GIFT_CARD_REFUNDED'; // recrédit lors d'un retour
     public const STORE_CREDIT_ISSUED = 'STORE_CREDIT_ISSUED';
+    // Fiche client et fidélité (F8, 28/10/2026)
+    public const CUSTOMER_SEARCHED = 'CUSTOMER_SEARCHED';
+    public const CUSTOMER_VIEWED = 'CUSTOMER_VIEWED';
+    public const CUSTOMER_CREATED = 'CUSTOMER_CREATED';
+    public const CUSTOMER_UPDATED = 'CUSTOMER_UPDATED';
+    public const CUSTOMER_LINKED = 'CUSTOMER_LINKED';
+    public const CUSTOMER_MERGED = 'CUSTOMER_MERGED';
+    public const CUSTOMER_ERASED = 'CUSTOMER_ERASED';
+    public const CUSTOMER_EXPORTED = 'CUSTOMER_EXPORTED';
+    public const LOYALTY_EARNED = 'LOYALTY_EARNED';
+    public const LOYALTY_REDEEMED = 'LOYALTY_REDEEMED';
+    public const LOYALTY_RETURNED = 'LOYALTY_RETURNED';
+    public const LOYALTY_ADJUSTED = 'LOYALTY_ADJUSTED';
+    public const LOYALTY_EXPIRED = 'LOYALTY_EXPIRED';
     /** Entrées d'une action qui peut avoir été validée par un responsable : elles portent data.approvedBy */
     private const APPROVABLE = [self::REFUND, self::CASH_WITHDRAWAL, self::FUND_WITHDRAWAL, self::DRAWER_OPENED, self::SESSION_CLOSED, self::DISCOUNT_APPLIED, self::PRICE_CHANGED,
-        self::GIFT_CARD_CANCELED, self::GIFT_CARD_ADJUSTED, self::GIFT_CARD_CASH_OUT, self::GIFT_CARD_REPLACED];
+        self::GIFT_CARD_CANCELED, self::GIFT_CARD_ADJUSTED, self::GIFT_CARD_CASH_OUT, self::GIFT_CARD_REPLACED, self::LOYALTY_ADJUSTED, self::CUSTOMER_ERASED];
 
     public const TYPES = [self::LOGIN, self::LOGIN_FAILED, self::LOGOUT, self::SESSION_OPENED, self::SESSION_CLOSED, self::CASH_DEPOSIT,
         self::CASH_WITHDRAWAL, self::FUND_DEPOSIT, self::FUND_WITHDRAWAL, self::SALE, self::REFUND, self::Z_REPORT_CREATED, self::X_REPORT_VIEWED,
@@ -75,7 +89,9 @@ class PosAuditService
         self::PIN_SET, self::PIN_FAILED, self::PIN_LOCKED, self::PIN_RESET, self::UNLOCK, self::APPROVAL_GRANTED, self::APPROVAL_FAILED,
         self::CARD_PAYMENT_STARTED, self::CARD_PAYMENT_SUCCEEDED, self::CARD_PAYMENT_FAILED, self::CARD_PAYMENT_CANCELED, self::CARD_REFUND, self::CARD_SIMULATED, self::TERMINAL_CONFIGURED,
         self::RECEIPT_REPRINTED, self::RECEIPT_EMAILED, self::RECEIPT_LINK_REVOKED, self::OFFLINE_SYNC,
-        self::GIFT_CARD_SOLD, self::GIFT_CARD_REDEEMED, self::GIFT_CARD_LOOKUP, self::GIFT_CARD_CANCELED, self::GIFT_CARD_ADJUSTED, self::GIFT_CARD_CASH_OUT, self::GIFT_CARD_REPLACED, self::GIFT_CARD_REFUNDED, self::STORE_CREDIT_ISSUED];
+        self::GIFT_CARD_SOLD, self::GIFT_CARD_REDEEMED, self::GIFT_CARD_LOOKUP, self::GIFT_CARD_CANCELED, self::GIFT_CARD_ADJUSTED, self::GIFT_CARD_CASH_OUT, self::GIFT_CARD_REPLACED, self::GIFT_CARD_REFUNDED, self::STORE_CREDIT_ISSUED,
+        self::CUSTOMER_SEARCHED, self::CUSTOMER_VIEWED, self::CUSTOMER_CREATED, self::CUSTOMER_UPDATED, self::CUSTOMER_LINKED, self::CUSTOMER_MERGED, self::CUSTOMER_ERASED, self::CUSTOMER_EXPORTED,
+        self::LOYALTY_EARNED, self::LOYALTY_REDEEMED, self::LOYALTY_RETURNED, self::LOYALTY_ADJUSTED, self::LOYALTY_EXPIRED];
 
     /** Clé du verrou consultatif (par base, donc par site) */
     private const LOCK_KEY = 7461002;

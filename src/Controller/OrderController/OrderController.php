@@ -435,6 +435,9 @@ class OrderController extends AbstractController
         $dto->setCashRegisterId(is_numeric($data['cashRegisterId'] ?? null) ? (int) $data['cashRegisterId'] : null);
         // Remises de caisse (F1) : remises de ligne dans items[].discounts (déjà dans items), remise de ticket ici ; contrôlées par le serveur
         $dto->setTicketDiscount(is_array($data['ticketDiscount'] ?? null) ? $data['ticketDiscount'] : null);
+        // Fiche client et fidélité (F8) : client rattaché à la vente, points rachetés (remise de ticket calculée par le serveur)
+        $dto->setCustomerId(is_numeric($data['customerId'] ?? null) ? (int) $data['customerId'] : null);
+        $dto->setLoyaltyRedeemPoints(is_array($data['loyalty'] ?? null) && is_numeric($data['loyalty']['redeemPoints'] ?? null) ? (int) $data['loyalty']['redeemPoints'] : 0);
 
         $result = $this->createOrderUseCase->execute($dto);
         if (!$result instanceof Order && $paymentIntent !== null) {

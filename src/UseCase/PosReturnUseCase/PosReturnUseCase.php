@@ -84,6 +84,9 @@ class PosReturnUseCase
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
             $dto->setCreditApplied($credit);
             $dto->setTicketDiscount($ticketDiscount);
+            // Fiche client et fidélité (F8) : client de la vente d'échange (sale.customerId, sinon celui du retour ou de la vente d'origine), points rachetés
+            $dto->setCustomerId(is_numeric($saleInput['customerId'] ?? null) ? (int) $saleInput['customerId'] : ($return->getReturnOrder()->getCustomerId() ?? $return->getOrder()?->getCustomerId()));
+            $dto->setLoyaltyRedeemPoints(is_array($saleInput['loyalty'] ?? null) && is_numeric($saleInput['loyalty']['redeemPoints'] ?? null) ? (int) $saleInput['loyalty']['redeemPoints'] : 0);
             $dto->setVerifiedPaymentAmount($paid);
             $dto->setPaymentSplit($cash, $paid - $cash);
             $dto->setCashRegisterId($cashRegisterId);

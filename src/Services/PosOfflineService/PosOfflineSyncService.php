@@ -58,6 +58,8 @@ class PosOfflineSyncService
         private readonly PosApprovalService $approvals,
         private readonly PosDiscountService $discounts,
         private readonly PosLineService $posLines, // article libre et prix manuel (F7)
+        private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client (F8)
+        private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
     ) {
     }
 
@@ -316,6 +318,20 @@ class PosOfflineSyncService
         $order = $this->orders->createOrder($seller, $em->getReference(OrderSource::class, 2), null, null, $em->getReference(StatusCommande::class, 3), $em->getReference(OrderType::class, 1));
         $order->setOrderDate(\DateTime::createFromImmutable($soldAtCorrected));
         $order->setSyncedAt($now);
+        // Fiche client (F8) : customerId ou loyaltyCode connus de la tablette ; fiche absente → vente acceptée sans client, customerUnknown
+        $customer = null;
+        $customerUnknown = false;
+        if (is_numeric($sale['customerId'] ?? null) || is_string($sale['loyaltyCode'] ?? null)) {
+            $customer = is_numeric($sale['customerId'] ?? null) ? $em->find(\App\Entity\PosCustomer::class, (int) $sale['customerId']) : null;
+            if ($customer !== null && !$customer->isActive()) {
+                $customer = null;
+            }
+            $customer ??= is_string($sale['loyaltyCode'] ?? null) ? $this->customers->findByLoyaltyCode($sale['loyaltyCode']) : null;
+            $customerUnknown = $customer === null;
+            if ($customer !== null) {
+                $order->setCustomerId($customer->getId());
+            }
+        }
         $stockShortfall = [];
         foreach ($lines as $i => $line) {
             $variant = $variants[$i];
@@ -372,9 +388,11 @@ class PosOfflineSyncService
         $receipt = $this->receipts->issue($order, $caisse, PosReceipt::TICKET, $declaredTotal);
         $receipt->setProvisionalNumber($sale['provisionalNumber']);
         $em->flush();
+        $loyaltyEarned = $customer !== null ? $this->loyalty->earn($order, $customer, $caisse, $seller, $this->customers) : 0; // points (F8) sur le net recalculé
         $offline = ['provisionalNumber' => $sale['provisionalNumber'], 'soldAt' => $soldAtCorrected->format(\DateTimeInterface::ATOM), 'deviceSoldAt' => $soldAt->format(\DateTimeInterface::ATOM), 'clockOffsetSeconds' => $offset,
             'packVersion' => $packVersion, 'chain' => $sale['chain'] ?? null, 'chainBroken' => $chainBroken, 'priceDrift' => ['amount' => $driftAmount, 'taxes' => $taxDrift, 'within' => $within], 'currentPriceDrift' => $currentDrift,
-            'stockShortfall' => $stockShortfall, 'lateEntry' => $lateEntry, 'forced' => $forced, 'cashReceived' => is_numeric($sale['cashReceived'] ?? null) ? (int) $sale['cashReceived'] : null];
+            'stockShortfall' => $stockShortfall, 'lateEntry' => $lateEntry, 'forced' => $forced, 'cashReceived' => is_numeric($sale['cashReceived'] ?? null) ? (int) $sale['cashReceived'] : null,
+            'customerId' => $customer?->getId(), 'customerUnknown' => $customerUnknown, 'loyaltyEarned' => $loyaltyEarned];
         $this->audit->record(PosAuditService::SALE, [
             'kind' => 'sale', 'reference' => $order->getReference(), 'receiptKind' => $receipt->getKind(), 'receiptNumber' => $receipt->getNumber(),
             'subTotal' => $declaredSubtotal, 'totalTax' => $declaredTaxTotal, 'totalAmount' => $declaredTotal, 'cashRounding' => $cashRounding, 'discountTotal' => $expected['discountTotal'],
@@ -395,7 +413,8 @@ class PosOfflineSyncService
         return ['provisionalNumber' => $sale['provisionalNumber'], 'idempotencyKey' => $key, 'orderId' => $order->getId(), 'cashRegisterId' => $register->getId(), 'packVersion' => $packVersion,
             'receiptNumber' => $receipt->getNumber(), 'receiptReference' => $register->receiptReference($receipt->getNumber()), 'barcode' => sprintf('IZ-T-%d-%d', $register->getId(), $receipt->getNumber()),
             'soldAt' => $soldAtCorrected->format(\DateTimeInterface::ATOM), 'priceDrift' => $offline['priceDrift'], 'currentPriceDrift' => $currentDrift, 'stockShortfall' => $stockShortfall,
-            'lateEntry' => $lateEntry, 'chainBroken' => $chainBroken, 'forced' => $forced !== null, 'totals' => ['expected' => $expected['total'], 'declared' => $declaredTotal, 'cashTotal' => $declaredCash]];
+            'lateEntry' => $lateEntry, 'chainBroken' => $chainBroken, 'forced' => $forced !== null, 'totals' => ['expected' => $expected['total'], 'declared' => $declaredTotal, 'cashTotal' => $declaredCash],
+            'customer' => $customer !== null ? ['id' => $customer->getId(), 'loyaltyEarned' => $loyaltyEarned] : null, 'customerUnknown' => $customerUnknown];
     }
 
     /** Empreinte d'une vente pour le chaînage : sha256(prevHash + JSON canonique de la vente sans chain) */

@@ -21,7 +21,7 @@ use App\UseCase\CaisseUseCase\HandleCaisseTransactionUseCase as Tx;
  */
 class CashSessionReportBuilder
 {
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty)
     {
     }
 
@@ -127,6 +127,9 @@ class CashSessionReportBuilder
             'offline' => $this->offline($saleOrders),
             'customItems' => $this->customItems($saleOrders), // articles libres (F7, 26/10/2026)
             'priceOverrides' => $this->priceOverrides($saleOrders), // prix modifiés (F7)
+            // Fiche client et fidélité (F8, 28/10/2026) : ventes rattachées à un client, points gagnés, rachetés (points et valeur) et repris
+            'customers' => ['salesWithCustomer' => ['count' => count(array_filter($saleOrders, fn (Order $o) => $o->getCustomerId() !== null)), 'total' => (int) array_sum(array_map(fn (Order $o) => $o->getCustomerId() !== null ? (int) round((float) $o->getTotalAmount()) : 0, $saleOrders))],
+                'loyalty' => $this->loyalty->reportBlock((int) $session->getId())],
             // Cartes-cadeaux et avoirs (F9, 27/10/2026) : vendu, utilisé, avoirs émis, remboursé, ajusté (session) ; solde en cours du site (passif)
             'giftCards' => $em->getRepository(\App\Entity\PosGiftCardTransaction::class)->totalsForSession((int) $session->getId()) + ['outstanding' => $em->getRepository(\App\Entity\PosGiftCard::class)->outstanding()],
         ];

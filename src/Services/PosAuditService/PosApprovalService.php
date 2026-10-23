@@ -31,6 +31,8 @@ class PosApprovalService
     public const GIFT_CARD_CANCEL = 'gift_card_cancel'; // annulation d'une carte-cadeau vendue, jamais utilisée (F9, 27/10/2026)
     public const GIFT_CARD_ADJUST = 'gift_card_adjust'; // ajustement manuel de solde ou remboursement en espèces au-delà du seuil (F9)
     public const GIFT_CARD_REPLACE = 'gift_card_replace'; // remplacement d'une carte perdue (F9)
+    public const LOYALTY_ADJUST = 'loyalty_adjust'; // ajustement manuel de points (F8, 28/10/2026)
+    public const CUSTOMER_ERASE = 'customer_erase'; // effacement (anonymisation) d'une fiche client (F8)
     /** action → clés de contexte qui doivent correspondre */
     public const CONTEXT = [
         self::REFUND => ['orderId'],
@@ -46,6 +48,8 @@ class PosApprovalService
         self::GIFT_CARD_CANCEL => ['amount'], // montant remboursé (cents)
         self::GIFT_CARD_ADJUST => ['amount'], // valeur absolue de l'ajustement ou du solde remboursé (cents)
         self::GIFT_CARD_REPLACE => ['amount'], // solde reporté (cents)
+        self::LOYALTY_ADJUST => ['customerId', 'points'], // points ajustés (valeur absolue)
+        self::CUSTOMER_ERASE => ['customerId'],
     ];
     /** Clés de contexte textuelles (les autres sont numériques) */
     public const STRING_CONTEXT = ['scope'];

@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (225)
+## Boutique et commun (235)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -356,6 +356,16 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/pos/approvals` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::approve` |
 | GET | `/api/pos/audit/verify` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosAuditController::verify` |
 | GET | `/api/pos/audit` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosAuditController::list` |
+| POST | `/api/pos/customers/{id}/erase` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::erase` |
+| GET | `/api/pos/customers/{id}/export` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::export` |
+| GET | `/api/pos/customers/{id}/history` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::history` |
+| POST | `/api/pos/customers/{id}/link` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::link` |
+| POST | `/api/pos/customers/{id}/loyalty/adjust` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::adjustLoyalty` |
+| POST | `/api/pos/customers/{id}/merge` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::merge` |
+| GET | `/api/pos/customers/{id}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::get` |
+| PATCH | `/api/pos/customers/{id}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::update` |
+| GET | `/api/pos/customers` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::search` |
+| POST | `/api/pos/customers` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::create` |
 | POST | `/api/pos/exchanges/quote` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::exchangeQuote` |
 | POST | `/api/pos/exchanges` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::exchange` |
 | POST | `/api/pos/gift-cards/replace` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::replace` |

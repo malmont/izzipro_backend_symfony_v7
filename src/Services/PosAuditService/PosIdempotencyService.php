@@ -31,7 +31,8 @@ class PosIdempotencyService implements ResetInterface
     public const ROUTES = ['order_create_multi_payment', 'order_cancel', 'caisse_open', 'caisse_close', 'caisse_deposit', 'caisse_withdraw',
         'caisse_cash_funddeposit', 'caisse_cash_fund_withdraw', 'caisse_drawer_open',
         'pos_terminal_payment_create', 'pos_terminal_payment_cancel', 'pos_terminal_payment_refund', 'pos_return_create', 'pos_exchange_create', 'pos_receipt_email',
-        'pos_gift_card_create', 'pos_gift_card_cancel', 'pos_gift_card_adjust', 'pos_gift_card_cash_out', 'pos_gift_card_replace']; // cartes-cadeaux (F9, 27/10/2026)
+        'pos_gift_card_create', 'pos_gift_card_cancel', 'pos_gift_card_adjust', 'pos_gift_card_cash_out', 'pos_gift_card_replace', // cartes-cadeaux (F9, 27/10/2026)
+        'pos_customer_create', 'pos_customer_merge', 'pos_customer_erase', 'pos_loyalty_adjust']; // fiche client et fidélité (F8, 28/10/2026)
     private const STALE_SECONDS = 60;
     private const RETENTION_DAYS = 7;
 

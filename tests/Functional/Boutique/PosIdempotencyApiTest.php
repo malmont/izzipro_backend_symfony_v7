@@ -69,7 +69,8 @@ class PosIdempotencyApiTest extends WebTestCase
         $orderId = json_decode($sale1->getContent(), true)['orderId'];
         $this->assertSame($orders + 1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM "order"'), 'une seule vente');
         $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_receipt WHERE order_id = ?", [$orderId]), 'un seul numéro de ticket');
-        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'SALE' AND payload LIKE ?", ['%"id":' . $orderId . '%']), 'une seule entrée de journal');
+        $reference = $this->db->fetchOne('SELECT reference FROM "order" WHERE id = ?', [$orderId]);
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'SALE' AND payload LIKE ?", ['%"reference":"' . $reference . '"%']), 'une seule entrée de journal (filtre sur la référence : "id" tombait sur des identifiants d\'utilisateurs)');
         $this->assertSame('done', $this->db->fetchOne('SELECT status FROM pos_idempotency_key WHERE idem_key = ?', [$this->key]));
 
         $this->key = self::uuid();

@@ -151,6 +151,19 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflinePriceTolerance', 'Écart de prix toléré par vente (cents)')->setHelp('Recalcul au pack déclaré ; au-delà, vente refusée sauf acceptation forcée par un responsable ; défaut 5')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflinePackValidityHours', 'Validité du pack hors ligne (heures)')->setHelp('défaut 24')->hideOnIndex(),
 
+            // Fiche client et fidélité (F8, 28/10/2026)
+            FormField::addPanel('Clients et fidélité (caisse)')->setHelp('Fiche client de caisse (nom, téléphone, courriel, consentements) distincte du compte web, rattachable à un compte existant avec le consentement du client ; aucun compte web ni courriel n\'est créé. Fidélité : points gagnés sur le net des articles (hors taxes, hors part payée par carte-cadeau), rachetés en remise de ticket calculée par le serveur. Données personnelles (Loi 25, RGPD) : consentements datés par finalité, marketing séparé et désactivé par défaut, journal des consultations, effacement = anonymisation.'),
+            BooleanField::new('posCustomersEnabled', 'Fiche client activée')->hideOnIndex(),
+            BooleanField::new('posCustomerLinkEnabled', 'Rattachement d\'un compte web autorisé (avec consentement)')->hideOnIndex(),
+            BooleanField::new('posLoyaltyEnabled', 'Programme de fidélité activé')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posLoyaltyPointsPerDollar', 'Points gagnés par dollar dépensé')->setHelp('défaut 1')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posLoyaltyValuePer100', 'Valeur de 100 points (cents)')->setHelp('défaut 100 = 1,00 $')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posLoyaltyMinRedeem', 'Minimum de points pour un rachat')->setHelp('défaut 500')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posLoyaltyRedeemStep', 'Pas de rachat (points)')->setHelp('défaut 100')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posLoyaltyExpiryMonths', 'Expiration des points (mois sans activité)')->setRequired(false)->setHelp('Vide = jamais')->hideOnIndex(),
+            TextField::new('posConsentTextVersion', 'Version du texte des consentements')->setRequired(false)->setHelp('Référence enregistrée avec chaque consentement, p. ex. 2026-10')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCustomerSearchPerMinute', 'Recherches de clients par utilisateur et par minute')->setHelp('Empêche de tester des courriels un par un pour savoir qui a un compte web ; défaut 30, 0 = sans limite')->hideOnIndex(),
+
             // Cartes-cadeaux et avoirs (F9, 27/10/2026) : désactivés par défaut
             FormField::addPanel('Cartes-cadeaux et avoirs (caisse)')->setHelp('Carte-cadeau vendue en caisse (code unique non devinable, ticket Code 128 et QR, ou carte physique pré-imprimée) et avoir émis par un retour, utilisables comme moyen de paiement. La vente d\'une carte est un passif, pas un chiffre d\'affaires : taxes à l\'utilisation. Expiration : la règle dépend du pays. Au Québec, une carte prépayée vendue contre de l\'argent ne peut pas expirer et un solde de 5,00 $ ou moins doit être remboursé en espèces sur demande (vide = jamais d\'expiration, seuil 500). La France ou d\'autres pays ont d\'autres règles : ajustez ces valeurs.'),
             BooleanField::new('posGiftCardEnabled', 'Cartes-cadeaux activées')->hideOnIndex(),

@@ -246,6 +246,9 @@ class PosGiftCardService
         $item = (new OrderItems())->setOrderAssociated($order)->setQuantity(1)->setUnitPrice((float) $amount)->setTotalPrice((float) $amount)->setCustomLabel('Carte-cadeau •••• ' . substr($code, -4))->setTaxable(false);
         $order->addOrderItem($item);
         $order->setSubTotal($amount)->setTotalTax(0)->setTotalAmount($amount);
+        if (is_numeric($body['customerId'] ?? null)) { // fiche client (F8) : acheteur de la carte (aucun point : passif)
+            $order->setCustomerId((int) $em->getConnection()->fetchOne('SELECT id FROM pos_customer WHERE id = ? AND erased_at IS NULL AND merged_into_id IS NULL', [(int) $body['customerId']]) ?: throw new CashRegisterException('CUSTOMER_NOT_FOUND', 'Fiche client introuvable', 404, [], ['customerId' => (int) $body['customerId']]));
+        }
         $em->persist($order);
         $em->persist($item);
         $em->flush();
@@ -271,6 +274,7 @@ class PosGiftCardService
         $receipt = $this->receipts->issue($order, $caisse, PosReceipt::GIFT_CARD, $amount);
 
         $card = new PosGiftCard(PosGiftCard::GIFT_CARD, self::hash($code), substr($code, -4), $amount);
+        $card->setCustomerId($order->getCustomerId()); // fiche client (F8)
         $card->setIssuedOrderId($order->getId())->setIssuedById($user->getId())->setCashRegisterId($register->getId())
             ->setExpiresAt($settings['expiryMonths'] !== null ? new \DateTimeImmutable('+' . $settings['expiryMonths'] . ' months') : null);
         $em->persist($card);

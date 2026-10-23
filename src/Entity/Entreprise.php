@@ -296,6 +296,40 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => false])]
     private bool $posOfflineEnabled = false;
 
+    // Fiche client et fidélité (F8, 28/10/2026) : fiche client activée (aucun effet sans rattachement), rattachement d'un compte web
+    // autorisé, programme de fidélité désactivé par défaut, points par dollar, valeur de 100 points (cents), minimum et pas de rachat,
+    // expiration des points après N mois sans activité (null = jamais), version du texte des consentements
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posCustomersEnabled = true;
+
+    #[ORM\Column(options: ['default' => true])]
+    private bool $posCustomerLinkEnabled = true;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posLoyaltyEnabled = false;
+
+    #[ORM\Column(options: ['default' => 1])]
+    private int $posLoyaltyPointsPerDollar = 1;
+
+    #[ORM\Column(options: ['default' => 100])]
+    private int $posLoyaltyValuePer100 = 100;
+
+    #[ORM\Column(options: ['default' => 500])]
+    private int $posLoyaltyMinRedeem = 500;
+
+    #[ORM\Column(options: ['default' => 100])]
+    private int $posLoyaltyRedeemStep = 100;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $posLoyaltyExpiryMonths = null;
+
+    #[ORM\Column(length: 40, nullable: true)]
+    private ?string $posConsentTextVersion = null;
+
+    /** Recherches de clients par utilisateur et par minute (anti-énumération des comptes web), 0 = sans limite */
+    #[ORM\Column(options: ['default' => 30])]
+    private int $posCustomerSearchPerMinute = 30;
+
     // Cartes-cadeaux et avoirs (F9, 27/10/2026) : désactivés par défaut ; montants proposés (cents, séparés par des virgules) ;
     // expiration en mois (null = jamais : règle du Québec pour une carte vendue contre de l'argent) ; seuil de remboursement en
     // espèces d'un solde (cents, défaut 500 = 5,00 $ : droit du client au Québec) ; remboursement au-delà avec validation
@@ -879,6 +913,28 @@ class Entreprise implements TranslatableInterface
     public function setPosReturnReasons(?string $text): static { $t = $text !== null ? trim(strip_tags($text)) : ''; $this->posReturnReasons = $t === '' ? null : mb_substr($t, 0, 2000); return $this; }
     /** @return list<array{code: string, label: string}> motifs du site (liste par défaut si vide) */
     public function returnReasons(): array { return self::reasonList($this->posReturnReasons, self::RETURN_REASONS_DEFAULT); }
+
+    // Fiche client et fidélité (F8, 28/10/2026)
+    public function isPosCustomersEnabled(): bool { return $this->posCustomersEnabled; }
+    public function setPosCustomersEnabled(bool $v): static { $this->posCustomersEnabled = $v; return $this; }
+    public function isPosCustomerLinkEnabled(): bool { return $this->posCustomerLinkEnabled; }
+    public function setPosCustomerLinkEnabled(bool $v): static { $this->posCustomerLinkEnabled = $v; return $this; }
+    public function isPosLoyaltyEnabled(): bool { return $this->posLoyaltyEnabled; }
+    public function setPosLoyaltyEnabled(bool $v): static { $this->posLoyaltyEnabled = $v; return $this; }
+    public function getPosLoyaltyPointsPerDollar(): int { return $this->posLoyaltyPointsPerDollar; }
+    public function setPosLoyaltyPointsPerDollar(?int $v): static { $this->posLoyaltyPointsPerDollar = max(0, min(1000, (int) $v)); return $this; }
+    public function getPosLoyaltyValuePer100(): int { return $this->posLoyaltyValuePer100; }
+    public function setPosLoyaltyValuePer100(?int $v): static { $this->posLoyaltyValuePer100 = max(0, (int) $v); return $this; }
+    public function getPosLoyaltyMinRedeem(): int { return $this->posLoyaltyMinRedeem; }
+    public function setPosLoyaltyMinRedeem(?int $v): static { $this->posLoyaltyMinRedeem = max(1, (int) $v); return $this; }
+    public function getPosLoyaltyRedeemStep(): int { return $this->posLoyaltyRedeemStep; }
+    public function setPosLoyaltyRedeemStep(?int $v): static { $this->posLoyaltyRedeemStep = max(1, (int) $v); return $this; }
+    public function getPosLoyaltyExpiryMonths(): ?int { return $this->posLoyaltyExpiryMonths; }
+    public function setPosLoyaltyExpiryMonths(?int $m): static { $this->posLoyaltyExpiryMonths = $m !== null && $m > 0 ? min(600, $m) : null; return $this; }
+    public function getPosCustomerSearchPerMinute(): int { return $this->posCustomerSearchPerMinute; }
+    public function setPosCustomerSearchPerMinute(?int $v): static { $this->posCustomerSearchPerMinute = max(0, (int) $v); return $this; }
+    public function getPosConsentTextVersion(): ?string { return $this->posConsentTextVersion; }
+    public function setPosConsentTextVersion(?string $v): static { $t = $v !== null ? trim($v) : ''; $this->posConsentTextVersion = $t === '' ? null : mb_substr($t, 0, 40); return $this; }
 
     // Cartes-cadeaux et avoirs (F9, 27/10/2026)
     public const GIFT_CARD_AMOUNTS_DEFAULT = [2500, 5000, 10000];

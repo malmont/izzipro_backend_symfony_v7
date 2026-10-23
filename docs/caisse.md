@@ -82,6 +82,7 @@ Pas de `DELETE` : un poste se désactive.
 
 > Ajouts P2-a (26/10/2026) : `items[].custom` (article libre) et `items[].priceOverride` (prix manuel), voir « Article libre et prix manuel » ; `typeOrder: 2` soumis au réglage « retour sans ticket ».
 > Ajout F9 (27/10/2026) : `paymentMethods[] {type: 4 | 5, amount, code}` (carte-cadeau, avoir), voir « Cartes-cadeaux et avoirs ».
+> Ajout F8 (28/10/2026) : `customerId` (client de caisse rattaché) et `loyalty: {redeemPoints}` (points rachetés en remise de ticket), voir « Fiche client et fidélité ».
 
 Route distincte du tunnel web (`/api/order/create`, `create-guest`, webhook Stripe), réservée à `ROLE_USER_POS` et
 `ROLE_ADMIN`. Corps :
@@ -969,6 +970,92 @@ reçu à la première réponse. `POST /api/order/cancel/{id}` sur une vente de c
 
 `settings.approvals.giftCardCancel`, `giftCardAdjust`, `giftCardReplace` : `{required: true}` (toujours un responsable). Références :
 Loi sur la protection du consommateur du Québec, art. 187.3 (expiration) et OPC (remboursement d'un solde ≤ 5 $).
+
+## Fiche client et fidélité (lot F8, 28/10/2026)
+
+Code : `Services/PosCustomerService/PosCustomerService` et `PosLoyaltyService`, `UseCase/PosCustomerUseCase`,
+`Controller/PosController/PosCustomerController`. Fiche client activée par défaut (aucun effet sans rattachement), fidélité
+désactivée par défaut.
+
+### État des lieux et modèle
+
+- Les clients de la boutique en ligne sont des `user` (`ROLE_USER_INTERNET`, courriel obligatoire et unique ; téléphone sur les
+  adresses). `order.user_id` est le client d'une commande web mais **le caissier** d'une vente en caisse. Aucun programme de
+  fidélité ni consentement n'existait ; la newsletter (`newsletter_subscriber`) reste au web.
+- **Fiche de caisse `pos_customer`**, distincte du compte web : prénom, nom, téléphone **E.164** (« +15145551234 » : 514-555-1234,
+  (514) 555-1234 et +1 514 555 1234 donnent la même fiche ; numéro national interprété avec le pays du site, international avec + ;
+  les adresses web existantes ne sont pas touchées), courriel (minuscules),
+  `user_id` du compte web rattaché (rien n'est écrit sur `user`, aucun compte ni courriel créé), `loyalty_code` (`FD-XXXX-XXXX`,
+  code-barres `IZ-F-<code>`), `loyalty_points`, dates, `erased_at`, `merged_into_id`. `pos_customer_consent` : finalité
+  (`loyalty`, `receipts`, `marketing`, `account_link`), accordé ou retiré, date, caissier, version du texte (historique conservé,
+  état effectif = dernière ligne). `pos_loyalty_transaction` : `earn`, `redeem`, `return`, `adjust`, `expire`, `merge_in`,
+  `merge_out`, points signés, solde après, valeur, commande, retour, session. Colonnes additives `order.customer_id` et
+  `pos_gift_card.customer_id`.
+
+### Routes (`/api/pos/customers`, caisse)
+
+| Route | Corps / réponse |
+|---|---|
+| `GET /api/pos/customers?q=` | Recherche : code de fidélité (exact, `IZ-F-` accepté), **courriel exact**, **téléphone exact** (E.164 ou 10 derniers chiffres), sinon **nom (3 caractères au moins), fiches de caisse seulement**. Les comptes web (`source: web`) ne sortent que sur un courriel ou un téléphone exact, jamais par nom, jamais s'ils sont déjà rattachés. 20 résultats au plus. **Limite par utilisateur** : `customers.searchPerMinute` recherches par minute (défaut 30, 0 = sans limite) → 429 **`CUSTOMER_SEARCH_RATE_LIMITED`** `{limit, retryAfterSeconds}`, comptée sur le journal. Journal **`CUSTOMER_SEARCHED`** `{kind, query (courriel et téléphone masqués), posResults, webResults}`. |
+| `POST /api/pos/customers` (`Idempotency-Key`) | `{firstName?, lastName?, phone?, email?, consents?: {loyalty, receipts, marketing, account_link}}` : un nom et un téléphone ou un courriel ; 409 `CUSTOMER_EXISTS {customerId, field}` ; code de fidélité attribué dès le consentement `loyalty`. 201 fiche. |
+| `GET /api/pos/customers/{id}` | Fiche (journal **`CUSTOMER_VIEWED`**) ; `GET …/{id}/history` : ventes, retours et cartes de caisse (`order.customer_id`), commandes web du compte rattaché (détail pour le responsable), mouvements de points, totaux. Fiche effacée : lisible (comptabilité), 410 `CUSTOMER_ERASED` en écriture ; fusionnée : 409 `CUSTOMER_MERGED {mergedIntoId}`. |
+| `PATCH /api/pos/customers/{id}` | Coordonnées et consentements ; journal `CUSTOMER_UPDATED` (clés modifiées) |
+| `POST /api/pos/customers/{id}/link` | `{userId}` : rattachement à un compte web ; **consentement `account_link` exigé** (409 `CONSENT_REQUIRED`), 404 `USER_NOT_FOUND`, 409 `USER_ALREADY_LINKED`, `CUSTOMER_LINK_DISABLED` |
+| `POST /api/pos/customers/{id}/merge` (`Idempotency-Key`) | `{intoId}` (responsable) : ventes, cartes, points et consentements accordés passent sur la fiche conservée |
+| `POST /api/pos/customers/{id}/erase` (`Idempotency-Key`) | Responsable (action C3 `customer_erase {customerId}` pour les validations) : **anonymisation** (nom, coordonnées, code, compte rattaché effacés, consentements retirés, points annulés) ; les ventes restent rattachées |
+| `GET /api/pos/customers/{id}/export` | Responsable : droit d'accès, données complètes et historique des consentements (`CUSTOMER_EXPORTED`) |
+| `POST /api/pos/customers/{id}/loyalty/adjust` (`Idempotency-Key`) | `{points (signé), reason, cashRegisterId?}` : responsable, ou caissier avec validation C3 **`loyalty_adjust`** `{customerId, points}` |
+
+**Masquage** : le caissier voit nom, `phone` « •••• 1234 », `email` « m***@domaine », `linkedAccount` (sans `userId`), points et
+consentements ; le responsable voit tout. Fiche client désactivée : 409 `CUSTOMERS_DISABLED`.
+
+### Rattachement d'une vente, fidélité, reçu
+
+- `customerId` dans `POST /api/order/create-multi-payment`, `POST /api/pos/returns` (sinon client de la vente d'origine),
+  `POST /api/pos/exchanges` (`sale.customerId`), `POST /api/pos/gift-cards` (acheteur, aucun point). Détachement : ne pas envoyer la
+  clé (rien n'est modifié après l'encaissement). 404 `CUSTOMER_NOT_FOUND`, 409 `CUSTOMER_NOT_ALLOWED` hors caisse.
+- **Points gagnés** : `floor(assiette / 100) × pointsPerDollar`, assiette = net des articles après remises, hors taxes, **moins la part
+  payée par carte-cadeau ou avoir** ; jamais sur une vente de carte-cadeau ; seulement si le programme est actif et le consentement
+  `loyalty` accordé. **Rachat** : `loyalty: {redeemPoints: N}` dans la vente (ou `sale.loyalty` d'un échange) → remise de ticket
+  calculée par le serveur (`valuePer100Points`, minimum `minRedeem`, pas `redeemStep`), motif « Récompense fidélité (N points) »,
+  **hors plafonds et validations caissier**, taxes sur le net ; incompatible avec une remise de ticket saisie (409
+  `LOYALTY_TICKET_DISCOUNT_CONFLICT`) ; 422 `LOYALTY_POINTS_INVALID`, 409 `LOYALTY_INSUFFICIENT`, `LOYALTY_DISABLED`,
+  `LOYALTY_CONSENT_REQUIRED`, `LOYALTY_CUSTOMER_REQUIRED`. Le programme s'appuie sur les remises F1 : elles doivent rester autorisées.
+- **Retour** : points de la vente repris au prorata du net remboursé, jamais au-delà des points gagnés ; **points déjà dépensés :
+  solde ramené à 0, manque indiqué** dans la réponse (`loyalty {returned, shortfall, balance}`) et le journal (`LOYALTY_RETURNED
+  {due, points, shortfall}`), le retour n'est jamais bloqué ; annulation d'une vente : tous les points repris, même règle. **Expiration**
+  : solde remis à zéro après N mois sans gain ni rachat (réglage, **vide = jamais, désactivée par défaut**).
+- Ticket : `customer {id, name (prénom et initiale), loyalty {earned, redeemed, redeemedAmount, balance, code}}` (null sans client).
+  Journal `LOYALTY_EARNED`, `LOYALTY_REDEEMED`, `LOYALTY_RETURNED`, `LOYALTY_ADJUSTED`, `LOYALTY_EXPIRED` ; `SALE.data.customerId`, `loyalty`.
+- Reçu par courriel F3 : `POST /api/pos/receipts/email {barcode}` **sans `email`** → adresse du client rattaché s'il a consenti aux
+  reçus (`receipts`), journal `source: customer` ; sinon 422 `EMAIL_INVALID` comme avant. L'adresse n'est toujours pas conservée sur le reçu.
+- Rapports X et Z : **`customers {salesWithCustomer {count, total}, loyalty {earned, redeemed {points, amount, count}, returned}}`**.
+- Hors ligne (C5 partie 2) : pas de fichier client dans le pack. Une vente hors ligne porte `customerId` ou `loyaltyCode` connus de la
+  tablette : rattachement et points à la synchronisation, réponse `customer {id, loyaltyEarned}` ; fiche absente ou effacée →
+  vente acceptée sans client, `customerUnknown: true`. Aucune création hors ligne (`settings.customers.offline = "queued"`).
+
+### Données personnelles (Loi 25, RGPD)
+
+Consentement explicite enregistré par finalité avec date, caissier et version du texte (`settings.customers.consentTextVersion`) ;
+`marketing` séparé, jamais présumé ; `account_link` exigé avant tout rattachement à un compte web. Données minimales (pas d'adresse
+postale sur la fiche). Journal C2 de chaque recherche, consultation, export, modification. Droit d'accès : export ; droit à
+l'effacement : anonymisation, pas de suppression (les ventes restent rattachées à la fiche anonymisée).
+
+### Réglages (panneau EasyAdmin « Clients et fidélité (caisse) », `settings.customers` et `settings.loyalty`)
+
+| Réglage | Défaut | Clé |
+|---|---|---|
+| Fiche client activée | **oui** | `customers.enabled` |
+| Rattachement d'un compte web autorisé | oui | `customers.linkEnabled` |
+| Version du texte des consentements | vide | `customers.consentTextVersion` |
+| Recherches de clients par utilisateur et par minute | 30 (0 = sans limite) | `customers.searchPerMinute` |
+| Programme de fidélité activé | **non** | `loyalty.enabled` |
+| Points par dollar dépensé | 1 | `loyalty.pointsPerDollar` |
+| Valeur de 100 points (cents) | 100 | `loyalty.valuePer100Points` |
+| Minimum et pas de rachat (points) | 500 et 100 | `loyalty.minRedeem`, `loyalty.redeemStep` |
+| Expiration des points (mois sans activité) | vide = jamais | `loyalty.expiryMonths` |
+
+`settings.approvals.loyaltyAdjust` et `customerErase` : `{required: true}`.
 
 ## Mécanique interne
 
