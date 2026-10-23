@@ -481,6 +481,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Shipping Labels', 'fas fa-tag',          ShippingLabel::class);
 
         yield MenuItem::section('IIZIMANAGER');
+        yield MenuItem::linkToRoute('Exports comptables (caisse)', 'fas fa-file-csv', 'admin_pos_exports'); // F14 (29/10/2026)
         yield MenuItem::linkToCrud('Collections', 'fas fa-archive', Collections::class);
         yield MenuItem::linkToCrud('Commandes', 'fas fa-shopping-cart', Commande::class);
         yield MenuItem::linkToCrud('Notes de Frais', 'fas fa-receipt', NoteDeFrais::class);

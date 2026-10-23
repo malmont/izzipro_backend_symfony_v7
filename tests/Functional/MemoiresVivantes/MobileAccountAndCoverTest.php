@@ -133,7 +133,9 @@ class MobileAccountAndCoverTest extends BookTypeApiTestCase
         $this->assertSame(401, $this->as('GET', '/api/memoires/books?scope=my', null, $owner['token'])[0], 'l\'ancien jeton ne désigne plus personne');
         // Le registre garde la trace, sous l'identité anonymisée
         [, $ledger] = $this->api('GET', '/admin/payments?search=' . urlencode("supprime-{$owner['id']}"));
-        $this->assertSame(['chapter', 'print'], array_values(array_unique(array_column($ledger['payments'], 'kind'))));
+        $kinds = array_values(array_unique(array_column($ledger['payments'], 'kind')));
+        sort($kinds); // deux paiements créés la même seconde : l'ordre du registre n'est pas garanti
+        $this->assertSame(['chapter', 'print'], $kinds);
     }
 
     /** @return array{status: string, detail: string} */

@@ -211,6 +211,29 @@ class PosOfflineApiTest extends WebTestCase
         $this->assertSame(403, $this->request('GET', '/api/pos/offline-sales')->getStatusCode());
         $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
         $this->assertGreaterThanOrEqual(5, count($this->json($this->request('GET', '/api/pos/offline-sales?terminalId=' . $this->terminalId))['syncs']));
+        // Clé d'idempotence déjà utilisée par une vente EN LIGNE (réponse perdue par la caisse, vente mise en file avec la même clé) :
+        // même montant → duplicate avec la commande existante, aucune seconde commande ; autre montant → rejected IDEMPOTENCY_KEY_REUSED
+        $onlineKey = self::uuid();
+        $qo = $this->json($this->request('POST', '/api/pos/quote', ['items' => [['productVariantId' => $this->cap, 'quantity' => 1]], 'cashRegisterId' => $this->register]));
+        $online = $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => [['productVariantId' => $this->cap, 'quantity' => 1]], 'paymentMethods' => [['type' => 2, 'amount' => $qo['cashTotal'] / 100]], 'cashRegisterId' => $this->register], ['HTTP_IDEMPOTENCY_KEY' => $onlineKey]), 201);
+        $queued = $this->offlineSale($seller, "P-$this->terminalId-9", [['productVariantId' => $this->cap, 'quantity' => 1]], $pack, $sale3['chain']['hash']);
+        $queued['idempotencyKey'] = $onlineKey;
+        $queued['totals']['total'] = (int) round($online['totalAmount'] * 100); // même montant que la vente en ligne (prix courant, pas celui du pack)
+        $queued['chain']['hash'] = PosOfflineSyncService::hashOf($queued, $sale3['chain']['hash']);
+        $ordersBefore = (int) $this->db->fetchOne('SELECT COUNT(*) FROM "order"');
+        $dupOnline = $this->json($this->request('POST', '/api/pos/offline-sales', $batch + ['sales' => [$queued]]))['results'][0];
+        $this->assertArrayHasKey('onlineSale', $dupOnline, json_encode($dupOnline));
+        $this->assertSame(['duplicate', true, $online['orderId'], $online['receiptNumber'], $online['barcode']], [$dupOnline['status'], $dupOnline['onlineSale'], $dupOnline['orderId'], $dupOnline['receiptNumber'], $dupOnline['barcode']], 'clé de la vente en ligne reconnue');
+        $this->assertSame($ordersBefore, (int) $this->db->fetchOne('SELECT COUNT(*) FROM "order"'), 'aucune seconde commande');
+        $this->assertSame('duplicate', $this->json($this->request('POST', '/api/pos/offline-sales', $batch + ['sales' => [$queued]]))['results'][0]['status'], 'rejeu : même réponse');
+        $this->assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'OFFLINE_SYNC' AND payload LIKE ?", ['%"kind":"online_duplicate"%"idempotencyKey":"' . $onlineKey . '"%']), 'journalisé');
+        $other = $this->offlineSale($seller, "P-$this->terminalId-10", [['productVariantId' => $this->cap, 'quantity' => 2]], $pack, $queued['chain']['hash']);
+        $other['idempotencyKey'] = $onlineKey;
+        $other['provisionalNumber'] = "P-$this->terminalId-10";
+        $other['chain']['hash'] = PosOfflineSyncService::hashOf($other, $queued['chain']['hash']);
+        $reused = $this->json($this->request('POST', '/api/pos/offline-sales', $batch + ['sales' => [$other]]))['results'][0];
+        $this->assertSame(['rejected', 'IDEMPOTENCY_KEY_REUSED', false, $online['orderId']], [$reused['status'], $reused['error'], $reused['forceable'], $reused['orderId']], 'autre montant : refus');
+        $this->assertSame($ordersBefore, (int) $this->db->fetchOne('SELECT COUNT(*) FROM "order"'));
         $this->db->executeStatement('UPDATE entreprise SET pos_offline_enabled = false');
     }
 

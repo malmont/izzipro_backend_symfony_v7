@@ -1,6 +1,6 @@
 {
   "rule": "pos-offline-v1",
-  "description": "Jeu de cas partagé backend / POS : le total hors ligne calculé par la tablette doit être identique, au cent, au résultat attendu. Montants en cents ; rate = taux décimal ; step = pas d'arrondi des espèces (1 = aucun). Lignes facultatives (F7) : custom {label, unitPrice, taxable} = article libre (unitPrice de la ligne ignoré), priceOverride {unitPrice} = prix manuel ; taxes sur taxableSubtotal.",
+  "description": "Jeu de cas partagé backend / POS : le total hors ligne calculé par la tablette doit être identique, au cent, au résultat attendu. Montants en cents ; rate = taux décimal ; step = pas d'arrondi des espèces (1 = aucun). Lignes facultatives (F7) : custom {label, unitPrice, taxable} = article libre (unitPrice de la ligne ignoré), priceOverride {unitPrice} = prix manuel ; taxes sur taxableSubtotal. chainVectors : vecteurs de test du chaînage (clé à part, F14).",
   "cases": [
     {
       "id": "simple-une-ligne-qc",
@@ -918,6 +918,81 @@
         "cashRounding": 0,
         "change": null
       }
+    }
+  ],
+  "chainVectors": [
+    {
+      "id": "chaine-vente-complete-accents",
+      "description": "hash = sha256(prevHash + JSON canonique de la vente sans la clé chain) ; canonique = clés triées récursivement, sans espaces, UTF-8 et / non échappés (JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES). Le POS doit reproduire canonical et hash à l'octet près.",
+      "prevHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sale": {
+        "idempotencyKey": "3f6b2c1e-9d4a-4b7e-8c21-5a0e7d9f1b23",
+        "provisionalNumber": "P-7-42",
+        "cashRegisterId": 1,
+        "sellerId": 38,
+        "soldAt": "2026-10-28T14:05:09-04:00",
+        "items": [
+          {
+            "productVariantId": 1,
+            "quantity": 2,
+            "discounts": [
+              {
+                "type": "percent",
+                "value": 10,
+                "reasonCode": "fidelite"
+              }
+            ]
+          },
+          {
+            "custom": {
+              "label": "Retouche d’ourlet – café crème à côté",
+              "unitPrice": 1500,
+              "taxable": true
+            },
+            "quantity": 1
+          },
+          {
+            "productVariantId": 2,
+            "quantity": 1,
+            "priceOverride": {
+              "unitPrice": 1700,
+              "reasonCode": "prix_concurrent"
+            }
+          }
+        ],
+        "ticketDiscount": {
+          "type": "amount",
+          "value": 300,
+          "reasonText": "Geste commercial — Noël"
+        },
+        "payments": [
+          {
+            "type": 2,
+            "amount": 9800
+          }
+        ],
+        "cashReceived": 10000,
+        "totals": {
+          "subtotal": 8220,
+          "taxes": [
+            {
+              "label": "TPS",
+              "amount": 411
+            },
+            {
+              "label": "TVQ",
+              "amount": 820
+            }
+          ],
+          "total": 9451,
+          "cashTotal": 9450,
+          "cashRounding": -1
+        },
+        "customerId": 12,
+        "loyaltyCode": "FD-G8MJ-V2CJ"
+      },
+      "canonical": "{\"cashReceived\":10000,\"cashRegisterId\":1,\"customerId\":12,\"idempotencyKey\":\"3f6b2c1e-9d4a-4b7e-8c21-5a0e7d9f1b23\",\"items\":[{\"discounts\":[{\"reasonCode\":\"fidelite\",\"type\":\"percent\",\"value\":10}],\"productVariantId\":1,\"quantity\":2},{\"custom\":{\"label\":\"Retouche d’ourlet – café crème à côté\",\"taxable\":true,\"unitPrice\":1500},\"quantity\":1},{\"priceOverride\":{\"reasonCode\":\"prix_concurrent\",\"unitPrice\":1700},\"productVariantId\":2,\"quantity\":1}],\"loyaltyCode\":\"FD-G8MJ-V2CJ\",\"payments\":[{\"amount\":9800,\"type\":2}],\"provisionalNumber\":\"P-7-42\",\"sellerId\":38,\"soldAt\":\"2026-10-28T14:05:09-04:00\",\"ticketDiscount\":{\"reasonText\":\"Geste commercial — Noël\",\"type\":\"amount\",\"value\":300},\"totals\":{\"cashRounding\":-1,\"cashTotal\":9450,\"subtotal\":8220,\"taxes\":[{\"amount\":411,\"label\":\"TPS\"},{\"amount\":820,\"label\":\"TVQ\"}],\"total\":9451}}",
+      "hash": "a60c9cc829b39c27339b14fc3e6cc552061954fa6f5ad3749f77c9224cff0c19"
     }
   ]
 }

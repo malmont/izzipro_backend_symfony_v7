@@ -107,6 +107,45 @@ class PosOfflineSyncService
                 $counts['duplicates']++;
                 continue;
             }
+            if ($seen && $seen->getStatus() === 'duplicate') { // doublon d'une vente en ligne déjà reconnu : même montant → même réponse, autre montant → refus
+                $stored = $seen->getResult();
+                if ((int) ($sale['totals']['total'] ?? -1) === (int) ($stored['totals']['online'] ?? -2)) {
+                    $results[] = ['status' => 'duplicate'] + $stored;
+                    $counts['duplicates']++;
+                } else {
+                    $results[] = ['status' => 'rejected', 'provisionalNumber' => $sale['provisionalNumber'], 'error' => 'IDEMPOTENCY_KEY_REUSED', 'message' => 'Clé d\'idempotence déjà utilisée par une vente en ligne d\'un autre montant', 'forceable' => false, 'orderId' => $stored['orderId'] ?? null, 'totals' => ['declared' => (int) ($sale['totals']['total'] ?? -1), 'online' => $stored['totals']['online'] ?? null]];
+                    $counts['rejected']++;
+                }
+                continue;
+            }
+            // Clé déjà utilisée par une vente EN LIGNE (create-multi-payment, stockage C5 partie 1, même site) : la vente a atteint le serveur
+            // puis la caisse a perdu la réponse et l'a mise en file. Même montant → duplicate avec la commande existante ; autre montant →
+            // rejected IDEMPOTENCY_KEY_REUSED. Journalisé (29/10/2026).
+            $online = $this->onlineSaleForKey($key);
+            if ($online !== null) {
+                $declaredTotal = (int) ($sale['totals']['total'] ?? -1);
+                $onlineTotal = (int) round((float) $online['total_amount']);
+                if ($declaredTotal === $onlineTotal) {
+                    $receipt = $em->getRepository(PosReceipt::class)->forOrders([(int) $online['id']])[(int) $online['id']][PosReceipt::TICKET] ?? null;
+                    $body = ['provisionalNumber' => $sale['provisionalNumber'], 'idempotencyKey' => $key, 'orderId' => (int) $online['id'], 'onlineSale' => true,
+                        'receiptNumber' => $receipt?->getNumber(), 'receiptReference' => $receipt ? $receipt->getCashRegister()->receiptReference($receipt->getNumber()) : null, 'barcode' => $receipt ? \App\Services\PosReturnService\PosReturnService::barcode($receipt) : null,
+                        'cashRegisterId' => $receipt?->getCashRegister()->getId(), 'totals' => ['declared' => $declaredTotal, 'online' => $onlineTotal]];
+                    $row = $seen ?? new PosOfflineSale($terminalId, $key, $sale['provisionalNumber']);
+                    $row->setStatus('duplicate')->setResult($body)->setOrderId((int) $online['id'])->setCashRegisterId($receipt?->getCashRegister()->getId());
+                    $em->persist($row);
+                    $em->flush();
+                    $this->audit->record(PosAuditService::OFFLINE_SYNC, ['kind' => 'online_duplicate', 'terminalId' => $terminalId, 'provisionalNumber' => $sale['provisionalNumber'], 'idempotencyKey' => $key, 'orderId' => (int) $online['id'], 'total' => $onlineTotal], null, null, 'order', (int) $online['id'], $syncedBy);
+                    $results[] = ['status' => 'duplicate'] + $body;
+                    $counts['duplicates']++;
+                    continue;
+                }
+                $body = ['provisionalNumber' => $sale['provisionalNumber'], 'error' => 'IDEMPOTENCY_KEY_REUSED', 'message' => 'Clé d\'idempotence déjà utilisée par une vente en ligne d\'un autre montant', 'forceable' => false,
+                    'orderId' => (int) $online['id'], 'totals' => ['declared' => $declaredTotal, 'online' => $onlineTotal]];
+                $this->audit->record(PosAuditService::OFFLINE_SYNC, ['kind' => 'online_key_reused', 'terminalId' => $terminalId, 'provisionalNumber' => $sale['provisionalNumber'], 'idempotencyKey' => $key, 'orderId' => (int) $online['id'], 'declared' => $declaredTotal, 'online' => $onlineTotal], null, null, 'order', (int) $online['id'], $syncedBy);
+                $results[] = ['status' => 'rejected'] + $body;
+                $counts['rejected']++;
+                continue;
+            }
             // Chaînage du journal local : vérifié, jamais bloquant
             $chain = is_array($sale['chain'] ?? null) ? $sale['chain'] : [];
             $expectedHash = self::hashOf($sale, (string) ($chain['prevHash'] ?? ''));
@@ -415,6 +454,16 @@ class PosOfflineSyncService
             'soldAt' => $soldAtCorrected->format(\DateTimeInterface::ATOM), 'priceDrift' => $offline['priceDrift'], 'currentPriceDrift' => $currentDrift, 'stockShortfall' => $stockShortfall,
             'lateEntry' => $lateEntry, 'chainBroken' => $chainBroken, 'forced' => $forced !== null, 'totals' => ['expected' => $expected['total'], 'declared' => $declaredTotal, 'cashTotal' => $declaredCash],
             'customer' => $customer !== null ? ['id' => $customer->getId(), 'loyaltyEarned' => $loyaltyEarned] : null, 'customerUnknown' => $customerUnknown];
+    }
+
+    /** Vente en ligne (create-multi-payment, C5 partie 1) déjà enregistrée sous cette clé sur ce site : {id, total_amount} ou null */
+    private function onlineSaleForKey(string $key): ?array
+    {
+        $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
+            'SELECT o.id, o.total_amount FROM pos_idempotency_key k JOIN "order" o ON o.id = k.subject_id WHERE k.idem_key = ? AND k.route LIKE ? AND k.status = ? AND k.subject_type = ? ORDER BY k.id DESC LIMIT 1',
+            [$key, 'order_create_multi_payment%', 'done', 'sale']); // route stockée « nom chemin » (C5 partie 1)
+
+        return $row ?: null;
     }
 
     /** Empreinte d'une vente pour le chaînage : sha256(prevHash + JSON canonique de la vente sans chain) */

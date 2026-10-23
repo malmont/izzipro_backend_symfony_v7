@@ -137,6 +137,8 @@ security:
         # 🔹 Ticket numérique (24/10/2026, F3) : page publique du reçu par jeton signé (QR), réimpression et envoi par courriel pour la caisse
         - { path: ^/api/r/, roles: PUBLIC_ACCESS }
         - { path: ^/api/pos/receipts(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
+        # 🔹 Statistiques par caissier et exports comptables (29/10/2026, F14) : caisse (un caissier ne voit que ses chiffres ; exports : responsable, contrôle dans le service)
+        - { path: ^/api/pos/(statistics|exports)(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Fiche client et fidélité (28/10/2026, F8) : caisse ; fusion, effacement, export et ajustement de points : responsable (dans le service)
         - { path: ^/api/pos/customers(/|$), roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
         # 🔹 Cartes-cadeaux et avoirs (27/10/2026, F9) : caisse ; annulation, ajustement et remplacement validés par un responsable (C3, dans le service)

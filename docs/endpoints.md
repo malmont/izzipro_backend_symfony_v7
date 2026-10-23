@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (235)
+## Boutique et commun (239)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -368,6 +368,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/pos/customers` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::create` |
 | POST | `/api/pos/exchanges/quote` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::exchangeQuote` |
 | POST | `/api/pos/exchanges` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::exchange` |
+| GET | `/api/pos/exports/accounting/entries.csv` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReportingController::entries` |
+| GET | `/api/pos/exports/accounting/summary.csv` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReportingController::summary` |
+| GET | `/api/pos/exports/accounting` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReportingController::accounting` |
 | POST | `/api/pos/gift-cards/replace` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::replace` |
 | POST | `/api/pos/gift-cards/{code}/adjust` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::adjust` |
 | POST | `/api/pos/gift-cards/{code}/cancel` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::cancel` |
@@ -387,6 +390,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/pos/returns/lookup` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::lookup` |
 | POST | `/api/pos/returns` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::create` |
 | GET | `/api/pos/settings` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::settings` |
+| GET | `/api/pos/statistics/cashiers` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReportingController::cashiers` |
 | POST | `/api/pos/terminal/payments/{id}/cancel` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::cancel` |
 | POST | `/api/pos/terminal/payments/{id}/refund` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::refund` |
 | POST | `/api/pos/terminal/payments/{id}/simulate` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::simulate` |
@@ -524,7 +528,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (21)
+## Administration (EasyAdmin) (22)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -537,6 +541,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/memoires/ai-quotas` | ROLE_ADMIN | `Controller\Admin\Memoires\AiQuotaPageController::index` |
 | POST | `/admin/memoires/ai-quotas` | ROLE_ADMIN | `Controller\Admin\Memoires\AiQuotaPageController::save` |
 | ANY | `/admin/pdf/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::pdfPrintBarcode` |
+| GET, POST | `/admin/pos/exports` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosAccountingExportController::index` |
 | ANY | `/admin/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printBarcode` |
 | ANY | `/admin/product-variant/{id}/edit-custom` | ROLE_ADMIN | `Controller\Admin\CustomProductVariantController::edit` |
 | ANY | `/admin/product/{id}/specifications` | ROLE_ADMIN | `Controller\Admin\ProductSpecificationController::edit` |

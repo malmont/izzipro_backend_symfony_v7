@@ -761,6 +761,11 @@ Stock décrémenté même sous zéro (`stockShortfall`). Remises hors ligne : pl
 Chaînage : `hash = sha256(prevHash + JSON canonique de la vente sans chain)` (clés triées, sans espaces, UTF-8 et `/` non
 échappés) ; rupture (prevHash ≠ dernier hash connu du terminal, ou hash faux) → `chainBroken: true`, signalée, jamais bloquante.
 Chaque vente est traitée dans sa propre transaction.
+**Clé déjà utilisée par une vente en ligne** (29/10/2026) : une vente passée par `create-multi-payment` avec `Idempotency-Key` puis
+perdue par la caisse (réponse non reçue) et mise en file sous la même clé est reconnue (stockage C5 partie 1, même site) : même
+montant → `duplicate` avec la commande existante (`orderId`, `receiptNumber`, `receiptReference`, `barcode`, `onlineSale: true`),
+aucune seconde commande ; autre montant → `rejected` **`IDEMPOTENCY_KEY_REUSED`** (non forçable). Journal `OFFLINE_SYNC` (`kind`
+`online_duplicate` | `online_key_reused`).
 
 Journal : `SALE` avec `data.offline {provisionalNumber, soldAt, deviceSoldAt, clockOffsetSeconds, packVersion, chain, chainBroken,
 priceDrift, currentPriceDrift, stockShortfall, lateEntry, forced, cashReceived}` et `data.syncedBy` ; `OFFLINE_SYNC` par lot.
@@ -1056,6 +1061,85 @@ l'effacement : anonymisation, pas de suppression (les ventes restent rattachées
 | Expiration des points (mois sans activité) | vide = jamais | `loyalty.expiryMonths` |
 
 `settings.approvals.loyaltyAdjust` et `customerErase` : `{required: true}`.
+
+## Statistiques par caissier et exports comptables (lot F14, 29/10/2026)
+
+Routes nouvelles et séparées : les 11 routes de statistiques existantes (`/api/payments/statistics/*`, `/api/statistiques/*`,
+`/api/carrier/statistics`) sont inchangées. Code : `Services/PosStatisticsService/PosCashierStatisticsService`,
+`Services/AccountingService/` (service commun), `UseCase/PosReportingUseCase`, `Controller/PosController/PosReportingController`,
+page EasyAdmin `Controller/Admin/PosAccountingExportController` (menu IIZIMANAGER → « Exports comptables (caisse) »).
+
+### Fuseau horaire du magasin (`settings.store`)
+
+`{timezone, source}` : réglage `pos_timezone` (fiche Entreprise, IANA), sinon déduit de la **province** quand le pays en a plusieurs
+(Canada : QC et ON → America/Toronto, MB → America/Winnipeg, SK → America/Regina, AB → America/Edmonton, BC → America/Vancouver,
+NS/PE → America/Halifax, NB → America/Moncton, NL → America/St_Johns…), sinon du pays (Martinique → America/Martinique, France →
+Europe/Paris…), sinon UTC. Sert aux journées des statistiques par caissier et des exports. Les réservations gardent leur
+America/Toronto actuel. Code : `Services/CaisseService/StoreClock`.
+
+### Vecteur de chaînage hors ligne (complément C5 partie 2)
+
+`GET /api/pos/offline-cases` porte une clé à part **`chainVectors`** (format `cases` inchangé) : une vente complète (remises de ligne et
+de ticket, article libre à libellé accentué, prix manuel, client), `prevHash`, la chaîne JSON **canonique exacte** et le **hash
+attendu**. Règle : `hash = sha256(prevHash + JSON canonique de la vente sans la clé chain)`, canonique = clés triées
+récursivement, sans espaces, UTF-8 et `/` non échappés. Le POS doit reproduire les deux à l'octet près (test).
+
+### `GET /api/pos/statistics/cashiers?from=&to=&cashRegisterId=&cashierId=` (caisse)
+
+Période en journées du magasin (`from`, `to` au format AAAA-MM-JJ, défaut : aujourd'hui), par **date de vente**. Une ligne par
+**vendeur réel** (`order.user_id` : le compte qui a encaissé ; hors ligne : `sellerId`) et une ligne `total` :
+`sales {count, grossHt, netHt, ttc, items, averageTicket, itemsPerTicket}`, `discounts {count, amount}` (F1),
+`priceOverrides {count, difference}` et `customItems {count, amount}` (F7), `returns {count, amount}` (F2, par celui qui a fait le
+retour), `cancellations {count, amount}` (par celui qui a annulé), `drawerOpenings` (sans vente), `approvals {requested, granted}`
+(C3), `discrepancies {sessions, total, absolute}` (sessions qu'il a fermées, C1), `offlineSales`, `giftCardsSold {count, amount}`
+(F9), `salesWithCustomer`, `loyaltyPointsEarned` (F8). Un **caissier** ne voit que ses propres chiffres (`cashierId` forcé, `scope:
+self`, courriel masqué) ; responsable et administrateur voient tous les vendeurs. Chaque consultation est journalisée
+**`CASHIER_STATS_VIEWED`** (qui, période, portée) : données d'employés, finalité de gestion. Test : la somme des vendeurs égale le
+rapport X/Z de la même période.
+
+### Export comptable (responsable ; page EasyAdmin pour l'administrateur)
+
+À partir des **sessions clôturées** (rapports Z). **Journée comptable : un rapport Z entier est rattaché à la date d'OUVERTURE de sa
+session, dans le fuseau du magasin, jamais coupé sur deux jours** (une session peut passer minuit). Les montants d'une session
+viennent de ses commandes, paiements, retours et mouvements (figés à la clôture) ; le Z donne la pièce (`Z-<poste>-<n°>`), les
+espèces comptées, l'écart et le dépôt en banque. Les rapports clôturés avant F9 et F8 (blocs cartes-cadeaux et clients absents,
+comptés à 0) sont signalés dans l'aperçu (`legacyReports`, `legacyNote`). Journal **`EXPORT_GENERATED`** (qui, période, format,
+nombre de rapports).
+
+| Route | Contenu |
+|---|---|
+| `GET /api/pos/exports/accounting?from=&to=&cashRegisterId=` | Aperçu JSON : `period`, `timezone`, `rule`, `days[]` (synthèse par jour), `entries[]`, `totals {debit, credit, balanced, byDay}`, `reports[]`, `legacyReports`, `accounts` |
+| `GET …/accounting/summary.csv` | **Synthèse par jour** : UTF-8 avec BOM, « ; », virgule décimale : rapports Z, ventes (nombre, HT brut, remises, récompenses fidélité, HT net, arrondi), base et montant de chaque taxe (TPS, TVQ ; TVA en France), ventes TTC, encaissements par moyen (espèces, carte déclarée, terminal carte, Interac, PayPal, carte-cadeau, avoir), retours (nombre, TTC, remboursé espèces et carte, recrédits, avoirs émis), cartes-cadeaux vendues (passif) et remboursées, écart de caisse, dépôt en banque, mouvements du fond, dépôts et retraits |
+| `GET …/accounting/entries.csv?format=generic` | **Écritures équilibrées** « ; » : Date;Journal;Compte;Libellé du compte;Libellé;Débit;Crédit;Pièce;Source |
+| `GET …/accounting/entries.csv?format=qbo` | QuickBooks Online : « , », point décimal, sans BOM, dates JJ/MM/AAAA, colonnes `JournalNo,JournalDate,AccountName,Description,Debits,Credits` (noms de comptes ; à l'import choisir le format de date JJ/MM/AAAA). **Au-delà de 1 000 lignes** (limite d'import QuickBooks) : 413 **`EXPORT_TOO_LARGE`** `{lines, limit, from, to, suggestedTo, linesUntilSuggestedTo}` : réduire la période jusqu'à `suggestedTo` (dernier jour entier qui tient, les pièces ne sont jamais coupées) ; si une seule journée dépasse déjà la limite, le message renvoie au format `generic` |
+
+Écritures (journal VT, une pièce par Z) : ventes HT brutes au crédit des ventes, remises et récompenses fidélité au débit de leurs
+comptes, chaque taxe collectée au crédit, encaissements au débit (caisse, cartes à encaisser, Interac, PayPal) ; règlements par
+carte-cadeau ou avoir au débit du passif correspondant ; retours : ventes et taxes au débit, remboursements au crédit du moyen,
+avoirs émis au crédit du passif ; cartes-cadeaux vendues : débit du moyen, crédit « cartes-cadeaux en circulation » (passif, pas de
+chiffre d'affaires) ; écart de caisse (+ excédent : débit caisse, crédit écarts) ; dépôt en banque (débit banque, crédit caisse) ;
+arrondi des espèces ; écart résiduel d'arrondi porté au compte d'arrondi. **Contrôle : débits = crédits par jour** (`totals.byDay`,
+test).
+
+Formats d'import des logiciels courants au Québec : **QuickBooks Online** importe des écritures de journal en CSV (format `qbo`,
+colonnes ci-dessus, moins de 1 000 lignes par fichier, comptes désignés par leur nom) ; **Sage 50 Canada** importe le journal
+général par son format texte « .IMP » et **Acomba** par son module d'importation avec correspondance de colonnes : le format
+`generic` (une ligne par imputation avec numéro de compte, pièce et date) est fait pour y être mappé.
+
+### Service comptable commun (`Services/AccountingService`)
+
+Indépendant de la caisse, prévu pour l'export de la boutique en ligne et le module comptable de l'application de gestion :
+`ChartOfAccounts` (plan **unique par site**, réglé dans EasyAdmin une ligne par clé `cle=numero;Nom`, plan par défaut québécois :
+`sales`, `sales_rate_<taux>`, `returns`, `discounts`, `loyalty_rewards`, `shipping_revenue`, `tax_gst`, `tax_qst`, `tax_hst`,
+`tax_hst_<province>`, `tax_pst`, `tax_vat`, `tax_vat_<taux>`, `tax_other`, `cash`, `bank`, `card_clearing`, `interac_clearing`,
+`stripe_clearing`, `paypal_clearing`, `stripe_fees`, `commission`, `stripe_payout`, `gift_card_liability`, `store_credit_liability`,
+`cash_discrepancy`, `cash_rounding`, `suspense` ; les clés dynamiques retombent sur leur clé générique). **À l'enregistrement dans EasyAdmin**, une ligne mal
+formée, une clé inconnue, un doublon ou un numéro de compte invalide sont **refusés avec un message précis** (ligne, cause, clés acceptées),
+jamais ignorés. `JournalEntryBuilder`
+(entrée : montants par catégorie et une **source** — `pos` aujourd'hui, `web` demain : ventes par taxe, taxes, livraison, remises,
+encaissements par moyen, remboursements, cartes-cadeaux, avoirs, écarts, frais Stripe, commission, virements ; sortie : écritures
+équilibrées). Le web s'y branchera en produisant ses montants par jour (commandes, remboursements et virements Stripe) et en
+appelant `JournalEntryBuilder::build(..., 'web', ...)` avec le même plan de comptes. Exposé dans `settings.accounting.accounts`.
 
 ## Mécanique interne
 

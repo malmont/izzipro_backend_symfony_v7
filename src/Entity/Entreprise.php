@@ -7,6 +7,8 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 
 #[ORM\Entity(repositoryClass: EntrepriseRepository::class)]
@@ -295,6 +297,14 @@ class Entreprise implements TranslatableInterface
     // écart de prix toléré par vente (cents), validité du pack (h)
     #[ORM\Column(options: ['default' => false])]
     private bool $posOfflineEnabled = false;
+
+    // Fuseau horaire du magasin et plan de comptes (F14, 29/10/2026) : fuseau IANA (null = déduit du pays et de la province) ;
+    // correspondance des comptes comptables du site, une ligne par clé « cle=numero;Nom » (null = plan par défaut québécois)
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $posTimezone = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $accountingAccounts = null;
 
     // Fiche client et fidélité (F8, 28/10/2026) : fiche client activée (aucun effet sans rattachement), rattachement d'un compte web
     // autorisé, programme de fidélité désactivé par défaut, points par dollar, valeur de 100 points (cents), minimum et pas de rachat,
@@ -913,6 +923,20 @@ class Entreprise implements TranslatableInterface
     public function setPosReturnReasons(?string $text): static { $t = $text !== null ? trim(strip_tags($text)) : ''; $this->posReturnReasons = $t === '' ? null : mb_substr($t, 0, 2000); return $this; }
     /** @return list<array{code: string, label: string}> motifs du site (liste par défaut si vide) */
     public function returnReasons(): array { return self::reasonList($this->posReturnReasons, self::RETURN_REASONS_DEFAULT); }
+
+    // Fuseau horaire et plan de comptes (F14, 29/10/2026)
+    public function getPosTimezone(): ?string { return $this->posTimezone; }
+    public function setPosTimezone(?string $tz): static { $t = $tz !== null ? trim($tz) : ''; $this->posTimezone = $t !== '' && in_array($t, \DateTimeZone::listIdentifiers(), true) ? $t : null; return $this; }
+    public function getAccountingAccounts(): ?string { return $this->accountingAccounts; }
+    /** Plan de comptes (F14) : une clé inconnue, un doublon ou une ligne mal formée sont refusés à l'enregistrement (EasyAdmin), jamais ignorés */
+    #[Assert\Callback]
+    public function validateAccountingAccounts(ExecutionContextInterface $context): void
+    {
+        foreach (\App\Services\AccountingService\ChartOfAccounts::validate($this->accountingAccounts) as $message) {
+            $context->buildViolation($message)->atPath('accountingAccounts')->addViolation();
+        }
+    }
+    public function setAccountingAccounts(?string $text): static { $t = $text !== null ? trim(strip_tags($text)) : ''; $this->accountingAccounts = $t === '' ? null : mb_substr($t, 0, 8000); return $this; }
 
     // Fiche client et fidélité (F8, 28/10/2026)
     public function isPosCustomersEnabled(): bool { return $this->posCustomersEnabled; }
