@@ -78,9 +78,13 @@ class NoteDeFraisController extends AbstractController
         return new JsonResponse(['success' => 'Note de frais created'], JsonResponse::HTTP_CREATED);
     }
 
+    /** Écriture : administrateur ou propriétaire de la collection de la note (S2.7, 30/10/2026 : avant, tout utilisateur connecté, toute note) */
     #[Route('/api/notes-de-frais/{id}', name: 'update_note_de_frais', methods: ['PUT'])]
     public function updateNoteDeFrais(NoteDeFrais $note, Request $request): JsonResponse
     {
+        if (($refused = $this->refuseUnlessOwnerOrAdmin($note)) !== null) {
+            return $refused;
+        }
         $data = json_decode($request->getContent(), true);
         if (!$data) {
             return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
@@ -102,9 +106,22 @@ class NoteDeFraisController extends AbstractController
     #[Route('/api/notes-de-frais/{id}', name: 'delete_note_de_frais', methods: ['DELETE'])]
     public function deleteNoteDeFrais(NoteDeFrais $note): JsonResponse
     {
+        if (($refused = $this->refuseUnlessOwnerOrAdmin($note)) !== null) {
+            return $refused;
+        }
         $this->deleteNoteDeFraisUseCase->execute($note);
 
         // Invalidation gérée par l'event subscriber existant
         return new JsonResponse(['success' => 'Note de frais deleted'], JsonResponse::HTTP_NO_CONTENT);
+    }
+
+    /** 403 FORBIDDEN sauf administrateur ou propriétaire de la collection de la note (la note elle-même n'a pas de propriétaire) */
+    private function refuseUnlessOwnerOrAdmin(NoteDeFrais $note): ?JsonResponse
+    {
+        if ($this->isGranted('ROLE_ADMIN') || ($note->getCollection()?->getUserCollections() !== null && $note->getCollection()->getUserCollections() === $this->getUser())) {
+            return null;
+        }
+
+        return new JsonResponse(['error' => 'FORBIDDEN', 'message' => 'Cette note de frais ne vous appartient pas'], JsonResponse::HTTP_FORBIDDEN);
     }
 }

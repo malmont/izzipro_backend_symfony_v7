@@ -24,7 +24,7 @@ class AdressController extends AbstractController
     public function index(AdressRepository $adressRepository): Response
     {
         return $this->render('adress/index.html.twig', [
-            'adresses' => $adressRepository->findAll(),
+            'adresses' => $adressRepository->findBy(['userAdress' => $this->getUser()]), // S2.7 : ses adresses seulement (avant : toutes)
         ]);
     }
 
@@ -67,6 +67,9 @@ class AdressController extends AbstractController
         Adress $adress,
         AdressRepository $adressRepository
     ): Response {
+        if ($adress->getUserAdress() !== $this->getUser()) {
+            throw $this->createAccessDeniedException('Cette adresse ne vous appartient pas'); // S2.7 (30/10/2026)
+        }
         $form = $this->createForm(AdressType::class, $adress);
         $form->handleRequest($request);
 
@@ -99,6 +102,9 @@ class AdressController extends AbstractController
         Adress $adress,
         AdressRepository $adressRepository
     ): Response {
+        if ($adress->getUserAdress() !== $this->getUser()) {
+            throw $this->createAccessDeniedException('Cette adresse ne vous appartient pas'); // S2.7 (30/10/2026)
+        }
         if (
             $this->isCsrfTokenValid(
                 'delete' . $adress->getId(),

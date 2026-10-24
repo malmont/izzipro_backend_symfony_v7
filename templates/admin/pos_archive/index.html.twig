@@ -1,0 +1,16 @@
+{% extends 'base_admin.html.twig' %}
+{% block title %}Archive annuelle (caisse){% endblock %}
+{% block body %}
+<div class="container-fluid">
+    <h1 class="mb-3">Archive annuelle des données de caisse</h1>
+    <p class="text-muted">Par exercice (année civile, fuseau du magasin) : ZIP au format ouvert contenant <code>archive.json</code> (rapports Z, journal chaîné vérifié, tickets et avoirs avec lignes, taxes, paiements, retours, cartes-cadeaux), <code>archive.pdf</code> (synthèse) et <code>SHA256SUMS</code>. À conserver hors du serveur pendant la durée légale : les sauvegardes quotidiennes ne couvrent que 14 jours.</p>
+    {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+    <form method="post" class="row g-2 align-items-end mb-4">
+        <div class="col-md-2"><label class="form-label">Exercice</label><select name="year" class="form-select">{% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}</select></div>
+        <div class="col-md-3"><button type="submit" class="btn btn-primary">Produire et télécharger l'archive</button></div>
+    </form>
+    <h5>Archives produites (journal)</h5>
+    <table class="table table-sm"><thead><tr><th>Date</th><th>Exercice</th><th>Fichier</th><th>Empreinte SHA-256</th><th>Taille</th><th>Chaîne</th></tr></thead>
+    <tbody>{% for j in journal %}<tr><td>{{ j.at }}</td><td>{{ j.data.year }}</td><td>{{ j.data.filename }}</td><td><code>{{ j.data.sha256 }}</code></td><td>{{ (j.data.size / 1024)|number_format(0, ',', ' ') }} ko</td><td>{{ j.data.chainValid ? 'intègre' : 'rupture' }}</td></tr>{% else %}<tr><td colspan="6">Aucune archive produite.</td></tr>{% endfor %}</tbody></table>
+</div>
+{% endblock %}

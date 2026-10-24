@@ -76,6 +76,20 @@ class OrderItems
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $priceReasonText = null;
 
+    // Instantanés (A1, 30/10/2026) : libellés figés à la vente (caisse et web), lus en priorité, catalogue en repli ; rétro-remplis
+    // depuis le catalogue actuel pour les lignes antérieures
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $productName = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $variantLabel = null;
+
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $productCode = null;
+
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $barcode = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -209,8 +223,32 @@ class OrderItems
     public function setPriceReasonCode(?string $code): static { $this->priceReasonCode = $code !== null ? mb_substr($code, 0, 40) : null; return $this; }
     public function getPriceReasonText(): ?string { return $this->priceReasonText; }
     public function setPriceReasonText(?string $text): static { $this->priceReasonText = $text !== null ? mb_substr(trim($text), 0, 255) : null; return $this; }
-    /** Nom affiché : produit du catalogue, sinon libellé de l'article libre */
-    public function displayName(): ?string { return $this->productVariant?->getProduct()?->getName() ?? $this->customLabel; }
+    // Instantanés (A1)
+    public function getProductName(): ?string { return $this->productName; }
+    public function setProductName(?string $v): static { $this->productName = $v !== null ? mb_substr(trim($v), 0, 255) : null; return $this; }
+    public function getVariantLabel(): ?string { return $this->variantLabel; }
+    public function setVariantLabel(?string $v): static { $v = $v !== null ? trim($v) : ''; $this->variantLabel = $v === '' ? null : mb_substr($v, 0, 255); return $this; }
+    public function getProductCode(): ?string { return $this->productCode; }
+    public function setProductCode(?string $v): static { $this->productCode = $v !== null && $v !== '' ? mb_substr($v, 0, 64) : null; return $this; }
+    public function getBarcode(): ?string { return $this->barcode; }
+    public function setBarcode(?string $v): static { $this->barcode = $v !== null && $v !== '' ? mb_substr($v, 0, 64) : null; return $this; }
+    /** Fige les libellés d'une variante au moment de la vente */
+    public function snapshotFrom(?ProductVariant $variant): static
+    {
+        if ($variant === null) {
+            return $this;
+        }
+        $product = $variant->getProduct();
+        $this->setProductName($product?->getName())->setProductCode($product?->getCode())->setBarcode($variant->getBarcode() ?? $product?->getBarcode());
+        $parts = array_filter([$variant->getColor()?->getName(), $variant->getSize()?->getName()]);
+        foreach ($variant->getOptionValues() as $value) {
+            $parts[] = $value->getValue();
+        }
+
+        return $this->setVariantLabel(implode(' ', $parts));
+    }
+    /** Nom affiché : instantané figé à la vente, sinon produit du catalogue, sinon libellé de l'article libre */
+    public function displayName(): ?string { return $this->productName ?? $this->productVariant?->getProduct()?->getName() ?? $this->customLabel; }
     public function getReturnedFromItem(): ?OrderItems { return $this->returnedFromItem; }
     public function setReturnedFromItem(?OrderItems $item): static { $this->returnedFromItem = $item; return $this; }
 

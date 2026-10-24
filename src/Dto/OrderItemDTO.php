@@ -51,7 +51,7 @@ class OrderItemDTO
         $this->productId = $product->getId();
         $this->productVariantId = $variant->getId();
         $this->customizationId = $orderItem->getCustomization()?->getId();
-        $this->productVariantName = $product->getName();
+        $this->productVariantName = $orderItem->getProductName() ?? $product->getName(); // instantané figé à la vente (A1), catalogue en repli
         
         // Use the snapshot stored in the entity first, fall back to product if empty (for older orders)
         $this->productSaleUnit = $orderItem->getSaleUnit() 

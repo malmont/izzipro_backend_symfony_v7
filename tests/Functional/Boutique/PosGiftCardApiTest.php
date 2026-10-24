@@ -56,7 +56,7 @@ class PosGiftCardApiTest extends WebTestCase
         $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register, 'cashFund' => 20000]);
         $cashier = $this->loginAs(['ROLE_USER_POS']);
         $s = $this->json($this->request('GET', '/api/pos/settings'));
-        $this->assertSame(['enabled' => false, 'suggestedAmounts' => [2500, 5000, 10000], 'expiryMonths' => null, 'storeCredits' => ['enabled' => false, 'expiryMonths' => null], 'cashRefundMaxBalance' => 500, 'cashRefundBeyond' => false], array_diff_key($s['giftCards'], ['codeFormat' => 1, 'barcodePrefix' => 1, 'offline' => 1]), 'désactivé par défaut, règle du Québec');
+        $this->assertSame(['enabled' => false, 'suggestedAmounts' => [2500, 5000, 10000], 'expiryMonths' => null, 'storeCredits' => ['enabled' => false, 'expiryMonths' => null], 'cashRefundMaxBalance' => 500, 'cashRefundBeyond' => false], array_diff_key($s['giftCards'], ['codeFormat' => 1, 'barcodePrefix' => 1, 'offline' => 1, 'codeAttemptsPer10Min' => 1]), 'désactivé par défaut, règle du Québec');
         $this->assertSame([false, ['required' => true]], [$s['giftCards']['offline'], $s['approvals']['giftCardCancel']]);
         $sell = fn (array $body) => $this->request('POST', '/api/pos/gift-cards', $body + ['cashRegisterId' => $this->register]);
         $this->assertSame('GIFT_CARD_DISABLED', json_decode($sell(['amount' => 5000, 'paymentMethods' => [['type' => 2, 'amount' => 50]]])->getContent(), true)['error']);
@@ -166,7 +166,7 @@ class PosGiftCardApiTest extends WebTestCase
         $this->approval = null;
         $this->assertSame(['canceled', 0, [['type' => 2, 'amount' => 2500]], 2500, 'gift_card_cancellation', 'credit_note'], [$canceled['giftCard']['status'], $canceled['giftCard']['balance'], $canceled['refunds'], $canceled['cash'], $canceled['kind'], $canceled['receiptKind']]);
         $this->assertSame([7, 10], [(int) $this->db->fetchOne('SELECT status_id FROM "order" WHERE id = ?', [$sold['orderId']]), (int) $this->db->fetchOne('SELECT transaction_type_id FROM transaction_caisse WHERE order_caisse_id = ? ORDER BY id DESC LIMIT 1', [$sold['orderId']])]);
-        $this->assertSame([409, 'GIFT_CARD_INACTIVE'], $this->error($this->request('POST', '/api/pos/gift-cards/' . $sold['giftCard']['code'] . '/cancel', ['cashRegisterId' => $this->register])));
+        $this->assertSame([404, 'GIFT_CARD_NOT_FOUND'], $this->error($this->request('POST', '/api/pos/gift-cards/' . $sold['giftCard']['code'] . '/cancel', ['cashRegisterId' => $this->register])), 'carte annulée : réponse uniforme, sans révéler son existence (S2)');
         $this->assertSame([409, 'GIFT_CARD_ORDER'], $this->error($this->request('POST', '/api/order/cancel/' . $sale['orderId'], ['paymentMethod' => 2, 'cashRegisterId' => $this->register])), 'une vente de carte ne s\'annule pas par /api/order/cancel');
         $this->token = null;
         $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
@@ -184,8 +184,7 @@ class PosGiftCardApiTest extends WebTestCase
         $rep = $this->json($this->request('POST', '/api/pos/gift-cards/replace', ['barcode' => $sale['barcode'], 'last4' => substr($code, -4), 'cashRegisterId' => $this->register]), 201);
         $this->assertSame([5000, 'replaced', 0, $rep['giftCard']['id']], [$rep['giftCard']['balance'], $rep['replaced']['status'], $rep['replaced']['balance'], $rep['replaced']['replacedById']]);
         $this->assertNotSame($code, $rep['giftCard']['code']);
-        $oldCard = $this->json($this->request('GET', '/api/pos/gift-cards/' . $code));
-        $this->assertSame(['replaced', false], [$oldCard['status'], $oldCard['usable']]);
+        $this->assertSame([404, 'GIFT_CARD_NOT_FOUND'], $this->error($this->request('GET', '/api/pos/gift-cards/' . $code)), 'carte remplacée : réponse uniforme (S2)');
         $this->assertSame(5000, $this->json($this->request('GET', '/api/pos/gift-cards/' . $rep['giftCard']['code']))['balance']);
         $this->assertSame(['GIFT_CARD_SOLD', 'GIFT_CARD_REDEEMED', 'GIFT_CARD_REFUNDED', 'STORE_CREDIT_ISSUED', 'GIFT_CARD_CANCELED', 'GIFT_CARD_ADJUSTED', 'GIFT_CARD_CASH_OUT', 'GIFT_CARD_REPLACED'],
             array_values(array_filter(['GIFT_CARD_SOLD', 'GIFT_CARD_REDEEMED', 'GIFT_CARD_REFUNDED', 'STORE_CREDIT_ISSUED', 'GIFT_CARD_CANCELED', 'GIFT_CARD_ADJUSTED', 'GIFT_CARD_CASH_OUT', 'GIFT_CARD_REPLACED'], fn ($t) => (int) $this->db->fetchOne('SELECT COUNT(*) FROM pos_audit_log WHERE type = ?', [$t]) > 0)), 'tout est journalisé');

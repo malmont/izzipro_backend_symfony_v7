@@ -75,7 +75,7 @@ class PosAuditApiTest extends WebTestCase
 
         $entries = $this->entriesSince($start);
         $this->assertSame(['LOGIN', 'LOGIN_FAILED', 'LOGIN', 'LOGOUT'], array_column($entries, 'type'));
-        $this->assertSame(['id' => $first['terminal']['id'], 'label' => 'Tablette audit'], $entries[0]['terminal']);
+        $this->assertSame(['id' => $first['terminal']['id'], 'label' => 'Tablette audit', 'cashRegisterId' => $this->register], $entries[0]['terminal']); // cashRegisterId : poste rattaché à la clé (S2, 30/10/2026)
         $this->assertSame($email, $entries[1]['data']['email']);
         $this->assertNull($entries[1]['user'], 'connexion refusée : e-mail seulement');
         $this->assertStringNotContainsString('mauvais-mot-de-passe', json_encode($entries[1]), 'jamais le mot de passe');

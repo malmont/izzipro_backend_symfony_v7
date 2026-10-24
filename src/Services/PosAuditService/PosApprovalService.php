@@ -65,7 +65,8 @@ class PosApprovalService
         private readonly PosAuditService $audit,
         private readonly PosSettingsService $settings,
         private readonly PosApprovalContext $current,
-        private readonly RequestStack $requestStack
+        private readonly RequestStack $requestStack,
+        #[\Symfony\Component\DependencyInjection\Attribute\Autowire(service: 'limiter.pos_approval_terminal')] private readonly \Symfony\Component\RateLimiter\RateLimiterFactory $terminalLimiter // essais de validation par terminal (S2, 30/10/2026)
     ) {
     }
 
@@ -99,6 +100,12 @@ class PosApprovalService
         }
         $context = $group !== null ? $context : self::normalizeContext($action, $context);
         $terminal = $this->terminals->current() ?? throw new CashRegisterException('TERMINAL_REQUIRED', 'Terminal de caisse non identifié (en-tête X-Pos-Terminal)', 403);
+        // Essais de validation par terminal (S2) : en plus du blocage du PIN par compte (5 essais, 15 minutes)
+        $limit = $this->terminalLimiter->create('t' . $terminal['id'])->consume(1);
+        if (!$limit->isAccepted()) {
+            $this->audit->record(PosAuditService::APPROVAL_FAILED, ['action' => $action, 'reason' => 'APPROVAL_RATE_LIMITED', 'managerId' => is_numeric($managerId) ? (int) $managerId : null], subjectType: 'approval');
+            throw new CashRegisterException('APPROVAL_RATE_LIMITED', 'Trop d\'essais de validation sur ce terminal : réessayez plus tard', 429, [], ['retryAfterSeconds' => max(1, $limit->getRetryAfter()->getTimestamp() - time())]);
+        }
         $em = $this->emProvider->getEntityManager();
         $manager = is_numeric($managerId) ? $em->find(User::class, (int) $managerId) : null;
         try {

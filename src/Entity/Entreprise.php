@@ -298,6 +298,17 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => false])]
     private bool $posOfflineEnabled = false;
 
+    // Conservation des données de vente (A1, 30/10/2026) : années (null = défaut du pays, jamais moins que le plancher légal),
+    // mode des modifications (observe = journalisées, block = refusées), essais de codes de cartes-cadeaux inconnus par 10 minutes (S2)
+    #[ORM\Column(nullable: true)]
+    private ?int $dataRetentionYears = null;
+
+    #[ORM\Column(length: 10, options: ['default' => 'observe'])]
+    private string $retentionWriteMode = 'observe';
+
+    #[ORM\Column(options: ['default' => 10])]
+    private int $posGiftCardCodeAttempts = 10;
+
     // Fuseau horaire du magasin et plan de comptes (F14, 29/10/2026) : fuseau IANA (null = déduit du pays et de la province) ;
     // correspondance des comptes comptables du site, une ligne par clé « cle=numero;Nom » (null = plan par défaut québécois)
     #[ORM\Column(length: 64, nullable: true)]
@@ -923,6 +934,23 @@ class Entreprise implements TranslatableInterface
     public function setPosReturnReasons(?string $text): static { $t = $text !== null ? trim(strip_tags($text)) : ''; $this->posReturnReasons = $t === '' ? null : mb_substr($t, 0, 2000); return $this; }
     /** @return list<array{code: string, label: string}> motifs du site (liste par défaut si vide) */
     public function returnReasons(): array { return self::reasonList($this->posReturnReasons, self::RETURN_REASONS_DEFAULT); }
+
+    // Conservation (A1, 30/10/2026)
+    public function getDataRetentionYears(): ?int { return $this->dataRetentionYears; }
+    public function setDataRetentionYears(?int $y): static { $this->dataRetentionYears = $y !== null && $y > 0 ? min(99, $y) : null; return $this; }
+    public function getRetentionWriteMode(): string { return $this->retentionWriteMode; }
+    public function setRetentionWriteMode(?string $m): static { $this->retentionWriteMode = $m === 'block' ? 'block' : 'observe'; return $this; }
+    public function getPosGiftCardCodeAttempts(): int { return $this->posGiftCardCodeAttempts; }
+    public function setPosGiftCardCodeAttempts(?int $v): static { $this->posGiftCardCodeAttempts = max(0, (int) $v); return $this; }
+    /** Plancher légal : jamais moins que le défaut du pays (validation à l'enregistrement) */
+    #[Assert\Callback]
+    public function validateRetention(ExecutionContextInterface $context): void
+    {
+        $floor = \App\Services\RetentionService\RetentionPolicy::legalYears(\App\Services\OrderService\TaxEngine::normalizeAddress(['country' => $this->getAddressEntreprise()?->getCountry()])['country'] ?? null);
+        if ($this->dataRetentionYears !== null && $this->dataRetentionYears < $floor) {
+            $context->buildViolation(sprintf('La durée de conservation ne peut pas être inférieure au plancher légal du pays (%d ans).', $floor))->atPath('dataRetentionYears')->addViolation();
+        }
+    }
 
     // Fuseau horaire et plan de comptes (F14, 29/10/2026)
     public function getPosTimezone(): ?string { return $this->posTimezone; }

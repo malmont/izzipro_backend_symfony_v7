@@ -62,6 +62,7 @@ class PosSettingsService
             'customers' => \App\Services\PosCustomerService\PosCustomerService::settingsOf($e), // fiche client (F8, 28/10/2026)
             'loyalty' => \App\Services\PosCustomerService\PosLoyaltyService::settingsOf($e), // fidélité (F8)
             'store' => \App\Services\CaisseService\StoreClock::resolve($e), // fuseau horaire du magasin (F14, 29/10/2026) : {timezone, source}
+            'retention' => \App\Services\RetentionService\RetentionPolicy::settingsOf($e), // conservation des données de vente (A1, 30/10/2026)
             'accounting' => ['accounts' => \App\Services\AccountingService\ChartOfAccounts::accountsOf($e), 'exportFormats' => ['summary.csv', 'entries.csv?format=generic', 'entries.csv?format=qbo']], // plan de comptes (F14)
             'offline' => $this->offline->settings(), // mode hors ligne (C5 partie 2, 25/10/2026)
             'returns' => ['maxDays' => $e?->getPosReturnMaxDays(), 'withoutReceipt' => $e?->isPosReturnWithoutReceipt() ?? false, 'restockDefault' => $e?->isPosReturnRestockDefault() ?? true,

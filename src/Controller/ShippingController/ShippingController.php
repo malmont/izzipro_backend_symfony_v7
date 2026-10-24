@@ -22,7 +22,8 @@ class ShippingController extends AbstractController
         private GetParcelSummariesForCart  $getParcelSummariesForCart,
         private PurchaseShippingForCart    $purchaseShippingForCart,
         private GetShippingSummaryForCart  $getShippingSummaryForCart,
-        private LoggerInterface            $logger 
+        private LoggerInterface            $logger,
+        private \App\Services\TenantEntityManagerProvider $emProvider,
     ) {}
 
     /**
@@ -100,6 +101,14 @@ class ShippingController extends AbstractController
         try {
             $data = json_decode($request->getContent(), true);
             $orderId = (int) ($data['orderId'] ?? 0);
+            // S2.7 (30/10/2026) : étiquettes payées par le marchand → commande de l'utilisateur connecté ou administrateur (avant : tout utilisateur connecté, toute commande)
+            $order = $this->emProvider->getEntityManager()->find(\App\Entity\Order::class, $orderId);
+            if ($order === null) {
+                return $this->json(['error' => 'ORDER_NOT_FOUND', 'message' => "Commande #$orderId introuvable"], JsonResponse::HTTP_NOT_FOUND);
+            }
+            if (!$this->isGranted('ROLE_ADMIN') && $order->getUserId() !== $this->getUser()) {
+                return $this->json(['error' => 'FORBIDDEN', 'message' => 'Cette commande ne vous appartient pas'], JsonResponse::HTTP_FORBIDDEN);
+            }
             $cart = array_map(
                 fn(array $i) => new CartItemDto($i['productId'], $i['quantity']),
                 $data['cartItems'] ?? []
@@ -123,10 +132,7 @@ class ShippingController extends AbstractController
             $this->logger->error('Erreur API Shipping/Buy: ' . $e->getMessage(), ['exception' => $e]);
             
             return $this->json(
-                [
-                    'error' => 'DEBUG ERROR: ' . $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ],
+                ['error' => 'DEBUG ERROR: ' . $e->getMessage()], // trace retirée de la réponse (S2.7), conservée dans le journal
                 JsonResponse::HTTP_INTERNAL_SERVER_ERROR
             );
         }

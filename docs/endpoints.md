@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (239)
+## Boutique et commun (240)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -354,6 +354,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/payments/statistics/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\PaymentsController::getPaymentStatistics` |
 | GET | `/api/payments` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::getPayments` |
 | POST | `/api/pos/approvals` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::approve` |
+| GET | `/api/pos/archive/{year}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosArchiveController::download` |
 | GET | `/api/pos/audit/verify` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosAuditController::verify` |
 | GET | `/api/pos/audit` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosAuditController::list` |
 | POST | `/api/pos/customers/{id}/erase` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosCustomerController::erase` |
@@ -528,7 +529,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (22)
+## Administration (EasyAdmin) (23)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -541,6 +542,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/memoires/ai-quotas` | ROLE_ADMIN | `Controller\Admin\Memoires\AiQuotaPageController::index` |
 | POST | `/admin/memoires/ai-quotas` | ROLE_ADMIN | `Controller\Admin\Memoires\AiQuotaPageController::save` |
 | ANY | `/admin/pdf/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::pdfPrintBarcode` |
+| GET, POST | `/admin/pos/archive` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosArchiveAdminController::index` |
 | GET, POST | `/admin/pos/exports` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosAccountingExportController::index` |
 | ANY | `/admin/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printBarcode` |
 | ANY | `/admin/product-variant/{id}/edit-custom` | ROLE_ADMIN | `Controller\Admin\CustomProductVariantController::edit` |

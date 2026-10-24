@@ -1,6 +1,6 @@
 {# Corps d'un reçu de caisse (F3, 24/10/2026) : page publique, PDF et courriel. Variables : receipt (bloc ticket), profile (app-profile pos), duplicate #}
 {% set store = receipt.store %}
-{% set kindLabel = {'sale': 'Ticket de vente', 'exchange': 'Ticket d\'échange', 'return': 'Avoir (retour)', 'cancellation': 'Avoir (annulation)'}[receipt.kind] ?? 'Ticket' %}
+{% set kindLabel = {'sale': 'Ticket de vente', 'exchange': 'Ticket d\'échange', 'return': 'Avoir (retour)', 'cancellation': 'Avoir (annulation)', 'gift_card': 'Ticket de carte-cadeau', 'gift_card_cancellation': 'Avoir (carte-cadeau annulée)'}[receipt.kind] ?? 'Ticket' %}
 <div class="receipt" style="font-family:'DejaVu Sans',Arial,Helvetica,sans-serif;font-size:12px;color:#222;max-width:360px;margin:0 auto;">
     {% if duplicate %}<div style="text-align:center;font-weight:bold;letter-spacing:2px;border:1px solid #222;padding:4px;margin-bottom:8px;">DUPLICATA</div>{% endif %}
     <div style="text-align:center;margin-bottom:8px;">

@@ -89,6 +89,7 @@ class PosGiftCardService
             'storeCredits' => ['enabled' => $e?->isPosStoreCreditEnabled() ?? false, 'expiryMonths' => $e?->getPosStoreCreditExpiryMonths()],
             'cashRefundMaxBalance' => $e?->getPosGiftCardCashRefundMax() ?? 500,
             'cashRefundBeyond' => $e?->isPosGiftCardCashRefundBeyond() ?? false,
+            'codeAttemptsPer10Min' => $e?->getPosGiftCardCodeAttempts() ?? 10, // S2 : codes refusés par utilisateur et par terminal
             'codeFormat' => 'GC-XXXX-XXXX-XXXX | AV-XXXX-XXXX-XXXX',
             'barcodePrefix' => self::BARCODE_PREFIX,
             'offline' => false, // solde inconnu sans réseau : jamais hors ligne
@@ -156,8 +157,10 @@ class PosGiftCardService
         }
         $em = $this->emProvider->getEntityManager();
         $card = $em->getRepository(PosGiftCard::class)->findByHash(self::hash($code));
-        if ($card === null) {
-            throw new CashRegisterException('GIFT_CARD_NOT_FOUND', 'Carte-cadeau ou avoir inconnu', 404, [], ['last4' => substr($code, -4)]);
+        if ($card === null || in_array($card->getStatus(), [PosGiftCard::CANCELED, PosGiftCard::REPLACED], true)) {
+            // Réponse uniforme (S2) : un code inconnu, annulé ou remplacé est refusé sans révéler s'il existe ; l'essai compte pour la limite
+            $this->countFailedCode($code);
+            throw new CashRegisterException('GIFT_CARD_NOT_FOUND', 'Carte-cadeau ou avoir inconnu ou inutilisable', 404, [], ['last4' => substr($code, -4)]);
         }
         if ($lock) {
             $em->lock($card, LockMode::PESSIMISTIC_WRITE);
@@ -167,9 +170,38 @@ class PosGiftCardService
         return $card;
     }
 
+    /**
+     * Codes refusés (S2, 30/10/2026) : au-delà de N essais par 10 minutes par utilisateur OU par terminal (réglage du site, 0 = sans limite),
+     * consultation et paiement sont refusés 429 GIFT_CARD_LOOKUP_LIMIT {retryAfterSeconds}. Comptés sur le journal (GIFT_CARD_LOOKUP, result
+     * GIFT_CARD_NOT_FOUND), journalisés. Appelé avant toute recherche de code.
+     */
+    public function assertCodeAttempts(User $user): void
+    {
+        $limit = $this->settings()['codeAttemptsPer10Min'];
+        if ($limit <= 0) {
+            return;
+        }
+        $conn = $this->emProvider->getEntityManager()->getConnection();
+        $since = (new \DateTimeImmutable('-10 minutes'))->format('Y-m-d H:i:s');
+        $terminal = $this->terminals->current();
+        $byUser = (int) $conn->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = ? AND user_id = ? AND occurred_at > ? AND payload LIKE '%\"result\":\"GIFT_CARD_NOT_FOUND\"%'", [PosAuditService::GIFT_CARD_LOOKUP, $user->getId(), $since]);
+        $byTerminal = $terminal ? (int) $conn->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = ? AND terminal_id = ? AND occurred_at > ? AND payload LIKE '%\"result\":\"GIFT_CARD_NOT_FOUND\"%'", [PosAuditService::GIFT_CARD_LOOKUP, $terminal['id'], $since]) : 0;
+        if ($byUser >= $limit || $byTerminal >= $limit) {
+            $this->audit->record(PosAuditService::GIFT_CARD_LOOKUP, ['result' => 'code_attempts_limited', 'limit' => $limit, 'byUser' => $byUser, 'byTerminal' => $byTerminal], subjectType: 'gift_card', user: $user);
+            throw new CashRegisterException('GIFT_CARD_LOOKUP_LIMIT', 'Trop de codes refusés : réessayez dans quelques minutes', 429, [], ['retryAfterSeconds' => 600, 'limit' => $limit]);
+        }
+    }
+
+    /** Journalise un code refusé (inconnu, annulé ou remplacé) pour la limite d'essais ; l'utilisateur courant est celui de la requête */
+    private function countFailedCode(string $code): void
+    {
+        $this->audit->record(PosAuditService::GIFT_CARD_LOOKUP, ['result' => 'GIFT_CARD_NOT_FOUND', 'last4' => substr($code, -4)], subjectType: 'gift_card');
+    }
+
     /** Consultation du solde : limitée par terminal et par adresse IP (429 GIFT_CARD_LOOKUP_LIMIT), journalisée (succès et échecs) */
     public function lookup(mixed $raw, User $user): array
     {
+        $this->assertCodeAttempts($user);
         $terminal = $this->terminals->current();
         $request = $this->requestStack->getMainRequest();
         $limits = [$this->lookupByTerminal->create('t' . ($terminal['id'] ?? 'none')), $this->lookupByIp->create((string) ($request?->getClientIp() ?? 'none'))];
@@ -183,7 +215,9 @@ class PosGiftCardService
         try {
             $card = $this->find($raw);
         } catch (CashRegisterException $e) {
-            $this->audit->record(PosAuditService::GIFT_CARD_LOOKUP, ['result' => $e->errorCode, 'last4' => is_string($raw) ? substr(preg_replace('/[^A-Za-z0-9]/', '', strtoupper($raw)) ?? '', -4) : null], subjectType: 'gift_card', user: $user);
+            if ($e->errorCode !== 'GIFT_CARD_NOT_FOUND') { // un code inconnu est déjà compté par find()
+                $this->audit->record(PosAuditService::GIFT_CARD_LOOKUP, ['result' => $e->errorCode, 'last4' => is_string($raw) ? substr(preg_replace('/[^A-Za-z0-9]/', '', strtoupper($raw)) ?? '', -4) : null], subjectType: 'gift_card', user: $user);
+            }
             throw $e;
         }
         $this->audit->record(PosAuditService::GIFT_CARD_LOOKUP, ['result' => 'ok', 'kind' => $card->getKind(), 'last4' => $card->getLast4(), 'balance' => $card->getBalance(), 'status' => $card->getStatus()], subjectType: 'gift_card', subjectId: $card->getId(), user: $user);
@@ -323,6 +357,7 @@ class PosGiftCardService
         if ($cents <= 0) {
             throw new CashRegisterException('GIFT_CARD_PAYMENT_INVALID', 'Part carte-cadeau : montant positif attendu', 400);
         }
+        $this->assertCodeAttempts($user); // codes devinables (S2) : même limite en paiement qu'en consultation
         $card = $this->find($part->getCode(), true);
         $this->assertKind($card, $part->getType());
         if (($card->getKind() === PosGiftCard::GIFT_CARD && !$settings['enabled']) || ($card->getKind() === PosGiftCard::STORE_CREDIT && !$settings['storeCredits']['enabled'])) {

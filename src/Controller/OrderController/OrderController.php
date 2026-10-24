@@ -116,6 +116,11 @@ class OrderController extends AbstractController
         $data['orderSource'] ??= self::ORDER_SOURCE_ECOMMERCE;
         $data['typeOrder'] ??= self::TYPE_ORDER_SALE;
         $data['paymentMethod'] ??= self::PAYMENT_METHOD_ONLINE;
+        // S2.7 (30/10/2026) : un caissier ou responsable (sans ROLE_ADMIN) ne crée ici qu'une vente web ; une vente, un retour ou une
+        // carte-cadeau de caisse passe par create-multi-payment / /api/pos/returns (session ouverte, validations C3, journal)
+        if (!$this->isGranted('ROLE_ADMIN') && ((int) $data['orderSource'] === self::ORDER_SOURCE_POS || (int) $data['typeOrder'] !== self::TYPE_ORDER_SALE)) {
+            return $this->json(['error' => 'POS_ROUTE_REQUIRED', 'message' => 'Les ventes, retours et cartes-cadeaux de caisse passent par POST /api/order/create-multi-payment ou /api/pos/returns'], JsonResponse::HTTP_FORBIDDEN);
+        }
         // ---------------------------------------------------------------------
 
         $em = $this->emProvider->getEntityManager();

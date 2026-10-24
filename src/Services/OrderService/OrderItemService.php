@@ -13,6 +13,7 @@ class OrderItemService
         $orderItem->setOrderAssociated($order);
         $order->addOrderItem($orderItem);
         $orderItem->setProductVariant($productVariant);
+        $orderItem->snapshotFrom($productVariant); // libellés figés à la vente (A1, 30/10/2026)
         $orderItem->setQuantity($quantity);
         
         $finalUnitPrice = $unitPrice ?? (float)$productVariant->getProduct()->getEffectivePrice();

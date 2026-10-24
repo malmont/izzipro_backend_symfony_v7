@@ -138,6 +138,15 @@ services:
         tags:
             - { name: doctrine.event_subscriber }
 
+    # Garde de conservation des données de vente (A1, 30/10/2026) : suppression refusée, modifications observées ou refusées
+    App\Services\ArchiveService\PosArchiveService:
+        arguments:
+            $projectDir: '%kernel.project_dir%'
+
+    App\EventSubscriber\RetentionGuardSubscriber:
+        tags:
+            - { name: doctrine.event_subscriber }
+
     App\Services\TenantConnectionManager:
         arguments:
             $masterDatabaseUrl: '%env(MASTER_DATABASE_URL)%'

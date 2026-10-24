@@ -108,6 +108,9 @@ class PosReceiptUseCase
 
     public function revokeLink(User $user, PosReceipt $receipt): array
     {
+        if (!\App\Services\PosAuditService\PosApprovalService::isManager($user)) { // S2 (30/10/2026) : révocation d'un lien public réservée au responsable
+            throw new CashRegisterException('FORBIDDEN', 'Révocation du lien réservée au responsable de caisse', 403);
+        }
         $receipt->revokeLink();
         $this->emProvider->getEntityManager()->flush();
         $this->audit->record(PosAuditService::RECEIPT_LINK_REVOKED, ['barcode' => PosReturnService::barcode($receipt), 'linkVersion' => $receipt->getLinkVersion()], $receipt->getSession(), $receipt->getCashRegister(), 'receipt', $receipt->getId(), $user);

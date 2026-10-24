@@ -64,6 +64,13 @@ framework:
             interval: '15 minutes'
             lock_factory: null
 
+        # Validations d'un responsable (30/10/2026, S2) : essais par terminal, en plus du blocage du PIN par compte
+        pos_approval_terminal:
+            policy: sliding_window
+            limit: 30
+            interval: '15 minutes'
+            lock_factory: null
+
         # Consultation du solde d'une carte-cadeau ou d'un avoir (27/10/2026, F9) : anti-balayage des codes, par terminal et par IP
         pos_gift_card_lookup_terminal:
             policy: sliding_window
@@ -96,6 +103,12 @@ when@test:
     framework:
         rate_limiter:
             api_login_ip:
+                policy: sliding_window
+                limit: 10000
+                interval: '15 minutes'
+                lock_factory: null
+            # Validations (S2) : la suite enchaîne les validations sur peu de terminaux ; la limite est testée à part
+            pos_approval_terminal:
                 policy: sliding_window
                 limit: 10000
                 interval: '15 minutes'

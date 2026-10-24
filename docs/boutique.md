@@ -236,7 +236,12 @@ intent Stripe) et la commande naît **une seule fois par paiement**, du navigate
   sans `paymentIntentId` ; gardé pour le webhook (renvoyé une fois suffit : un panier modifié garde le corps du premier
   appel). Sans `shippingAddress`, les taxes viennent de l'adresse de `order`. Le client connecté est reconnu par son jeton
   du site (`OptionalCustomerResolver` : la route reste hors du pare-feu JWT, un jeton expiré ne bloque pas un invité).
-- `POST /api/order/create` (client) et `/api/order/create-guest` (invité) : **idempotents**. Premier appel : 201
+- `POST /api/order/create` (client) et `/api/order/create-guest` (invité) : **idempotents**. Depuis le 30/10/2026 (audit S2.7), un
+  caissier ou responsable de caisse sans `ROLE_ADMIN` n'y crée qu'une vente web (403 `POS_ROUTE_REQUIRED` pour `orderSource` 2 ou
+  `typeOrder` ≠ 1 : les opérations de caisse passent par `create-multi-payment` et `/api/pos/returns`) ; `POST /api/shipping/buy`
+  exige la commande de l'utilisateur connecté ou `ROLE_ADMIN` (403 `FORBIDDEN`, 404 `ORDER_NOT_FOUND`) ; `PUT`/`DELETE
+  /api/notes-de-frais/{id}` exigent `ROLE_ADMIN` ou le propriétaire de la collection de la note (403 `FORBIDDEN`) ; les pages HTML `/adress/*` ne montrent que ses adresses. Comportement du
+  tunnel web inchangé pour un client. Premier appel : 201
   `{ success, orderId, guestToken? (invité), alreadyCreated: false }`. Appel suivant pour le même paiement : **200** et la
   même commande (`alreadyCreated: true`), avec le `guestToken` pour l'invité **à la même adresse e-mail** ; paiement d'un
   autre client ou autre e-mail : 409. Deux appels simultanés (navigateur et webhook) : réservation atomique de la trace

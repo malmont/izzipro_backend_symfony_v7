@@ -1141,6 +1141,307 @@ encaissements par moyen, remboursements, cartes-cadeaux, avoirs, écarts, frais 
 équilibrées). Le web s'y branchera en produisant ses montants par jour (commandes, remboursements et virements Stripe) et en
 appelant `JournalEntryBuilder::build(..., 'web', ...)` avec le même plan de comptes. Exposé dans `settings.accounting.accounts`.
 
+## Conservation des données, contrôle des rôles, Loi 96 (lot A1 / S2 / A4, 30/10/2026)
+
+Code : `Services/RetentionService/` (politique, exception), `EventSubscriber/RetentionGuardSubscriber` (garde Doctrine),
+`Services/ArchiveService/PosArchiveService` (archive annuelle), `Controller/PosController/PosArchiveController`,
+`Controller/Admin/PosArchiveAdminController` ; schéma `migrations/Version20261030100000.php`,
+`scripts/migrate_all_v2_retention.sh`. Tests : `tests/Functional/Boutique/PosRetentionArchiveApiTest.php`,
+`tests/Functional/Security/PosRoleMatrixTest.php`.
+
+### Durées de conservation (`settings.retention`)
+
+| Pays du site (adresse de l'entreprise) | Plancher | Base légale (à confirmer par le comptable du site) |
+|---|---|---|
+| Canada (`CA`, dont Québec) | **6 ans après la fin de l'année** à laquelle les registres se rapportent | Loi de l'impôt sur le revenu, art. 230(4) et Règlement de l'impôt sur le revenu, art. 5800 (ARC, « Conservation des registres ») ; Loi sur la taxe d'accise, art. 286 (TPS/TVH) ; Loi sur l'administration fiscale du Québec (RLRQ, c. A-6.002), art. 35.1 (Revenu Québec, « Conservation des registres et pièces justificatives ») |
+| France et DROM (`FR`, `MQ`, `GP`, `GF`, `RE`, `YT`) | **10 ans** | Code de commerce, art. L123-22 (documents comptables et pièces justificatives : 10 ans) ; Livre des procédures fiscales, art. L102 B (6 ans, couvert par les 10) |
+| Belgique (`BE`), Suisse (`CH`), Luxembourg (`LU`), Monaco (`MC`) | 10 ans | BE : CIR 92 art. 315 et Code TVA art. 60 (10 ans depuis la loi du 20/11/2022) ; CH : CO art. 958f ; LU : Code de commerce art. 16 |
+| États-Unis (`US`) | 7 ans | choix prudentiel (IRS : 3 à 7 ans selon le cas) |
+| autre pays | 10 ans | valeur prudente par défaut |
+
+- `RetentionPolicy::legalYears(pays)` donne le plancher ; la fiche Entreprise (EasyAdmin, panneau « Conservation des données
+  de vente (caisse) », champ « Durée de conservation (années) ») permet d'allonger la durée **par site**, jamais de la
+  raccourcir (validateur : « La durée de conservation ne peut pas être inférieure au plancher légal du pays »). Vide = défaut
+  du pays. `GET /api/pos/settings` rend `retention: {years, legalYears, country, source: "country" | "site", writeMode, purge: "none", fiscalYear: "calendar"}`.
+- Échéance d'une donnée = **31 décembre, 23:59:59 (fuseau du magasin), de l'année de la vente + N** (`RetentionPolicy::endOfRetention`).
+  **L'exercice est supposé égal à l'année civile** (`fiscalYear: "calendar"`) : si l'exercice du site se termine à une autre
+  date, l'échéance légale peut être postérieure (« 6 ans après la fin de l'année d'imposition ») ; à confirmer par le comptable.
+- **AUCUNE purge automatique n'a lieu à l'échéance** (`purge: "none"`) : les données restent en base indéfiniment ; une
+  éventuelle suppression ou anonymisation à l'échéance sera une décision à part, prise plus tard, hors de ce lot.
+
+### Garde des suppressions et des modifications (`RetentionGuardSubscriber`, écouteur Doctrine `onFlush`)
+
+**Suppression : refusée tout de suite**, quel que soit le mode, avec un message clair (409 `RETENTION_LOCKED` par l'API,
+« accès refusé » avec le message dans EasyAdmin) à la place d'une erreur SQL :
+
+- données de vente : commandes de la caisse (`orderSource` 2) et commandes de type carte-cadeau (type 3), **commandes web
+  payées** (paiement enregistré ou statut complété/livré ; une commande web **non payée**, panier abandonné, reste
+  supprimable comme avant), leurs lignes, taxes et paiements ; sessions de caisse, transactions et comptages, rapports Z,
+  tickets, retours, cartes-cadeaux et leurs mouvements, journal d'audit, paiements terminal, ventes hors ligne et
+  synchronisations, validations C3 ;
+- **parents** référencés par une vente : utilisateur (vendeur ou client d'une vente), variante et produit vendus, poste de
+  caisse ayant une session : refusés avec le message « … référencé par N vente(s) » (désactiver le poste, archiver le
+  produit, anonymiser l'utilisateur à la place).
+
+**Modification : d'abord en mode observation** (réglage EasyAdmin « Modifications des données de caisse », défaut
+`observe`) : rien n'est bloqué ; toute modification d'une donnée de vente **hors exceptions** est journalisée
+`RETENTION_WRITE_OBSERVED {entity, id, fields, origin (route ou commande), user}` dans `pos_audit_log`. Le passage au mode
+`block` (modification refusée, 409 `RETENTION_LOCKED`, « Corriger par une contre-écriture ») se décidera **après la recette,
+au vu du journal** ; il n'y a pas de préproduction. Exceptions (jamais journalisées, jamais bloquées) :
+
+| Entité | Champs libres (écritures normales du cycle de vie) |
+|---|---|
+| `Order` | `status`, `statusUpdatedAt`, `totalAmount`, `subTotal`, `total_tax`, `syncedAt`, `customerId`, `taxTransactionId`, `stripeInvoiceId` |
+| `OrderTax` | `amount` (annulation : taxes ramenées à 0, contre-écriture C1) |
+| `Payments` | `stripePaymentId`, `stripeReceiptUrl`, `stripeStatus`, `stripeCardBrand`, `stripeLast4`, `stripeRiskLevel`, `statutPayment` |
+| `Caisse` (session) | `amountTotal`, `fonDeCaisse`, `isOpen`, `closedAt` |
+| `PosReceipt` | `reprintCount`, `linkVersion`, `linkRevokedAt`, `provisionalNumber` |
+| `PosReturn` | `exchangeOrder`, `storeCreditId`, `giftCardRefund` |
+| `PosGiftCard` | `balance`, `status`, `canceledAt`, `replacedById`, `customerId`, `issuedReturnId` |
+| `PosGiftCardTransaction` | `returnId`, `approvedBy`, `reason` |
+| `PosApproval` | `usedAt` |
+| `PosTerminalPayment`, `PosOfflineSale`, `PosOfflineSync` | toutes (états techniques) |
+| toute entité créée dans la même requête | libre (construction d'une vente en plusieurs flushs) |
+
+Le garde est enregistré pour la connexion partagée (`doctrine.event_subscriber`, `config/services.yaml`) : il s'applique
+à l'API, à EasyAdmin et aux commandes console (le `CashRecordLockTrait` de C2 reste la première barrière dans EasyAdmin).
+Un traitement interne légitime peut appeler `RetentionGuardSubscriber::suspend()` dans sa transaction ; aucun ne le fait aujourd'hui.
+
+### Instantanés des lignes de vente (`order_items.product_name`, `variant_label`, `product_code`, `barcode`)
+
+Remplis **par le serveur** à la vente, en caisse comme sur le web (`OrderItems::snapshotFrom`, dans `OrderItemService`) ;
+les lectures (ticket, DTO `productVariantName`, exports, archive) partent de l'instantané et retombent sur le catalogue
+s'il est vide. **Réponses JSON de même forme** : aucune clé ajoutée ni retirée. Rétro-remplissage à la migration depuis le
+catalogue **actuel** (nom, code, code-barres de la variante ou du produit, libellé couleur + taille) : l'historique déjà
+perdu (produit renommé ou supprimé avant le 30/10/2026) ne revient pas. Ligne libre (P2-a) : `product_name` vide,
+`displayName()` rend `customLabel`.
+
+### Archive annuelle (`GET /api/pos/archive/{year}`, responsable ; EasyAdmin « Archive annuelle de caisse », `/admin/pos/archive`)
+
+ZIP `archive-caisse-<site>-<année>.zip` : `archive.json` (site, année, fuseau, rapports Z de l'année (date d'ouverture, fuseau du
+magasin), journal d'audit de l'année **avec vérification ligne à ligne du chaînage** (`hash = sha256(prev_hash . payload)`) et
+synthèse `chain {entries, valid, firstBroken}`, ventes de la caisse par lots de 200 avec lignes, taxes, paiements, tickets,
+retour et mouvements de carte, cartes-cadeaux émises dans l'année), `archive.pdf` (**synthèse seule** : compteurs, totaux
+par Z, état du chaînage), `SHA256SUMS`, `README.txt` (vérification : `sha256sum -c SHA256SUMS`). Produite **en flux** dans
+`var/archives` (jamais l'année entière en mémoire ; testée avec 300 ventes copiées dans le test, le PHP reste à mémoire
+constante), puis envoyée et supprimée (`X-Archive-Sha256`, `X-Archive-Counts`, `X-Archive-Chain-Valid`) ; journal
+`ARCHIVE_EXPORTED {year, sha256, size, counts, chainValid}`. 403 `FORBIDDEN` pour un caissier, 400 `YEAR_INVALID`. L'archive est
+un **format ouvert à conserver hors du serveur** (le contribuable reste responsable de sa conservation) ; elle ne retire
+rien de la base.
+
+Sauvegardes du serveur (pour mémoire, aucun changement d'infrastructure dans ce lot) : `systemd` `backup-daily.timer`
+(04:00 UTC) vide toutes les bases dans `/home/arkanoa/backups/data`, **rotation 14 jours**. Elles couvrent la **restauration**
+après incident, pas la conservation légale : celle-ci repose sur la base vivante (aucune purge) et sur les archives
+annuelles téléchargées et conservées par le site.
+
+### Rattachement d'un terminal à un poste (S2.6)
+
+Une clé POS portant un `cashRegisterId` (écran « Clés des applications », `PUT /api/app-keys/{id}`) rend `cashRegisterId`
+dans `GET /api/pos/terminal`. Pour un **caissier** (sans `ROLE_POS_MANAGER`), ce terminal n'opère **en caisse** que sur ce
+poste : vendre (`create-multi-payment`), ouvrir, clôturer, dépôt, retrait, fond, tiroir, paiement terminal, cartes-cadeaux
+et commandes annulées → `cashRegisterId` différent = 403 `CASH_REGISTER_FORBIDDEN {cashRegisterId, terminalCashRegisterId}`,
+absent = le poste du terminal (`CashRegisterResolver::resolve`). **Retours, échanges, consultation et réimpression de
+tickets restent possibles pour toute vente du site** (le retour s'enregistre sur le poste du caissier). Responsable et
+administrateur : tous les postes. Clé sans poste : comportement inchangé.
+
+### Cartes-cadeaux : réponse uniforme et limite de codes refusés (S2.8)
+
+- Carte **inconnue, annulée ou remplacée** : même réponse 404 `GIFT_CARD_NOT_FOUND` « Carte-cadeau ou avoir inconnu ou
+  inutilisable » (avant : `GIFT_CARD_CANCELED` / `GIFT_CARD_REPLACED` révélaient l'existence du code). Format invalide : 422
+  `GIFT_CARD_CODE_INVALID` inchangé (non compté).
+- Chaque code refusé est journalisé (`GIFT_CARD_LOOKUP`, `result: GIFT_CARD_NOT_FOUND`, empreinte du code) ; au-delà de
+  **10 codes refusés en 10 minutes, par utilisateur OU par terminal** (réglage EasyAdmin « Codes de cartes-cadeaux refusés :
+  essais par 10 minutes », `settings.giftCards.codeAttemptsPer10Min`, 0 = sans limite), consultation **et** paiement par
+  carte (même valide) répondent 429 `GIFT_CARD_LOOKUP_LIMIT {retryAfterSeconds: 600, limit}` ; journal `code_attempts_limited`.
+  Les limiteurs IP/terminal de F9 (`pos_gift_card_lookup_*`) restent en place.
+- Validations C3 : au plus **30 par terminal et 15 minutes** (`limiter.pos_approval_terminal`) → 429 `APPROVAL_RATE_LIMITED`.
+
+### Loi 96 (A4) : documents en français
+
+Ticket (impression, réimpression), page publique `GET /api/r/{jeton}` (`lang="fr"`, « Télécharger en PDF »), PDF et courriel du
+reçu, bons de retour et avoirs sont **en français** ; natures : « Ticket de vente », « Ticket d'échange », « Avoir (retour) »,
+« Avoir (annulation) », « Ticket de carte-cadeau », « Avoir (carte-cadeau annulée) » (les deux dernières manquaient et
+rendaient « Ticket »). Test : rendu des six natures sans mot anglais (`Receipt`, `Change`, `Subtotal`, …). Les textes libres
+du site (en-tête, pied de ticket, noms de produits) restent de la responsabilité du site.
+
+### Audit des rôles (S2.7)
+
+Règle : `ROLE_USER_POS` (caissier) = caisse de son poste, lecture des postes, ventes et retours ; `ROLE_POS_MANAGER` = en plus
+postes, exports, archive, statistiques de tous, révocation de liens, actions C3 sans validation ; `ROLE_ADMIN` = tout.
+Garde-fou : `tests/Functional/Security/PosRoleMatrixTest.php` (un caissier tente chaque action réservée : refus attendu)
+et `AnonymousWriteAccessTest`. Écarts corrigés dans ce lot : révocation de lien de reçu (le service exigeait seulement la
+route ; désormais aussi dans `PosReceiptUseCase::revokeLink`) ; réponse non uniforme des cartes annulées/remplacées.
+
+Table d'audit (générée depuis `docs/endpoints.md` le 30/10/2026 ; **153 routes authentifiées** atteignables par un
+caissier, plus 147 routes publiques). Colonnes : accès `security.yaml` (« caisse » = `ROLE_USER_POS ou ROLE_POS_MANAGER ou
+ROLE_ADMIN`, « web + caisse » = aussi `ROLE_USER_INTERNET`) ; contrôle dans le code (rôle, action C3, propriété) ; test qui le
+prouve (`tests/Functional/...`, « — » = aucun test dédié).
+
+| Méthode | Route | Accès | Contrôle dans le code (rôle / C3 / propriété) | Test |
+|---|---|---|---|---|
+| GET | `/api/newsletter` | web + caisse | lecture (liste publique des numéros) | — |
+| GET, POST | `/booking-setup/` | aucune règle | authentification propre au contrôleur (jeton), pages HTML | AnonymousWriteAccessTest (liste) |
+| ANY | `/booking-setup/configure/{id}` | aucune règle | authentification propre au contrôleur (jeton), pages HTML | AnonymousWriteAccessTest (liste) |
+| ANY | `/booking-setup/list` | aucune règle | authentification propre au contrôleur (jeton), pages HTML | AnonymousWriteAccessTest (liste) |
+| ANY | `/booking-setup/logout` | aucune règle | authentification propre au contrôleur (jeton), pages HTML | AnonymousWriteAccessTest (liste) |
+| ANY | `/` | aucune règle | page publique du site legacy / connexion | — |
+| ANY | `/` | aucune règle | page publique du site legacy / connexion | — |
+| ANY | `/account/order/{id}` | web + caisse | sa commande (`o.userId`) | — |
+| ANY | `/account/otp` | web + caisse | session de l'utilisateur | AuthCookieFlowTest |
+| ANY | `/account` | web + caisse | redirige vers /admin (ROLE_ADMIN) | — |
+| GET | `/adress/` | web + caisse | ses adresses (**corrigé S2.7** : avant, toutes) | — |
+| GET, POST | `/adress/new` | web + caisse | rattache à l'utilisateur connecté | — |
+| GET, POST | `/adress/{id}/edit` | web + caisse | propriétaire (**corrigé S2.7**) | — |
+| POST | `/adress/{id}` | web + caisse | propriétaire + CSRF (**corrigé S2.7**) | — |
+| GET | `/api/adresses/` | web + caisse | ses adresses (`getUserAdress() === user`) | CustomerAccountApiTest |
+| PUT | `/api/adresses/{id}/set-primary` | web + caisse | ses adresses (`getUserAdress() === user`) | CustomerAccountApiTest |
+| DELETE | `/api/adresses/{id}` | web + caisse | ses adresses (`getUserAdress() === user`) | CustomerAccountApiTest |
+| PUT | `/api/adresses/{id}` | web + caisse | ses adresses (`getUserAdress() === user`) | CustomerAccountApiTest |
+| GET | `/api/adresses` | web + caisse | ses adresses (`getUserAdress() === user`) | CustomerAccountApiTest |
+| POST | `/api/adresses` | web + caisse | ses adresses (`getUserAdress() === user`) | CustomerAccountApiTest |
+| POST | `/api/caisse/cashfunddeposit` | caisse | session ouverte du poste ; poste du terminal si rattaché (`CashRegisterResolver`) | CashRegisterApiTest, PosRoleMatrixTest |
+| POST | `/api/caisse/cashfundwithdraw` | caisse | idem ; fond négatif refusé | CashRegisterApiTest |
+| POST | `/api/caisse/close` | caisse | session du poste ; C3 `close_without_count` si comptage absent et réglage actif ; poste du terminal | CashClosingApiTest, PosRoleMatrixTest |
+| GET | `/api/caisse/denominations` | caisse | lecture, coupures du site | CashClosingApiTest |
+| POST | `/api/caisse/deposit` | caisse | session ouverte du poste ; poste du terminal | CashRegisterApiTest, PosRoleMatrixTest |
+| POST | `/api/caisse/drawer-open` | caisse | C3 `drawer_open` hors vente si réglage actif ; poste du terminal | PosPinApiTest, PosRoleMatrixTest |
+| POST | `/api/caisse/open` | caisse | poste actif sans session ouverte ; poste du terminal | CashRegisterApiTest |
+| GET | `/api/caisse/report/x` | caisse | lecture, session du poste | CashClosingApiTest |
+| GET | `/api/caisse/report/z/{id}` | caisse | lecture, rapport du site | CashClosingApiTest |
+| GET | `/api/caisse/report/z` | caisse | lecture, rapports du site | CashClosingApiTest |
+| GET | `/api/caisse/transactions` | caisse | lecture, session ouverte du poste | CashRegisterApiTest |
+| POST | `/api/caisse/withdraw` | caisse | session ouverte du poste ; poste du terminal | CashRegisterApiTest |
+| GET | `/api/caisse` | caisse | lecture, session du poste | CashRegisterApiTest |
+| GET | `/api/cash-registers` | caisse | lecture ; postes inactifs : responsable seulement | CashRegisterApiTest, PosManagerRoleTest |
+| GET | `/api/colors` | web + caisse | lecture de référentiels | — |
+| DELETE | `/api/notes-de-frais/{id}` | web + caisse | **ROLE_ADMIN ou propriétaire de la collection de la note** (403 `FORBIDDEN`, **corrigé S2.7** : avant, tout utilisateur connecté, toute note) | PosRoleMatrixTest |
+| PUT | `/api/notes-de-frais/{id}` | web + caisse | **ROLE_ADMIN ou propriétaire de la collection** (**corrigé S2.7**) | PosRoleMatrixTest |
+| POST | `/api/order/cancel/{id}` | web + caisse | auteur de la commande ; vente de caisse d'autrui : responsable ; C3 `refund` selon seuil | PosOrderApiTest, PosManagerRoleTest, PosRoleMatrixTest |
+| POST | `/api/order/create-multi-payment` | caisse | `orderSource` 2 : session ouverte du poste (ou du terminal) ; C3 `discount`, `price_override`, `custom_item` ; retour libre selon réglage ; carte-cadeau : limite de codes refusés | PosOrderApiTest, PosDiscountApiTest, PosCustomItemApiTest, PosGiftCardApiTest, PosRoleMatrixTest |
+| POST | `/api/order/create` | web + caisse | route web : caissier/responsable sans ROLE_ADMIN → vente web seulement (403 `POS_ROUTE_REQUIRED` pour source 2 ou type ≠ vente, **corrigé S2.7**) ; adresse de l'utilisateur | CheckoutApiTest, PosRoleMatrixTest |
+| GET | `/api/orders` | web + caisse | caissier/responsable : `orderSource=2` obligatoire (403 sinon) ; admin : tout | PosRoleAccessTest |
+| GET | `/api/ordersuser` | web + caisse | ses commandes | CustomerAccountApiTest |
+| POST | `/api/payment` | web + caisse | lecture d'un PaymentIntent du compte Stripe du site par son id, aucune écriture (**sans contrôle de propriété, hors lot**) | — |
+| GET | `/api/payments` | web + caisse | caissier/responsable : `orderSource=2` obligatoire ; admin : tout | PosRoleAccessTest |
+| POST | `/api/pos/approvals` | caisse | PIN d'un responsable, terminal ; 30 / terminal / 15 min (429 `APPROVAL_RATE_LIMITED`) | PosPinApiTest |
+| GET | `/api/pos/archive/{year}` | caisse | **responsable** (403 `FORBIDDEN`) | PosRetentionArchiveApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/customers/{id}/erase` | caisse | **responsable** (puis C3 `customer_erase` formelle) | PosCustomerApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/customers/{id}/export` | caisse | **responsable** | PosCustomerApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/customers/{id}/history` | caisse | fiche du site ; champs masqués pour le caissier ; journal | PosCustomerApiTest |
+| POST | `/api/pos/customers/{id}/link` | caisse | consentement `account_link` du client exigé, réglage `linkEnabled` | PosCustomerApiTest |
+| POST | `/api/pos/customers/{id}/loyalty/adjust` | caisse | C3 `loyalty_adjust` (toujours pour un caissier) | PosCustomerApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/customers/{id}/merge` | caisse | **responsable** | PosCustomerApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/customers/{id}` | caisse | fiche du site ; masquage caissier ; journal `CUSTOMER_VIEWED` | PosCustomerApiTest |
+| PATCH | `/api/pos/customers/{id}` | caisse | fiche du site ; consentements | PosCustomerApiTest |
+| GET | `/api/pos/customers` | caisse | recherche : courriel/téléphone exacts, nom ≥ 3 ; 30/min/utilisateur (429) ; journal masqué | PosCustomerApiTest |
+| POST | `/api/pos/customers` | caisse | création ; téléphone E.164 | PosCustomerApiTest |
+| POST | `/api/pos/exchanges/quote` | caisse | lecture (simulation) ; toute vente du site | PosReturnApiTest |
+| POST | `/api/pos/exchanges` | caisse | toute vente du site ; session du poste du caissier ; C3 `return` selon seuil | PosReturnApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/exports/accounting/entries.csv` | caisse | **responsable** | PosReportingApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/exports/accounting/summary.csv` | caisse | **responsable** | PosReportingApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/exports/accounting` | caisse | **responsable** | PosReportingApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/gift-cards/replace` | caisse | C3 `gift_card_replace` ; vente d'origine + 4 derniers caractères | PosGiftCardApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/gift-cards/{code}/adjust` | caisse | C3 `gift_card_adjust` | PosGiftCardApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/gift-cards/{code}/cancel` | caisse | C3 `gift_card_cancel` | PosGiftCardApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/gift-cards/{code}/cash-out` | caisse | réglage `cashOutEnabled` ; session du poste ; C3 selon seuil | PosGiftCardApiTest |
+| GET | `/api/pos/gift-cards/{code}` | caisse | 404 uniforme ; 10 codes refusés / 10 min / utilisateur et terminal (429) ; limiteurs IP/terminal F9 | PosGiftCardApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/gift-cards` | caisse | session ouverte du poste ; poste du terminal ; réglage `enabled` | PosGiftCardApiTest |
+| GET | `/api/pos/offline-cases` | caisse | lecture publique du jeu de cas (connecté) | PosOfflineApiTest |
+| GET | `/api/pos/offline-pack` | caisse | lecture ; poste du terminal | PosOfflineApiTest |
+| GET | `/api/pos/offline-sales` | caisse | **responsable** (historique des synchronisations) | PosOfflineApiTest |
+| POST | `/api/pos/offline-sales` | caisse | `X-Pos-Terminal` obligatoire ; vendeur déclaré doit avoir un rôle de caisse ; C3 `offline_force` ; plafonds de remise | PosOfflineApiTest |
+| POST | `/api/pos/pin` | caisse | son propre PIN, mot de passe exigé | PosPinApiTest |
+| POST | `/api/pos/quote` | caisse | lecture (devis) ; remises plafonnées par rôle (information) | PosDiscountApiTest |
+| POST | `/api/pos/receipts/email` | caisse | toute vente du site (par conception) ; adresse non conservée ; limite d'envois | PosReceiptApiTest |
+| POST | `/api/pos/receipts/revoke-link` | caisse | **responsable** (route et service, **corrigé S2.7**) | PosReceiptApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/receipts` | caisse | toute vente du site (réimpression, par conception) ; journal `RECEIPT_REPRINTED` | PosReceiptApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/returns/lookup` | caisse | toute vente du site (lecture) | PosReturnApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/returns` | caisse | toute vente du site ; session du poste du caissier ; C3 `return` selon seuil ; sans ticket selon réglage | PosReturnApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/settings` | caisse | lecture des réglages du site (sans secret) | PosSettingsApiTest |
+| GET | `/api/pos/statistics/cashiers` | caisse | caissier : ramené à lui-même (`scope: self`) ; responsable : tous | PosReportingApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/terminal/payments/{id}/cancel` | caisse | paiement du site ; terminal | PosTerminalApiTest |
+| POST | `/api/pos/terminal/payments/{id}/refund` | caisse | C3 `refund` selon seuil | PosTerminalApiTest |
+| POST | `/api/pos/terminal/payments/{id}/simulate` | caisse | **responsable** (mode test) | PosTerminalApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/terminal/payments/{id}` | caisse | lecture, paiement du site | PosTerminalApiTest |
+| GET | `/api/pos/terminal/payments` | caisse | lecture, paiements du site | PosTerminalApiTest |
+| POST | `/api/pos/terminal/payments` | caisse | session ouverte du poste ; poste du terminal | PosTerminalApiTest |
+| GET | `/api/pos/terminal` | caisse | poste du terminal si rattaché (403 `CASH_REGISTER_FORBIDDEN`) ; rend `cashRegisterId` | PosTerminalApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/unlock` | caisse | son propre PIN ; blocage après N essais | PosPinApiTest |
+| GET | `/api/products/{id}/reviews/eligibility` | web + caisse | utilisateur connecté (achat) | ReviewApiTest |
+| POST | `/api/products/{id}/reviews` | web + caisse | éligibilité (achat), limite de débit | ReviewApiTest |
+| GET | `/api/profile` | web + caisse | soi-même | CustomerAccountApiTest |
+| PATCH, PUT | `/api/profile` | web + caisse | soi-même ; rôles non modifiables (courriel modifiable sans mot de passe : hors lot) | CustomerAccountApiTest |
+| GET | `/api/reviews/mine` | web + caisse | ses avis | ReviewApiTest |
+| DELETE | `/api/reviews/{id}` | web + caisse | auteur (404 sinon) | ReviewApiTest |
+| PUT, PATCH | `/api/reviews/{id}` | web + caisse | auteur (404 sinon) | ReviewApiTest |
+| POST | `/api/shipping/buy` | web + caisse | commande de l'utilisateur ou ROLE_ADMIN (403 `FORBIDDEN`, 404 `ORDER_NOT_FOUND`), trace retirée de la réponse (**corrigé S2.7**) | PosRoleMatrixTest |
+| POST | `/api/shipping/parcels` | web + caisse | calcul sans écriture | — |
+| GET | `/api/sizes` | web + caisse | lecture de référentiels | — |
+| GET | `/api/social-networks` | web + caisse | lecture de référentiels | — |
+| GET | `/api/styles` | web + caisse | lecture de référentiels | — |
+| POST | `/api/subscriptions/portal-session` | web + caisse + `#[IsGranted(ROLE_USER_INTERNET)]` | `#[IsGranted(ROLE_USER_INTERNET)]` : refusé au caissier ; ses abonnements | SubscriptionApiTest |
+| POST | `/api/subscriptions/{id}/cancel` | web + caisse + `#[IsGranted(ROLE_USER_INTERNET)]` | `#[IsGranted(ROLE_USER_INTERNET)]` : refusé au caissier ; ses abonnements | SubscriptionApiTest |
+| POST | `/api/subscriptions/{id}/change-plan` | web + caisse + `#[IsGranted(ROLE_USER_INTERNET)]` | `#[IsGranted(ROLE_USER_INTERNET)]` : refusé au caissier ; ses abonnements | SubscriptionApiTest |
+| POST | `/api/subscriptions/{id}/pause` | web + caisse + `#[IsGranted(ROLE_USER_INTERNET)]` | `#[IsGranted(ROLE_USER_INTERNET)]` : refusé au caissier ; ses abonnements | SubscriptionApiTest |
+| POST | `/api/subscriptions/{id}/resume` | web + caisse + `#[IsGranted(ROLE_USER_INTERNET)]` | `#[IsGranted(ROLE_USER_INTERNET)]` : refusé au caissier ; ses abonnements | SubscriptionApiTest |
+| GET | `/api/subscriptions/{id}` | web + caisse + `#[IsGranted(ROLE_USER_INTERNET)]` | `#[IsGranted(ROLE_USER_INTERNET)]` : refusé au caissier ; ses abonnements | SubscriptionApiTest |
+| GET | `/api/subscriptions` | web + caisse + `#[IsGranted(ROLE_USER_INTERNET)]` | `#[IsGranted(ROLE_USER_INTERNET)]` : refusé au caissier ; ses abonnements | SubscriptionApiTest |
+| POST | `/api/subscriptions` | web + caisse + `#[IsGranted(ROLE_USER_INTERNET)]` | `#[IsGranted(ROLE_USER_INTERNET)]` : refusé au caissier ; ses abonnements | SubscriptionApiTest |
+| GET | `/api/type-fournisseurs` | web + caisse | lecture de référentiels | — |
+| GET | `/api/type-note-de-frais` | web + caisse | lecture de référentiels | — |
+| ANY | `/cart/add/{id}` | aucune règle | panier de session (pages HTML du site legacy) | — |
+| ANY | `/cart/delete-all/{id}` | aucune règle | panier de session (pages HTML du site legacy) | — |
+| ANY | `/cart/delete/{id}` | aucune règle | panier de session (pages HTML du site legacy) | — |
+| ANY | `/cart` | aucune règle | panier de session (pages HTML du site legacy) | — |
+| ANY | `/cgu/conditions-generales-utilisation` | aucune règle | page publique du site legacy / connexion | — |
+| ANY | `/checkout/confirm` | web + caisse | panier de session, ses adresses | — |
+| ANY | `/checkout/edit` | web + caisse | idem | — |
+| ANY | `/checkout` | web + caisse | idem | — |
+| GET, POST | `/contact/` | aucune règle | page publique du site legacy / connexion | — |
+| ANY | `/create-checkout-session/{reference}` | aucune règle | tunnel Stripe legacy (référence de commande) | — |
+| ANY | `/logout` | aucune règle | page publique du site legacy / connexion | — |
+| POST | `/password-reset/confirm` | aucune règle | page publique du site legacy / connexion | — |
+| GET | `/password-reset/form` | aucune règle | page publique du site legacy / connexion | — |
+| ANY | `/product/{slug}` | aucune règle | page publique du site legacy / connexion | — |
+| ANY | `/register` | aucune règle | page publique du site legacy / connexion | — |
+| ANY | `/shop` | aucune règle | page publique du site legacy / connexion | — |
+| ANY | `/stripe-payment-cancel/{StripeCheckoutSessionId}` | aucune règle | tunnel Stripe legacy (référence de commande) | — |
+| ANY | `/stripe-payment-succes/{StripeCheckoutSessionId}` | aucune règle | tunnel Stripe legacy (référence de commande) | — |
+| GET, POST | `/stripe/connect` | aucune règle + `#[IsGranted(ROLE_ADMIN)]` | `#[IsGranted(ROLE_ADMIN)]` | — |
+| GET, POST | `/stripe/disconnect` | aucune règle + `#[IsGranted(ROLE_ADMIN)]` | `#[IsGranted(ROLE_ADMIN)]` | — |
+| GET | `/stripe/success` | aucune règle + `#[IsGranted(ROLE_ADMIN)]` | `#[IsGranted(ROLE_ADMIN)]` | — |
+| GET | `/videos/{id}` | aucune règle | page publique du site legacy / connexion | — |
+| GET | `/videos` | aucune règle | page publique du site legacy / connexion | — |
+| GET | `/api/validate-token` | web + caisse | soi-même | AuthCookieFlowTest |
+| GET | `/verify/email` | aucune règle | page publique du site legacy / connexion | — |
+| ANY | `/setup/new-store` | aucune règle | jeton de création de boutique (base maître) | AnonymousWriteAccessTest (liste) |
+| ANY | `/setup/status/{tenantCode}/{syncJobId}/{finalUrl}` | aucune règle | jeton de création de boutique (base maître) | AnonymousWriteAccessTest (liste) |
+| GET, HEAD | `/assets/uploads/{path}` | aucune règle | fichiers publics ou clé d'accès signée | SharedMediaDeliveryHardeningTest |
+| GET, HEAD | `/bucket-simulator/{path}` | aucune règle | fichiers publics ou clé d'accès signée | SharedMediaDeliveryHardeningTest |
+| GET, HEAD | `/media/secure/{accessKey}` | aucune règle | fichiers publics ou clé d'accès signée | SharedMediaDeliveryHardeningTest |
+| GET | `/shared-media/{id}` | aucune règle | médias partagés publics (UUID) | SharedMediaSecurityTest |
+| GET | `/shared-media` | aucune règle | médias partagés publics (UUID) | SharedMediaSecurityTest |
+| GET, HEAD | `/uploads/{path}` | aucune règle | fichiers publics ou clé d'accès signée | SharedMediaDeliveryHardeningTest |
+| GET | `/api/categories.{_format}` | web + caisse | lecture | — |
+| POST | `/api/categories.{_format}` | web + caisse | `security: is_granted(ROLE_ADMIN)` sur l'opération (API Platform ; `endpoints.md` ne le voit pas) | — |
+| DELETE | `/api/categories/{id}.{_format}` | web + caisse | `security: is_granted(ROLE_ADMIN)` sur l'opération (API Platform ; `endpoints.md` ne le voit pas) | — |
+| GET | `/api/categories/{id}.{_format}` | web + caisse | lecture | — |
+| PATCH | `/api/categories/{id}.{_format}` | web + caisse | `security: is_granted(ROLE_ADMIN)` sur l'opération (API Platform ; `endpoints.md` ne le voit pas) | — |
+| PUT | `/api/categories/{id}.{_format}` | web + caisse | `security: is_granted(ROLE_ADMIN)` sur l'opération (API Platform ; `endpoints.md` ne le voit pas) | — |
+| GET, HEAD | `/api/errors/{status}` | web + caisse | pages d'erreur API Platform | — |
+| GET | `/api/validation_errors/{id}` | web + caisse | pages d'erreur API Platform | — |
+| GET | `/api/validation_errors/{id}` | web + caisse | pages d'erreur API Platform | — |
+| GET | `/api/validation_errors/{id}` | web + caisse | pages d'erreur API Platform | — |
+
+Routes **publiques** (`PUBLIC_ACCESS`, un caissier n'y gagne rien par rapport à un visiteur) : `/api/Carrier` (1), `/api/admin-settings` (2), `/api/adresses` (2), `/api/app` (1), `/api/app-profile` (1), `/api/baniere-statiques` (2), `/api/bannieres` (2), `/api/booking` (2), `/api/boussole` (3), `/api/boutique-settings` (1), `/api/candidatures` (1), `/api/cart` (1), `/api/categories-marque` (2), `/api/category` (1), `/api/components-config` (1), `/api/contact` (1), `/api/contacts` (2), `/api/currencies` (1), `/api/customization` (1), `/api/embeds` (2), `/api/emplois` (1), `/api/entreprise` (1), `/api/explore-cards` (1), `/api/features` (1), `/api/financement` (1), `/api/health` (1), `/api/homeslider` (1), `/api/landingpage` (1), `/api/landingpage-config` (3), `/api/landingpage-settings` (1), `/api/login` (1), `/api/logout` (1), `/api/marques` (1), `/api/memoires` (40), `/api/multiliens` (2), `/api/newsletter` (1), `/api/order` (1), `/api/order-statuses` (1), `/api/orders` (1), `/api/otp-verify` (1), `/api/password-reset` (2), `/api/pos` (2), `/api/presentation-groups` (2), `/api/presentations` (2), `/api/products` (8), `/api/products.{_format}` (1), `/api/productsid` (1), `/api/r` (1), `/api/recherches` (2), `/api/register` (1), `/api/resend-verification` (1), `/api/reservations` (5), `/api/service-offers` (2), `/api/shared-media` (2), `/api/shipping` (2), `/api/stripe` (2), `/api/stripe-config` (1), `/api/subscription-plans` (1), `/api/team` (2), `/api/tenant` (3), `/api/token` (1), `/api/transporteurs` (1), `/api/vehicle_products` (1), `/api/vehicle_products.{_format}` (1), `/api/vehicles` (2), `/api/vehicles.{_format}` (1), `/api/videos` (2), `/api/webhooks` (2), `/stripe` (1).
+
+Constats hors lot (non corrigés, à décider) : `POST /api/payment` lit un PaymentIntent par son id sans contrôle de propriété
+(fuite de carte masquée et reçu pour qui connaît un `pi_…`) ; `PATCH /api/profile` change le courriel sans mot de passe ni
+nouvelle vérification ; les ressources API Platform `Commande`, `Product`, `Vehicle`, `VehicleProduct` n'ont pas de clause
+`security` (couvertes par `access_control` seul) ; `docs/endpoints.md` ne voit pas les clauses `security` d'API Platform
+(`/api/categories` : écritures bien réservées à ROLE_ADMIN).
+
+
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la
@@ -1158,6 +1459,6 @@ voir `docs/architecture.md`, « Clé d'activation des applications mobiles ») o
 `GET /api/tenant/check-mobile` ; il garde l'hôte complet reçu (`tenant.host`) et l'envoie dans `X-Tenant-Host` sur
 chaque requête. Une clé POS peut être **rattachée à un poste de caisse** (`cashRegisterId` à la création ou par
 `PUT /api/app-keys/{id}`, écran « Clés des applications ») : l'activation rend alors `cashRegister: {id, name}` (copie
-faite sur la clé, le site n'étant pas accessible à ce moment) et le POS présélectionne ce poste, le caissier pouvant en
-changer ; `null` sinon, et le POS demande le poste (`GET /api/cash-registers`). Puis le caissier se connecte : `POST /api/login {username, password, platform: "pos"}` →
+faite sur la clé, le site n'étant pas accessible à ce moment) et le POS présélectionne ce poste ; depuis le 30/10/2026 (S2.6) un
+**caissier** n'opère en caisse que sur ce poste (403 `CASH_REGISTER_FORBIDDEN` ailleurs), un responsable peut en changer ; `null` sinon, et le POS demande le poste (`GET /api/cash-registers`). Puis le caissier se connecte : `POST /api/login {username, password, platform: "pos"}` →
 `{token, refresh_token}` (voir `docs/architecture.md`, « Authentification »).

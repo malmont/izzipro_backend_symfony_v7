@@ -85,7 +85,7 @@ class PosTerminalService
         if (hash_equals($this->token((int) $m[1], $tenantCode), $header)) {
             $row = $this->keys->findOneForTenant((int) $m[1], $tenantCode);
             if ($row && $row['app'] === 'pos' && $row['revoked_at'] === null) {
-                $terminal = ['id' => (int) $row['id'], 'label' => (string) $row['label']];
+                $terminal = ['id' => (int) $row['id'], 'label' => (string) $row['label'], 'cashRegisterId' => isset($row['cash_register_id']) && $row['cash_register_id'] !== null ? (int) $row['cash_register_id'] : null]; // poste rattaché à la clé (S2, 30/10/2026)
             }
         }
 

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><title>Archive de caisse {{ year }}</title>
+<style>body{font-family:'DejaVu Sans',sans-serif;font-size:10px;color:#111}h1{font-size:16px;margin:0 0 4px}h2{font-size:12px;margin:14px 0 4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:3px 4px;text-align:left}th{background:#eee}td.n{text-align:right}.muted{color:#555}</style></head>
+<body>
+<h1>Archive des données de caisse — {{ site }} — exercice {{ year }}</h1>
+<p class="muted">Produite le {{ generatedAt }} (fuseau {{ timezone }}). Détail complet dans archive.json ; empreintes dans SHA256SUMS. Conservation : {{ retention.years }} ans (plancher légal {{ retention.legalYears }}, pays {{ retention.country ?? '—' }}), aucune purge automatique. Journal chaîné {{ chainValid ? 'vérifié : intègre' : 'ATTENTION : rupture de chaîne détectée' }}.</p>
+<h2>Contenu</h2>
+<table><tr><th>Rapports Z</th><th>Entrées du journal</th><th>Commandes de caisse</th><th>Tickets et avoirs</th><th>Retours</th><th>Cartes-cadeaux et avoirs émis</th></tr>
+<tr><td class="n">{{ counts.zReports }}</td><td class="n">{{ counts.journal }}</td><td class="n">{{ counts.orders }}</td><td class="n">{{ counts.receipts }}</td><td class="n">{{ counts.returns }}</td><td class="n">{{ counts.giftCards }}</td></tr></table>
+<h2>Rapports Z (par date d'ouverture de session)</h2>
+<table><tr><th>Pièce</th><th>Jour</th><th>Clôturé le</th><th>Ventes (nb)</th><th>Ventes TTC</th><th>Remboursements</th><th>Espèces attendues</th><th>Comptées</th><th>Écart</th></tr>
+{% for z in zReports %}<tr><td>{{ z.piece }}</td><td>{{ z.day }}</td><td>{{ z.closedAt }}</td><td class="n">{{ z.sales ? z.sales.count : '' }}</td><td class="n">{{ z.sales ? (z.sales.total / 100)|number_format(2, ',', ' ') : '' }}</td><td class="n">{{ z.refunds ? (z.refunds.total / 100)|number_format(2, ',', ' ') : '' }}</td><td class="n">{{ (z.expectedCash / 100)|number_format(2, ',', ' ') }}</td><td class="n">{{ z.countedCash is not null ? (z.countedCash / 100)|number_format(2, ',', ' ') : '—' }}</td><td class="n">{{ z.discrepancy is not null ? (z.discrepancy / 100)|number_format(2, ',', ' ') : '—' }}</td></tr>{% else %}<tr><td colspan="9">Aucun rapport Z sur l'exercice.</td></tr>{% endfor %}
+</table>
+</body></html>

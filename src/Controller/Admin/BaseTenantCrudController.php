@@ -59,7 +59,11 @@ abstract class BaseTenantCrudController extends AbstractCrudController
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         $tenantEm = $this->emProvider->getEntityManager();
-        $tenantEm->flush();
+        try {
+            $tenantEm->flush();
+        } catch (\App\Services\RetentionService\RetentionViolationException $e) { // mode « block » (A1)
+            throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException($e->getMessage(), $e);
+        }
         if (DemoContentMarker::customized($entityInstance)) { // une fiche d'exemple modifiée devient définitive
             $tenantEm->flush();
         }
@@ -73,6 +77,10 @@ abstract class BaseTenantCrudController extends AbstractCrudController
         $tenantEm = $this->emProvider->getEntityManager();
         $managedEntity = $tenantEm->contains($entityInstance) ? $entityInstance : $tenantEm->merge($entityInstance);
         $tenantEm->remove($managedEntity);
-        $tenantEm->flush();
+        try {
+            $tenantEm->flush();
+        } catch (\App\Services\RetentionService\RetentionViolationException $e) { // conservation des données de vente (A1) : message clair
+            throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException($e->getMessage(), $e);
+        }
     }
 }
