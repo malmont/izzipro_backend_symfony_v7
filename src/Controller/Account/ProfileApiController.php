@@ -11,6 +11,11 @@ use Symfony\Component\Routing\Annotation\Route;
 
 class ProfileApiController extends BaseTenantApiController
 {
+    public function __construct(\App\Services\TenantEntityManagerProvider $emProvider, private readonly \App\Services\AccountService\EmailChangeGuard $emailChanges)
+    {
+        parent::__construct($emProvider);
+    }
+
     #[Route('/api/profile', name: 'api_profile_get', methods: ['GET'])]
     public function getProfile(): JsonResponse
     {
@@ -48,6 +53,15 @@ class ProfileApiController extends BaseTenantApiController
         }
 
         $em = $this->emProvider->getEntityManager();
+
+        // S7 (31/10/2026) : un changement RÉEL d'adresse (différente après trim et minuscules) exige une confirmation ; le tunnel
+        // de paiement du site renvoie l'adresse actuelle et ne passe pas ici ; adresse vide ou absente : comportement inchangé
+        $oldEmail = (string) $user->getEmail();
+        $emailChanges = isset($data['email']) && \App\Services\AccountService\EmailChangeGuard::isChange($oldEmail, $data['email']);
+        $method = \App\Services\AccountService\EmailChangeGuard::method($user);
+        if ($emailChanges && ($refused = $this->emailChanges->authorize($user, $data, $request)) !== null) {
+            return $this->json($refused['body'], $refused['status']);
+        }
 
         if (isset($data['firstName'])) {
             $user->setFirstname($data['firstName']);
@@ -89,6 +103,9 @@ class ProfileApiController extends BaseTenantApiController
         }
 
         $em->flush();
+        if ($emailChanges) {
+            $this->emailChanges->notifyChanged($user, $oldEmail, (string) $user->getEmail(), $method, $request);
+        }
 
         return $this->json([
             'message' => 'Profile updated successfully',

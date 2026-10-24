@@ -42,7 +42,9 @@ class PosTerminalUseCase
             throw new CashRegisterException('VALIDATION_FAILED', 'Corps invalide', 422, $errors);
         }
 
-        return $this->payments->start($user, is_numeric($body['cashRegisterId'] ?? null) ? (int) $body['cashRegisterId'] : null, $body['items'], $others, (int) $body['amount'], $posKey, is_array($body['ticketDiscount'] ?? null) ? $body['ticketDiscount'] : null);
+        $reader = is_array($body['reader'] ?? null) ? array_intersect_key($body['reader'], array_flip(['id', 'label', 'type'])) : null; // kit (F13/F16) : lecteur déclaré par l'application, journal seulement
+
+        return $this->payments->start($user, is_numeric($body['cashRegisterId'] ?? null) ? (int) $body['cashRegisterId'] : null, $body['items'], $others, (int) $body['amount'], $posKey, is_array($body['ticketDiscount'] ?? null) ? $body['ticketDiscount'] : null, $reader);
     }
 
     public function get(int $id, ?User $user = null): PosTerminalPayment
@@ -88,5 +90,22 @@ class PosTerminalUseCase
     public function toArray(PosTerminalPayment $payment): array
     {
         return $this->payments->toArray($payment);
+    }
+
+    /** POST /api/pos/terminal/connection-token {cashRegisterId?} (kit Stripe Terminal, F13/F16) */
+    public function connectionToken(User $user, array $body): array
+    {
+        return $this->payments->connectionToken($user, is_numeric($body['cashRegisterId'] ?? null) ? (int) $body['cashRegisterId'] : null);
+    }
+
+    /** POST /api/pos/terminal/payments/{id}/refund/confirm {stripeRefundId} (kit : remboursement Interac présenté sur le lecteur) */
+    public function confirmRefund(int $id, array $body, User $user): PosTerminalPayment
+    {
+        $refundId = $body['stripeRefundId'] ?? null;
+        if (!is_string($refundId) || !preg_match('/^re_[A-Za-z0-9_]{6,}$/', $refundId)) {
+            throw new CashRegisterException('VALIDATION_FAILED', 'Corps invalide', 422, [['path' => 'stripeRefundId', 'message' => 'identifiant de remboursement Stripe (re_…) attendu']]);
+        }
+
+        return $this->payments->confirmRefund($this->payments->find($id), $refundId, $user);
     }
 }

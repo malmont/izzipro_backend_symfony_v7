@@ -9,7 +9,7 @@ namespace App\Services\PosTerminalService;
  * Intention normalisée : {id, status, amount, amountReceived, captured, paymentMethodType, cardBrand, last4, failureCode,
  * failureMessage, applicationFee}. Lecteur normalisé : {id, label, deviceType, simulated, status (online|offline),
  * action: null | {type, status (in_progress|succeeded|failed), failureCode, failureMessage, paymentIntent, refund}}.
- * Remboursement normalisé : {id, status, amount, failureReason}.
+ * Remboursement normalisé : {id, status, amount, failureReason, paymentIntent, created}. Intention : aussi clientSecret et chargeId (F13/F16).
  */
 interface PosTerminalGatewayInterface
 {
@@ -57,4 +57,10 @@ interface PosTerminalGatewayInterface
 
     /** Clé Stripe en production (sk_live) */
     public function isLiveMode(): bool;
+
+    /** Kit Stripe Terminal dans l'application (F13/F16) : secret d'un ConnectionToken sur le compte du site, pour l'emplacement donné ; jamais mis en cache */
+    public function createConnectionToken(?string $locationId): string;
+
+    /** Remboursements d'une intention (réconciliation d'un remboursement présenté par le kit) : liste de remboursements normalisés */
+    public function listRefunds(string $paymentIntentId): array;
 }

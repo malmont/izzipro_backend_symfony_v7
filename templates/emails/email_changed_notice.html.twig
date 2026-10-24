@@ -1,0 +1,27 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Votre adresse courriel a été modifiée{% endblock %}
+
+{% block body %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr>
+        <td align="center">
+            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+                <tr>
+                    <td align="center" style="background: #1e293b; padding: 28px 20px;">
+                        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700;">Votre adresse courriel a été modifiée</h1>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 30px; font-size: 15px; color: #1e293b;">
+                        <p style="margin-top: 0;">Bonjour {{ firstname|default('') }},</p>
+                        <p>L'adresse courriel de votre compte a été remplacée le {{ changedAt|date('d/m/Y à H:i') }} : l'ancienne adresse <strong>{{ oldEmail }}</strong> ne recevra plus les messages de votre compte, qui iront désormais à <strong>{{ newEmail }}</strong>.</p>
+                        <p>Si vous êtes à l'origine de ce changement, vous n'avez rien à faire.</p>
+                        <p>Si vous n'avez pas demandé ce changement, répondez à ce message ou contactez-nous sans attendre : nous pourrons rétablir votre adresse.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+{% endblock %}

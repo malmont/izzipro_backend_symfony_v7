@@ -99,6 +99,93 @@ class CustomerAccountApiTest extends WebTestCase
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'connexion avec le nouveau mot de passe');
     }
 
+    /** S7 (31/10/2026) : POST /api/payment ne rend que les paiements de l'utilisateur (session de paiement ou commande), d'un invité avec son jeton, ou de l'administrateur */
+    public function testPaymentVerificationIsLimitedToTheOwner(): void
+    {
+        \App\Tests\Fake\FakeCheckoutPaymentGateway::reset();
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        $variant = (int) $this->db->fetchOne("SELECT v.id FROM product_variant v JOIN product p ON p.id = v.product_id WHERE p.code = 'DEMO-CASQUETTE' ORDER BY v.id LIMIT 1");
+        $order = ['addressId' => $this->address(), 'carrierId' => 6, 'items' => [['productVariantId' => $variant, 'quantity' => 1]]];
+        $pi = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $order['items'], 'carrierId' => 6, 'order' => $order])))['paymentIntentId'];
+
+        // Session de paiement à son nom, pas encore payée : propriétaire reconnu, réponse Stripe « pas abouti » comme avant
+        $pending = $this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi]));
+        $this->assertSame(500, $pending->getStatusCode());
+        $this->assertStringContainsString('pas abouti', json_decode($pending->getContent(), true)['errors'][0]);
+
+        \App\Tests\Fake\FakeCheckoutPaymentGateway::confirm($pi);
+        $created = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi]));
+        $this->assertSame(201, $created->getStatusCode(), $created->getContent());
+        $orderId = (int) json_decode($created->getContent(), true)['orderId'];
+        $mine = $this->json($this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi])));
+        $this->assertSame([true, $pi, 'succeeded', '4242'], [$mine['success'], $mine['payment']['stripePaymentId'], $mine['payment']['status'], $mine['payment']['last4']], 'réponse inchangée pour le propriétaire');
+
+        // Autre client : 404, même réponse qu'un identifiant inconnu
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        $other = $this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi]));
+        $this->assertSame([404, 'PAYMENT_NOT_FOUND'], [$other->getStatusCode(), json_decode($other->getContent(), true)['error']]);
+        $unknown = $this->request('POST', '/api/payment', json_encode(['paymentIntentId' => 'pi_inconnu']));
+        $this->assertSame([404, 'PAYMENT_NOT_FOUND'], [$unknown->getStatusCode(), json_decode($unknown->getContent(), true)['error']]);
+        $this->assertSame(json_decode($other->getContent(), true), json_decode($unknown->getContent(), true), 'rien ne distingue un paiement d\'autrui d\'un identifiant inconnu');
+
+        // Invité : jeton de la commande exigé
+        $this->db->executeStatement('UPDATE "order" SET guest_token = ? WHERE id = ?', ['jeton-s7-0123456789abcdef', $orderId]);
+        $this->assertSame(404, $this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi, 'guestToken' => 'faux']))->getStatusCode());
+        $this->assertTrue($this->json($this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi, 'guestToken' => 'jeton-s7-0123456789abcdef'])))['success'], 'invité avec son jeton');
+
+        // Administrateur : tout
+        $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
+        $this->assertTrue($this->json($this->request('POST', '/api/payment', json_encode(['paymentIntentId' => $pi])))['success']);
+    }
+
+    /** S7 (31/10/2026) : le changement d'adresse courriel exige le mot de passe actuel (ou un code OTP pour les comptes sans mot de passe), seulement quand l'adresse change vraiment */
+    public function testEmailChangeRequiresConfirmationOnlyWhenTheAddressReallyChanges(): void
+    {
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        $email = $this->session['email'];
+        $error = fn (Response $r) => [$r->getStatusCode(), json_decode($r->getContent(), true)['error'] ?? null];
+
+        // Tunnel de paiement du site : PATCH avec l'adresse ACTUELLE (casse et espaces différents) → aucun contrôle, comme avant
+        $same = $this->json($this->request('PATCH', '/api/profile', json_encode(['email' => ' ' . strtoupper($email) . ' ', 'firstName' => 'Paiement'])));
+        $this->assertSame('Paiement', $same['user']['firstName']);
+        $this->json($this->request('PATCH', '/api/profile', json_encode(['email' => $email])));
+        $this->assertSame('Compte', $this->json($this->request('PATCH', '/api/profile', json_encode(['firstName' => 'Compte'])))['user']['firstName'], 'sans adresse : inchangé');
+
+        $new = 'nouveau-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        $this->assertSame([403, 'PASSWORD_REQUIRED'], $error($this->request('PATCH', '/api/profile', json_encode(['email' => $new]))));
+        $this->assertSame([403, 'PASSWORD_INVALID'], $error($this->request('PATCH', '/api/profile', json_encode(['email' => $new, 'currentPassword' => 'faux']))));
+        $this->assertSame($email, $this->json($this->request('GET', '/api/profile'))['email'], 'rien n\'a changé');
+        $taken = (string) $this->db->fetchOne("SELECT email FROM \"user\" WHERE email <> ? ORDER BY id LIMIT 1", [$email]);
+        $this->assertSame(409, $this->request('PATCH', '/api/profile', json_encode(['email' => $taken, 'currentPassword' => self::PASSWORD]))->getStatusCode(), 'adresse déjà prise : comme avant');
+        $changed = $this->json($this->request('PATCH', '/api/profile', json_encode(['email' => $new, 'currentPassword' => self::PASSWORD])));
+        $this->assertSame($new, $changed['user']['email']);
+        $this->assertSame($new, $this->json($this->request('GET', '/api/profile'))['email']);
+
+        // Limite d'essais par compte (10 / 15 min, comme la connexion)
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        for ($i = 0; $i < 10; $i++) {
+            $this->assertSame(403, $this->request('PATCH', '/api/profile', json_encode(['email' => 'x' . $i . '@example.invalid', 'currentPassword' => 'faux']))->getStatusCode());
+        }
+        $limited = $this->request('PATCH', '/api/profile', json_encode(['email' => 'x@example.invalid', 'currentPassword' => self::PASSWORD]));
+        $this->assertSame([429, 'TOO_MANY_ATTEMPTS'], $error($limited));
+        $this->assertGreaterThan(0, json_decode($limited->getContent(), true)['retryAfterSeconds']);
+
+        // Compte en connexion par code (OTP) : code envoyé à l'ANCIENNE adresse, puis otpCode dans le corps
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        $otpEmail = $this->session['email'];
+        $userId = (int) $this->db->fetchOne('SELECT id FROM "user" WHERE email = ?', [$otpEmail]);
+        $this->db->executeStatement('UPDATE "user" SET otp_enabled = true WHERE id = ?', [$userId]);
+        $target = 'otp-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        $required = $this->request('PATCH', '/api/profile', json_encode(['email' => $target, 'currentPassword' => self::PASSWORD]));
+        $this->assertSame([403, 'OTP_REQUIRED'], $error($required), 'le mot de passe ne suffit pas pour un compte OTP');
+        $this->assertStringEndsWith('@example.invalid', json_decode($required->getContent(), true)['sentTo']);
+        $code = (string) $this->db->fetchOne('SELECT code FROM otp_code WHERE user_otp_id = ? ORDER BY id DESC LIMIT 1', [$userId]);
+        $this->assertSame(6, strlen($code), 'code généré pour l\'adresse actuelle');
+        $this->assertSame([403, 'OTP_INVALID'], $error($this->request('PATCH', '/api/profile', json_encode(['email' => $target, 'otpCode' => '000000']))));
+        $this->assertSame($target, $this->json($this->request('PATCH', '/api/profile', json_encode(['email' => $target, 'otpCode' => $code])))['user']['email']);
+        $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM otp_code WHERE user_otp_id = ? AND code = ?', [$userId, $code]), 'code consommé');
+    }
+
     private function address(): int
     {
         $em = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager();

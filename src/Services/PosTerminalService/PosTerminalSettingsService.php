@@ -32,7 +32,29 @@ class PosTerminalSettingsService
             'customerCancel' => $e?->isPosTerminalCustomerCancel() ?? true,
             'cartDisplay' => $e?->isPosTerminalCartDisplay() ?? false,
             'currency' => strtolower($e?->getCurrency() ?? 'cad'),
+            // Kit Stripe Terminal dans l'application (F13/F16, 31/10/2026) : défaut non ; remboursement Interac en attente : 15 min
+            'tapToPay' => $e?->isPosTapToPayAllowed() ?? false,
+            'bluetoothReader' => $e?->isPosBluetoothReaderAllowed() ?? false,
+            'refundPendingMinutes' => $e?->getPosTerminalRefundPendingMinutes() ?? 15,
         ];
+    }
+
+    /** Le mode d'un poste est-il autorisé par le site ? (manuel et serveur : toujours) */
+    public function modeAllowed(string $mode): bool
+    {
+        $s = $this->settings();
+
+        return match ($mode) {
+            \App\Entity\CashRegister::MODE_TAP_TO_PAY => $s['tapToPay'],
+            \App\Entity\CashRegister::MODE_BLUETOOTH => $s['bluetoothReader'],
+            default => true,
+        };
+    }
+
+    /** Le poste a-t-il un terminal de paiement utilisable (serveur, ou kit dans un mode autorisé par le site) ? Règle R1 de la carte déclarée */
+    public function registerHasTerminal(\App\Entity\CashRegister $register): bool
+    {
+        return $register->isSdkMode() ? $this->modeAllowed($register->effectiveTerminalMode()) : $register->hasTerminal();
     }
 
     /** Moyens acceptés sur le terminal */

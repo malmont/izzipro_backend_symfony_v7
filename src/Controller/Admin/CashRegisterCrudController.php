@@ -53,6 +53,11 @@ class CashRegisterCrudController extends BaseTenantCrudController
                 ->setHelp('Trois mots séparés par des tirets, affichés sur le lecteur. Laisser vide pour ne rien changer.'),
             BooleanField::new('createSimulatedReader', 'Créer un lecteur simulé (clé de test seulement)')->onlyOnForms()->renderAsSwitch(false),
             BooleanField::new('detachReader', 'Détacher le lecteur de ce poste')->onlyOnForms()->renderAsSwitch(false),
+            // Kit Stripe Terminal dans l'application (F13/F16, 31/10/2026)
+            \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('terminalMode', 'Mode du terminal')->hideOnIndex()->setRequired(false)
+                ->setChoices(['Manuel (carte déclarée)' => CashRegister::MODE_MANUAL, 'Piloté par le serveur (WisePOS E, S700)' => CashRegister::MODE_SERVER, 'Tap to Pay (le téléphone ou la tablette lit la carte)' => CashRegister::MODE_TAP_TO_PAY, 'Lecteur Bluetooth (WisePad 3)' => CashRegister::MODE_BLUETOOTH])
+                ->setFormTypeOption('placeholder', 'Déduit : serveur si un lecteur est rattaché, sinon manuel')
+                ->setHelp('Tap to Pay et Bluetooth exigent l\'autorisation du site (fiche Entreprise, panneau « Terminal de paiement Stripe ») ; l\'application parle alors au lecteur avec le kit Stripe Terminal.'),
         ];
     }
 
@@ -78,6 +83,12 @@ class CashRegisterCrudController extends BaseTenantCrudController
             $register->setTerminalEnabled(false);
             $this->addFlash('warning', 'Terminal non activé : aucun lecteur rattaché à ce poste.');
         }
+        if ($register->isSdkMode() && !$this->container->get(\App\Services\PosTerminalService\PosTerminalSettingsService::class)->modeAllowed($register->effectiveTerminalMode())) {
+            $this->addFlash('warning', 'Mode enregistré, mais ce mode n\'est pas autorisé sur le site : activez-le dans la fiche Entreprise (panneau « Terminal de paiement Stripe »), sinon le POS répondra TERMINAL_MODE_NOT_ALLOWED.');
+        }
+        if ($register->getTerminalMode() === CashRegister::MODE_SERVER && !$register->hasTerminal()) {
+            $this->addFlash('warning', 'Mode « piloté par le serveur » sans lecteur rattaché et activé : le terminal restera indisponible.');
+        }
         $register->pairingCode = null;
         $register->createSimulatedReader = $register->detachReader = false;
     }
@@ -96,12 +107,13 @@ class CashRegisterCrudController extends BaseTenantCrudController
         $this->applyTerminalChanges($entityInstance);
         parent::updateEntity($entityManager, $entityInstance);
         $this->container->get(\App\Services\PosAuditService\PosAuditService::class)->record(\App\Services\PosAuditService\PosAuditService::CASH_REGISTER_UPDATED,
-            ['after' => ['name' => $entityInstance->getName(), 'isActive' => $entityInstance->isActive(), 'terminalEnabled' => $entityInstance->isTerminalEnabled(), 'readerId' => $entityInstance->getStripeReaderId()], 'via' => 'easyadmin'], null, $entityInstance, 'cash_register', $entityInstance->getId());
+            ['after' => ['name' => $entityInstance->getName(), 'isActive' => $entityInstance->isActive(), 'terminalEnabled' => $entityInstance->isTerminalEnabled(), 'readerId' => $entityInstance->getStripeReaderId(), 'terminalMode' => $entityInstance->getTerminalMode()], 'via' => 'easyadmin'], null, $entityInstance, 'cash_register', $entityInstance->getId());
     }
 
     public static function getSubscribedServices(): array
     {
         return parent::getSubscribedServices() + [\App\Services\PosAuditService\PosAuditService::class => \App\Services\PosAuditService\PosAuditService::class,
-            \App\Services\PosTerminalService\PosTerminalPaymentService::class => \App\Services\PosTerminalService\PosTerminalPaymentService::class];
+            \App\Services\PosTerminalService\PosTerminalPaymentService::class => \App\Services\PosTerminalService\PosTerminalPaymentService::class,
+            \App\Services\PosTerminalService\PosTerminalSettingsService::class => \App\Services\PosTerminalService\PosTerminalSettingsService::class];
     }
 }

@@ -29,7 +29,21 @@ class PosTerminalController extends AbstractController
         return $this->guard(fn () => $this->json($this->terminal->status($request->query->get('cashRegisterId'))));
     }
 
-    /** {cashRegisterId?, amount, items, otherPayments?} → 201 paiement envoyé au lecteur */
+    /** Kit Stripe Terminal dans l'application (F13/F16) : {cashRegisterId?} → {secret, locationId, mode, cashRegisterId} ; poste en mode Tap to Pay ou Bluetooth autorisé, X-Pos-Terminal obligatoire */
+    #[Route('/api/pos/terminal/connection-token', name: 'pos_terminal_connection_token', methods: ['POST'])]
+    public function connectionToken(Request $request): JsonResponse
+    {
+        return $this->guard(fn () => $this->json($this->terminal->connectionToken($this->user(), $this->body($request))));
+    }
+
+    /** Kit : {stripeRefundId} après processRefund() sur le lecteur → 200 paiement avec refund.status succeeded ; même identifiant rejoué → même réponse */
+    #[Route('/api/pos/terminal/payments/{id}/refund/confirm', name: 'pos_terminal_payment_refund_confirm', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function confirmRefund(int $id, Request $request): JsonResponse
+    {
+        return $this->guard(fn () => $this->json($this->terminal->toArray($this->terminal->confirmRefund($id, $this->body($request), $this->user()))));
+    }
+
+    /** {cashRegisterId?, amount, items, otherPayments?, reader?} → 201 paiement envoyé au lecteur (ou, en mode kit, intention à confirmer : clientSecret) */
     #[Route('/api/pos/terminal/payments', name: 'pos_terminal_payment_create', methods: ['POST'])]
     public function create(Request $request): JsonResponse
     {

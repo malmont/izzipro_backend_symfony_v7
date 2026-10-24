@@ -56,8 +56,9 @@ class PosTerminalReconcileCommand extends Command
             try {
                 $this->emProvider->switchTenant($tenant['dbname'], $tenant['code']);
                 $connection = $this->emProvider->getEntityManager()->getConnection();
-                // Sites sans terminal activé : non parcourus (une requête indexée, aucun appel Stripe)
-                if (!$connection->fetchOne('SELECT 1 FROM cash_register WHERE terminal_enabled = true LIMIT 1')) {
+                // Sites sans terminal : non parcourus (requêtes indexées, aucun appel Stripe). Terminal = lecteur piloté par le serveur,
+                // ou poste en mode kit Stripe Terminal (F13/F16 : Tap to Pay, Bluetooth), dont les paiements et remboursements se réconcilient aussi
+                if (!$connection->fetchOne("SELECT 1 FROM cash_register WHERE terminal_enabled = true OR terminal_mode IN ('tap_to_pay', 'bluetooth') LIMIT 1")) {
                     $skipped++;
                     continue;
                 }

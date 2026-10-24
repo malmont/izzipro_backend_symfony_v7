@@ -230,6 +230,12 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->setHelp('Liste des paiements réussis sans vente pour le responsable')->hideOnIndex(),
             BooleanField::new('posTerminalCustomerCancel', 'Annulation par le client sur l\'écran du lecteur')->hideOnIndex(),
             BooleanField::new('posTerminalCartDisplay', 'Afficher le panier sur le lecteur')->hideOnIndex(),
+            // Kit Stripe Terminal dans l'application (F13/F16, 31/10/2026) : défaut non
+            BooleanField::new('posTapToPayAllowed', 'Tap to Pay autorisé (téléphone ou tablette lit la carte)')->hideOnIndex()
+                ->setHelp('Kit Stripe Terminal dans l\'application : le serveur fournit les jetons et crée le paiement, l\'application lit la carte. Le mode se choisit par poste (menu Postes de caisse).'),
+            BooleanField::new('posBluetoothReaderAllowed', 'Lecteur Bluetooth autorisé (BBPOS WisePad 3)')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalRefundPendingMinutes', 'Remboursement Interac en attente sur le lecteur : expiration (minutes)')
+                ->setHelp('Kit seulement : au-delà, le serveur relit Stripe (remboursement fait → enregistré ; sinon demande expirée, paiement de nouveau remboursable)')->hideOnIndex(),
 
             FormField::addPanel('Informations Générales'),
             TextField::new('facebookPixelId', 'Facebook Pixel ID')->hideOnIndex(),

@@ -319,6 +319,45 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
   `order_items.customization_id`, migration `Version20261009150000`).
 - Tests : `tests/Functional/Boutique/CustomerAccountApiTest.php`.
 
+## Sécurité du compte et du paiement (S7, 31/10/2026)
+
+Code : `Services/PaymentService/PaymentOwnershipService`, `Services/AccountService/EmailChangeGuard`, `Controller/paymentController/PaymentsController::processPayment`,
+`Controller/Account/ProfileApiController::updateProfile` ; tests `tests/Functional/Boutique/CustomerAccountApiTest.php`.
+
+### `POST /api/payment { paymentIntentId, guestToken? }` : propriété du paiement
+
+Avant, tout utilisateur connecté obtenait l'état, la marque et les quatre derniers chiffres de la carte, et l'URL du reçu de
+**n'importe quel** paiement du site à partir de son identifiant `pi_…`. Désormais le paiement doit appartenir à l'appelant : session
+de paiement du panier à son nom (`create-intent`), ou commande créée pour ce paiement qui est la sienne, ou commande d'invité dont il
+présente le jeton (`guestToken`, celui rendu une seule fois par `order/create-guest`) ; l'administrateur du site voit tout. Sinon
+**404 `PAYMENT_NOT_FOUND`** `{success: false, error, message}`, identique pour un paiement d'autrui et pour un identifiant inconnu ;
+journal sécurité `payment.verify.not_owner`. Réponse inchangée pour un client légitime (`{success, payment {stripePaymentId, status,
+receiptUrl, cardBrand, last4, riskLevel}}`, 500 `{success: false, errors}` si le paiement n'a pas abouti). La route est conservée (appelants
+MAUI non vérifiables) ; le site Next.js ne l'appelle pas.
+
+### `PATCH /api/profile` : changement d'adresse courriel confirmé
+
+- La confirmation n'est exigée que si l'adresse **change réellement** : comparaison après `trim` et en minuscules. Le tunnel de paiement
+  du site Next.js (`checkoutFlow.js`, `completeOrder`) envoie l'adresse **actuelle** : ce cas, comme une adresse absente ou vide, garde
+  exactement le comportement d'avant.
+- Compte avec mot de passe : champ **`currentPassword`** obligatoire dans le corps → 403 `PASSWORD_REQUIRED` (absent) ou 403
+  `PASSWORD_INVALID` (faux), message en clair, rien n'est modifié.
+- Compte en connexion par code (`otpEnabled`) ou sans mot de passe utilisable : un **code OTP est envoyé à l'ancienne adresse** par le
+  mécanisme existant (`OtpService`, 6 chiffres, 5 minutes) → 403 `OTP_REQUIRED {message, sentTo (masqué), lifetimeSeconds}` ; renvoyer la
+  même demande avec **`otpCode`** → 403 `OTP_INVALID` si faux ou expiré ; le code est consommé. Le mot de passe ne suffit pas pour ces comptes.
+- Essais limités **par compte** : 10 par 15 minutes (`profile_email_change_account`, comme la connexion) → 429 `TOO_MANY_ATTEMPTS
+  {retryAfterSeconds}` ; remis à zéro au succès.
+- Après le changement : courriel d'information à l'**ancienne** adresse (`emails/email_changed_notice.html.twig`, serveur d'envoi du site,
+  sinon celui de la plateforme ; sans lien d'annulation pour l'instant) et journal sécurité `profile.email_changed {userId, from, to,
+  method, noticeSent, ip}` (`var/log/dev-security.log`). L'unicité de l'adresse (409 `Email already in use`) reste vérifiée après la confirmation.
+- Comptes créés par un achat invité (mot de passe aléatoire inconnu du client) : ils doivent d'abord se donner un mot de passe
+  (`password-reset`) avant de pouvoir changer d'adresse.
+
+**À faire côté fronts (site Next.js et application e-commerce Flutter), écran du profil** : quand l'utilisateur modifie son adresse courriel,
+demander son mot de passe actuel et l'envoyer dans `currentPassword` avec le `PATCH` ; afficher les messages des 403 `PASSWORD_REQUIRED`,
+`PASSWORD_INVALID` et du 429. Pour un compte OTP : sur 403 `OTP_REQUIRED`, afficher « un code a été envoyé à votre adresse actuelle » et un
+champ de saisie, puis renvoyer le `PATCH` avec `otpCode`. Les autres champs du profil (nom, téléphone, permis) et le paiement ne changent pas.
+
 ## Abonnements (09/10/2026, § 11)
 
 Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionController/`, `UseCase/SubscriptionUseCase/`

@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (240)
+## Boutique et commun (242)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -392,7 +392,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/pos/returns` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReturnController::create` |
 | GET | `/api/pos/settings` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::settings` |
 | GET | `/api/pos/statistics/cashiers` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReportingController::cashiers` |
+| POST | `/api/pos/terminal/connection-token` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::connectionToken` |
 | POST | `/api/pos/terminal/payments/{id}/cancel` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::cancel` |
+| POST | `/api/pos/terminal/payments/{id}/refund/confirm` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::confirmRefund` |
 | POST | `/api/pos/terminal/payments/{id}/refund` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::refund` |
 | POST | `/api/pos/terminal/payments/{id}/simulate` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::simulate` |
 | GET | `/api/pos/terminal/payments/{id}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosTerminalController::get` |

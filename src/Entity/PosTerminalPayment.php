@@ -132,6 +132,37 @@ class PosTerminalPayment
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $finishedAt = null;
 
+    // Kit Stripe Terminal dans l'application (F13/F16, 31/10/2026) : canal server (lecteur piloté par le serveur) ou sdk (Tap to Pay,
+    // lecteur Bluetooth : intention créée ici, carte lue et confirmée par l'application) ; charge Stripe pour les remboursements en
+    // personne ; libellé du lecteur déclaré par l'application ; heure de la demande d'un remboursement Interac à présenter sur le lecteur
+    public const CHANNEL_SERVER = 'server';
+    public const CHANNEL_SDK = 'sdk';
+
+    #[ORM\Column(length: 10, options: ['default' => self::CHANNEL_SERVER])]
+    private string $channel = self::CHANNEL_SERVER;
+
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $stripeChargeId = null;
+
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $readerLabel = null;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $refundRequestedAt = null;
+
+    /** Non persisté : secret client du PaymentIntent, rendu à l'application pour le canal sdk tant que la carte est attendue */
+    public ?string $clientSecret = null;
+
+    public function getChannel(): string { return $this->channel; }
+    public function setChannel(string $channel): static { $this->channel = $channel === self::CHANNEL_SDK ? self::CHANNEL_SDK : self::CHANNEL_SERVER; return $this; }
+    public function isSdk(): bool { return $this->channel === self::CHANNEL_SDK; }
+    public function getStripeChargeId(): ?string { return $this->stripeChargeId; }
+    public function setStripeChargeId(?string $id): static { $this->stripeChargeId = $id; return $this; }
+    public function getReaderLabel(): ?string { return $this->readerLabel; }
+    public function setReaderLabel(?string $label): static { $this->readerLabel = $label !== null ? mb_substr($label, 0, 100) : null; return $this; }
+    public function getRefundRequestedAt(): ?\DateTimeImmutable { return $this->refundRequestedAt; }
+    public function setRefundRequestedAt(?\DateTimeImmutable $at): static { $this->refundRequestedAt = $at; return $this; }
+
     public function __construct()
     {
         $this->createdAt = $this->updatedAt = new \DateTimeImmutable();

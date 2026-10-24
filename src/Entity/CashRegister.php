@@ -48,6 +48,18 @@ class CashRegister
     #[ORM\Column(options: ['default' => false])]
     private bool $stripeReaderSimulated = false;
 
+    /** Mode du terminal (F13/F16, 31/10/2026) : NULL = déduit (serveur si lecteur rattaché, sinon manuel) */
+    #[ORM\Column(length: 16, nullable: true)]
+    private ?string $terminalMode = null;
+
+    public const MODE_MANUAL = 'manual';
+    public const MODE_SERVER = 'server';
+    public const MODE_TAP_TO_PAY = 'tap_to_pay';
+    public const MODE_BLUETOOTH = 'bluetooth';
+    public const MODES = [self::MODE_MANUAL, self::MODE_SERVER, self::MODE_TAP_TO_PAY, self::MODE_BLUETOOTH];
+    /** Modes où l'application parle au lecteur avec le kit Stripe Terminal (PaymentIntent créé par le serveur, confirmé par le kit) */
+    public const SDK_MODES = [self::MODE_TAP_TO_PAY, self::MODE_BLUETOOTH];
+
     // Préfixe de présentation des numéros de ticket et d'avoir (R1, 23/10/2026) ; la suite numérique par poste reste inchangée
     #[ORM\Column(length: 10, nullable: true)]
     private ?string $receiptPrefix = null;
@@ -115,8 +127,14 @@ class CashRegister
     /** Numéro présenté : préfixe du poste + numéro (ex. « C1-123 ») ; sans préfixe, le numéro seul */
     public function receiptReference(int $number): string { return ($this->receiptPrefix ?? '') . $number; }
 
-    /** Terminal utilisable : activé et lecteur rattaché */
+    /** Terminal piloté par le serveur utilisable : activé et lecteur rattaché */
     public function hasTerminal(): bool { return $this->terminalEnabled && $this->stripeReaderId !== null; }
+
+    public function getTerminalMode(): ?string { return $this->terminalMode; }
+    public function setTerminalMode(?string $mode): static { $this->terminalMode = in_array($mode, self::MODES, true) ? $mode : null; return $this; }
+    /** Mode effectif : réglé, sinon déduit de l'existant (serveur si un lecteur est rattaché et activé, manuel sinon) */
+    public function effectiveTerminalMode(): string { return $this->terminalMode ?? ($this->hasTerminal() ? self::MODE_SERVER : self::MODE_MANUAL); }
+    public function isSdkMode(): bool { return in_array($this->effectiveTerminalMode(), self::SDK_MODES, true); }
 
     public function getSessions(): Collection
     {

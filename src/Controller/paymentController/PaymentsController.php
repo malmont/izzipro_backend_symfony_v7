@@ -40,7 +40,9 @@ class PaymentsController extends AbstractController
         StripeService $stripeService,
         TenantConnectionManager $connectionManager,
         private readonly \App\UseCase\CheckoutUseCase\PrepareCheckoutUseCase $prepareCheckout,
-        private readonly \App\Security\OptionalCustomerResolver $customers
+        private readonly \App\Security\OptionalCustomerResolver $customers,
+        private readonly \App\Services\PaymentService\PaymentOwnershipService $ownership,
+        private readonly \Psr\Log\LoggerInterface $securityLogger,
     ) {
         $this->getPaymentsByOrderSourceUseCase = $getPaymentsByOrderSourceUseCase;
         $this->createPaymentUseCase = $createPaymentUseCase;
@@ -97,6 +99,13 @@ class PaymentsController extends AbstractController
         $paymentIntentId = $data['paymentIntentId'] ?? null;
         if (!$paymentIntentId) {
             return $this->json(['success' => false, 'error' => 'Invalid data: paymentIntentId is missing.'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        // S7 (31/10/2026) : paiement de l'utilisateur (session de paiement ou commande), invité avec son jeton, ou administrateur ;
+        // sinon 404 sans révéler si l'identifiant existe (avant : tout utilisateur connecté, tout paiement du site)
+        if (!($user instanceof \App\Entity\User) || !$this->ownership->owns((string) $paymentIntentId, $user, is_string($data['guestToken'] ?? null) ? $data['guestToken'] : null, $this->isGranted('ROLE_ADMIN'))) {
+            $this->securityLogger->warning('payment.verify.not_owner', ['userId' => $user?->getId(), 'paymentIntentId' => (string) $paymentIntentId, 'ip' => $request->getClientIp()]);
+
+            return $this->json(['success' => false, 'error' => 'PAYMENT_NOT_FOUND', 'message' => 'Aucun paiement de ce compte ne correspond à cet identifiant'], JsonResponse::HTTP_NOT_FOUND);
         }
         $result = $this->createPaymentUseCase->execute($paymentIntentId);
         if ($result['success']) {

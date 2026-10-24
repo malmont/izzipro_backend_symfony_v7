@@ -168,6 +168,16 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => false])]
     private bool $posTerminalCartDisplay = false;
 
+    // Kit Stripe Terminal dans l'application (F13/F16, 31/10/2026) : Tap to Pay et lecteur Bluetooth autorisés (défaut non), expiration d'un remboursement Interac en attente
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posTapToPayAllowed = false;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posBluetoothReaderAllowed = false;
+
+    #[ORM\Column(options: ['default' => 15])]
+    private int $posTerminalRefundPendingMinutes = 15;
+
     // Réglages de caisse R1 (23/10/2026) : défauts = comportement livré. PIN (C3), fond suggéré, moyens de paiement du POS,
     // ticket (en-tête, pied, numéros de taxes), paniers en attente, alerte espèces, terminal exigé
     #[ORM\Column(options: ['default' => 4])]
@@ -839,6 +849,12 @@ class Entreprise implements TranslatableInterface
     public function isPosTerminalCustomerCancel(): bool { return $this->posTerminalCustomerCancel; }
     public function setPosTerminalCustomerCancel(bool $enabled): static { $this->posTerminalCustomerCancel = $enabled; return $this; }
     public function isPosTerminalCartDisplay(): bool { return $this->posTerminalCartDisplay; }
+    public function isPosTapToPayAllowed(): bool { return $this->posTapToPayAllowed; }
+    public function setPosTapToPayAllowed(bool $allowed): static { $this->posTapToPayAllowed = $allowed; return $this; }
+    public function isPosBluetoothReaderAllowed(): bool { return $this->posBluetoothReaderAllowed; }
+    public function setPosBluetoothReaderAllowed(bool $allowed): static { $this->posBluetoothReaderAllowed = $allowed; return $this; }
+    public function getPosTerminalRefundPendingMinutes(): int { return $this->posTerminalRefundPendingMinutes; }
+    public function setPosTerminalRefundPendingMinutes(?int $minutes): static { $this->posTerminalRefundPendingMinutes = min(24 * 60, max(1, (int) $minutes)); return $this; }
     public function setPosTerminalCartDisplay(bool $enabled): static { $this->posTerminalCartDisplay = $enabled; return $this; }
 
     public function getPosPinMinLength(): int { return $this->posPinMinLength; }

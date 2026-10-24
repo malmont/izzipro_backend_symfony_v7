@@ -160,6 +160,21 @@ class StripeTerminalGateway implements PosTerminalGatewayInterface
         return str_starts_with($this->stripe->secretKey(), 'sk_live');
     }
 
+    public function createConnectionToken(?string $locationId): string
+    {
+        $params = $locationId !== null ? ['location' => $locationId] : [];
+        $token = $this->call(fn (StripeClient $c, array $o) => $c->terminal->connectionTokens->create($params, $o), null, 'jeton de connexion');
+
+        return (string) $token->secret;
+    }
+
+    public function listRefunds(string $paymentIntentId): array
+    {
+        $list = $this->call(fn (StripeClient $c, array $o) => $c->refunds->all(['payment_intent' => $paymentIntentId, 'limit' => 100], $o), null, 'liste des remboursements');
+
+        return array_map(self::refund(...), $list->data);
+    }
+
     /** @template T @param callable(StripeClient, array): T $action @return T */
     private function call(callable $action, ?string $idempotencyKey, string $label): mixed
     {
@@ -206,6 +221,8 @@ class StripeTerminalGateway implements PosTerminalGatewayInterface
             'paymentMethodType' => $type, 'cardBrand' => $details?->brand ?? null, 'last4' => $details?->last4 ?? null,
             'failureCode' => $error ? ($error->decline_code ?? $error->code ?? null) : null, 'failureMessage' => $error?->message ?? null,
             'applicationFee' => (int) ($pi->application_fee_amount ?? 0),
+            // F13/F16 : secret pour le kit (confirmation par l'application) et charge pour les remboursements en personne
+            'clientSecret' => $pi->client_secret ?? null, 'chargeId' => $charge?->id ?? (is_string($pi->latest_charge ?? null) ? $pi->latest_charge : null),
         ];
     }
 
@@ -229,6 +246,9 @@ class StripeTerminalGateway implements PosTerminalGatewayInterface
 
     public static function refund(Refund $refund): array
     {
-        return ['id' => $refund->id, 'status' => (string) $refund->status, 'amount' => (int) $refund->amount, 'failureReason' => $refund->failure_reason ?? null];
+        $intent = $refund->payment_intent ?? null;
+
+        return ['id' => $refund->id, 'status' => (string) $refund->status, 'amount' => (int) $refund->amount, 'failureReason' => $refund->failure_reason ?? null,
+            'paymentIntent' => is_object($intent) ? $intent->id : $intent, 'created' => (int) ($refund->created ?? 0)];
     }
 }

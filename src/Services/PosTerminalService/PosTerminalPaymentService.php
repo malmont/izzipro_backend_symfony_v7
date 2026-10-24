@@ -50,6 +50,7 @@ class PosTerminalPaymentService
         private readonly StripeConnectSetupService $connect,
         private readonly TenantConnectionManager $tenants,
         private readonly LoggerInterface $logger,
+        #[\Symfony\Component\DependencyInjection\Attribute\Autowire(service: 'limiter.pos_connection_token_terminal')] private readonly \Symfony\Component\RateLimiter\RateLimiterFactory $connectionTokens,
     ) {
     }
 
@@ -59,9 +60,23 @@ class PosTerminalPaymentService
     public function status(CashRegister $register): array
     {
         $settings = $this->settings->settings();
+        $mode = $register->effectiveTerminalMode();
+        $public = ['cardWaitSeconds' => $settings['cardWaitSeconds'], 'customerCancel' => $settings['customerCancel'], 'interac' => $settings['interac'],
+            'tapToPay' => $settings['tapToPay'], 'bluetoothReader' => $settings['bluetoothReader'], 'refundPendingMinutes' => $settings['refundPendingMinutes']];
+        if ($register->isSdkMode()) {
+            // Kit Stripe Terminal dans l'application (F13/F16) : pas de lecteur côté serveur ; paiement en cours par terminal (clé POS)
+            $allowed = $this->settings->modeAllowed($mode);
+            $current = ($terminal = $this->posTerminals->current()) !== null ? $this->repo()->findActiveOnReader(self::sdkReaderId((int) $terminal['id'])) : null;
+            if ($current) {
+                $current = $this->refresh($current);
+            }
+
+            return ['available' => $allowed, 'mode' => $mode, 'cashRegisterId' => $register->getId(), 'reader' => null, 'paymentMethods' => $allowed ? $this->settings->paymentMethodTypes() : [],
+                'currentPayment' => $current && $current->isPending() && $current->getStatus() !== PosTerminalPayment::AUTHORIZED ? $this->toArray($current) : null,
+                'simulationAllowed' => false, 'error' => $allowed ? null : 'TERMINAL_MODE_NOT_ALLOWED', 'settings' => $public];
+        }
         if (!$register->hasTerminal()) {
-            return ['available' => false, 'cashRegisterId' => $register->getId(), 'reader' => null, 'paymentMethods' => [], 'currentPayment' => null, 'simulationAllowed' => false,
-                'settings' => ['cardWaitSeconds' => $settings['cardWaitSeconds'], 'customerCancel' => $settings['customerCancel'], 'interac' => $settings['interac']]];
+            return ['available' => false, 'mode' => $mode, 'cashRegisterId' => $register->getId(), 'reader' => null, 'paymentMethods' => [], 'currentPayment' => null, 'simulationAllowed' => false, 'settings' => $public];
         }
         $readerStatus = 'offline';
         $error = null;
@@ -78,13 +93,107 @@ class PosTerminalPaymentService
         }
 
         return [
-            'available' => true, 'cashRegisterId' => $register->getId(),
+            'available' => true, 'mode' => $mode, 'cashRegisterId' => $register->getId(),
             'reader' => ['id' => $register->getStripeReaderId(), 'label' => $register->getStripeReaderLabel(), 'simulated' => $register->isStripeReaderSimulated(), 'status' => $readerStatus, 'error' => $error],
             'paymentMethods' => $this->settings->paymentMethodTypes(),
             'currentPayment' => $current && $current->isPending() && $current->getStatus() !== PosTerminalPayment::AUTHORIZED ? $this->toArray($current) : null,
             'simulationAllowed' => $register->isStripeReaderSimulated() && !$this->gateway->isLiveMode(),
-            'settings' => ['cardWaitSeconds' => $settings['cardWaitSeconds'], 'customerCancel' => $settings['customerCancel'], 'interac' => $settings['interac']],
+            'settings' => $public,
         ];
+    }
+
+    // ---------------------------------------------------------------- kit Stripe Terminal dans l'application (F13/F16, 31/10/2026)
+
+    /** Identifiant interne du « lecteur » d'un terminal (clé POS) en mode kit : une seule opération à la fois par terminal */
+    public static function sdkReaderId(int $terminalId): string
+    {
+        return 'sdk:t' . $terminalId;
+    }
+
+    /**
+     * Poste en mode kit autorisé par le site, et terminal (X-Pos-Terminal) présent : sinon refus explicite.
+     *
+     * @return array{register: CashRegister, terminal: array, mode: string}
+     */
+    private function requireSdkContext(?int $cashRegisterId): array
+    {
+        $register = $this->registers->resolve($cashRegisterId); // rattachement du terminal à son poste (A1-S2) appliqué ici
+        $mode = $register->effectiveTerminalMode();
+        if (!$register->isSdkMode()) {
+            throw new CashRegisterException('TERMINAL_MODE_INVALID', sprintf('Le poste « %s » n\'est pas en mode Tap to Pay ni lecteur Bluetooth (mode : %s)', $register->getName(), $mode), 409, [], ['cashRegisterId' => $register->getId(), 'mode' => $mode]);
+        }
+        if (!$this->settings->modeAllowed($mode)) {
+            throw new CashRegisterException('TERMINAL_MODE_NOT_ALLOWED', $mode === CashRegister::MODE_TAP_TO_PAY ? 'Tap to Pay n\'est pas autorisé sur ce site (réglage EasyAdmin)' : 'Le lecteur Bluetooth n\'est pas autorisé sur ce site (réglage EasyAdmin)', 409, [], ['cashRegisterId' => $register->getId(), 'mode' => $mode]);
+        }
+        $terminal = $this->posTerminals->current();
+        if ($terminal === null) {
+            throw new CashRegisterException('TERMINAL_REQUIRED', 'En-tête X-Pos-Terminal (clé d\'activation du POS) requis pour le kit Stripe Terminal', 403);
+        }
+
+        return ['register' => $register, 'terminal' => $terminal, 'mode' => $mode];
+    }
+
+    /** POST /api/pos/terminal/connection-token : secret d'un ConnectionToken sur le compte connecté du site, pour l'emplacement du site ; jamais mis en cache */
+    public function connectionToken(User $user, ?int $cashRegisterId): array
+    {
+        ['register' => $register, 'terminal' => $terminal, 'mode' => $mode] = $this->requireSdkContext($cashRegisterId);
+        $limit = $this->connectionTokens->create('terminal:' . $terminal['id'])->consume();
+        if (!$limit->isAccepted()) {
+            throw new CashRegisterException('CONNECTION_TOKEN_RATE_LIMITED', 'Trop de jetons de connexion demandés par ce terminal : réessayez plus tard', 429, [], ['retryAfterSeconds' => max(1, $limit->getRetryAfter()->getTimestamp() - time())]);
+        }
+        $location = $this->ensureLocation();
+        $secret = $this->guard(fn () => $this->gateway->createConnectionToken($location));
+        $this->audit->record(PosAuditService::CONNECTION_TOKEN_ISSUED, ['cashRegisterId' => $register->getId(), 'mode' => $mode, 'locationId' => $location, 'terminalId' => $terminal['id']], null, $register, 'cash_register', $register->getId(), $user);
+
+        return ['secret' => $secret, 'locationId' => $location, 'mode' => $mode, 'cashRegisterId' => $register->getId()];
+    }
+
+    /**
+     * POST /api/pos/terminal/payments/{id}/refund/confirm {stripeRefundId} : remboursement Interac présenté sur le lecteur par le kit
+     * (processRefund), vérifié chez Stripe puis enregistré ; même identifiant rejoué → même réponse.
+     */
+    public function confirmRefund(PosTerminalPayment $payment, string $stripeRefundId, User $user): PosTerminalPayment
+    {
+        if (!$payment->isSdk()) {
+            throw new CashRegisterException('REFUND_CHANNEL_INVALID', 'Ce paiement a été pris sur un lecteur piloté par le serveur : le remboursement se suit par GET', 409, [], ['paymentId' => $payment->getId()]);
+        }
+        if ($payment->getRefundStatus() === PosTerminalPayment::REFUND_SUCCEEDED && $payment->getRefundId() === $stripeRefundId) {
+            return $payment; // rejeu
+        }
+        if ($payment->getRefundStatus() === PosTerminalPayment::REFUND_SUCCEEDED) {
+            throw new CashRegisterException('REFUND_ALREADY_CONFIRMED', 'Un autre remboursement a déjà été confirmé pour ce paiement', 409, [], ['refundId' => $payment->getRefundId()]);
+        }
+        if ($payment->getRefundStatus() !== PosTerminalPayment::REFUND_WAITING) {
+            throw new CashRegisterException('REFUND_NOT_PENDING', 'Aucun remboursement en attente sur ce paiement : demandez-le d\'abord (POST …/refund)', 409, [], ['refund' => $this->refundArray($payment)]);
+        }
+        $refund = $this->guard(fn () => $this->gateway->retrieveRefund($stripeRefundId));
+        if ($refund === null) {
+            throw new CashRegisterException('REFUND_NOT_FOUND', 'Remboursement Stripe introuvable', 404, [], ['stripeRefundId' => $stripeRefundId]);
+        }
+        if (($refund['paymentIntent'] ?? null) !== $payment->getStripePaymentIntentId()) {
+            throw new CashRegisterException('REFUND_MISMATCH', 'Ce remboursement ne porte pas sur ce paiement', 409, [], ['stripeRefundId' => $stripeRefundId]);
+        }
+        if ((int) $refund['amount'] !== (int) $payment->getRefundAmount()) {
+            throw new CashRegisterException('REFUND_AMOUNT_MISMATCH', 'Le montant remboursé sur le lecteur diffère du montant demandé', 409, [], ['expected' => $payment->getRefundAmount(), 'refunded' => $refund['amount']]);
+        }
+        $this->applyConfirmedRefund($payment, $refund, $user, 'confirm');
+
+        return $payment;
+    }
+
+    /** Remboursement du kit vérifié chez Stripe : enregistré (réussi ou en attente de Stripe) ou marqué en échec */
+    private function applyConfirmedRefund(PosTerminalPayment $payment, array $refund, ?User $user, string $via): void
+    {
+        $ok = in_array($refund['status'], ['succeeded', 'pending'], true);
+        $payment->setRefundId($refund['id'])->setRefundFailureMessage($refund['failureReason'])->setRefundStatus($ok ? PosTerminalPayment::REFUND_SUCCEEDED : PosTerminalPayment::REFUND_FAILED);
+        if ($ok) {
+            $payment->addRefunded((int) $payment->getRefundAmount());
+        }
+        $this->emProvider->getEntityManager()->flush();
+        $this->record(PosAuditService::REFUND_CONFIRMED, $payment, $user, ['refundAmount' => $payment->getRefundAmount(), 'refundId' => $refund['id'], 'refundStatus' => $refund['status'], 'via' => $via]);
+        if ($ok) {
+            $this->record(PosAuditService::CARD_REFUND, $payment, $user, ['refundAmount' => $payment->getRefundAmount(), 'refundId' => $refund['id'], 'onReader' => true, 'channel' => PosTerminalPayment::CHANNEL_SDK]);
+        }
     }
 
     /** Total (cents) du devis au comptoir pour des articles (taxes du magasin) */
@@ -103,10 +212,12 @@ class PosTerminalPaymentService
      * @param int $amount part carte en cents
      * @param ?string $posKey Idempotency-Key POS de la requête (clé Stripe de la création)
      */
-    public function start(User $user, ?int $cashRegisterId, array $items, array $otherPayments, int $amount, ?string $posKey, ?array $ticketDiscount = null): PosTerminalPayment
+    public function start(User $user, ?int $cashRegisterId, array $items, array $otherPayments, int $amount, ?string $posKey, ?array $ticketDiscount = null, ?array $readerInfo = null): PosTerminalPayment
     {
         $register = $this->registers->resolve($cashRegisterId);
-        if (!$register->hasTerminal()) {
+        // Kit Stripe Terminal dans l'application (F13/F16) : l'intention est créée ici et confirmée par l'application ; aucun lecteur côté serveur
+        $sdk = $register->isSdkMode() ? $this->requireSdkContext($cashRegisterId) : null;
+        if ($sdk === null && !$register->hasTerminal()) {
             throw new CashRegisterException('TERMINAL_UNAVAILABLE', sprintf('Aucun terminal de paiement sur le poste « %s »', $register->getName()), 409, [], ['cashRegisterId' => $register->getId()]);
         }
         $session = $this->registers->requireOpenSession($register->getId(), 409);
@@ -129,18 +240,20 @@ class PosTerminalPaymentService
         } catch (CashRegisterException $e) {
             throw new CashRegisterException('AMOUNT_MISMATCH', 'La part carte ne correspond pas au devis du serveur', 422, [], ['quoteTotal' => $total, 'otherPayments' => $cash + $nonCash, 'expectedCard' => $total - $cash - $nonCash, 'amount' => $amount]);
         }
-        $readerId = (string) $register->getStripeReaderId();
-        // Une seule opération à la fois sur un lecteur
+        $readerId = $sdk !== null ? self::sdkReaderId((int) $sdk['terminal']['id']) : (string) $register->getStripeReaderId();
+        // Une seule opération à la fois sur un lecteur (ou par terminal en mode kit)
         $active = $this->repo()->findActiveOnReader($readerId);
         if ($active && $this->refresh($active)->isPending() && $active->getStatus() !== PosTerminalPayment::AUTHORIZED) {
             throw new CashRegisterException('READER_BUSY', 'Un paiement est déjà en cours sur ce terminal', 409, [], ['paymentId' => $active->getId()]);
         }
-        $reader = $this->guard(fn () => $this->gateway->retrieveReader($readerId));
-        if ($reader === null) {
-            throw new CashRegisterException('READER_NOT_FOUND', 'Le lecteur du poste n\'existe plus chez Stripe : à réappairer', 409);
-        }
-        if ($reader['status'] !== 'online') {
-            throw new CashRegisterException('READER_OFFLINE', 'Le terminal est hors ligne : vérifiez son alimentation et sa connexion', 409);
+        if ($sdk === null) {
+            $reader = $this->guard(fn () => $this->gateway->retrieveReader($readerId));
+            if ($reader === null) {
+                throw new CashRegisterException('READER_NOT_FOUND', 'Le lecteur du poste n\'existe plus chez Stripe : à réappairer', 409);
+            }
+            if ($reader['status'] !== 'online') {
+                throw new CashRegisterException('READER_OFFLINE', 'Le terminal est hors ligne : vérifiez son alimentation et sa connexion', 409);
+            }
         }
         $settings = $this->settings->settings();
         $em = $this->emProvider->getEntityManager();
@@ -148,12 +261,13 @@ class PosTerminalPaymentService
         $payment = (new PosTerminalPayment())->setCashRegister($register)->setCaisseId($session->getId())->setUserId((int) $user->getId())
             ->setTerminalId($this->posTerminals->current()['id'] ?? null)->setReaderId($readerId)->setAmount($amount)->setCurrency($settings['currency'])
             ->setQuoteTotal($total)->setOtherPayments($cash + $nonCash)->setQuoteHash(hash('sha256', json_encode([$items, $otherPayments])))
-            ->setIdempotencyKey($key)->setStripePaymentIntentId('pending:' . $key)->setApplicationFee($this->settings->fee($amount, 'interac_present'));
+            ->setIdempotencyKey($key)->setStripePaymentIntentId('pending:' . $key)->setApplicationFee($this->settings->fee($amount, 'interac_present'))
+            ->setChannel($sdk !== null ? PosTerminalPayment::CHANNEL_SDK : PosTerminalPayment::CHANNEL_SERVER)->setReaderLabel($sdk !== null ? (string) ($readerInfo['label'] ?? $readerInfo['type'] ?? $sdk['mode']) : null);
         $em->persist($payment);
         $em->flush();
         try {
             $intent = $this->gateway->createPaymentIntent($amount, $settings['currency'], $this->settings->paymentMethodTypes(), $payment->getApplicationFee(),
-                ['store_code' => (string) $this->tenants->getCurrentTenantCode(), 'pos_terminal' => '1', 'pos_payment_id' => (string) $payment->getId(), 'cash_register_id' => (string) $register->getId()], $key);
+                ['store_code' => (string) $this->tenants->getCurrentTenantCode(), 'pos_terminal' => '1', 'pos_payment_id' => (string) $payment->getId(), 'cash_register_id' => (string) $register->getId(), 'pos_channel' => $payment->getChannel()], $key);
         } catch (PosTerminalGatewayException $e) {
             $payment->setStatus(PosTerminalPayment::FAILED)->setFailureCode($e->errorCode)->setFailureMessage($e->getMessage());
             $em->flush();
@@ -161,6 +275,15 @@ class PosTerminalPaymentService
         }
         $payment->setStripePaymentIntentId($intent['id']);
         $em->flush();
+        if ($sdk !== null) {
+            // L'application lit la carte et confirme avec le secret client ; le serveur relira l'état chez Stripe (GET)
+            $payment->setStatus(PosTerminalPayment::WAITING_FOR_CARD);
+            $payment->clientSecret = $intent['clientSecret'] ?? null;
+            $em->flush();
+            $this->record(PosAuditService::CARD_PAYMENT_STARTED, $payment, $user, ['channel' => PosTerminalPayment::CHANNEL_SDK, 'mode' => $sdk['mode'], 'reader' => $readerInfo]);
+
+            return $payment;
+        }
         if ($settings['cartDisplay']) {
             try {
                 $lines = array_map(fn (array $l) => ['description' => mb_substr((string) ($l['name'] ?? $l['label'] ?? 'Article'), 0, 60), 'amount' => (int) ($l['unitPrice'] ?? $l['price'] ?? 0), 'quantity' => (int) ($l['quantity'] ?? 1)], $quote['lines'] ?? []);
@@ -209,9 +332,11 @@ class PosTerminalPaymentService
             switch ($intent['status']) {
                 case 'succeeded':
                     $this->applyCard($payment, $intent)->setStatus(PosTerminalPayment::CAPTURED);
+                    $payment->isSdk() && $payment->setFailureCode(null)->setFailureMessage(null); // kit : un refus précédent (autre carte) n'a plus cours
                     break;
                 case 'requires_capture':
                     $this->applyCard($payment, $intent);
+                    $payment->isSdk() && $payment->setFailureCode(null)->setFailureMessage(null);
                     if ($before !== PosTerminalPayment::AUTHORIZED) {
                         $payment->setStatus(PosTerminalPayment::AUTHORIZED);
                     } elseif ($payment->getOrderId() === null && $payment->getUpdatedAt() < new \DateTimeImmutable('-' . $settings['authCancelMinutes'] . ' minutes')) {
@@ -225,6 +350,20 @@ class PosTerminalPaymentService
                     $payment->getFailureCode() ?? $payment->setFailureCode('canceled');
                     break;
                 default: // requires_payment_method, requires_confirmation, processing : état du lecteur
+                    if ($payment->isSdk()) {
+                        // Kit : pas de lecteur côté serveur. Refus d'une carte (dont « PIN hors ligne » canadien sur Tap to Pay) : code Stripe
+                        // exposé tel quel, l'intention reste utilisable pour une autre carte ; au-delà du délai : annulée
+                        $payment->clientSecret = $intent['clientSecret'] ?? null;
+                        if ($payment->getCreatedAt() < new \DateTimeImmutable('-' . $settings['cardWaitSeconds'] . ' seconds')) {
+                            $this->gateway->cancelPaymentIntent($payment->getStripePaymentIntentId(), 'pos-cancel-' . $payment->getStripePaymentIntentId());
+                            $payment->setStatus(PosTerminalPayment::CANCELED)->setFailureCode('timeout')->setFailureMessage('Aucune carte confirmée dans le délai');
+                            $payment->clientSecret = null;
+                        } else {
+                            $payment->setStatus($intent['status'] === 'requires_payment_method' ? PosTerminalPayment::WAITING_FOR_CARD : PosTerminalPayment::PROCESSING)
+                                ->setFailureCode($intent['failureCode'] ?? null)->setFailureMessage($intent['failureMessage'] ?? null);
+                        }
+                        break;
+                    }
                     $reader = $this->gateway->retrieveReader($payment->getReaderId());
                     $action = $reader['action'] ?? null;
                     $mine = $action !== null && ($action['paymentIntent'] ?? null) === $payment->getStripePaymentIntentId() && $action['type'] === 'process_payment_intent';
@@ -264,7 +403,7 @@ class PosTerminalPaymentService
         if (!$payment->isPending()) {
             return $payment; // déjà annulé ou refusé : rejeu sans effet
         }
-        if (in_array($payment->getStatus(), [PosTerminalPayment::WAITING_FOR_CARD, PosTerminalPayment::PROCESSING], true)) {
+        if (!$payment->isSdk() && in_array($payment->getStatus(), [PosTerminalPayment::WAITING_FOR_CARD, PosTerminalPayment::PROCESSING], true)) {
             $this->guard(fn () => $this->gateway->cancelReaderAction($payment->getReaderId())); // READER_BUSY (409) si une autorisation est en cours
         }
         if (!str_starts_with($payment->getStripePaymentIntentId(), 'pending:')) {
@@ -399,6 +538,14 @@ class PosTerminalPaymentService
             throw new CashRegisterException('REFUND_AMOUNT_INVALID', 'Montant de remboursement invalide', 400, [], ['max' => $payment->getRefundable()]);
         }
         $payment->setRefundApprovedBy($approvedBy);
+        if ($payment->isInterac() && $payment->isSdk()) {
+            // Kit : l'application présente le remboursement sur le lecteur (processRefund) puis le confirme (POST …/refund/confirm) ; expiration réglée
+            $payment->setRefundStatus(PosTerminalPayment::REFUND_WAITING)->setRefundAmount($amount)->setRefundId(null)->setRefundFailureMessage(null)->setRefundRequestedAt(new \DateTimeImmutable());
+            $this->emProvider->getEntityManager()->flush();
+            $this->record(PosAuditService::REFUND_PENDING, $payment, $user, ['refundAmount' => $amount, 'expiresInMinutes' => $this->settings->settings()['refundPendingMinutes']]);
+
+            return $payment;
+        }
         if ($payment->isInterac()) {
             $this->guard(fn () => $this->gateway->refundOnReader($payment->getReaderId(), $payment->getStripePaymentIntentId(), $amount, 'pos-refund-' . $payment->getStripePaymentIntentId() . '-' . $amount . '-' . $payment->getRefundedTotal()));
             $payment->setRefundStatus(PosTerminalPayment::REFUND_WAITING)->setRefundAmount($amount)->setRefundId(null)->setRefundFailureMessage(null);
@@ -416,6 +563,9 @@ class PosTerminalPaymentService
     {
         if ($payment->getRefundStatus() !== PosTerminalPayment::REFUND_WAITING) {
             return $payment;
+        }
+        if ($payment->isSdk()) {
+            return $this->refreshSdkRefund($payment, $user);
         }
         try {
             $reader = $this->gateway->retrieveReader($payment->getReaderId());
@@ -440,6 +590,37 @@ class PosTerminalPaymentService
         } catch (PosTerminalGatewayException $e) {
             $this->logger->warning(sprintf('[PosTerminal] suivi du remboursement %d : %s', $payment->getId(), $e->getMessage()));
         }
+
+        return $payment;
+    }
+
+    /**
+     * Remboursement du kit non confirmé : avant l'expiration, rien ; après, Stripe est relu : un remboursement du bon montant,
+     * postérieur à la demande, est enregistré (REFUND_CONFIRMED via reconcile) ; sinon la demande expire (REFUND_EXPIRED) et le paiement
+     * redevient remboursable.
+     */
+    private function refreshSdkRefund(PosTerminalPayment $payment, ?User $user): PosTerminalPayment
+    {
+        $requested = $payment->getRefundRequestedAt() ?? $payment->getUpdatedAt();
+        if ($requested > new \DateTimeImmutable('-' . $this->settings->settings()['refundPendingMinutes'] . ' minutes')) {
+            return $payment;
+        }
+        try {
+            foreach ($this->gateway->listRefunds($payment->getStripePaymentIntentId()) as $refund) {
+                if ((int) $refund['amount'] === (int) $payment->getRefundAmount() && in_array($refund['status'], ['succeeded', 'pending'], true) && (int) ($refund['created'] ?? 0) >= $requested->getTimestamp() - 60) {
+                    $this->applyConfirmedRefund($payment, $refund, $user, 'reconcile');
+
+                    return $payment;
+                }
+            }
+        } catch (PosTerminalGatewayException $e) {
+            $this->logger->warning(sprintf('[PosTerminal] relecture des remboursements du paiement %d : %s', $payment->getId(), $e->getMessage()));
+
+            return $payment;
+        }
+        $payment->setRefundStatus(PosTerminalPayment::REFUND_FAILED)->setRefundFailureMessage('Remboursement non confirmé dans le délai : demande expirée, paiement de nouveau remboursable');
+        $this->emProvider->getEntityManager()->flush();
+        $this->record(PosAuditService::REFUND_EXPIRED, $payment, $user, ['refundAmount' => $payment->getRefundAmount(), 'requestedAt' => $requested->format(\DateTimeInterface::ATOM)]);
 
         return $payment;
     }
@@ -589,6 +770,13 @@ class PosTerminalPaymentService
             'refund' => $this->refundArray($p),
             'createdAt' => $p->getCreatedAt()->format(\DateTimeInterface::ATOM),
             'updatedAt' => $p->getUpdatedAt()->format(\DateTimeInterface::ATOM),
+            // Kit Stripe Terminal dans l'application (F13/F16) : canal ; secret client tant que la carte est attendue (canal sdk seulement) ;
+            // remboursement Interac à présenter sur le lecteur par l'application
+            'channel' => $p->getChannel(),
+            'clientSecret' => $p->isSdk() && $p->clientSecret !== null && in_array($p->getStatus(), [PosTerminalPayment::WAITING_FOR_CARD, PosTerminalPayment::PROCESSING], true) ? $p->clientSecret : null,
+            'refundInstruction' => $p->isSdk() && $p->getRefundStatus() === PosTerminalPayment::REFUND_WAITING
+                ? ['paymentIntentId' => $p->getStripePaymentIntentId(), 'chargeId' => $p->getStripeChargeId(), 'amount' => $p->getRefundAmount(), 'currency' => $p->getCurrency(), 'requestedAt' => $p->getRefundRequestedAt()?->format(\DateTimeInterface::ATOM), 'expiresInMinutes' => $this->settings->settings()['refundPendingMinutes']]
+                : null,
         ];
     }
 
@@ -632,7 +820,7 @@ class PosTerminalPaymentService
     {
         return $payment->setPaymentMethodType($intent['paymentMethodType'] ?? $payment->getPaymentMethodType())
             ->setCardBrand($intent['cardBrand'] ?? $payment->getCardBrand())->setLast4($intent['last4'] ?? $payment->getLast4())
-            ->setApplicationFee($intent['applicationFee'] ?? $payment->getApplicationFee());
+            ->setApplicationFee($intent['applicationFee'] ?? $payment->getApplicationFee())->setStripeChargeId($intent['chargeId'] ?? $payment->getStripeChargeId());
     }
 
     private function attachReader(CashRegister $register, array $reader): void
@@ -676,7 +864,7 @@ class PosTerminalPaymentService
         $session = $payment->getCaisseId() ? $this->emProvider->getEntityManager()->find(Caisse::class, $payment->getCaisseId()) : null;
         $this->audit->record($type, $extra + [
             'paymentId' => $payment->getId(), 'stripePaymentIntentId' => $payment->getStripePaymentIntentId(), 'amount' => $payment->getAmount(), 'currency' => $payment->getCurrency(),
-            'readerId' => $payment->getReaderId(), 'status' => $payment->getStatus(), 'paymentMethodType' => $payment->getPaymentMethodType(),
+            'readerId' => $payment->getReaderId(), 'readerLabel' => $payment->getReaderLabel(), 'channel' => $payment->getChannel(), 'status' => $payment->getStatus(), 'paymentMethodType' => $payment->getPaymentMethodType(),
             'cardBrand' => $payment->getCardBrand(), 'last4' => $payment->getLast4(), 'failureCode' => $payment->getFailureCode(), 'applicationFee' => $payment->getApplicationFee(),
         ], $session, $payment->getCashRegister(), 'terminal_payment', $payment->getId(), $user, $user === null);
     }

@@ -68,7 +68,7 @@ class PosSettingsService
             'returns' => ['maxDays' => $e?->getPosReturnMaxDays(), 'withoutReceipt' => $e?->isPosReturnWithoutReceipt() ?? false, 'restockDefault' => $e?->isPosReturnRestockDefault() ?? true,
                 'cashRefundForCardSale' => $e?->isPosReturnCashForCardSale() ?? false, 'reasons' => $e ? $e->returnReasons() : []],
             // Terminal de paiement Stripe (C4) : réglages utiles au POS (les commissions restent côté serveur)
-            'terminal' => array_intersect_key($this->terminal->settings(), array_flip(['interac', 'cardWaitSeconds', 'customerCancel', 'orphanMinutes', 'authCancelMinutes', 'currency'])),
+            'terminal' => array_intersect_key($this->terminal->settings(), array_flip(['interac', 'cardWaitSeconds', 'customerCancel', 'orphanMinutes', 'authCancelMinutes', 'currency', 'tapToPay', 'bluetoothReader', 'refundPendingMinutes'])), // + kit (F13/F16)
         ];
     }
 
@@ -111,7 +111,7 @@ class PosSettingsService
             if ($disabled) {
                 throw new \App\Services\CaisseService\CashRegisterException('PAYMENT_METHOD_DISABLED', 'Ce moyen de paiement est désactivé sur ce site', 422, [], ['type' => $type]);
             }
-            if ($declaredCard && $allowed['declaredCardBlockedWithTerminal'] && $register->hasTerminal()) {
+            if ($declaredCard && $allowed['declaredCardBlockedWithTerminal'] && $this->terminal->registerHasTerminal($register)) { // serveur ou kit (F13/F16)
                 throw new \App\Services\CaisseService\CashRegisterException('DECLARED_CARD_BLOCKED', 'Carte déclarée refusée : ce poste a un terminal de paiement, utilisez-le', 422, [], ['cashRegisterId' => $register->getId()]);
             }
         }

@@ -23,10 +23,12 @@ final class FakeTerminalGateway implements PosTerminalGatewayInterface
     public static $afterCapture = null;
     public static bool $live = false;
     public static array $idempotencyKeys = [];
+    /** @var list<?string> emplacements des jetons de connexion émis (F13/F16) */
+    public static array $connectionTokens = [];
 
     public static function reset(): void
     {
-        self::$intents = self::$readers = self::$refunds = self::$offline = self::$authorizing = self::$idempotencyKeys = [];
+        self::$intents = self::$readers = self::$refunds = self::$offline = self::$authorizing = self::$idempotencyKeys = self::$connectionTokens = [];
         self::$afterCapture = null;
         self::$live = false;
     }
@@ -139,7 +141,7 @@ final class FakeTerminalGateway implements PosTerminalGatewayInterface
             throw new PosTerminalGatewayException('STRIPE_ERROR', 'Interac refunds must be processed in person', 502, 'payment_method_unsupported');
         }
         $id = 're_test_' . bin2hex(random_bytes(6));
-        self::$refunds[$id] = ['id' => $id, 'status' => 'succeeded', 'amount' => $amount, 'failureReason' => null, 'paymentIntent' => $paymentIntentId];
+        self::$refunds[$id] = ['id' => $id, 'status' => 'succeeded', 'amount' => $amount, 'failureReason' => null, 'paymentIntent' => $paymentIntentId, 'created' => time()];
         self::$intents[$paymentIntentId]['refunded'] = ($pi['refunded'] ?? 0) + $amount;
         self::$idempotencyKeys[$idempotencyKey] = $id;
 
@@ -198,7 +200,7 @@ final class FakeTerminalGateway implements PosTerminalGatewayInterface
         $piId = $action['paymentIntent'];
         if ($action['type'] === 'refund_payment') {
             $id = 're_test_' . bin2hex(random_bytes(6));
-            self::$refunds[$id] = ['id' => $id, 'status' => 'succeeded', 'amount' => $action['amount'], 'failureReason' => null, 'paymentIntent' => $piId];
+            self::$refunds[$id] = ['id' => $id, 'status' => 'succeeded', 'amount' => $action['amount'], 'failureReason' => null, 'paymentIntent' => $piId, 'created' => time()];
             self::$intents[$piId]['refunded'] = (self::$intents[$piId]['refunded'] ?? 0) + $action['amount'];
             $action = ['type' => 'refund_payment', 'status' => 'succeeded', 'failureCode' => null, 'failureMessage' => null, 'paymentIntent' => $piId, 'refund' => $id];
 
@@ -237,6 +239,60 @@ final class FakeTerminalGateway implements PosTerminalGatewayInterface
         return self::$live;
     }
 
+    public function createConnectionToken(?string $locationId): string
+    {
+        self::$connectionTokens[] = $locationId;
+
+        return 'pst_test_' . bin2hex(random_bytes(12));
+    }
+
+    public function listRefunds(string $paymentIntentId): array
+    {
+        return array_values(array_filter(self::$refunds, fn (array $r) => $r['paymentIntent'] === $paymentIntentId));
+    }
+
+    /**
+     * Kit Stripe Terminal simulé (F13/F16) : l'application a lu la carte et confirmé l'intention. 4242… carte autorisée (à capturer),
+     * 4506… Interac (débitée aussitôt), 4000 0000 0000 0002 refusée, 4000 0000 0000 9995 fonds insuffisants,
+     * 4000 0025 0000 3155 carte canadienne « PIN hors ligne » (insertion exigée : refusée par Tap to Pay).
+     */
+    public static function sdkConfirm(string $paymentIntentId, string $cardNumber): void
+    {
+        $pi = &self::$intents[$paymentIntentId];
+        if (!in_array($pi['status'], ['requires_payment_method', 'requires_confirmation'], true)) {
+            throw new \LogicException('intention non confirmable : ' . $pi['status']);
+        }
+        $number = preg_replace('/\D/', '', $cardNumber);
+        $declines = ['4000000000000002' => ['generic_decline', 'Your card was declined.'], '4000000000009995' => ['insufficient_funds', 'Your card has insufficient funds.'],
+            '4000000000000069' => ['expired_card', 'Your card has expired.'], '4000002500003155' => ['offline_pin_required', 'This card requires a PIN entered offline: insert the card in a reader.']];
+        if (isset($declines[$number])) {
+            [$pi['failure'], $pi['failureMessage']] = $declines[$number];
+            $pi['status'] = 'requires_payment_method'; // le kit laisse réessayer avec une autre carte sur la même intention
+
+            return;
+        }
+        $interac = $number === '4506445006931933';
+        $pi['type'] = $interac ? 'interac_present' : 'card_present';
+        $pi['brand'] = $interac ? 'interac' : (str_starts_with($number, '5') ? 'mastercard' : 'visa');
+        $pi['last4'] = substr($number, -4);
+        $pi['failure'] = $pi['failureMessage'] = null;
+        $pi['status'] = $interac ? 'succeeded' : 'requires_capture';
+        $pi['amount_received'] = $interac ? $pi['amount'] : 0;
+        $pi['charge'] = 'ch_test_' . substr($paymentIntentId, -8);
+    }
+
+    /** Kit simulé : processRefund() sur le lecteur (Interac, carte représentée) → remboursement Stripe */
+    public static function sdkRefund(string $paymentIntentId, int $amount, bool $succeeded = true): string
+    {
+        $id = 're_test_' . bin2hex(random_bytes(6));
+        self::$refunds[$id] = ['id' => $id, 'status' => $succeeded ? 'succeeded' : 'failed', 'amount' => $amount, 'failureReason' => $succeeded ? null : 'card_declined', 'paymentIntent' => $paymentIntentId, 'created' => time()];
+        if ($succeeded) {
+            self::$intents[$paymentIntentId]['refunded'] = (self::$intents[$paymentIntentId]['refunded'] ?? 0) + $amount;
+        }
+
+        return $id;
+    }
+
     private function &reader(string $readerId): array
     {
         if (!isset(self::$readers[$readerId])) {
@@ -251,6 +307,6 @@ final class FakeTerminalGateway implements PosTerminalGatewayInterface
         $pi = self::$intents[$id];
 
         return ['id' => $id, 'status' => $pi['status'], 'amount' => $pi['amount'], 'amountReceived' => $pi['amount_received'], 'captured' => $pi['status'] === 'succeeded',
-            'paymentMethodType' => $pi['type'], 'cardBrand' => $pi['brand'], 'last4' => $pi['last4'], 'failureCode' => $pi['failure'], 'failureMessage' => $pi['failureMessage'], 'applicationFee' => $pi['fee']];
+            'paymentMethodType' => $pi['type'], 'cardBrand' => $pi['brand'], 'last4' => $pi['last4'], 'failureCode' => $pi['failure'], 'failureMessage' => $pi['failureMessage'], 'clientSecret' => $id . '_secret_test', 'chargeId' => $pi['charge'] ?? ($pi['status'] === 'succeeded' || $pi['status'] === 'requires_capture' ? 'ch_test_' . substr($id, -8) : null), 'applicationFee' => $pi['fee']];
     }
 }

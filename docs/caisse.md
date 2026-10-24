@@ -1321,7 +1321,7 @@ prouve (`tests/Functional/...`, « — » = aucun test dédié).
 | POST | `/api/order/create` | web + caisse | route web : caissier/responsable sans ROLE_ADMIN → vente web seulement (403 `POS_ROUTE_REQUIRED` pour source 2 ou type ≠ vente, **corrigé S2.7**) ; adresse de l'utilisateur | CheckoutApiTest, PosRoleMatrixTest |
 | GET | `/api/orders` | web + caisse | caissier/responsable : `orderSource=2` obligatoire (403 sinon) ; admin : tout | PosRoleAccessTest |
 | GET | `/api/ordersuser` | web + caisse | ses commandes | CustomerAccountApiTest |
-| POST | `/api/payment` | web + caisse | lecture d'un PaymentIntent du compte Stripe du site par son id, aucune écriture (**sans contrôle de propriété, hors lot**) | — |
+| POST | `/api/payment` | web + caisse | paiement de l'utilisateur, invité avec `guestToken` ou administrateur, sinon 404 `PAYMENT_NOT_FOUND` (**corrigé S7, 31/10/2026**) | CustomerAccountApiTest |
 | GET | `/api/payments` | web + caisse | caissier/responsable : `orderSource=2` obligatoire ; admin : tout | PosRoleAccessTest |
 | POST | `/api/pos/approvals` | caisse | PIN d'un responsable, terminal ; 30 / terminal / 15 min (429 `APPROVAL_RATE_LIMITED`) | PosPinApiTest |
 | GET | `/api/pos/archive/{year}` | caisse | **responsable** (403 `FORBIDDEN`) | PosRetentionArchiveApiTest, PosRoleMatrixTest |
@@ -1365,12 +1365,14 @@ prouve (`tests/Functional/...`, « — » = aucun test dédié).
 | GET | `/api/pos/terminal/payments/{id}` | caisse | lecture, paiement du site | PosTerminalApiTest |
 | GET | `/api/pos/terminal/payments` | caisse | lecture, paiements du site | PosTerminalApiTest |
 | POST | `/api/pos/terminal/payments` | caisse | session ouverte du poste ; poste du terminal | PosTerminalApiTest |
-| GET | `/api/pos/terminal` | caisse | poste du terminal si rattaché (403 `CASH_REGISTER_FORBIDDEN`) ; rend `cashRegisterId` | PosTerminalApiTest, PosRoleMatrixTest |
+| GET | `/api/pos/terminal` | caisse | poste du terminal si rattaché (403 `CASH_REGISTER_FORBIDDEN`) ; rend `cashRegisterId` et `mode` | PosTerminalApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/terminal/connection-token` | caisse | poste du terminal (rattachement), mode kit autorisé par le site, `X-Pos-Terminal` obligatoire, 60 / terminal / 10 min (F13/F16) | PosTerminalSdkApiTest |
+| POST | `/api/pos/terminal/payments/{id}/refund/confirm` | caisse | paiement du site, remboursement Stripe vérifié (intention, montant), rejeu idempotent (F13/F16) | PosTerminalSdkApiTest |
 | POST | `/api/pos/unlock` | caisse | son propre PIN ; blocage après N essais | PosPinApiTest |
 | GET | `/api/products/{id}/reviews/eligibility` | web + caisse | utilisateur connecté (achat) | ReviewApiTest |
 | POST | `/api/products/{id}/reviews` | web + caisse | éligibilité (achat), limite de débit | ReviewApiTest |
 | GET | `/api/profile` | web + caisse | soi-même | CustomerAccountApiTest |
-| PATCH, PUT | `/api/profile` | web + caisse | soi-même ; rôles non modifiables (courriel modifiable sans mot de passe : hors lot) | CustomerAccountApiTest |
+| PATCH, PUT | `/api/profile` | web + caisse | soi-même ; rôles non modifiables ; changement réel de courriel confirmé par mot de passe ou code OTP (**corrigé S7**) | CustomerAccountApiTest |
 | GET | `/api/reviews/mine` | web + caisse | ses avis | ReviewApiTest |
 | DELETE | `/api/reviews/{id}` | web + caisse | auteur (404 sinon) | ReviewApiTest |
 | PUT, PATCH | `/api/reviews/{id}` | web + caisse | auteur (404 sinon) | ReviewApiTest |
@@ -1435,12 +1437,92 @@ prouve (`tests/Functional/...`, « — » = aucun test dédié).
 
 Routes **publiques** (`PUBLIC_ACCESS`, un caissier n'y gagne rien par rapport à un visiteur) : `/api/Carrier` (1), `/api/admin-settings` (2), `/api/adresses` (2), `/api/app` (1), `/api/app-profile` (1), `/api/baniere-statiques` (2), `/api/bannieres` (2), `/api/booking` (2), `/api/boussole` (3), `/api/boutique-settings` (1), `/api/candidatures` (1), `/api/cart` (1), `/api/categories-marque` (2), `/api/category` (1), `/api/components-config` (1), `/api/contact` (1), `/api/contacts` (2), `/api/currencies` (1), `/api/customization` (1), `/api/embeds` (2), `/api/emplois` (1), `/api/entreprise` (1), `/api/explore-cards` (1), `/api/features` (1), `/api/financement` (1), `/api/health` (1), `/api/homeslider` (1), `/api/landingpage` (1), `/api/landingpage-config` (3), `/api/landingpage-settings` (1), `/api/login` (1), `/api/logout` (1), `/api/marques` (1), `/api/memoires` (40), `/api/multiliens` (2), `/api/newsletter` (1), `/api/order` (1), `/api/order-statuses` (1), `/api/orders` (1), `/api/otp-verify` (1), `/api/password-reset` (2), `/api/pos` (2), `/api/presentation-groups` (2), `/api/presentations` (2), `/api/products` (8), `/api/products.{_format}` (1), `/api/productsid` (1), `/api/r` (1), `/api/recherches` (2), `/api/register` (1), `/api/resend-verification` (1), `/api/reservations` (5), `/api/service-offers` (2), `/api/shared-media` (2), `/api/shipping` (2), `/api/stripe` (2), `/api/stripe-config` (1), `/api/subscription-plans` (1), `/api/team` (2), `/api/tenant` (3), `/api/token` (1), `/api/transporteurs` (1), `/api/vehicle_products` (1), `/api/vehicle_products.{_format}` (1), `/api/vehicles` (2), `/api/vehicles.{_format}` (1), `/api/videos` (2), `/api/webhooks` (2), `/stripe` (1).
 
-Constats hors lot (non corrigés, à décider) : `POST /api/payment` lit un PaymentIntent par son id sans contrôle de propriété
-(fuite de carte masquée et reçu pour qui connaît un `pi_…`) ; `PATCH /api/profile` change le courriel sans mot de passe ni
-nouvelle vérification ; les ressources API Platform `Commande`, `Product`, `Vehicle`, `VehicleProduct` n'ont pas de clause
+Constats hors lot : `POST /api/payment` et `PATCH /api/profile`, corrigés par le lot S7 du 31/10/2026 (`docs/boutique.md`) ; les ressources API Platform `Commande`, `Product`, `Vehicle`, `VehicleProduct` n'ont pas de clause
 `security` (couvertes par `access_control` seul) ; `docs/endpoints.md` ne voit pas les clauses `security` d'API Platform
 (`/api/categories` : écritures bien réservées à ROLE_ADMIN).
 
+
+## Kit Stripe Terminal dans l'application : Tap to Pay et lecteur Bluetooth (lots F13 / F16, 31/10/2026)
+
+En plus du terminal **piloté par le serveur** (C4 : WisePOS E, S700, la tablette ne parle jamais au lecteur), deux façons d'encaisser
+une carte **depuis l'application** avec le kit natif Stripe Terminal (iOS et Android, pas de web) : **Tap to Pay** (le téléphone
+ou la tablette lit la carte sans contact) et le **lecteur Bluetooth BBPOS WisePad 3**. Dans les deux cas l'application parle au
+lecteur ; le serveur fournit les jetons, crée et vérifie le paiement ; aucune clé Stripe ni aucun numéro de carte dans
+l'application. Code : `Services/PosTerminalService/PosTerminalPaymentService` (canal `sdk`), `PosTerminalSettingsService`,
+`Controller/PosController/PosTerminalController` ; schéma `migrations/Version20261031100000.php`, `scripts/migrate_all_v2_pos_terminal_sdk.sh` ;
+tests `tests/Functional/Boutique/PosTerminalSdkApiTest.php` (kit simulé : `FakeTerminalGateway::sdkConfirm`, `sdkRefund`).
+
+### Disponibilité au Canada (documentation Stripe, 31/10/2026)
+
+| | Disponibilité | Conditions |
+|---|---|---|
+| Tap to Pay sur iPhone | Canada, Interac pris en charge, PIN depuis iOS 16.4 | iPhone XS ou plus récent, iOS d'au plus un an ; **iPad non pris en charge** ; droit Apple « Tap to Pay on iPhone » demandé par l'éditeur de l'application (développement puis distribution), clé `com.apple.developer.proximity-reader.payment.acceptance`, revue Apple, écran « Comment payer » obligatoire |
+| Tap to Pay sur Android | Canada, Interac et PIN pris en charge | Android 13 ou plus, services Google et Play Store, correctif de sécurité de moins de 12 mois, non enraciné, options développeur désactivées, **jamais un terminal certifié PCI PTS** ; appareils cités par Stripe : Sunmi **T3**, **D3 MINI**, V3 MIX, L3, V3, CPad, Flex 3, Galaxy Tab Active5 (le D3 « tout court » n'est pas listé) |
+| BBPOS WisePad 3 | Canada | Bluetooth basse énergie (iOS, Android), clavier PIN et puce, pack de langue français avec un emplacement canadien, logiciel `4.01.07.00_Prod_NA_off_v30` ou plus récent |
+| Interac (`interac_present`) | les trois | capture automatique seulement (`manual_preferred` pour mélanger avec la carte de crédit) ; **remboursement en personne obligatoire**, par le kit (`processRefund`), jamais par l'API |
+
+**Point d'attention** : beaucoup de cartes canadiennes sont « PIN hors ligne seulement » : au-dessus des plafonds sans contact (Interac
+Flash 250 $, insertion exigée au-delà de 100 $ ou à la quatrième transaction consécutive), la carte doit être insérée, ce que Tap to Pay
+ne permet pas. Stripe refuse alors la transaction (`offline_pin_required`, `online_or_offline_pin_required`) : le POS propose un autre
+moyen (lecteur, espèces). Le WisePad 3 n'a pas cette limite. Stripe ne publie pas de kit Flutter : l'application passe par un greffon
+ou des canaux de plateforme ; le contrat serveur ci-dessous n'en dépend pas.
+
+### Modes et réglages
+
+- **Mode du terminal par poste** (menu Postes de caisse, « Mode du terminal ») : `manual` (carte déclarée), `server` (piloté par le
+  serveur), `tap_to_pay`, `bluetooth`. Non réglé = **déduit de l'existant** : `server` si un lecteur est rattaché et activé, `manual`
+  sinon. Exposé dans `GET /api/pos/terminal` (`mode`) et `GET /api/cash-registers` (`terminalMode`).
+- **Autorisations par site** (fiche Entreprise, panneau « Terminal de paiement Stripe (caisse) ») : « Tap to Pay autorisé » et
+  « Lecteur Bluetooth autorisé », **défaut non** ; « Remboursement Interac en attente sur le lecteur : expiration (minutes) », défaut
+  15. `GET /api/pos/settings` : `terminal.tapToPay`, `terminal.bluetoothReader`, `terminal.refundPendingMinutes`.
+- Poste en mode kit non autorisé par le site : `GET /api/pos/terminal` → `available: false, error: TERMINAL_MODE_NOT_ALLOWED` ; jeton et
+  paiement → 409 `TERMINAL_MODE_NOT_ALLOWED`. Poste en mode manuel ou serveur : jeton → 409 `TERMINAL_MODE_INVALID`.
+- La **carte déclarée** reste soumise au réglage R1 (`declaredCardBlockedWithTerminal` : bloquée aussi quand le poste est en mode kit autorisé).
+- **Hors ligne** : cartes toujours refusées hors ligne (décision C5) ; ne pas activer le mode hors ligne du kit Stripe.
+
+### Jeton de connexion : `POST /api/pos/terminal/connection-token {cashRegisterId?}` (caissier, `X-Pos-Terminal` obligatoire)
+
+→ 200 `{secret, locationId, mode, cashRegisterId}` : ConnectionToken créé sur le **compte connecté du site** pour l'**emplacement du
+site** (créé au besoin depuis l'adresse de l'entreprise, comme C4). Le poste est celui du terminal rattaché (A1-S2 : autre poste → 403
+`CASH_REGISTER_FORBIDDEN` pour un caissier ; sans `cashRegisterId`, le poste du terminal). Le secret n'est **jamais mis en cache ni
+journalisé** (l'application le redemande à chaque reconnexion du kit) ; **60 jetons par terminal et 10 minutes** → 429
+`CONNECTION_TOKEN_RATE_LIMITED {retryAfterSeconds}` ; journal `CONNECTION_TOKEN_ISSUED {cashRegisterId, mode, locationId, terminalId}`.
+Sans en-tête : 403 `TERMINAL_REQUIRED`.
+
+### Paiement : routes C4 réutilisées, canal porté par le poste (`channel: server | sdk`)
+
+| Étape | Kit (poste `tap_to_pay` ou `bluetooth`) | Serveur (C4), inchangé |
+|---|---|---|
+| `POST /api/pos/terminal/payments {cashRegisterId?, amount, items, otherPayments?, reader?: {id, label, type}}` | même PaymentIntent (`card_present` + `interac_present`, `manual_preferred`, commission, `metadata.pos_terminal`, `pos_channel: sdk`), ligne `channel: sdk`, **`clientSecret` rendu** ; `X-Pos-Terminal` obligatoire (403 `TERMINAL_REQUIRED`) ; un paiement à la fois **par terminal** (409 `READER_BUSY`) ; `reader` journalisé | envoyé au lecteur ; **`clientSecret: null`, toujours** |
+| L'application | `collectPaymentMethod` puis `confirmPaymentIntent` avec le secret | — |
+| `GET /api/pos/terminal/payments/{id}` | relit Stripe : `succeeded` + `captured: false` (carte autorisée) ou `true` (Interac débité) ; **refus d'une carte** (dont « PIN hors ligne ») : `status` reste `waiting_for_card`, `failureCode` = code Stripe tel quel (`offline_pin_required`…), `failureMessage`, `clientSecret` toujours présent pour une autre carte ; au-delà de `cardWaitSeconds` : `canceled`, `failureCode: timeout` | relit Stripe et le lecteur |
+| `POST /api/order/create-multi-payment` avec `terminalPaymentId` | identique : vérifié puis **capturé dans la transaction** | identique |
+| `POST …/cancel` | intention annulée chez Stripe (pas d'action lecteur) ; le kit peut aussi annuler localement, le serveur fait foi | action du lecteur et intention annulées |
+| Paiements sans vente, réconciliation (cron `app:pos:terminal-reconcile`, qui parcourt désormais aussi les sites n'ayant que des postes en mode kit), idempotence (`Idempotency-Key`), journal, rapports X et Z (`cardTerminal`) | identiques (même table, mêmes états) | identiques |
+
+Réponse d'un paiement : clés ajoutées **`channel`**, **`clientSecret`** (secret du canal `sdk` tant que la carte est attendue, sinon
+`null`), **`refundInstruction`** (ci-dessous) ; rien de retiré.
+
+### Remboursements
+
+- **Carte de crédit** (`card_present`) : inchangé, par le serveur en ligne (annulation de vente, retour, `POST …/refund`).
+- **Interac par le kit** : `POST /api/pos/terminal/payments/{id}/refund {amount?}` (validation C3 `refund` inchangée) → `refund.status:
+  waiting_for_card` et **`refundInstruction {paymentIntentId, chargeId, amount, currency, requestedAt, expiresInMinutes}`** ; journal
+  `REFUND_PENDING`. L'application appelle `processRefund` sur le lecteur (le client représente la carte d'origine), puis
+  **`POST /api/pos/terminal/payments/{id}/refund/confirm {stripeRefundId}`** : le serveur relit le remboursement chez Stripe (404
+  `REFUND_NOT_FOUND`, 409 `REFUND_MISMATCH` s'il porte sur un autre paiement, 409 `REFUND_AMOUNT_MISMATCH`), l'enregistre
+  (`refund.status: succeeded`, `refund.id` à passer en **`terminalRefundId`** à l'annulation ou au retour, comme C4), journal
+  `REFUND_CONFIRMED` + `CARD_REFUND` ; **même `stripeRefundId` rejoué → même réponse** ; autre identifiant après confirmation → 409
+  `REFUND_ALREADY_CONFIRMED` ; sans demande en attente → 409 `REFUND_NOT_PENDING`.
+- **Expiration** : un remboursement en attente non confirmé après `refundPendingMinutes` (défaut 15) est repris par la réconciliation
+  C4 (et par `GET`) : Stripe est relu ; un remboursement du bon montant postérieur à la demande est enregistré (`REFUND_CONFIRMED`,
+  `via: reconcile`) ; sinon la demande expire (`refund.status: failed`, message « demande expirée », journal `REFUND_EXPIRED`) et le
+  paiement redevient remboursable.
+
+### Journal
+
+`CONNECTION_TOKEN_ISSUED`, `REFUND_PENDING`, `REFUND_CONFIRMED`, `REFUND_EXPIRED` ; les entrées `CARD_*` portent `channel`, `readerLabel`
+et, au démarrage, `reader` déclaré par l'application. Aucun secret, aucun numéro de carte.
 
 ## Mécanique interne
 

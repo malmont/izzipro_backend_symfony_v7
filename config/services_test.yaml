@@ -59,6 +59,12 @@ services:
     App\Tests\Fake\FakeCheckoutPaymentGateway:
         autowire: true
     App\Services\CheckoutService\CheckoutPaymentGatewayInterface: '@App\Tests\Fake\FakeCheckoutPaymentGateway'
+    # Vérification d'un paiement (POST /api/payment) : lit les intents simulés ci-dessus (S7, 31/10/2026)
+    App\Services\StripePaymentService\StripePaymentService:
+        class: App\Tests\Fake\FakeStripePaymentService
+        autowire: true
+        arguments:
+            $stripeSecretKey: 'sk_test_simule'
     # Terminal de paiement Stripe de la caisse : lecteur et cartes simulés (aucun appel réseau)
     App\Tests\Fake\FakeTerminalGateway:
         autowire: true
