@@ -1,0 +1,38 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}Coupons de fabricant (caisse){% endblock %}
+
+{% block body %}
+<div class="container-fluid">
+    <h1 class="mb-3">Coupons de fabricant (caisse)</h1>
+    <p class="text-muted">Bons remboursés par le fabricant ou une chambre de compensation, acceptés en caisse comme un moyen de paiement : les taxes restent calculées sur le prix plein (Loi sur la taxe d'accise, art. 181(2) ; TVQ). Le rapport liste les coupons acceptés dans la période ; « Marquer réclamés » passe ceux à réclamer dans un lot daté. Les coupons retournés après réclamation sont à régulariser avec le fabricant.
+        {% if not settings.enabled %}<br><span class="text-warning">Les coupons ne sont pas activés sur ce site (fiche Entreprise, panneau « Coupons de fabricant (caisse) »).</span>{% endif %}</p>
+    {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+    {% if done %}<div class="alert alert-success">Lot {{ done.batch }} : {{ done.count }} coupon(s), {{ (done.total / 100)|number_format(2, ',', ' ') }} marqués réclamés.</div>{% endif %}
+    <form method="post" class="row g-2 align-items-end mb-4">
+        <div class="col-md-2"><label class="form-label">Acceptés du</label><input type="date" name="from" class="form-control" value="{{ filters.from }}"></div>
+        <div class="col-md-2"><label class="form-label">au</label><input type="date" name="to" class="form-control" value="{{ filters.to }}"></div>
+        <div class="col-md-2"><label class="form-label">Fabricant</label><input type="text" name="manufacturer" class="form-control" value="{{ filters.manufacturer }}" placeholder="tous"></div>
+        <div class="col-md-2"><label class="form-label">Statut</label>
+            <select name="status" class="form-select">{% for v, l in {'to_claim': 'À réclamer', 'claimed': 'Réclamés', 'returned_after_claim': 'Retournés après réclamation', 'voided': 'Annulés par un retour', 'all': 'Tous'} %}<option value="{{ v }}" {{ filters.status == v ? 'selected' : '' }}>{{ l }}</option>{% endfor %}</select></div>
+        <div class="col-md-4">
+            <button type="submit" name="action" value="report" class="btn btn-secondary">Afficher</button>
+            <button type="submit" name="action" value="csv" class="btn btn-primary">CSV</button>
+            <button type="submit" name="action" value="mark" class="btn btn-warning" onclick="return confirm('Passer en « réclamés » tous les coupons à réclamer de cette période ?')">Marquer réclamés</button>
+        </div>
+    </form>
+    {% if report %}
+        <p><strong>{{ report.count }}</strong> coupon(s), {{ (report.total / 100)|number_format(2, ',', ' ') }} ; fractions de taxe (information CTI/RTI) :
+            {% for t, v in report.taxFractions %}{{ t }} {{ (v / 100)|number_format(2, ',', ' ') }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+        <table class="table table-sm table-striped">
+            <thead><tr><th>Fabricant</th><th class="text-end">Nombre</th><th class="text-end">Montant</th>{% for t, v in report.taxFractions %}<th class="text-end">Fraction {{ t }}</th>{% endfor %}</tr></thead>
+            <tbody>{% for m in report.byManufacturer %}<tr><td>{{ m.manufacturer }}</td><td class="text-end">{{ m.count }}</td><td class="text-end">{{ (m.total / 100)|number_format(2, ',', ' ') }}</td>{% for t, v in m.taxFractions %}<td class="text-end">{{ (v / 100)|number_format(2, ',', ' ') }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+        </table>
+        <h5>Détail</h5>
+        <table class="table table-sm">
+            <thead><tr><th>Accepté le</th><th>Fabricant</th><th>Préfixe GS1</th><th>Offre</th><th>Série</th><th>Vente</th><th class="text-end">Montant</th><th>Statut</th><th>Lot</th></tr></thead>
+            <tbody>{% for c in report.coupons %}<tr><td>{{ c.redeemedAt|date('d/m/Y H:i') }}</td><td>{{ c.manufacturer }}</td><td>{{ c.companyPrefix }}</td><td>{{ c.offerCode }}</td><td>{{ c.serial }}</td><td>#{{ c.orderId }}</td><td class="text-end">{{ (c.amount / 100)|number_format(2, ',', ' ') }}</td><td>{{ c.status }}</td><td>{{ c.claimBatch }}</td></tr>{% endfor %}</tbody>
+        </table>
+    {% endif %}
+</div>
+{% endblock %}

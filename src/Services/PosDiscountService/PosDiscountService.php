@@ -70,6 +70,12 @@ class PosDiscountService
         return $quote;
     }
 
+    /** Arrondi des espèces d'un montant dû (devis avec coupons, F17) */
+    public function cashRound(int $cents): int
+    {
+        return $this->rounding->round($cents);
+    }
+
     /** Structure, autorisation du site et motifs des remises demandées (sans calcul) */
     public function check(array $items, ?array $ticketDiscount): void
     {

@@ -369,7 +369,15 @@ class OrderController extends AbstractController
             if (in_array((int) $method['type'], [PaymentMethodDTO::GIFT_CARD, PaymentMethodDTO::STORE_CREDIT], true) && ($giftCode === null || $giftCode === '')) {
                 return $this->json(['error' => 'PAYMENT_METHODS_INVALID', 'message' => 'code : code de la carte-cadeau ou de l\'avoir requis pour les types 4 et 5'], JsonResponse::HTTP_BAD_REQUEST);
             }
-            $paymentMethods[] = new PaymentMethodDTO((int) $method['type'], (float) $method['amount'], $terminalRef !== null ? (string) $terminalRef : null, $giftCode);
+            // Coupon de fabricant (type 6, F17) : fabricant ou code-barres lisible ; contrôlé et enregistré dans la transaction de la vente (taxes sur le prix plein)
+            $coupon = null;
+            if ((int) $method['type'] === PaymentMethodDTO::MANUFACTURER_COUPON) {
+                $coupon = is_array($method['coupon'] ?? null) ? $method['coupon'] : [];
+                if ((!is_string($coupon['manufacturer'] ?? null) || trim($coupon['manufacturer']) === '') && (!is_string($coupon['barcode'] ?? null) || trim($coupon['barcode']) === '')) {
+                    return $this->json(['error' => 'PAYMENT_METHODS_INVALID', 'message' => 'coupon : {manufacturer} ou {barcode} requis pour un coupon de fabricant (type 6)'], JsonResponse::HTTP_BAD_REQUEST);
+                }
+            }
+            $paymentMethods[] = new PaymentMethodDTO((int) $method['type'], (float) $method['amount'], $terminalRef !== null ? (string) $terminalRef : null, $giftCode, $coupon);
         }
         if (!$paymentMethods) {
             return $this->json(['error' => 'PAYMENT_METHODS_REQUIRED', 'message' => 'Au moins un moyen de paiement est requis'], JsonResponse::HTTP_BAD_REQUEST);

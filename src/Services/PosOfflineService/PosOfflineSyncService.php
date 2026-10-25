@@ -215,8 +215,11 @@ class PosOfflineSyncService
         $cashPaid = 0;
         foreach ($payments as $p) {
             if (!is_array($p) || (int) ($p['type'] ?? 0) !== 2 || !is_numeric($p['amount'] ?? null)) {
-                $errors[] = ['path' => 'payments', 'message' => in_array((int) ($p['type'] ?? 0), [4, 5], true)
-                    ? 'carte-cadeau et avoir indisponibles hors ligne (solde inconnu sans réseau) : espèces seulement' : 'espèces seulement hors ligne (type 2, montant en cents)'];
+                $errors[] = ['path' => 'payments', 'message' => match ((int) ($p['type'] ?? 0)) {
+                    4, 5 => 'carte-cadeau et avoir indisponibles hors ligne (solde inconnu sans réseau) : espèces seulement',
+                    6 => 'coupons de fabricant indisponibles hors ligne (doublons et expiration non vérifiables sans réseau) : espèces seulement',
+                    default => 'espèces seulement hors ligne (type 2, montant en cents)',
+                }];
                 break;
             }
             $cashPaid += (int) $p['amount'];

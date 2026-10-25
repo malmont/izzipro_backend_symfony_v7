@@ -385,6 +385,13 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => false])]
     private bool $posGiftCardCashRefundBeyond = false;
 
+    // Coupons de fabricant (F17, 01/11/2026) : acceptés (défaut non) ; total maximal par vente sans validation d'un responsable (cents, 0 = toujours)
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posCouponEnabled = false;
+
+    #[ORM\Column(options: ['default' => 2000])]
+    private int $posCouponMaxWithoutApproval = 2000;
+
     // Article libre et prix manuel (F7, 26/10/2026) : désactivés par défaut ; montant maximal sans validation d'un responsable
     // (cents, null = jamais de validation, 0 = toujours) ; motif du prix manuel obligatoire, motifs (un par ligne)
     #[ORM\Column(options: ['default' => false])]
@@ -1006,6 +1013,10 @@ class Entreprise implements TranslatableInterface
 
     // Cartes-cadeaux et avoirs (F9, 27/10/2026)
     public const GIFT_CARD_AMOUNTS_DEFAULT = [2500, 5000, 10000];
+    public function isPosCouponEnabled(): bool { return $this->posCouponEnabled; }
+    public function setPosCouponEnabled(bool $v): static { $this->posCouponEnabled = $v; return $this; }
+    public function getPosCouponMaxWithoutApproval(): int { return $this->posCouponMaxWithoutApproval; }
+    public function setPosCouponMaxWithoutApproval(?int $cents): static { $this->posCouponMaxWithoutApproval = max(0, (int) $cents); return $this; }
     public function isPosGiftCardEnabled(): bool { return $this->posGiftCardEnabled; }
     public function setPosGiftCardEnabled(bool $v): static { $this->posGiftCardEnabled = $v; return $this; }
     public function getPosGiftCardAmounts(): ?string { return $this->posGiftCardAmounts; }

@@ -16,7 +16,7 @@ class PosReceiptDto
     /** @param array<string, \App\Entity\PosReceipt> $receipts numéros de la commande (C2) */
     public static function fromOrder(Order $order, ?Entreprise $entreprise, ?Caisse $caisse, string $locale, array $receipts = [],
         ?\App\Entity\PosTerminalPayment $terminal = null, ?string $receiptUrl = null, bool $duplicate = false, ?\App\Entity\PosReceipt $receiptOverride = null,
-        array $giftCards = ['redemptions' => [], 'issued' => null, 'storeCredit' => null], ?array $customer = null): array
+        array $giftCards = ['redemptions' => [], 'issued' => null, 'storeCredit' => null], ?array $customer = null, array $coupons = []): array
     {
         $dollars = fn (?float $cents) => round(((float) $cents) / 100, 2);
         // Ticket complet (F3, 24/10/2026) : lignes, caissier, devise, monnaie rendue, détail des cartes, nature, lien public, duplicata
@@ -56,6 +56,11 @@ class PosReceiptDto
                 'paymentMethodType' => $card ? ($terminal && $payment->getStripePaymentId() === $terminal->getStripePaymentIntentId() ? $terminal->getPaymentMethodType() : ($payment->getStripePaymentId() ? ($terminal?->getPaymentMethodType() ?? 'card') : 'declared')) : null,
             ];
         }
+        // Coupons de fabricant (F17) : une ligne « Coupon fabricant » par coupon dans les paiements ; taxes et total sur le prix plein
+        foreach ($coupons as $c) {
+            $payments[] = ['type' => 6, 'label' => 'Coupon fabricant – ' . $c['manufacturer'] . ($c['offerCode'] ? ' (offre ' . $c['offerCode'] . ')' : ''), 'amount' => $dollars($c['amount']), 'cardBrand' => null, 'last4' => null, 'paymentMethodType' => null, 'coupon' => ['manufacturer' => $c['manufacturer'], 'offerCode' => $c['offerCode'], 'status' => $c['status']]];
+            $paid += max(0, (int) $c['amount']);
+        }
         $register = $caisse?->getCashRegister();
 
         $receipt = $receiptOverride ?? $receipts[\App\Entity\PosReceipt::TICKET] ?? $receipts[\App\Entity\PosReceipt::CREDIT_NOTE] ?? $receipts[\App\Entity\PosReceipt::GIFT_CARD] ?? null;
@@ -64,7 +69,7 @@ class PosReceiptDto
         $kind = $isCreditNote ? ($order->getOrderType()?->getId() === 2 ? 'return' : ($order->getOrderType()?->getId() === 3 ? 'gift_card_cancellation' : 'cancellation'))
             : ($receipt?->getKind() === \App\Entity\PosReceipt::GIFT_CARD ? 'gift_card' : ($order->getCreditApplied() > 0 ? 'exchange' : 'sale'));
         // Montant dû = total + arrondi − crédit d'échange − part carte-cadeau (F9 : 0 sans carte, comme avant)
-        $amountDueCents = (int) round($order->getTotalAmount() + $order->getCashRounding() - $order->getCreditApplied() - $order->getGiftCardApplied());
+        $amountDueCents = (int) round($order->getTotalAmount() + $order->getCashRounding() - $order->getCreditApplied() - $order->getGiftCardApplied() - $order->getManufacturerCouponApplied()); // − coupons (F17)
 
         return [
             // Ticket numérique (F3) : nature du document, duplicata, lien public (QR), réimpressions, émission
@@ -112,6 +117,8 @@ class PosReceiptDto
             'giftCardPayments' => array_map(fn ($g) => ['kind' => $g['kind'], 'last4' => $g['last4'], 'amount' => $dollars($g['amount'])], $giftCards['redemptions'] ?? []),
             'giftCard' => $giftCards['issued'] ?? null,
             'storeCredit' => $giftCards['storeCredit'] ?? null,
+            // Coupons de fabricant (F17, 01/11/2026) : part réglée par coupons (taxes sur le prix plein), détail dans payments (type 6)
+            'manufacturerCouponApplied' => $dollars($order->getManufacturerCouponApplied()),
             // Fiche client et fidélité (F8, 28/10/2026) : client rattaché (prénom et initiale), points de la vente et solde ; null sans client
             'customer' => $customer,
             'taxes' => $taxes,

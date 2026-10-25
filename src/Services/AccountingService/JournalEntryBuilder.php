@@ -54,8 +54,8 @@ class JournalEntryBuilder
             $add(ChartOfAccounts::taxKey((string) $t['label'], $t['province'] ?? null, isset($t['rate']) ? (float) $t['rate'] : null), 0, (int) ($t['tax'] ?? 0), $t['label'] . ' collectée');
         }
         // Encaissements TTC des ventes
-        $receiptKeys = ['cash' => 'cash', 'card' => 'card_clearing', 'interac' => 'interac_clearing', 'stripe' => 'stripe_clearing', 'paypal' => 'paypal_clearing', 'giftCard' => 'gift_card_liability', 'storeCredit' => 'store_credit_liability'];
-        $receiptLabels = ['cash' => 'Encaissements espèces', 'card' => 'Encaissements carte', 'interac' => 'Encaissements Interac', 'stripe' => 'Encaissements Stripe', 'paypal' => 'Encaissements PayPal', 'giftCard' => 'Règlements par carte-cadeau', 'storeCredit' => 'Règlements par avoir'];
+        $receiptKeys = ['cash' => 'cash', 'card' => 'card_clearing', 'interac' => 'interac_clearing', 'stripe' => 'stripe_clearing', 'paypal' => 'paypal_clearing', 'giftCard' => 'gift_card_liability', 'storeCredit' => 'store_credit_liability', 'coupon' => 'coupon_receivable'];
+        $receiptLabels = ['cash' => 'Encaissements espèces', 'card' => 'Encaissements carte', 'interac' => 'Encaissements Interac', 'stripe' => 'Encaissements Stripe', 'paypal' => 'Encaissements PayPal', 'giftCard' => 'Règlements par carte-cadeau', 'storeCredit' => 'Règlements par avoir', 'coupon' => 'Coupons de fabricant acceptés'];
         foreach ($receiptKeys as $k => $key) {
             $add($key, (int) ($amounts['receipts'][$k] ?? 0), 0, $receiptLabels[$k]);
         }
@@ -66,7 +66,7 @@ class JournalEntryBuilder
         foreach ($amounts['refundsTaxes'] ?? [] as $t) {
             $add(ChartOfAccounts::taxKey((string) $t['label'], $t['province'] ?? null, isset($t['rate']) ? (float) $t['rate'] : null), (int) ($t['tax'] ?? 0), 0, $t['label'] . ' sur retours');
         }
-        $refundLabels = ['cash' => 'Remboursements espèces', 'card' => 'Remboursements carte', 'interac' => 'Remboursements Interac', 'stripe' => 'Remboursements Stripe', 'giftCard' => 'Recrédits de cartes-cadeaux', 'storeCredit' => 'Avoirs émis'];
+        $refundLabels = ['cash' => 'Remboursements espèces', 'card' => 'Remboursements carte', 'interac' => 'Remboursements Interac', 'stripe' => 'Remboursements Stripe', 'giftCard' => 'Recrédits de cartes-cadeaux', 'storeCredit' => 'Avoirs émis', 'coupon' => 'Coupons de fabricant annulés (retours)'];
         foreach ($refundLabels as $k => $label) {
             $add($receiptKeys[$k], 0, (int) ($amounts['refunds'][$k] ?? 0), $label);
         }

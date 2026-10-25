@@ -94,6 +94,7 @@ class CashSessionReportBuilder
         $entreprise = $em->getRepository(Entreprise::class)->findOneBy([]);
         $sales['byPaymentMethod'] = $this->byPaymentMethod($saleOrders, fn (float $amount) => $amount > 0, $locale);
         $sales['giftCards'] = (int) array_sum(array_map(fn (Order $o) => $o->getGiftCardApplied(), $saleOrders)); // part réglée par carte-cadeau ou avoir (F9) : espèces + cartes + giftCards = total
+        $sales['manufacturerCoupons'] = (int) array_sum(array_map(fn (Order $o) => $o->getManufacturerCouponApplied(), $saleOrders)); // part réglée par coupons de fabricant (F17) : taxes sur le prix plein
         $refunds['byPaymentMethod'] = $this->byPaymentMethod($refundOrders, fn (float $amount) => $amount < 0, $locale);
 
         return [
@@ -132,6 +133,8 @@ class CashSessionReportBuilder
                 'loyalty' => $this->loyalty->reportBlock((int) $session->getId())],
             // Cartes-cadeaux et avoirs (F9, 27/10/2026) : vendu, utilisé, avoirs émis, remboursé, ajusté (session) ; solde en cours du site (passif)
             'giftCards' => $em->getRepository(\App\Entity\PosGiftCardTransaction::class)->totalsForSession((int) $session->getId()) + ['outstanding' => $em->getRepository(\App\Entity\PosGiftCard::class)->outstanding()],
+            // Coupons de fabricant (F17, 01/11/2026) : acceptés sur la session (à réclamer au fabricant), annulés par les retours de la session
+            'manufacturerCoupons' => $em->getRepository(\App\Entity\PosManufacturerCoupon::class)->totalsForSession((int) $session->getId()),
         ];
     }
 

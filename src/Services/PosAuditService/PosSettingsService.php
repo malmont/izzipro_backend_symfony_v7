@@ -43,6 +43,8 @@ class PosSettingsService
                 'giftCardCancel' => ['required' => true], 'giftCardAdjust' => ['required' => true], 'giftCardReplace' => ['required' => true],
                 'loyaltyAdjust' => ['required' => true], 'customerErase' => ['required' => true], // fiche client et fidélité (F8)
                 'priceOverride' => ['required' => $lines['priceOverride']['enabled'] && $lines['priceOverride']['maxAmount'] !== null, 'threshold' => $lines['priceOverride']['maxAmount']],
+                // Coupons de fabricant (F17) : au-delà du total maximal par vente (0 = toujours)
+                'manufacturerCoupon' => ['required' => $e?->isPosCouponEnabled() ?? false, 'threshold' => $e?->getPosCouponMaxWithoutApproval() ?? 2000],
             ],
             'pin' => $this->pinRules(),
             // Lot R1 (23/10/2026) : réglages par site, défauts = comportement d'avant (ajouts seulement)
@@ -59,6 +61,7 @@ class PosSettingsService
             'customItems' => $lines['customItems'], // article libre (F7, 26/10/2026)
             'priceOverride' => $lines['priceOverride'], // prix manuel (F7, 26/10/2026)
             'giftCards' => \App\Services\PosGiftCardService\PosGiftCardService::settingsOf($e), // cartes-cadeaux et avoirs (F9, 27/10/2026)
+            'coupons' => \App\Services\PosCouponService\PosCouponService::settingsOf($e), // coupons de fabricant (F17, 01/11/2026)
             'customers' => \App\Services\PosCustomerService\PosCustomerService::settingsOf($e), // fiche client (F8, 28/10/2026)
             'loyalty' => \App\Services\PosCustomerService\PosLoyaltyService::settingsOf($e), // fidélité (F8)
             'store' => \App\Services\CaisseService\StoreClock::resolve($e), // fuseau horaire du magasin (F14, 29/10/2026) : {timezone, source}
@@ -106,6 +109,9 @@ class PosSettingsService
             if ($type === \App\Dto\PaymentMethodDTO::GIFT_CARD || $type === \App\Dto\PaymentMethodDTO::STORE_CREDIT) { // F9 : vérifiés et débités par PosGiftCardService
                 continue;
             }
+            if ($type === \App\Dto\PaymentMethodDTO::MANUFACTURER_COUPON) { // F17 : vérifiés et enregistrés par PosCouponService (réglage « coupons acceptés »)
+                continue;
+            }
             $declaredCard = $type === 1 && $method->getTerminalPaymentId() === null;
             $disabled = match ($type) { 2 => !$allowed['cash'], 3 => !$allowed['paypal'], 1 => $declaredCard && !$allowed['declaredCard'], default => false };
             if ($disabled) {
@@ -144,6 +150,7 @@ class PosSettingsService
             // Cartes-cadeaux (F9) : annulation, ajustement et remplacement toujours validés par un responsable
             PosApprovalService::GIFT_CARD_CANCEL, PosApprovalService::GIFT_CARD_ADJUST, PosApprovalService::GIFT_CARD_REPLACE => true,
             PosApprovalService::LOYALTY_ADJUST, PosApprovalService::CUSTOMER_ERASE => true, // fiche client et fidélité (F8) : toujours un responsable
+            PosApprovalService::MANUFACTURER_COUPON => ($e?->isPosCouponEnabled() ?? false) && \App\Services\PosLineService\PosLineService::beyond((int) $amount, $e?->getPosCouponMaxWithoutApproval() ?? 2000), // coupons (F17)
             default => false,
         };
     }

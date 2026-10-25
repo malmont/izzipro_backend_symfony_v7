@@ -58,7 +58,8 @@ class CreateOrderUseCase
         private readonly \App\Services\PosAuditService\PosApprovalService $approvals, // validations groupées (P2-a)
         private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards, // cartes-cadeaux et avoirs (F9)
         private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client (F8)
-        private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty // fidélité (F8)
+        private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
+        private readonly \App\Services\PosCouponService\PosCouponService $coupons // coupons de fabricant (F17)
     ) {
         $this->createOrderCommandUseCase = $createOrderCommandUseCase;
         $this->processOrderItemsUseCase = $processOrderItemsUseCase;
@@ -127,6 +128,18 @@ class CreateOrderUseCase
                 $orderDTO->setTicketDiscount($ticketDiscount);
                 $loyaltyReward = ['points' => $points, 'amount' => $amount];
             }
+            // Coupons de fabricant (F17) : parts de type 6, vente au comptoir seulement ; contrôlés AVANT toute validation C3 (site, montant, expiration,
+            // doublon de série) ; enregistrés plus bas dans la transaction ; taxes et total inchangés (prix plein), seul le dû diminue
+            $couponParts = $orderDTO instanceof CreateOrderMultiPaymentDTO ? array_values(array_filter($orderDTO->getPaymentMethods(), fn ($m) => $m->isCoupon())) : [];
+            $couponList = [];
+            $couponDemand = null;
+            if ($couponParts !== []) {
+                if ($orderDTO->getOrderSource() !== 2 || $typeOrderId !== 1) {
+                    throw new CashRegisterException('COUPON_PAYMENT_INVALID', 'Un coupon de fabricant ne règle qu\'une vente au comptoir', 409);
+                }
+                $couponList = $this->coupons->fromParts($couponParts);
+                $couponDemand = $this->coupons->demand($user, (int) array_sum(array_column($couponList, 'amount')));
+            }
             $discountSummary = null;
             $posQuote = null;
             $hasDiscounts = \App\Services\PosDiscountService\PosDiscountCalculator::hasDiscounts($orderDTO->getItems(), $ticketDiscount);
@@ -142,6 +155,9 @@ class CreateOrderUseCase
                 if ($capSummary !== null && ($d = $this->discounts->demand($user, $capSummary)) !== null) {
                     array_unshift($demands, $d);
                 }
+                if ($couponDemand !== null) {
+                    $demands[] = $couponDemand; // validation groupée (P2-a) : un seul jeton pour remises, lignes et coupons
+                }
                 $this->approvals->requireAll($demands, $user);
                 if ($capSummary !== null) {
                     $this->discounts->checkManagerCap($user, $capSummary);
@@ -150,6 +166,8 @@ class CreateOrderUseCase
                 throw new CashRegisterException('DISCOUNT_NOT_ALLOWED', 'Les remises ne s\'appliquent qu\'aux ventes au comptoir', 409);
             } elseif ($hasLines) {
                 throw new CashRegisterException('CUSTOM_ITEM_NOT_ALLOWED', 'L\'article libre et le prix manuel ne s\'appliquent qu\'aux ventes au comptoir', 409);
+            } elseif ($couponDemand !== null) {
+                $this->approvals->requireAll([$couponDemand], $user); // coupons seuls au-delà du maximum : validation C3 action manufacturer_coupon
             }
             $order = $this->createOrderCommandUseCase->execute($orderDTO, $user);
             if ($order instanceof JsonResponse) {
@@ -206,6 +224,9 @@ class CreateOrderUseCase
                             throw new CashRegisterException('GIFT_CARD_PAYMENT_INVALID', 'Une carte-cadeau ou un avoir ne règle qu\'une vente au comptoir', 409);
                         }
                         $giftParts[] = $paymentMethod;
+                        continue;
+                    }
+                    if ($paymentMethod->isCoupon()) { // coupon de fabricant (F17) : enregistré plus bas, aucune ligne dans payments
                         continue;
                     }
                     if ($paymentMethod->getType() == 2) {
@@ -276,6 +297,10 @@ class CreateOrderUseCase
                 foreach ($giftParts as $part) {
                     $this->giftCards->redeem($part, $order, $user, $caisse);
                 }
+                // Coupons de fabricant (F17) : montant ≤ prix de la ligne concernée, écrits ici (ligne verrouillée), part portée par order.manufacturer_coupon_applied
+                if ($couponList !== []) {
+                    $this->coupons->redeem($couponList, $order, $user, $caisse);
+                }
                 // Fiche client et fidélité (F8) : client rattaché, points rachetés puis points gagnés sur le net (après remises, hors carte-cadeau)
                 $loyalty = ['earned' => 0, 'redeemed' => 0, 'redeemedAmount' => 0];
                 if ($customer !== null) {
@@ -301,6 +326,7 @@ class CreateOrderUseCase
                     'cashRounding' => $order->getCashRounding(),
                     'creditApplied' => $order->getCreditApplied(),
                     'giftCardApplied' => $order->getGiftCardApplied(), // cartes-cadeaux et avoirs (F9)
+                    'manufacturerCouponApplied' => $order->getManufacturerCouponApplied(), // coupons de fabricant (F17)
                     'customerId' => $customer?->getId(), 'loyalty' => $customer !== null ? $loyalty : null, // fiche client et fidélité (F8)
                     'discountTotal' => $discountSummary['total'] ?? 0,
                     'payments' => array_values(array_map(fn ($p) => ['type' => $p->getPaymentMethod()?->getId(), 'amount' => (int) round((float) $p->getAmount())], $order->getPayments()->toArray())),
@@ -336,6 +362,8 @@ class CreateOrderUseCase
             if ($em->getConnection()->isTransactionActive()) {
                 $em->getConnection()->rollBack();
             }
+            // Coupons de fabricant (F17) : le refus (déjà utilisé, expiré) reste journalisé malgré l'annulation de la transaction
+            $this->coupons->journalRefusalAfterRollback($e, $user instanceof \App\Entity\User ? $user : null);
             return new JsonResponse($e->toBody(), $e->status);
         } catch (\Exception $e) {
             if ($em->getConnection()->isTransactionActive()) {

@@ -6,6 +6,8 @@ class PaymentMethodDTO
     /** Types propres au corps des routes de caisse (F9, 27/10/2026) : aucune ligne dans la table des moyens de paiement ni dans payments */
     public const GIFT_CARD = 4;
     public const STORE_CREDIT = 5;
+    /** Coupon de fabricant (F17, 01/11/2026) : moyen de paiement remboursé par un tiers, taxes sur le prix plein ; aucune ligne dans payments */
+    public const MANUFACTURER_COUPON = 6;
 
     private $type;
     private $amount;
@@ -13,13 +15,26 @@ class PaymentMethodDTO
     private ?string $terminalPaymentId;
     /** Carte-cadeau ou avoir (F9) : code scanné ou saisi, types 4 et 5 seulement */
     private ?string $code;
+    /** Coupon de fabricant (F17) : {manufacturer?, barcode?, offerCode?, serial?, productVariantId?, expiresAt?}, type 6 seulement */
+    private ?array $coupon;
 
-    public function __construct(int $type, float $amount, ?string $terminalPaymentId = null, ?string $code = null)
+    public function __construct(int $type, float $amount, ?string $terminalPaymentId = null, ?string $code = null, ?array $coupon = null)
     {
         $this->type = $type;
         $this->amount = $amount;
         $this->terminalPaymentId = $terminalPaymentId;
         $this->code = $code;
+        $this->coupon = $coupon;
+    }
+
+    public function getCoupon(): ?array
+    {
+        return $this->coupon;
+    }
+
+    public function isCoupon(): bool
+    {
+        return $this->type === self::MANUFACTURER_COUPON;
     }
 
     public function getCode(): ?string

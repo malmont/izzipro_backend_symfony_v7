@@ -1366,6 +1366,9 @@ prouve (`tests/Functional/...`, « — » = aucun test dédié).
 | GET | `/api/pos/terminal/payments` | caisse | lecture, paiements du site | PosTerminalApiTest |
 | POST | `/api/pos/terminal/payments` | caisse | session ouverte du poste ; poste du terminal | PosTerminalApiTest |
 | GET | `/api/pos/terminal` | caisse | poste du terminal si rattaché (403 `CASH_REGISTER_FORBIDDEN`) ; rend `cashRegisterId` et `mode` | PosTerminalApiTest, PosRoleMatrixTest |
+| POST | `/api/pos/coupons/parse` | caisse | lecture d'un code-barres, aucune écriture (F17) | PosManufacturerCouponApiTest |
+| GET | `/api/pos/coupons/claims` et `.csv` | caisse | **responsable** (403 `FORBIDDEN`) (F17) | PosManufacturerCouponApiTest |
+| POST | `/api/pos/coupons/claims/mark` | caisse | **responsable** (F17) | PosManufacturerCouponApiTest |
 | POST | `/api/pos/terminal/connection-token` | caisse | poste du terminal (rattachement), mode kit autorisé par le site, `X-Pos-Terminal` obligatoire, 60 / terminal / 10 min (F13/F16) | PosTerminalSdkApiTest |
 | POST | `/api/pos/terminal/payments/{id}/refund/confirm` | caisse | paiement du site, remboursement Stripe vérifié (intention, montant), rejeu idempotent (F13/F16) | PosTerminalSdkApiTest |
 | POST | `/api/pos/unlock` | caisse | son propre PIN ; blocage après N essais | PosPinApiTest |
@@ -1523,6 +1526,124 @@ Réponse d'un paiement : clés ajoutées **`channel`**, **`clientSecret`** (secr
 
 `CONNECTION_TOKEN_ISSUED`, `REFUND_PENDING`, `REFUND_CONFIRMED`, `REFUND_EXPIRED` ; les entrées `CARD_*` portent `channel`, `readerLabel`
 et, au démarrage, `reader` déclaré par l'application. Aucun secret, aucun numéro de carte.
+
+## Coupons de fabricant (lot F17, 01/11/2026)
+
+Bons de réduction émis par une marque et **remboursés au commerçant** par le fabricant ou une chambre de compensation. Code :
+`Services/PosCouponService/` (`PosCouponService`, `CouponBarcodeParser`), `Controller/PosController/PosCouponController`,
+`Controller/Admin/PosCouponAdminController` ; entité `PosManufacturerCoupon` (`pos_manufacturer_coupon`), colonne
+`order.manufacturer_coupon_applied` ; schéma `migrations/Version20261101100000.php`, `scripts/migrate_all_v2_pos_coupons.sh` ;
+tests `tests/Functional/Boutique/PosManufacturerCouponApiTest.php`.
+
+### Règle fiscale et modèle
+
+- **Loi sur la taxe d'accise, art. 181(2)** (bon remboursable) : la taxe percevable par l'inscrit est réputée égale à celle qui serait
+  percevable **sans le bon** ; le bon vaut paiement partiel taxes comprises, l'inscrit est réputé avoir perçu la fraction de taxe de la
+  valeur du bon (crédit de taxe sur les intrants ; le remboursement par le fabricant n'est pas une contrepartie, art. 181(5)).
+  **Revenu Québec** (bons de réduction remboursables) applique la même règle à la TVQ : le bon « réduit le total de la facture comme
+  un paiement en argent », TPS et TVQ calculées sur le prix de l'article sans tenir compte du bon. Exemple officiel : article 25 $,
+  bon 10 $ : TPS 1,25 $, TVQ 2,49 $, le client paie 18,74 $. Le bon **non remboursable** (celui du magasin) peut, lui, réduire la
+  base de taxe : c'est la remise F1, qui n'a pas changé.
+- **Modèle retenu : le coupon est un MOYEN DE PAIEMENT** (part `type: 6`, modèle des cartes-cadeaux F9), jamais une remise. Le devis,
+  les lignes, les taxes et le total de la vente sont ceux du prix plein ; seul le **dû** diminue. Aucune ligne dans la table des
+  paiements : la part est cumulée dans `order.manufacturer_coupon_applied`, chaque coupon a sa ligne dans `pos_manufacturer_coupon`.
+  Plusieurs coupons par vente. Vente au comptoir seulement (`orderSource` 2, vente de type 1) : 409 `COUPON_PAYMENT_INVALID` sinon.
+  Les remises F1, les prix promotionnels et le tunnel web sont inchangés.
+
+### Réglages (fiche Entreprise, panneau « Coupons de fabricant (caisse) » ; `settings.coupons`, `settings.approvals.manufacturerCoupon`)
+
+| Réglage | Défaut | Effet |
+|---|---|---|
+| Coupons de fabricant acceptés | **non** | 409 `COUPON_DISABLED` sur tout coupon (devis et vente) |
+| Montant maximal de coupons par vente sans validation (cents) | 2000 (20 $) | au-delà du **total** des coupons de la vente : validation C3 action **`manufacturer_coupon`**, contexte `{amount}` ; 0 = toujours ; intégrée aux validations groupées P2-a (un seul jeton avec les remises, articles libres et prix manuels) ; jamais pour un responsable |
+
+`GET /api/pos/settings` : `coupons {enabled, maxWithoutApproval, barcodeFormats: ["gs1_databar_8110", "upc_a_5"], taxOnFullPrice: true, offline: false}`,
+`approvals.manufacturerCoupon {required, threshold}`. **Hors ligne** : part de type 6 refusée à la synchronisation (`OFFLINE_SALE_INVALID`,
+« coupons de fabricant indisponibles hors ligne »), comme les cartes-cadeaux.
+
+### Lecture d'un code-barres : `POST /api/pos/coupons/parse {barcode}` (caisse)
+
+Formats : **GS1 DataBar Expanded, identificateur d'application 8110** (norme nord-américaine, GS1 US / GS1 Canada ; préfixe `(8110)` ou
+`]e0` accepté) et **ancien UPC-A à système numérique 5**. Réponse : `{format, companyPrefix, offerCode, saveValue (cents), saveValueCode,
+valueCode (fixed_amount | free_item | buy_x_get_y | percent_off | …), amount, amountReliable, expiresAt, startsAt, serial, familyCode,
+purchaseRequirement {value, code}, retailerId, complete, expired, alreadyUsed}`. **`amountReliable: true`** seulement pour un montant fixe
+(code de valeur 0 ou absent) sur un code entièrement lu : sinon `amount: null` et le POS **demande toujours le montant au caissier**.
+Fiables : préfixe du fabricant, code d'offre, montant fixe, date d'expiration et numéro de série s'ils sont présents. Non fiables sans
+les données du fabricant : exigences d'achat, codes famille, « article gratuit », « deux pour un », pourcentage. UPC-A système 5 : seul le
+fabricant se lit, le code de valeur à deux chiffres suppose une table que l'on ne reproduit pas. 422 `COUPON_BARCODE_INVALID` sinon.
+La structure DataBar vient de la norme NACAG et reste **à valider sur de vrais coupons** (recette prévue) ; `alreadyUsed` n'est renseigné
+qu'avec un numéro de série (`null` sinon).
+
+Exemples pour les tests du POS :
+
+| Code-barres | Réponse attendue |
+|---|---|
+| `81100012345123456320011000032712315000012390000` (DataBar 8110, montant fixe) | `format: gs1_databar_8110, companyPrefix: "012345", offerCode: "123456", saveValue: 200, amount: 200, amountReliable: true, expiresAt: "2027-12-31", serial: "000123", valueCode: fixed_amount, complete: true` |
+| `811000123456543211011000091000` (DataBar 8110, code de valeur 1 « article gratuit ») | `companyPrefix: "012345", offerCode: "654321", saveValue: 0, saveValueCode: "1", valueCode: free_item, amount: null, amountReliable: false, serial: null, alreadyUsed: null` → le caissier saisit le montant |
+| `512345123257` (UPC-A système 5) | `format: upc_a_5, companyPrefix: "12345", familyCode: "123", valueCode: "25", amount: null, amountReliable: false` → le caissier saisit le montant ; `512345123250` → 422 (chiffre de contrôle) |
+
+### Devis et vente
+
+- **Devis** `POST /api/pos/quote` : `coupons: [{amount (cents, requis si le code-barres ne le donne pas), manufacturer (requis sans
+  code-barres lisible), barcode?, offerCode?, serial?, productVariantId?, expiresAt? (AAAA-MM-JJ)}]` → ajoute `manufacturerCoupons
+  {count, total, coupons: [{amount, manufacturer, companyPrefix, offerCode, serial, format, source: scan | manual, productVariantId,
+  expiresAt, amountReliable}]}`, et **`amountDue` / `cashAmountDue`** diminués du total des coupons (après les cartes-cadeaux si
+  `giftCards` est aussi envoyé). `total`, `taxes`, `lines` inchangés. Sans code-barres, `manufacturer` libre ; avec un code-barres sans
+  fabricant saisi : `GS1 <préfixe>`.
+- Refus (devis et vente) : 409 `COUPON_DISABLED` ; 422 `COUPON_AMOUNT_INVALID` (montant absent ou ≤ 0) ; 422 **`COUPON_EXCEEDS_ITEM`**
+  (montant > net de la ligne concernée, toutes ses unités ; sans ligne : > net des articles) ; 422 `COUPON_EXCEEDS_DUE` (total des coupons
+  > dû) ; 422 `COUPON_ITEM_NOT_IN_SALE` ; **422 `COUPON_EXPIRED`** quand la date d'expiration est lue ou saisie (le caissier retire le
+  coupon, jamais de forçage ; sans date lisible, aucun contrôle) ; **409 `COUPON_ALREADY_USED`** quand le même coupon (fabricant + offre +
+  numéro de série) a déjà été accepté sur le site et n'a pas été annulé par un retour avant réclamation (sans série, aucun contrôle).
+  Chaque refus est journalisé `MANUFACTURER_COUPON_REFUSED {reason: already_used | expired, …}`, y compris en vente (réécrit après le
+  retour arrière de la transaction, `inSale: true`).
+- **Vente** `POST /api/order/create-multi-payment` : une part par coupon `{type: 6, amount (dollars, comme les autres parts), coupon:
+  {manufacturer?, barcode?, offerCode?, serial?, productVariantId?, expiresAt?}}` (`manufacturer` ou `barcode` requis : 400
+  `PAYMENT_METHODS_INVALID`). Les parts couvrent total + arrondi − crédit, coupons compris ; contrôles ci-dessus **avant** toute
+  validation C3 ; enregistrement dans la transaction (ligne verrouillée), `MANUFACTURER_COUPON_REDEEMED` par coupon. Réponse : clés
+  ajoutées **`manufacturerCouponApplied`** (dollars) et une entrée `payments[] {type: 6, label: "Coupon fabricant – <fabricant> (offre
+  …)", amount, coupon {manufacturer, offerCode, status}}` ; `amountDue` = total + arrondi − crédit − cartes-cadeaux − coupons ; taxes et
+  total inchangés. Échange F2 (`sale` de `POST /api/pos/exchanges`) : même corps. Terminal C4 : `otherPayments: [{type: 6, amount}]`
+  accepté, part carte = total − espèces − coupons.
+- **Ticket** (impression, réimpression, courriel, page publique) : une ligne « Coupon fabricant – <marque> » dans les paiements, taxes
+  calculées sur le prix plein.
+
+### Retours (F2) et annulations
+
+- `GET /api/pos/returns/lookup` : `payments.manufacturerCoupons {total, items: [{id, orderItemId, manufacturer, amount, status}]}`.
+- `POST /api/pos/returns` : le remboursement est le **montant réellement payé par le client** ; la part coupon des unités retournées
+  n'est jamais rendue (coupon lié à une ligne : au prorata des unités retournées ; coupon sans ligne : au prorata du net retourné).
+  Réponse : `manufacturerCoupons {notRefunded, voided, returnedAfterClaim, coupons}`. Un coupon dont la ligne est entièrement retournée
+  (cumul des retours), ou tout coupon quand toute la vente est retournée : **`voided`** s'il n'était pas encore réclamé (il sort du
+  rapport et libère son numéro de série), **`returned_after_claim`** s'il l'était déjà (le fabricant a déjà remboursé une vente défaite :
+  à régulariser avec lui, section à part du rapport). Journal `MANUFACTURER_COUPON_VOIDED`.
+- `POST /api/order/cancel/{id}` d'une vente avec coupons : montant rendu = total − coupons ; coupons annulés ou « retournés après
+  réclamation » de la même façon ; journal `REFUND.data.manufacturerCoupons`.
+
+### Réclamation (responsable ; page EasyAdmin « Coupons de fabricant (caisse) », `/admin/pos/coupons`)
+
+| Méthode, route | Réponse |
+|---|---|
+| `GET /api/pos/coupons/claims?from&to&manufacturer&status` | `{period, status, manufacturer, count, total, taxFractions {TPS, TVQ…}, taxRule, byManufacturer: [{manufacturer, count, total, taxFractions}], coupons: [...]}` ; `status` : `to_claim` (défaut), `claimed`, `returned_after_claim`, `voided`, `all` ; période = date d'acceptation (fuseau du magasin), défaut mois en cours |
+| `GET /api/pos/coupons/claims.csv?…` | CSV « ; », virgule décimale, BOM : Fabricant, Préfixe GS1, Code offre, Numéro de série, Accepté le, Vente, Montant, Statut, Réclamé le, Lot, Source, Fraction <taxe>… |
+| `POST /api/pos/coupons/claims/mark {from, to, manufacturer?}` | coupons **à réclamer** de la période passés en `claimed` dans un lot `CL-<horodatage>-<aléa>` : `{batch, count, total, byManufacturer, period}` ; 409 `NOTHING_TO_CLAIM` ; journal `MANUFACTURER_COUPONS_CLAIMED` |
+
+Caissier : 403 `FORBIDDEN`. **Fraction de taxe** d'un coupon = montant × taux / (100 + taux) par taxe (TPS 5/105, TVQ 9,975/109,975 :
+25,00 $ → 1,19 $ et 2,27 $) : information pour le comptable (CTI / RTI), **aucune écriture automatique**.
+
+### Rapports X et Z, export comptable (F14)
+
+- X et Z : bloc **`manufacturerCoupons {count, total, voided}`** (acceptés sur la session, annulés par les retours de la session) ;
+  `sales.manufacturerCoupons` (espèces + cartes + cartes-cadeaux + coupons = total des ventes).
+- Plan de comptes : clé **`coupon_receivable`** (défaut 1050 « Coupons de fabricant à recevoir », actif). Écritures : encaissement par
+  coupon au **débit** de ce compte (« Coupons de fabricant acceptés »), coupons annulés par les retours au **crédit** (« Coupons de
+  fabricant annulés (retours) ») ; le règlement du fabricant (banque contre coupons à recevoir) se passe hors caisse. Synthèse CSV : deux
+  colonnes ajoutées **en fin**, « Coupons fabricant acceptés » et « Coupons fabricant annulés ».
+
+### Journal
+
+`MANUFACTURER_COUPON_REDEEMED`, `MANUFACTURER_COUPON_REFUSED`, `MANUFACTURER_COUPON_VOIDED`, `MANUFACTURER_COUPONS_CLAIMED` ; les
+entrées portent fabricant, préfixe, offre, série et montant, jamais de donnée personnelle.
 
 ## Mécanique interne
 

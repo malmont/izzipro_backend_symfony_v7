@@ -37,6 +37,7 @@ class ChartOfAccounts
         'stripe_payout' => ['1020', 'Banque'],
         'gift_card_liability' => ['2400', 'Cartes-cadeaux en circulation'],
         'store_credit_liability' => ['2410', 'Avoirs clients'],
+        'coupon_receivable' => ['1050', 'Coupons de fabricant à recevoir'], // F17 (01/11/2026) : part des ventes réglée par coupon, remboursée par le fabricant
         'cash_discrepancy' => ['6900', 'Écarts de caisse'],
         'cash_rounding' => ['6910', 'Arrondis des espèces'],
         'suspense' => ['9999', 'Compte d\'attente'],

@@ -101,6 +101,10 @@ class Order
     #[ORM\Column(nullable: true)]
     private ?int $giftCardApplied = null;
 
+    /** Part réglée par coupons de fabricant (F17, 01/11/2026, cents) : moyen de paiement remboursé par un tiers, taxes sur le prix plein */
+    #[ORM\Column(nullable: true)]
+    private ?int $manufacturerCouponApplied = null;
+
     /** Client de caisse rattaché (F8, 28/10/2026 : pos_customer ; user_id reste le caissier pour une vente en caisse) */
     #[ORM\Column(nullable: true)]
     private ?int $customerId = null;
@@ -483,6 +487,8 @@ class Order
     public function getCreditApplied(): int { return $this->creditApplied ?? 0; }
     public function setCreditApplied(?int $cents): static { $this->creditApplied = $cents !== null && $cents > 0 ? $cents : null; return $this; }
     public function getGiftCardApplied(): int { return $this->giftCardApplied ?? 0; }
+    public function getManufacturerCouponApplied(): int { return $this->manufacturerCouponApplied ?? 0; }
+    public function setManufacturerCouponApplied(?int $cents): static { $this->manufacturerCouponApplied = $cents !== null && $cents > 0 ? $cents : null; return $this; }
     public function getCustomerId(): ?int { return $this->customerId; }
     public function setCustomerId(?int $id): static { $this->customerId = $id; return $this; }
     public function setGiftCardApplied(?int $cents): static { $this->giftCardApplied = $cents !== null && $cents > 0 ? $cents : null; return $this; }

@@ -483,6 +483,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('IIZIMANAGER');
         yield MenuItem::linkToRoute('Exports comptables (caisse)', 'fas fa-file-csv', 'admin_pos_exports'); // F14 (29/10/2026)
         yield MenuItem::linkToRoute('Archive annuelle (caisse)', 'fas fa-archive', 'admin_pos_archive'); // A1 (30/10/2026)
+        yield MenuItem::linkToRoute('Coupons de fabricant (caisse)', 'fas fa-ticket-alt', 'admin_pos_coupons'); // F17 (01/11/2026)
         yield MenuItem::linkToCrud('Collections', 'fas fa-archive', Collections::class);
         yield MenuItem::linkToCrud('Commandes', 'fas fa-shopping-cart', Commande::class);
         yield MenuItem::linkToCrud('Notes de Frais', 'fas fa-receipt', NoteDeFrais::class);

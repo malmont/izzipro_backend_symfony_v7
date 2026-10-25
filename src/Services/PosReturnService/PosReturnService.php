@@ -69,6 +69,7 @@ class PosReturnService
         private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards, // cartes-cadeaux et avoirs (F9, 27/10/2026)
         private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client (F8, 28/10/2026)
         private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
+        private readonly \App\Services\PosCouponService\PosCouponService $coupons, // coupons de fabricant (F17, 01/11/2026)
     ) {
     }
 
@@ -173,6 +174,8 @@ class PosReturnService
             'payments' => ['cash' => $paid['cash'], 'card' => $paid['card'], 'other' => $paid['other'],
                 // Cartes-cadeaux et avoirs (F9) : part réglée par carte ou avoir et part encore recréditable
                 'giftCard' => $order->getGiftCardApplied(), 'giftCardRefundable' => (int) array_sum($em->getRepository(\App\Entity\PosGiftCardTransaction::class)->redeemedAvailable((int) $order->getId())),
+                // Coupons de fabricant (F17) : part réglée par coupons, jamais remboursée au client ; détail (statut : à réclamer, réclamé, annulé)
+                'manufacturerCoupons' => ['total' => $order->getManufacturerCouponApplied(), 'items' => array_map(fn ($c) => ['id' => $c->getId(), 'orderItemId' => $c->getOrderItemId(), 'manufacturer' => $c->getManufacturer(), 'amount' => $c->getAmount(), 'status' => $c->getStatus()], $this->coupons->couponsOf($order))],
                 'terminal' => $terminal ? ['paymentId' => $terminal->getId(), 'paymentMethodType' => $terminal->getPaymentMethodType(), 'cardBrand' => $terminal->getCardBrand(), 'last4' => $terminal->getLast4(), 'refundable' => $terminal->getRefundable()] : null],
             'refunded' => $refunded,
             'lines' => $lines,
@@ -248,6 +251,9 @@ class PosReturnService
         }
         $creditApplied = min(max(0, $creditApplied), $total);
         $toRefund = $total - $creditApplied;
+        // Coupons de fabricant (F17) : la part coupon des unités retournées n'est jamais remboursée au client (remboursement = ce qu'il a réellement payé)
+        $couponPart = $original !== null ? $this->coupons->attributed($original, $lines) : ['notRefunded' => 0, 'coupons' => []];
+        $toRefund = max(0, $toRefund - $couponPart['notRefunded']);
 
         // Validation d'un responsable (C3) : action return, contexte {orderId, amount}
         $this->approvals->requireFor(PosApprovalService::RETURN, $user, ['orderId' => $original?->getId() ?? 0, 'amount' => $total], $total);
@@ -352,6 +358,9 @@ class PosReturnService
         }
         // Fidélité (F8) : reprise des points de la vente d'origine au prorata du net remboursé
         $loyaltyReturned = $original !== null ? $this->loyalty->onReturn($original, $subtotal, (int) $returnOrder->getId(), $caisse, $user) : ['points' => 0, 'shortfall' => 0];
+        // Coupons de fabricant (F17) : coupon d'une ligne entièrement retournée (cumul) ou de toute la vente → annulé, ou « retourné après réclamation »
+        $couponsVoided = $original !== null && $couponPart['notRefunded'] > 0
+            ? $this->coupons->onReturn($original, $returnOrder, $this->cumulativeReturned($original, $lines), false, $caisse, $user) : ['voided' => 0, 'returnedAfterClaim' => 0, 'coupons' => []];
         $em->flush();
 
         $this->audit->record(PosAuditService::REFUND, [
@@ -362,6 +371,7 @@ class PosReturnService
             'amount' => $total, 'creditApplied' => $creditApplied, 'cashRefund' => $cashRefund, 'cardRefund' => $cardRefund, 'cashRounding' => $cashRounding,
             'giftCardRefund' => $giftRefund, 'storeCredit' => $storeCredit ? ['giftCardId' => $storeCredit['card']->getId(), 'last4' => $storeCredit['card']->getLast4(), 'amount' => $storeCreditAmount] : null,
             'customerId' => $customerId, 'loyaltyReturned' => $loyaltyReturned,
+            'manufacturerCoupons' => ['notRefunded' => $couponPart['notRefunded'], 'voided' => $couponsVoided['voided'], 'returnedAfterClaim' => $couponsVoided['returnedAfterClaim']], // F17
             'terminal' => $terminal ? ['paymentId' => $terminal->getId(), 'refundId' => $terminalRefundId, 'paymentMethodType' => $terminal->getPaymentMethodType()] : null,
             'subTotal' => $subtotal, 'totalTax' => $taxTotal, 'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'amount' => $t['amount']], $taxes),
         ], $caisse, null, 'order', $returnOrder->getId(), $user);
@@ -396,6 +406,8 @@ class PosReturnService
             'reason' => ['code' => $return->getReasonCode(), 'text' => $return->getReasonText()], 'restock' => $return->isRestock(),
             'customerId' => $returnOrder->getCustomerId(), // fiche client (F8)
             'loyalty' => $this->loyalty->returnSummary((int) $returnOrder->getId()), // points repris {returned, shortfall (déjà dépensés), balance} ou null
+            // Coupons de fabricant (F17) : part coupon non remboursée au client (= montant − crédit − espèces exactes − carte − carte-cadeau − avoir), coupons annulés par ce retour
+            'manufacturerCoupons' => $this->couponSummary($return),
             'lines' => $lines,
             'taxes' => array_values(array_map(fn (OrderTax $t) => ['label' => $t->getTax()?->getName(), 'amount' => -(int) round((float) $t->getAmount())], $returnOrder->getOrderTaxes()->toArray())),
             'createdAt' => $return->getCreatedAt()->format(\DateTimeInterface::ATOM),
@@ -530,6 +542,38 @@ class PosReturnService
     }
 
     /** Total des lignes taxables (assiette des taxes ; une ligne libre non taxable, F7, n'en fait pas partie) */
+    /** @return array<int, int> quantités retournées par ligne, cumul des retours précédents et de celui-ci */
+    private function cumulativeReturned(Order $original, array $lines): array
+    {
+        $cumulative = $this->emProvider->getEntityManager()->getRepository(PosReturn::class)->returnedQuantities($original);
+        foreach ($lines as $l) {
+            $id = (int) $l['item']->getId();
+            $cumulative[$id] = ($cumulative[$id] ?? 0) + (int) $l['quantity'];
+        }
+
+        return $cumulative;
+    }
+
+    /** @return array{notRefunded: int, voided: int, returnedAfterClaim: int, coupons: list<array>} */
+    private function couponSummary(PosReturn $return): array
+    {
+        $original = $return->getOrder();
+        $out = ['notRefunded' => 0, 'voided' => 0, 'returnedAfterClaim' => 0, 'coupons' => []];
+        if ($original === null || $original->getManufacturerCouponApplied() === 0) {
+            return $out;
+        }
+        $storeCredit = $return->getStoreCreditId() ? (int) $return->getAmount() - $return->getCreditApplied() : 0; // avoir = tout le remboursement
+        $out['notRefunded'] = max(0, $return->getAmount() - $return->getCreditApplied() - ($return->getCashRefund() - $return->getCashRounding()) - $return->getCardRefund() - $return->getGiftCardRefund() - $storeCredit);
+        foreach ($this->coupons->couponsOf($original) as $c) {
+            if ($c->getReturnOrderId() === $return->getReturnOrder()->getId()) {
+                $out[$c->getStatus() === \App\Entity\PosManufacturerCoupon::VOIDED ? 'voided' : 'returnedAfterClaim'] += $c->getAmount();
+                $out['coupons'][] = ['id' => $c->getId(), 'manufacturer' => $c->getManufacturer(), 'amount' => $c->getAmount(), 'status' => $c->getStatus()];
+            }
+        }
+
+        return $out;
+    }
+
     private function itemsTotal(Order $order): int
     {
         return (int) array_sum(array_map(fn (OrderItems $i) => $i->isTaxable() ? (int) round((float) $i->getTotalPrice()) : 0, $order->getOrderItems()->toArray()));

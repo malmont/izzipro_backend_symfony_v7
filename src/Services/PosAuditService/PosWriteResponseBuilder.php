@@ -22,7 +22,8 @@ class PosWriteResponseBuilder
 {
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly CaisseService $caisseService, private readonly PosReceiptService $receipts, private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments, private readonly \App\Services\PosReturnService\PosReturnService $returns, private readonly PosReceiptLinkService $links,
         private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards, // cartes-cadeaux et avoirs (F9, 27/10/2026)
-        private readonly \App\Services\PosCustomerService\PosCustomerService $customers) // fiche client et fidélité (F8, 28/10/2026)
+        private readonly \App\Services\PosCustomerService\PosCustomerService $customers, // fiche client et fidélité (F8, 28/10/2026)
+        private readonly \App\Services\PosCouponService\PosCouponService $coupons) // coupons de fabricant (F17, 01/11/2026)
     {
     }
 
@@ -55,7 +56,7 @@ class PosWriteResponseBuilder
         }
 
         return PosReceiptDto::fromOrder($order, $em->getRepository(Entreprise::class)->findOneBy([]), $this->caisseService->getCaisseOfOrder($order), $locale, $receipts,
-            $this->terminalPayments->findByOrder((int) $order->getId()), $receipt ? $this->links->url($receipt) : null, $duplicate, $receipt, $giftCards, $this->customers->receiptBlock($order));
+            $this->terminalPayments->findByOrder((int) $order->getId()), $receipt ? $this->links->url($receipt) : null, $duplicate, $receipt, $giftCards, $this->customers->receiptBlock($order), $this->coupons->receiptBlock($order));
     }
 
     /** POST /api/order/cancel/{id} d'une vente au comptoir (200) : dernier avoir de la commande */

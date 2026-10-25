@@ -104,7 +104,7 @@ class PosAccountingExportService
             $header[] = $l;
         }
         $header = array_merge($header, ['Ventes TTC', 'Encaissé espèces', 'Encaissé carte déclarée', 'Encaissé terminal carte', 'Encaissé Interac', 'Encaissé PayPal', 'Réglé par carte-cadeau', 'Réglé par avoir',
-            'Retours (nombre)', 'Retours TTC', 'Remboursé espèces', 'Remboursé carte', 'Recrédit cartes-cadeaux', 'Avoirs émis', 'Cartes-cadeaux vendues (nombre)', 'Cartes-cadeaux vendues', 'Cartes-cadeaux remboursées', 'Écart de caisse', 'Dépôt en banque', 'Entrées de fond', 'Sorties de fond', 'Dépôts', 'Retraits']);
+            'Retours (nombre)', 'Retours TTC', 'Remboursé espèces', 'Remboursé carte', 'Recrédit cartes-cadeaux', 'Avoirs émis', 'Cartes-cadeaux vendues (nombre)', 'Cartes-cadeaux vendues', 'Cartes-cadeaux remboursées', 'Écart de caisse', 'Dépôt en banque', 'Entrées de fond', 'Sorties de fond', 'Dépôts', 'Retraits', 'Coupons fabricant acceptés', 'Coupons fabricant annulés']); // deux colonnes ajoutées en fin (F17)
         $rows = [];
         $f = fn (int $c) => AccountingCsv::fr($c);
         foreach ($export['days'] as $d) {
@@ -115,7 +115,7 @@ class PosAccountingExportService
             }
             $rows[] = array_merge($row, [$f($d['salesTtc']), $f($d['receipts']['cash']), $f($d['receipts']['declaredCard']), $f($d['receipts']['card']), $f($d['receipts']['interac']), $f($d['receipts']['paypal']), $f($d['receipts']['giftCard']), $f($d['receipts']['storeCredit']),
                 $d['returnsCount'], $f($d['refundsTtc']), $f($d['refunds']['cash']), $f($d['refunds']['card'] + $d['refunds']['interac']), $f($d['refunds']['giftCard']), $f($d['refunds']['storeCredit']), $d['giftCardsSoldCount'], $f($d['giftCardsSold']), $f($d['giftCardsRefunded']),
-                $f($d['discrepancy']), $f($d['bankDeposit']), $f($d['fundDeposits']), $f($d['fundWithdrawals']), $f($d['deposits']), $f($d['withdrawals'])]);
+                $f($d['discrepancy']), $f($d['bankDeposit']), $f($d['fundDeposits']), $f($d['fundWithdrawals']), $f($d['deposits']), $f($d['withdrawals']), $f($d['receipts']['coupon'] ?? 0), $f($d['refunds']['coupon'] ?? 0)]);
         }
 
         return AccountingCsv::write($header, $rows);
@@ -174,7 +174,7 @@ class PosAccountingExportService
         }
         $in = fn (array $ids) => $ids ? implode(',', $ids) : '0';
         // Ventes : net HT (lignes), brut HT (lignes + remises), TTC, arrondi, remises, récompenses fidélité (remise de ticket « Récompense fidélité »)
-        $sales = $conn->fetchAssociative('SELECT COUNT(*) AS n, COALESCE(SUM(total_amount), 0) AS ttc, COALESCE(SUM(cash_rounding), 0) AS rounding, COALESCE(SUM(gift_card_applied), 0) AS gift, COALESCE(SUM(credit_applied), 0) AS credit FROM "order" WHERE id IN (' . $in($saleIds) . ')');
+        $sales = $conn->fetchAssociative('SELECT COUNT(*) AS n, COALESCE(SUM(total_amount), 0) AS ttc, COALESCE(SUM(cash_rounding), 0) AS rounding, COALESCE(SUM(gift_card_applied), 0) AS gift, COALESCE(SUM(manufacturer_coupon_applied), 0) AS coupon, COALESCE(SUM(credit_applied), 0) AS credit FROM "order" WHERE id IN (' . $in($saleIds) . ')');
         $items = $conn->fetchAssociative('SELECT COALESCE(SUM(total_price), 0) AS net, COALESCE(SUM(total_price + discount_amount), 0) AS gross, COALESCE(SUM(discount_amount), 0) AS discounts FROM order_items WHERE order_associated_id IN (' . $in($saleIds) . ')');
         $rewards = (int) $conn->fetchOne('SELECT COALESCE(SUM(amount), 0) FROM pos_loyalty_transaction WHERE kind = \'redeem\' AND order_id IN (' . $in($saleIds) . ')');
         $taxes = [];
@@ -183,7 +183,7 @@ class PosAccountingExportService
             $taxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'base' => (int) $conn->fetchOne('SELECT COALESCE(SUM(total_price), 0) FROM order_items WHERE taxable AND order_associated_id IN (' . $in($saleIds) . ')'), 'tax' => (int) round((float) $t['tax'])];
         }
         // Encaissements des ventes par moyen (paiements positifs), terminal / Interac / déclarée pour la carte
-        $receipts = ['cash' => 0, 'declaredCard' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => (int) $sales['gift'], 'storeCredit' => 0];
+        $receipts = ['cash' => 0, 'declaredCard' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => (int) $sales['gift'], 'storeCredit' => 0, 'coupon' => (int) $sales['coupon']]; // coupon : F17
         $redeemed = $conn->fetchAllAssociative('SELECT c.kind, COALESCE(SUM(-tx.amount), 0) AS amount FROM pos_gift_card_transaction tx JOIN pos_gift_card c ON c.id = tx.gift_card_id WHERE tx.kind = \'redeem\' AND tx.order_id IN (' . $in($saleIds) . ') GROUP BY c.kind');
         foreach ($redeemed as $r) {
             if ($r['kind'] === 'store_credit') {
@@ -199,7 +199,8 @@ class PosAccountingExportService
         foreach ($conn->fetchAllAssociative('SELECT t.name AS label, t.rate, COALESCE(SUM(-ot.amount), 0) AS tax FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $in($returnIds) . ') GROUP BY t.name, t.rate ORDER BY MIN(t.id)') as $t) {
             $refundTaxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'tax' => (int) round((float) $t['tax'])];
         }
-        $refunds = ['cash' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => 0, 'storeCredit' => 0];
+        $refunds = ['cash' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => 0, 'storeCredit' => 0,
+            'coupon' => (int) $conn->fetchOne("SELECT COALESCE(SUM(amount), 0) FROM pos_manufacturer_coupon WHERE voided_caisse_id = ? AND status IN ('voided', 'returned_after_claim')", [$caisseId])]; // coupons annulés par les retours de la session (F17)
         $pr = $conn->fetchAssociative('SELECT COALESCE(SUM(cash_refund), 0) AS cash, COALESCE(SUM(card_refund), 0) AS card, COALESCE(SUM(gift_card_refund), 0) AS gift, COALESCE(SUM(CASE WHEN store_credit_id IS NOT NULL THEN amount - credit_applied - cash_refund - card_refund - gift_card_refund ELSE 0 END), 0) AS credits FROM pos_return WHERE caisse_id = ?', [$caisseId]);
         $refunds['cash'] = (int) $pr['cash'];
         $refunds['card'] = (int) $pr['card'];
@@ -223,7 +224,7 @@ class PosAccountingExportService
         return [
             'salesCount' => (int) $sales['n'], 'salesTtc' => (int) round((float) $sales['ttc']), 'salesNetHt' => $netHt, 'salesGrossHt' => (int) round((float) $items['gross']),
             'discounts' => (int) round((float) $items['discounts']), 'loyaltyRewards' => $rewards, 'salesByTax' => $taxes, 'cashRounding' => (int) $sales['rounding'],
-            'receipts' => ['cash' => $receipts['cash'], 'card' => $receipts['card'] + $receipts['declaredCard'], 'declaredCard' => $receipts['declaredCard'], 'interac' => $receipts['interac'], 'paypal' => $receipts['paypal'], 'giftCard' => max(0, $receipts['giftCard']), 'storeCredit' => $receipts['storeCredit']],
+            'receipts' => ['cash' => $receipts['cash'], 'card' => $receipts['card'] + $receipts['declaredCard'], 'declaredCard' => $receipts['declaredCard'], 'interac' => $receipts['interac'], 'paypal' => $receipts['paypal'], 'giftCard' => max(0, $receipts['giftCard']), 'storeCredit' => $receipts['storeCredit'], 'coupon' => $receipts['coupon']], // coupon : F17
             'returnsCount' => (int) $returns['n'], 'refundsTtc' => (int) round((float) $returns['ttc']), 'refundsHt' => $refundsHt, 'refundsTaxes' => $refundTaxes, 'refunds' => $refunds,
             'giftCardsSoldCount' => $giftSoldCount, 'giftCardsSold' => ['cash' => $giftSold['cash'], 'card' => $giftSold['card'] + $giftSold['declaredCard'], 'interac' => $giftSold['interac'], 'stripe' => 0], 'giftCardsRefunded' => ['cash' => $giftRefunded],
             'discrepancy' => (int) ($z->getDiscrepancy() ?? 0), 'bankDeposit' => (int) ($z->getBankDeposit() ?? 0),
@@ -264,8 +265,8 @@ class PosAccountingExportService
     private static function emptyDay(string $day): array
     {
         return ['date' => $day, 'pieces' => [], 'salesCount' => 0, 'salesGrossHt' => 0, 'discounts' => 0, 'loyaltyRewards' => 0, 'salesNetHt' => 0, 'salesTtc' => 0, 'cashRounding' => 0, 'taxes' => [],
-            'receipts' => ['cash' => 0, 'declaredCard' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => 0, 'storeCredit' => 0], 'returnsCount' => 0, 'refundsTtc' => 0, 'refundsHt' => 0,
-            'refunds' => ['cash' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => 0, 'storeCredit' => 0], 'giftCardsSoldCount' => 0, 'giftCardsSold' => 0, 'giftCardsRefunded' => 0,
+            'receipts' => ['cash' => 0, 'declaredCard' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => 0, 'storeCredit' => 0, 'coupon' => 0], 'returnsCount' => 0, 'refundsTtc' => 0, 'refundsHt' => 0,
+            'refunds' => ['cash' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => 0, 'storeCredit' => 0, 'coupon' => 0], 'giftCardsSoldCount' => 0, 'giftCardsSold' => 0, 'giftCardsRefunded' => 0,
             'discrepancy' => 0, 'bankDeposit' => 0, 'deposits' => 0, 'withdrawals' => 0, 'fundDeposits' => 0, 'fundWithdrawals' => 0];
     }
 

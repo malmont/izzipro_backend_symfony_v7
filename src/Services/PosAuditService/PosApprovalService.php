@@ -32,7 +32,8 @@ class PosApprovalService
     public const GIFT_CARD_ADJUST = 'gift_card_adjust'; // ajustement manuel de solde ou remboursement en espèces au-delà du seuil (F9)
     public const GIFT_CARD_REPLACE = 'gift_card_replace'; // remplacement d'une carte perdue (F9)
     public const LOYALTY_ADJUST = 'loyalty_adjust'; // ajustement manuel de points (F8, 28/10/2026)
-    public const CUSTOMER_ERASE = 'customer_erase'; // effacement (anonymisation) d'une fiche client (F8)
+    public const CUSTOMER_ERASE = 'customer_erase';
+    public const MANUFACTURER_COUPON = 'manufacturer_coupon'; // coupons de fabricant au-delà du maximum par vente (F17, 01/11/2026) // effacement (anonymisation) d'une fiche client (F8)
     /** action → clés de contexte qui doivent correspondre */
     public const CONTEXT = [
         self::REFUND => ['orderId'],
@@ -50,6 +51,7 @@ class PosApprovalService
         self::GIFT_CARD_REPLACE => ['amount'], // solde reporté (cents)
         self::LOYALTY_ADJUST => ['customerId', 'points'], // points ajustés (valeur absolue)
         self::CUSTOMER_ERASE => ['customerId'],
+        self::MANUFACTURER_COUPON => ['amount'], // total des coupons de fabricant de la vente (cents)
     ];
     /** Clés de contexte textuelles (les autres sont numériques) */
     public const STRING_CONTEXT = ['scope'];

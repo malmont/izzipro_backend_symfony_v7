@@ -16,7 +16,8 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class PosQuoteController extends AbstractController
 {
-    public function __construct(private readonly PosDiscountService $discounts, private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards)
+    public function __construct(private readonly PosDiscountService $discounts, private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards,
+        private readonly \App\Services\PosCouponService\PosCouponService $coupons) // coupons de fabricant (F17, 01/11/2026)
     {
     }
 
@@ -34,6 +35,15 @@ class PosQuoteController extends AbstractController
             if (!empty($data['giftCards'])) {
                 $gift = $this->giftCards->preview($data['giftCards'], (int) $quote['total']);
                 $quote += ['giftCards' => $gift['giftCards'], 'giftCardApplied' => $gift['giftCardApplied'], 'amountDue' => $gift['amountDue'], 'cashAmountDue' => $gift['cashAmountDue']];
+            }
+            // Coupons de fabricant (F17) : contrôlés contre les lignes (montant ≤ prix de l'article, expiration, doublon de série) ; taxes et total
+            // inchangés (prix plein), seul le dû diminue ; clés ajoutées seulement si coupons est envoyé
+            if (!empty($data['coupons'])) {
+                $due = (int) ($quote['amountDue'] ?? $quote['total']);
+                $preview = $this->coupons->preview($data['coupons'], $quote, $due);
+                $quote['manufacturerCoupons'] = ['count' => $preview['count'], 'total' => $preview['total'], 'coupons' => $preview['coupons']];
+                $quote['amountDue'] = $preview['amountDue'];
+                $quote['cashAmountDue'] = $this->discounts->cashRound($preview['amountDue']);
             }
 
             return $this->json($quote);

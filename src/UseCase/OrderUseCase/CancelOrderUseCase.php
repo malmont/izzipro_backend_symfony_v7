@@ -38,7 +38,8 @@ class CancelOrderUseCase
         private readonly \App\Services\PosAuditService\PosIdempotencyService $idempotency,
         private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments,
         private readonly \App\Services\PosAuditService\PosApprovalContext $approvalContext,
-        private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty // fidélité (F8)
+        private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
+        private readonly \App\Services\PosCouponService\PosCouponService $coupons // coupons de fabricant (F17)
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
@@ -81,6 +82,11 @@ class CancelOrderUseCase
             $paymentTypeId = 1;
             $statusPaymentId = 2;
             $refundAmount = $order->getTotalAmount();
+            // Coupons de fabricant (F17) : la part réglée par coupon n'est jamais rendue au client ; les coupons sont annulés plus bas
+            $couponApplied = $order->getOrderSource()?->getId() === 2 ? $order->getManufacturerCouponApplied() : 0;
+            if ($couponApplied > 0) {
+                $refundAmount = max(0, (float) $refundAmount - $couponApplied);
+            }
             // Montants d'origine (remis à 0 plus bas) : conservés au journal de caisse et sur l'avoir (C2)
             $before = [
                 'totalAmount' => (int) round((float) $order->getTotalAmount()), 'subTotal' => (int) round((float) $order->getSubTotal()),
@@ -163,6 +169,8 @@ class CancelOrderUseCase
                 if ($terminal !== null && $terminal->getStatus() === \App\Entity\PosTerminalPayment::CAPTURED && $paymentMethod != 2) {
                     $this->terminalPayments->refundForCancel($terminal, $terminalRefundId, $refundedBy);
                 }
+                // Coupons de fabricant (F17) : annulés (ou « retournés après réclamation ») avec la vente
+                $couponsVoided = $couponApplied > 0 ? $this->coupons->onReturn($order, null, [], true, $caisse, $refundedBy) : null;
                 $this->handleCaisseTransactionUseCase->execute($caisse, $order, $refundedBy ?? $order->getUserId(), $refundAmount, $transactionTypeId, [], $caisseAmount,
                     $posCashRefund ? -($cashRefund - (int) round($refundAmount)) : null);
                 // Avoir (suite continue par poste) et entrée au journal, avec les montants d'origine (C2)
@@ -172,6 +180,7 @@ class CancelOrderUseCase
                     'creditNoteNumber' => $creditNote->getNumber(),
                     'refundAmount' => (int) round((float) $refundAmount), 'paymentMethod' => $paymentMethod,
                     'cashRefund' => $posCashRefund ? $cashRefund : 0,
+                    'manufacturerCoupons' => $couponsVoided !== null ? ['notRefunded' => $couponApplied, 'voided' => $couponsVoided['voided'], 'returnedAfterClaim' => $couponsVoided['returnedAfterClaim']] : null, // F17
                     'terminalRefund' => isset($terminal) && $terminal !== null && $terminal->getRefundStatus() !== null ? ['paymentId' => $terminal->getId(), 'refundId' => $terminal->getRefundId(), 'amount' => $terminal->getRefundAmount(), 'paymentMethodType' => $terminal->getPaymentMethodType()] : null,
                     'before' => $before, 'after' => ['totalAmount' => 0, 'subTotal' => 0, 'totalTax' => 0, 'status' => 7],
                 ], $caisse, null, 'order', $order->getId(), $refundedBy);

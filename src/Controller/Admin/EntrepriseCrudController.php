@@ -185,6 +185,11 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posGiftCardCashRefundMax', 'Remboursement en espèces d\'un solde : seuil (cents)')->setHelp('Jusqu\'à ce solde, le client peut exiger les espèces ; défaut 500 = 5,00 $ (Québec)')->hideOnIndex(),
             BooleanField::new('posGiftCardCashRefundBeyond', 'Remboursement en espèces au-delà du seuil (avec validation d\'un responsable)')->hideOnIndex(),
 
+            // Coupons de fabricant (F17, 01/11/2026) : désactivés par défaut
+            FormField::addPanel('Coupons de fabricant (caisse)')->setHelp('Bons de réduction émis par une marque et remboursés au commerçant par le fabricant ou une chambre de compensation. Acceptés comme un moyen de paiement : la TPS et la TVQ restent calculées sur le prix plein (Loi sur la taxe d\'accise, art. 181(2)). Rapport des coupons à réclamer : menu « Coupons de fabricant (caisse) ».'),
+            BooleanField::new('posCouponEnabled', 'Coupons de fabricant acceptés')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCouponMaxWithoutApproval', 'Coupons : montant maximal par vente sans validation (cents)')->setHelp('Total des coupons d\'une vente ; au-delà, validation d\'un responsable (action manufacturer_coupon). 0 = toujours une validation. Défaut 2000 (20 $).')->hideOnIndex(),
+
             // Article libre et prix manuel (F7, 26/10/2026) : désactivés par défaut
             FormField::addPanel('Article libre et prix manuel (caisse)')->setHelp('Article libre : vente d\'un article absent du catalogue (libellé, prix saisi, taxable ou non), sans mouvement de stock. Prix manuel : prix catalogue remplacé sur une ligne, avec motif. Au-delà du montant maximal, validation d\'un responsable ; vide = jamais, 0 = toujours.'),
             BooleanField::new('posCustomItemEnabled', 'Article libre autorisé')->hideOnIndex(),
