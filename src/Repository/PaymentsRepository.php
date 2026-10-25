@@ -23,9 +23,11 @@ class PaymentsRepository extends EntityRepository
      */
     public function getTotalPaymentsForCurrentWeek(string $paymentType, ?int $orderSource = null): float
     {
+        // Semaine du lundi 0 h au dimanche 23 h 59 min 59 s, comme la répartition journalière (correctif du 01/11/2026 : les bornes
+        // gardaient l'heure courante, et un paiement du dimanche postérieur à l'heure de la requête sortait du total)
         $now = new DateTime();
-        $startOfWeek = (clone $now)->modify('monday this week');
-        $endOfWeek = (clone $startOfWeek)->modify('+6 days');
+        $startOfWeek = (clone $now)->modify('monday this week')->setTime(0, 0, 0);
+        $endOfWeek = (clone $startOfWeek)->modify('+6 days')->setTime(23, 59, 59);
 
         $qb = $this->createQueryBuilder('p')
             ->select('SUM(p.amount)')
