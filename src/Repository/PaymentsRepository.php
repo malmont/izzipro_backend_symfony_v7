@@ -23,11 +23,12 @@ class PaymentsRepository extends EntityRepository
      */
     public function getTotalPaymentsForCurrentWeek(string $paymentType, ?int $orderSource = null): float
     {
-        // Semaine du lundi 0 h au dimanche 23 h 59 min 59 s, comme la répartition journalière (correctif du 01/11/2026 : les bornes
-        // gardaient l'heure courante, et un paiement du dimanche postérieur à l'heure de la requête sortait du total)
-        $now = new DateTime();
+        // Semaine du magasin : lundi 0 h → dimanche 23 h 59 min 59 s dans le fuseau du magasin (F14, StoreClock), bornes ramenées en UTC
+        // (correctifs du 01/11/2026 : les bornes gardaient l'heure courante et la journée était celle du serveur)
+        $now = $this->storeNow();
         $startOfWeek = (clone $now)->modify('monday this week')->setTime(0, 0, 0);
         $endOfWeek = (clone $startOfWeek)->modify('+6 days')->setTime(23, 59, 59);
+        [$startOfWeek, $endOfWeek] = [self::utc($startOfWeek), self::utc($endOfWeek)];
 
         $qb = $this->createQueryBuilder('p')
             ->select('SUM(p.amount)')
@@ -58,9 +59,12 @@ class PaymentsRepository extends EntityRepository
      */
     public function getDailyPaymentsForCurrentWeek(string $paymentType, ?int $orderSource = null): array
     {
-        $now = new DateTime();
-        $startOfWeek = (clone $now)->modify('monday this week')->setTime(0, 0, 0);
-        $endOfWeek = (clone $startOfWeek)->modify('+6 days')->setTime(23, 59, 59);
+        // Journées du magasin (fuseau de StoreClock, F14) : une vente du soir tombe dans son jour local, pas dans celui du serveur (01/11/2026)
+        $now = $this->storeNow();
+        $tz = $now->getTimezone();
+        $startLocal = (clone $now)->modify('monday this week')->setTime(0, 0, 0);
+        $endLocal = (clone $startLocal)->modify('+6 days')->setTime(23, 59, 59);
+        [$startOfWeek, $endOfWeek] = [self::utc($startLocal), self::utc($endLocal)];
 
         $qb = $this->createQueryBuilder('p')
             ->select('p.paymentDate as date, p.amount as amount')
@@ -78,13 +82,14 @@ class PaymentsRepository extends EntityRepository
         }
 
         $dailyPayments = [];
-        $period = new \DatePeriod($startOfWeek, new \DateInterval('P1D'), (clone $endOfWeek)->modify('+1 second'));
+        $period = new \DatePeriod($startLocal, new \DateInterval('P1D'), (clone $endLocal)->modify('+1 second'));
         foreach ($period as $date) {
             $dailyPayments[$date->format('Y-m-d')] = 0;
         }
         foreach ($qb->getQuery()->getResult() as $row) {
             $date = $row['date'];
-            $day = $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : substr((string) $date, 0, 10);
+            // Heure de paiement en base = UTC (heure du serveur) ; journée du magasin après conversion dans son fuseau
+            $day = $date instanceof \DateTimeInterface ? \DateTime::createFromInterface($date)->setTimezone(new \DateTimeZone('UTC'))->setTimezone($tz)->format('Y-m-d') : substr((string) $date, 0, 10);
             if (array_key_exists($day, $dailyPayments)) {
                 $dailyPayments[$day] = (float) $dailyPayments[$day] + (float) $row['amount'];
             }

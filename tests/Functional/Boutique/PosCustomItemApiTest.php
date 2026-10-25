@@ -256,8 +256,9 @@ class PosCustomItemApiTest extends WebTestCase
 
         $stats = $this->json($this->request('GET', '/api/payments/statistics/pos'));
         $week = $stats['current_week']['PaiementClient'];
-        $today = (new \DateTimeImmutable())->format('Y-m-d');
-        $monday = (new \DateTimeImmutable('monday this week'))->format('Y-m-d');
+        $storeTz = new \DateTimeZone('America/Toronto'); // journées du magasin (site de test au Québec), pas celles du serveur (01/11/2026)
+        $today = (new \DateTimeImmutable('now', $storeTz))->format('Y-m-d');
+        $monday = (new \DateTimeImmutable('monday this week', $storeTz))->format('Y-m-d');
         $this->assertSame(7, count($week['daily']), 'sept jours');
         $this->assertSame($monday, $week['daily'][0]['date'], 'la semaine commence lundi');
         $this->assertCount(7, array_unique(array_column($week['daily'], 'date')), 'une entrée par jour (plus une par horodatage)');
