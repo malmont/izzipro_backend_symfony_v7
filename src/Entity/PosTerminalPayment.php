@@ -153,6 +153,17 @@ class PosTerminalPayment
     /** Non persisté : secret client du PaymentIntent, rendu à l'application pour le canal sdk tant que la carte est attendue */
     public ?string $clientSecret = null;
 
+    // Destination du paiement (complément F9 / C4, 01/11/2026) : vente avec articles (sale) ou vente d'une carte-cadeau (gift_card) ;
+    // vérifiée au rattachement pour empêcher l'usage croisé
+    public const PURPOSE_SALE = 'sale';
+    public const PURPOSE_GIFT_CARD = 'gift_card';
+
+    #[ORM\Column(length: 16, options: ['default' => self::PURPOSE_SALE])]
+    private string $purpose = self::PURPOSE_SALE;
+
+    public function getPurpose(): string { return $this->purpose; }
+    public function setPurpose(string $purpose): static { $this->purpose = $purpose === self::PURPOSE_GIFT_CARD ? self::PURPOSE_GIFT_CARD : self::PURPOSE_SALE; return $this; }
+
     public function getChannel(): string { return $this->channel; }
     public function setChannel(string $channel): static { $this->channel = $channel === self::CHANNEL_SDK ? self::CHANNEL_SDK : self::CHANNEL_SERVER; return $this; }
     public function isSdk(): bool { return $this->channel === self::CHANNEL_SDK; }

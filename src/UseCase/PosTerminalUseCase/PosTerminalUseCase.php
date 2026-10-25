@@ -27,8 +27,17 @@ class PosTerminalUseCase
         if (!is_numeric($body['amount'] ?? null) || (int) $body['amount'] <= 0 || (float) $body['amount'] !== (float) (int) $body['amount']) {
             $errors[] = ['path' => 'amount', 'message' => 'entier positif en cents attendu'];
         }
-        if (empty($body['items']) || !is_array($body['items'])) {
-            $errors[] = ['path' => 'items', 'message' => 'au moins un article attendu'];
+        // Vente d'une carte-cadeau (complément F9 / C4) : giftCardAmount (cents) à la place de items, exactement l'un des deux
+        $giftCard = array_key_exists('giftCardAmount', $body) && $body['giftCardAmount'] !== null;
+        $hasItems = !empty($body['items']) && is_array($body['items']);
+        if ($giftCard && $hasItems) {
+            $errors[] = ['path' => 'giftCardAmount', 'message' => 'items ou giftCardAmount, pas les deux'];
+        } elseif ($giftCard) {
+            if (!is_numeric($body['giftCardAmount']) || (int) $body['giftCardAmount'] <= 0 || (float) $body['giftCardAmount'] !== (float) (int) $body['giftCardAmount']) {
+                $errors[] = ['path' => 'giftCardAmount', 'message' => 'entier positif en cents attendu (montant de la carte-cadeau)'];
+            }
+        } elseif (!$hasItems) {
+            $errors[] = ['path' => 'items', 'message' => 'au moins un article attendu (ou giftCardAmount pour une carte-cadeau)'];
         }
         $others = [];
         foreach (is_array($body['otherPayments'] ?? null) ? $body['otherPayments'] : [] as $i => $other) {
@@ -44,7 +53,7 @@ class PosTerminalUseCase
 
         $reader = is_array($body['reader'] ?? null) ? array_intersect_key($body['reader'], array_flip(['id', 'label', 'type'])) : null; // kit (F13/F16) : lecteur déclaré par l'application, journal seulement
 
-        return $this->payments->start($user, is_numeric($body['cashRegisterId'] ?? null) ? (int) $body['cashRegisterId'] : null, $body['items'], $others, (int) $body['amount'], $posKey, is_array($body['ticketDiscount'] ?? null) ? $body['ticketDiscount'] : null, $reader);
+        return $this->payments->start($user, is_numeric($body['cashRegisterId'] ?? null) ? (int) $body['cashRegisterId'] : null, $hasItems ? $body['items'] : [], $others, (int) $body['amount'], $posKey, is_array($body['ticketDiscount'] ?? null) ? $body['ticketDiscount'] : null, $reader, $giftCard ? (int) $body['giftCardAmount'] : null);
     }
 
     public function get(int $id, ?User $user = null): PosTerminalPayment

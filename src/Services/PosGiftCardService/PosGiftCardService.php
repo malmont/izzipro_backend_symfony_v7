@@ -271,7 +271,7 @@ class PosGiftCardService
         $terminalParts = [];
         foreach ($methods as $m) {
             if ($m->getTerminalPaymentId() !== null) {
-                $terminalParts[] = [$m, $this->terminalPayments->verifyForSale($m->getTerminalPaymentId(), (int) round($m->getAmount() * 100), $register)];
+                $terminalParts[] = [$m, $this->terminalPayments->verifyForSale($m->getTerminalPaymentId(), (int) round($m->getAmount() * 100), $register, \App\Entity\PosTerminalPayment::PURPOSE_GIFT_CARD)]; // paiement créé avec giftCardAmount (C4)
             }
         }
 

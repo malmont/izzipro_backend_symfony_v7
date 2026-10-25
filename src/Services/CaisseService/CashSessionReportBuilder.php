@@ -40,6 +40,7 @@ class CashSessionReportBuilder
         $rounding = ['count' => 0, 'total' => 0];
         $saleOrders = [];
         $refundOrders = [];
+        $giftOrders = []; // ventes de cartes-cadeaux (type 3) : hors ventes et chiffre d'affaires, mais leurs paiements terminal comptent dans cardTerminal (F9 / C4)
         $cashFlow = 0;
         foreach ($transactions as $t) {
             $type = (int) $t->getTransactionType()->getId();
@@ -84,6 +85,10 @@ class CashSessionReportBuilder
                     $movements['fundWithdrawals'] += -$cash;
                     break;
                 case Tx::GIFT_CARD_SALE: // cartes-cadeaux (F9) : espèces déjà dans cashFlow ; détail dans le bloc giftCards
+                    if ($t->getOrderCaisse()) {
+                        $giftOrders[$t->getOrderCaisse()->getId()] = $t->getOrderCaisse();
+                    }
+                    break;
                 case Tx::GIFT_CARD_REFUND:
                     break;
             }
@@ -121,7 +126,7 @@ class CashSessionReportBuilder
             'discrepancyThreshold' => $entreprise?->getPosDiscrepancyThreshold() ?? 0,
             'store' => StoreInfoDto::fromEntreprise($entreprise),
             // Terminal de paiement Stripe (C4, 23/10/2026) : ajout, ventilation par moyen inchangée
-            'cardTerminal' => $this->cardTerminal($saleOrders, $register),
+            'cardTerminal' => $this->cardTerminal($saleOrders, $register, $giftOrders),
             // Retours partiels et échanges (F2, 24/10/2026) : ajout ; les remboursements correspondants sont déjà dans refunds
             'returns' => $em->getRepository(\App\Entity\PosReturn::class)->totalsForSession((int) $session->getId()),
             // Ventes hors ligne synchronisées (C5 partie 2, 25/10/2026) : ajout
@@ -208,25 +213,36 @@ class CashSessionReportBuilder
     }
 
     /** Parts carte des ventes de la session : terminal (carte de crédit), Interac, carte déclarée ; paiements sans vente du poste */
-    private function cardTerminal(array $saleOrders, ?\App\Entity\CashRegister $register): array
+    private function cardTerminal(array $saleOrders, ?\App\Entity\CashRegister $register, array $giftOrders = []): array
     {
         $em = $this->emProvider->getEntityManager();
         $out = ['terminal' => 0, 'interac' => 0, 'declared' => 0, 'count' => 0, 'withoutSale' => 0];
+        $gift = ['terminal' => 0, 'interac' => 0, 'declared' => 0, 'count' => 0]; // détail des ventes de cartes-cadeaux (F9 / C4) : incluses dans les totaux ci-dessus
         $byOrder = [];
-        foreach ($em->getRepository(\App\Entity\PosTerminalPayment::class)->findByOrderIds(array_keys($saleOrders)) as $p) {
+        foreach ($em->getRepository(\App\Entity\PosTerminalPayment::class)->findByOrderIds(array_merge(array_keys($saleOrders), array_keys($giftOrders))) as $p) {
             $byOrder[$p->getOrderId()] = ($byOrder[$p->getOrderId()] ?? 0) + $p->getAmount();
-            $out[$p->isInterac() ? 'interac' : 'terminal'] += $p->getAmount();
+            $kind = $p->isInterac() ? 'interac' : 'terminal';
+            $out[$kind] += $p->getAmount();
             $out['count']++;
+            if (isset($giftOrders[$p->getOrderId()])) {
+                $gift[$kind] += $p->getAmount();
+                $gift['count']++;
+            }
         }
-        foreach ($saleOrders as $id => $order) {
+        foreach ($saleOrders + $giftOrders as $id => $order) {
             foreach ($order->getPayments() as $payment) {
                 $amount = (int) round((float) $payment->getAmount());
                 if ($payment->getPaymentMethod()?->getId() === 1 && $amount > 0) {
-                    $out['declared'] += max(0, $amount - ($byOrder[$id] ?? 0));
+                    $declared = max(0, $amount - ($byOrder[$id] ?? 0));
+                    $out['declared'] += $declared;
+                    if (isset($giftOrders[$id])) {
+                        $gift['declared'] += $declared;
+                    }
                     $byOrder[$id] = max(0, ($byOrder[$id] ?? 0) - $amount);
                 }
             }
         }
+        $out['giftCards'] = $gift;
         if ($register) {
             $out['withoutSale'] = count($em->getRepository(\App\Entity\PosTerminalPayment::class)->findOrphans($em->getRepository(Entreprise::class)->findOneBy([])?->getPosTerminalOrphanMinutes() ?? 5, $register));
         }

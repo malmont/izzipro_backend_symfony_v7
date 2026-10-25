@@ -99,7 +99,7 @@ final class SubscriptionService
         }
     }
 
-    /** @return array{subscription: Subscription, clientSecret: ?string, reused: bool} */
+    /** @return array{subscription: Subscription, clientSecret: ?string, intentType: ?string, reused: bool} */
     private function subscribeLocked(User $user, SubscriptionPlan $plan, int $quantity, ?Adress $address, ?Carrier $carrier, int $shippingAmount): array
     {
         $em = $this->emProvider->getEntityManager();
@@ -119,7 +119,7 @@ final class SubscriptionService
                 $this->applyStripeState($open, $state);
                 $em->flush();
 
-                return ['subscription' => $open, 'clientSecret' => $state['clientSecret'], 'reused' => true];
+                return ['subscription' => $open, 'clientSecret' => $state['clientSecret'], 'intentType' => $state['intentType'] ?? 'payment', 'reused' => true];
             }
             if ($state !== null && $state['status'] === 'incomplete') {
                 $this->applyStripeState($open, $this->stripe->cancel($open->getStripeSubscriptionId(), false));
@@ -149,7 +149,7 @@ final class SubscriptionService
         $this->applyStripeState($subscription, $state);
         $em->flush();
 
-        return ['subscription' => $subscription, 'clientSecret' => $state['clientSecret'], 'reused' => false];
+        return ['subscription' => $subscription, 'clientSecret' => $state['clientSecret'], 'intentType' => $state['intentType'] ?? null, 'reused' => false];
     }
 
     /** @throws SubscriptionException 404 */
@@ -257,6 +257,16 @@ final class SubscriptionService
     }
 
     /** Recopie de l'état Stripe (création, réponse d'une opération, webhook) */
+    /**
+     * Facture payée : la carte qui l'a payée devient celle de l'abonnement s'il n'en a pas (voir l'interface).
+     *
+     * @throws SubscriptionException|\Throwable erreur Stripe
+     */
+    public function ensureDefaultPaymentMethod(Subscription $subscription, string $invoiceId): ?string
+    {
+        return $subscription->getStripeSubscriptionId() !== null ? $this->stripe->ensureDefaultPaymentMethod($subscription->getStripeSubscriptionId(), $invoiceId) : null;
+    }
+
     public function applyStripeState(Subscription $subscription, array $state): void
     {
         if (($state['status'] ?? '') !== '') {

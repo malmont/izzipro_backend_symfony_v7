@@ -65,6 +65,7 @@ class HandleSubscriptionWebhookUseCase
                     return ['status' => 'ignored', 'detail' => 'facture non payée'];
                 }
                 $order = $this->orders->createFromInvoice($subscription, $object);
+                $this->keepPaymentMethod($subscription, $object);
                 $subscription->setPaymentIssue(null);
                 $subscription->setStatus($subscription->getStatus() === Subscription::STATUS_TRIALING && (int) ($object['total'] ?? 0) === 0 ? Subscription::STATUS_TRIALING : Subscription::STATUS_ACTIVE);
                 $periodEnd = $object['lines']['data'][0]['period']['end'] ?? null;
@@ -88,6 +89,25 @@ class HandleSubscriptionWebhookUseCase
                 }
 
                 return ['status' => 'processed', 'detail' => $subscription->getStatus()];
+        }
+    }
+
+    /**
+     * Facture payée avec un montant (25/10/2026) : si l'abonnement n'a pas de carte par défaut chez Stripe (essai gratuit
+     * dont la carte n'a pas été enregistrée, facture payée ensuite depuis le courriel d'impayé), celle qui vient de payer
+     * le devient, pour que les échéances suivantes soient débitées seules. Une erreur Stripe ne bloque jamais le webhook.
+     */
+    private function keepPaymentMethod(Subscription $subscription, array $invoice): void
+    {
+        if ((int) ($invoice['amount_paid'] ?? 0) <= 0 || !is_string($invoice['id'] ?? null)) {
+            return;
+        }
+        try {
+            if (($paymentMethod = $this->service->ensureDefaultPaymentMethod($subscription, $invoice['id'])) !== null) {
+                $this->logger->info('[Subscription] Carte de la facture posée par défaut sur l\'abonnement', ['subscription' => $subscription->getId(), 'invoice' => $invoice['id']]);
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning('[Subscription] Carte par défaut non posée après une facture payée', ['subscription' => $subscription->getId(), 'invoice' => $invoice['id'], 'message' => $e->getMessage()]);
         }
     }
 

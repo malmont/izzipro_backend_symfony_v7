@@ -10,7 +10,9 @@ use App\Entity\User;
 /**
  * Appels Stripe Billing d'un site (compte connecté), derrière une interface pour les tests (FakeSubscriptionStripeGateway).
  * Un abonnement Stripe est rendu sous forme de tableau normalisé :
- * { id, status, currentPeriodEnd: ?int (horodatage), cancelAtPeriodEnd: bool, paused: bool, clientSecret: ?string, itemId: ?string }.
+ * { id, status, currentPeriodEnd: ?int (horodatage), cancelAtPeriodEnd: bool, paused: bool, clientSecret: ?string,
+ *   intentType: 'payment' | 'setup' | null (nature du clientSecret : paiement de la première facture, ou enregistrement
+ *   de la carte quand il n'y a rien à payer, période d'essai), itemId: ?string }.
  */
 interface SubscriptionStripeGatewayInterface
 {
@@ -58,4 +60,14 @@ interface SubscriptionStripeGatewayInterface
      * @return array{refundId: string, amount: int, currency: string}|null null : aucune facture payée à rembourser
      */
     public function refundLatestPayment(string $subscriptionId): ?array;
+
+    /**
+     * Carte par défaut de l'abonnement (25/10/2026) : si l'abonnement n'en a pas, pose celle qui vient de payer la
+     * facture, pour que les échéances suivantes soient débitées seules (cas d'un essai gratuit dont la carte n'a pas
+     * été enregistrée, payé ensuite depuis le courriel d'impayé).
+     *
+     * @return string|null identifiant du moyen de paiement posé ; null si l'abonnement en avait déjà un ou si la facture
+     *                     n'en donne pas
+     */
+    public function ensureDefaultPaymentMethod(string $subscriptionId, string $invoiceId): ?string;
 }

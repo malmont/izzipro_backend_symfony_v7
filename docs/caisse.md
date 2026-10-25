@@ -403,7 +403,7 @@ expose `terminal: null | {readerId, label, simulated}`.
 | Méthode, route | Corps | Réponse |
 |---|---|---|
 | `GET /api/pos/terminal?cashRegisterId=` | — | 200 `{available, cashRegisterId, reader: null \| {id, label, simulated, status: online \| offline, error}, paymentMethods: ["card_present", "interac_present"?], currentPayment, simulationAllowed, settings {cardWaitSeconds, customerCancel, interac}}` ; `available: false` sans terminal (garder la carte déclarée) |
-| `POST /api/pos/terminal/payments` | `{cashRegisterId?, amount (cents, part carte), items (comme la vente), otherPayments?: [{type (2 espèces…), amount (cents)}]}` | 201 paiement (ci-dessous), `status: waiting_for_card`. Refus : 409 `TERMINAL_UNAVAILABLE`, 409 `CASH_REGISTER_CLOSED`, 422 `AMOUNT_MISMATCH {quoteTotal, otherPayments, expectedCard, amount}` (part carte ≠ devis du serveur, arrondi des espèces admis), 400 `AMOUNT_TOO_SMALL`, 409 `READER_BUSY {paymentId}`, 409 `READER_OFFLINE`, 409 `READER_NOT_FOUND`, 504 `READER_TIMEOUT` (réessayer), 503 `STRIPE_UNAVAILABLE`, 502 `STRIPE_ERROR` |
+| `POST /api/pos/terminal/payments` | `{cashRegisterId?, amount (cents, part carte), items (comme la vente) **ou `giftCardAmount` (cents, vente d'une carte-cadeau, complément F9 / C4 du 01/11/2026 : exactement l'un des deux)**, otherPayments?: [{type (2 espèces…), amount (cents)}]}` | 201 paiement (ci-dessous), `status: waiting_for_card`. Refus : 409 `TERMINAL_UNAVAILABLE`, 409 `CASH_REGISTER_CLOSED`, 422 `AMOUNT_MISMATCH {quoteTotal, otherPayments, expectedCard, amount}` (part carte ≠ devis du serveur, arrondi des espèces admis), 400 `AMOUNT_TOO_SMALL`, 409 `READER_BUSY {paymentId}`, 409 `READER_OFFLINE`, 409 `READER_NOT_FOUND`, 504 `READER_TIMEOUT` (réessayer), 503 `STRIPE_UNAVAILABLE`, 502 `STRIPE_ERROR` |
 | `GET /api/pos/terminal/payments/{id}` | — | 200 paiement relu chez Stripe ; le POS interroge toutes les 1 à 2 s |
 | `POST /api/pos/terminal/payments/{id}/cancel` | — | 200 paiement `canceled` (`failureCode: canceled_by_cashier`) ; 409 `READER_BUSY` pendant une autorisation (attendre puis réessayer) ; 409 `PAYMENT_ALREADY_CAPTURED` (passer par le remboursement) ; rejeu sans effet |
 | `POST /api/pos/terminal/payments/{id}/refund` | `{amount?}` cents (partiel possible) | Caissier : **403 `APPROVAL_REQUIRED`** (C3, action `refund`, contexte `{orderId}` du paiement rattaché, sinon `{orderId: 0, terminalPaymentId}`), puis rejeu avec `X-Pos-Approval` ; responsable : direct. 200 paiement avec `refund` ; carte de crédit : remboursement en ligne aussitôt ; Interac : `refund.status: waiting_for_card`, le client présente sa carte, suivi par `GET` ; autorisation non capturée : libérée (`canceled`, `voided_by_manager`) ; 409 `PAYMENT_NOT_CAPTURED`, 400 `REFUND_AMOUNT_INVALID`, 502 `TERMINAL_REFUND_FAILED` |
@@ -411,7 +411,7 @@ expose `terminal: null | {readerId, label, simulated}`.
 | `POST /api/pos/terminal/payments/{id}/simulate` | `{type: card_present \| interac_present, cardNumber?}` | 200 paiement après carte simulée (lecteur simulé et clé Stripe de test seulement ; 403 `SIMULATION_FORBIDDEN` sinon, même appelée en production) ; journalisée `CARD_SIMULATED`. Cartes de test : 4242 4242 4242 4242 acceptée, 4000 0000 0000 0002 refusée, 4000 0000 0000 9995 fonds insuffisants, 4506 4450 0693 1933 Interac |
 
 Paiement : `{paymentId, stripePaymentIntentId, status: waiting_for_card | processing | succeeded | failed | canceled,
-captured, amount, currency, paymentMethodType: card_present | interac_present | null, cardBrand, last4, failureCode,
+captured, amount, currency, purpose: sale | gift_card, paymentMethodType: card_present | interac_present | null, cardBrand, last4, failureCode,
 failureMessage, cashRegisterId, orderId, refund: null | {id, status: waiting_for_card | succeeded | failed, amount,
 failureMessage}, createdAt, updatedAt}`. `succeeded` + `captured: false` : carte de crédit autorisée (débit à la vente) ;
 `succeeded` + `captured: true` : Interac débité (ou carte capturée). `failureCode` : `insufficient_funds`,
@@ -420,6 +420,14 @@ failureMessage}, createdAt, updatedAt}`. `succeeded` + `captured: false` : carte
 
 ### Vente et annulation
 
+- **Destination du paiement** (complément F9 / C4, 01/11/2026) : `purpose: sale` (créé avec `items`) ou `gift_card` (créé avec
+  `giftCardAmount`), reprise en métadonnée Stripe `pos_purpose`. `create-multi-payment` n'accepte qu'un paiement `sale`,
+  `POST /api/pos/gift-cards` qu'un paiement `gift_card` : sinon **409 `TERMINAL_PAYMENT_PURPOSE_MISMATCH`** `{terminalPaymentId,
+  purpose, expected}`, rien n'est capturé. Avec `giftCardAmount`, le « devis » est le montant de la carte (ni article ni taxe) : `amount`
+  + `otherPayments` doit le couvrir (422 `AMOUNT_MISMATCH`), même intention, même commission, même suivi, même annulation, même
+  réconciliation ; en mode kit (F13/F16), même `clientSecret`. Un paiement `gift_card` réussi sans carte émise (coupure entre le terminal et
+  `POST /api/pos/gift-cards`) apparaît dans `GET /api/pos/terminal/payments?orphans=1` avec son `purpose` : rejouer `POST /api/pos/gift-cards`
+  avec le même `terminalPaymentId` (et la même `Idempotency-Key`) le rattache, sinon `…/refund` le rembourse.
 - `POST /api/order/create-multi-payment` : une part `{type: 1, amount, terminalPaymentId}` (ou `stripePaymentId` =
   PaymentIntent) est vérifiée **puis capturée dans la transaction** : paiement réussi, même montant, même poste, jamais
   rattaché. Refus (rien n'est créé, rien n'est capturé) : 404 `TERMINAL_PAYMENT_NOT_FOUND`, 402
@@ -444,8 +452,10 @@ failureMessage}, createdAt, updatedAt}`. `succeeded` + `captured: false` : carte
 Journal (C2) : `CARD_PAYMENT_STARTED`, `CARD_PAYMENT_SUCCEEDED` (autorisation ou débit), `CARD_PAYMENT_FAILED`,
 `CARD_PAYMENT_CANCELED`, `CARD_REFUND` (`data.onReader`), `CARD_SIMULATED`, `TERMINAL_CONFIGURED` ; données : montant,
 lecteur, poste, PaymentIntent, type, marque et 4 derniers chiffres seulement. Rapports X et Z : ventilation par moyen
-inchangée, bloc ajouté **`cardTerminal {terminal, interac, declared, count, withoutSale}`** (cents ; `declared` = parts
-carte sans terminal ; `withoutSale` = paiements sans vente du poste).
+inchangée, bloc ajouté **`cardTerminal {terminal, interac, declared, count, withoutSale, giftCards {terminal, interac, declared, count}}`**
+(cents ; `declared` = parts carte sans terminal ; `withoutSale` = paiements sans vente du poste ; depuis le 01/11/2026 les totaux comptent
+aussi les paiements terminal des **ventes de cartes-cadeaux** (rapprochement avec les virements Stripe), détaillés dans `giftCards`, et
+jamais dans `sales` ni dans le chiffre d'affaires).
 
 Réconciliation (`PosTerminalPaymentService::reconcile`) : relit chaque paiement en attente, annule les cartes jamais
 présentées (délai d'attente), libère les autorisations sans vente (délai réglé), suit les remboursements Interac. Lancée
@@ -926,7 +936,7 @@ Deux moyens de paiement de magasin, propres à la caisse. Code : `Services/PosGi
 
 | Route | Corps | Réponse |
 |---|---|---|
-| `POST /api/pos/gift-cards` (`Idempotency-Key`) | `{amount (cents), code? (carte pré-imprimée), paymentMethods [{type 1|2|3, amount (dollars), terminalPaymentId?}], cashRegisterId?}` | 201 `{giftCard {id, kind, code (une fois), last4, barcode, balance, initialAmount, status, usable, expiresAt, issuedAt, issuedOrderId}, orderId, …ticket (kind gift_card, receiptKind gift_card, barcode IZ-C-…, giftCard masqué)}` ; 409 `GIFT_CARD_DISABLED`, `GIFT_CARD_CODE_TAKEN`, `GIFT_CARD_PAYMENT_INVALID` ; 400 `PAYMENT_TOTAL_MISMATCH` ; 422 `GIFT_CARD_CODE_INVALID` |
+| `POST /api/pos/gift-cards` (`Idempotency-Key`) | `{amount (cents), code? (carte pré-imprimée), paymentMethods [{type 1|2|3, amount (dollars), terminalPaymentId? (paiement créé avec **`giftCardAmount`**, destination `gift_card`, sinon 409 `TERMINAL_PAYMENT_PURPOSE_MISMATCH`)}], cashRegisterId?}` | 201 `{giftCard {id, kind, code (une fois), last4, barcode, balance, initialAmount, status, usable, expiresAt, issuedAt, issuedOrderId}, orderId, …ticket (kind gift_card, receiptKind gift_card, barcode IZ-C-…, giftCard masqué)}` ; 409 `GIFT_CARD_DISABLED`, `GIFT_CARD_CODE_TAKEN`, `GIFT_CARD_PAYMENT_INVALID` ; 400 `PAYMENT_TOTAL_MISMATCH` ; 422 `GIFT_CARD_CODE_INVALID` |
 | `GET /api/pos/gift-cards/{code}` | — | 200 carte (sans code) ; 404 `GIFT_CARD_NOT_FOUND` ; 429 **`GIFT_CARD_LOOKUP_LIMIT`** `{retryAfterSeconds}` (20 consultations par terminal et 60 par adresse IP par 10 minutes) ; chaque consultation, réussie ou non, est journalisée (`GIFT_CARD_LOOKUP`) |
 | `POST /api/pos/gift-cards/{code}/cancel` (`Idempotency-Key`) | `{terminalRefundId?, cashRegisterId?}` | 200 `{giftCard (canceled), orderId, refunds [{type, amount}], cash, …avoir (kind gift_card_cancellation)}` ; validation C3 **`gift_card_cancel`** `{amount}` ; carte jamais utilisée seulement : 409 `GIFT_CARD_USED`, `GIFT_CARD_INACTIVE`, `GIFT_CARD_NOT_CANCELABLE` (avoir). Remboursement par le moyen d'origine (terminal : en ligne ou Interac déjà présenté sur le lecteur), transaction de caisse **type 10**, commande d'émission au statut Annulation |
 | `POST /api/pos/gift-cards/{code}/adjust` (`Idempotency-Key`) | `{amount (cents, signé, non nul), reason, cashRegisterId?}` | 200 `{giftCard}` ; validation C3 **`gift_card_adjust`** `{amount}` (valeur absolue) ; 409 `GIFT_CARD_INSUFFICIENT` si le solde deviendrait négatif |

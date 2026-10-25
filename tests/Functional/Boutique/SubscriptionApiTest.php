@@ -84,6 +84,7 @@ class SubscriptionApiTest extends WebTestCase
         $body = json_decode($created->getContent(), true);
         $this->assertSame('incomplete', $body['status']);
         $this->assertStringStartsWith('pi_test_secret_sub_test_', $body['clientSecret']);
+        $this->assertSame('payment', $body['intentType'], 'première facture à payer : confirmPayment');
         $shipping = (int) round((float) $this->db->fetchOne('SELECT price FROM carrier WHERE id = 1'));
         $this->assertSame([2, 'incomplete', false, 1, $shipping], [$body['subscription']['quantity'], $body['subscription']['status'], $body['subscription']['cancelAtPeriodEnd'], $body['subscription']['carrier']['id'], $body['subscription']['shippingAmount']]);
         $create = FakeSubscriptionStripeGateway::$calls[array_search('create', array_column(FakeSubscriptionStripeGateway::$calls, 0), true)];
@@ -110,12 +111,15 @@ class SubscriptionApiTest extends WebTestCase
         $this->assertSame([7000.0 + $shipping, 1048.0, 8048.0 + $shipping, (float) $shipping, 'in_test_1', $id], [(float) $order['sub_total'], (float) $order['total_tax'], (float) $order['total_amount'], (float) $order['shipping_cost'], $order['stripe_invoice_id'], (int) $order['subscription_id']]);
         $this->assertSame(3500.0, (float) $this->db->fetchOne('SELECT unit_price FROM order_items WHERE order_associated_id = ?', [$detail['orders'][0]['id']]), 'prix unitaire sans la livraison');
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM payments WHERE stripe_payment_id = ?', ['pi_test_invoice_1']));
+        $this->assertContains(['ensureDefaultPaymentMethod', $stripeId, 'in_test_1'], FakeSubscriptionStripeGateway::$calls, 'la carte qui a payé devient celle de l\'abonnement');
+        $this->assertSame('pm_test_card', FakeSubscriptionStripeGateway::$subscriptions[$stripeId]['defaultPaymentMethod']);
         $this->webhook('invoice.paid', ['id' => 'in_test_1', 'subscription' => $stripeId, 'paid' => true, 'total' => 8048 + $shipping, 'amount_paid' => 8048 + $shipping, 'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]);
         $this->assertSame(1, count($this->json($this->request('GET', "/api/subscriptions/$id"))['orders']), 'facture rejouée : pas de seconde commande');
 
         // Facture à 0 (essai, changement de formule sans montant) : pas de commande
         $zero = $this->webhook('invoice.paid', ['id' => 'in_test_zero', 'subscription' => $stripeId, 'paid' => true, 'subtotal' => 0, 'total' => 0, 'amount_paid' => 0, 'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]);
         $this->assertStringContainsString('facture à 0', json_decode($zero->getContent(), true)['detail'] ?? '', $zero->getContent());
+        $this->assertNotContains(['ensureDefaultPaymentMethod', $stripeId, 'in_test_zero'], FakeSubscriptionStripeGateway::$calls, 'facture à 0 : aucune carte à garder');
         $this->assertSame(1, count($this->json($this->request('GET', "/api/subscriptions/$id"))['orders']), 'facture à 0 : aucune commande');
 
         // Gestion : pause, reprise, changement de formule, annulation à la fin de la période, reprise, annulation immédiate
@@ -134,6 +138,37 @@ class SubscriptionApiTest extends WebTestCase
         $portal = $this->json($this->request('POST', '/api/subscriptions/portal-session', json_encode(['returnUrl' => 'https://mvtest.test/dashboard'])));
         $this->assertStringStartsWith('https://billing.stripe.test/session/cus_test_', $portal['url']);
         $this->assertSame($id, $this->json($this->request('GET', '/api/subscriptions'))[0]['id']);
+    }
+
+    public function testTrialSubscriptionAsksToSaveTheCardAndAPaidInvoiceKeepsIt(): void
+    {
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        $product = $this->productId('DEMO-PANIER');
+        $plan = $this->json($this->request('GET', "/api/subscription-plans?productId=$product"))[0];
+        $this->db->executeStatement('UPDATE subscription_plan SET trial_days = 14 WHERE id = ?', [$plan['id']]);
+        try {
+            $created = $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plan['id'], 'addressId' => $this->address(), 'carrierId' => 1]));
+            $this->assertSame(201, $created->getStatusCode(), $created->getContent());
+            $body = json_decode($created->getContent(), true);
+            $this->assertSame(['trialing', 'setup'], [$body['status'], $body['intentType']], 'essai gratuit : rien à payer, la carte s\'enregistre (confirmSetup)');
+            $this->assertStringStartsWith('seti_test_secret_', $body['clientSecret']);
+
+            // fin d'essai sans carte : facture payée depuis le courriel d'impayé, la carte devient celle de l'abonnement ;
+            // une erreur Stripe à ce moment ne bloque pas le webhook
+            $stripeId = $this->db->fetchOne('SELECT stripe_subscription_id FROM subscription WHERE id = ?', [$body['subscriptionId']]);
+            FakeSubscriptionStripeGateway::$subscriptions[$stripeId]['failDefaultPaymentMethod'] = true;
+            $failing = $this->webhook('invoice.paid', ['id' => 'in_test_trial_end', 'subscription' => $stripeId, 'paid' => true, 'subtotal' => 3500, 'total' => 3500, 'amount_paid' => 3500, 'payment_intent' => 'pi_test_trial_end',
+                'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]);
+            $this->assertSame('processed', json_decode($failing->getContent(), true)['status'], $failing->getContent());
+            $this->assertSame('active', $this->json($this->request('GET', '/api/subscriptions/' . $body['subscriptionId']))['status']);
+            unset(FakeSubscriptionStripeGateway::$subscriptions[$stripeId]['failDefaultPaymentMethod']);
+            FakeSubscriptionStripeGateway::$subscriptions[$stripeId]['invoicePaymentMethod'] = 'pm_test_from_email';
+            $this->webhook('invoice.paid', ['id' => 'in_test_trial_end_2', 'subscription' => $stripeId, 'paid' => true, 'subtotal' => 3500, 'total' => 3500, 'amount_paid' => 3500, 'payment_intent' => 'pi_test_trial_end_2',
+                'subscription_details' => ['metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]]);
+            $this->assertSame('pm_test_from_email', FakeSubscriptionStripeGateway::$subscriptions[$stripeId]['defaultPaymentMethod']);
+        } finally {
+            $this->db->executeStatement('UPDATE subscription_plan SET trial_days = 0 WHERE id = ?', [$plan['id']]);
+        }
     }
 
     public function testFailedPaymentAndStripeDeletionUpdateTheSubscription(): void

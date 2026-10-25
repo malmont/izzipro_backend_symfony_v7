@@ -129,7 +129,7 @@ class PosTerminalApiTest extends WebTestCase
 
         // Rapport X : ventilation carte terminal
         $x = $this->json($this->request('GET', "/api/caisse/report/x?cashRegisterId=$this->register"));
-        $this->assertSame(['terminal' => $this->total, 'interac' => 0, 'declared' => 0, 'count' => 1, 'withoutSale' => 0], $x['cardTerminal']);
+        $this->assertSame(['terminal' => $this->total, 'interac' => 0, 'declared' => 0, 'count' => 1, 'withoutSale' => 0, 'giftCards' => ['terminal' => 0, 'interac' => 0, 'declared' => 0, 'count' => 0]], $x['cardTerminal']); // giftCards : ajout F9/C4 (01/11/2026)
 
         // Annulation : remboursement Stripe en ligne de la part carte
         $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);

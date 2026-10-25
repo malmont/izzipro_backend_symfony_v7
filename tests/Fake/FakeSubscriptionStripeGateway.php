@@ -66,7 +66,8 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
         $id = 'sub_test_' . bin2hex(random_bytes(4)); // unique d'un test à l'autre (la base de test persiste)
         self::$subscriptions[$id] = [
             'id' => $id, 'status' => $trialDays > 0 ? 'trialing' : 'incomplete', 'currentPeriodEnd' => (new \DateTimeImmutable('+1 month'))->getTimestamp(),
-            'cancelAtPeriodEnd' => false, 'paused' => false, 'clientSecret' => 'pi_test_secret_' . $id, 'itemId' => "si_test_{$id}", 'canceledAt' => null,
+            'cancelAtPeriodEnd' => false, 'paused' => false, 'clientSecret' => ($trialDays > 0 ? 'seti_test_secret_' : 'pi_test_secret_') . $id,
+            'intentType' => $trialDays > 0 ? 'setup' : 'payment', 'itemId' => "si_test_{$id}", 'canceledAt' => null,
             'priceId' => $priceId, 'quantity' => $quantity, 'customerId' => $customerId, 'metadata' => $metadata, 'taxRateIds' => $taxRateIds, 'automaticTax' => $automaticTax, 'shippingPriceId' => $shippingPriceId,
         ];
         self::$calls[] = ['create', $id, $priceId, $quantity, $trialDays, $metadata, $taxRateIds, $automaticTax, $shippingPriceId];
@@ -126,6 +127,20 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
         $amount = self::$subscriptions[$subscriptionId]['paidAmount'] ?? null;
 
         return $amount === null ? null : ['refundId' => 're_test_' . bin2hex(random_bytes(3)), 'amount' => (int) $amount, 'currency' => 'cad'];
+    }
+
+    /** Carte par défaut simulée : 'defaultPaymentMethod' sur l'abonnement ; 'invoicePaymentMethod' posé par le test, sinon pm_test_card */
+    public function ensureDefaultPaymentMethod(string $subscriptionId, string $invoiceId): ?string
+    {
+        self::$calls[] = ['ensureDefaultPaymentMethod', $subscriptionId, $invoiceId];
+        if (isset(self::$subscriptions[$subscriptionId]['failDefaultPaymentMethod'])) {
+            throw new \RuntimeException('Stripe indisponible (simulé)');
+        }
+        if (!empty(self::$subscriptions[$subscriptionId]['defaultPaymentMethod'])) {
+            return null;
+        }
+
+        return self::$subscriptions[$subscriptionId]['defaultPaymentMethod'] = self::$subscriptions[$subscriptionId]['invoicePaymentMethod'] ?? 'pm_test_card';
     }
 
     public function portalUrl(string $customerId, string $returnUrl): string

@@ -212,8 +212,9 @@ class PosTerminalPaymentService
      * @param int $amount part carte en cents
      * @param ?string $posKey Idempotency-Key POS de la requête (clé Stripe de la création)
      */
-    public function start(User $user, ?int $cashRegisterId, array $items, array $otherPayments, int $amount, ?string $posKey, ?array $ticketDiscount = null, ?array $readerInfo = null): PosTerminalPayment
+    public function start(User $user, ?int $cashRegisterId, array $items, array $otherPayments, int $amount, ?string $posKey, ?array $ticketDiscount = null, ?array $readerInfo = null, ?int $giftCardAmount = null): PosTerminalPayment
     {
+        $purpose = $giftCardAmount !== null ? PosTerminalPayment::PURPOSE_GIFT_CARD : PosTerminalPayment::PURPOSE_SALE; // complément F9 / C4 (01/11/2026)
         $register = $this->registers->resolve($cashRegisterId);
         // Kit Stripe Terminal dans l'application (F13/F16) : l'intention est créée ici et confirmée par l'application ; aucun lecteur côté serveur
         $sdk = $register->isSdkMode() ? $this->requireSdkContext($cashRegisterId) : null;
@@ -224,11 +225,16 @@ class PosTerminalPaymentService
         if ($amount < 50) {
             throw new CashRegisterException('AMOUNT_TOO_SMALL', 'Montant carte inférieur au minimum accepté (0,50)', 400, [], ['amount' => $amount]);
         }
-        // Devis du serveur : la part carte doit compléter exactement les autres parts (arrondi des espèces admis)
-        try {
-            $quote = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'shippingAddress' => $this->taxAddress->forStore(), 'ticketDiscount' => $ticketDiscount], true));
-        } catch (CartQuoteException $e) {
-            throw new CashRegisterException('QUOTE_INVALID', $e->getMessage(), 400);
+        // Devis du serveur : la part carte doit compléter exactement les autres parts (arrondi des espèces admis) ;
+        // vente d'une carte-cadeau : le « devis » est le montant de la carte, sans article ni taxe (complément F9 / C4)
+        if ($giftCardAmount !== null) {
+            $quote = ['total' => $giftCardAmount, 'lines' => [], 'taxes' => []];
+        } else {
+            try {
+                $quote = $this->quotes->quote(CartQuoteInputDto::fromArray(['items' => $items, 'shippingAddress' => $this->taxAddress->forStore(), 'ticketDiscount' => $ticketDiscount], true));
+            } catch (CartQuoteException $e) {
+                throw new CashRegisterException('QUOTE_INVALID', $e->getMessage(), 400);
+            }
         }
         $total = (int) $quote['total']; // net des remises de caisse (F1)
         $cash = $nonCash = 0;
@@ -260,14 +266,14 @@ class PosTerminalPaymentService
         $key = $posKey ?? self::uuid();
         $payment = (new PosTerminalPayment())->setCashRegister($register)->setCaisseId($session->getId())->setUserId((int) $user->getId())
             ->setTerminalId($this->posTerminals->current()['id'] ?? null)->setReaderId($readerId)->setAmount($amount)->setCurrency($settings['currency'])
-            ->setQuoteTotal($total)->setOtherPayments($cash + $nonCash)->setQuoteHash(hash('sha256', json_encode([$items, $otherPayments])))
+            ->setQuoteTotal($total)->setOtherPayments($cash + $nonCash)->setQuoteHash(hash('sha256', json_encode([$giftCardAmount !== null ? ['giftCard' => $giftCardAmount] : $items, $otherPayments])))->setPurpose($purpose)
             ->setIdempotencyKey($key)->setStripePaymentIntentId('pending:' . $key)->setApplicationFee($this->settings->fee($amount, 'interac_present'))
             ->setChannel($sdk !== null ? PosTerminalPayment::CHANNEL_SDK : PosTerminalPayment::CHANNEL_SERVER)->setReaderLabel($sdk !== null ? (string) ($readerInfo['label'] ?? $readerInfo['type'] ?? $sdk['mode']) : null);
         $em->persist($payment);
         $em->flush();
         try {
             $intent = $this->gateway->createPaymentIntent($amount, $settings['currency'], $this->settings->paymentMethodTypes(), $payment->getApplicationFee(),
-                ['store_code' => (string) $this->tenants->getCurrentTenantCode(), 'pos_terminal' => '1', 'pos_payment_id' => (string) $payment->getId(), 'cash_register_id' => (string) $register->getId(), 'pos_channel' => $payment->getChannel()], $key);
+                ['store_code' => (string) $this->tenants->getCurrentTenantCode(), 'pos_terminal' => '1', 'pos_payment_id' => (string) $payment->getId(), 'cash_register_id' => (string) $register->getId(), 'pos_channel' => $payment->getChannel(), 'pos_purpose' => $purpose], $key);
         } catch (PosTerminalGatewayException $e) {
             $payment->setStatus(PosTerminalPayment::FAILED)->setFailureCode($e->errorCode)->setFailureMessage($e->getMessage());
             $em->flush();
@@ -280,11 +286,11 @@ class PosTerminalPaymentService
             $payment->setStatus(PosTerminalPayment::WAITING_FOR_CARD);
             $payment->clientSecret = $intent['clientSecret'] ?? null;
             $em->flush();
-            $this->record(PosAuditService::CARD_PAYMENT_STARTED, $payment, $user, ['channel' => PosTerminalPayment::CHANNEL_SDK, 'mode' => $sdk['mode'], 'reader' => $readerInfo]);
+            $this->record(PosAuditService::CARD_PAYMENT_STARTED, $payment, $user, ['channel' => PosTerminalPayment::CHANNEL_SDK, 'mode' => $sdk['mode'], 'reader' => $readerInfo, 'purpose' => $purpose]);
 
             return $payment;
         }
-        if ($settings['cartDisplay']) {
+        if ($settings['cartDisplay'] && $giftCardAmount === null) {
             try {
                 $lines = array_map(fn (array $l) => ['description' => mb_substr((string) ($l['name'] ?? $l['label'] ?? 'Article'), 0, 60), 'amount' => (int) ($l['unitPrice'] ?? $l['price'] ?? 0), 'quantity' => (int) ($l['quantity'] ?? 1)], $quote['lines'] ?? []);
                 $this->gateway->setReaderDisplay($readerId, $settings['currency'], $lines, (int) array_sum(array_map(fn ($t) => (int) ($t['amount'] ?? 0), $quote['taxes'] ?? [])), $total);
@@ -302,7 +308,7 @@ class PosTerminalPaymentService
         }
         $payment->setStatus(PosTerminalPayment::WAITING_FOR_CARD);
         $em->flush();
-        $this->record(PosAuditService::CARD_PAYMENT_STARTED, $payment, $user);
+        $this->record(PosAuditService::CARD_PAYMENT_STARTED, $payment, $user, ['purpose' => $purpose]);
 
         return $payment;
     }
@@ -418,12 +424,15 @@ class PosTerminalPaymentService
 
     // ---------------------------------------------------------------- vente et annulation de vente
 
-    /** Paiement utilisable pour une part carte d'une vente : réussi, même montant, même poste, jamais rattaché */
-    public function verifyForSale(int|string $reference, int $amount, CashRegister $register): PosTerminalPayment
+    /** Paiement utilisable pour une part carte d'une vente : réussi, même montant, même poste, jamais rattaché, même destination (sale | gift_card) */
+    public function verifyForSale(int|string $reference, int $amount, CashRegister $register, string $purpose = PosTerminalPayment::PURPOSE_SALE): PosTerminalPayment
     {
         $payment = is_int($reference) || ctype_digit((string) $reference) ? $this->repo()->find((int) $reference) : $this->repo()->findByIntent((string) $reference);
         if (!$payment) {
             throw new CashRegisterException('TERMINAL_PAYMENT_NOT_FOUND', 'Paiement par terminal introuvable', 404, [], ['terminalPaymentId' => $reference]);
+        }
+        if ($payment->getPurpose() !== $purpose) { // complément F9 / C4 : un paiement créé pour une carte-cadeau ne règle pas une vente, et inversement
+            throw new CashRegisterException('TERMINAL_PAYMENT_PURPOSE_MISMATCH', $purpose === PosTerminalPayment::PURPOSE_GIFT_CARD ? 'Ce paiement par terminal a été créé pour une vente avec articles, pas pour une carte-cadeau' : 'Ce paiement par terminal a été créé pour une carte-cadeau (giftCardAmount), pas pour une vente avec articles', 409, [], ['terminalPaymentId' => $payment->getId(), 'purpose' => $payment->getPurpose(), 'expected' => $purpose]);
         }
         $this->refresh($payment);
         if ($payment->getOrderId() !== null) {
@@ -773,6 +782,7 @@ class PosTerminalPaymentService
             // Kit Stripe Terminal dans l'application (F13/F16) : canal ; secret client tant que la carte est attendue (canal sdk seulement) ;
             // remboursement Interac à présenter sur le lecteur par l'application
             'channel' => $p->getChannel(),
+            'purpose' => $p->getPurpose(), // sale | gift_card (complément F9 / C4, 01/11/2026)
             'clientSecret' => $p->isSdk() && $p->clientSecret !== null && in_array($p->getStatus(), [PosTerminalPayment::WAITING_FOR_CARD, PosTerminalPayment::PROCESSING], true) ? $p->clientSecret : null,
             'refundInstruction' => $p->isSdk() && $p->getRefundStatus() === PosTerminalPayment::REFUND_WAITING
                 ? ['paymentIntentId' => $p->getStripePaymentIntentId(), 'chargeId' => $p->getStripeChargeId(), 'amount' => $p->getRefundAmount(), 'currency' => $p->getCurrency(), 'requestedAt' => $p->getRefundRequestedAt()?->format(\DateTimeInterface::ATOM), 'expiresInMinutes' => $this->settings->settings()['refundPendingMinutes']]

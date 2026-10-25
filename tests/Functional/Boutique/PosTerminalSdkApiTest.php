@@ -239,7 +239,8 @@ class PosTerminalSdkApiTest extends WebTestCase
         $this->db->executeStatement("UPDATE pos_terminal_payment SET created_at = NOW() - INTERVAL '200 seconds' WHERE id = ?", [$p5['paymentId']]);
         $timeout = $this->json($this->request('GET', '/api/pos/terminal/payments/' . $p5['paymentId'], null, $t));
         $this->assertSame(['canceled', 'timeout', 'canceled'], [$timeout['status'], $timeout['failureCode'], FakeTerminalGateway::$intents[$p5['stripePaymentIntentId']]['status']]);
-        $this->assertSame(['sdk' => 5], array_map('intval', $this->db->fetchAllKeyValue("SELECT channel, COUNT(*) FROM pos_terminal_payment WHERE cash_register_id = ? AND channel = 'sdk' AND created_at > NOW() - INTERVAL '10 minutes' GROUP BY channel", [$this->register])));
+        $ids = [$payment['paymentId'], $p2['paymentId'], $p3['paymentId'], $p4['paymentId'], $p5['paymentId']];
+        $this->assertSame(['sdk' => 5], array_map('intval', $this->db->fetchAllKeyValue('SELECT channel, COUNT(*) FROM pos_terminal_payment WHERE id IN (' . implode(',', $ids) . ') GROUP BY channel')), 'les cinq paiements du test sont du canal sdk (base partagée : jamais de décompte absolu)');
     }
 
     /** @return array{id: int, token: string} clé POS activée (terminal) */

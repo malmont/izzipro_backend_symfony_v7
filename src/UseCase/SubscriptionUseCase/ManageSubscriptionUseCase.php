@@ -20,7 +20,7 @@ class ManageSubscriptionUseCase
 
     /**
      * @param array<string, mixed> $body { planId, quantity?, addressId?, carrierId? }
-     * @return array{subscriptionId: int, clientSecret: ?string, status: string, reused: bool, subscription: SubscriptionOutputDto}
+     * @return array{subscriptionId: int, clientSecret: ?string, intentType: ?string, status: string, reused: bool, subscription: SubscriptionOutputDto}
      * @throws SubscriptionException
      */
     public function subscribe(User $user, array $body, string $locale): array
@@ -36,7 +36,9 @@ class ManageSubscriptionUseCase
         $result = $this->service->subscribe($user, (int) $planId, (int) $quantity, self::id($body['addressId'] ?? null), self::id($body['carrierId'] ?? null));
 
         return [
-            'subscriptionId' => (int) $result['subscription']->getId(), 'clientSecret' => $result['clientSecret'], 'status' => $result['subscription']->getStatus(),
+            'subscriptionId' => (int) $result['subscription']->getId(), 'clientSecret' => $result['clientSecret'],
+            // payment : confirmer le paiement de la première facture ; setup : enregistrer la carte (essai gratuit, rien à payer)
+            'intentType' => $result['intentType'] ?? null, 'status' => $result['subscription']->getStatus(),
             'reused' => $result['reused'] ?? false,
             'subscription' => $this->service->toDto($result['subscription'], $locale),
         ];

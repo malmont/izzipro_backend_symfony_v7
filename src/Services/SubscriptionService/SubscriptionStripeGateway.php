@@ -136,7 +136,7 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
 
     public function retrieve(string $subscriptionId): array
     {
-        return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->retrieve($subscriptionId, ['expand' => ['latest_invoice.confirmation_secret', 'latest_invoice.payment_intent']], $o)));
+        return self::normalize($this->call(fn (StripeClient $c, array $o) => $c->subscriptions->retrieve($subscriptionId, ['expand' => ['latest_invoice.confirmation_secret', 'latest_invoice.payment_intent', 'pending_setup_intent']], $o)));
     }
 
     public function cancel(string $subscriptionId, bool $atPeriodEnd): array
@@ -196,6 +196,32 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         });
     }
 
+    public function ensureDefaultPaymentMethod(string $subscriptionId, string $invoiceId): ?string
+    {
+        return $this->call(function (StripeClient $c, array $o) use ($subscriptionId, $invoiceId): ?string {
+            $subscription = $c->subscriptions->retrieve($subscriptionId, [], $o);
+            if (!empty($subscription->default_payment_method)) {
+                return null;
+            }
+            // API 2025-03+ : le paiement d'une facture est dans invoice.payments (à demander), plus dans invoice.payment_intent
+            $invoice = $c->invoices->retrieve($invoiceId, ['expand' => ['payments.data.payment.payment_intent']], $o);
+            $paymentMethod = null;
+            foreach ($invoice->payments->data ?? [] as $payment) {
+                $intent = $payment->payment->payment_intent ?? null;
+                if (($payment->status ?? null) === 'paid' && is_object($intent) && !empty($intent->payment_method)) {
+                    $paymentMethod = is_string($intent->payment_method) ? $intent->payment_method : $intent->payment_method->id;
+                    break;
+                }
+            }
+            if ($paymentMethod === null) {
+                return null;
+            }
+            $c->subscriptions->update($subscriptionId, ['default_payment_method' => $paymentMethod], $o);
+
+            return $paymentMethod;
+        });
+    }
+
     public function portalUrl(string $customerId, string $returnUrl): string
     {
         // Compte Express : aucun portail par défaut, la plateforme crée sa configuration (StripeConnectSetupService)
@@ -219,6 +245,8 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
             }
         }
         $item ??= $items[0] ?? null;
+        $paymentSecret = $a['latest_invoice']['confirmation_secret']['client_secret'] ?? $a['latest_invoice']['payment_intent']['client_secret'] ?? null;
+        $setupSecret = $a['pending_setup_intent']['client_secret'] ?? null;
 
         return [
             'id' => (string) ($a['id'] ?? ''),
@@ -226,7 +254,9 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
             'currentPeriodEnd' => isset($a['current_period_end']) ? (int) $a['current_period_end'] : (isset($item['current_period_end']) ? (int) $item['current_period_end'] : null),
             'cancelAtPeriodEnd' => (bool) ($a['cancel_at_period_end'] ?? false),
             'paused' => !empty($a['pause_collection']),
-            'clientSecret' => $a['latest_invoice']['confirmation_secret']['client_secret'] ?? $a['latest_invoice']['payment_intent']['client_secret'] ?? $a['pending_setup_intent']['client_secret'] ?? null,
+            'clientSecret' => $paymentSecret ?? $setupSecret,
+            // nature du clientSecret : le frontend confirme un paiement (confirmPayment) ou un enregistrement de carte (confirmSetup)
+            'intentType' => $paymentSecret !== null ? 'payment' : ($setupSecret !== null ? 'setup' : null),
             'itemId' => $item['id'] ?? null,
             'canceledAt' => isset($a['canceled_at']) ? (int) $a['canceled_at'] : null,
         ];
