@@ -374,7 +374,7 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
 | Route | Accès | Contenu |
 |---|---|---|
 | `GET /api/subscription-plans?productId=&locale=` | public | formules actives (sans `productId` : toutes celles de la boutique, produits encore vendus par abonnement ; grille de formules `PlanGrid`) `{ id, productId, productName, name, interval (week\|month\|year), intervalCount, price (cents), currency, trialDays, minimumTerms, active, description (sous-titre), features (liste d'avantages, 20 au plus), highlighted (formule recommandée, une par produit), badge (texte du badge ou null) }`, textes en clair dans la langue demandée |
-| `POST /api/subscriptions { planId, quantity?, addressId?, carrierId? }` | client connecté | 201 `{ subscriptionId, clientSecret, status, subscription }` ; abonnement Stripe créé en `default_incomplete`, première facture payée par le `clientSecret` (Payment Element) ; `trialDays` > 0 → `trialing` (carte enregistrée, `clientSecret` du SetupIntent) ; 403 si `commerce.subscriptionsEnabled` est `false` ; 404 formule ; 422 produit sans abonnement, quantité, adresse d'un autre client |
+| `POST /api/subscriptions { planId, quantity?, addressId?, carrierId? }` | client connecté | 201 `{ subscriptionId, clientSecret, intentType, status, subscription }` ; abonnement Stripe créé en `default_incomplete`, première facture payée par le `clientSecret` (Payment Element) ; `trialDays` > 0 → `trialing`, rien à payer : la carte s'enregistre par le `clientSecret` d'un SetupIntent. `intentType` (25/10/2026) dit lequel : `payment` → `stripe.confirmPayment`, `setup` → `stripe.confirmSetup` (sans cette confirmation, aucune carte n'est gardée et la fin de l'essai part en impayé) ; 403 si `commerce.subscriptionsEnabled` est `false` ; 404 formule ; 422 produit sans abonnement, quantité, adresse d'un autre client |
 | `GET /api/subscriptions`, `GET …/{id}` | client connecté | `{ id, plan, quantity, status, currentPeriodEnd, cancelAtPeriodEnd, address, carrier, createdAt, canceledAt, orders: [{ id, reference, date, total, status }] }` ; autre client : 404 |
 | `POST …/{id}/cancel { atPeriodEnd?: true }` | client | fin de période par défaut (`cancelAtPeriodEnd`), ou immédiate (`canceled`, courriel) |
 | `POST …/{id}/resume`, `…/{id}/pause` | client | reprise (annulation programmée levée, collecte reprise) ; pause (`pause_collection: void`, courriel) ; 409 si résilié ou pas actif |
@@ -407,6 +407,11 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
     prochain essai, numéro de l'essai), renvoyé par `GET /api/subscriptions` en `latestInvoice` tant que le statut est
     `past_due` (null sinon), courriel avec le montant, l'essai « n sur 4 », la date du prochain essai et un bouton
     « Payer maintenant » (page de facture Stripe) ; effacé par `invoice.paid` ;
+  - carte par défaut (25/10/2026) : à chaque `invoice.paid` avec un montant, si l'abonnement n'a pas de carte par défaut
+    chez Stripe, celle qui vient de payer le devient (`SubscriptionStripeGateway::ensureDefaultPaymentMethod`, paiement lu
+    dans `invoice.payments`) ; une facture payée depuis le courriel d'impayé rend ainsi les échéances suivantes
+    automatiques. Une erreur Stripe à ce moment est journalisée et ne bloque pas le webhook. Cas réel : abonnement n° 8 de
+    `demo`, essai gratuit dont le SetupIntent n'avait jamais été confirmé, échéance du 25/10/2026 refusée faute de carte ;
   - au 4e essai refusé (`SubscriptionService::MAX_FAILED_PAYMENTS`) ou quand Stripe ne prévoit plus d'essai
     (`next_payment_attempt` null) : résiliation immédiate par le site (appel à Stripe) et courriel « résilié faute de
     paiement ». La règle ne dépend donc pas des réglages de relance du compte Stripe. Migration
