@@ -403,7 +403,7 @@ expose `terminal: null | {readerId, label, simulated}`.
 | Méthode, route | Corps | Réponse |
 |---|---|---|
 | `GET /api/pos/terminal?cashRegisterId=` | — | 200 `{available, cashRegisterId, reader: null \| {id, label, simulated, status: online \| offline, error}, paymentMethods: ["card_present", "interac_present"?], currentPayment, simulationAllowed, settings {cardWaitSeconds, customerCancel, interac}}` ; `available: false` sans terminal (garder la carte déclarée) |
-| `POST /api/pos/terminal/payments` | `{cashRegisterId?, amount (cents, part carte), items (comme la vente) **ou `giftCardAmount` (cents, vente d'une carte-cadeau, complément F9 / C4 du 01/11/2026 : exactement l'un des deux)**, otherPayments?: [{type (2 espèces…), amount (cents)}]}` | 201 paiement (ci-dessous), `status: waiting_for_card`. Refus : 409 `TERMINAL_UNAVAILABLE`, 409 `CASH_REGISTER_CLOSED`, 422 `AMOUNT_MISMATCH {quoteTotal, otherPayments, expectedCard, amount}` (part carte ≠ devis du serveur, arrondi des espèces admis), 400 `AMOUNT_TOO_SMALL`, 409 `READER_BUSY {paymentId}`, 409 `READER_OFFLINE`, 409 `READER_NOT_FOUND`, 504 `READER_TIMEOUT` (réessayer), 503 `STRIPE_UNAVAILABLE`, 502 `STRIPE_ERROR` |
+| `POST /api/pos/terminal/payments` | `{cashRegisterId?, amount (cents, part carte), items (comme la vente) **ou `giftCardAmount` (cents, vente d'une carte-cadeau, complément F9 / C4 du 01/11/2026 : exactement l'un des deux)**, otherPayments?: [{type (2 espèces, 3 PayPal, **4 carte-cadeau, 5 avoir, 6 coupon de fabricant**, jamais 1), amount (cents)}]}` : les autres parts entrent dans la part carte attendue (`expectedCard` = devis − espèces − autres parts) ; la carte-cadeau ou l'avoir n'est débité qu'à la vente, avec son `code` | 201 paiement (ci-dessous), `status: waiting_for_card`. Refus : 409 `TERMINAL_UNAVAILABLE`, 409 `CASH_REGISTER_CLOSED`, 422 `AMOUNT_MISMATCH {quoteTotal, otherPayments, expectedCard, amount}` (part carte ≠ devis du serveur, arrondi des espèces admis), 400 `AMOUNT_TOO_SMALL`, 409 `READER_BUSY {paymentId}`, 409 `READER_OFFLINE`, 409 `READER_NOT_FOUND`, 504 `READER_TIMEOUT` (réessayer), 503 `STRIPE_UNAVAILABLE`, 502 `STRIPE_ERROR` |
 | `GET /api/pos/terminal/payments/{id}` | — | 200 paiement relu chez Stripe ; le POS interroge toutes les 1 à 2 s |
 | `POST /api/pos/terminal/payments/{id}/cancel` | — | 200 paiement `canceled` (`failureCode: canceled_by_cashier`) ; 409 `READER_BUSY` pendant une autorisation (attendre puis réessayer) ; 409 `PAYMENT_ALREADY_CAPTURED` (passer par le remboursement) ; rejeu sans effet |
 | `POST /api/pos/terminal/payments/{id}/refund` | `{amount?}` cents (partiel possible) | Caissier : **403 `APPROVAL_REQUIRED`** (C3, action `refund`, contexte `{orderId}` du paiement rattaché, sinon `{orderId: 0, terminalPaymentId}`), puis rejeu avec `X-Pos-Approval` ; responsable : direct. 200 paiement avec `refund` ; carte de crédit : remboursement en ligne aussitôt ; Interac : `refund.status: waiting_for_card`, le client présente sa carte, suivi par `GET` ; autorisation non capturée : libérée (`canceled`, `voided_by_manager`) ; 409 `PAYMENT_NOT_CAPTURED`, 400 `REFUND_AMOUNT_INVALID`, 502 `TERMINAL_REFUND_FAILED` |
@@ -897,6 +897,15 @@ autres sources (e-commerce, application mobile) ne changent pas. Le parcours à 
 `GET /api/payments/statistics/{source}` : `current_week.*.daily` cumule désormais **par jour** (lundi 00:00:00 → dimanche
 23:59:59). Avant : regroupement par horodatage exact (deux paiements du même jour n'en comptaient qu'un) et semaine commençant
 le lundi à l'heure courante. Changement visible (administration, application MAUI), voulu ; les autres statistiques ne changent pas.
+
+Correctifs du 01/11/2026 (changements visibles voulus, comparés avant/après sur les 11 routes de statistiques de demo) :
+- `current_week.*.total` : la semaine finissait le **dimanche 0 h** (le `+6 jours` partait du lundi 0 h) : tout paiement du dimanche
+  manquait au total ; borne ramenée au dimanche 23 h 59 min 59 s.
+- `current_month.*` et `current_year.*` : les bornes gardaient l'heure courante (du 1er « à l'heure de la requête » au dernier jour
+  « à la même heure ») ; désormais du 1er à 0 h au dernier jour à 23 h 59 min 59 s.
+- **Fuseau du magasin** (`StoreClock`, celui des exports F14) pour la semaine, sa répartition journalière, le mois et l'année : une vente
+  du soir (par exemple 22 h à Montréal, 2 h UTC le lendemain) compte dans sa journée locale ; les bornes sont ramenées en UTC pour la
+  requête (heure des paiements en base). Les totaux ne changent pas, seule la répartition entre jours voisins bouge.
 
 ## Cartes-cadeaux et avoirs (lot F9, 27/10/2026)
 

@@ -143,6 +143,43 @@ class PosGiftCardTerminalApiTest extends WebTestCase
         $this->db->executeStatement('UPDATE entreprise SET pos_tap_to_pay_allowed = false');
     }
 
+    /** Question F9 / C4 (01/11/2026) : parts carte-cadeau ou avoir {type 4 | 5, amount en cents} dans otherPayments du paiement terminal, sans code : comptées dans la part carte attendue */
+    public function testGiftCardPartsInOtherPaymentsReduceTheExpectedCardPart(): void
+    {
+        $this->configureSimulatedReader();
+        $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        $this->terminal = $this->posTerminal();
+        $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register, 'cashFund' => 10000]);
+        $this->db->executeStatement("UPDATE product SET price = 4349, special_price = NULL WHERE code = 'DEMO-CASQUETTE'"); // 43,49 + TPS 2,17 + TVQ 4,34 = 50,00
+        $items = [['productVariantId' => $this->cap, 'quantity' => 1]];
+        $this->assertSame(5000, $this->json($this->request('POST', '/api/pos/quote', ['items' => $items, 'cashRegisterId' => $this->register]))['total'], 'vente de 50,00 $');
+        $card = $this->json($this->request('POST', '/api/pos/gift-cards', ['amount' => 2000, 'paymentMethods' => [['type' => 2, 'amount' => 20]], 'cashRegisterId' => $this->register]), 201)['giftCard'];
+        $error = fn (Response $r) => [$r->getStatusCode(), json_decode($r->getContent(), true)['error'] ?? null];
+
+        // Paiement simple : carte-cadeau 20 $ + terminal 30 $ ; sans la part carte-cadeau déclarée, le terminal attendrait 50 $
+        $short = $this->request('POST', '/api/pos/terminal/payments', ['cashRegisterId' => $this->register, 'amount' => 3000, 'items' => $items]);
+        $this->assertSame([422, 'AMOUNT_MISMATCH', 5000], [$short->getStatusCode(), json_decode($short->getContent(), true)['error'], json_decode($short->getContent(), true)['expectedCard']]);
+        $tp = $this->json($this->request('POST', '/api/pos/terminal/payments', ['cashRegisterId' => $this->register, 'amount' => 3000, 'items' => $items, 'otherPayments' => [['type' => 4, 'amount' => 2000]]]), 201);
+        $this->assertSame([3000, 'waiting_for_card', 'sale'], [$tp['amount'], $tp['status'], $tp['purpose']]);
+        $this->json($this->request('POST', '/api/pos/terminal/payments/' . $tp['paymentId'] . '/simulate', ['type' => 'card_present']));
+        $sale = $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => $items, 'paymentMethods' => [['type' => 4, 'amount' => 20, 'code' => $card['code']], ['type' => 1, 'amount' => 30, 'terminalPaymentId' => $tp['paymentId']]], 'cashRegisterId' => $this->register]), 201);
+        $this->assertEquals([50.0, 20.0, 30.0], [$sale['totalAmount'], $sale['giftCardApplied'], $sale['amountDue']]);
+        $this->assertSame(0, $this->json($this->request('GET', '/api/pos/gift-cards/' . $card['code']))['balance'], 'carte-cadeau débitée à la vente');
+        $this->assertSame('succeeded', FakeTerminalGateway::$intents[$tp['stripePaymentIntentId']]['status'], 'part terminal capturée');
+
+        // Paiement mixte : espèces 10 $ + avoir 20 $ + terminal 20 $ sur une seconde vente de 50 $
+        $this->db->executeStatement('UPDATE entreprise SET pos_store_credit_enabled = true');
+        $credit = $this->json($this->request('POST', '/api/pos/gift-cards', ['amount' => 2000, 'paymentMethods' => [['type' => 2, 'amount' => 20]], 'cashRegisterId' => $this->register]), 201)['giftCard']; // une carte-cadeau de 20 $ fait aussi l'affaire comme « autre part »
+        $mixed = $this->json($this->request('POST', '/api/pos/terminal/payments', ['cashRegisterId' => $this->register, 'amount' => 2000, 'items' => $items, 'otherPayments' => [['type' => 2, 'amount' => 1000], ['type' => 4, 'amount' => 2000]]]), 201);
+        $this->assertSame(2000, $mixed['amount']);
+        $this->json($this->request('POST', '/api/pos/terminal/payments/' . $mixed['paymentId'] . '/simulate', ['type' => 'interac_present']));
+        $sale2 = $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => $items, 'paymentMethods' => [['type' => 2, 'amount' => 10], ['type' => 4, 'amount' => 20, 'code' => $credit['code']], ['type' => 1, 'amount' => 20, 'terminalPaymentId' => $mixed['paymentId']]], 'cashRegisterId' => $this->register]), 201);
+        $this->assertEquals([50.0, 20.0, 30.0], [$sale2['totalAmount'], $sale2['giftCardApplied'], $sale2['amountDue']], 'dû 30 $ = 10 $ espèces + 20 $ terminal');
+        $x = $this->json($this->request('GET', "/api/caisse/report/x?cashRegisterId=$this->register"));
+        $this->assertSame([3000, 2000, 4000], [$x['cardTerminal']['terminal'], $x['cardTerminal']['interac'], $x['sales']['giftCards']], 'rapport X : terminal 30 $, Interac 20 $, part cartes-cadeaux 40 $');
+        $this->assertSame([422, 'VALIDATION_FAILED'], $error($this->request('POST', '/api/pos/terminal/payments', ['cashRegisterId' => $this->register, 'amount' => 2000, 'items' => $items, 'otherPayments' => [['type' => 1, 'amount' => 1000]]])), 'une part carte dans otherPayments est refusée (type 1 interdit)');
+    }
+
     private function configureSimulatedReader(): void
     {
         $provider = static::getContainer()->get(TenantEntityManagerProvider::class);
