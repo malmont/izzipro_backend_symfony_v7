@@ -63,6 +63,14 @@ class CancelOrderUseCase
             if (!$order) {
                 throw new Exception('Order not found');
             }
+            // Avoir (commande de retour F2) et vente déjà annulée (01/11/2026) : rien à rembourser, refus clair ; avant, l'annulation d'un avoir
+            // échouait sur l'unicité de l'avoir numéroté (400 avec l'erreur SQL, transaction annulée, rien ne sortait de la caisse)
+            if ($order->getOrderType()?->getId() === 2) {
+                throw new CashRegisterException('ORDER_NOT_REFUNDABLE', 'Un avoir (commande de retour) ne s\'annule pas et ne se rembourse pas : le client a déjà été remboursé par ce retour', 409, [], ['orderId' => $order->getId(), 'orderType' => 2]);
+            }
+            if ($order->getOrderSource()?->getId() === 2 && $order->getStatus()?->getId() === 7) {
+                throw new CashRegisterException('ORDER_NOT_REFUNDABLE', 'Cette vente est déjà annulée et remboursée', 409, [], ['orderId' => $order->getId(), 'status' => 7]);
+            }
             if ($order->getOrderType()?->getId() === 3) { // vente d'une carte-cadeau (F9) : annulation par POST /api/pos/gift-cards/{code}/cancel (carte jamais utilisée)
                 throw new CashRegisterException('GIFT_CARD_ORDER', 'Vente d\'une carte-cadeau : utilisez l\'annulation de la carte (POST /api/pos/gift-cards/{code}/cancel)', 409, [], ['orderId' => $order->getId()]);
             }

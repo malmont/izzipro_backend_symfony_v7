@@ -439,6 +439,9 @@ failureMessage}, createdAt, updatedAt}`. `succeeded` + `captured: false` : carte
   clé d'idempotence** : même capture (clé Stripe `pos-capture-<pi>`), vente enregistrée une fois. Sans réessai, la
   réconciliation relit Stripe : le paiement passe « débité » et apparaît dans les **paiements sans vente** ; une
   autorisation capturée n'est jamais annulée.
+- `POST /api/order/cancel/{id}` (01/11/2026) : un **avoir** (commande de retour F2) ou une **vente déjà annulée** → **409 `ORDER_NOT_REFUNDABLE`**
+  `{orderId, orderType | status}`, rien ne sort de la caisse ; une vente de carte-cadeau garde son 409 `GIFT_CARD_ORDER`. Avant, l'annulation d'un avoir
+  échouait sur l'unicité de l'avoir numéroté (400 avec l'erreur SQL, transaction annulée : aucun remboursement n'est jamais sorti). Commandes web : inchangées.
 - `POST /api/order/cancel/{id}` d'une vente payée sur le terminal, remboursée autrement qu'en espèces
   (`paymentMethod ≠ 2`) : **carte de crédit** → remboursement Stripe en ligne dans la transaction de l'annulation
   (`refund_application_fee`, la plateforme rend sa commission) ; **Interac** → le remboursement doit d'abord être
@@ -559,6 +562,12 @@ cent du prix unitaire taxes comprises d'une vente à l'unité.
 | `GET /api/pos/returns/lookup?orderId=` ou `?barcode=IZ-T-1-123` ou `?receipt=C1-123[&cashRegisterId=]` | — | 200 `{orderId, reference, soldAt, receiptNumber, receiptReference, barcode, cashRegister, totalAmount, cashRounding, payments {cash, card, other, terminal: null \| {paymentId, paymentMethodType, cardBrand, last4, refundable}}, refunded {cash, card, total}, lines: [{orderItemId, productVariantId, name, saleUnit, quantity, returnedQuantity, returnableQuantity, unitPrice, unitTaxes, unitRefundable, taxes}], eligible {allowed, reason: null \| ORDER_NOT_RETURNABLE \| ORDER_CANCELED \| RETURN_DEADLINE_EXCEEDED \| NOTHING_LEFT_TO_RETURN}, returnDeadline, reasons, restockDefault}` ; 404 `ORDER_NOT_FOUND` / `RECEIPT_NOT_FOUND`, 422 `BARCODE_INVALID`, 409 `RECEIPT_AMBIGUOUS {cashRegisterIds}` (même numéro sur plusieurs postes sans préfixe : préciser le poste ou scanner) |
 | `POST /api/pos/returns` | `{orderId, lines: [{orderItemId, quantity}], reasonCode? (settings.returns.reasons), reasonText?, restock? (défaut du site), refund?: {method: original \| cash \| card \| declared_card, terminalRefundId?}, cashRegisterId?}` ; sans ticket (réglage) : `{items: [{productVariantId, quantity}], …}` aux prix actuels | 201 retour (ci-dessous). Refus : 404 `ORDER_NOT_FOUND`, 409 `ORDER_NOT_RETURNABLE`, 409 `ORDER_CANCELED`, 409 `RETURN_DEADLINE_EXCEEDED {days}`, 409 `RETURN_WITHOUT_RECEIPT_FORBIDDEN`, 422 `RETURN_LINE_UNKNOWN`, 422 `RETURN_QUANTITY_EXCEEDED {orderItemId, requested, returnable}`, 422 `RETURN_REASON_REQUIRED`, 422 `RETURN_REASON_INVALID {reasons}`, 422 `REFUND_METHOD_INVALID {cardAvailable}`, 409 `CASH_REFUND_FORBIDDEN {cardPaid}`, 409 `TERMINAL_REFUND_REQUIRED {terminalPaymentId, amount}` (Interac), 409 `TERMINAL_REFUND_ALREADY_USED`, 409 `CASH_REGISTER_CLOSED`, 403 `APPROVAL_REQUIRED` |
 | `POST /api/pos/exchanges` | `{return: {…comme ci-dessus…}, sale: {items, paymentMethods?, cashRegisterId?}}` | 201 `{return, sale}` : `sale` = réponse de `create-multi-payment` (ticket) ; mêmes refus, plus ceux de la vente |
+
+**Avoirs (01/11/2026)** : un **avoir** (commande de retour, type 2) ou une vente de carte-cadeau (type 3) donné en `orderId` à `lookup`,
+`returns` ou `exchanges` → **409 `ORDER_NOT_RETURNABLE`** `{orderId, orderType, originalOrderId}` (« on ne retourne pas un retour ») ; avant,
+`lookup` répondait 200 avec `eligible.allowed: false`, que le POS pouvait ignorer. Le code-barres d'un avoir de retour (`IZ-A-…`) renvoie,
+lui, à la **vente d'origine**, qui reste consultable et retournable pour ses unités restantes ; celui d'un avoir d'annulation renvoie à la
+vente annulée (`eligible.reason: ORDER_CANCELED`).
 
 Retour : `{returnId, returnOrderId, orderId, exchangeOrderId, creditNoteNumber, creditNoteReference, barcode, cashRegister,
 amount, subTotal, totalTax, creditApplied, refund {method, amount, cash, card, cashRounding, terminal: null | {paymentId,

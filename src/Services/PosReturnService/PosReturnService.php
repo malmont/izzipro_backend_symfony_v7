@@ -139,6 +139,11 @@ class PosReturnService
     /** Vente et lignes remboursables : {order, receipt, payments, lines, eligible} */
     public function lookup(Order $order): array
     {
+        // Un avoir (commande de retour) ou une vente de carte-cadeau ne se retourne pas : refus franc (01/11/2026 ; avant : 200 avec eligible.allowed false,
+        // que le POS pouvait ignorer). Le code-barres d'un avoir de retour (IZ-A-…) renvoie, lui, à la vente d'origine (findSale) et reste consultable.
+        if ($order->getOrderType()?->getId() === self::ORDER_TYPE_RETURN || $order->getOrderType()?->getId() === 3) {
+            throw new CashRegisterException('ORDER_NOT_RETURNABLE', $order->getOrderType()?->getId() === 3 ? 'Vente d\'une carte-cadeau : pas de retour (annulation de la carte par POST /api/pos/gift-cards/{code}/cancel)' : 'Un avoir (commande de retour) ne se retourne pas : consultez la vente d\'origine', 409, [], ['orderId' => $order->getId(), 'orderType' => $order->getOrderType()?->getId(), 'originalOrderId' => $order->getReturnedFrom()?->getId()]);
+        }
         $em = $this->emProvider->getEntityManager();
         $settings = $this->settings();
         $eligible = ['allowed' => true, 'reason' => null];
