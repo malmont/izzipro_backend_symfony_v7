@@ -103,12 +103,24 @@ final class SubscriptionService
     private function subscribeLocked(User $user, SubscriptionPlan $plan, int $quantity, ?Adress $address, ?Carrier $carrier, int $shippingAmount): array
     {
         $em = $this->emProvider->getEntityManager();
-        // Double souscription (double clic, nouvel essai après une erreur, 09/10/2026) : un abonnement encore incomplet à
+        // Double souscription (double clic, nouvel essai après une erreur, 09/10/2026) : un essai sans carte (même formule et
+        // quantité) est repris avec son SetupIntent (25/10/2026) ; un abonnement encore incomplet à
         // la même formule et quantité est repris (même paiement à confirmer) ; un incomplet d'une autre formule, ou
         // expiré chez Stripe (23 h sans paiement), est annulé ; un abonnement en cours (essai, actif, impayé, en pause,
         // résiliation programmée comprise) au même produit refuse la souscription (409 already_subscribed), quelle que
         // soit la formule : pour en changer, POST /api/subscriptions/{id}/change-plan.
         foreach ($this->subscriptions()->findOpenForProduct($user, $plan->getProduct()) as $open) {
+            // Essai dont la carte n'a jamais été enregistrée (25/10/2026, demande du frontend) : même formule et quantité,
+            // repris avec son SetupIntent au lieu d'un 409, sur n'importe quel appareil
+            if ($open->getStatus() === Subscription::STATUS_TRIALING && $open->hasPaymentMethod() !== true && $open->getStripeSubscriptionId()
+                && $open->getPlan()?->getId() === $plan->getId() && $open->getQuantity() === $quantity) {
+                $state = $this->stripe->retrieve($open->getStripeSubscriptionId());
+                $this->applyStripeState($open, $state);
+                $em->flush();
+                if ($state['status'] === 'trialing' && $state['hasPaymentMethod'] !== true && ($state['intentType'] ?? null) === 'setup' && $state['clientSecret']) {
+                    return ['subscription' => $open, 'clientSecret' => $state['clientSecret'], 'intentType' => 'setup', 'reused' => true];
+                }
+            }
             if ($open->getStatus() !== Subscription::STATUS_INCOMPLETE) {
                 throw new SubscriptionException(409, 'Vous êtes déjà abonné à ce produit : changez de formule ou résiliez depuis votre compte.',
                     [['path' => 'planId', 'message' => sprintf('abonnement n° %d déjà en cours', $open->getId())]],
@@ -264,7 +276,15 @@ final class SubscriptionService
      */
     public function ensureDefaultPaymentMethod(Subscription $subscription, string $invoiceId): ?string
     {
-        return $subscription->getStripeSubscriptionId() !== null ? $this->stripe->ensureDefaultPaymentMethod($subscription->getStripeSubscriptionId(), $invoiceId) : null;
+        if ($subscription->getStripeSubscriptionId() === null) {
+            return null;
+        }
+        $paymentMethod = $this->stripe->ensureDefaultPaymentMethod($subscription->getStripeSubscriptionId(), $invoiceId);
+        if ($paymentMethod !== null) {
+            $subscription->setHasPaymentMethod(true);
+        }
+
+        return $paymentMethod;
     }
 
     public function applyStripeState(Subscription $subscription, array $state): void
@@ -284,6 +304,9 @@ final class SubscriptionService
         }
         if (array_key_exists('cancelAtPeriodEnd', $state)) {
             $subscription->setCancelAtPeriodEnd((bool) $state['cancelAtPeriodEnd']);
+        }
+        if (($state['hasPaymentMethod'] ?? null) !== null) {
+            $subscription->setHasPaymentMethod((bool) $state['hasPaymentMethod']);
         }
     }
 

@@ -13,6 +13,15 @@
         <ini name="display_errors" value="1" />
         <ini name="error_reporting" value="-1" />
         <server name="APP_ENV" value="test" force="true" />
+        <!-- débogage coupé dans le conteneur (APP_DEBUG=0, 17/10/2026) ; une variable d'environnement passe avant .env.test :
+             forcé ici pour les tests seulement, sinon leur cache (description des entités Doctrine…) ne suit plus le code
+             (25/10/2026). Le site, lui, reste sans débogage. -->
+        <env name="APP_DEBUG" value="1" force="true" />
+        <server name="APP_DEBUG" value="1" force="true" />
+        <!-- débogage coupé dans le conteneur (APP_DEBUG=0, 17/10/2026) ; une variable d'environnement passe avant .env.test :
+             forcé ici, sinon le cache des tests (description des entités Doctrine…) ne suit plus le code (25/10/2026) -->
+        <env name="APP_DEBUG" value="1" force="true" />
+        <server name="APP_DEBUG" value="1" force="true" />
         <server name="SHELL_VERBOSITY" value="-1" />
         <!-- code par e-mail activé en production (.env du conteneur) : les tests qui le veulent l'activent eux-mêmes -->
         <env name="ADMIN_OTP_REQUIRED" value="0" force="true" />

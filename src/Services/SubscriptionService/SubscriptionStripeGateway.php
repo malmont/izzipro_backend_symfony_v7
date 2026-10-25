@@ -254,6 +254,8 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
             'currentPeriodEnd' => isset($a['current_period_end']) ? (int) $a['current_period_end'] : (isset($item['current_period_end']) ? (int) $item['current_period_end'] : null),
             'cancelAtPeriodEnd' => (bool) ($a['cancel_at_period_end'] ?? false),
             'paused' => !empty($a['pause_collection']),
+            // carte par défaut de l'abonnement (champ absent de l'objet : inconnu)
+            'hasPaymentMethod' => array_key_exists('default_payment_method', $a) ? !empty($a['default_payment_method']) : null,
             'clientSecret' => $paymentSecret ?? $setupSecret,
             // nature du clientSecret : le frontend confirme un paiement (confirmPayment) ou un enregistrement de carte (confirmSetup)
             'intentType' => $paymentSecret !== null ? 'payment' : ($setupSecret !== null ? 'setup' : null),

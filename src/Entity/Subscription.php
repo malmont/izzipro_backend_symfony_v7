@@ -87,6 +87,13 @@ class Subscription
     #[ORM\Column(name: 'payment_issue', type: Types::JSON, nullable: true)]
     private ?array $paymentIssue = null;
 
+    /**
+     * Carte enregistrée chez Stripe comme moyen de paiement par défaut de l'abonnement (25/10/2026) : recopiée à chaque
+     * lecture ou webhook de l'abonnement ; null = inconnu (abonnement antérieur, pas encore relu).
+     */
+    #[ORM\Column(name: 'has_payment_method', nullable: true)]
+    private ?bool $hasPaymentMethod = null;
+
     public function __construct()
     {
         $this->createdAt = $this->updatedAt = new \DateTimeImmutable();
@@ -120,6 +127,8 @@ class Subscription
     public function getCanceledAt(): ?\DateTimeImmutable { return $this->canceledAt; }
     public function setCanceledAt(?\DateTimeImmutable $at): static { $this->canceledAt = $at; return $this; }
     public function getPausedAt(): ?\DateTimeImmutable { return $this->pausedAt; }
+    public function hasPaymentMethod(): ?bool { return $this->hasPaymentMethod; }
+    public function setHasPaymentMethod(?bool $hasPaymentMethod): static { $this->hasPaymentMethod = $hasPaymentMethod; return $this; }
     public function getPaymentIssue(): ?array { return $this->paymentIssue; }
     public function setPaymentIssue(?array $issue): static { $this->paymentIssue = $issue; return $this; }
     public function setPausedAt(?\DateTimeImmutable $at): static { $this->pausedAt = $at; return $this; }

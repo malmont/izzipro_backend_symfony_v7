@@ -12,7 +12,8 @@ use App\Entity\User;
  * Un abonnement Stripe est rendu sous forme de tableau normalisé :
  * { id, status, currentPeriodEnd: ?int (horodatage), cancelAtPeriodEnd: bool, paused: bool, clientSecret: ?string,
  *   intentType: 'payment' | 'setup' | null (nature du clientSecret : paiement de la première facture, ou enregistrement
- *   de la carte quand il n'y a rien à payer, période d'essai), itemId: ?string }.
+ *   de la carte quand il n'y a rien à payer, période d'essai), hasPaymentMethod: ?bool (carte par défaut de
+ *   l'abonnement chez Stripe ; null : inconnu), itemId: ?string }.
  */
 interface SubscriptionStripeGatewayInterface
 {

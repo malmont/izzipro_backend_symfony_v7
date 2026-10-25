@@ -152,6 +152,24 @@ class SubscriptionApiTest extends WebTestCase
             $body = json_decode($created->getContent(), true);
             $this->assertSame(['trialing', 'setup'], [$body['status'], $body['intentType']], 'essai gratuit : rien à payer, la carte s\'enregistre (confirmSetup)');
             $this->assertStringStartsWith('seti_test_secret_', $body['clientSecret']);
+            $this->assertFalse($body['subscription']['hasPaymentMethod'], 'aucune carte encore enregistrée');
+
+            // client parti sans enregistrer sa carte : la même souscription reprend l'essai et son SetupIntent (pas de 409),
+            // quel que soit l'appareil ; une autre quantité reste refusée
+            $again = $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plan['id'], 'addressId' => $this->address(), 'carrierId' => 1]));
+            $this->assertSame(200, $again->getStatusCode(), $again->getContent());
+            $resumed = json_decode($again->getContent(), true);
+            $this->assertSame([true, 'setup', $body['clientSecret'], $body['subscriptionId']], [$resumed['reused'], $resumed['intentType'], $resumed['clientSecret'], $resumed['subscriptionId']]);
+            $this->assertSame(409, $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plan['id'], 'quantity' => 2]))->getStatusCode(), 'autre quantité : refusée');
+
+            // carte enregistrée (confirmSetup) : Stripe envoie customer.subscription.updated avec la carte par défaut
+            $stripeIdForSetup = $this->db->fetchOne('SELECT stripe_subscription_id FROM subscription WHERE id = ?', [$body['subscriptionId']]);
+            $updated = $this->webhook('customer.subscription.updated', ['id' => $stripeIdForSetup, 'status' => 'trialing', 'default_payment_method' => 'pm_test_setup', 'cancel_at_period_end' => false, 'metadata' => ['tenant_code' => MV_TEST_TENANT_CODE]]);
+            $this->assertSame('processed', json_decode($updated->getContent(), true)['status'], $updated->getContent());
+            $this->assertTrue($this->json($this->request('GET', '/api/subscriptions/' . $body['subscriptionId']))['hasPaymentMethod']);
+            FakeSubscriptionStripeGateway::$subscriptions[$stripeIdForSetup]['hasPaymentMethod'] = true;
+            $this->assertSame(409, $this->request('POST', '/api/subscriptions', json_encode(['planId' => $plan['id'], 'addressId' => $this->address(), 'carrierId' => 1]))->getStatusCode(), 'essai avec carte : déjà abonné');
+            unset(FakeSubscriptionStripeGateway::$subscriptions[$stripeIdForSetup]['defaultPaymentMethod']);
 
             // fin d'essai sans carte : facture payée depuis le courriel d'impayé, la carte devient celle de l'abonnement ;
             // une erreur Stripe à ce moment ne bloque pas le webhook

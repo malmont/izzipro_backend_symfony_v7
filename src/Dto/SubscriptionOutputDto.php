@@ -28,7 +28,9 @@ final class SubscriptionOutputDto
         public readonly string $createdAt,
         public readonly ?string $canceledAt,
         public readonly array $orders,
-        public readonly ?array $latestInvoice = null
+        public readonly ?array $latestInvoice = null,
+        /** Carte enregistrée chez Stripe pour l'abonnement (25/10/2026) ; null : inconnu, abonnement pas encore relu */
+        public readonly ?bool $hasPaymentMethod = null
     ) {
     }
 
@@ -53,7 +55,8 @@ final class SubscriptionOutputDto
                 'id' => (int) $o->getId(), 'reference' => (string) $o->getReference(), 'date' => $o->getOrderDate()->format(\DateTimeInterface::ATOM),
                 'total' => (int) round((float) $o->getTotalAmount()), 'status' => $o->getStatus()?->getTranslation($locale)?->getName() ?? $o->getStatus()?->getName(),
             ], $orders),
-            $subscription->getStatus() === Subscription::STATUS_PAST_DUE ? $subscription->getPaymentIssue() : null
+            $subscription->getStatus() === Subscription::STATUS_PAST_DUE ? $subscription->getPaymentIssue() : null,
+            $subscription->hasPaymentMethod()
         );
     }
 }

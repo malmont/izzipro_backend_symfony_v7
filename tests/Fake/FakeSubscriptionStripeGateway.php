@@ -67,7 +67,7 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
         self::$subscriptions[$id] = [
             'id' => $id, 'status' => $trialDays > 0 ? 'trialing' : 'incomplete', 'currentPeriodEnd' => (new \DateTimeImmutable('+1 month'))->getTimestamp(),
             'cancelAtPeriodEnd' => false, 'paused' => false, 'clientSecret' => ($trialDays > 0 ? 'seti_test_secret_' : 'pi_test_secret_') . $id,
-            'intentType' => $trialDays > 0 ? 'setup' : 'payment', 'itemId' => "si_test_{$id}", 'canceledAt' => null,
+            'intentType' => $trialDays > 0 ? 'setup' : 'payment', 'hasPaymentMethod' => false, 'itemId' => "si_test_{$id}", 'canceledAt' => null,
             'priceId' => $priceId, 'quantity' => $quantity, 'customerId' => $customerId, 'metadata' => $metadata, 'taxRateIds' => $taxRateIds, 'automaticTax' => $automaticTax, 'shippingPriceId' => $shippingPriceId,
         ];
         self::$calls[] = ['create', $id, $priceId, $quantity, $trialDays, $metadata, $taxRateIds, $automaticTax, $shippingPriceId];
@@ -139,6 +139,8 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
         if (!empty(self::$subscriptions[$subscriptionId]['defaultPaymentMethod'])) {
             return null;
         }
+
+        self::$subscriptions[$subscriptionId]['hasPaymentMethod'] = true;
 
         return self::$subscriptions[$subscriptionId]['defaultPaymentMethod'] = self::$subscriptions[$subscriptionId]['invoicePaymentMethod'] ?? 'pm_test_card';
     }
