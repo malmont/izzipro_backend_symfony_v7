@@ -17,11 +17,12 @@ use Symfony\Component\Routing\Attribute\Route;
 class PosQuoteController extends AbstractController
 {
     public function __construct(private readonly PosDiscountService $discounts, private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards,
-        private readonly \App\Services\PosCouponService\PosCouponService $coupons) // coupons de fabricant (F17, 01/11/2026)
+        private readonly \App\Services\PosCouponService\PosCouponService $coupons, // coupons de fabricant (F17, 01/11/2026)
+        private readonly \App\Services\PosCustomerService\PosLoyaltyQuote $loyalty) // rachat de points connu avant l'encaissement (F8)
     {
     }
 
-    /** {items: [{productVariantId, quantity, customizationId?, discounts?: [{type, value, reasonCode?, reasonText?}]}], ticketDiscount?: {type, value, reasonCode?, reasonText?}, cashRegisterId?} */
+    /** {items: [{productVariantId, quantity, customizationId?, discounts?: [{type, value, reasonCode?, reasonText?}]}], ticketDiscount?: {type, value, reasonCode?, reasonText?}, cashRegisterId?, customerId?, loyalty?: {redeemPoints}} */
     #[Route('/api/pos/quote', name: 'pos_quote', methods: ['POST'])]
     public function quote(Request $request): JsonResponse
     {
@@ -30,7 +31,19 @@ class PosQuoteController extends AbstractController
             return $this->json(['error' => 'VALIDATION_FAILED', 'message' => 'items : au moins un article attendu', 'errors' => [['path' => 'items', 'message' => 'au moins un article attendu']]], 422);
         }
         try {
-            $quote = $this->discounts->quote(array_values($data['items']), is_array($data['ticketDiscount'] ?? null) ? $data['ticketDiscount'] : null);
+            $ticketDiscount = is_array($data['ticketDiscount'] ?? null) ? $data['ticketDiscount'] : null;
+            // Fiche client et rachat de points (F8) : mêmes contrôles que la vente, sans écriture ; la récompense devient la remise de ticket
+            // « Récompense fidélité » ; clé loyalty ajoutée seulement si des points sont rachetés (sans ces clés : réponse identique)
+            $loyalty = null;
+            $customerId = is_numeric($data['customerId'] ?? null) ? (int) $data['customerId'] : null;
+            $redeemPoints = \App\Services\PosCustomerService\PosLoyaltyQuote::redeemPoints($data);
+            if ($customerId !== null || $redeemPoints > 0) {
+                ['ticketDiscount' => $ticketDiscount, 'loyalty' => $loyalty] = $this->loyalty->apply($customerId, $redeemPoints, $ticketDiscount);
+            }
+            $quote = $this->discounts->quote(array_values($data['items']), $ticketDiscount);
+            if ($loyalty !== null) {
+                $quote['loyalty'] = $loyalty;
+            }
             // Cartes-cadeaux et avoirs présentés (F9) : solde, part applicable et reste à payer, sans débit ; clés ajoutées seulement si giftCards est envoyé
             if (!empty($data['giftCards'])) {
                 $gift = $this->giftCards->preview($data['giftCards'], (int) $quote['total']);

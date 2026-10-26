@@ -645,7 +645,7 @@ unitaire **brut** (`unit_price`), le **net** en `total_price`, les remises (`dis
 
 | Méthode, route | Corps | Réponse |
 |---|---|---|
-| `POST /api/pos/quote` (caisse, lecture, sans `Idempotency-Key`) | `{items: [{productVariantId, quantity, customizationId?, discounts?}], ticketDiscount?, cashRegisterId?}` | 200 comme `cart/quote` (taxes du magasin) plus `grossSubtotal`, `discounts {lines, ticket: null \| {type, value, amount, reasonCode, reasonText, scope}, total, gross}`, `cashTotal` ; lignes : `gross`, `discounts [{type, value, amount, reason…, scope}]`, `discountAmount`, `total` (net). Refus : 422 `DISCOUNT_INVALID`, 409 `DISCOUNT_NOT_ALLOWED {scope?}`, 422 `DISCOUNT_REASON_REQUIRED`, 422 `DISCOUNT_REASON_INVALID {reasons}`, 422/404 `QUOTE_INVALID` |
+| `POST /api/pos/quote` (caisse, lecture, sans `Idempotency-Key`) | `{items: [{productVariantId, quantity, customizationId?, discounts?}], ticketDiscount?, cashRegisterId?, customerId?, loyalty?: {redeemPoints}}` (F8 : récompense fidélité, voir « Fiche client et fidélité ») | 200 comme `cart/quote` (taxes du magasin) plus `grossSubtotal`, `discounts {lines, ticket: null \| {type, value, amount, reasonCode, reasonText, scope}, total, gross}`, `cashTotal` ; lignes : `gross`, `discounts [{type, value, amount, reason…, scope}]`, `discountAmount`, `total` (net). Refus : 422 `DISCOUNT_INVALID`, 409 `DISCOUNT_NOT_ALLOWED {scope?}`, 422 `DISCOUNT_REASON_REQUIRED`, 422 `DISCOUNT_REASON_INVALID {reasons}`, 422/404 `QUOTE_INVALID` |
 | `POST /api/order/create-multi-payment`, `sale` de `POST /api/pos/exchanges`, `POST /api/pos/terminal/payments` | mêmes `items[].discounts` et `ticketDiscount` (facultatifs : rien ne change sans eux) | la vente recalcule tout : paiements = net (sinon 400 `PAYMENT_TOTAL_MISMATCH`), part carte du terminal sur le net ; réponse et bloc ticket : `grossSubTotal`, `discounts {total, ticket, lines: [{productVariantId, quantity, gross, net, amount, discounts}]}` (dollars) ; mêmes refus que le devis plus 403 `APPROVAL_REQUIRED {action: "discount", context: {amount, percent, scope}}` et 403 `DISCOUNT_EXCEEDS_LIMIT {limit, amount, percent}` |
 
 Journal `DISCOUNT_APPLIED` (une entrée par vente remisée : `gross`, `total`, `ticket`, `lines`, `approvedBy` si validation).
@@ -1058,6 +1058,21 @@ consentements ; le responsable voit tout. Fiche client désactivée : 409 `CUSTO
   **hors plafonds et validations caissier**, taxes sur le net ; incompatible avec une remise de ticket saisie (409
   `LOYALTY_TICKET_DISCOUNT_CONFLICT`) ; 422 `LOYALTY_POINTS_INVALID`, 409 `LOYALTY_INSUFFICIENT`, `LOYALTY_DISABLED`,
   `LOYALTY_CONSENT_REQUIRED`, `LOYALTY_CUSTOMER_REQUIRED`. Le programme s'appuie sur les remises F1 : elles doivent rester autorisées.
+- **Rachat connu avant l'encaissement (26/10/2026)** : `customerId` et `loyalty: {redeemPoints}` aussi dans `POST /api/pos/quote`,
+  `POST /api/pos/exchanges/quote` (`sale.customerId`, `sale.loyalty`) et `POST /api/pos/terminal/payments` (mode articles). Mêmes
+  contrôles, même ordre et mêmes refus que la vente, **sans aucune écriture** (points expirés par inactivité : comptés 0, l'expiration
+  est écrite par la vente comme avant). La récompense devient la remise de ticket « Récompense fidélité (N points) » : `total`,
+  `cashTotal`, cartes-cadeaux (`amountDue`), coupons et part carte sont calculés **après** récompense. Clé ajoutée seulement si des points
+  sont rachetés : `loyalty {customerId, redeemPoints, amount, balance, balanceAfter}` (devis), `sale.loyalty` (devis d'échange).
+  Client seul (sans rachat) : contrôlé (404 `CUSTOMER_NOT_FOUND`, 409 `CUSTOMERS_DISABLED`), réponse identique. **Sans ces clés : réponses
+  identiques.** Échange : client = `sale.customerId`, sinon `return.customerId`, sinon client de la vente d'origine.
+  Terminal : aucun point débité (la vente débite) ; rachat sur la vente d'une carte-cadeau → 409 `TERMINAL_PAYMENT_PURPOSE_MISMATCH` ;
+  si le solde change entre le paiement et la vente, la vente refuse (`LOYALTY_INSUFFICIENT`) et le paiement capturé reste dans les
+  paiements sans vente (réconciliation C4). Le POS envoie ensuite à la vente exactement les mêmes `customerId` et `loyalty`.
+- **Correctif de l'échange avec rachat (26/10/2026)** : le crédit appliqué était calculé sur le total de la vente d'échange **avant**
+  récompense ; quand le retour couvrait ce total, le crédit dépassait la vente et le client perdait la récompense (retour 33,34 $, vente
+  27,59 $ après 500 points : 0 rendu au lieu de 5,75 $). Le crédit est désormais calculé après récompense. Sans rachat : inchangé.
+  Test : `PosLoyaltyQuoteApiTest`.
 - **Retour** : points de la vente repris au prorata du net remboursé, jamais au-delà des points gagnés ; **points déjà dépensés :
   solde ramené à 0, manque indiqué** dans la réponse (`loyalty {returned, shortfall, balance}`) et le journal (`LOYALTY_RETURNED
   {due, points, shortfall}`), le retour n'est jamais bloqué ; annulation d'une vente : tous les points repris, même règle. **Expiration**

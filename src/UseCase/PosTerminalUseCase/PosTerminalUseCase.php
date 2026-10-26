@@ -11,7 +11,8 @@ use App\Services\PosTerminalService\PosTerminalPaymentService;
 /** Terminal de paiement Stripe de la caisse (C4, 23/10/2026) : validation des corps et orchestration pour /api/pos/terminal */
 class PosTerminalUseCase
 {
-    public function __construct(private readonly PosTerminalPaymentService $payments, private readonly CashRegisterResolver $registers)
+    public function __construct(private readonly PosTerminalPaymentService $payments, private readonly CashRegisterResolver $registers,
+        private readonly \App\Services\PosCustomerService\PosLoyaltyQuote $loyalty) // rachat de points dans la part carte (F8)
     {
     }
 
@@ -20,7 +21,7 @@ class PosTerminalUseCase
         return $this->payments->status($this->registers->resolve(is_numeric($cashRegisterId) ? (int) $cashRegisterId : null));
     }
 
-    /** {cashRegisterId?, amount (cents, part carte), items[], otherPayments?: [{type, amount (cents)}]} */
+    /** {cashRegisterId?, amount (cents, part carte), items[], otherPayments?: [{type, amount (cents)}], ticketDiscount?, customerId?, loyalty?: {redeemPoints}} */
     public function create(User $user, array $body, ?string $posKey): PosTerminalPayment
     {
         $errors = [];
@@ -51,9 +52,21 @@ class PosTerminalUseCase
             throw new CashRegisterException('VALIDATION_FAILED', 'Corps invalide', 422, $errors);
         }
 
+        // Fiche client et rachat de points (F8) : part carte calculée après la récompense (remise de ticket « Récompense fidélité »), mêmes refus
+        // que la vente, aucun point débité ici (la vente débite). Vente d'une carte-cadeau : pas de rachat. Sans ces clés : inchangé.
+        $ticketDiscount = is_array($body['ticketDiscount'] ?? null) ? $body['ticketDiscount'] : null;
+        $customerId = is_numeric($body['customerId'] ?? null) ? (int) $body['customerId'] : null;
+        $redeemPoints = \App\Services\PosCustomerService\PosLoyaltyQuote::redeemPoints($body);
+        if ($giftCard && $redeemPoints > 0) {
+            throw new CashRegisterException('TERMINAL_PAYMENT_PURPOSE_MISMATCH', 'Pas de rachat de points sur la vente d\'une carte-cadeau', 409, [], ['purpose' => PosTerminalPayment::PURPOSE_GIFT_CARD]);
+        }
+        if (!$giftCard && ($customerId !== null || $redeemPoints > 0)) {
+            $ticketDiscount = $this->loyalty->apply($customerId, $redeemPoints, $ticketDiscount)['ticketDiscount'];
+        }
+
         $reader = is_array($body['reader'] ?? null) ? array_intersect_key($body['reader'], array_flip(['id', 'label', 'type'])) : null; // kit (F13/F16) : lecteur déclaré par l'application, journal seulement
 
-        return $this->payments->start($user, is_numeric($body['cashRegisterId'] ?? null) ? (int) $body['cashRegisterId'] : null, $hasItems ? $body['items'] : [], $others, (int) $body['amount'], $posKey, is_array($body['ticketDiscount'] ?? null) ? $body['ticketDiscount'] : null, $reader, $giftCard ? (int) $body['giftCardAmount'] : null);
+        return $this->payments->start($user, is_numeric($body['cashRegisterId'] ?? null) ? (int) $body['cashRegisterId'] : null, $hasItems ? $body['items'] : [], $others, (int) $body['amount'], $posKey, $ticketDiscount, $reader, $giftCard ? (int) $body['giftCardAmount'] : null);
     }
 
     public function get(int $id, ?User $user = null): PosTerminalPayment

@@ -98,6 +98,34 @@ class PosLoyaltyService
         return intdiv($points * $settings['valuePer100Points'], 100);
     }
 
+    /**
+     * Valeur d'un rachat pour un devis (F8, devis de caisse, d'échange et part carte du terminal) : mêmes contrôles et mêmes refus que
+     * rewardFor, sans aucune écriture ; des points expirés par inactivité comptent pour 0 (la vente écrira l'expiration, comme avant).
+     *
+     * @return array{amount: int, balance: int}
+     */
+    public function previewReward(PosCustomer $customer, int $points, PosCustomerService $customers): array
+    {
+        $settings = $this->settings();
+        if (!$settings['enabled']) {
+            throw new CashRegisterException('LOYALTY_DISABLED', 'Le programme de fidélité est désactivé sur ce site', 409);
+        }
+        if (!$customers->consentGranted($customer, PosCustomerConsent::LOYALTY)) {
+            throw new CashRegisterException('LOYALTY_CONSENT_REQUIRED', 'Le client n\'a pas consenti au programme de fidélité', 409, [], ['customerId' => $customer->getId()]);
+        }
+        if ($points < $settings['minRedeem'] || $points % $settings['redeemStep'] !== 0) {
+            throw new CashRegisterException('LOYALTY_POINTS_INVALID', sprintf('Rachat : au moins %d points, par pas de %d', $settings['minRedeem'], $settings['redeemStep']), 422, [['path' => 'loyalty.redeemPoints', 'message' => 'minimum et pas du site']], ['minRedeem' => $settings['minRedeem'], 'redeemStep' => $settings['redeemStep']]);
+        }
+        $months = $settings['expiryMonths'];
+        $expired = $months !== null && $customer->getLoyaltyPoints() > 0 && $customer->getLoyaltyLastActivityAt() !== null && $customer->getLoyaltyLastActivityAt() <= new \DateTimeImmutable('-' . $months . ' months');
+        $balance = $expired ? 0 : $customer->getLoyaltyPoints();
+        if ($points > $balance) {
+            throw new CashRegisterException('LOYALTY_INSUFFICIENT', 'Solde de points insuffisant', 409, [], ['balance' => $balance, 'requested' => $points]);
+        }
+
+        return ['amount' => intdiv($points * $settings['valuePer100Points'], 100), 'balance' => $balance];
+    }
+
     /** Débit des points rachetés (dans la transaction de la vente) */
     public function redeem(PosCustomer $customer, int $points, int $amount, Order $order, ?Caisse $caisse, ?User $user): void
     {

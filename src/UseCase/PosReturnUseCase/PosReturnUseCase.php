@@ -28,6 +28,7 @@ class PosReturnUseCase
         private readonly \App\Services\PosDiscountService\PosDiscountService $discounts,
         private readonly \App\Services\CaisseService\CashRoundingService $rounding,
         private readonly \App\Services\PosGiftCardService\PosGiftCardService $giftCards, // cartes-cadeaux et avoirs (F9)
+        private readonly \App\Services\PosCustomerService\PosLoyaltyQuote $loyaltyQuote, // rachat de points connu avant l'encaissement (F8)
     ) {
     }
 
@@ -73,7 +74,10 @@ class PosReturnUseCase
             // 1. Montants : retour (prix payés) et vente (devis du serveur) → crédit appliqué
             $returnTotal = $this->returns->preview($returnInput);
             $ticketDiscount = is_array($saleInput['ticketDiscount'] ?? null) ? $saleInput['ticketDiscount'] : null;
-            $saleTotal = $this->createOrder->quoteTotal($saleInput['items'], $ticketDiscount);
+            // Points rachetés (F8) : crédit calculé sur le total APRÈS récompense ; avant, il l'était sur le total avant récompense et dépassait
+            // la vente quand le retour la couvrait (le client perdait la récompense). Sans rachat : inchangé. La vente applique la récompense elle-même.
+            $quoteDiscount = \App\Services\PosCustomerService\PosLoyaltyQuote::redeemPoints($saleInput) > 0 ? $this->exchangeLoyalty($returnInput, $saleInput, $ticketDiscount)['ticketDiscount'] : $ticketDiscount;
+            $saleTotal = $this->createOrder->quoteTotal($saleInput['items'], $quoteDiscount);
             $credit = min($returnTotal, $saleTotal);
             // 2. Retour : seul le reste (retour − crédit) est remboursé au client
             $return = $this->returns->create($user, $returnInput, $posKey, $credit);
@@ -115,6 +119,11 @@ class PosReturnUseCase
         }
         $ticketDiscount = is_array($saleInput['ticketDiscount'] ?? null) ? $saleInput['ticketDiscount'] : null;
         $returnTotal = $this->returns->preview($returnInput);
+        // Fiche client et rachat de points de la vente d'échange (F8) : comme l'échange ; clé sale.loyalty seulement si des points sont rachetés
+        $loyalty = null;
+        if (\App\Services\PosCustomerService\PosLoyaltyQuote::redeemPoints($saleInput) > 0 || is_numeric($saleInput['customerId'] ?? null)) {
+            ['ticketDiscount' => $ticketDiscount, 'loyalty' => $loyalty] = $this->exchangeLoyalty($returnInput, $saleInput, $ticketDiscount);
+        }
         $quote = $this->discounts->quote(array_values($saleInput['items']), $ticketDiscount);
         $credit = min($returnTotal, (int) $quote['total']);
         $amountDue = (int) $quote['total'] - $credit;
@@ -124,13 +133,30 @@ class PosReturnUseCase
 
         return [
             'returnAmount' => $returnTotal,
-            'sale' => ['subtotal' => $quote['subtotal'], 'grossSubtotal' => $quote['grossSubtotal'] ?? $quote['subtotal'], 'discounts' => $quote['discounts'], 'taxes' => $quote['taxes'], 'total' => $quote['total'], 'cashTotal' => $quote['cashTotal']],
+            'sale' => ['subtotal' => $quote['subtotal'], 'grossSubtotal' => $quote['grossSubtotal'] ?? $quote['subtotal'], 'discounts' => $quote['discounts'], 'taxes' => $quote['taxes'], 'total' => $quote['total'], 'cashTotal' => $quote['cashTotal']] + ($loyalty !== null ? ['loyalty' => $loyalty] : []),
             'creditApplied' => $credit,
             'amountDue' => $gift ? $gift['amountDue'] : $amountDue,
             'cashAmountDue' => $this->rounding->round($gift ? $gift['amountDue'] : $amountDue),
             'refundDue' => $refundDue,
             'cashRefundDue' => $this->rounding->round($refundDue),
         ] + ($gift ? ['giftCards' => $gift['giftCards'], 'giftCardApplied' => $gift['giftCardApplied'], 'amountDueBeforeGiftCards' => $amountDue] : []);
+    }
+
+    /**
+     * Rachat de points de la vente d'échange (F8) : client = sale.customerId, sinon celui du retour (return.customerId), sinon celui de la
+     * vente d'origine (même règle que createExchange) ; mêmes contrôles que la vente, sans écriture.
+     */
+    private function exchangeLoyalty(array $returnInput, array $saleInput, ?array $ticketDiscount): array
+    {
+        $customerId = is_numeric($saleInput['customerId'] ?? null) ? (int) $saleInput['customerId'] : null;
+        if ($customerId === null && is_numeric($returnInput['customerId'] ?? null)) {
+            $customerId = (int) $returnInput['customerId'];
+        }
+        if ($customerId === null && is_numeric($returnInput['orderId'] ?? null)) {
+            $customerId = $this->emProvider->getEntityManager()->find(Order::class, (int) $returnInput['orderId'])?->getCustomerId();
+        }
+
+        return $this->loyaltyQuote->apply($customerId, \App\Services\PosCustomerService\PosLoyaltyQuote::redeemPoints($saleInput), $ticketDiscount);
     }
 
     public function returnBody(PosReturn $return, string $locale): array
