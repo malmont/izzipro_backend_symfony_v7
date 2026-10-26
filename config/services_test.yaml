@@ -70,6 +70,11 @@ services:
         autowire: true
         public: true
     App\Services\PosTerminalService\PosTerminalGatewayInterface: '@App\Tests\Fake\FakeTerminalGateway'
+    # Mesure des requêtes lourdes (S8) : inactive dans la suite (le processus PHPUnit cumule sa mémoire) ; RequestPeakLogTest règle ses seuils
+    App\EventSubscriber\RequestPeakLogSubscriber:
+        arguments:
+            $minMb: 1000000
+            $minMs: 100000000
     # Enregistrement des requêtes SQL (S8) : preuve qu'une route reste bornée ; inactif tant qu'un test ne l'a pas démarré
     App\Tests\Fake\SqlRecorderMiddleware:
         tags: ['doctrine.middleware']

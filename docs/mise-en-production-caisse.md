@@ -221,6 +221,10 @@ La route de surveillance pour UptimeRobot (jeton en lecture seule) viendra plus 
 
 - **Clés** : clés réelles restreintes (section 3), rotation annuelle, accès au tableau de bord Stripe en double authentification.
 - **Courriels d'alerte** : vérifier SPF et DKIM du domaine expéditeur de `MAILER_DSN`.
-- **PHP-FPM** : `memory_limit = -1` et 600 secondes de calcul par requête : une requête emballée peut occuper un processus pendant
-  10 minutes et plusieurs gigaoctets. Proposer `memory_limit` borné (par exemple 512M) et `request_terminate_timeout` (par exemple 120 s)
-  pour les requêtes web, les commandes en ligne de commande gardant leurs propres limites.
+- **PHP-FPM (appliqué le 26/10/2026, S8)** : pool web (`docker/php/zz-perf-pool.conf`) à `memory_limit` 1024 Mo par requête,
+  `request_terminate_timeout` 300 s, journal des requêtes de plus de 10 s (`slowlog` vers `docker logs symfony_app_v2`) ; la ligne de
+  commande (workers, timer, commandes) garde ses propres limites. Application : `php-fpm -t` puis
+  `docker exec symfony_app_v2 sh -c 'kill -USR2 1'` (rechargement en douceur) ; retour arrière : `git checkout` du fichier puis le même
+  rechargement. **Mesure** : `var/log/request-peaks-AAAA-MM.log` (`EventSubscriber/RequestPeakLogSubscriber`), une ligne par requête web
+  d'au moins 64 Mo ou 5 s (route, méthode, statut, site, pic mémoire, durée ; jamais le chemin réel), 3 mois gardés. Vers le 02/11/2026 :
+  mémoire maximale réelle par route, puis décision 512 Mo et maintien ou retrait de la mesure.
