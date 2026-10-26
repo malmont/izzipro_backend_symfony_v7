@@ -739,6 +739,8 @@ customizable}]}]` (produits `isPos` vendables, sans location ; `customizable` : 
 `calculationRule: "pos-offline-v1"`, `testCases: "/api/pos/offline-cases"`. Chaque pack émis est conservé sous sa version
 (`pos_offline_pack` : prix, taxes, pas d'arrondi) pour recalculer les ventes aux conditions connues de la tablette. Scan
 hors ligne : d'abord `variants[].barcode`, puis `products[].barcode`.
+Grille de favoris (F10) : clé `favorites [{productId, variantId, defaultVariantId, pinned, rank}]` (les favoris du poste, prix dans
+`products`) **seulement si les favoris sont activés** ; sinon contenu et ETag du pack inchangés.
 
 ### Règle de calcul « pos-offline-v1 » et jeu de cas partagé
 
@@ -1416,6 +1418,9 @@ prouve (`tests/Functional/...`, « — » = aucun test dédié).
 | POST | `/api/pos/coupons/parse` | caisse | lecture d'un code-barres, aucune écriture (F17) | PosManufacturerCouponApiTest |
 | GET | `/api/pos/coupons/claims` et `.csv` | caisse | **responsable** (403 `FORBIDDEN`) (F17) | PosManufacturerCouponApiTest |
 | POST | `/api/pos/coupons/claims/mark` | caisse | **responsable** (F17) | PosManufacturerCouponApiTest |
+| GET | `/api/pos/favorites` | caisse | lecture ; poste facultatif (F10) | PosFavoritesApiTest |
+| GET | `/api/pos/favorites/pins` | caisse | **responsable** (403 `FORBIDDEN`) (F10) | PosFavoritesApiTest |
+| PUT | `/api/pos/favorites/pins` | caisse | **responsable** (403 `FORBIDDEN`) ; journal `FAVORITES_UPDATED` (F10) | PosFavoritesApiTest |
 | POST | `/api/pos/terminal/connection-token` | caisse | poste du terminal (rattachement), mode kit autorisé par le site, `X-Pos-Terminal` obligatoire, 60 / terminal / 10 min (F13/F16) | PosTerminalSdkApiTest |
 | POST | `/api/pos/terminal/payments/{id}/refund/confirm` | caisse | paiement du site, remboursement Stripe vérifié (intention, montant), rejeu idempotent (F13/F16) | PosTerminalSdkApiTest |
 | POST | `/api/pos/unlock` | caisse | son propre PIN ; blocage après N essais | PosPinApiTest |
@@ -1691,6 +1696,50 @@ Caissier : 403 `FORBIDDEN`. **Fraction de taxe** d'un coupon = montant × taux /
 
 `MANUFACTURER_COUPON_REDEEMED`, `MANUFACTURER_COUPON_REFUSED`, `MANUFACTURER_COUPON_VOIDED`, `MANUFACTURER_COUPONS_CLAIMED` ; les
 entrées portent fabricant, préfixe, offre, série et montant, jamais de donnée personnelle.
+
+## Grille de favoris (lot F10)
+
+Grille de produits à toucher sur l'écran de vente (articles sans code-barres, ventes fréquentes). **Désactivée par défaut.**
+
+### Réglages (panneau EasyAdmin « Grille de favoris (caisse) », `settings.favorites`)
+
+`{enabled (défaut false), mode: "both" | "pinned" | "bestSellers" (défaut both), days (30, de 1 à 365), gridSize (24, de 1 à 100)}`.
+
+### Grille : `GET /api/pos/favorites?cashRegisterId=` (caisse)
+
+- Désactivée : **200 `{enabled: false, items: []}`**.
+- Sinon `{enabled: true, mode, days, gridSize, scope: "site" | "register", cashRegisterId, items: [...]}` : épinglés d'abord, dans
+  l'ordre choisi, puis les plus vendus non épinglés jusqu'à `gridSize` (mode `pinned` : épinglés seuls ; `bestSellers` : plus vendus seuls).
+- **Portée** : les épinglés d'un poste **remplacent** ceux du site pour ce poste (sans fusion) ; poste sans épinglés propres ou
+  `cashRegisterId` absent : ceux du site (`scope: "site"`).
+- Entrée : `{rank, productId, variantId (variante épinglée, sinon null), defaultVariantId (variante à vendre sans choix : épinglée ou
+  unique ; null si plusieurs), hasVariants (true : la caisse demande la variante), name, variantLabel, price (cents, règle du devis :
+  prix de la variante, sinon prix effectif du produit, prix promotionnel compris ; pour un produit à plusieurs variantes, prix du produit,
+  le devis fait foi), image (URL ou null), barcode, pinned}`.
+- Seulement les produits vendables en caisse (`isPos`, vente activée, hors location) ; jamais les cartes-cadeaux ni les articles libres.
+  Un produit épinglé devenu non vendable est écarté de la grille, son épinglage est conservé (`sellable: false` dans la liste des épinglés).
+- `ETag` ; `If-None-Match` identique (même faible, `W/"…"`) → **304** sans corps, comme le pack hors ligne.
+
+**Plus vendus** : ventes au comptoir (source caisse, type vente) **non annulées**, des `days` derniers jours **dans le fuseau du magasin**
+(journée en cours comprise), quantités **nettes des retours** faits sur ces ventes, par produit, de la plus grande à la plus petite
+(égalité : identifiant croissant). Une requête d'agrégat, classement gardé 10 minutes (vidé par toute écriture du site). Les épinglés
+sont lus à chaque appel : un épinglage se voit tout de suite.
+
+### Épinglage (responsable ; caissier : 403 `FORBIDDEN`)
+
+- `GET /api/pos/favorites/pins?cashRegisterId=` → `{scope, cashRegisterId, inheritsSite (poste sans épinglés propres : ceux du site
+  sont listés), pins: [{id, position, productId, variantId, name, variantLabel, sellable}], maxPins: 100}`.
+- `PUT /api/pos/favorites/pins {cashRegisterId?: int | null, pins: [{productId, variantId?}]}` : **remplace** la liste ordonnée de la
+  portée (épingler, retirer, réordonner en un appel) ; `pins: []` pour un poste : le poste reprend les épinglés du site. Réponse : comme
+  le GET. Refus **422 `VALIDATION_FAILED`** sans écriture, `errors: [{path, code, message}]` avec `code` `PRODUCT_NOT_FOUND`,
+  `PRODUCT_NOT_SELLABLE`, `VARIANT_MISMATCH` (variante d'un autre produit), `DUPLICATE`, `TOO_MANY` (> 100), `INVALID`.
+  Journal **`FAVORITES_UPDATED {scope, cashRegisterId, before, after}`**.
+- EasyAdmin, menu Caisse « Favoris de la caisse » : même table (produit, variante facultative qui fixe le produit, poste vide = site,
+  position) ; journal `FAVORITES_UPDATED {source: "easyadmin", action, pin}`.
+- Suppression d'un produit, d'une variante ou d'un poste : ses épinglages disparaissent (table `pos_favorite`, clés en cascade).
+
+Index de performance sur les commandes : non créé (volume actuel faible, cache) ; à reconsidérer au-delà de quelques milliers de ventes
+de caisse par mois. Test : `PosFavoritesApiTest`.
 
 ## Mécanique interne
 

@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (246)
+## Boutique et commun (249)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -376,6 +376,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/pos/exports/accounting/entries.csv` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReportingController::entries` |
 | GET | `/api/pos/exports/accounting/summary.csv` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReportingController::summary` |
 | GET | `/api/pos/exports/accounting` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosReportingController::accounting` |
+| GET | `/api/pos/favorites/pins` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosFavoriteController::pins` |
+| PUT | `/api/pos/favorites/pins` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosFavoriteController::replacePins` |
+| GET | `/api/pos/favorites` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosFavoriteController::grid` |
 | POST | `/api/pos/gift-cards/replace` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::replace` |
 | POST | `/api/pos/gift-cards/{code}/adjust` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::adjust` |
 | POST | `/api/pos/gift-cards/{code}/cancel` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosGiftCardController::cancel` |

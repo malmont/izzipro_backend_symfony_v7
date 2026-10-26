@@ -392,6 +392,19 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => 2000])]
     private int $posCouponMaxWithoutApproval = 2000;
 
+    // Grille de favoris (F10) : activée (défaut non), mode (pinned | bestSellers | both), fenêtre des plus vendus en jours, taille de la grille
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posFavoritesEnabled = false;
+
+    #[ORM\Column(length: 16, options: ['default' => 'both'])]
+    private string $posFavoritesMode = 'both';
+
+    #[ORM\Column(options: ['default' => 30])]
+    private int $posFavoritesDays = 30;
+
+    #[ORM\Column(options: ['default' => 24])]
+    private int $posFavoritesGridSize = 24;
+
     // Article libre et prix manuel (F7, 26/10/2026) : désactivés par défaut ; montant maximal sans validation d'un responsable
     // (cents, null = jamais de validation, 0 = toujours) ; motif du prix manuel obligatoire, motifs (un par ligne)
     #[ORM\Column(options: ['default' => false])]
@@ -1017,6 +1030,15 @@ class Entreprise implements TranslatableInterface
     public function setPosCouponEnabled(bool $v): static { $this->posCouponEnabled = $v; return $this; }
     public function getPosCouponMaxWithoutApproval(): int { return $this->posCouponMaxWithoutApproval; }
     public function setPosCouponMaxWithoutApproval(?int $cents): static { $this->posCouponMaxWithoutApproval = max(0, (int) $cents); return $this; }
+    public const POS_FAVORITES_MODES = ['pinned', 'bestSellers', 'both'];
+    public function isPosFavoritesEnabled(): bool { return $this->posFavoritesEnabled; }
+    public function setPosFavoritesEnabled(bool $v): static { $this->posFavoritesEnabled = $v; return $this; }
+    public function getPosFavoritesMode(): string { return in_array($this->posFavoritesMode, self::POS_FAVORITES_MODES, true) ? $this->posFavoritesMode : 'both'; }
+    public function setPosFavoritesMode(?string $mode): static { $this->posFavoritesMode = in_array($mode, self::POS_FAVORITES_MODES, true) ? $mode : 'both'; return $this; }
+    public function getPosFavoritesDays(): int { return $this->posFavoritesDays; }
+    public function setPosFavoritesDays(?int $days): static { $this->posFavoritesDays = min(365, max(1, (int) ($days ?? 30))); return $this; }
+    public function getPosFavoritesGridSize(): int { return $this->posFavoritesGridSize; }
+    public function setPosFavoritesGridSize(?int $size): static { $this->posFavoritesGridSize = min(100, max(1, (int) ($size ?? 24))); return $this; }
     public function isPosGiftCardEnabled(): bool { return $this->posGiftCardEnabled; }
     public function setPosGiftCardEnabled(bool $v): static { $this->posGiftCardEnabled = $v; return $this; }
     public function getPosGiftCardAmounts(): ?string { return $this->posGiftCardAmounts; }

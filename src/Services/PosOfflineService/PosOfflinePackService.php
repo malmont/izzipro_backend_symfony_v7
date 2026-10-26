@@ -34,6 +34,7 @@ class PosOfflinePackService
         private readonly TaxEngine $taxes,
         private readonly PosSettingsService $settings,
         private readonly PosOfflineSettings $offline,
+        private readonly \App\Services\PosFavoriteService\PosFavoriteService $favorites, // grille de favoris (F10)
     ) {
     }
 
@@ -91,6 +92,11 @@ class PosOfflinePackService
             'calculationRule' => PosOfflineCalculator::RULE,
             'testCases' => '/api/pos/offline-cases',
         ];
+        // Grille de favoris (F10) : références {productId, variantId, defaultVariantId, pinned, rank} (prix déjà dans products) ; clé ajoutée
+        // seulement si les favoris sont activés : sinon contenu et ETag du pack inchangés
+        if (($favorites = $this->favorites->packEntries($register, '')) !== null) {
+            $content['favorites'] = $favorites;
+        }
         $etag = hash('sha256', json_encode($content, JSON_UNESCAPED_UNICODE));
         $now = new \DateTimeImmutable();
         $validUntil = $now->modify('+' . $settings['packValidityHours'] . ' hours');

@@ -190,6 +190,14 @@ class EntrepriseCrudController extends BaseTenantCrudController
             BooleanField::new('posCouponEnabled', 'Coupons de fabricant acceptés')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCouponMaxWithoutApproval', 'Coupons : montant maximal par vente sans validation (cents)')->setHelp('Total des coupons d\'une vente ; au-delà, validation d\'un responsable (action manufacturer_coupon). 0 = toujours une validation. Défaut 2000 (20 $).')->hideOnIndex(),
 
+            // Grille de favoris (F10) : désactivée par défaut
+            FormField::addPanel('Grille de favoris (caisse)')->setHelp('Grille de produits à toucher sur l\'écran de vente (articles sans code-barres, ventes fréquentes) : produits épinglés par le responsable d\'abord, dans l\'ordre choisi (menu « Favoris de la caisse » ; les épinglés d\'un poste remplacent ceux du site pour ce poste), puis les plus vendus en caisse sur la période, nets des retours, pour compléter la grille.'),
+            BooleanField::new('posFavoritesEnabled', 'Grille de favoris activée')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('posFavoritesMode', 'Contenu de la grille')->hideOnIndex()
+                ->setChoices(['Épinglés puis plus vendus' => 'both', 'Épinglés seulement' => 'pinned', 'Plus vendus seulement' => 'bestSellers']),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posFavoritesDays', 'Plus vendus : nombre de jours')->setHelp('Ventes de caisse des N derniers jours (fuseau du magasin), de 1 à 365. Défaut 30.')->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posFavoritesGridSize', 'Taille de la grille')->setHelp('Nombre de cases, de 1 à 100. Défaut 24.')->hideOnIndex(),
+
             // Article libre et prix manuel (F7, 26/10/2026) : désactivés par défaut
             FormField::addPanel('Article libre et prix manuel (caisse)')->setHelp('Article libre : vente d\'un article absent du catalogue (libellé, prix saisi, taxable ou non), sans mouvement de stock. Prix manuel : prix catalogue remplacé sur une ligne, avec motif. Au-delà du montant maximal, validation d\'un responsable ; vide = jamais, 0 = toujours.'),
             BooleanField::new('posCustomItemEnabled', 'Article libre autorisé')->hideOnIndex(),

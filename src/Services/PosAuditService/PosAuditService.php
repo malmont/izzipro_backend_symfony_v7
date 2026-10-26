@@ -95,6 +95,8 @@ class PosAuditService
     // Conservation et archive (A1, 30/10/2026)
     public const RETENTION_WRITE_OBSERVED = 'RETENTION_WRITE_OBSERVED';
     public const ARCHIVE_EXPORTED = 'ARCHIVE_EXPORTED';
+    // Grille de favoris (F10) : épinglage par le responsable (site ou poste)
+    public const FAVORITES_UPDATED = 'FAVORITES_UPDATED';
     /** Entrées d'une action qui peut avoir été validée par un responsable : elles portent data.approvedBy */
     private const APPROVABLE = [self::REFUND, self::CASH_WITHDRAWAL, self::FUND_WITHDRAWAL, self::DRAWER_OPENED, self::SESSION_CLOSED, self::DISCOUNT_APPLIED, self::PRICE_CHANGED,
         self::GIFT_CARD_CANCELED, self::GIFT_CARD_ADJUSTED, self::GIFT_CARD_CASH_OUT, self::GIFT_CARD_REPLACED, self::LOYALTY_ADJUSTED, self::CUSTOMER_ERASED];
@@ -108,7 +110,7 @@ class PosAuditService
         self::RECEIPT_REPRINTED, self::RECEIPT_EMAILED, self::RECEIPT_LINK_REVOKED, self::OFFLINE_SYNC,
         self::GIFT_CARD_SOLD, self::GIFT_CARD_REDEEMED, self::GIFT_CARD_LOOKUP, self::GIFT_CARD_CANCELED, self::GIFT_CARD_ADJUSTED, self::GIFT_CARD_CASH_OUT, self::GIFT_CARD_REPLACED, self::GIFT_CARD_REFUNDED, self::STORE_CREDIT_ISSUED,
         self::CUSTOMER_SEARCHED, self::CUSTOMER_VIEWED, self::CUSTOMER_CREATED, self::CUSTOMER_UPDATED, self::CUSTOMER_LINKED, self::CUSTOMER_MERGED, self::CUSTOMER_ERASED, self::CUSTOMER_EXPORTED,
-        self::LOYALTY_EARNED, self::LOYALTY_REDEEMED, self::LOYALTY_RETURNED, self::LOYALTY_ADJUSTED, self::LOYALTY_EXPIRED, self::CASHIER_STATS_VIEWED, self::EXPORT_GENERATED, self::RETENTION_WRITE_OBSERVED, self::ARCHIVE_EXPORTED];
+        self::LOYALTY_EARNED, self::LOYALTY_REDEEMED, self::LOYALTY_RETURNED, self::LOYALTY_ADJUSTED, self::LOYALTY_EXPIRED, self::CASHIER_STATS_VIEWED, self::EXPORT_GENERATED, self::RETENTION_WRITE_OBSERVED, self::ARCHIVE_EXPORTED, self::FAVORITES_UPDATED];
 
     /** Clé du verrou consultatif (par base, donc par site) */
     private const LOCK_KEY = 7461002;

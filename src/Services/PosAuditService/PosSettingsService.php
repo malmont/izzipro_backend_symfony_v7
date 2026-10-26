@@ -62,6 +62,7 @@ class PosSettingsService
             'priceOverride' => $lines['priceOverride'], // prix manuel (F7, 26/10/2026)
             'giftCards' => \App\Services\PosGiftCardService\PosGiftCardService::settingsOf($e), // cartes-cadeaux et avoirs (F9, 27/10/2026)
             'coupons' => \App\Services\PosCouponService\PosCouponService::settingsOf($e), // coupons de fabricant (F17, 01/11/2026)
+            'favorites' => \App\Services\PosFavoriteService\PosFavoriteService::settingsOf($e), // grille de favoris (F10) : {enabled, mode, days, gridSize}
             'customers' => \App\Services\PosCustomerService\PosCustomerService::settingsOf($e), // fiche client (F8, 28/10/2026)
             'loyalty' => \App\Services\PosCustomerService\PosLoyaltyService::settingsOf($e), // fidélité (F8)
             'store' => \App\Services\CaisseService\StoreClock::resolve($e), // fuseau horaire du magasin (F14, 29/10/2026) : {timezone, source}
