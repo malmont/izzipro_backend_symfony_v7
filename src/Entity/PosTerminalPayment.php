@@ -161,6 +161,13 @@ class PosTerminalPayment
     #[ORM\Column(length: 16, options: ['default' => self::PURPOSE_SALE])]
     private string $purpose = self::PURPOSE_SALE;
 
+    // Mode Stripe du paiement (M1) : celui du site à la création ; un paiement d'un autre mode n'est plus relu ni remboursé par Stripe
+    #[ORM\Column(length: 8, options: ['default' => 'test'])]
+    private string $stripeMode = 'test';
+
+    public function getStripeMode(): string { return $this->stripeMode; }
+    public function setStripeMode(string $mode): static { $this->stripeMode = $mode === 'live' ? 'live' : 'test'; return $this; }
+
     public function getPurpose(): string { return $this->purpose; }
     public function setPurpose(string $purpose): static { $this->purpose = $purpose === self::PURPOSE_GIFT_CARD ? self::PURPOSE_GIFT_CARD : self::PURPOSE_SALE; return $this; }
 

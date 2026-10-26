@@ -469,12 +469,12 @@ présentées (délai d'attente), libère les autorisations sans vente (délai r�
 à l'ouverture et à la fermeture de session (sans effet sur la réponse), à chaque `GET /api/pos/terminal`, et par la
 commande **`app:pos:terminal-reconcile`** : seuls les sites ayant un terminal activé sont parcourus, sortie immédiate
 sans paiement en attente (une requête indexée, aucun appel Stripe), verrou fichier + verrou consultatif PostgreSQL par
-base, options `--from=HH:MM --to=HH:MM` (plage horaire) et `--tenant=<code>`. **Installation du cron** (hôte, toutes les
-15 minutes ; fréquence et plage à ajuster) :
-
-```
-*/15 * * * * docker exec -w /var/www symfony_app_v2 php bin/console app:pos:terminal-reconcile --from=07:00 --to=23:59 >> /var/log/pos-terminal-reconcile.log 2>&1
-```
+base, options `--from=HH:MM --to=HH:MM` (plage horaire), `--tenant=<code>` et `--no-alerts` (M1). **Planification (installée le
+26/10/2026)** : timer systemd de l'hôte `pos-terminal-reconcile.timer`, toutes les 5 minutes jour et nuit, journal
+`/var/log/pos-terminal-reconcile.log` (rotation quotidienne, 30 jours) ; fichiers et commandes dans `ops/` et
+`docs/mise-en-production-caisse.md`. Chaque exécution écrit son état daté dans `var/pos-terminal-reconcile.status.json` (dernière
+exécution, dernière exécution complète, 50 dernières ; fichier `.status.test.json` pour les tests), lu par `GET /api/pos/health`, puis
+lance la surveillance et les alertes (voir « Paiements de caisse en production »).
 
 Code : `Services/PosTerminalService/` (`PosTerminalGatewayInterface` + `StripeTerminalGateway`, `PosTerminalPaymentService`,
 `PosTerminalSettingsService`), `UseCase/PosTerminalUseCase/PosTerminalUseCase`, `Controller/PosController/PosTerminalController`,
@@ -1418,6 +1418,7 @@ prouve (`tests/Functional/...`, « — » = aucun test dédié).
 | POST | `/api/pos/coupons/parse` | caisse | lecture d'un code-barres, aucune écriture (F17) | PosManufacturerCouponApiTest |
 | GET | `/api/pos/coupons/claims` et `.csv` | caisse | **responsable** (403 `FORBIDDEN`) (F17) | PosManufacturerCouponApiTest |
 | POST | `/api/pos/coupons/claims/mark` | caisse | **responsable** (F17) | PosManufacturerCouponApiTest |
+| GET | `/api/pos/health` | **administrateur** (M1) | surveillance des paiements de caisse, lecture | PosStripeLiveApiTest |
 | GET | `/api/pos/favorites` | caisse | lecture ; poste facultatif (F10) | PosFavoritesApiTest |
 | GET | `/api/pos/favorites/pins` | caisse | **responsable** (403 `FORBIDDEN`) (F10) | PosFavoritesApiTest |
 | PUT | `/api/pos/favorites/pins` | caisse | **responsable** (403 `FORBIDDEN`) ; journal `FAVORITES_UPDATED` (F10) | PosFavoritesApiTest |
@@ -1696,6 +1697,68 @@ Caissier : 403 `FORBIDDEN`. **Fraction de taxe** d'un coupon = montant × taux /
 
 `MANUFACTURER_COUPON_REDEEMED`, `MANUFACTURER_COUPON_REFUSED`, `MANUFACTURER_COUPON_VOIDED`, `MANUFACTURER_COUPONS_CLAIMED` ; les
 entrées portent fabricant, préfixe, offre, série et montant, jamais de donnée personnelle.
+
+## Paiements de caisse en production (lot M1)
+
+### Mode Stripe par site : « Paiements de caisse : test | réel »
+
+- Réglage du site, **test par défaut**, affiché dans la page EasyAdmin **« Paiements de caisse (Stripe) »** (menu Caisse) et dans
+  `GET /api/pos/terminal` : nouvelle clé **`stripeMode: "test" | "live"`** (la clé `mode` reste le type de terminal).
+- Clés : test = clés actuelles de la plateforme ; réel = **`STRIPE_LIVE_SECRET_KEY` / `STRIPE_LIVE_PUBLIC_KEY`, réservées à la caisse**.
+  Compte Connect **réel distinct** (`stripe_config.live_account_id`, `live_is_active`, `live_terminal_location_id`) ; le compte actuel
+  reste celui du mode test. Choix de la clé et du compte : `StripeAccountResolver` (réutilisable par la boutique le jour où elle passera
+  en réel ; aujourd'hui la boutique, ses webhooks et les abonnements n'en dépendent pas).
+- **Passage en réel** (page EasyAdmin seulement, jamais par le formulaire de l'entreprise) : clés réelles configurées, compte réel du
+  magasin qui **peut encaisser ET recevoir les virements** (`charges_enabled`, `payouts_enabled`, relus chez Stripe à l'instant), **aucun
+  paiement par terminal en cours** ni remboursement Interac en attente. Refus 409 `STRIPE_KEYS_MISSING`, `STRIPE_ACCOUNT_NOT_READY`
+  (`{chargesEnabled, payoutsEnabled, currentlyDue, disabledReason}`), `TERMINAL_PAYMENTS_PENDING`. Les lecteurs appairés sont **détachés**
+  (un lecteur appartient à un compte et à un mode) et s'appairent de nouveau depuis la fiche du poste. Journal **`STRIPE_MODE_CHANGED
+  {from, to, detachedReaders, account}`** avec l'administrateur. Retour en test : mêmes contrôles de paiements en cours, journalisé.
+- **En réel** : `simulationAllowed` toujours `false`, lecteur simulé refusé (403 `SIMULATION_FORBIDDEN`), carte simulée impossible.
+- Chaque paiement par terminal garde son mode (`pos_terminal_payment.stripe_mode`). Une opération Stripe (capture, annulation,
+  remboursement, carte simulée) sur un paiement de l'autre mode → **409 `TERMINAL_PAYMENT_OTHER_MODE {paymentId, paymentMode, siteMode}`** :
+  rembourser autrement (espèces) ; un tel paiement n'est plus relu chez Stripe.
+
+### Compte Connect réel d'un nouveau magasin (page « Paiements de caisse (Stripe) »)
+
+« Inscription Stripe du compte réel » crée au besoin un compte Express réel (pays et courriel de l'entreprise) et ouvre le lien
+d'inscription Stripe ; au retour, l'état est relu (actif si encaissement et virements autorisés). Le tableau affiche pour chaque mode :
+compte (identifiant tronqué), actif, encaissement, virements, pièces demandées (`currently_due`, `past_due`), emplacement Terminal.
+« Créer l'emplacement Terminal » crée l'emplacement du mode en cours à l'adresse de l'entreprise (aussi créé au premier appairage).
+Journal `STRIPE_ACCOUNT_UPDATED` (création, lien, changement d'état) et `TERMINAL_CONFIGURED {action: location_created}`. Site interne :
+compte de la plateforme, sans inscription.
+
+### Surveillance : `GET /api/pos/health` (administrateur ; 403 sinon) et bloc de la page EasyAdmin
+
+Toujours 200, `Cache-Control: no-store` : `{status: ok | info | warning | critical, checkedAt, site, usesTerminal, stripe {mode, internal,
+keys {test, live}, account {configured, id (tronqué), active, terminalLocation, status {livemode, chargesEnabled, payoutsEnabled,
+detailsSubmitted, currentlyDue, pastDue, eventuallyDue, disabledReason, currentDeadline} | {error}}, pendingPayments}, reconcile
+{lastRunAt, lastOutcome, lastCompletedAt, minutesAgo, stale, staleAfterMinutes: 30, lastErrors}, checks: [{code, level, message, count,
+details}], alerts {siteEnabled, siteRecipient (masqué), platformRecipient}}`.
+
+| Contrôle (`code`) | Niveau | Quand |
+|---|---|---|
+| `STRIPE_KEYS_MISSING` | critical | mode réel sans clés réelles |
+| `STRIPE_ACCOUNT_NOT_READY` | critical | mode réel, encaissement ou virements suspendus |
+| `STRIPE_ACCOUNT_REQUIREMENTS` | warning | mode réel, pièces demandées par Stripe |
+| `STRIPE_ACCOUNT_UNREADABLE` | warning | compte réel illisible chez Stripe |
+| `SIMULATED_READER_IN_LIVE` | critical | lecteur simulé en mode réel |
+| `STRIPE_TEST_MODE` | info | site avec terminal en mode test |
+| `RECONCILE_STALE` | critical | site avec terminal, réconciliation complète il y a plus de 30 minutes (hors plage horaire réglée : non) |
+| `ORPHAN_PAYMENTS` | warning | paiements par terminal sans vente au-delà du délai réglé (20 derniers listés) |
+| `REFUNDS_EXPIRED` | warning | remboursements Interac en attente au-delà du délai, ou expirés en 24 h |
+| `SESSIONS_OPEN_24H` | warning | sessions de caisse ouvertes depuis plus de 24 h |
+| `CAPTURE_FAILURES` | critical | échecs de capture d'un paiement par terminal en 24 h (journal `CARD_PAYMENT_FAILED {stage: capture}`, écrit après l'annulation de la vente) |
+
+**Alertes par courriel** (fin de chaque réconciliation, sites ayant déjà ouvert une session de caisse ; compte Stripe relu seulement en
+mode réel) : contrôles `warning` et `critical`, au **contact du site** si activé (fiche Entreprise, panneau « Paiements de caisse et
+surveillance (caisse) » : alertes activées, défaut non ; adresse facultative, sinon courriel de l'entreprise) et à l'**administrateur de
+la plateforme** (`POS_ALERT_PLATFORM_EMAIL`, facultative). Envoi par le serveur de la plateforme (`MAILER_DSN`). Même situation : pas de
+nouvel envoi avant 6 heures (une heure si elle s'aggrave) ; situation disparue : marquée résolue (table `pos_health_alert`). Journal
+`HEALTH_ALERT_SENT {codes, recipients, sent, status}`. **Aucune donnée de carte.**
+
+Liste de contrôle d'ouverture d'un magasin, clés restreintes, passage du serveur en production : `docs/mise-en-production-caisse.md`.
+Test : `PosStripeLiveApiTest`.
 
 ## Grille de favoris (lot F10)
 

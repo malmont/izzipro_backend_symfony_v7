@@ -2,7 +2,7 @@
 
 namespace App\Services\PosTerminalService;
 
-use App\Services\StripeService\StripeService;
+use App\Services\StripeService\StripeAccountResolver;
 use Psr\Log\LoggerInterface;
 use Stripe\Exception\ApiConnectionException;
 use Stripe\Exception\ApiErrorException;
@@ -12,10 +12,13 @@ use Stripe\Refund;
 use Stripe\StripeClient;
 use Stripe\Terminal\Reader;
 
-/** Stripe Terminal sur le compte connecté du site (charges directes, comme la boutique en ligne) ; aucune donnée de carte conservée */
+/**
+ * Stripe Terminal sur le compte connecté du site (charges directes, comme la boutique en ligne) ; aucune donnée de carte conservée.
+ * Clé et compte du mode de la caisse du site (M1, StripeAccountResolver : « Paiements de caisse : test | réel »).
+ */
 class StripeTerminalGateway implements PosTerminalGatewayInterface
 {
-    public function __construct(private readonly StripeService $stripe, private readonly LoggerInterface $logger)
+    public function __construct(private readonly StripeAccountResolver $accounts, private readonly LoggerInterface $logger)
     {
     }
 
@@ -27,7 +30,7 @@ class StripeTerminalGateway implements PosTerminalGatewayInterface
             'payment_method_options' => ['card_present' => ['capture_method' => 'manual_preferred']],
             'metadata' => $metadata, 'expand' => ['latest_charge'],
         ];
-        if ($applicationFee > 0 && $this->stripe->accountOptions()) {
+        if ($applicationFee > 0 && $this->accountOptions()) {
             $params['application_fee_amount'] = $applicationFee;
         }
 
@@ -49,7 +52,7 @@ class StripeTerminalGateway implements PosTerminalGatewayInterface
     public function capturePaymentIntent(string $id, int $applicationFee, string $idempotencyKey): array
     {
         $params = ['expand' => ['latest_charge']];
-        if ($this->stripe->accountOptions()) {
+        if ($this->accountOptions()) {
             $params['application_fee_amount'] = max(0, $applicationFee);
         }
 
@@ -94,7 +97,7 @@ class StripeTerminalGateway implements PosTerminalGatewayInterface
     public function refundOnline(string $paymentIntentId, int $amount, string $idempotencyKey): array
     {
         $params = ['payment_intent' => $paymentIntentId, 'amount' => $amount];
-        if ($this->stripe->accountOptions()) {
+        if ($this->accountOptions()) {
             $params['refund_application_fee'] = true; // la plateforme rend sa commission sur une vente remboursée
         }
 
@@ -104,7 +107,7 @@ class StripeTerminalGateway implements PosTerminalGatewayInterface
     public function refundOnReader(string $readerId, string $paymentIntentId, int $amount, string $idempotencyKey): array
     {
         $params = ['payment_intent' => $paymentIntentId, 'amount' => $amount];
-        if ($this->stripe->accountOptions()) {
+        if ($this->accountOptions()) {
             $params['refund_application_fee'] = true;
         }
 
@@ -157,7 +160,7 @@ class StripeTerminalGateway implements PosTerminalGatewayInterface
 
     public function isLiveMode(): bool
     {
-        return str_starts_with($this->stripe->secretKey(), 'sk_live');
+        return $this->accounts->mode(StripeAccountResolver::CHANNEL_POS) === StripeAccountResolver::LIVE;
     }
 
     public function createConnectionToken(?string $locationId): string
@@ -178,15 +181,20 @@ class StripeTerminalGateway implements PosTerminalGatewayInterface
     /** @template T @param callable(StripeClient, array): T $action @return T */
     private function call(callable $action, ?string $idempotencyKey, string $label): mixed
     {
-        $options = $this->stripe->accountOptions();
+        $mode = $this->accounts->mode(StripeAccountResolver::CHANNEL_POS);
+        $secretKey = $this->accounts->secretKey($mode);
+        if ($secretKey === null) {
+            throw new PosTerminalGatewayException('STRIPE_KEYS_MISSING', $mode === StripeAccountResolver::LIVE ? 'Clés Stripe réelles de la caisse non configurées sur le serveur' : 'Clé Stripe de test non configurée sur le serveur', 409);
+        }
+        $options = $this->accountOptions();
         if ($options === null) {
-            throw new PosTerminalGatewayException('TERMINAL_UNAVAILABLE', 'Aucun compte Stripe actif sur ce site', 409);
+            throw new PosTerminalGatewayException('TERMINAL_UNAVAILABLE', $mode === StripeAccountResolver::LIVE ? 'Aucun compte Stripe réel actif sur ce site' : 'Aucun compte Stripe actif sur ce site', 409);
         }
         if ($idempotencyKey !== null) {
             $options['idempotency_key'] = $idempotencyKey;
         }
         try {
-            return $action(new StripeClient($this->stripe->secretKey()), $options);
+            return $action(new StripeClient($secretKey), $options);
         } catch (CardException $e) {
             throw new PosTerminalGatewayException('PAYMENT_DECLINED', $e->getMessage(), 402, $e->getDeclineCode() ?: $e->getStripeCode(), $e);
         } catch (ApiConnectionException $e) {
@@ -250,5 +258,11 @@ class StripeTerminalGateway implements PosTerminalGatewayInterface
 
         return ['id' => $refund->id, 'status' => (string) $refund->status, 'amount' => (int) $refund->amount, 'failureReason' => $refund->failure_reason ?? null,
             'paymentIntent' => is_object($intent) ? $intent->id : $intent, 'created' => (int) ($refund->created ?? 0)];
+    }
+
+    /** Options du compte du mode de la caisse du site (null : aucun compte actif dans ce mode) */
+    private function accountOptions(): ?array
+    {
+        return $this->accounts->accountOptions($this->accounts->mode(StripeAccountResolver::CHANNEL_POS));
     }
 }

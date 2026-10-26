@@ -1,0 +1,18 @@
+# Caisse (C4, F13/F16, M1) : réconciliation des paiements par terminal Stripe (paiements sans vente, autorisations
+# expirées, remboursements Interac en attente). Lancée toutes les 5 minutes par pos-terminal-reconcile.timer.
+# Pas deux exécutions en même temps : systemd ne relance pas un service oneshot encore actif, la commande tient en plus un
+# verrou fichier (var/pos-terminal-reconcile.lock) et un verrou consultatif par base. État daté de chaque exécution :
+# var/pos-terminal-reconcile.status.json (lu par GET /api/pos/health). Installation : docs/mise-en-production-caisse.md.
+[Unit]
+Description=Caisse : reconciliation des paiements par terminal Stripe (app:pos:terminal-reconcile)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=arkanoa
+Group=arkanoa
+ExecStart=/usr/bin/docker exec -w /var/www symfony_app_v2 php bin/console app:pos:terminal-reconcile --no-interaction
+TimeoutStartSec=4min
+StandardOutput=append:/var/log/pos-terminal-reconcile.log
+StandardError=append:/var/log/pos-terminal-reconcile.log

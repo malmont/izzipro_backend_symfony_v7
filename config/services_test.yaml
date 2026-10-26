@@ -70,3 +70,8 @@ services:
         autowire: true
         public: true
     App\Services\PosTerminalService\PosTerminalGatewayInterface: '@App\Tests\Fake\FakeTerminalGateway'
+    # Comptes Connect de la caisse (M1) : simulés
+    App\Tests\Fake\FakePosStripeAccountGateway:
+        autowire: true
+        public: true
+    App\Services\PosStripeService\PosStripeAccountGatewayInterface: '@App\Tests\Fake\FakePosStripeAccountGateway'

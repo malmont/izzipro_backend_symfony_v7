@@ -1,0 +1,12 @@
+# Caisse : réconciliation toutes les 5 minutes, jour et nuit (aucun appel Stripe sur un site sans paiement en attente)
+[Unit]
+Description=Caisse : reconciliation des paiements par terminal Stripe toutes les 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+AccuracySec=15s
+Persistent=false
+Unit=pos-terminal-reconcile.service
+
+[Install]
+WantedBy=timers.target

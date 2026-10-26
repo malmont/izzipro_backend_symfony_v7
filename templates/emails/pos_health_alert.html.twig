@@ -1,0 +1,33 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Caisse {{ site }} : alerte de surveillance{% endblock %}
+
+{% block body %}
+{# Surveillance des paiements de caisse (M1) : aucune donnée de carte, identifiants techniques seulement #}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr>
+        <td align="center">
+            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+                <tr>
+                    <td align="center" style="background: {{ report.status == 'critical' ? '#991b1b' : '#92400e' }}; padding: 28px 20px;">
+                        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700;">Caisse {{ site }} : {{ report.status == 'critical' ? 'alerte critique' : 'point à vérifier' }}</h1>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 30px; font-size: 15px; color: #1e293b;">
+                        <p style="margin-top: 0;">La surveillance des paiements de caisse du site <strong>{{ siteCode }}</strong> a relevé, le {{ report.checkedAt|date('d/m/Y à H:i') }} (UTC) :</p>
+                        <ul style="padding-left: 18px;">
+                            {% for check in checks %}
+                                <li style="margin-bottom: 8px;"><strong>{{ check.level == 'critical' ? 'Critique' : 'Attention' }}</strong> : {{ check.message }}</li>
+                            {% endfor %}
+                        </ul>
+                        <p>Paiements de caisse : mode <strong>{{ report.stripe.mode == 'live' ? 'réel' : 'test' }}</strong>.
+                            {% if report.reconcile.lastCompletedAt %}Dernière réconciliation : {{ report.reconcile.lastCompletedAt|date('d/m/Y à H:i') }} (UTC).{% endif %}</p>
+                        <p>Détail et actions : EasyAdmin, menu Caisse, « Paiements de caisse (Stripe) ». Ce message n'est pas renvoyé avant 6 heures pour la même situation.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+{% endblock %}

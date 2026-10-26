@@ -218,9 +218,12 @@ services:
     App\MemoiresVivantes\Services\RevenueCat\RevenueCatClientInterface: '@App\MemoiresVivantes\Services\RevenueCat\RevenueCatClient'
     # Terminal de paiement Stripe de la caisse (C4, 23/10/2026) : passerelle réelle (simulée dans les tests)
     App\Services\PosTerminalService\PosTerminalGatewayInterface: '@App\Services\PosTerminalService\StripeTerminalGateway'
+    # Comptes Connect de la caisse par mode test | réel (M1) : passerelle réelle (simulée dans les tests)
+    App\Services\PosStripeService\PosStripeAccountGatewayInterface: '@App\Services\PosStripeService\StripePosAccountGateway'
     App\Command\PosTerminalReconcileCommand:
         arguments:
             $projectDir: '%kernel.project_dir%'
+            $environment: '%kernel.environment%'
     App\MemoiresVivantes\Controller\RevenueCatWebhookController:
         arguments:
             $webhookSecret: '%env(string:default::REVENUECAT_WEBHOOK_SECRET)%'

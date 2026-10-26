@@ -364,6 +364,8 @@ class CreateOrderUseCase
             }
             // Coupons de fabricant (F17) : le refus (déjà utilisé, expiré) reste journalisé malgré l'annulation de la transaction
             $this->coupons->journalRefusalAfterRollback($e, $user instanceof \App\Entity\User ? $user : null);
+            // Échec de capture du paiement par terminal (M1) : journalisé malgré l'annulation de la transaction, compté par la surveillance
+            $this->terminalPayments->journalCaptureFailureAfterRollback($e, $user instanceof \App\Entity\User ? $user : null);
             return new JsonResponse($e->toBody(), $e->status);
         } catch (\Exception $e) {
             if ($em->getConnection()->isTransactionActive()) {

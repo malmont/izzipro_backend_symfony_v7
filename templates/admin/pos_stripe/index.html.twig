@@ -1,0 +1,67 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}Paiements de caisse (Stripe){% endblock %}
+
+{% macro yesno(v) %}{% if v %}<span class="badge bg-success">oui</span>{% else %}<span class="badge bg-danger">non</span>{% endif %}{% endmacro %}
+{% import _self as m %}
+
+{% block body %}
+{% set live = report.stripe.mode == 'live' %}
+<div class="container-fluid">
+    <h1 class="mb-3">Paiements de caisse (Stripe)</h1>
+    <div class="alert {{ live ? 'alert-danger' : 'alert-secondary' }} fs-5">
+        Paiements de caisse : <strong>{{ live ? 'RÉEL' : 'test' }}</strong>
+        {% if live %}: les cartes sont débitées pour de vrai, aucun lecteur simulé.{% else %}: aucun paiement réel (lecteur simulé et cartes de test possibles).{% endif %}
+    </div>
+    <p class="text-muted">Concerne la caisse seulement : la boutique en ligne garde sa configuration Stripe actuelle. Passage en réel : clés réelles configurées sur le serveur, compte Stripe réel du magasin qui peut encaisser ET recevoir les virements, aucun paiement par terminal en cours ; les lecteurs appairés sont détachés (un lecteur appartient à un compte et à un mode) et s'appairent de nouveau depuis la fiche du poste. Chaque changement est inscrit au journal de caisse.</p>
+    {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+    {% if done %}<div class="alert alert-success">{{ done }}</div>{% endif %}
+
+    <h2 class="h4 mt-4">Surveillance</h2>
+    <p>État : {% if report.status == 'ok' %}<span class="badge bg-success">OK</span>{% elseif report.status == 'info' %}<span class="badge bg-info">information</span>{% elseif report.status == 'warning' %}<span class="badge bg-warning text-dark">à vérifier</span>{% else %}<span class="badge bg-danger">CRITIQUE</span>{% endif %}
+        — dernière réconciliation : {{ report.reconcile.lastCompletedAt ? report.reconcile.lastCompletedAt|date('d/m/Y H:i') ~ ' UTC (il y a ' ~ report.reconcile.minutesAgo ~ ' min)' : 'jamais' }}
+        — alertes par courriel : contact du site {{ report.alerts.siteEnabled ? ('activées (' ~ (report.alerts.siteRecipient ?: 'aucune adresse') ~ ')') : 'désactivées (fiche Entreprise)' }}, administrateur de la plateforme {{ report.alerts.platformRecipient ? 'configuré' : 'non configuré' }}.</p>
+    {% if report.checks is empty %}<p class="text-success">Aucun point à signaler.</p>{% else %}
+        <ul>{% for c in report.checks %}<li><span class="badge {{ c.level == 'critical' ? 'bg-danger' : (c.level == 'warning' ? 'bg-warning text-dark' : 'bg-info') }}">{{ c.level }}</span> {{ c.message }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    <h2 class="h4 mt-4">Comptes Stripe de la caisse</h2>
+    <table class="table table-sm">
+        <thead><tr><th>Mode</th><th>Clés serveur</th><th>Compte</th><th>Actif</th><th>Encaissement</th><th>Virements</th><th>Pièces demandées</th><th>Emplacement Terminal</th></tr></thead>
+        <tbody>
+        {% for mode in ['test', 'live'] %}{% set a = overview.accounts[mode] %}{% set s = a.status %}
+            <tr class="{{ mode == report.stripe.mode ? 'table-active' : '' }}">
+                <td>{{ mode == 'live' ? 'réel' : 'test' }}{{ mode == report.stripe.mode ? ' (en cours)' : '' }}</td>
+                <td>{{ m.yesno(overview.keys[mode]) }}</td>
+                <td>{{ overview.internal ? 'compte de la plateforme (site interne)' : (a.id ?: 'aucun') }}</td>
+                <td>{{ m.yesno(a.active) }}</td>
+                <td>{% if s and s.error is not defined %}{{ m.yesno(s.chargesEnabled) }}{% else %}—{% endif %}</td>
+                <td>{% if s and s.error is not defined %}{{ m.yesno(s.payoutsEnabled) }}{% else %}—{% endif %}</td>
+                <td>{% if s and s.error is defined %}<span class="text-danger">{{ s.error }}</span>{% elseif s %}{{ (s.currentlyDue|merge(s.pastDue))|join(', ') ?: 'aucune' }}{% else %}—{% endif %}</td>
+                <td>{{ m.yesno(a.terminalLocation) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <form method="post" class="d-flex flex-wrap gap-2 mb-4">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf) }}">
+        {% if not overview.internal %}<button type="submit" name="action" value="onboarding" class="btn btn-primary" {{ overview.keys.live ? '' : 'disabled' }}>Inscription Stripe du compte réel</button>
+        <button type="submit" name="action" value="refresh" class="btn btn-secondary" {{ overview.keys.live ? '' : 'disabled' }}>Relire l'état du compte réel</button>{% endif %}
+        <button type="submit" name="action" value="location" class="btn btn-secondary">Créer l'emplacement Terminal (mode en cours)</button>
+        {% if live %}
+            <button type="submit" name="action" value="mode_test" class="btn btn-outline-secondary" onclick="return confirm('Repasser les paiements de caisse en mode TEST ? Les lecteurs appairés seront détachés.')">Repasser en test</button>
+        {% else %}
+            <button type="submit" name="action" value="mode_live" class="btn btn-danger" {{ overview.keys.live ? '' : 'disabled' }} onclick="return confirm('Passer les paiements de caisse en mode RÉEL ? Les cartes seront débitées pour de vrai ; les lecteurs appairés seront détachés.')">Passer en réel</button>
+        {% endif %}
+    </form>
+    {% if not overview.keys.live %}<p class="text-muted">Clés Stripe réelles de la caisse non configurées sur le serveur (variables STRIPE_LIVE_SECRET_KEY et STRIPE_LIVE_PUBLIC_KEY) : inscription réelle et passage en réel indisponibles.</p>{% endif %}
+
+    <h2 class="h4 mt-4">Postes</h2>
+    <table class="table table-sm">
+        <thead><tr><th>Poste</th><th>Actif</th><th>Mode du terminal</th><th>Lecteur</th></tr></thead>
+        <tbody>{% for r in overview.registers %}<tr><td>{{ r.name }}</td><td>{{ m.yesno(r.active) }}</td><td>{{ r.terminalMode }}</td><td>{% if r.reader %}{{ r.reader.label }}{{ r.reader.simulated ? ' (simulé)' : '' }}{{ r.reader.enabled ? '' : ' — désactivé' }}{% else %}—{% endif %}</td></tr>{% endfor %}</tbody>
+    </table>
+    <p class="text-muted">Paiements par terminal en cours : {{ overview.pendingPayments }}. Appairage d'un lecteur réel : fiche du poste (menu « Postes de caisse »), code à trois mots affiché par le lecteur.</p>
+</div>
+{% endblock %}

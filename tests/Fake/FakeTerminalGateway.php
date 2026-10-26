@@ -234,9 +234,14 @@ final class FakeTerminalGateway implements PosTerminalGatewayInterface
         return $reader;
     }
 
+    /** Mode réel : forcé par le test (self::$live) ou réglage « Paiements de caisse : réel » du site (M1) */
     public function isLiveMode(): bool
     {
-        return self::$live;
+        return self::$live || $this->accounts?->mode(\App\Services\StripeService\StripeAccountResolver::CHANNEL_POS) === 'live';
+    }
+
+    public function __construct(private readonly ?\App\Services\StripeService\StripeAccountResolver $accounts = null)
+    {
     }
 
     public function createConnectionToken(?string $locationId): string

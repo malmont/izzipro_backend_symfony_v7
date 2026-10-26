@@ -1,0 +1,10 @@
+# Journal de la réconciliation de la caisse : rotation quotidienne, 30 jours conservés, compressés
+/var/log/pos-terminal-reconcile.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 root adm
+}

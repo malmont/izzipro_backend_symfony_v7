@@ -405,6 +405,17 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => 24])]
     private int $posFavoritesGridSize = 24;
 
+    // Paiements de caisse en production (M1) : mode Stripe de la caisse (test | live, défaut test ; passage en réel par la page EasyAdmin
+    // « Paiements de caisse (Stripe) », jamais par ce formulaire) ; alertes de surveillance au contact du site (défaut non) et adresse facultative
+    #[ORM\Column(length: 8, options: ['default' => 'test'])]
+    private string $posStripeMode = 'test';
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $posAlertsEnabled = false;
+
+    #[ORM\Column(length: 180, nullable: true)]
+    private ?string $posAlertsEmail = null;
+
     // Article libre et prix manuel (F7, 26/10/2026) : désactivés par défaut ; montant maximal sans validation d'un responsable
     // (cents, null = jamais de validation, 0 = toujours) ; motif du prix manuel obligatoire, motifs (un par ligne)
     #[ORM\Column(options: ['default' => false])]
@@ -1039,6 +1050,13 @@ class Entreprise implements TranslatableInterface
     public function setPosFavoritesDays(?int $days): static { $this->posFavoritesDays = min(365, max(1, (int) ($days ?? 30))); return $this; }
     public function getPosFavoritesGridSize(): int { return $this->posFavoritesGridSize; }
     public function setPosFavoritesGridSize(?int $size): static { $this->posFavoritesGridSize = min(100, max(1, (int) ($size ?? 24))); return $this; }
+    public function getPosStripeMode(): string { return $this->posStripeMode === 'live' ? 'live' : 'test'; }
+    /** Réservé à PosStripeModeService (contrôles du passage en réel, journal) */
+    public function setPosStripeMode(string $mode): static { $this->posStripeMode = $mode === 'live' ? 'live' : 'test'; return $this; }
+    public function isPosAlertsEnabled(): bool { return $this->posAlertsEnabled; }
+    public function setPosAlertsEnabled(bool $v): static { $this->posAlertsEnabled = $v; return $this; }
+    public function getPosAlertsEmail(): ?string { return $this->posAlertsEmail; }
+    public function setPosAlertsEmail(?string $email): static { $email = trim((string) $email); $this->posAlertsEmail = $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) ? mb_strtolower($email) : null; return $this; }
     public function isPosGiftCardEnabled(): bool { return $this->posGiftCardEnabled; }
     public function setPosGiftCardEnabled(bool $v): static { $this->posGiftCardEnabled = $v; return $this; }
     public function getPosGiftCardAmounts(): ?string { return $this->posGiftCardAmounts; }

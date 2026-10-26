@@ -323,6 +323,7 @@ Dans `.env` (non versionné ; **ne jamais écrire de valeur dans la doc**). Un `
 | IA | `ANTHROPIC_API_KEY` (Mémoires Vivantes), `ANTHROPIC_API_KEY_LANDING`, `LANDING_AI_MODEL_EDIT`, `LANDING_AI_MODEL_PAGE`, `LANDING_AI_MODEL_IMAGES`, `LANDING_AI_EFFORT_EDIT` / `_CREATE` / `_PAGE` / `_IMAGES`, `LANDING_AI_CACHE_TTL_PAGE` (facultatives, voir `config/landingpage/README.md`), `OPENAI_API_KEY` (transcription) |
 | Traduction | `DEEPL_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_SECRET_KEY` |
 | Paiement, livraison | `STRIPE_SECRET_KEY`, `STRIPE_PUBLIC_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET`, `SQUARE_SECRET_KEY`, `EASYPOST_SECRET_KEY` |
+| Caisse en production (M1, facultatives) | `STRIPE_LIVE_SECRET_KEY`, `STRIPE_LIVE_PUBLIC_KEY` (clés **réelles réservées à la caisse**, choisies par site par `StripeAccountResolver` ; la boutique garde `STRIPE_SECRET_KEY`), `STRIPE_TEST_SECRET_KEY` / `STRIPE_TEST_PUBLIC_KEY` (seulement le jour où `STRIPE_SECRET_KEY` deviendrait réelle), `POS_ALERT_PLATFORM_EMAIL` (alertes de surveillance de la caisse à l'administrateur de la plateforme ; jamais modifiable par un site). Procédure : `docs/mise-en-production-caisse.md` |
 | Impression (Mémoires Vivantes) | `LULU_CLIENT_KEY`, `LULU_CLIENT_SECRET`, `LULU_API_URL`, `LULU_AUTH_URL`, `LULU_CONTACT_EMAIL`, `LULU_DEFAULT_POD_PACKAGE_ID` |
 | Stockage | `STORAGE_PUBLIC_URL`, `STORAGE_ESG_ADAPTER`, `STORAGE_ESG_DIR` |
 | Landing Page (synchronisation) | `FRONTEND_CONFIG_URL`, `DEPLOY_SYNC_TOKEN` |

@@ -190,6 +190,12 @@ class EntrepriseCrudController extends BaseTenantCrudController
             BooleanField::new('posCouponEnabled', 'Coupons de fabricant acceptés')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCouponMaxWithoutApproval', 'Coupons : montant maximal par vente sans validation (cents)')->setHelp('Total des coupons d\'une vente ; au-delà, validation d\'un responsable (action manufacturer_coupon). 0 = toujours une validation. Défaut 2000 (20 $).')->hideOnIndex(),
 
+            // Paiements de caisse en production (M1) : mode affiché ici, changé seulement depuis la page « Paiements de caisse (Stripe) » (contrôles, journal)
+            FormField::addPanel('Paiements de caisse et surveillance (caisse)')->setHelp('Mode Stripe de la caisse (test | réel) : page « Paiements de caisse (Stripe) » du menu Caisse, qui contrôle le compte Stripe réel avant le passage. Alertes : courriel au contact du site quand la surveillance relève un point à vérifier ou critique (réconciliation arrêtée, paiements sans vente, remboursements Interac expirés, sessions ouvertes depuis plus de 24 h, échecs de capture, compte Stripe suspendu) ; même situation renvoyée au plus toutes les 6 heures ; aucune donnée de carte.'),
+            TextField::new('posStripeMode', 'Paiements de caisse')->hideOnForm()->hideOnIndex()->formatValue(fn ($v) => $v === 'live' ? 'RÉEL' : 'test'),
+            BooleanField::new('posAlertsEnabled', 'Alertes de surveillance par courriel au contact du site')->hideOnIndex(),
+            EmailField::new('posAlertsEmail', 'Adresse des alertes (vide : courriel de l\'entreprise)')->setRequired(false)->hideOnIndex(),
+
             // Grille de favoris (F10) : désactivée par défaut
             FormField::addPanel('Grille de favoris (caisse)')->setHelp('Grille de produits à toucher sur l\'écran de vente (articles sans code-barres, ventes fréquentes) : produits épinglés par le responsable d\'abord, dans l\'ordre choisi (menu « Favoris de la caisse » ; les épinglés d\'un poste remplacent ceux du site pour ce poste), puis les plus vendus en caisse sur la période, nets des retours, pour compléter la grille.'),
             BooleanField::new('posFavoritesEnabled', 'Grille de favoris activée')->hideOnIndex(),
