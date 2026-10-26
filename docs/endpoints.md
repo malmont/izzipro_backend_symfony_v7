@@ -423,7 +423,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/products/{id}` | ROLE_ADMIN | `Controller\ProductController\ProductController::deleteProduct` |
 | GET | `/api/products/{id}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductDetail` |
 | GET | `/api/products/{offer}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductsByOffer` |
-| GET | `/api/products` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getAllProducts` |
+| GET | `/api/products` | ROLE_ADMIN | `Controller\ProductController\ProductController::getAllProducts` |
 | GET | `/api/productsid/{id}` | PUBLIC_ACCESS | `Controller\ProductController\ProductController::getProductById` |
 | GET | `/api/profile` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\Account\ProfileApiController::getProfile` |
 | PATCH, PUT | `/api/profile` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\Account\ProfileApiController::updateProfile` |
@@ -574,7 +574,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
-| GET | `/api/categories.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
+| GET | `/api/categories.{_format}` | ROLE_ADMIN | API Platform (Categories) |
 | POST | `/api/categories.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
 | DELETE | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
 | GET | `/api/categories/{id}.{_format}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (Categories) |
@@ -587,7 +587,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PATCH | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
 | PUT | `/api/commandes/{id}.{_format}` | ROLE_ADMIN | API Platform (Commande) |
 | GET, HEAD | `/api/errors/{status}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | API Platform (?) |
-| GET | `/api/products.{_format}` | PUBLIC_ACCESS | API Platform (Product) |
+| GET | `/api/products.{_format}` | ROLE_ADMIN | API Platform (Product) |
 | POST | `/api/products.{_format}` | ROLE_ADMIN | API Platform (Product) |
 | DELETE | `/api/products/{id}.{_format}` | ROLE_ADMIN | API Platform (Product) |
 | GET | `/api/products/{id}.{_format}` | PUBLIC_ACCESS | API Platform (Product) |

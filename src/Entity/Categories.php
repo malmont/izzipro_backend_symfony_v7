@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use App\Entity\Traits\DemoContentTrait;
 use ApiPlatform\Metadata\ApiResource;
+use Symfony\Component\Serializer\Annotation\Groups;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
@@ -18,11 +19,13 @@ use Doctrine\ORM\Mapping as ORM;
 use App\Entity\TranslatableInterface;
 
 #[ORM\Entity(repositoryClass: CategoriesRepository::class)]
-// Lectures inchangées (connecté, règle ^/api) ; écritures réservées aux administrateurs depuis le 15/10/2026 : avant,
-// tout client connecté pouvait créer, modifier et supprimer les catégories du site. La boutique lit /api/category (autre route).
+// Écritures réservées aux administrateurs depuis le 15/10/2026. Lectures (S8, 26/10/2026) : réservées à l'administrateur, champs simples
+// (groupe category:list, sans les produits ni les packs imbriqués), 30 par page, 100 au plus ; avant, tout client connecté (création de
+// compte libre) lisait les catégories avec tous leurs produits imbriqués, sans limite. La boutique lit /api/category (autre route, inchangée).
 #[ApiResource(operations: [
-    new GetCollection(),
-    new Get(),
+    new GetCollection(security: "is_granted('ROLE_ADMIN')", normalizationContext: ['groups' => ['category:list']],
+        paginationItemsPerPage: 30, paginationMaximumItemsPerPage: 100, paginationClientItemsPerPage: true),
+    new Get(security: "is_granted('ROLE_ADMIN')", normalizationContext: ['groups' => ['category:list']]),
     new Post(security: "is_granted('ROLE_ADMIN')"),
     new Put(security: "is_granted('ROLE_ADMIN')"),
     new Patch(security: "is_granted('ROLE_ADMIN')"),
@@ -35,32 +38,41 @@ class Categories implements TranslatableInterface, DemoContentInterface
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['category:list'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['category:list'])]
     private ?string $name = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['category:list'])]
     private ?string $description = null;
 
     #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['category:list'])]
     private ?string $image = null;
 
     #[ORM\ManyToMany(targetEntity: Product::class, mappedBy: 'category')]
     private Collection $products;
 #[ORM\Column(nullable: true)]
+    #[Groups(['category:list'])]
     private ?int $externalShippingClassId = null;
 
     #[ORM\Column(options: ['default' => false])]
+    #[Groups(['category:list'])]
     private ?bool $isRentalCategory = false;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['category:list'])]
     private ?int $categoryType = null;
 
     #[ORM\Column(options: ['default' => true])]
+    #[Groups(['category:list'])]
     private ?bool $syncWeb = true;
 
     #[ORM\Column(options: ['default' => true])]
+    #[Groups(['category:list'])]
     private ?bool $isVisible = true;
 
     /**

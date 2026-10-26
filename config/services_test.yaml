@@ -70,6 +70,9 @@ services:
         autowire: true
         public: true
     App\Services\PosTerminalService\PosTerminalGatewayInterface: '@App\Tests\Fake\FakeTerminalGateway'
+    # Enregistrement des requêtes SQL (S8) : preuve qu'une route reste bornée ; inactif tant qu'un test ne l'a pas démarré
+    App\Tests\Fake\SqlRecorderMiddleware:
+        tags: ['doctrine.middleware']
     # Comptes Connect de la caisse (M1) : simulés
     App\Tests\Fake\FakePosStripeAccountGateway:
         autowire: true

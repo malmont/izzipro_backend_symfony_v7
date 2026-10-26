@@ -13,6 +13,12 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\Common\Collections\ArrayCollection;
 use App\Entity\TranslatableInterface;
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Put;
 use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: ProductRepository::class)]
@@ -28,46 +34,60 @@ use Symfony\Component\Serializer\Annotation\Groups;
 #[ORM\Index(name: 'idx_product_is_web', fields: ['isWeb'])]
 #[ORM\Index(name: 'idx_product_is_pos', fields: ['isPos'])]
 #[ORM\Index(name: 'idx_product_is_accessory', fields: ['isAccessory'])]
-#[ApiResource]
+// Lecture API Platform (S8, incident du 26/10/2026) : réservée à l'administrateur, champs simples (groupe product:list, aucune relation
+// imbriquée), 30 par page, 100 au plus (itemsPerPage). Avant : publique, toutes les relations imbriquées sans limite (requêtes de plusieurs
+// minutes et gigaoctets). Les fronts lisent les routes dédiées (/api/products/{id}, by-slug, by-category…), inchangées. Écritures inchangées.
+#[ApiResource(operations: [
+    new GetCollection(security: "is_granted('ROLE_ADMIN')", normalizationContext: ['groups' => ['product:list']],
+        paginationItemsPerPage: 30, paginationMaximumItemsPerPage: 100, paginationClientItemsPerPage: true),
+    new Get(security: "is_granted('ROLE_ADMIN')", normalizationContext: ['groups' => ['product:list']]),
+    new Post(),
+    new Put(),
+    new Patch(),
+    new Delete(),
+])]
 class Product implements TranslatableInterface, DemoContentInterface
 {
     use DemoContentTrait;
 
-    #[Groups(['vehicle_product:read'])]
+    #[Groups(['product:list', 'vehicle_product:read'])]
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
     private ?int $id = null;
 
-    #[Groups(['vehicle_product:read'])]
+    #[Groups(['product:list', 'vehicle_product:read'])]
     #[ORM\Column(length: 255)]
     private ?string $name = null;
 
-    #[Groups(['vehicle_product:read'])]
+    #[Groups(['product:list', 'vehicle_product:read'])]
     #[ORM\Column(type: Types::TEXT, nullable: true)] 
     private ?string $description = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)] 
     private ?string $moreinformations =  '';
 
-    #[Groups(['vehicle_product:read'])]
+    #[Groups(['product:list', 'vehicle_product:read'])]
     #[ORM\Column]
     private ?float $price = null;
 
-    #[Groups(['vehicle_product:read'])]
+    #[Groups(['product:list', 'vehicle_product:read'])]
     #[ORM\Column]
     private ?bool $isbestseller = false;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['product:list'])]
     private ?bool $isnewarrival = false;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['product:list'])]
     private ?bool $isfeatured = false;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['product:list'])]
     private ?bool $isspecialoffer = false;
 
-    #[Groups(['vehicle_product:read'])]
+    #[Groups(['product:list', 'vehicle_product:read'])]
     #[ORM\Column(length: 255, nullable: true)] 
     private ?string $image = null;
 
@@ -80,20 +100,22 @@ class Product implements TranslatableInterface, DemoContentInterface
     #[ORM\OneToMany(mappedBy: 'productReviews', targetEntity: ReviewsProduct::class)]
     private Collection $reviewsProducts;
 
-    #[Groups(['vehicle_product:read'])]
+    #[Groups(['product:list', 'vehicle_product:read'])]
     #[ORM\Column]
     private ?int $quantity = null;
 
     #[ORM\Column]
+    #[Groups(['product:list'])]
     private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $tags = null;
 
     #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['product:list'])]
     private ?string $code = null;
 
-    #[Groups(['vehicle_product:read'])]
+    #[Groups(['product:list', 'vehicle_product:read'])]
     #[ORM\Column(length: 255)]
     private ?string $slug = null;
 
@@ -104,6 +126,7 @@ class Product implements TranslatableInterface, DemoContentInterface
     private ?float $coefficientMultiplier = null;
 
     #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['product:list'])]
     private ?string $barcode = null;
 
     #[ORM\ManyToOne(inversedBy: 'products')]
@@ -123,9 +146,11 @@ class Product implements TranslatableInterface, DemoContentInterface
     private ?bool $isAccessory = false;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['product:list'])]
     private ?bool $isWeb = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['product:list'])]
     private ?bool $isPos = null;
 
     #[ORM\OneToOne(mappedBy: 'product', cascade: ['persist', 'remove'])]
@@ -153,7 +178,7 @@ class Product implements TranslatableInterface, DemoContentInterface
     private Collection $translations;
 
     #[ORM\Column(nullable: true)]
-    #[Groups(['product:read'])]
+    #[Groups(['product:list', 'product:read'])]
     private ?float $specialPrice = null;
     
     #[ORM\Column(nullable: true)]
@@ -170,18 +195,21 @@ class Product implements TranslatableInterface, DemoContentInterface
      * Ancien mode unique (retail ou booking), gardé en lecture pour l'existant et dérivé des modes explicites
      * ci-dessous : booking quand la location est le seul mode, retail sinon.
      */
-    #[Groups(['vehicle_product:read', 'product:read'])]
+    #[Groups(['product:list', 'vehicle_product:read', 'product:read'])]
     #[ORM\Column(type: 'string', length: 20, enumType: ProductMode::class, options: ['default' => 'retail'])]
     private ProductMode $mode = ProductMode::RETAIL;
 
     // Modes explicites de la boutique réglable (08/10/2026) : un produit peut en cumuler plusieurs (vente et location)
     #[ORM\Column(name: 'sale_enabled', options: ['default' => true])]
+    #[Groups(['product:list'])]
     private bool $saleEnabled = true;
 
     #[ORM\Column(name: 'rental_enabled', options: ['default' => false])]
+    #[Groups(['product:list'])]
     private bool $rentalEnabled = false;
 
     #[ORM\Column(name: 'subscription_enabled', options: ['default' => false])]
+    #[Groups(['product:list'])]
     private bool $subscriptionEnabled = false;
 
     /** Moyenne des avis publiés (1 à 5, deux décimales), null sans avis ; tenue par ReviewAggregateService */

@@ -24,9 +24,12 @@ class StatusPayment implements TranslatableInterface
     private ?string $description = null;
 
     /**
+     * Non associée (S8, 26/10/2026) : Order::$status est un StatusCommande, aucune commande ne référence un statut de paiement.
+     * L'ancienne association (mappedBy: 'status') hydratait des commandes avec un statut de paiement (TypeError, GET /api/products en 500
+     * sur un site ayant des commandes payées). Collection toujours vide, accesseurs conservés ; aucun changement de schéma.
+     *
      * @var Collection<int, Order>
      */
-    #[ORM\OneToMany(mappedBy: 'status', targetEntity: Order::class)]
     private Collection $orders;
 
     /**

@@ -145,6 +145,31 @@ dont le contenu d'exemple de la landing page et de la boutique, marqué `is_demo
 route est calculé dans `docs/endpoints.md`. Garde-fou : `tests/Functional/Security/AnonymousWriteAccessTest.php`
 refuse toute route d'écriture sans rôle qui n'est pas une exception justifiée.
 
+### Ressources API Platform (`#[ApiResource]`, audit S8 du 26/10/2026)
+
+Une collection API Platform **sans groupes de sérialisation** imbrique toutes les relations des entités qui ne sont pas des ressources
+(variantes, réservations, avis, commandes, utilisateurs…), et ces relations bouclent : une seule requête peut occuper un processus
+PHP-FPM plusieurs minutes et plusieurs gigaoctets (incident du 26/10/2026 sur `GET /api/products`). Règle : **toute ressource exposée
+a un groupe de lecture borné (champs simples, aucune relation imbriquée non bornée) et une pagination plafonnée** ; la lecture
+publique est réservée à ce dont les fronts ont besoin. Les fronts lisent des routes dédiées (DTO à champs explicites).
+
+| Ressource | Opérations | Lecture | Groupes de lecture | Pagination | Remarque |
+|---|---|---|---|---|---|
+| `Product` | liste, fiche (`/api/products/{id}.{format}`), écritures | **administrateur** (401 / 403 avant toute requête) | `product:list` : champs simples | 30, client jusqu'à 100 | S8 ; avant : publique, relations sans limite. La fiche `/api/products/{id}` (sans suffixe) est la route dédiée `get_product_detail` (DTO), publique, inchangée. La route dédiée `get_all_products` (`GET /api/products`, `ProductController::getAllProducts`) est masquée par celle d'API Platform, enregistrée avant elle : elle ne répond jamais (`docs/endpoints.md` l'affiche quand même) |
+| `Categories` | liste, fiche, écritures (administrateur) | **administrateur** | `category:list` : champs simples, sans produits ni packs | 30, client jusqu'à 100 | S8 ; avant : tout client connecté, produits imbriqués. La boutique lit `/api/category` (route dédiée, inchangée) |
+| `Vehicle` | liste, fiche, écritures (administrateur) | publique | `vehicle:read` : champs simples, sans produit ni traductions | 24, plafond 50 | S8 ; aucune donnée en base aujourd'hui |
+| `VehicleProduct` | liste, fiche, écritures (administrateur) | publique (site : `?page=1&pageSize=50`, `pageSize` ignoré, 24 par page) | `vehicle_product:read` | 24, plafond 50 | profondeur bornée ; **liste `bookings` non bornée** (une entrée vide par réservation du produit) : proposition, retirer `bookings` du groupe |
+| `Commande` | toutes par défaut | administrateur | aucun | 30 | à traiter plus tard (groupes) ; aucune donnée en base |
+| `Collections` | — | — | — | — | non exposée (attribut en commentaire) |
+
+Hors API Platform, à surveiller : `GET /api/memoires/admin/users` (administrateur) rend la liste complète des utilisateurs sans
+pagination ; proposition : `?page=` et `?limit=` (défaut 50, plafond 200) avec le total.
+
+Contrôles en test : `tests/Functional/Boutique/ApiPlatformBoundedReadsTest.php` (401 / 403 sans requête sur les produits, champs
+bornés, pagination, nombre de requêtes SQL constant des routes des fronts quel que soit le nombre de commandes ; enregistreur de requêtes
+`tests/Fake/SqlRecorderMiddleware.php`), `tests/Functional/Doctrine/InverseSideMappingTest.php` (tous les côtés inverses des relations
+pointent vers leur entité : `doctrine:schema:validate` ne le vérifie pas).
+
 ## Organisation du code et conventions
 
 Toute nouvelle fonctionnalité suit les couches **Repository > Service > UseCase > Controller > DTO** (+ écran

@@ -9,14 +9,18 @@ use App\Repository\VehicleRepository;
 use App\Entity\TranslatableInterface;
 use Doctrine\DBAL\Types\Types;
 use ApiPlatform\Metadata\ApiResource;
+use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: VehicleRepository::class)]
-#[ApiResource]
+// Lecture publique inchangée ; champs simples (groupe vehicle:read, sans le produit ni les traductions imbriqués) et pagination comme
+// VehicleProduct : 24 par page, 50 au plus (S8, 26/10/2026). Avant : toutes les relations imbriquées, sans limite.
+#[ApiResource(normalizationContext: ['groups' => ['vehicle:read']], paginationItemsPerPage: 24, paginationMaximumItemsPerPage: 50)]
 class Vehicle implements TranslatableInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['vehicle:read'])]
     private ?int $id = null;
 
     #[ORM\ManyToOne]
@@ -24,36 +28,47 @@ class Vehicle implements TranslatableInterface
     private ?Product $product = null;
 
     #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['vehicle:read'])]
     private ?string $title = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['vehicle:read'])]
     private ?string $description = null;
 
     #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['vehicle:read'])]
     private ?string $picture = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['vehicle:read'])]
     private ?int $year = null;
 
     #[ORM\Column(length: 100, nullable: true)]
+    #[Groups(['vehicle:read'])]
     private ?string $color = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['vehicle:read'])]
     private ?int $transmission = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['vehicle:read'])]
     private ?int $gasType = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['vehicle:read'])]
     private ?bool $newVehicle = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['vehicle:read'])]
     private ?bool $featuredVehicle = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['vehicle:read'])]
     private ?bool $webDisplay = null;
 
     #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['vehicle:read'])]
     private ?string $slug = null;
 
     /**

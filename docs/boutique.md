@@ -89,10 +89,21 @@ prochain PUT du site concerné. `app:landingpage:check-reglable` suit la même l
 restauration, accès) ; `tests/Functional/LandingPage/LandingSiteModelApiTest.php` (modèles des deux applications).
 Essais réels : site `demo` uniquement.
 
+## Liste générique des produits : `GET /api/products` fermée (S8, 26/10/2026)
+
+La liste générée par API Platform (`GET /api/products`, `/api/products.json`, `/api/products/{id}.{format}`) est **réservée à
+l'administrateur** (401 sans connexion, 403 pour un client, refus avant toute requête), avec des champs simples (groupe `product:list`,
+aucune relation) et 30 produits par page (`itemsPerPage` jusqu'à 100). Avant, elle était publique et imbriquait toutes les relations :
+une requête occupait un processus du serveur plusieurs minutes (incident du 26/10/2026). **Le site et les applications lisent les routes
+dédiées, inchangées** : `/api/products/{id}` (fiche, DTO), `/api/products/by-slug/{slug}`, `/api/products/by-category`,
+`/api/products/{bestsellers|newarrivals|…}`, `/api/productsid/{id}`, avis et éligibilité, variantes ; catégories : `/api/category`.
+Le site ne relit plus jamais la liste complète en repli d'une fiche en erreur (correction côté Next.js). Détail des ressources API
+Platform : `docs/architecture.md`.
+
 ## Contrat d'un produit (08/10/2026, `ProductCommerceDto`)
 
 Toutes les routes qui renvoient un produit (`/api/products/by-slug/{slug}`, `/api/productsid/{id}`,
-`/api/products/{sélection}`, `/api/products/by-category`, `/api/products`, DTO `ProductDetailedOutputDTO`,
+`/api/products/{sélection}`, `/api/products/by-category`, `/api/products/{id}`, DTO `ProductDetailedOutputDTO`,
 `ProductOutputDTO`, `ProductOutputCategoryDto`) portent, en plus des anciens champs (`mode`, `price` en dollars,
 `bookingConfig`, `category`, mêmes unités qu'avant), gardés pour le carrousel des landing pages :
 

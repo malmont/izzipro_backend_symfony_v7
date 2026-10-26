@@ -53,7 +53,9 @@ class MobileAccessHardeningTest extends WebTestCase
         $body = json_encode(['name' => 'Catégorie test ' . bin2hex(random_bytes(2))]);
 
         $this->loginAs(['ROLE_USER_INTERNET'], 'mobile');
-        $this->assertSame(200, $this->request('GET', '/api/categories', null, $ld)->getStatusCode(), 'lecture inchangée (connecté)');
+        // Lecture réservée à l'administrateur depuis S8 (26/10/2026) : avant, tout client connecté lisait les catégories avec leurs produits
+        // imbriqués sans limite ; la boutique lit /api/category (route dédiée, publique, inchangée)
+        $this->assertSame(403, $this->request('GET', '/api/categories', null, $ld)->getStatusCode(), 'client : lecture refusée (S8)');
         $this->assertSame(403, $this->request('POST', '/api/categories', $body, $ld)->getStatusCode(), 'client : création refusée');
 
         $this->loginAs(['ROLE_ADMIN']);
