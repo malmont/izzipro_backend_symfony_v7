@@ -149,10 +149,9 @@ class ApiPlatformBoundedReadsTest extends WebTestCase
         $this->assertSame($vehicles['count'], $measure('/api/vehicle_products?page=1&pageSize=50&locale=fr')['count'], 'produits véhicules bornés');
         $vp = $this->json($this->request('GET', '/api/vehicle_products'));
         foreach ($this->members($vp) as $m) {
-            foreach ($m['bookings'] ?? [] as $b) {
-                $this->assertSame([], array_diff(array_keys((array) $b), ['@id', '@type']), 'réservations sans champ (groupe absent) : profondeur bornée');
-            }
+            $this->assertArrayNotHasKey('bookings', $m, 'liste des réservations non exposée (une entrée par réservation, sans limite)');
             $this->assertArrayNotHasKey('variants', $m);
+            $this->assertSame([], array_values(array_diff(array_keys($m['bookingConfiguration'] ?? []), ['@id', '@type', 'id', 'granularity', 'stockQuantity', 'minDuration', 'bufferTime'])), 'configuration de réservation : champs simples');
         }
     }
 
