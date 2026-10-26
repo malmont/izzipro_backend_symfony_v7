@@ -237,6 +237,17 @@ retirés, envoi abandonné s'il n'en reste aucun (hors tests). Refus définitif 
 - Le nom de la file est le **chemin du DSN** (`%env(MESSENGER_TRANSPORT_DSN)%_esg`) : l'option `stream` est ignorée
   quand le DSN a un chemin.
 - Ne jamais vider Redis en entier (`FLUSHALL`) ; le cache applicatif est dans la base 0.
+- **Invalidation du cache applicatif (26/10/2026)** : toute écriture Doctrine d'une entité (création, modification,
+  suppression, liaison d'une collection, traductions comprises) vide **tout le cache du site et de sa base** (étiquettes
+  du code et de la base, posées sur chaque entrée de `TenantCacheService` ; celle de la base couvre les codes qui
+  partagent une base, esgboost/esgboost1 et arkanoa-media/arkanoa-media1, et les commandes sans code de site), juste après le flush puis une seconde fois en fin de requête, de commande
+  ou de message (`EventSubscriber/CacheInvalidationSubscriber` et `CacheInvalidationFinalizer`). Plus aucune table
+  entité → clés à tenir : un nouveau composant est couvert d'office. Exceptions, sans effet sur une réponse en cache :
+  jetons, codes OTP, journaux, suivi de l'IA (`IGNORED_CLASSES`), compteur de consultations des médias et date de
+  dernière connexion (`IGNORED_FIELDS`). Une écriture en SQL direct échappe à Doctrine : appeler
+  `TenantCacheService::invalidateTenant()`. Test : `tests/Functional/Cache/CacheInvalidationTest.php`.
+  Restent hors de ce mécanisme : le cache HTTP des lectures publiques (`PublicReadCacheSubscriber`, 60 s pour un
+  visiteur anonyme, jamais pour un administrateur connecté) et le cache propre au frontend.
 - **Écran « Workers »** (EasyAdmin, menu Maintenance ; `Controller/Admin/WorkerAdminController`, `/admin/workers`),
   réservé à `ROLE_SUPER_ADMIN` (entrée de menu, contrôleur et `access_control`) : état de chaque worker, contenu des
   files, rédactions de chapitres en cours ou en échec du site (relance, libération), bouton de redémarrage (même signal

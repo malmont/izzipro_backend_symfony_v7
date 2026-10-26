@@ -23,6 +23,29 @@ class TenantCacheService
         return $this->tcp->getTenantCode() ?: 'master';
     }
 
+    /** Étiquette d'un site, posée sur chacune de ses entrées */
+    public static function tenantTag(string $tenantCode): string
+    {
+        return preg_replace('/[{}()\/\\\\@:]/', '_', $tenantCode);
+    }
+
+    /**
+     * Étiquette de la base, posée elle aussi sur chaque entrée (26/10/2026) : deux codes de site peuvent partager une
+     * base (esgboost et esgboost1, arkanoa-media et arkanoa-media1), et une commande peut écrire sans code de site.
+     * Une écriture vide l'étiquette du code et celle de la base (CacheInvalidationSubscriber).
+     */
+    public static function databaseTag(string $dbname): string
+    {
+        return 'db.' . preg_replace('/[{}()\/\\\\@:]/', '_', $dbname);
+    }
+
+    private function getDatabaseName(): ?string
+    {
+        $dbname = $this->tcp->getConnection()->getParams()['dbname'] ?? null;
+
+        return is_string($dbname) && $dbname !== '' ? $dbname : null;
+    }
+
     /**
      * Récupère ou calcule un item, isolé par tenant.
      */
@@ -40,7 +63,10 @@ class TenantCacheService
         if ($extraTags) {
             $tags = array_map(fn($tag) => preg_replace('/[{}()\/\\\\@:]/', '_', $tenantCode . '_' . $tag), $extraTags);
         }
-        $tags[] = preg_replace('/[{}()\/\\\\@:]/', '_', $tenantCode);
+        $tags[] = self::tenantTag($tenantCode);
+        if ($dbname = $this->getDatabaseName()) {
+            $tags[] = self::databaseTag($dbname);
+        }
 
         return $this->cache->get($key, function (ItemInterface $item) use ($compute, $ttl, $tags) {
             if ($ttl !== null) {
@@ -70,9 +96,17 @@ class TenantCacheService
         return $this->cache->invalidateTags($tags);
     }
 
-    /** Invalide tout le cache du tenant actuel (chaque entrée porte l'étiquette du tenant) : après une écriture en masse */
+    /**
+     * Invalide tout le cache du tenant actuel et de sa base (chaque entrée porte ces deux étiquettes) : après une
+     * écriture en masse ou en SQL direct
+     */
     public function invalidateTenant(): bool
     {
-        return $this->cache->invalidateTags([preg_replace('/[{}()\/\\\\@:]/', '_', $this->getTenantCode())]);
+        $tags = [self::tenantTag($this->getTenantCode())];
+        if ($dbname = $this->getDatabaseName()) {
+            $tags[] = self::databaseTag($dbname);
+        }
+
+        return $this->cache->invalidateTags($tags);
     }
 }

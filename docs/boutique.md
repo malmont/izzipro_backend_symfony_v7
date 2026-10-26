@@ -178,8 +178,8 @@ inscrite au journal (`GET /api/landingpage-audit?resource=products`…) et resta
 
 Une image venue de la médiathèque est enregistrée sous `/media/secure/{clé}` et rendue en URL complète par tous les
 DTO de la boutique (`MediaUrlResolver::joinStored`) ; un nom de fichier téléversé dans l'administration reste servi
-sous `/assets/uploads/<dossier>/`. Les caches des lectures publiques sont invalidés (étiquettes de
-`LandingContentSpec` + `CacheInvalidationSubscriber`). Code : `LandingContentSpec` (liste blanche, `localeField`,
+sous `/assets/uploads/<dossier>/`. Les caches des lectures publiques sont invalidés à
+chaque écriture (`CacheInvalidationSubscriber` : tout le cache du site, voir `docs/architecture.md`). Code : `LandingContentSpec` (liste blanche, `localeField`,
 `titleField`, `aliases`), `LandingContentEditor` (natures `number`, `date`, `images` ajoutées). Tests :
 `tests/Functional/Boutique/BoutiqueContentEditApiTest.php`.
 
