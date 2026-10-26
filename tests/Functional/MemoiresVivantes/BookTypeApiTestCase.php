@@ -55,6 +55,25 @@ abstract class BookTypeApiTestCase extends WebTestCase
         return [$response->getStatusCode(), json_decode((string) $response->getContent(), true)];
     }
 
+    /**
+     * Tous les comptes de GET /admin/users, page par page (pagination S8 : 200 au plus par page, total dans X-Total-Count) ; la base de
+     * test partagée en accumule plusieurs centaines au fil de la suite.
+     */
+    protected function allAdminUsers(string $as = 'admin'): array
+    {
+        $all = [];
+        for ($page = 1; $page <= 50; $page++) {
+            [$status, $rows] = $this->api('GET', '/admin/users?page=' . $page . '&limit=200', null, $as);
+            $this->assertSame(200, $status);
+            $all = array_merge($all, $rows);
+            if (count($all) >= (int) $this->client->getResponse()->headers->get('X-Total-Count') || $rows === []) {
+                break;
+            }
+        }
+
+        return $all;
+    }
+
     /** Détail d'un type par son code */
     protected function typeByCode(string $code): array
     {

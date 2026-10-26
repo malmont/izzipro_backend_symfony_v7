@@ -292,6 +292,12 @@ mobile fait son propre livre, avec des quotas et, à venir, des chapitres payant
 - `GET /admin/users` : champs **ajoutés** à chaque utilisateur : `population`, `signupChannel`, `createdAt`,
   `lastActivityAt` (dernier des : dernière connexion, modification d'un livre ou d'un chapitre, appel IA),
   `mobileBooksCount`. Cette liste contient tous les comptes du site, clients de la boutique compris.
+- **Pagination de `GET /admin/users` (S8, 26/10/2026)** : `?page=` (défaut 1) et `?limit=` (défaut **et plafond 200**), ordre des
+  identifiants ; total dans l'en-tête **`X-Total-Count`** (exposé au navigateur par `Access-Control-Expose-Headers`) ; le corps reste
+  un **tableau** d'utilisateurs, page au-delà de la fin : `[]`. Sans paramètre : les 200 premiers comptes (aujourd'hui, tous les comptes
+  d'un site). **À ajouter dans la console (agent du site, application web)** : lire `X-Total-Count` ; tant qu'il dépasse le nombre de
+  comptes reçus, afficher une pagination (pages de 50 par exemple : `?page=N&limit=50`) ou un bouton « Charger plus » ; garder la recherche
+  et les filtres côté serveur si la console en ajoute (paramètres à demander au backend). Test : `AdminUsersPaginationTest`.
 - `GET /admin/mobile-users?search=&page=1&perPage=20` (`Controller/Admin/MobileUserAdminController`,
   `Services/MobileUserStatsService`, `Repository/UserActivityStatsRepository` : SQL agrégé, une requête par famille) :
   population mobile seulement, administrateurs exclus → `{date, timezone, limits, page, perPage, total, users:

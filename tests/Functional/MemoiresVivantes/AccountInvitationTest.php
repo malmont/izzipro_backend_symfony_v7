@@ -33,7 +33,7 @@ class AccountInvitationTest extends BookTypeApiTestCase
 
         // Sans origine connue (appel direct au backend), le domaine du site sert de repli
         $this->client->setServerParameter('HTTP_ORIGIN', 'https://mvtest.backend-strapi.online');
-        [, $list] = $this->api('GET', '/admin/users', null, 'admin');
+        $list = $this->allAdminUsers();
         $invited = array_values(array_filter($list, fn ($u) => $u['email'] === 'invite@example.invalid'))[0];
         $this->assertStringStartsWith('https://' . MV_TEST_TENANT_HOST . '/activer-compte?token=', $invited['activationUrl']);
     }

@@ -21,6 +21,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ADMIN')]
 class UserManagementController extends AbstractController
 {
+    /** Taille de page par défaut et maximale de la liste des utilisateurs */
+    private const PAGE_LIMIT = 200;
+
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly UserPasswordHasherInterface $passwordHasher,
@@ -42,7 +45,12 @@ class UserManagementController extends AbstractController
     {
         $em = $this->emProvider->getEntityManager();
         $userRepo = $em->getRepository(User::class);
-        $users = $userRepo->findBy([], ['id' => 'ASC']);
+        // Pagination (S8, 26/10/2026) : ?page= (défaut 1) et ?limit= (défaut et plafond 200), total dans X-Total-Count ; corps toujours un
+        // tableau. Avant : tous les utilisateurs d'un coup. Sans paramètre : les 200 premiers (aujourd'hui, tous les utilisateurs d'un site)
+        $limit = max(1, min(self::PAGE_LIMIT, (int) $request->query->get('limit', (string) self::PAGE_LIMIT)));
+        $page = max(1, (int) $request->query->get('page', '1'));
+        $total = $userRepo->count([]);
+        $users = $userRepo->findBy([], ['id' => 'ASC'], $limit, ($page - 1) * $limit);
 
         // Récupérer le nombre de livres créés par chaque utilisateur en une seule requête groupée
         $bookCounts = $em->getRepository(Book::class)->createQueryBuilder('b')
@@ -86,7 +94,7 @@ class UserManagementController extends AbstractController
             ];
         }
 
-        return $this->json($data);
+        return $this->json($data, 200, ['X-Total-Count' => (string) $total, 'Access-Control-Expose-Headers' => 'X-Total-Count']);
     }
 
     #[Route('', methods: ['POST'])]

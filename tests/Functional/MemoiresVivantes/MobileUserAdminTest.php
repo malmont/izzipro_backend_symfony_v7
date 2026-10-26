@@ -81,7 +81,7 @@ class MobileUserAdminTest extends BookTypeApiTestCase
         }
         $this->assertContains($mobile['id'], $ids);
         $this->assertNotContains($webUser['id'], $ids, 'client web absent');
-        [, $admin] = $this->api('GET', '/admin/users');
+        $admin = $this->allAdminUsers();
         $adminIds = array_column(array_filter($admin, fn ($u) => in_array('ROLE_ADMIN', $u['roles'], true)), 'id');
         $this->assertSame([], array_intersect($adminIds, $ids), 'administrateurs absents');
 
@@ -102,8 +102,7 @@ class MobileUserAdminTest extends BookTypeApiTestCase
         $this->assertSame(404, $this->api('GET', '/admin/mobile-users/999999')[0]);
 
         // GET /admin/users : champs ajoutés seulement
-        [$status, $users] = $this->api('GET', '/admin/users');
-        $this->assertSame(200, $status);
+        $users = $this->allAdminUsers();
         $byId = array_column($users, null, 'id');
         $this->assertSame(['mobile', 'mobile', 1], [$byId[$mobile['id']]['population'], $byId[$mobile['id']]['signupChannel'], $byId[$mobile['id']]['mobileBooksCount']]);
         $this->assertSame(['web_client', 'web_invite', 0], [$byId[$webUser['id']]['population'], $byId[$webUser['id']]['signupChannel'], $byId[$webUser['id']]['mobileBooksCount']]);
@@ -115,7 +114,7 @@ class MobileUserAdminTest extends BookTypeApiTestCase
 
         // Un client web qui crée un livre dans l'application devient « mobile »
         $this->json('POST', '/api/memoires/mobile/books', ['title' => 'Essai depuis le téléphone', 'type' => 'individuel'], $webUser['token']);
-        [, $users] = $this->api('GET', '/admin/users');
+        $users = $this->allAdminUsers();
         $this->assertSame('mobile', array_column($users, null, 'id')[$webUser['id']]['population']);
         $this->assertSame(200, $this->api('GET', '/admin/mobile-users/' . $webUser['id'])[0]);
 
