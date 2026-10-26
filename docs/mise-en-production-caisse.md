@@ -36,7 +36,7 @@ Cocher dans l'ordre, sur le site du magasin (jamais sur demo, qui reste en test)
    données de vente (caisse) »), puis vérifier qu'une modification d'une vente archivée est refusée dans EasyAdmin.
 10. **Archive annuelle conservée hors serveur** : à chaque clôture d'exercice, archive annuelle (EasyAdmin, « Archive
     annuelle (caisse) ») téléchargée et conservée hors du serveur (empreinte SHA-256 notée).
-11. **Sauvegardes** : sauvegarde quotidienne vérifiée (section 5) ; copie hors serveur en place avant le premier client.
+11. **Sauvegardes** : sauvegarde quotidienne vérifiée ; copie hors serveur chiffrée en place et restauration mensuelle verte (section 5) avant le premier client ; surveillance Healthchecks.io active (section 6).
 12. **Serveur en production** : passage du mode développement au mode production avant le premier client (section 4).
 
 ## 2. Réconciliation planifiée (installée le 26/10/2026)
@@ -127,20 +127,100 @@ Le serveur tourne en `APP_ENV=dev` avec `APP_DEBUG=0` (choix du propriétaire). 
   assistant IA, Mémoires Vivantes, EasyAdmin ; `GET /api/pos/health` ; journaux sans erreur nouvelle.
 - **Retour arrière** : remettre `APP_ENV=dev`, recréer le conteneur, `cache:clear`.
 
-## 5. Recommandations soumises au propriétaire (non appliquées)
+## 5. Sauvegardes hors serveur chiffrées (restic vers OVHcloud Beauharnois) : procédure
 
-- **Sauvegardes hors serveur chiffrées** : les sauvegardes quotidiennes (environ 9 Mo par jour, 14 jours) restent sur le même
-  disque. Proposition : `restic` (chiffrement côté serveur, déduplication) vers un stockage objet au Canada (Loi 25), par exemple
-  OVHcloud Object Storage (Beauharnois) ; volume inférieur à 1 Go sur un an, coût estimé inférieur à 1 $ par mois (à confirmer
-  sur la grille du fournisseur). Mot de passe du dépôt restic conservé hors serveur (gestionnaire de mots de passe du propriétaire).
-  Lancement à la suite de `backup-daily.service` ; `restic check` hebdomadaire ; **restauration testée chaque mois** : restauration
-  du dernier vidage d'une base dans un conteneur PostgreSQL temporaire et requête de contrôle (nombre de commandes), résultat au
-  journal. Archive annuelle de la caisse copiée dans le même dépôt.
-- **Surveillance externe** : (a) Healthchecks.io (gratuit jusqu'à 20 contrôles) : le service du timer appelle une URL de
-  contrôle à chaque exécution réussie ; alerte si aucun appel pendant 15 minutes, même si le serveur est arrêté. (b) UptimeRobot
-  (gratuit, toutes les 5 minutes) sur une route de surveillance dédiée en lecture seule, protégée par un jeton
-  (`POS_HEALTH_TOKEN`, en-tête `X-Health-Token`), qui ne rend que `{status, reconcileStale}` agrégés pour tous les sites, sans
-  détail ni donnée de paiement ; alerte par courriel ou SMS si `status` est `critical` ou si la route ne répond plus. Route et
-  jeton à développer après accord.
+Décision du propriétaire (26/10/2026) : copie chiffrée des sauvegardes quotidiennes vers un stockage objet au Canada (Loi 25).
+**Non installé** : le propriétaire crée le compte, puis l'installation se fait avec son accord.
+
+Aujourd'hui : `backup-daily.timer` (04:00 UTC) vide chaque base PostgreSQL et archive les médias de Mémoires Vivantes dans
+`/home/arkanoa/backups/data/<date>` (environ 9 Mo par jour, 14 jours gardés), **sur le même disque**.
+
+### Ce que le propriétaire crée chez OVHcloud
+
+1. Un projet **Public Cloud** (s'il n'existe pas), puis **Object Storage**, « Créer un conteneur » : offre **Standard (API S3)**,
+   région **BHS (Beauharnois, Canada)**, nom `arkanoa-backups-app-v2`, accès **privé**. Activer le **versioning** du conteneur
+   (un fichier écrasé ou supprimé reste récupérable).
+2. **Utilisateurs et rôles**, « Créer un utilisateur », rôle « ObjectStore operator », puis « Générer les identifiants S3 ».
+   Si l'interface le permet, limiter l'utilisateur à ce seul conteneur (politique S3 : lecture, écriture, liste sur
+   `arkanoa-backups-app-v2` uniquement).
+3. **Mot de passe de chiffrement restic** : le propriétaire le génère (au moins 32 caractères aléatoires) dans son gestionnaire de
+   mots de passe. Il chiffre tout le dépôt côté serveur : OVHcloud ne voit que des données chiffrées.
+
+### Ce que le propriétaire transmet (hors du dépôt et de toute discussion journalisée si possible)
+
+| Information | Exemple de forme |
+|---|---|
+| Point d'accès S3 | `https://s3.bhs.io.cloud.ovh.net` |
+| Région | `bhs` |
+| Nom du conteneur | `arkanoa-backups-app-v2` |
+| Clé d'accès S3 | identifiant de l'utilisateur S3 |
+| Clé secrète S3 | secret de l'utilisateur S3 |
+| Mot de passe restic | celui de l'étape 3 |
+
+Ces valeurs vont dans `/home/arkanoa/backups/restic.env` (propriétaire `arkanoa`, droits `0600`), jamais dans le dépôt :
+
+```bash
+RESTIC_REPOSITORY=s3:https://s3.bhs.io.cloud.ovh.net/arkanoa-backups-app-v2
+AWS_ACCESS_KEY_ID=<clé d'accès S3>
+AWS_SECRET_ACCESS_KEY=<clé secrète S3>
+AWS_DEFAULT_REGION=bhs
+RESTIC_PASSWORD=<mot de passe restic>
+```
+
+### La clé de chiffrement hors du serveur
+
+Le mot de passe restic doit exister à deux endroits : sur le serveur (fichier ci-dessus, pour les copies automatiques) et **hors du
+serveur** (gestionnaire de mots de passe du propriétaire, plus une copie papier ou un second coffre). **Sans lui, aucune sauvegarde
+n'est récupérable**, même avec l'accès OVHcloud. À l'installation, une seconde clé restic personnelle du propriétaire est ajoutée
+(`restic key add`) : elle ouvre le même dépôt, ne vit jamais sur le serveur, et permet de retirer la clé du serveur s'il est compromis.
+
+### Installation (après accord, à exécuter par l'agent)
+
+1. `sudo apt install restic` ; `restic init` (création du dépôt chiffré) ; `restic key add` (clé personnelle du propriétaire, saisie
+   par lui).
+2. Script `/home/arkanoa/backups/scripts/offsite.sh` : `restic backup` du dossier du jour (`data/<date>`) et des archives annuelles de
+   la caisse téléchargées, puis `restic forget --keep-daily 30 --keep-weekly 12 --keep-monthly 24 --prune`.
+3. `offsite-backup.service` et `.timer` (05:00 UTC, après la sauvegarde de 04:00), journal `/home/arkanoa/backups/logs/offsite.log`
+   avec rotation ; `restic check` le dimanche.
+4. **Restauration testée chaque mois** (`restore-test.timer`, le 1er à 06:00 UTC) : `restic restore latest` dans un dossier
+   temporaire, restauration du vidage de `db_demo` dans un conteneur PostgreSQL éphémère (`docker run --rm postgres`), requête de
+   contrôle (nombre de commandes et de produits comparé à la base vivante), suppression du conteneur et du dossier ; résultat daté au
+   journal, et échec signalé à Healthchecks.io (section 6) comme un contrôle distinct.
+5. Première vérification manuelle devant le propriétaire : `restic snapshots`, puis restauration d'un fichier au hasard.
+
+Coût estimé : moins de 1 Go stocké sur un an, soit moins de 1 $ par mois en stockage Standard (à confirmer sur la grille OVHcloud ;
+le trafic sortant d'une restauration complète reste de quelques centimes).
+
+## 6. Surveillance externe par Healthchecks.io : procédure
+
+Décision du propriétaire (26/10/2026) : chaque passage réussi du timer de réconciliation prévient Healthchecks.io ; sans nouvelles
+pendant 15 minutes (serveur arrêté, Docker arrêté, timer cassé, commande en échec), Healthchecks.io alerte. **Non installé.**
+
+### Ce que le propriétaire crée
+
+1. Un compte sur healthchecks.io (offre gratuite : 20 contrôles), un projet « Arkanoa production ».
+2. « Add Check » : nom `pos-terminal-reconcile`, **Period 5 minutes**, **Grace 10 minutes**.
+3. Intégrations : courriel (et SMS ou appel si souhaité) vers l'administrateur de la plateforme.
+4. Transmettre l'**URL de ping** du contrôle (forme `https://hc-ping.com/<identifiant>`). Elle n'est pas un mot de passe mais
+   permet d'envoyer de faux signaux : elle reste hors du dépôt.
+
+### Installation (après accord, à exécuter par l'agent)
+
+- URL dans `/etc/default/pos-terminal-reconcile` (`HC_PING_URL=…`, droits `0600`), lue par le service
+  (`EnvironmentFile=-/etc/default/pos-terminal-reconcile`).
+- Succès : `ExecStartPost` appelle l'URL (`curl -fsS -m 10 --retry 3`), seulement si la commande a réussi.
+- Échec : `ExecStopPost` appelle `<URL>/fail` quand le service ne se termine pas en succès : alerte immédiate, sans attendre 15 minutes.
+- La commande rendra un code d'échec quand un site est en erreur pendant la réconciliation (aujourd'hui : succès avec un message), pour
+  que ce cas déclenche aussi `/fail`.
+- Vérification : trois passages verts dans Healthchecks.io, puis un faux échec provoqué (service lancé avec une option invalide) qui
+  doit alerter.
+
+La route de surveillance pour UptimeRobot (jeton en lecture seule) viendra plus tard.
+
+## 7. Autres recommandations soumises au propriétaire (non appliquées)
+
 - **Clés** : clés réelles restreintes (section 3), rotation annuelle, accès au tableau de bord Stripe en double authentification.
 - **Courriels d'alerte** : vérifier SPF et DKIM du domaine expéditeur de `MAILER_DSN`.
+- **PHP-FPM** : `memory_limit = -1` et 600 secondes de calcul par requête : une requête emballée peut occuper un processus pendant
+  10 minutes et plusieurs gigaoctets. Proposer `memory_limit` borné (par exemple 512M) et `request_terminate_timeout` (par exemple 120 s)
+  pour les requêtes web, les commandes en ligne de commande gardant leurs propres limites.
