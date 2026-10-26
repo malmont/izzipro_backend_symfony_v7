@@ -442,6 +442,10 @@ failureMessage}, createdAt, updatedAt}`. `succeeded` + `captured: false` : carte
 - `POST /api/order/cancel/{id}` (01/11/2026) : un **avoir** (commande de retour F2) ou une **vente déjà annulée** → **409 `ORDER_NOT_REFUNDABLE`**
   `{orderId, orderType | status}`, rien ne sort de la caisse ; une vente de carte-cadeau garde son 409 `GIFT_CARD_ORDER`. Avant, l'annulation d'un avoir
   échouait sur l'unicité de l'avoir numéroté (400 avec l'erreur SQL, transaction annulée : aucun remboursement n'est jamais sorti). Commandes web : inchangées.
+- Commande **web** déjà annulée (même route, ou nouvel enregistrement dans EasyAdmin d'une commande au statut « Annulé ») : même refus
+  **409 `ORDER_NOT_REFUNDABLE`** `{orderId, status: 7}`, rien n'est écrit. Avant, la seconde annulation répondait 200, ajoutait un remboursement de 0
+  et **réintégrait le stock une seconde fois**. Statut lu en base, ligne verrouillée (EasyAdmin passe le statut à 7 avant l'appel : la première
+  annulation passe ; deux annulations simultanées se suivent). Première annulation web inchangée. Test : `WebOrderDoubleCancelApiTest`.
 - `POST /api/order/cancel/{id}` d'une vente payée sur le terminal, remboursée autrement qu'en espèces
   (`paymentMethod ≠ 2`) : **carte de crédit** → remboursement Stripe en ligne dans la transaction de l'annulation
   (`refund_application_fee`, la plateforme rend sa commission) ; **Interac** → le remboursement doit d'abord être

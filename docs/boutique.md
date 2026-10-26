@@ -298,6 +298,14 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
   `Version20261009110000`, script `scripts/migrate_all_v2_tax_regions.sh`).
 - Tests : `CartQuoteApiTest::testTaxesFollowTheShippingAddressRegion` (QC, ON, NB, FR, sans adresse, repli Stripe → table).
 
+## Annulation d'une commande web (`POST /api/order/cancel/{id}`)
+
+Réservée à l'auteur de la commande (client du site Next.js ou de l'application e-commerce) ; un administrateur annule
+depuis EasyAdmin en passant le statut à « Annulé ». La première annulation est inchangée : statut 7, montants remis à 0,
+remboursement enregistré, stock réintégré, réponse `{message}`. Une **seconde annulation** est refusée :
+**409 `ORDER_NOT_REFUNDABLE`** `{orderId, status: 7}`, rien n'est écrit (avant : 200 et stock réintégré une seconde fois).
+Détails dans `docs/caisse.md`.
+
 ## Compte client (08/10/2026, § 8)
 
 - **Nouveau mot de passe** : `POST /api/password-reset/request { email }` envoie un lien vers la page du frontend du

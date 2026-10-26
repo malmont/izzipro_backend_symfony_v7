@@ -71,6 +71,12 @@ class CancelOrderUseCase
             if ($order->getOrderSource()?->getId() === 2 && $order->getStatus()?->getId() === 7) {
                 throw new CashRegisterException('ORDER_NOT_REFUNDABLE', 'Cette vente est déjà annulée et remboursée', 409, [], ['orderId' => $order->getId(), 'status' => 7]);
             }
+            // Commande déjà annulée, toute source (commandes web, EasyAdmin) : avant, une seconde annulation réintégrait le stock une seconde fois.
+            // Statut lu en base, ligne verrouillée : EasyAdmin passe le statut à 7 dans son formulaire avant d'appeler l'annulation
+            // (la première annulation doit passer) ; deux annulations simultanées se suivent au lieu de se croiser
+            if ((int) $em->getConnection()->fetchOne('SELECT status_id FROM "order" WHERE id = ? FOR UPDATE', [$order->getId()]) === 7) {
+                throw new CashRegisterException('ORDER_NOT_REFUNDABLE', 'Cette commande est déjà annulée', 409, [], ['orderId' => $order->getId(), 'status' => 7]);
+            }
             if ($order->getOrderType()?->getId() === 3) { // vente d'une carte-cadeau (F9) : annulation par POST /api/pos/gift-cards/{code}/cancel (carte jamais utilisée)
                 throw new CashRegisterException('GIFT_CARD_ORDER', 'Vente d\'une carte-cadeau : utilisez l\'annulation de la carte (POST /api/pos/gift-cards/{code}/cancel)', 409, [], ['orderId' => $order->getId()]);
             }
