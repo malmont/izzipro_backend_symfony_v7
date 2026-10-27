@@ -79,10 +79,18 @@ class ProfileApiController extends BaseTenantApiController
             if ($existingUser && $existingUser->getId() !== $user->getId()) {
                 return $this->json(['error' => 'Email already in use'], Response::HTTP_CONFLICT);
             }
+            // Nom d'utilisateur égal à l'ancienne adresse : il suit la nouvelle (suite de S7, 27/10/2026), unicité vérifiée. Avant, la
+            // comparaison se faisait après le changement d'adresse et ne réussissait jamais : le nom gardait l'ancienne adresse.
+            $followsEmail = $user->getUsername() === $oldEmail && $oldEmail !== (string) $data['email'];
+            if ($followsEmail) {
+                $taken = $em->getRepository(User::class)->findOneBy(['username' => $data['email']]);
+                if ($taken && $taken->getId() !== $user->getId()) {
+                    return $this->json(['error' => 'Email already in use'], Response::HTTP_CONFLICT);
+                }
+            }
             $user->setEmail($data['email']);
-            // If username is usually the email, update it too
-            if ($user->getUsername() === $user->getEmail()) {
-                 $user->setUsername($data['email']);
+            if ($followsEmail) {
+                $user->setUsername($data['email']);
             }
         }
         if (isset($data['licenseNumber'])) {

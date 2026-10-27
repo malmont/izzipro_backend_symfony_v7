@@ -11,7 +11,12 @@ use Symfony\Component\Security\Core\Exception\UserNotFoundException;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Core\User\UserProviderInterface;
 
-class TenantUserProvider implements UserProviderInterface
+/**
+ * Utilisateurs du site courant. Jeton d'accès (suite de S7, 27/10/2026) : chargé par l'identifiant numérique du jeton (claim « id »), et
+ * seulement si ce compte porte encore l'adresse ou le nom d'utilisateur du jeton : un ancien jeton n'ouvre jamais un autre compte créé
+ * ensuite avec l'ancienne adresse, ni un compte supprimé (anonymisé). Jetons sans « id » et comptes Boussole : chemin d'avant.
+ */
+class TenantUserProvider implements UserProviderInterface, \Lexik\Bundle\JWTAuthenticationBundle\Security\User\PayloadAwareUserProviderInterface
 {
     public function __construct(
         private readonly TenantEntityManagerProvider $tenantEmProvider,
@@ -60,5 +65,25 @@ class TenantUserProvider implements UserProviderInterface
             || is_subclass_of($class, User::class)
             || $class === EsgUser::class
             || is_subclass_of($class, EsgUser::class);
+    }
+
+    /** Jeton d'accès : compte désigné par le claim « id », qui doit encore porter l'adresse ou le nom d'utilisateur du jeton */
+    public function loadUserByIdentifierAndPayload(string $identifier, array $payload): UserInterface
+    {
+        if (str_starts_with($identifier, EsgUser::IDENTIFIER_PREFIX) || !isset($payload['id']) || !is_numeric($payload['id'])) {
+            return $this->loadUserByIdentifier($identifier);
+        }
+        $user = $this->tenantEmProvider->getEntityManager()->find(User::class, (int) $payload['id']);
+        if (!$user instanceof User || ($user->getEmail() !== $identifier && $user->getUsername() !== $identifier)) {
+            throw new UserNotFoundException(sprintf('Jeton du compte %d sans correspondance (adresse changée ou compte supprimé).', (int) $payload['id']));
+        }
+
+        return $user;
+    }
+
+    /** @deprecated interface de lexik antérieure à 2.12 : même règle */
+    public function loadUserByUsernameAndPayload(string $username, array $payload): UserInterface
+    {
+        return $this->loadUserByIdentifierAndPayload($username, $payload);
     }
 }

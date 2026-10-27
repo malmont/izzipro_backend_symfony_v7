@@ -263,8 +263,14 @@ class UserManagementController extends AbstractController
                 if ($conflict && $conflict->getId() !== $targetUser->getId()) {
                     return $this->json(['error' => 'Cette adresse email est déjà utilisée par un autre compte.'], Response::HTTP_CONFLICT);
                 }
+                // Nom d'utilisateur égal à l'ancienne adresse : il suit la nouvelle, unicité vérifiée (suite de S7, 27/10/2026 ; avant, la
+                // comparaison se faisait après le changement et ne réussissait jamais)
+                $followsEmail = $targetUser->getUsername() === $targetUser->getEmail();
+                if ($followsEmail && ($taken = $userRepo->findOneBy(['username' => $newEmail])) && $taken->getId() !== $targetUser->getId()) {
+                    return $this->json(['error' => 'Cette adresse email est déjà utilisée par un autre compte.'], Response::HTTP_CONFLICT);
+                }
                 $targetUser->setEmail($newEmail);
-                if ($targetUser->getUsername() === $targetUser->getEmail()) {
+                if ($followsEmail) {
                     $targetUser->setUsername($newEmail);
                 }
             }

@@ -41,7 +41,14 @@ final class OptionalCustomerResolver
         if (!is_string($identifier) || $identifier === '') {
             return null;
         }
-        $user = $this->emProvider->getEntityManager()->getRepository(User::class)->findOneBy(['email' => $identifier]);
+        // Même règle que le pare-feu (TenantUserProvider) : compte du claim « id », s'il porte encore l'adresse du jeton (suite de S7)
+        $em = $this->emProvider->getEntityManager();
+        if (isset($payload['id']) && is_numeric($payload['id'])) {
+            $user = $em->find(User::class, (int) $payload['id']);
+
+            return $user instanceof User && ($user->getEmail() === $identifier || $user->getUsername() === $identifier) ? $user : null;
+        }
+        $user = $em->getRepository(User::class)->findOneBy(['email' => $identifier]);
 
         return $user instanceof User ? $user : null;
     }

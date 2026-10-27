@@ -93,6 +93,14 @@ class UserCrudController extends BaseTenantCrudController
         $this->hashPassword($entityInstance);
         $original = $this->emProvider->getEntityManager()->getUnitOfWork()->getOriginalEntityData($entityInstance);
         $this->applyRolePolicy($entityInstance, (array) ($original['roles'] ?? []));
+        // Nom d'utilisateur égal à l'ancienne adresse et laissé tel quel dans le formulaire : il suit la nouvelle adresse (suite de S7)
+        if ($entityInstance instanceof User && isset($original['email'], $original['username']) && $original['email'] !== $entityInstance->getEmail()
+            && $original['username'] === $original['email'] && $entityInstance->getUsername() === $original['username']) {
+            $taken = $this->emProvider->getEntityManager()->getRepository(User::class)->findOneBy(['username' => $entityInstance->getEmail()]);
+            if (!$taken || $taken->getId() === $entityInstance->getId()) {
+                $entityInstance->setUsername((string) $entityInstance->getEmail());
+            }
+        }
         parent::updateEntity($entityManager, $entityInstance);
         // Courriel changé dans EasyAdmin : les jetons de renouvellement suivent la nouvelle adresse (suite de S7)
         if ($entityInstance instanceof User && isset($original['email']) && $original['email'] !== $entityInstance->getEmail()) {

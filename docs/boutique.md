@@ -384,9 +384,16 @@ MAUI non vérifiables) ; le site Next.js ne l'appelle pas.
 
 ### Session après un changement d'adresse (`PATCH /api/profile`)
 
-Le jeton d'accès et le jeton de renouvellement sont liés à l'adresse courriel. **Quand l'adresse enregistrée change réellement (casse
-comprise)**, la réponse du `PATCH` ajoute de nouveaux jetons, sous la forme de la connexion, et les jetons de renouvellement de l'utilisateur
-suivent la nouvelle adresse (ses autres appareils restent connectés). **Sans changement d'adresse, la réponse est identique à avant.**
+Le jeton d'accès porte le nom d'utilisateur (en général égal à l'adresse) et l'identifiant du compte ; le jeton de renouvellement est
+lié à l'adresse. **Quand l'adresse enregistrée change réellement (casse comprise)**, la réponse du `PATCH` ajoute de nouveaux jetons, sous
+la forme de la connexion, les jetons de renouvellement de l'utilisateur suivent la nouvelle adresse (ses autres appareils restent connectés)
+et un nom d'utilisateur égal à l'ancienne adresse la suit aussi (unicité vérifiée, 409 sinon). **Sans changement d'adresse, la réponse est
+identique à avant.**
+
+Sécurité (27/10/2026) : un jeton d'accès n'ouvre que le compte de son identifiant (`id`), et seulement si ce compte porte encore le nom
+d'utilisateur ou l'adresse du jeton. Après un changement d'adresse, l'ancien jeton n'ouvre donc ni un compte créé ensuite avec l'ancienne
+adresse, ni l'ancien compte quand son nom d'utilisateur a suivi l'adresse (le client renouvelle sa session ou utilise les jetons rendus) ;
+un nom d'utilisateur choisi, différent de l'adresse, reste inchangé et son ancien jeton continue d'ouvrir ce seul compte.
 
 | Client | Ce que contient la réponse en cas de changement | À faire côté front |
 |---|---|---|

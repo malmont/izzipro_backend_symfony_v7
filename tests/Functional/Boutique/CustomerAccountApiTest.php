@@ -218,6 +218,12 @@ class CustomerAccountApiTest extends WebTestCase
             'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
             'HTTP_X_XSRF_TOKEN' => $this->session['XSRF-TOKEN_' . MV_TEST_TENANT_CODE] ?? null,
         ]), $body);
+        // Comme un navigateur : les cookies posés par la réponse remplacent les anciens (nouveaux jetons après un changement d'adresse)
+        if ($this->session !== []) {
+            foreach ($this->client->getResponse()->headers->getCookies() as $cookie) {
+                $this->session[$cookie->getName()] = $cookie->getValue();
+            }
+        }
 
         return $this->client->getResponse();
     }

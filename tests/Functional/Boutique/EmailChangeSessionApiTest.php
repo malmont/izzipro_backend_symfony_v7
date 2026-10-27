@@ -121,6 +121,46 @@ class EmailChangeSessionApiTest extends WebTestCase
         }
     }
 
+    public function testAnOldAccessTokenNeverOpensAnAccountCreatedLaterWithTheOldAddress(): void
+    {
+        $old = $this->user(['ROLE_USER_INTERNET']);
+        $login = $this->mobileLogin($old);
+        $this->session = [];
+        $this->bearer = $login['token'];
+        $new = 'suivi-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        $this->json($this->request('PATCH', '/api/profile', json_encode(['email' => $new, 'currentPassword' => self::PASSWORD])));
+        $this->assertSame([$new, $new], array_values($this->db->fetchAssociative('SELECT email, username FROM "user" WHERE email = ?', [$new])), 'le nom d\'utilisateur suit l\'adresse');
+
+        // Quelqu'un crée ensuite un compte avec l'ancienne adresse : l'ancien jeton ne l'ouvre pas
+        $other = $this->user(['ROLE_USER_INTERNET'], $old);
+        $this->bearer = $login['token'];
+        $this->assertSame(401, $this->request('GET', '/api/profile')->getStatusCode(), 'ancien jeton : ni l\'ancien compte (adresse changée) ni le nouveau');
+        $request = \Symfony\Component\HttpFoundation\Request::create('https://' . MV_TEST_TENANT_HOST . '/api/stripe/create-intent', 'POST', [], [], [], ['HTTP_AUTHORIZATION' => 'Bearer ' . $login['token']]);
+        $this->assertNull(static::getContainer()->get(\App\Security\OptionalCustomerResolver::class)->resolve($request), 'routes publiques : pas de client deviné');
+        // Le nouveau compte, lui, s'ouvre avec ses propres jetons ; l'ancien client renouvelle sa session (jeton transféré)
+        $this->bearer = $this->mobileLogin($other)['token'];
+        $this->assertSame($old, $this->json($this->request('GET', '/api/profile'))['email']);
+        $this->bearer = null;
+        $refreshed = json_decode($this->request('POST', '/api/token/refresh', json_encode(['refresh_token' => $login['refresh_token']]))->getContent(), true);
+        $this->bearer = $refreshed['token'] ?? null;
+        $this->assertSame($new, $this->json($this->request('GET', '/api/profile'))['email'], 'renouvellement : le client d\'origine');
+    }
+
+    public function testAUsernameDifferentFromTheEmailIsKeptAndTheSessionStaysSafe(): void
+    {
+        $email = $this->user(['ROLE_USER_INTERNET'], null, 'pseudo-' . bin2hex(random_bytes(3)));
+        $login = $this->mobileLogin($email);
+        $this->session = [];
+        $this->bearer = $login['token'];
+        $new = 'pseudo-nouveau-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        $body = $this->json($this->request('PATCH', '/api/profile', json_encode(['email' => $new, 'currentPassword' => self::PASSWORD])));
+        $this->assertStringStartsWith('pseudo-', (string) $this->db->fetchOne('SELECT username FROM "user" WHERE email = ?', [$new]), 'nom d\'utilisateur choisi : inchangé');
+        // Le jeton porte le nom d'utilisateur (inchangé, unique) : l'ancien jeton désigne toujours ce même compte, et lui seul
+        $this->assertSame($new, $this->json($this->request('GET', '/api/profile'))['email'], 'ancien jeton : même compte');
+        $this->bearer = $body['token'];
+        $this->assertSame($new, $this->json($this->request('GET', '/api/profile'))['email'], 'nouveau jeton rendu par le PATCH');
+    }
+
     public function testAnEmailChangeInEasyAdminTransfersRefreshTokens(): void
     {
         $email = $this->user(['ROLE_USER_INTERNET']);
@@ -176,13 +216,23 @@ class EmailChangeSessionApiTest extends WebTestCase
         $this->assertSame([true, false], [$p['otpEnabled'], $p['passwordSet']], 'confirmation par code');
     }
 
-    private function user(array $roles): string
+    private function mobileLogin(string $email): array
     {
-        $email = 'session-' . bin2hex(random_bytes(3)) . '@example.invalid';
+        $this->client->getCookieJar()->clear();
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/api/login', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json'],
+            json_encode(['username' => $email, 'password' => self::PASSWORD, 'platform' => 'mobile']));
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $this->client->getResponse()->getContent());
+
+        return json_decode($this->client->getResponse()->getContent(), true);
+    }
+
+    private function user(array $roles, ?string $email = null, ?string $username = null): string
+    {
+        $email ??= 'session-' . bin2hex(random_bytes(3)) . '@example.invalid';
         $container = static::getContainer();
         $provider = $container->get(TenantEntityManagerProvider::class);
         $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
-        $user = (new User())->setEmail($email)->setUsername($email)->setFirstname('Session')->setLastname('Client')->setRoles($roles)->setIsVerified(true);
+        $user = (new User())->setEmail($email)->setUsername($username ?? $email)->setFirstname('Session')->setLastname('Client')->setRoles($roles)->setIsVerified(true);
         $user->setPassword($container->get(UserPasswordHasherInterface::class)->hashPassword($user, self::PASSWORD));
         $provider->getEntityManager()->persist($user);
         $provider->getEntityManager()->flush();
