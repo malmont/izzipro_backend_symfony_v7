@@ -31,7 +31,8 @@ class UserManagementController extends AbstractController
         private readonly FrontendUrlResolver $frontendUrl,
         private readonly EmailSenderService $emailSender,
         private readonly LoggerInterface $logger,
-        private readonly \App\MemoiresVivantes\Services\MobileUserStatsService $mobileUserStats
+        private readonly \App\MemoiresVivantes\Services\MobileUserStatsService $mobileUserStats,
+        private readonly \App\Services\AccountService\SessionIdentityService $sessions // jetons de renouvellement après un changement de courriel
     ) {}
 
     /** Adresse du site frontend (les liens d'activation y renvoient ; avant, ils pointaient vers le stockage des médias) */
@@ -215,6 +216,7 @@ class UserManagementController extends AbstractController
         $em = $this->emProvider->getEntityManager();
         $userRepo = $em->getRepository(User::class);
         $targetUser = $userRepo->find($id);
+        $previousEmail = $targetUser?->getEmail();
 
         if (!$targetUser) {
             return $this->json(['error' => 'Utilisateur introuvable.'], Response::HTTP_NOT_FOUND);
@@ -276,6 +278,11 @@ class UserManagementController extends AbstractController
         }
 
         $em->flush();
+        // Courriel changé par l'administrateur : les jetons de renouvellement de l'utilisateur suivent la nouvelle adresse (son jeton en
+        // cours expire et son application le renouvelle) ; aucun jeton rendu, ce n'est pas sa session (suite de S7)
+        if ($previousEmail !== null && $previousEmail !== $targetUser->getEmail()) {
+            $this->sessions->transferRefreshTokens($previousEmail, (string) $targetUser->getEmail());
+        }
 
         return $this->json([
             'status' => 'updated',

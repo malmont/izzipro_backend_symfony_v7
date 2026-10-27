@@ -45,7 +45,7 @@ class AccountActivationController extends AbstractController
         }
 
         $hashedPassword = $this->passwordHasher->hashPassword($user, $password);
-        $user->setPassword($hashedPassword);
+        $user->setPassword($hashedPassword)->setPasswordSet(true); // mot de passe choisi à l'activation de l'invitation
         $user->setIsVerified(true);
         $user->setVerificationToken(null);
 

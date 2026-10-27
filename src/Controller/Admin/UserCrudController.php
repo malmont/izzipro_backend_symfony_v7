@@ -30,7 +30,8 @@ class UserCrudController extends BaseTenantCrudController
         TenantEntityManagerProvider $emProvider,
         private readonly RoleAssignmentPolicy $rolePolicy,
         private readonly ?\App\Services\PosAuditService\PosPinService $posPins = null,
-        private readonly ?\App\Services\PosAuditService\PosAuditService $posAudit = null
+        private readonly ?\App\Services\PosAuditService\PosAuditService $posAudit = null,
+        private readonly ?\App\Services\AccountService\SessionIdentityService $sessions = null // jetons après un changement de courriel
     ) {
         parent::__construct($emProvider);
         $this->userPasswordHasher = $userPasswordHasher;
@@ -93,6 +94,10 @@ class UserCrudController extends BaseTenantCrudController
         $original = $this->emProvider->getEntityManager()->getUnitOfWork()->getOriginalEntityData($entityInstance);
         $this->applyRolePolicy($entityInstance, (array) ($original['roles'] ?? []));
         parent::updateEntity($entityManager, $entityInstance);
+        // Courriel changé dans EasyAdmin : les jetons de renouvellement suivent la nouvelle adresse (suite de S7)
+        if ($entityInstance instanceof User && isset($original['email']) && $original['email'] !== $entityInstance->getEmail()) {
+            $this->sessions?->transferRefreshTokens((string) $original['email'], (string) $entityInstance->getEmail());
+        }
     }
 
     /** Règle appliquée côté serveur, même si le formulaire est forgé */

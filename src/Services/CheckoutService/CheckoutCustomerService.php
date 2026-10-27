@@ -69,8 +69,10 @@ final class CheckoutCustomerService
         // Requête non authentifiée : un compte existant reçoit la commande mais son profil n'est jamais modifié
         $isNewUser = $user === null;
         if ($isNewUser) {
+            // Mot de passe que le client n'a jamais choisi : hachage d'un secret aléatoire jeté aussitôt (inutilisable, même pour l'équipe),
+            // passwordSet faux (changement de courriel par code ; « mot de passe oublié » pour en choisir un). Avant : 20 caractères en clair.
             $user = (new User())->setEmail($email)->setFirstname($firstName ?: 'Guest')->setLastname($lastName ?: 'User')->setUsername($email)
-                ->setPassword(bin2hex(random_bytes(10)))->setIsVerified(true)->setRoles(['ROLE_USER_INTERNET']);
+                ->setPassword(password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT))->setPasswordSet(false)->setIsVerified(true)->setRoles(['ROLE_USER_INTERNET']);
             if (!empty($guestInfo['licenseNumber'])) {
                 $user->setLicenseNumber($guestInfo['licenseNumber']);
             }

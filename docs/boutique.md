@@ -369,8 +369,33 @@ MAUI non vérifiables) ; le site Next.js ne l'appelle pas.
 - Après le changement : courriel d'information à l'**ancienne** adresse (`emails/email_changed_notice.html.twig`, serveur d'envoi du site,
   sinon celui de la plateforme ; sans lien d'annulation pour l'instant) et journal sécurité `profile.email_changed {userId, from, to,
   method, noticeSent, ip}` (`var/log/dev-security.log`). L'unicité de l'adresse (409 `Email already in use`) reste vérifiée après la confirmation.
-- Comptes créés par un achat invité (mot de passe aléatoire inconnu du client) : ils doivent d'abord se donner un mot de passe
-  (`password-reset`) avant de pouvoir changer d'adresse.
+- Comptes créés par un achat invité (mot de passe que le client n'a jamais choisi : `passwordSet` faux) : confirmation **par code**, comme
+  les comptes OTP (`otpEnabled` vrai) ; « mot de passe oublié » (`password-reset/confirm`) leur donne un mot de passe (`passwordSet` vrai,
+  confirmation par mot de passe ensuite). Le mot de passe de ces comptes est un hachage d'un secret aléatoire jeté aussitôt : inutilisable
+  (avant le 04/11/2026 : 20 caractères en clair, jamais envoyés ni affichés, inutilisables aussi pour se connecter ; remplacés par un hachage).
+
+### `GET /api/profile` : `otpEnabled` et `passwordSet` (ajouts)
+
+- **`otpEnabled`** : vrai si un changement d'adresse sera confirmé par un **code** envoyé à l'adresse actuelle (compte OTP, sans mot de
+  passe ou `passwordSet` faux) ; faux : par le **mot de passe actuel** (`currentPassword`). Le front choisit le champ à afficher.
+- **`passwordSet`** : faux seulement pour un compte créé par un achat invité dont le client n'a pas encore choisi de mot de passe ; vrai
+  partout ailleurs (comptes existants d'origine incertaine compris) ; vrai après `password-reset/confirm` ou l'activation d'une invitation.
+- Les autres champs ne changent pas.
+
+### Session après un changement d'adresse (`PATCH /api/profile`)
+
+Le jeton d'accès et le jeton de renouvellement sont liés à l'adresse courriel. **Quand l'adresse enregistrée change réellement (casse
+comprise)**, la réponse du `PATCH` ajoute de nouveaux jetons, sous la forme de la connexion, et les jetons de renouvellement de l'utilisateur
+suivent la nouvelle adresse (ses autres appareils restent connectés). **Sans changement d'adresse, la réponse est identique à avant.**
+
+| Client | Ce que contient la réponse en cas de changement | À faire côté front |
+|---|---|---|
+| Site Next.js (session par cookies) | nouveaux cookies `auth_token_<site>`, `refresh_token_<site>`, `XSRF-TOKEN_<site>` ; corps `{message, user, token, refresh_token, csrf_token}` | rien pour les cookies (le navigateur les remplace) ; **reprendre le nouveau jeton CSRF** (`csrf_token`, ou le cookie `XSRF-TOKEN_<site>`) pour l'en-tête `X-XSRF-TOKEN` des requêtes suivantes |
+| Application e-commerce, Mémoires Vivantes, MAUI (jeton `Bearer`) | corps `{message, user, token, refresh_token}` | **enregistrer `token` et `refresh_token`** à la place des anciens |
+
+Changement d'adresse par un administrateur (console Mémoires Vivantes `PUT /api/memoires/admin/users/{id}`, EasyAdmin) : les jetons de
+renouvellement de l'utilisateur suivent aussi la nouvelle adresse ; aucun jeton n'est rendu (ce n'est pas sa session) : son application
+renouvelle son jeton comme d'habitude. Test : `EmailChangeSessionApiTest`.
 
 **À faire côté fronts (site Next.js et application e-commerce Flutter), écran du profil** : quand l'utilisateur modifie son adresse courriel,
 demander son mot de passe actuel et l'envoyer dans `currentPassword` avec le `PATCH` ; afficher les messages des 403 `PASSWORD_REQUIRED`,

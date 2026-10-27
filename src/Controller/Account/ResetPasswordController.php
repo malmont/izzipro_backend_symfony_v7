@@ -138,7 +138,7 @@ class ResetPasswordController extends AbstractController
         if (!$user || $user->getResetTokenExpiresAt() < new \DateTime()) {
             return $this->json(['error' => 'Lien invalide ou expiré : demandez un nouveau lien.'], 400);
         }
-        $user->setPassword($passwordHasher->hashPassword($user, $newPassword));
+        $user->setPassword($passwordHasher->hashPassword($user, $newPassword))->setPasswordSet(true); // mot de passe choisi par le client
         $user->setResetToken(null);
         $user->setResetTokenExpiresAt(null);
         $em->flush();
@@ -245,7 +245,7 @@ class ResetPasswordController extends AbstractController
         }
 
         // Hash & Save
-        $user->setPassword($passwordHasher->hashPassword($user, (string) $newPassword));
+        $user->setPassword($passwordHasher->hashPassword($user, (string) $newPassword))->setPasswordSet(true); // mot de passe choisi par le client
         $user->setResetToken(null);
         $user->setResetTokenExpiresAt(null);
         $em->flush();

@@ -47,7 +47,8 @@ final class EmailChangeGuard
 
     public static function method(User $user): string
     {
-        return ($user->isOtpEnabled() ?? false) || trim((string) $user->getPassword()) === '' ? self::METHOD_OTP : self::METHOD_PASSWORD;
+        // Mot de passe jamais choisi par le client (compte créé par un achat invité, suite de S7) : confirmation par code, comme sans mot de passe
+        return ($user->isOtpEnabled() ?? false) || trim((string) $user->getPassword()) === '' || !$user->isPasswordSet() ? self::METHOD_OTP : self::METHOD_PASSWORD;
     }
 
     /**

@@ -80,6 +80,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(nullable: true)]
     private ?bool $otpEnabled = false;
 
+    // Mot de passe choisi par le client (suite de S7) : faux seulement pour un compte créé par un achat invité (mot de passe aléatoire
+    // inutilisable) ; vrai après password-reset/confirm ou l'activation d'une invitation. Faux : changement de courriel confirmé par code.
+    #[ORM\Column(options: ['default' => true])]
+    private bool $passwordSet = true;
+
     /**
      * @var Collection<int, OtpCode>
      */
@@ -415,6 +420,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setOtpEnabled(?bool $otpEnabled): static
     {
         $this->otpEnabled = $otpEnabled;
+
+        return $this;
+    }
+
+    public function isPasswordSet(): bool
+    {
+        return $this->passwordSet;
+    }
+
+    public function setPasswordSet(bool $passwordSet): static
+    {
+        $this->passwordSet = $passwordSet;
 
         return $this;
     }

@@ -11,7 +11,8 @@ use Symfony\Component\Routing\Annotation\Route;
 
 class ProfileApiController extends BaseTenantApiController
 {
-    public function __construct(\App\Services\TenantEntityManagerProvider $emProvider, private readonly \App\Services\AccountService\EmailChangeGuard $emailChanges)
+    public function __construct(\App\Services\TenantEntityManagerProvider $emProvider, private readonly \App\Services\AccountService\EmailChangeGuard $emailChanges,
+        private readonly \App\Services\AccountService\SessionIdentityService $sessions) // session après un changement de courriel (suite de S7)
     {
         parent::__construct($emProvider);
     }
@@ -35,6 +36,10 @@ class ProfileApiController extends BaseTenantApiController
             'licenseNumber' => $user->getLicenseNumber(),
             'licenseExpirationDate' => $user->getLicenseExpirationDate()?->format('Y-m-d'),
             'phone' => $user->getPrimaryAddress()?->getPhone(), // Attempt to get phone from primary address if user thinks it's there
+            // Suite de S7 : changement de courriel confirmé par un code (sinon par le mot de passe actuel) ; mot de passe choisi par le client
+            // (faux seulement pour un compte créé par un achat invité, jusqu'à « mot de passe oublié »)
+            'otpEnabled' => \App\Services\AccountService\EmailChangeGuard::method($user) === \App\Services\AccountService\EmailChangeGuard::METHOD_OTP,
+            'passwordSet' => $user->isPasswordSet(),
         ]);
     }
 
@@ -106,8 +111,17 @@ class ProfileApiController extends BaseTenantApiController
         if ($emailChanges) {
             $this->emailChanges->notifyChanged($user, $oldEmail, (string) $user->getEmail(), $method, $request);
         }
+        // Adresse enregistrée réellement changée (casse comprise) : les jetons, liés au courriel, suivent la nouvelle adresse ; nouveaux
+        // jetons rendus sous la forme de la connexion. Adresse inchangée : réponse identique à avant.
+        $reissue = $oldEmail !== (string) $user->getEmail();
+        $response = new JsonResponse();
+        $tokens = [];
+        if ($reissue) {
+            $this->sessions->transferRefreshTokens($oldEmail, (string) $user->getEmail());
+            $tokens = $this->sessions->reissue($user, $request, $response);
+        }
 
-        return $this->json([
+        return $this->withTokens($response, $tokens, [
             'message' => 'Profile updated successfully',
             'user' => [
                 'id' => $user->getId(),
@@ -119,5 +133,11 @@ class ProfileApiController extends BaseTenantApiController
                 'phone' => $user->getPrimaryAddress()?->getPhone(),
             ]
         ]);
+    }
+
+    /** Corps de la réponse du profil, avec les nouveaux jetons éventuels (cookies déjà posés sur $response) */
+    private function withTokens(JsonResponse $response, array $tokens, array $body): JsonResponse
+    {
+        return $response->setData($body + $tokens);
     }
 }
