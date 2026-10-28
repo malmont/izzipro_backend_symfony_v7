@@ -1328,7 +1328,7 @@ prouve (`tests/Functional/...`, « — » = aucun test dédié).
 
 | Méthode | Route | Accès | Contrôle dans le code (rôle / C3 / propriété) | Test |
 |---|---|---|---|---|
-| GET | `/api/newsletter` | web + caisse | lecture (liste publique des numéros) | — |
+| GET | `/api/newsletter` | ROLE_ADMIN depuis le 27/10/2026 (web + caisse avant : liste des courriels inscrits lisible par tout compte) | refus 403 dans le code + access_control | ReservationConfirmAccessTest |
 | GET, POST | `/booking-setup/` | aucune règle | authentification propre au contrôleur (jeton), pages HTML | AnonymousWriteAccessTest (liste) |
 | ANY | `/booking-setup/configure/{id}` | aucune règle | authentification propre au contrôleur (jeton), pages HTML | AnonymousWriteAccessTest (liste) |
 | ANY | `/booking-setup/list` | aucune règle | authentification propre au contrôleur (jeton), pages HTML | AnonymousWriteAccessTest (liste) |

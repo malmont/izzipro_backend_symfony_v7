@@ -58,9 +58,11 @@ class ContactSubmitController extends AbstractController
             ], Response::HTTP_OK);
 
         } catch (\Exception $e) {
+            // détail dans le journal du conteneur, jamais renvoyé au visiteur (27/10/2026)
+            error_log(sprintf('[contact/submit] envoi en échec : %s : %s', $e::class, $e->getMessage()));
+
             return $this->json([
-                'message' => 'Une erreur est survenue lors de l\'envoi du message.',
-                'error' => $e->getMessage() // Optionnel, selon si on veut exposer l'erreur
+                'message' => 'Une erreur est survenue lors de l\'envoi du message.'
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }

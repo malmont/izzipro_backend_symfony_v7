@@ -64,8 +64,13 @@ security:
         - { path: ^/api/memoires/mobile/, roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/api/memoires/, roles: PUBLIC_ACCESS }
 
+        # 🔹 Confirmation d'un rendez-vous : connexion obligatoire (administrateur ou biographe, vérifié dans
+        #    ReservationApiController::confirm). Publique jusqu'au 27/10/2026.
+        - { path: ^/api/reservations/[^/]+/confirm$, roles: IS_AUTHENTICATED_FULLY }
         # 🔹 Réservations publiques (prise de rendez-vous et prestations)
         - { path: ^/api/reservations, roles: PUBLIC_ACCESS }
+        # 🔹 Liste des inscrits à la newsletter : administrateur (lisible par tout compte connecté jusqu'au 27/10/2026)
+        - { path: ^/api/newsletter$, roles: ROLE_ADMIN }
 
         # 🔹 ROLE_USER_INTERNET peut lire (GET)
         - { path: ^/api/admin-settings, methods: [GET], roles: PUBLIC_ACCESS }

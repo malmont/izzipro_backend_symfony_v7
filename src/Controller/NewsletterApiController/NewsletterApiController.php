@@ -32,9 +32,16 @@ class NewsletterApiController extends AbstractController
     }
 
 
+    /**
+     * Liste des inscrits : administrateur du site seulement. Jusqu'au 27/10/2026, tout compte connecté (la création
+     * de compte client est publique) lisait les adresses. Règle access_control en second rempart (security.yaml).
+     */
     #[Route('', name: 'api_newsletter_list', methods: ['GET'])]
     public function list(): JsonResponse
     {
+        if (!$this->isGranted('ROLE_ADMIN')) {
+            return $this->json(['message' => 'Réservé à l\'administrateur du site.'], Response::HTTP_FORBIDDEN);
+        }
         $subscribers = $this->getAllUseCase->execute();
   
         $outputDtos = array_map(

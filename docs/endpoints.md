@@ -77,7 +77,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/multiliens` | PUBLIC_ACCESS | `Controller\MultilienApiController\MultilienApiController::list` |
 | POST | `/api/multiliens` | ROLE_ADMIN | `Controller\MultilienApiController\MultilienApiController::create` |
 | POST | `/api/newsletter/subscribe` | PUBLIC_ACCESS | `Controller\NewsletterApiController\NewsletterApiController::subscribe` |
-| GET | `/api/newsletter` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\NewsletterApiController\NewsletterApiController::list` |
+| GET | `/api/newsletter` | ROLE_ADMIN | `Controller\NewsletterApiController\NewsletterApiController::list` |
 | PUT | `/api/presentation-groups/{id}/presentations/order` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::reorder` |
 | DELETE | `/api/presentation-groups/{id}/presentations/{presentationId}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::removePresentation` |
 | POST | `/api/presentation-groups/{id}/presentations` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\LandingContentController::addPresentation` |
@@ -237,7 +237,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/booking/check/{productId}` | PUBLIC_ACCESS | `Controller\BookingController\BookingController::check` |
 | GET | `/api/reservations/booked-slots` | PUBLIC_ACCESS | `Controller\ReservationApiController::getBookedSlots` |
 | GET | `/api/reservations/services` | PUBLIC_ACCESS | `Controller\ReservationApiController::getServices` |
-| POST | `/api/reservations/{id}/confirm` | PUBLIC_ACCESS | `Controller\ReservationApiController::confirm` |
+| POST | `/api/reservations/{id}/confirm` | IS_AUTHENTICATED_FULLY | `Controller\ReservationApiController::confirm` |
 | GET | `/api/reservations` | PUBLIC_ACCESS | `Controller\ReservationApiController::list` |
 | POST | `/api/reservations` | PUBLIC_ACCESS | `Controller\ReservationApiController::create` |
 | GET, POST | `/booking-setup/` | aucune règle | `Controller\BookingController\BookingSetupController::auth` |

@@ -99,9 +99,9 @@ class FinancementApiController extends AbstractController
 
         } catch (\Exception $e) {
             $this->logger->error("Erreur lors de la soumission de la demande de financement: " . $e->getMessage());
+            // détail dans le journal, jamais renvoyé au visiteur (27/10/2026)
             return $this->json([
-                'message' => 'Une erreur est survenue lors du traitement de votre demande.',
-                'error' => $e->getMessage()
+                'message' => 'Une erreur est survenue lors du traitement de votre demande.'
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }

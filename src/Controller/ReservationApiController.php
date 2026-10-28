@@ -144,10 +144,12 @@ class ReservationApiController extends AbstractController
                 'message' => $e->getMessage()
             ], Response::HTTP_CONFLICT);
         } catch (\Throwable $e) {
+            // détail dans le journal du conteneur, jamais renvoyé au visiteur (27/10/2026)
+            error_log(sprintf('[reservations] création en échec : %s : %s', $e::class, $e->getMessage()));
+
             return $this->json([
                 'success' => false,
-                'message' => 'Une erreur est survenue lors de l\'enregistrement de la réservation.',
-                'error' => $e->getMessage()
+                'message' => 'Une erreur est survenue lors de l\'enregistrement de la réservation.'
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -228,12 +230,36 @@ class ReservationApiController extends AbstractController
         ], Response::HTTP_BAD_REQUEST);
     }
 
+    /**
+     * Confirmation d'un rendez-vous : administrateur du site, ou biographe de la réservation (même règle que la
+     * liste). Publique jusqu'au 27/10/2026 : n'importe qui confirmait n'importe quel identifiant, le courriel partait
+     * au client et la réponse donnait son adresse. Règle access_control en second rempart (security.yaml).
+     */
     #[Route('/{id}/confirm', name: 'api_reservations_confirm', methods: ['POST'])]
     public function confirm(int $id, Request $request): JsonResponse
     {
-        try {
-            $reservation = $this->reservationService->confirmReservation($id);
+        $user = $this->getUser();
+        if (!$user instanceof \App\Entity\User) {
+            return $this->json(['success' => false, 'message' => 'Connexion requise.'], Response::HTTP_UNAUTHORIZED);
+        }
 
+        try {
+            $existing = $this->emProvider->getEntityManager()->getRepository(\App\Entity\Reservation::class)->find($id);
+            if (!$existing) {
+                return $this->json([
+                    'success' => false,
+                    'message' => 'Réservation introuvable pour l\'identifiant fourni.'
+                ], Response::HTTP_NOT_FOUND);
+            }
+            $isAdmin = in_array('ROLE_ADMIN', $user->getRoles(), true) || in_array('ROLE_SUPER_ADMIN', $user->getRoles(), true);
+            if (!$isAdmin && $existing->getBiographer()?->getId() !== $user->getId()) {
+                return $this->json([
+                    'success' => false,
+                    'message' => 'Seuls l\'administrateur du site et le biographe de ce rendez-vous peuvent le confirmer.'
+                ], Response::HTTP_FORBIDDEN);
+            }
+
+            $reservation = $this->reservationService->confirmReservation($id);
             if (!$reservation) {
                 return $this->json([
                     'success' => false,
@@ -259,11 +285,12 @@ class ReservationApiController extends AbstractController
                     'reservation_date' => $reservation->getReservationDate()?->format('Y-m-d'),
                     'reservation_slot' => $reservation->getReservationSlot(),
                     'client_name' => $reservation->getClientName(),
-                    'client_email' => $reservation->getClientEmail(),
                 ]
             ], Response::HTTP_OK);
 
         } catch (\Throwable $e) {
+            error_log(sprintf('[reservations] confirmation en échec : %s : %s', $e::class, $e->getMessage()));
+
             return $this->json([
                 'success' => false,
                 'message' => 'Une erreur est survenue lors de la confirmation de la réservation.'
