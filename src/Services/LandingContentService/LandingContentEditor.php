@@ -77,6 +77,10 @@ final class LandingContentEditor
             }
             if ($kind === LandingContentSpec::RELATION) {
                 [$class] = LandingContentSpec::relation($resource, $name);
+                if ($value === 0) {
+                    $values[$name] = null; // 0 retire la relation, comme null (28/10/2026)
+                    continue;
+                }
                 if (!is_int($value) || $this->emProvider->getEntityManager()->getRepository($class)->find($value) === null) {
                     $errors[] = ['path' => $name, 'message' => 'identifiant inconnu sur ce site'];
                 } else {
@@ -186,7 +190,8 @@ final class LandingContentEditor
             $value = match ($kind) {
                 LandingContentSpec::DATE => $value === null ? null : new \DateTimeImmutable((string) $value),
                 LandingContentSpec::NUMBER => $value === null ? null : (self::intSetter($entity, $setter) ? (int) round((float) $value) : (float) $value),
-                LandingContentSpec::INTEGER => (int) $value,
+                // null reste null quand le champ l'accepte (durée d'une prestation) ; sinon 0, comme avant
+                LandingContentSpec::INTEGER => $value === null && self::nullableSetter($entity, $setter) ? null : (int) $value,
                 LandingContentSpec::DOLLARS => $value === null ? null : round(((int) $value) / 100, 2),
                 LandingContentSpec::BOOLEAN => (bool) $value,
                 default => $value,
@@ -212,6 +217,12 @@ final class LandingContentEditor
     }
 
     /** Le setter attend-il un entier (prix d'une variante en cents) plutôt qu'un nombre décimal ? */
+    /** Le setter accepte-t-il null ? */
+    private static function nullableSetter(object $entity, string $setter): bool
+    {
+        return (bool) (new \ReflectionMethod($entity, $setter))->getParameters()[0]?->allowsNull();
+    }
+
     private static function intSetter(object $entity, string $setter): bool
     {
         $type = (new \ReflectionMethod($entity, $setter))->getParameters()[0]?->getType();
@@ -276,7 +287,7 @@ final class LandingContentEditor
             $values[$field] = match (true) {
                 $value instanceof \DateTimeInterface => $value->format(\DateTimeInterface::ATOM),
                 $kind === LandingContentSpec::NUMBER && $value !== null => (int) round((float) $value),
-                $kind === LandingContentSpec::INTEGER => (int) $value,
+                $kind === LandingContentSpec::INTEGER => $value === null && method_exists($entity, 'set' . ucfirst(LandingContentSpec::property($resource, $field))) && self::nullableSetter($entity, 'set' . ucfirst(LandingContentSpec::property($resource, $field))) ? null : (int) $value,
                 $kind === LandingContentSpec::DOLLARS => $value === null ? null : (int) round(((float) $value) * 100),
                 default => $value,
             };

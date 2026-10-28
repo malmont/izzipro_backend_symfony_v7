@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (260)
+## Boutique et commun (261)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -337,6 +337,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/form-submissions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\FormSubmissionController\FormSubmissionAdminController::show` |
 | PATCH | `/api/form-submissions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\FormSubmissionController\FormSubmissionAdminController::status` |
 | GET | `/api/form-submissions` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\FormSubmissionController\FormSubmissionAdminController::index` |
+| POST | `/api/form-submissions` | PUBLIC_ACCESS | `Controller\FormSubmissionController\FormSubmissionPublicController::submit` |
 | DELETE | `/api/fournisseurs/{id}` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::deleteFournisseur` |
 | GET | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::getAllFournisseurs` |
 | POST | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::createFournisseur` |

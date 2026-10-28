@@ -168,6 +168,41 @@ contact, assistant IA.
 - Migration `Version20261105100000`, script `scripts/migrate_all_v2_form_submissions.sh` (additif, appliqué à toutes les
   bases le 28/10/2026). Tests : `tests/Functional/Forms/FormSubmissionAdminTest.php`.
 
+### Envoi par le visiteur (lot 3, 28/10/2026)
+
+`POST /api/form-submissions` (public ; `FormSubmissionPublicController`, `SubmitFormUseCase`) :
+`{ app: "landingpage" | "boutique", sectionUid, formId, locale?, answers: { <name>: valeur }, site, fillSeconds }`.
+
+- **Formulaire** : lu dans les réglages ENREGISTRÉS (`FormDefinitionLocator` : `tabs[].sections[]` avec cet `uid`,
+  container `steps` d'id `formId` ; pages système de la boutique comprises). Questions = `field` des étapes, sauf
+  l'étape `success`. Libellés et options dans la langue de l'envoi (`translations.<langue>.label` / `.options`).
+- **Contrôle** (`FormAnswerValidator`, mêmes règles que le navigateur) : vide = absente, null, blanche, case non
+  cochée ; obligatoire ; courriel `^[^\s@]+@[^\s@]+\.[^\s@]{2,}$` ; téléphone `^\+?[\d\s().-]{7,20}$` et 7 chiffres ;
+  date AAAA-MM-JJ, `minDays`/`maxDays` comptés dans le fuseau du site (`Entreprise.posTimezone`, sinon
+  America/Toronto) ; nombre JSON, bornes incluses ; choix parmi `options`, ou `serviceOfferId` d'une prestation
+  réservable (`optionsSource: "services"`) ; textes après suppression des espaces, 5 000 caractères par défaut.
+- **Réponses** : `201 { reference }` (`<initiales du site>-<AAAAMMJJ>-<4 caractères>`, alphabet sans 0, O, 1, I, L ;
+  `FormSubmissionReferenceGenerator`) ; `400` corps invalide ; `404 { code: "form_not_found" }` ;
+  `409 { code: "form_changed", errors }` si une réponse vise une question absente du formulaire enregistré ;
+  `409 { code: "slot_taken" }` (cible réservation) ; `413` au-delà de 64 Ko ;
+  `422 { message: "Formulaire incomplet", errors: [{ path: "answers.<name>", message }] }` ; `429` (limite par IP,
+  seuls les envois acceptés comptent). Question obligatoire ajoutée pendant la saisie : 422 sur son chemin (le
+  frontend recharge s'il ne connaît pas la question).
+- **Anti-robot** : champ `site` rempli, ou `fillSeconds` absent ou inférieur à 8 : faux 201 avec une référence de même
+  forme, rien d'enregistré ni d'envoyé.
+- **Enregistrement** dans une transaction : la demande (toutes les questions, dans l'ordre, avec libellé et affichage) ;
+  cible `reservation` : une `Reservation` à partir des rôles (`service` → nom et slug de la prestation, `date`, `slot`
+  normalisé : espaces regroupés, tirets longs ramenés au trait d'union, `name`, `email`, `phone`, `guests`, et les
+  autres réponses dans `notes`), avec le verrou de créneau existant (créneau pris : 409, rien d'enregistré) ; sans
+  question date, la demande est gardée sans réservation ; cible `contact` : un `Contact` (message = remarques et
+  réponses sans rôle). `FormTargetWriter`.
+- **Après l'enregistrement** : purge des demandes expirées, puis courriels (`FormSubmissionNotifier`) : à
+  `Entreprise.formSubmissionsEmail`, sinon `Entreprise.email` (« répondre » écrit au visiteur ; site sans configuration
+  d'envoi : serveur de la plateforme), et accusé au visiteur s'il a donné un courriel, avec la référence ; cible
+  réservation : les courriels de la réservation (.ics) à la place, référence ajoutée, même destinataire.
+  `notifiedAt` daté quand la notification est partie. Un échec d'envoi ne perd jamais la demande.
+- Tests : `tests/Functional/Forms/FormSubmitTest.php`.
+
 ## Modèles de site
 
 Depuis le 07/10/2026, l'administrateur enregistre des configurations complètes comme modèles, sans toucher aux réglages
@@ -202,7 +237,7 @@ Depuis le 06/10/2026, l'éditeur modifie les contenus jusque-là gérés dans Ea
 | `baniere-statiques` | **`titre`**, **`texte`**, **`texteBouton`**, `imageDeFond`, `colorBackground` |
 | `bannieres` | **`titre`**, **`texte`**, `imageDeFond` |
 | `videos` | **`titre`**, **`description`**, **`texteBouton`**, **`lienBouton`**, `imageDeFond`, `lienVideo` |
-| `service-offers` | **`titre`**, **`titreCommentaire`**, **`descriptions`**, `logo`, `photoService` |
+| `service-offers` | **`titre`**, **`titreCommentaire`**, **`descriptions`**, `logo`, `photoService`, `familyId` (0 ou null : retirée ; inconnue : 422), `position` (0 à 100000), `bookable`, `durationMinutes` (0 à 10080, null efface) |
 | `products`, `category`, `homeslider`, `explore-cards` | données de la boutique réglable (08/10/2026) : voir `docs/boutique.md` |
 
 - Corps : objet JSON des seuls champs à changer ; valeur texte, ou `null` / `""` pour vider (sauf `titre`, obligatoire).

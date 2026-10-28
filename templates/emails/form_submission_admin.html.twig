@@ -1,0 +1,27 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Nouvelle demande : {{ submission.formName }}{% endblock %}
+
+{% block body %}
+<h2>Nouvelle demande : {{ submission.formName }}</h2>
+<p>Référence : <strong>{{ submission.reference }}</strong></p>
+
+<table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+    {% for answer in submission.answers %}
+        {% if answer.display is not empty %}
+        <tr>
+            <td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #eee; width: 180px; vertical-align: top;">{{ answer.label }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; white-space: pre-wrap;">{{ answer.display }}</td>
+        </tr>
+        {% endif %}
+    {% endfor %}
+</table>
+
+<p style="margin-top: 20px; color: #64748b; font-size: 13px;">Cette demande est enregistrée sur votre site (menu « Demandes reçues »).</p>
+
+{% if signature %}
+<div style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px;">
+    {{ signature|raw }}
+</div>
+{% endif %}
+{% endblock %}

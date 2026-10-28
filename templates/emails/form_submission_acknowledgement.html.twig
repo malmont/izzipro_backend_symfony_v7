@@ -1,0 +1,27 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Nous avons bien reçu votre demande{% endblock %}
+
+{% block body %}
+<h2>Nous avons bien reçu votre demande</h2>
+<p>Merci. Votre référence : <strong style="font-size: 18px; letter-spacing: 1px;">{{ submission.reference }}</strong></p>
+<p>Gardez-la : elle permet de retrouver votre demande, par téléphone ou par courriel.</p>
+
+<table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+    {% for answer in submission.answers %}
+        {% if answer.display is not empty %}
+        <tr>
+            <td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #eee; width: 180px; vertical-align: top;">{{ answer.label }}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; white-space: pre-wrap;">{{ answer.display }}</td>
+        </tr>
+        {% endif %}
+    {% endfor %}
+</table>
+
+{% if signature %}
+<div style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px;">
+    {{ signature|raw }}
+</div>
+{% endif %}
+<p>Cordialement,<br>L'équipe {{ fromName }}</p>
+{% endblock %}

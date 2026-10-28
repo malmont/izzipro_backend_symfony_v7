@@ -162,6 +162,30 @@ class FormSubmissionAdminTest extends WebTestCase
         $this->db()->executeStatement('DELETE FROM service_offer WHERE id = ?', [$offer]);
     }
 
+    public function testOfferSettingsArePatchedFromTheEditorAndJournaled(): void
+    {
+        $offer = (int) $this->db()->fetchOne("INSERT INTO service_offer (id, titre, duration_minutes) VALUES (nextval('service_offer_id_seq'), 'Aide au ménage', 60) RETURNING id");
+        $this->db()->executeStatement("DELETE FROM content_audit_log WHERE resource = 'service-offers'");
+        $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_INTERNET']);
+        $family = $this->json($this->request('POST', '/api/service-families', ['name' => 'Maison']), 201);
+
+        $patched = $this->json($this->request('PATCH', "/api/service-offers/$offer?locale=fr", ['familyId' => $family['id'], 'position' => 4, 'bookable' => false, 'durationMinutes' => 90]));
+        $this->assertSame([$family['id'], 'Maison', 4, false, 90], [$patched['familyId'], $patched['family']['name'], $patched['position'], $patched['bookable'], $patched['durationMinutes']]);
+        $read = $this->json($this->request('GET', "/api/service-offers/$offer?locale=fr"));
+        $this->assertSame([$family['id'], ['id' => $family['id'], 'name' => 'Maison', 'position' => 0]], [$read['familyId'], $read['family']], 'GET : valeur actuelle pour la fenêtre');
+        $journal = $this->db()->fetchAssociative("SELECT before_state, after_state FROM content_audit_log WHERE resource = 'service-offers' AND resource_id = ? ORDER BY id DESC LIMIT 1", [(string) $offer]);
+        $this->assertSame(['familyId' => null, 'position' => 0, 'bookable' => true, 'durationMinutes' => 60], array_intersect_key(json_decode($journal['before_state'], true), array_flip(['familyId', 'position', 'bookable', 'durationMinutes'])));
+
+        $cleared = $this->json($this->request('PATCH', "/api/service-offers/$offer?locale=fr", ['familyId' => 0, 'durationMinutes' => null]));
+        $this->assertSame([null, null, null], [$cleared['familyId'], $cleared['family'], $cleared['durationMinutes']], '0 retire la famille ; null efface la durée');
+        $this->json($this->request('PATCH', "/api/service-offers/$offer?locale=fr", ['familyId' => $family['id']]));
+        $this->assertSame(null, $this->json($this->request('PATCH', "/api/service-offers/$offer?locale=fr", ['familyId' => null]))['familyId'], 'null retire aussi la famille');
+        foreach ([['familyId' => 999999], ['position' => -1], ['bookable' => 'oui'], ['durationMinutes' => 1.5]] as $refused) {
+            $this->assertSame(422, $this->request('PATCH', "/api/service-offers/$offer?locale=fr", $refused)->getStatusCode(), json_encode($refused));
+        }
+        $this->db()->executeStatement('DELETE FROM service_offer WHERE id = ?', [$offer]);
+    }
+
     public function testFallbackServicesKeepTheirFieldsAndGetTheNewOnes(): void
     {
         if ((int) $this->db()->fetchOne('SELECT COUNT(*) FROM service_offer') > 0) {

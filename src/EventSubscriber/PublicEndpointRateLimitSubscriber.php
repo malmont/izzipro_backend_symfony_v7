@@ -31,6 +31,7 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
         '/api/boussole/auth/register',
         '/api/memoires/auth/activate',
         '/api/reservations',
+        '/api/form-submissions',
     ];
 
     public function __construct(

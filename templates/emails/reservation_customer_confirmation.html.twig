@@ -10,6 +10,12 @@
 <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #2563eb; margin: 25px 0;">
     <h3 style="margin-top: 0; color: #1e293b; font-size: 16px;">Détails de votre réservation :</h3>
     <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+        {% if reference is defined and reference %}
+        <tr>
+            <td style="padding: 8px 0; font-weight: bold; color: #475569; width: 160px;">Votre référence :</td>
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 700; letter-spacing: 1px;">{{ reference }}</td>
+        </tr>
+        {% endif %}
         <tr>
             <td style="padding: 8px 0; font-weight: bold; color: #475569; width: 160px;">Prestation :</td>
             <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">{{ reservation.serviceName }}</td>

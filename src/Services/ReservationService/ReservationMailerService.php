@@ -105,7 +105,25 @@ class ReservationMailerService
         return ($code !== '' ? $code . '.' : '') . ($_ENV['FRONTEND_BASE_DOMAIN'] ?? 'arkanoa-media.com');
     }
 
-    public function sendReservationEmails(Reservation $reservation, string $locale = 'fr', ?string $domain = null): void
+    /** Référence de la demande reçue qui a créé la réservation (formulaire à étapes), affichée dans les deux courriels */
+    private ?string $formReference = null;
+
+    /**
+     * @param string|null $adminRecipient destinataire de la notification (formulaire à étapes : Entreprise::formSubmissionsRecipient) ;
+     *                                    null : courriel de l'entreprise, comme avant
+     * @param string|null $reference référence de la demande reçue (formulaire à étapes)
+     */
+    public function sendReservationEmails(Reservation $reservation, string $locale = 'fr', ?string $domain = null, ?string $adminRecipient = null, ?string $reference = null): void
+    {
+        $this->formReference = $reference;
+        try {
+            $this->sendReservationEmailsNow($reservation, $locale, $domain, $adminRecipient);
+        } finally {
+            $this->formReference = null;
+        }
+    }
+
+    private function sendReservationEmailsNow(Reservation $reservation, string $locale, ?string $domain, ?string $adminRecipient): void
     {
         $domain = $domain ?: $this->defaultDomain();
 
@@ -153,7 +171,7 @@ class ReservationMailerService
             }
 
             // 2. Notification administrateur
-            $adminEmail = $entreprise ? $entreprise->getEmail() : null;
+            $adminEmail = $adminRecipient ?: ($entreprise ? $entreprise->getEmail() : null);
             if ($adminEmail) {
                 $this->sendAdminEmail(
                     $mailer,
@@ -275,6 +293,7 @@ class ReservationMailerService
             $context = $session ? $this->sessionContext($reservation) : [];
             $html = $this->twig->render($session ? 'emails/memoires_session_customer.html.twig' : 'emails/reservation_customer_confirmation.html.twig', $context + [
                 'reservation' => $reservation,
+                'reference' => $this->formReference,
                 'fromName' => $fromName,
                 'signature' => $signature,
                 'logoUrl' => $logoUrl,
@@ -316,6 +335,7 @@ class ReservationMailerService
             $context = $session ? $this->sessionContext($reservation) : [];
             $html = $this->twig->render($session ? 'emails/memoires_session_admin.html.twig' : 'emails/reservation_admin_notification.html.twig', $context + [
                 'reservation' => $reservation,
+                'reference' => $this->formReference,
                 'fromName' => $fromName,
                 'signature' => $signature,
                 'logoUrl' => $logoUrl,

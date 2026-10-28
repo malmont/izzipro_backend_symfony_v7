@@ -135,7 +135,11 @@ final class LandingContentSpec
                 'titre' => [self::TEXT, true, 255, true], 'titreCommentaire' => [self::TEXT, true, 255, false],
                 'descriptions' => [self::TEXT, true, 20000, false], 'logo' => [self::IMAGE, false, 255, false],
                 'photoService' => [self::IMAGE, false, 255, false],
+                // formulaires à étapes (28/10/2026) : famille (0 ou null la retire), ordre, réservable, durée en minutes
+                'familyId' => [self::RELATION, false, 0, false], 'position' => [self::INTEGER, false, 100000, false],
+                'bookable' => [self::BOOLEAN, false, 0, false], 'durationMinutes' => [self::INTEGER, false, 10080, false],
             ],
+            'relations' => ['familyId' => [\App\Entity\ServiceFamily::class, 'family']],
             'tags' => ['service_offers_all', 'service_offer_%d'],
         ],
         // Boutique réglable (08/10/2026) : fiches affichées par les blocs liés. Montants en cents.

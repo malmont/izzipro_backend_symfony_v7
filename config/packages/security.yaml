@@ -67,6 +67,8 @@ security:
         # 🔹 Demandes reçues des formulaires à étapes (28/10/2026) : lecture, statut, suppression, export pour l'administrateur
         #    (vérifié aussi par #[IsGranted] sur FormSubmissionAdminController). L'envoi public (POST) viendra au lot 3.
         - { path: ^/api/form-submissions, methods: [GET, PATCH, DELETE], roles: ROLE_ADMIN }
+        #    Envoi par un visiteur (lot 3) : public, limite par IP, champ piège, réponses revalidées sur les réglages enregistrés
+        - { path: ^/api/form-submissions$, methods: [POST], roles: PUBLIC_ACCESS }
         # 🔹 Familles de prestations : lecture publique (formulaires), écritures administrateur
         - { path: ^/api/service-families, methods: [GET], roles: PUBLIC_ACCESS }
         - { path: ^/api/service-families, roles: ROLE_ADMIN }
