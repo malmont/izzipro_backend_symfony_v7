@@ -152,11 +152,15 @@ class PosReturnUseCase
         if ($customerId === null && is_numeric($returnInput['customerId'] ?? null)) {
             $customerId = (int) $returnInput['customerId'];
         }
-        if ($customerId === null && is_numeric($returnInput['orderId'] ?? null)) {
-            $customerId = $this->emProvider->getEntityManager()->find(Order::class, (int) $returnInput['orderId'])?->getCustomerId();
+        $original = is_numeric($returnInput['orderId'] ?? null) ? $this->emProvider->getEntityManager()->find(Order::class, (int) $returnInput['orderId']) : null;
+        if ($customerId === null) {
+            $customerId = $original?->getCustomerId();
         }
+        $redeem = \App\Services\PosCustomerService\PosLoyaltyQuote::redeemPoints($saleInput);
+        // Le retour reprend d'abord les points gagnés par la vente d'origine (même client) : solde contrôlé après cette reprise
+        $returnSubtotal = $original !== null && $redeem > 0 && $original->getCustomerId() === $customerId ? $this->returns->previewSubtotal($returnInput) : null;
 
-        return $this->loyaltyQuote->apply($customerId, \App\Services\PosCustomerService\PosLoyaltyQuote::redeemPoints($saleInput), $ticketDiscount);
+        return $this->loyaltyQuote->applyForExchange($customerId, $redeem, $ticketDiscount, $original, $returnSubtotal);
     }
 
     public function returnBody(PosReturn $return, string $locale): array

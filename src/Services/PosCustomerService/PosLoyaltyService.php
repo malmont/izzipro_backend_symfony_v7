@@ -104,7 +104,38 @@ class PosLoyaltyService
      *
      * @return array{amount: int, balance: int}
      */
-    public function previewReward(PosCustomer $customer, int $points, PosCustomerService $customers): array
+    /**
+     * Points que onReturn reprendra pour un retour (même calcul, sans écriture), bornés par le solde : sert au devis d'échange, qui doit
+     * refuser ce que l'échange refusera une fois le retour passé (relecture du 28/10/2026).
+     */
+    public function previewReturn(Order $original, ?int $refundedNet): int
+    {
+        if ($original->getCustomerId() === null) {
+            return 0;
+        }
+        $em = $this->emProvider->getEntityManager();
+        $customer = $em->find(PosCustomer::class, $original->getCustomerId());
+        if ($customer === null) {
+            return 0;
+        }
+        $earned = $base = $already = 0;
+        foreach ($em->getRepository(PosLoyaltyTransaction::class)->findBy(['orderId' => $original->getId(), 'kind' => PosLoyaltyTransaction::EARN]) as $tx) {
+            $earned += $tx->getPoints();
+            $base += (int) $tx->getAmount();
+        }
+        foreach ($em->getRepository(PosLoyaltyTransaction::class)->findBy(['orderId' => $original->getId(), 'kind' => PosLoyaltyTransaction::RETURN]) as $tx) {
+            $already += -$tx->getPoints();
+        }
+        if ($earned <= 0) {
+            return 0;
+        }
+        $share = $refundedNet === null || $base <= 0 ? $earned : (int) round($earned * min($refundedNet, $base) / $base);
+
+        return max(0, min(max(0, min($share, $earned - $already)), $customer->getLoyaltyPoints()));
+    }
+
+    /** @param int $reservedPoints points qui seront repris avant la vente (retour d'un échange) : retranchés du solde contrôlé */
+    public function previewReward(PosCustomer $customer, int $points, PosCustomerService $customers, int $reservedPoints = 0): array
     {
         $settings = $this->settings();
         if (!$settings['enabled']) {
@@ -118,7 +149,7 @@ class PosLoyaltyService
         }
         $months = $settings['expiryMonths'];
         $expired = $months !== null && $customer->getLoyaltyPoints() > 0 && $customer->getLoyaltyLastActivityAt() !== null && $customer->getLoyaltyLastActivityAt() <= new \DateTimeImmutable('-' . $months . ' months');
-        $balance = $expired ? 0 : $customer->getLoyaltyPoints();
+        $balance = max(0, ($expired ? 0 : $customer->getLoyaltyPoints()) - max(0, $reservedPoints));
         if ($points > $balance) {
             throw new CashRegisterException('LOYALTY_INSUFFICIENT', 'Solde de points insuffisant', 409, [], ['balance' => $balance, 'requested' => $points]);
         }

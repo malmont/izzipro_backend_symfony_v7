@@ -24,10 +24,26 @@ class PosLoyaltyQuote
     }
 
     /**
-     * @return array{ticketDiscount: ?array, loyalty: ?array{customerId: int, redeemPoints: int, amount: int, balance: int, balanceAfter: int}}
-     *         ticketDiscount : celle du corps, ou la récompense si des points sont rachetés ; loyalty : null sans rachat
+     * Échange (relecture du 28/10/2026) : le retour reprend d'abord les points gagnés par la vente d'origine quand elle est du même client ;
+     * le devis contrôle le solde après cette reprise, comme la vente le fera, et l'indique (returnTakesBack).
      */
-    public function apply(?int $customerId, int $redeemPoints, ?array $ticketDiscount): array
+    public function applyForExchange(?int $customerId, int $redeemPoints, ?array $ticketDiscount, ?\App\Entity\Order $original, ?int $returnSubtotal): array
+    {
+        $takenBack = $original !== null && $customerId !== null && $original->getCustomerId() === $customerId && $redeemPoints > 0
+            ? $this->loyalty->previewReturn($original, $returnSubtotal) : 0;
+        $result = $this->apply($customerId, $redeemPoints, $ticketDiscount, $takenBack);
+        if ($result['loyalty'] !== null && $takenBack > 0) {
+            $result['loyalty']['returnTakesBack'] = $takenBack;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array{ticketDiscount: ?array, loyalty: ?array{customerId: int, redeemPoints: int, amount: int, balance: int, balanceAfter: int, returnTakesBack?: int}}
+     *         ticketDiscount : celle du corps, ou la récompense si des points sont rachetés ; loyalty : null sans rachat ; \$reservedPoints : points qui seront repris avant la vente (échange)
+     */
+    public function apply(?int $customerId, int $redeemPoints, ?array $ticketDiscount, int $reservedPoints = 0): array
     {
         $customer = null;
         if ($customerId !== null) {
@@ -43,7 +59,7 @@ class PosLoyaltyQuote
         if ($ticketDiscount !== null) {
             throw new CashRegisterException('LOYALTY_TICKET_DISCOUNT_CONFLICT', 'Un rachat de points et une remise de ticket ne se cumulent pas', 409);
         }
-        $reward = $this->loyalty->previewReward($customer, $redeemPoints, $this->customers);
+        $reward = $this->loyalty->previewReward($customer, $redeemPoints, $this->customers, $reservedPoints);
 
         return [
             'ticketDiscount' => ['type' => 'amount', 'value' => $reward['amount'], 'reasonText' => sprintf('Récompense fidélité (%d points)', $redeemPoints)],

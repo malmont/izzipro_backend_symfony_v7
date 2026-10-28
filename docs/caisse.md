@@ -1071,6 +1071,11 @@ consentements ; le responsable voit tout. Fiche client désactivée : 409 `CUSTO
   Terminal : aucun point débité (la vente débite) ; rachat sur la vente d'une carte-cadeau → 409 `TERMINAL_PAYMENT_PURPOSE_MISMATCH` ;
   si le solde change entre le paiement et la vente, la vente refuse (`LOYALTY_INSUFFICIENT`) et le paiement capturé reste dans les
   paiements sans vente (réconciliation C4). Le POS envoie ensuite à la vente exactement les mêmes `customerId` et `loyalty`.
+- **Échange : points repris par le retour (28/10/2026)** : quand la vente d'origine est du même client, le retour reprend d'abord les
+  points qu'elle avait fait gagner (prorata du net retourné) ; le devis `POST /api/pos/exchanges/quote` et le contrôle de
+  `POST /api/pos/exchanges` vérifient le solde **après** cette reprise, comme la vente le fera : mêmes refus (`LOYALTY_INSUFFICIENT`
+  avec le `balance` restant), `sale.loyalty.balance` et `balanceAfter` exacts, clé **`returnTakesBack`** (points repris) ajoutée
+  seulement dans ce cas. Avant, le devis acceptait un rachat que l'échange refusait ensuite.
 - **Correctif de l'échange avec rachat (26/10/2026)** : le crédit appliqué était calculé sur le total de la vente d'échange **avant**
   récompense ; quand le retour couvrait ce total, le crédit dépassait la vente et le client perdait la récompense (retour 33,34 $, vente
   27,59 $ après 500 points : 0 rendu au lieu de 5,75 $). Le crédit est désormais calculé après récompense. Sans rachat : inchangé.

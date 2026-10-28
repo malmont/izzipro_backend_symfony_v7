@@ -125,6 +125,34 @@ class PosLoyaltyQuoteApiTest extends WebTestCase
         $this->assertSame(100 + $sale['customer']['loyalty']['earned'], $sale['customer']['loyalty']['balance'], 'points débités par la vente seulement');
     }
 
+    public function testTheExchangeQuoteAccountsForThePointsTheReturnTakesBack(): void
+    {
+        // Relecture du 28/10/2026 : la vente d'origine (même client) a fait gagner 29 points ; le retour les reprend AVANT la vente d'échange
+        $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
+        $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register, 'cashFund' => 20000]);
+        $customer = $this->customer(0);
+        $items = [['productVariantId' => $this->cap, 'quantity' => 1]];
+        $sale = $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => $items, 'paymentMethods' => [['type' => 2, 'amount' => 33.35]], 'cashRegisterId' => $this->register, 'customerId' => $customer]), 201);
+        $this->assertSame(29, $sale['customer']['loyalty']['earned']);
+        $line = $this->json($this->request('GET', '/api/pos/returns/lookup?orderId=' . $sale['orderId']))['lines'][0]['orderItemId'];
+        $return = ['orderId' => $sale['orderId'], 'lines' => [['orderItemId' => $line, 'quantity' => 1]], 'reasonCode' => 'autre', 'refund' => ['method' => 'cash']];
+        $error = fn (Response $r) => [$r->getStatusCode(), json_decode($r->getContent(), true)['error'] ?? null, json_decode($r->getContent(), true)['balance'] ?? null];
+
+        // Solde 520 : 500 points semblaient disponibles, mais le retour en reprend 29 → le devis refuse comme l'échange refuserait
+        $this->db->executeStatement('UPDATE pos_customer SET loyalty_points = 520 WHERE id = ?', [$customer]);
+        $quote = ['return' => $return, 'sale' => ['items' => $items, 'loyalty' => ['redeemPoints' => 500], 'cashRegisterId' => $this->register]];
+        $this->assertSame([409, 'LOYALTY_INSUFFICIENT', 491], $error($this->request('POST', '/api/pos/exchanges/quote', $quote)), 'solde contrôlé après la reprise de 29 points');
+        $this->assertSame([409, 'LOYALTY_INSUFFICIENT', 491], $error($this->request('POST', '/api/pos/exchanges', $quote + ['sale' => $quote['sale'] + ['paymentMethods' => []]])), 'l\'échange refuse de la même façon, avant toute écriture');
+        $this->assertSame(520, (int) $this->db->fetchOne('SELECT loyalty_points FROM pos_customer WHERE id = ?', [$customer]), 'rien n\'a été écrit');
+
+        // Solde 600 : devis et échange d'accord ; balanceAfter exact
+        $this->db->executeStatement('UPDATE pos_customer SET loyalty_points = 600 WHERE id = ?', [$customer]);
+        $q = $this->json($this->request('POST', '/api/pos/exchanges/quote', $quote));
+        $this->assertSame(['customerId' => $customer, 'redeemPoints' => 500, 'amount' => 500, 'balance' => 571, 'balanceAfter' => 71, 'returnTakesBack' => 29], $q['sale']['loyalty']);
+        $ex = $this->json($this->request('POST', '/api/pos/exchanges', ['return' => $return, 'sale' => ['items' => $items, 'paymentMethods' => [], 'loyalty' => ['redeemPoints' => 500]], 'cashRegisterId' => $this->register]), 201);
+        $this->assertSame(71 + $ex['sale']['customer']['loyalty']['earned'], $ex['sale']['customer']['loyalty']['balance'], 'solde final = balanceAfter du devis + points gagnés par la vente d\'échange');
+    }
+
     public function testTheExchangeQuoteKnowsTheRewardAndTheCustomerOfTheOriginalSale(): void
     {
         $this->loginAs(['ROLE_USER_POS', 'ROLE_POS_MANAGER']);
@@ -143,7 +171,8 @@ class PosLoyaltyQuoteApiTest extends WebTestCase
         // Client repris de la vente d'origine (sans sale.customerId) ; crédit après récompense ; le client récupère la différence
         $q = $this->json($this->request('POST', '/api/pos/exchanges/quote', ['return' => $return, 'sale' => ['items' => $items, 'loyalty' => ['redeemPoints' => 500], 'cashRegisterId' => $this->register]]));
         $this->assertSame([(int) $rewarded['total'], (int) $rewarded['total'], 0, 3334 - (int) $rewarded['total']], [$q['sale']['total'], $q['creditApplied'], $q['amountDue'], $q['refundDue']]);
-        $this->assertSame(['customerId' => $customer, 'redeemPoints' => 500, 'amount' => 500, 'balance' => 600, 'balanceAfter' => 100], $q['sale']['loyalty']);
+        // La vente d'origine a fait gagner 29 points au même client : le retour les reprend avant la vente d'échange (28/10/2026)
+        $this->assertSame(['customerId' => $customer, 'redeemPoints' => 500, 'amount' => 500, 'balance' => 571, 'balanceAfter' => 71, 'returnTakesBack' => 29], $q['sale']['loyalty']);
         $this->assertSame([409, 'LOYALTY_INSUFFICIENT'], [($r = $this->request('POST', '/api/pos/exchanges/quote', ['return' => $return, 'sale' => ['items' => $items, 'loyalty' => ['redeemPoints' => 10000]]]))->getStatusCode(), json_decode($r->getContent(), true)['error']]);
         $this->assertSame(600, (int) $this->db->fetchOne('SELECT loyalty_points FROM pos_customer WHERE id = ?', [$customer]), 'aucune écriture');
     }

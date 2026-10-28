@@ -420,6 +420,16 @@ class PosReturnService
         ];
     }
 
+    /** Net hors taxes d'un retour avant toute écriture : l'assiette de la reprise des points (PosLoyaltyService::onReturn), relecture du 28/10/2026 */
+    public function previewSubtotal(array $input): int
+    {
+        $settings = $this->settings();
+        $original = is_numeric($input['orderId'] ?? null) ? $this->findSale((int) $input['orderId'], null, null, null) : null;
+        [, $subtotal] = $original ? $this->linesFromSale($original, $input['lines'] ?? null, $settings) : $this->linesFromCatalog($input['items'] ?? null);
+
+        return (int) $subtotal;
+    }
+
     /** Total d'un retour avant toute écriture (pour décider du crédit d'un échange) */
     public function preview(array $input): int
     {
