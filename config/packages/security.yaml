@@ -121,9 +121,9 @@ security:
         # 🔹 Ressources API Platform Product et Categories (S8, 26/10/2026) : lecture réservée à l'administrateur, refusée AVANT toute requête
         #    (401 anonyme, 403 client). Avant : liste des produits publique, relations imbriquées sans limite (incident PHP-FPM du 26/10/2026).
         #    Les fronts lisent les routes dédiées, toujours publiques : /api/products/{id}, /api/products/by-slug|by-category|…, /api/category.
-        - { path: ^/api/products(\.[a-z]+)?$, methods: [GET], roles: ROLE_ADMIN }
-        - { path: ^/api/products/\d+\.[a-z]+$, methods: [GET], roles: ROLE_ADMIN }
-        - { path: ^/api/categories(/\d+)?(\.[a-z]+)?$, methods: [GET], roles: ROLE_ADMIN }
+        - { path: ^/api/products(\.[a-z]+)?$, methods: [GET, HEAD], roles: ROLE_ADMIN }
+        - { path: ^/api/products/\d+\.[a-z]+$, methods: [GET, HEAD], roles: ROLE_ADMIN }
+        - { path: ^/api/categories(/\d+)?(\.[a-z]+)?$, methods: [GET, HEAD], roles: ROLE_ADMIN }
         # 🔹 Avis clients (09/10/2026) : dépôt et droit d'écrire réservés aux clients connectés. Avant la règle « products »
         #    qui réserve les écritures aux admins ; la lecture des avis publiés reste publique (règle « products »).
         #    /api/reviews/* (mes avis, modifier, supprimer) : règle générale ^/api (connecté), auteur vérifié par le contrôleur.

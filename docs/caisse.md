@@ -739,8 +739,10 @@ customizable}]}]` (produits `isPos` vendables, sans location ; `customizable` : 
 `calculationRule: "pos-offline-v1"`, `testCases: "/api/pos/offline-cases"`. Chaque pack émis est conservé sous sa version
 (`pos_offline_pack` : prix, taxes, pas d'arrondi) pour recalculer les ventes aux conditions connues de la tablette. Scan
 hors ligne : d'abord `variants[].barcode`, puis `products[].barcode`.
-Grille de favoris (F10) : clé `favorites [{productId, variantId, defaultVariantId, pinned, rank}]` (les favoris du poste, prix dans
-`products`) **seulement si les favoris sont activés** ; sinon contenu et ETag du pack inchangés.
+Grille de favoris (F10) : clé `favorites [{productId, variantId, defaultVariantId, pinned, rank}]` **seulement si les favoris sont
+activés** ; sinon contenu et ETag du pack inchangés. Depuis le 28/10/2026, elle ne contient que les **épinglés** du poste (ou du site),
+toujours `pinned: true`, rangs 1..n, prix dans `products` ; les plus vendus restent servis en ligne par `GET /api/pos/favorites` (ils
+changeaient à chaque vente et créaient une version de pack à chaque passage). Même format d'entrée : rien à changer côté caisse.
 
 ### Règle de calcul « pos-offline-v1 » et jeu de cas partagé
 
@@ -1759,7 +1761,7 @@ details}], alerts {siteEnabled, siteRecipient (masqué), platformRecipient}}`.
 | `STRIPE_ACCOUNT_UNREADABLE` | warning | compte réel illisible chez Stripe |
 | `SIMULATED_READER_IN_LIVE` | critical | lecteur simulé en mode réel |
 | `STRIPE_TEST_MODE` | info | site avec terminal en mode test |
-| `RECONCILE_STALE` | critical | site avec terminal, réconciliation complète il y a plus de 30 minutes (hors plage horaire réglée : non) |
+| `RECONCILE_STALE` | critical | site avec terminal, réconciliation complète il y a plus de 30 minutes (hors plage horaire réglée : non). Visible dans la route et la page EasyAdmin ; **jamais envoyé par courriel**, puisque c'est la réconciliation qui envoie les courriels : un timer arrêté est détecté par Healthchecks.io (`docs/mise-en-production-caisse.md`, section 6) |
 | `ORPHAN_PAYMENTS` | warning | paiements par terminal sans vente au-delà du délai réglé (20 derniers listés) |
 | `REFUNDS_EXPIRED` | warning | remboursements Interac en attente au-delà du délai, ou expirés en 24 h |
 | `SESSIONS_OPEN_24H` | warning | sessions de caisse ouvertes depuis plus de 24 h |

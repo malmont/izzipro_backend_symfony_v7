@@ -98,12 +98,27 @@ class PosFavoriteService
     /** Références des favoris pour le pack hors ligne (prix déjà dans le pack) ; null si désactivés (pack inchangé) */
     public function packEntries(?CashRegister $register, string $productsBaseUrl): ?array
     {
-        $grid = $this->grid($register, $productsBaseUrl)['body'];
-        if (!$grid['enabled']) {
+        // Épinglés seulement (relecture du 28/10/2026) : les plus vendus changent à chaque vente et créaient une version de pack (instantané
+        // complet des prix) à chaque passage ; ils restent servis en ligne par GET /api/pos/favorites. Même format d'entrée, rangs 1..n.
+        $settings = $this->settings();
+        if (!$settings['enabled']) {
             return null;
         }
+        $entries = [];
+        if ($settings['mode'] !== 'bestSellers') {
+            [, $pins] = $this->effectivePins($register);
+            foreach ($pins as $pin) {
+                if (count($entries) >= $settings['gridSize']) {
+                    break;
+                }
+                if (self::sellable($pin->getProduct())) {
+                    $e = $this->entry($pin->getProduct(), $pin->getProductVariant(), true, count($entries) + 1, $productsBaseUrl);
+                    $entries[] = ['productId' => $e['productId'], 'variantId' => $e['variantId'], 'defaultVariantId' => $e['defaultVariantId'], 'pinned' => true, 'rank' => $e['rank']];
+                }
+            }
+        }
 
-        return array_map(fn (array $i) => ['productId' => $i['productId'], 'variantId' => $i['variantId'], 'defaultVariantId' => $i['defaultVariantId'], 'pinned' => $i['pinned'], 'rank' => $i['rank']], $grid['items']);
+        return $entries;
     }
 
     /** Épinglés d'une portée pour l'écran d'édition (responsable) */

@@ -280,7 +280,7 @@ class UserManagementController extends AbstractController
             if (strlen($data['password']) < 6) {
                 return $this->json(['error' => 'Le mot de passe doit comporter au moins 6 caractères.'], Response::HTTP_BAD_REQUEST);
             }
-            $targetUser->setPassword($this->passwordHasher->hashPassword($targetUser, $data['password']));
+            $targetUser->setPassword($this->passwordHasher->hashPassword($targetUser, $data['password']))->setPasswordSet(true); // mot de passe utilisable : confirmation par mot de passe
         }
 
         $em->flush();

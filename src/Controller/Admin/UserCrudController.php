@@ -127,7 +127,7 @@ class UserCrudController extends BaseTenantCrudController
                 $entityInstance,
                 $entityInstance->getPlainPassword()
             );
-            $entityInstance->setPassword($hashedPassword);
+            $entityInstance->setPassword($hashedPassword)->setPasswordSet(true); // mot de passe utilisable (relecture du 28/10/2026)
             $entityInstance->setPlainPassword(null);
         }
     }

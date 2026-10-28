@@ -168,10 +168,18 @@ class PosFavoritesApiTest extends WebTestCase
         $this->json($this->request('PUT', '/api/pos/favorites/pins', ['pins' => [['productId' => $p('DEMO-SAC')]]]));
         $this->assertSame(200, $this->request('GET', '/api/pos/favorites', null, ['HTTP_IF_NONE_MATCH' => $etag])->getStatusCode());
 
-        // Pack hors ligne : références des favoris du poste (prix déjà dans products)
-        $pack = $this->json($this->request('GET', "/api/pos/offline-pack?cashRegisterId=$this->register"));
-        $this->assertSame(['productId' => $p('DEMO-SAC'), 'variantId' => null, 'defaultVariantId' => $sacDefault, 'pinned' => true, 'rank' => 1], $pack['favorites'][0]);
-        $this->assertSame(array_column($grid("?cashRegisterId=$this->register")['items'], 'productId'), array_column($pack['favorites'], 'productId'));
+        // Pack hors ligne : les ÉPINGLÉS seulement (28/10/2026), même format d'entrée ; les plus vendus restent en ligne ; l'ETag du pack
+        // ne bouge pas avec les ventes
+        $packResponse = $this->request('GET', "/api/pos/offline-pack?cashRegisterId=$this->register");
+        $pack = $this->json($packResponse);
+        $this->assertSame([['productId' => $p('DEMO-SAC'), 'variantId' => null, 'defaultVariantId' => $sacDefault, 'pinned' => true, 'rank' => 1]], $pack['favorites']);
+        $this->assertGreaterThan(1, count($grid("?cashRegisterId=$this->register")['items']), 'la grille en ligne, elle, complète avec les plus vendus');
+        // Une vente qui bouleverse le classement des plus vendus ne change pas les favoris du pack (le stock, lui, y change comme avant)
+        $this->assertSame($p('DEMO-VESTE'), $grid("?cashRegisterId=$this->register")['items'][1]['productId'], 'avant : la veste (65) est le premier plus vendu derrière l\'épinglé');
+        $this->sell([['productVariantId' => $v('DEMO-GOURDE'), 'quantity' => 100]]);
+        $this->assertSame($p('DEMO-GOURDE'), $grid("?cashRegisterId=$this->register")['items'][1]['productId'], 'en ligne : la gourde (160) passe devant la veste');
+        $this->assertSame($pack['favorites'], $this->json($this->request('GET', "/api/pos/offline-pack?cashRegisterId=$this->register"))['favorites'], 'pack : favoris identiques');
+        $this->assertSame([], array_values(array_filter($pack['favorites'], fn ($f) => !$f['pinned'])));
         $this->db->executeStatement("UPDATE product SET special_price = NULL WHERE code = 'DEMO-SAC'");
         $this->db->executeStatement('UPDATE product_variant SET price = NULL WHERE id = ?', [$tshirt]);
     }

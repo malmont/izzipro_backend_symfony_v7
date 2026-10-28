@@ -71,8 +71,13 @@ class PosFavoriteCrudController extends BaseTenantCrudController
 
     public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
-        $this->journal($entityInstance, 'deleted');
-        parent::deleteEntity($entityManager, $entityInstance);
+        $snapshot = $entityInstance instanceof PosFavorite ? ['register' => $entityInstance->getCashRegister(), 'productId' => $entityInstance->getProduct()?->getId(), 'variantId' => $entityInstance->getProductVariant()?->getId(), 'position' => $entityInstance->getPosition()] : null;
+        parent::deleteEntity($entityManager, $entityInstance); // journal après la suppression (relecture du 28/10/2026) : rien au journal si elle échoue
+        if ($snapshot !== null) {
+            $register = $snapshot['register'];
+            $this->audit->record(PosAuditService::FAVORITES_UPDATED, ['source' => 'easyadmin', 'action' => 'deleted', 'scope' => $register ? 'register' : 'site', 'cashRegisterId' => $register?->getId(),
+                'pin' => ['productId' => $snapshot['productId'], 'variantId' => $snapshot['variantId'], 'position' => $snapshot['position']]], null, $register, $register ? 'cash_register' : null, $register?->getId());
+        }
     }
 
     /** Variante choisie : son produit fait foi */
