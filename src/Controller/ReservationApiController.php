@@ -303,7 +303,7 @@ class ReservationApiController extends AbstractController
     {
         $services = $this->cacheService->get('reservations_services_list', function () {
             return $this->getServicesUseCase->execute();
-        }, 3600, \App\Cache\CacheTags::listTags(\App\Cache\CacheTags::SERVICE_OFFERS));
+        }, 3600, [...\App\Cache\CacheTags::listTags(\App\Cache\CacheTags::SERVICE_OFFERS), ...\App\Cache\CacheTags::listTags(\App\Cache\CacheTags::SERVICE_FAMILIES)]);
 
         return $this->json($services, Response::HTTP_OK);
     }
