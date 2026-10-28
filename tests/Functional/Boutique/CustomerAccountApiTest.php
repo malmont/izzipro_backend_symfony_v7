@@ -145,9 +145,13 @@ class CustomerAccountApiTest extends WebTestCase
         $email = $this->session['email'];
         $error = fn (Response $r) => [$r->getStatusCode(), json_decode($r->getContent(), true)['error'] ?? null];
 
-        // Tunnel de paiement du site : PATCH avec l'adresse ACTUELLE (casse et espaces différents) → aucun contrôle, comme avant
-        $same = $this->json($this->request('PATCH', '/api/profile', json_encode(['email' => ' ' . strtoupper($email) . ' ', 'firstName' => 'Paiement'])));
-        $this->assertSame('Paiement', $same['user']['firstName']);
+        // Tunnel de paiement du site : PATCH avec l'adresse ACTUELLE (casse et espaces différents) → aucun contrôle, et (28/10/2026) l'adresse
+        // n'est pas réécrite, aucun nouveau jeton : même session, même adresse en base
+        $sameResponse = $this->request('PATCH', '/api/profile', json_encode(['email' => ' ' . strtoupper($email) . ' ', 'firstName' => 'Paiement']));
+        $same = $this->json($sameResponse);
+        $this->assertSame(['Paiement', $email, []], [$same['user']['firstName'], $same['user']['email'], $sameResponse->headers->getCookies()], 'adresse inchangée, pas de cookies');
+        $this->assertSame($email, $this->db->fetchOne('SELECT email FROM "user" WHERE email = ?', [$email]));
+        $this->assertSame(400, $this->request('PATCH', '/api/profile', json_encode(['email' => 'pas-une-adresse', 'currentPassword' => self::PASSWORD]))->getStatusCode(), 'adresse invalide refusée');
         $this->json($this->request('PATCH', '/api/profile', json_encode(['email' => $email])));
         $this->assertSame('Compte', $this->json($this->request('PATCH', '/api/profile', json_encode(['firstName' => 'Compte'])))['user']['firstName'], 'sans adresse : inchangé');
 

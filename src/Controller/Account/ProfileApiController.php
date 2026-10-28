@@ -62,7 +62,17 @@ class ProfileApiController extends BaseTenantApiController
         // S7 (31/10/2026) : un changement RÉEL d'adresse (différente après trim et minuscules) exige une confirmation ; le tunnel
         // de paiement du site renvoie l'adresse actuelle et ne passe pas ici ; adresse vide ou absente : comportement inchangé
         $oldEmail = (string) $user->getEmail();
-        $emailChanges = isset($data['email']) && \App\Services\AccountService\EmailChangeGuard::isChange($oldEmail, $data['email']);
+        // Adresse (relecture du 28/10/2026) : chaîne attendue, comparée après trim et en minuscules comme le site (emailChange.js) ; une adresse
+        // identique à la casse ou aux espaces près n'est PAS réécrite (avant, elle l'était telle quelle : connexion ensuite impossible) ;
+        // une adresse réellement nouvelle est validée puis enregistrée telle que saisie, sans espaces
+        if (array_key_exists('email', $data) && $data['email'] !== null && !is_string($data['email'])) {
+            return $this->json(['error' => 'Invalid email'], Response::HTTP_BAD_REQUEST);
+        }
+        $requestedEmail = is_string($data['email'] ?? null) ? trim($data['email']) : null;
+        $emailChanges = $requestedEmail !== null && \App\Services\AccountService\EmailChangeGuard::isChange($oldEmail, $requestedEmail);
+        if ($emailChanges && !filter_var($requestedEmail, FILTER_VALIDATE_EMAIL)) {
+            return $this->json(['error' => 'Invalid email'], Response::HTTP_BAD_REQUEST);
+        }
         $method = \App\Services\AccountService\EmailChangeGuard::method($user);
         if ($emailChanges && ($refused = $this->emailChanges->authorize($user, $data, $request)) !== null) {
             return $this->json($refused['body'], $refused['status']);
@@ -74,23 +84,23 @@ class ProfileApiController extends BaseTenantApiController
         if (isset($data['lastName'])) {
             $user->setLastname($data['lastName']);
         }
-        if (isset($data['email'])) {
-            $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $data['email']]);
+        if ($emailChanges) {
+            $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $requestedEmail]);
             if ($existingUser && $existingUser->getId() !== $user->getId()) {
                 return $this->json(['error' => 'Email already in use'], Response::HTTP_CONFLICT);
             }
             // Nom d'utilisateur égal à l'ancienne adresse : il suit la nouvelle (suite de S7, 27/10/2026), unicité vérifiée. Avant, la
             // comparaison se faisait après le changement d'adresse et ne réussissait jamais : le nom gardait l'ancienne adresse.
-            $followsEmail = $user->getUsername() === $oldEmail && $oldEmail !== (string) $data['email'];
+            $followsEmail = $user->getUsername() === $oldEmail;
             if ($followsEmail) {
-                $taken = $em->getRepository(User::class)->findOneBy(['username' => $data['email']]);
+                $taken = $em->getRepository(User::class)->findOneBy(['username' => $requestedEmail]);
                 if ($taken && $taken->getId() !== $user->getId()) {
                     return $this->json(['error' => 'Email already in use'], Response::HTTP_CONFLICT);
                 }
             }
-            $user->setEmail($data['email']);
+            $user->setEmail($requestedEmail);
             if ($followsEmail) {
-                $user->setUsername($data['email']);
+                $user->setUsername($requestedEmail);
             }
         }
         if (isset($data['licenseNumber'])) {
@@ -121,7 +131,7 @@ class ProfileApiController extends BaseTenantApiController
         }
         // Adresse enregistrée réellement changée (casse comprise) : les jetons, liés au courriel, suivent la nouvelle adresse ; nouveaux
         // jetons rendus sous la forme de la connexion. Adresse inchangée : réponse identique à avant.
-        $reissue = $oldEmail !== (string) $user->getEmail();
+        $reissue = $emailChanges; // changement réel seulement : jamais de nouveaux jetons pour une différence de casse ou d'espaces
         $response = new JsonResponse();
         $tokens = [];
         if ($reissue) {

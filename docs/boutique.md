@@ -356,9 +356,11 @@ MAUI non vérifiables) ; le site Next.js ne l'appelle pas.
 
 ### `PATCH /api/profile` : changement d'adresse courriel confirmé
 
-- La confirmation n'est exigée que si l'adresse **change réellement** : comparaison après `trim` et en minuscules. Le tunnel de paiement
-  du site Next.js (`checkoutFlow.js`, `completeOrder`) envoie l'adresse **actuelle** : ce cas, comme une adresse absente ou vide, garde
-  exactement le comportement d'avant.
+- La confirmation n'est exigée que si l'adresse **change réellement** : comparaison après `trim` et en minuscules, la même que le site
+  (`emailChange.js`). Le tunnel de paiement du site Next.js (`checkoutFlow.js`, `completeOrder`) envoie l'adresse **actuelle** : ce cas,
+  comme une adresse absente ou vide, est **sans effet** (28/10/2026 : l'adresse n'est plus réécrite avec la casse ou les espaces envoyés,
+  et aucun nouveau jeton n'est rendu ; avant, elle l'était telle quelle, ce qui pouvait casser la connexion). Une adresse réellement
+  nouvelle est validée (400 `Invalid email` sinon, ou si `email` n'est pas une chaîne) puis enregistrée telle que saisie, sans espaces.
 - Compte avec mot de passe : champ **`currentPassword`** obligatoire dans le corps → 403 `PASSWORD_REQUIRED` (absent) ou 403
   `PASSWORD_INVALID` (faux), message en clair, rien n'est modifié.
 - Compte en connexion par code (`otpEnabled`) ou sans mot de passe utilisable : un **code OTP est envoyé à l'ancienne adresse** par le
@@ -389,6 +391,8 @@ lié à l'adresse. **Quand l'adresse enregistrée change réellement (casse comp
 la forme de la connexion, les jetons de renouvellement de l'utilisateur suivent la nouvelle adresse (ses autres appareils restent connectés)
 et un nom d'utilisateur égal à l'ancienne adresse la suit aussi (unicité vérifiée, 409 sinon). **Sans changement d'adresse, la réponse est
 identique à avant.**
+
+Une différence de casse ou d'espaces seulement n'est pas un changement : rien n'est réécrit, aucun jeton n'est rendu (28/10/2026).
 
 Sécurité (27/10/2026) : un jeton d'accès n'ouvre que le compte de son identifiant (`id`), et seulement si ce compte porte encore le nom
 d'utilisateur ou l'adresse du jeton. Après un changement d'adresse, l'ancien jeton n'ouvre donc ni un compte créé ensuite avec l'ancienne

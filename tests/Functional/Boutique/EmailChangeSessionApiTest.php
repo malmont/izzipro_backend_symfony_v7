@@ -67,14 +67,12 @@ class EmailChangeSessionApiTest extends WebTestCase
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM refresh_tokens WHERE username = ? AND refresh_token = ?', [$new, $old["refresh_token_$code"]]), 'jeton de la session d\'avant transféré');
         $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM refresh_tokens WHERE username = ?', [$old['email']]));
 
-        // Changement de casse seulement : l'adresse enregistrée change, la session continue aussi
-        $upper = strtoupper($new);
-        $case = $this->request('PATCH', '/api/profile', json_encode(['email' => $upper]));
-        $this->assertSame(['message', 'user', 'token', 'refresh_token', 'csrf_token'], array_keys($this->json($case)), 'casse : nouveaux jetons');
-        foreach ($case->headers->getCookies() as $c) {
-            $this->session[$c->getName()] = $c->getValue();
-        }
-        $this->assertSame($upper, $this->json($this->request('GET', '/api/profile'))['email']);
+        // Changement de casse ou d'espaces seulement (28/10/2026) : adresse non réécrite, réponse d'avant, aucun nouveau jeton, même session
+        $case = $this->request('PATCH', '/api/profile', json_encode(['email' => ' ' . strtoupper($new) . ' ']));
+        $this->assertSame(['message', 'user'], array_keys($this->json($case)), 'casse : pas de nouveaux jetons');
+        $this->assertSame([], $case->headers->getCookies());
+        $this->assertSame($new, $this->json($this->request('GET', '/api/profile'))['email'], 'adresse inchangée en base, session intacte');
+        $this->assertSame($new, $this->db->fetchOne('SELECT username FROM "user" WHERE email = ?', [$new]));
     }
 
     public function testAnAppSessionGetsNewTokensAndItsRefreshTokenStillWorks(): void
