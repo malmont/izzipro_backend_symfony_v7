@@ -411,6 +411,7 @@ final class LandingAiEvalCases
     public function createCases(): array
     {
         return [
+            ...$this->formCases(),
             [
                 'id' => 'C1', 'componentKey' => 'Service', 'media' => [], 'prompt' => 'Grille de mes services avec prix et bouton Réserver.',
                 'check' => function (LandingAiCreateResult $r) {
@@ -949,6 +950,77 @@ final class LandingAiEvalCases
         $parent = $this->inspector->blocksById($composition)[$a->parentId ?? ''] ?? null;
 
         return $parent !== null && ($parent->layout ?? null) === 'row';
+    }
+
+    /**
+     * Formulaires à étapes (lot 4, 28/10/2026), joués en création dans la famille Presentation : F1 prise de
+     * rendez-vous (L'Intendant Privé), F2 devis, F3 inscription. Les règles entre blocs (étapes, name, submit, rôles)
+     * sont déjà vérifiées par V1 (validateur) ; ces vérifications regardent le contenu attendu.
+     *
+     * @return list<array>
+     */
+    private function formCases(): array
+    {
+        $form = function (LandingAiCreateResult $r): array {
+            $blocks = $this->inspector->blocks($r->composition);
+            $steps = array_values(array_filter($blocks, fn ($b) => ($b->type ?? null) === 'container' && ($b->layout ?? null) === 'steps'));
+            $fields = array_values(array_filter($blocks, fn ($b) => ($b->type ?? null) === 'field'));
+            $success = array_values(array_filter($blocks, fn ($b) => ($b->stepRole ?? null) === 'success'));
+            $texts = json_encode($r->composition, JSON_UNESCAPED_UNICODE);
+
+            return [
+                'steps' => $steps[0] ?? null,
+                'stepCount' => isset($steps[0]) ? count(array_filter($blocks, fn ($b) => ($b->parentId ?? null) === ($steps[0]->id ?? null) && ($b->stepRole ?? null) !== 'success')) : 0,
+                'roles' => array_values(array_filter(array_map(fn ($f) => $f->fieldRole ?? null, $fields))),
+                'fields' => count($fields),
+                'submit' => count(array_filter($blocks, fn ($b) => ($b->type ?? null) === 'button' && ($b->action ?? null) === 'submit')),
+                'success' => $success !== [],
+                'reference' => str_contains($texts, '{reference}'),
+                'servicesSource' => array_filter($fields, fn ($f) => ($f->optionsSource ?? null) === 'services') !== [],
+                'emailRequired' => array_filter($fields, fn ($f) => ($f->fieldType ?? null) === 'email' && ($f->fieldRole ?? null) === 'email' && ($f->required ?? false) === true) !== [],
+            ];
+        };
+        $detail = fn (array $f) => sprintf('cible : %s ; étapes : %d ; questions : %d ; rôles : %s ; submit : %d ; success : %s ; {reference} : %s ; prestations du site : %s ; courriel obligatoire : %s',
+            $f['steps']->formTarget ?? '(aucune)', $f['stepCount'], $f['fields'], implode(', ', $f['roles']) ?: 'aucun', $f['submit'], $f['success'] ? 'oui' : 'non',
+            $f['reference'] ? 'oui' : 'non', $f['servicesSource'] ? 'oui' : 'non', $f['emailRequired'] ? 'oui' : 'non');
+
+        return [
+            [
+                'id' => 'F1', 'componentKey' => 'Presentation', 'media' => [],
+                'prompt' => 'Formulaire de prise de rendez-vous pour une conciergerie de personnes âgées : en 4 étapes, la prestation (choisie parmi nos prestations, par famille), le moment (jour et créneau du matin, du midi, de l\'après-midi ou du soir), les coordonnées (nom, téléphone, courriel, adresse), puis une vérification avant l\'envoi. Message final avec une référence à noter. Gros caractères, très lisible.',
+                'check' => function (LandingAiCreateResult $r) use ($form, $detail) {
+                    $f = $form($r);
+                    $ok = ($f['steps']->formTarget ?? null) === 'reservation' && $f['emailRequired'] && $f['servicesSource'] && $f['submit'] === 1 && $f['success'] && $f['reference']
+                        && !array_diff(['service', 'date', 'slot', 'name', 'phone', 'email'], $f['roles']);
+
+                    return $this->result($ok, $detail($f));
+                },
+            ],
+            [
+                'id' => 'F2', 'componentKey' => 'Presentation', 'media' => [],
+                'prompt' => 'Formulaire de demande de devis pour des travaux de rénovation : type de travaux (cuisine, salle de bain, peinture, autre), surface en m², budget, délai souhaité, puis nom, courriel et téléphone. Récapitulatif avant l\'envoi.',
+                'check' => function (LandingAiCreateResult $r) use ($form, $detail) {
+                    $f = $form($r);
+                    $hasNumber = array_filter($this->inspector->blocks($r->composition), fn ($b) => ($b->type ?? null) === 'field' && ($b->fieldType ?? null) === 'number') !== [];
+                    $summary = $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'summary') !== null;
+                    $ok = $f['steps'] !== null && in_array($f['steps']->formTarget ?? 'generic', ['generic', 'contact'], true) && $f['submit'] === 1 && $f['success'] && $f['reference'] && $hasNumber && $summary && in_array('email', $f['roles'], true);
+
+                    return $this->result($ok, $detail($f) . sprintf(' ; surface en nombre : %s ; récapitulatif : %s', $hasNumber ? 'oui' : 'non', $summary ? 'oui' : 'non'));
+                },
+            ],
+            [
+                'id' => 'F3', 'componentKey' => 'Presentation', 'media' => [],
+                'prompt' => 'Formulaire d\'inscription à un atelier : choix de l\'atelier (Aquarelle, Poterie, Couture), nombre de participants (1 à 4), nom, courriel, et une case pour accepter le règlement.',
+                'check' => function (LandingAiCreateResult $r) use ($form, $detail) {
+                    $f = $form($r);
+                    $checkbox = $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'field' && ($b->fieldType ?? null) === 'checkbox' && ($b->required ?? false) === true) !== null;
+                    $guests = $this->find($r->composition, fn ($b) => ($b->type ?? null) === 'field' && ($b->fieldType ?? null) === 'number' && ($b->maxValue ?? null) === 4) !== null;
+                    $ok = $f['steps'] !== null && $f['submit'] === 1 && $f['success'] && $f['reference'] && $checkbox && $guests;
+
+                    return $this->result($ok, $detail($f) . sprintf(' ; case obligatoire : %s ; participants 1 à 4 : %s', $checkbox ? 'oui' : 'non', $guests ? 'oui' : 'non'));
+                },
+            ],
+        ];
     }
 
     private function find(object $composition, callable $predicate): ?object

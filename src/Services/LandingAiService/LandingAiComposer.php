@@ -91,18 +91,20 @@ final class LandingAiComposer
     public function edit(string $componentKey, object $composition, string $prompt, string $locale = 'fr', array $media = [], array $images = [], string|int|null $dataType = null, array $options = []): LandingAiEditResult|LandingAiQuestionsResult
     {
         $options['questionsAllowed'] = self::questionsAllowed($options, $prompt); // lu par le constructeur de prompts
+        $options['maxQuestions'] = self::asksForm($prompt . ' ' . ($options['tab']['brief'] ?? '')) ? LandingAiQuestions::MAX_FORM_QUESTIONS : LandingAiQuestions::MAX_QUESTIONS;
         $stored = $this->site->storedCompositions();
         $library = $this->content->mediaLibrary();
         $allowedMedia = $this->withLibrary($this->site->allowedMedia([...$stored, $composition], $media, $prompt), $library);
-        $editable = $this->content->editableContent($componentKey, $dataType, $locale);
+        $editable = $this->content->withServiceOffers($this->content->editableContent($componentKey, $dataType, $locale), $composition, $locale);
+        $formAsked = self::asksForm($prompt);
         $payload = $this->prompts->editPayload($this->model($images), $componentKey, $composition, $prompt, $locale, $media, $allowedMedia, $this->site->palette($stored), $images, $library, $editable, $options);
 
         $removalAsked = self::asksRemoval($prompt);
 
         $questionsAllowed = $options['questionsAllowed'];
 
-        return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia, $removalAsked, $editable, $questionsAllowed) {
-            if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, ($input->operations ?? []) === [])) !== null) {
+        return $this->run($payload, LandingAiPromptBuilder::EDIT_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($composition, $componentKey, $allowedMedia, $removalAsked, $editable, $questionsAllowed, $formAsked, $options) {
+            if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, ($input->operations ?? []) === [], $options['maxQuestions'])) !== null) {
                 return $asked;
             }
             $operations = is_array($input->operations ?? null) ? $input->operations : [];
@@ -130,7 +132,7 @@ final class LandingAiComposer
                 ...$this->checker->missingBackgrounds($applied['composition'], $existing),
                 ...$this->checker->sceneErrors($applied['composition'], $existing),
                 ...$this->checker->addedLinks($applied['composition'], $composition),
-                ...$this->checker->addedForms($applied['composition'], $composition),
+                ...$this->checker->addedForms($applied['composition'], $composition, $formAsked, $componentKey),
             ];
             [$proposals, $proposalErrors] = $this->proposals->check($input, $editable);
             array_push($errors, ...$proposalErrors);
@@ -156,6 +158,7 @@ final class LandingAiComposer
     public function create(string $componentKey, string $prompt, string $locale = 'fr', array $media = [], ?string $defaultDataType = null, array $images = [], array $options = []): LandingAiCreateResult|LandingAiQuestionsResult
     {
         $options['questionsAllowed'] = self::questionsAllowed($options, $prompt); // lu par le constructeur de prompts
+        $options['maxQuestions'] = self::asksForm($prompt . ' ' . ($options['tab']['brief'] ?? '')) ? LandingAiQuestions::MAX_FORM_QUESTIONS : LandingAiQuestions::MAX_QUESTIONS;
         $stored = $this->site->storedCompositions();
         $usesData = $this->data->familyUsesData($componentKey);
         $optional = $usesData && $this->data->dataOptional($componentKey);
@@ -168,11 +171,13 @@ final class LandingAiComposer
 
         $questionsAllowed = $options['questionsAllowed'];
 
-        return $this->run($payload, LandingAiPromptBuilder::CREATE_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds, $questionsAllowed) {
-            if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, !is_object($input->composition ?? null))) !== null) {
+        $formAsked = self::asksForm($prompt);
+
+        return $this->run($payload, LandingAiPromptBuilder::CREATE_TOOL, $images !== [], function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds, $questionsAllowed, $formAsked, $options) {
+            if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, !is_object($input->composition ?? null), $options['maxQuestions'])) !== null) {
                 return $asked;
             }
-            [$section, $errors] = $this->checkSection($input, $componentKey, $allowedMedia, $availableIds, '');
+            [$section, $errors] = $this->checkSection($input, $componentKey, $allowedMedia, $availableIds, '', $formAsked);
             if ($errors) {
                 return [null, $errors];
             }
@@ -201,6 +206,7 @@ final class LandingAiComposer
     public function page(string $prompt, string $locale = 'fr', array $media = [], array $images = [], ?string $componentKey = null, array $options = []): LandingAiPageResult|LandingAiQuestionsResult
     {
         $options['questionsAllowed'] = self::questionsAllowed($options, $prompt); // lu par le constructeur de prompts
+        $options['maxQuestions'] = self::asksForm($prompt . ' ' . ($options['tab']['brief'] ?? '')) ? LandingAiQuestions::MAX_FORM_QUESTIONS : LandingAiQuestions::MAX_QUESTIONS;
         $stored = $this->site->storedCompositions();
         $families = $componentKey !== null ? [$componentKey] : $this->catalogue->componentKeys();
         $presets = array_merge(...array_map(fn ($key) => $this->site->presetCompositions($key), $families));
@@ -224,8 +230,10 @@ final class LandingAiComposer
 
         $questionsAllowed = $options['questionsAllowed'];
 
-        return $this->run($payload, LandingAiPromptBuilder::PAGE_TOOL, true, function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds, $system, $tab, $siteHome, $landingHome, $asksCommerce, $questionsAllowed) {
-            if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, !is_array($input->sections ?? null) || $input->sections === [])) !== null) {
+        $formAsked = self::asksForm($prompt . ' ' . ($tab['brief'] ?? ''));
+
+        return $this->run($payload, LandingAiPromptBuilder::PAGE_TOOL, true, function (object $input, LandingAiUsageStats $stats) use ($componentKey, $allowedMedia, $availableIds, $system, $tab, $siteHome, $landingHome, $asksCommerce, $questionsAllowed, $formAsked, $options) {
+            if (($asked = $this->askedQuestions($input, $questionsAllowed, $stats, !is_array($input->sections ?? null) || $input->sections === [], $options['maxQuestions'])) !== null) {
                 return $asked;
             }
             $sections = is_array($input->sections ?? null) ? $input->sections : [];
@@ -245,7 +253,7 @@ final class LandingAiComposer
                     $errors[] = ['path' => "sections[$i].componentKey", 'message' => sprintf('onglet « %s » : pas de section %s dans un onglet (la navbar et le footer sont communs au site) ; retire-la', $tab['title'], $key)];
                     continue;
                 }
-                [$checked, $sectionErrors] = $this->checkSection($section, $key, $allowedMedia, $availableIds, "sections[$i].");
+                [$checked, $sectionErrors] = $this->checkSection($section, $key, $allowedMedia, $availableIds, "sections[$i].", $formAsked);
                 $sectionErrors ? array_push($errors, ...$sectionErrors) : $valid[] = ['componentKey' => $key] + $checked;
             }
             $scenes = array_keys(array_filter($valid, fn ($s) => $this->checker->sceneCount($s['composition']) > 0));
@@ -339,7 +347,7 @@ final class LandingAiComposer
      * @param array<string, list<string>> $availableIds identifiants de données par famille qui en utilise
      * @return array{0: array{dataType: ?string, composition: object}|null, 1: list<array{path: string, message: string}>}
      */
-    private function checkSection(object $input, string $componentKey, array $allowedMedia, array $availableIds, string $prefix): array
+    private function checkSection(object $input, string $componentKey, array $allowedMedia, array $availableIds, string $prefix, bool $formAsked = false): array
     {
         $composition = $input->composition ?? null;
         if (!is_object($composition)) {
@@ -357,7 +365,7 @@ final class LandingAiComposer
         // chemins relatifs à la composition ; en page, préfixés par sections[i].composition
         $errors = array_map(
             fn ($e) => ['path' => $prefix === '' ? $e['path'] : rtrim($prefix . 'composition.' . $e['path'], '.'), 'message' => $e['message']],
-            [...$this->checker->check($composition, $componentKey, $allowedMedia), ...$this->checker->missingBackgrounds($composition), ...$this->checker->sceneErrors($composition), ...$this->checker->addedLinks($composition), ...$this->checker->addedForms($composition)]
+            [...$this->checker->check($composition, $componentKey, $allowedMedia), ...$this->checker->missingBackgrounds($composition), ...$this->checker->sceneErrors($composition), ...$this->checker->addedLinks($composition), ...$this->checker->addedForms($composition, null, $formAsked, $componentKey)]
         );
         $usesData = $this->data->familyUsesData($componentKey);
         $optional = $usesData && $this->data->dataOptional($componentKey);
@@ -392,7 +400,7 @@ final class LandingAiComposer
      *
      * @return array{0: ?LandingAiQuestionsResult, 1: list<array{path: string, message: string}>}|null
      */
-    private function askedQuestions(object $input, bool $allowed, LandingAiUsageStats $stats, bool $nothingComposed): ?array
+    private function askedQuestions(object $input, bool $allowed, LandingAiUsageStats $stats, bool $nothingComposed, int $max = LandingAiQuestions::MAX_QUESTIONS): ?array
     {
         if (!LandingAiQuestions::asked($input)) {
             return null;
@@ -401,7 +409,7 @@ final class LandingAiComposer
             // questions non permises : ignorées si le modèle a aussi composé, sinon renvoyées au modèle
             return $nothingComposed ? [null, [['path' => 'questions', 'message' => 'questions non autorisées pour cette demande (réponses déjà données, ou questions désactivées) : compose avec les réponses, choisis le plus sûr pour le reste et dis-le dans summary']]] : null;
         }
-        [$questions, $errors] = $this->questions->parse($input);
+        [$questions, $errors] = $this->questions->parse($input, $max);
         if ($errors) {
             return [null, $errors];
         }
@@ -415,6 +423,16 @@ final class LandingAiComposer
         if ($removed) {
             $this->logger->info('Assistant IA : clés retirées sans nouvel essai (doublon, null, style sans effet, média de repli inventé, stepAt tardif)', ['keys' => array_slice($removed, 0, 10)]);
         }
+    }
+
+    /**
+     * La demande veut-elle un formulaire (réservation, devis, inscription, questionnaire…) ? Sinon, un formulaire à
+     * étapes ajouté par l'IA est renvoyé au modèle (LandingAiCompositionChecker::addedForms), et elle a 3 questions au
+     * plus au lieu de 5.
+     */
+    public static function asksForm(string $text): bool
+    {
+        return preg_match('/\b(formulaires?|questionnaires?|inscriptions?|r[ée]servations?|r[ée]server|rendez-vous|rdv|devis|candidatures?|sondages?|enqu[êe]tes?|demandes? de (contact|devis|rappel|renseignements?|rendez-vous)|prise de contact|[ée]tapes|wizard|form)\b/iu', $text) === 1;
     }
 
     /**

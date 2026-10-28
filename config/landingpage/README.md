@@ -242,6 +242,11 @@ par le validateur, le catalogue et le constructeur de prompts, sans redémarrage
       `ia-libelles-editeur.md`, synchronisé avec les autres fichiers (voir plus haut) ; il fait partie des consignes
       en cache.
     - Réponse : `contentChanges`, `groupChanges` et `limits` toujours présents (tableaux vides par défaut).
+  - **Formulaires à étapes** (28/10/2026) : l'IA compose un container `layout: "steps"` (étapes, blocs `field` et
+    `summary`, boutons `next`/`prev`/`submit`/`restart`, étape `stepRole: "success"` avec `{reference}`) seulement si la
+    demande veut un formulaire, jamais dans Navbar ou Footer ; règles entre blocs vérifiées par le validateur
+    (`ReglableFormRules`) ; 5 questions de clarification au plus pour ces demandes ; propositions `service-offers`
+    (famille, ordre, réservable, durée) en retouche d'un formulaire qui propose les prestations. Détail : `docs/landingpage.md`.
   - **Avant tout appel à l'IA** (30/09/2026) : en retouche, la composition reçue est limitée à 200 Ko (400) et doit
     déjà passer le contrat, les types de la famille et les médias (422 `Composition invalide`, sans crédit ni limite
     par minute consommés). Une composition invalide faisait échouer les 3 essais, payés, avec les crédits libérés.

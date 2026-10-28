@@ -142,7 +142,7 @@ final class LandingAiOutputRepair
     }
 
     /** Mises en page d'un parent où un enfant sans largeur prend toute la largeur dans les modèles du catalogue */
-    private const FULL_WIDTH_LAYOUTS = ['stack', 'grid', 'slides'];
+    private const FULL_WIDTH_LAYOUTS = ['stack', 'grid', 'slides', 'steps'];
 
     /**
      * Largeur manquante (14/10/2026, page ENVERS sur un site : 44 blocs sans « w », cartes et textes rendus sur deux

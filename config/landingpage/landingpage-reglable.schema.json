@@ -287,6 +287,8 @@
             "icon",
             "rating",
             "countdown",
+            "field",
+            "summary",
             "modeSwitch",
             "price",
             "optionPicker",
@@ -476,9 +478,10 @@
             "row",
             "grid",
             "slides",
-            "scroll"
+            "scroll",
+            "steps"
           ],
-          "description": "Container : free = positions en %, stack / row / grid = mise en page en flux dans l’ordre du tableau, slides = diaporama (un enfant ou un élément de liste par diapositive), scroll = scène au défilement (le premier enfant de type video avance avec le défilement de la page ; un second enfant de type video, facultatif, est sa version pour téléphone, verticale 9:16, affichée à sa place sur écran étroit ; chaque autre enfant est une étape de texte affichée à son tour ; les vidéos sont des fichiers ou des médias du site, pas YouTube ni Vimeo)."
+          "description": "Container : free = positions en %, stack / row / grid = mise en page en flux dans l’ordre du tableau, slides = diaporama (un enfant ou un élément de liste par diapositive), scroll = scène au défilement (le premier enfant de type video avance avec le défilement de la page ; un second enfant de type video, facultatif, est sa version pour téléphone, verticale 9:16, affichée à sa place sur écran étroit ; chaque autre enfant est une étape de texte affichée à son tour ; les vidéos sont des fichiers ou des médias du site, pas YouTube ni Vimeo), steps = formulaire à étapes (chaque enfant container est une étape nommée par tabLabel, une seule affichée à la fois ; questions en blocs field, récapitulatif en bloc summary, boutons action next / prev / submit / restart ; un seul formulaire par section)."
         },
         "gap": {
           "type": "number",
@@ -973,6 +976,10 @@
                 "type": "string",
                 "maxLength": 10000
               },
+              "hint": {
+                "type": "string",
+                "maxLength": 10000
+              },
               "links": {
                 "type": "array",
                 "maxItems": 40,
@@ -981,6 +988,15 @@
                   "maxLength": 200
                 },
                 "description": "Titres des liens d’un menu, dans l’ordre (vide = titre de base)."
+              },
+              "options": {
+                "type": "array",
+                "maxItems": 40,
+                "items": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "description": "Question (field) : libellés des options, dans l’ordre de options (vide = libellé de base)."
               }
             }
           }
@@ -1014,6 +1030,8 @@
             "Syne",
             "Manrope",
             "JetBrains Mono",
+            "Lora",
+            "Poppins",
             "Georgia",
             "Système"
           ],
@@ -1026,13 +1044,13 @@
             "lg",
             "glow"
           ],
-          "description": "Ombre prédéfinie. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Ombre prédéfinie. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "opacity": {
           "type": "number",
           "minimum": 0,
           "maximum": 99,
-          "description": "Opacité en %, absente = 100. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Opacité en %, absente = 100. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "hover": {
           "enum": [
@@ -1045,7 +1063,7 @@
             "rise",
             "grow"
           ],
-          "description": "Effet au survol (hors édition). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Effet au survol (hors édition). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "carouselTransition": {
           "enum": [
@@ -1081,7 +1099,7 @@
         },
         "glowColor": {
           "$ref": "#/$defs/color",
-          "description": "Couleur des halos du bloc : ombre « glow » et effet au survol « glow ». Absente : bleu clair (rgba(56, 189, 248)). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Couleur des halos du bloc : ombre « glow » et effet au survol « glow ». Absente : bleu clair (rgba(56, 189, 248)). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "animation": {
           "enum": [
@@ -1092,35 +1110,35 @@
             "from-right",
             "zoom"
           ],
-          "description": "Apparition quand le bloc entre dans l’écran (une fois) : fondu, montée, arrivée par la gauche / la droite, zoom. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Apparition quand le bloc entre dans l’écran (une fois) : fondu, montée, arrivée par la gauche / la droite, zoom. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "animationDelay": {
           "type": "number",
           "minimum": 0,
           "maximum": 1.5,
-          "description": "Délai avant l’apparition, en secondes, pour enchaîner les blocs. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Délai avant l’apparition, en secondes, pour enchaîner les blocs. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "animationDuration": {
           "type": "number",
           "minimum": 0.1,
           "maximum": 3,
-          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "animationDistance": {
           "type": "number",
           "minimum": 0,
           "maximum": 200,
-          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "link": {
           "$ref": "#/$defs/url",
-          "description": "Rend tout le bloc cliquable (image, carte…). Types : container, title, text, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Rend tout le bloc cliquable (image, carte…). Types : container, title, text, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "blur": {
           "type": "number",
           "minimum": 0,
           "maximum": 120,
-          "description": "Flou en px (halos décoratifs). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Flou en px (halos décoratifs). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "loop": {
           "enum": [
@@ -1128,13 +1146,13 @@
             "marquee",
             "spin"
           ],
-          "description": "Mouvement continu : float = le contenu flotte doucement (logo, icône). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Mouvement continu : float = le contenu flotte doucement (logo, icône). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "rotate": {
           "type": "number",
           "minimum": -30,
           "maximum": 30,
-          "description": "Rotation en degrés. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Rotation en degrés. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "textShadow": {
           "enum": [
@@ -1151,9 +1169,13 @@
         "action": {
           "enum": [
             "contact",
-            "reservation"
+            "reservation",
+            "next",
+            "prev",
+            "submit",
+            "restart"
           ],
-          "description": "contact : le bouton ouvre la fenêtre de contact du site au lieu de suivre url ; reservation : il présélectionne offer dans le formulaire de réservation de la page et fait défiler jusqu’à lui (sans formulaire dans la page, url s’applique). Types : button."
+          "description": "next, prev, submit, restart : bouton d’un formulaire à étapes (étape suivante après contrôle des réponses, étape précédente, envoi, nouvelle demande ; un seul submit par formulaire). contact : le bouton ouvre la fenêtre de contact du site au lieu de suivre url ; reservation : il présélectionne offer dans le formulaire de réservation de la page et fait défiler jusqu’à lui (sans formulaire dans la page, url s’applique). Types : button."
         },
         "offer": {
           "type": "string",
@@ -1220,7 +1242,7 @@
           "type": "number",
           "minimum": 0,
           "maximum": 100,
-          "description": "Étape d’une scène au défilement : moment où elle apparaît, en % du défilement de la scène (et donc de la vidéo). Absent : étapes réparties à intervalles égaux. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Étape d’une scène au défilement : moment où elle apparaît, en % du défilement de la scène (et donc de la vidéo). Absent : étapes réparties à intervalles égaux. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "headingSize": {
           "type": "number",
@@ -1249,6 +1271,8 @@
             "Syne",
             "Manrope",
             "JetBrains Mono",
+            "Lora",
+            "Poppins",
             "Georgia",
             "Système"
           ],
@@ -1341,6 +1365,8 @@
             "Syne",
             "Manrope",
             "JetBrains Mono",
+            "Lora",
+            "Poppins",
             "Georgia",
             "Système"
           ],
@@ -1440,23 +1466,23 @@
           "type": "number",
           "minimum": 0,
           "maximum": 2000,
-          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "fixedHeight": {
           "type": "number",
           "minimum": 8,
           "maximum": 1200,
-          "description": "Hauteur fixe en px dans une pile, une rangée ou une grille (logo, vignette), aussi sur mobile. Une image s’y ajuste selon objectFit. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Hauteur fixe en px dans une pile, une rangée ou une grille (logo, vignette), aussi sur mobile. Une image s’y ajuste selon objectFit. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "paddingX": {
           "type": "number",
           "minimum": 0,
           "maximum": 160,
-          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "pushEnd": {
           "type": "boolean",
-          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+          "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
         },
         "bindingFallback": {
           "type": "boolean",
@@ -1481,11 +1507,11 @@
         },
         "accent": {
           "$ref": "#/$defs/color",
-          "description": "Couleur de l’onglet actif, de la carte choisie et du filtre actif. Types : container, modeSwitch, optionPicker, optionGroups, quantity, rentalPack, bookingCalendar, categoryPicker, pagination, gallery, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm, reviewSummary, reviewList, reviewForm, myReviews."
+          "description": "Couleur de l’onglet actif, de la carte choisie et du filtre actif. Types : container, field, summary, modeSwitch, optionPicker, optionGroups, quantity, rentalPack, bookingCalendar, categoryPicker, pagination, gallery, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm, reviewSummary, reviewList, reviewForm, myReviews."
         },
         "accentBackground": {
           "$ref": "#/$defs/background",
-          "description": "Types : container, modeSwitch, optionPicker, optionGroups, quantity, rentalPack, bookingCalendar, categoryPicker, pagination, gallery, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm, reviewSummary, reviewList, reviewForm, myReviews."
+          "description": "Types : container, field, summary, modeSwitch, optionPicker, optionGroups, quantity, rentalPack, bookingCalendar, categoryPicker, pagination, gallery, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm, reviewSummary, reviewList, reviewForm, myReviews."
         },
         "tabsStyle": {
           "enum": [
@@ -1534,7 +1560,7 @@
         "label": {
           "type": "string",
           "maxLength": 10000,
-          "description": "Libellé sous le chiffre (text contient le chiffre). Types : stat, price, customPrice, addressForm, orderDetail, subscriptionList, myReviews, cartBadge, quantity, rentalPack, deposit, stock, cartLines, cartTotals, checkoutSummary, checkoutShipping, checkoutAddress, checkoutIdentity, checkoutLicense, orderConfirmation, orderList, addressList, carrierList, profileForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
+          "description": "Libellé sous le chiffre (text contient le chiffre). Types : field, stat, price, customPrice, addressForm, orderDetail, subscriptionList, myReviews, cartBadge, quantity, rentalPack, deposit, stock, cartLines, cartTotals, checkoutSummary, checkoutShipping, checkoutAddress, checkoutIdentity, checkoutLicense, orderConfirmation, orderList, addressList, carrierList, profileForm, loginForm, registerForm, passwordResetForm, resendVerificationForm."
         },
         "poster": {
           "$ref": "#/$defs/url",
@@ -1557,7 +1583,169 @@
         "placeholder": {
           "type": "string",
           "maxLength": 10000,
-          "description": "Formulaire newsletter : texte du champ e-mail. Types : form, newsletterForm."
+          "description": "Formulaire newsletter : texte du champ e-mail. Question (field) : texte indicatif du champ. Types : form, newsletterForm, field."
+        },
+        "stepsProgress": {
+          "enum": [
+            "bar",
+            "numbers",
+            "none"
+          ],
+          "description": "Formulaire à étapes (container layout steps) : progression affichée au-dessus de l’étape (bar = traits avec le nom des étapes, défaut ; numbers = numéros ; none = rien). Types : container."
+        },
+        "formName": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Formulaire à étapes : nom des demandes reçues dans l’administration (ex. « Demande de rendez-vous »). Types : container."
+        },
+        "formTarget": {
+          "enum": [
+            "generic",
+            "reservation",
+            "contact"
+          ],
+          "description": "Formulaire à étapes : generic (défaut) = demande reçue seulement ; reservation = crée aussi une réservation à partir des fieldRole (service, date, slot, name, phone, email, guests, notes) ; contact = crée aussi un message de contact. reservation et contact exigent une question fieldType email, fieldRole email, required true. Types : container."
+        },
+        "stepRole": {
+          "enum": [
+            "success"
+          ],
+          "description": "Étape d’un formulaire (container enfant direct d’un container steps) : success = étape affichée après l’envoi, une seule par formulaire ; jetons {reference} et {answer:<name>} dans ses textes. Types : container."
+        },
+        "fieldType": {
+          "enum": [
+            "text",
+            "email",
+            "tel",
+            "textarea",
+            "number",
+            "date",
+            "select",
+            "choice",
+            "checkbox"
+          ],
+          "description": "Question : text (défaut), email, tel, textarea, number, date, select (liste), choice (pastilles ou cartes), checkbox (case à cocher ; required = doit être cochée). Types : field."
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,39}$",
+          "description": "Question : clé de la réponse, unique dans le formulaire (ex. nom, telephone, date_souhaitee). Obligatoire. Types : field."
+        },
+        "hint": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Question : aide affichée sous le champ. Types : field."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Question : réponse obligatoire. Types : field."
+        },
+        "minLength": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000,
+          "description": "Question texte : nombre minimal de caractères. Types : field."
+        },
+        "maxLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000,
+          "description": "Question texte : nombre maximal de caractères (5 000 par défaut). Types : field."
+        },
+        "minValue": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000,
+          "description": "Question number : valeur minimale. Types : field."
+        },
+        "maxValue": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000,
+          "description": "Question number : valeur maximale. Types : field."
+        },
+        "minDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 730,
+          "description": "Question date : date au plus tôt = aujourd’hui + minDays jours (1 = demain). Types : field."
+        },
+        "maxDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 730,
+          "description": "Question date : date au plus tard = aujourd’hui + maxDays jours. Types : field."
+        },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 40,
+          "description": "Question select ou choice : choix proposés { value, label } ; value est envoyée, label affiché (traduit sous translations.<langue>.options). Créneaux d’une réservation : reprendre exactement les libellés des formulaires existants (« 09:00 - 12:00 »). Types : field.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "value",
+              "label"
+            ],
+            "properties": {
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "^[^<>]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^<>]*\\S[^<>]*$"
+              }
+            }
+          }
+        },
+        "optionsSource": {
+          "enum": [
+            "services"
+          ],
+          "description": "Question select ou choice : choix lus dans les données du site au lieu de options ; services = prestations réservables (la valeur envoyée est serviceOfferId). Types : field."
+        },
+        "optionsGroupBy": {
+          "enum": [
+            "family"
+          ],
+          "description": "Question avec optionsSource services : family = choix groupés par famille de prestations. Types : field."
+        },
+        "choiceStyle": {
+          "enum": [
+            "pills",
+            "cards"
+          ],
+          "description": "Question choice : pills (pastilles, défaut) ou cards (cartes larges). Types : field."
+        },
+        "fieldRole": {
+          "enum": [
+            "service",
+            "date",
+            "slot",
+            "name",
+            "phone",
+            "email",
+            "address",
+            "notes",
+            "guests"
+          ],
+          "description": "Question : rôle pour la cible du formulaire (service, date, slot, name, phone, email, address, notes, guests), unique dans le formulaire. email exige fieldType email, phone tel, date date, guests number, service et slot select ou choice. Types : field."
+        },
+        "summaryFields": {
+          "type": "array",
+          "maxItems": 30,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[\\w-]{1,60}$"
+          },
+          "description": "Résumé (summary) : name des questions récapitulées, dans l’ordre ; absent = toutes les questions du formulaire. Types : summary."
         },
         "navDirection": {
           "enum": [
@@ -2063,6 +2251,256 @@
         "reviewFilters": {
           "type": "boolean",
           "description": "Liste des avis : tri (plus récents, mieux notés, moins bien notés) et filtre par note au-dessus de la liste. Types : reviewList."
+        },
+        "itemStyles": {
+          "type": "array",
+          "maxItems": 24,
+          "description": "Bloc du gabarit d’une liste (enfant, à toute profondeur, d’un container repeat) : réglages d’apparence propres à une carte, une entrée par position (1re carte, 2e…), {} = aucun. Chaque entrée est posée par-dessus les propriétés du bloc pour cette carte seulement (ex. [{}, { \"w\": 60 }] : image plus petite sur la 2e carte). Textes, liens et données restent communs. Une propriété réservée à certains types ne vaut que pour eux (ex. dividerWidth : divider) ; booléens : true ou false.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "w": {
+                "type": "number",
+                "minimum": 2,
+                "maximum": 100,
+                "description": "Largeur en % du parent (aussi respectée dans une pile verticale ou une rangée)."
+              },
+              "h": {
+                "type": "number",
+                "minimum": 2,
+                "maximum": 100,
+                "description": "Hauteur en % du parent (hauteur minimale pour un container en flux)."
+              },
+              "size": {
+                "type": "number",
+                "minimum": 10,
+                "maximum": 120,
+                "description": "Taille du texte en px à la largeur de référence de la section."
+              },
+              "radius": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 999,
+                "description": "Arrondi des coins en px."
+              },
+              "padding": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 120,
+                "description": "Marge interne en px."
+              },
+              "borderWidth": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 16,
+                "description": "Épaisseur de bordure en px (épaisseur de la ligne pour divider)."
+              },
+              "dividerWidth": {
+                "type": "number",
+                "minimum": 5,
+                "maximum": 100,
+                "description": "Longueur de la ligne en % (divider)."
+              },
+              "gap": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 120,
+                "description": "Container en flux : espacement en px."
+              },
+              "color": {
+                "$ref": "#/$defs/color"
+              },
+              "borderColor": {
+                "$ref": "#/$defs/color"
+              },
+              "background": {
+                "$ref": "#/$defs/background",
+                "description": "Fond dessiné seulement pour container, button et badge (ignoré ailleurs ; divider : dégradé seulement). Absent sur ces trois types : blanc opaque (#ffffff). Un container posé sur un fond coloré doit écrire « transparent », sinon il masque ce fond (texte clair illisible)."
+              },
+              "align": {
+                "enum": [
+                  "left",
+                  "center",
+                  "right"
+                ],
+                "description": "Alignement du texte du bloc, et des enfants d’un container en pile ou en rangée. Dans une pile, un bloc en fitContent se place selon son propre align, les autres selon celui du parent : un bouton fitContent d’une pile alignée à gauche doit donc écrire « left » pour rester à gauche."
+              },
+              "fontWeight": {
+                "enum": [
+                  "normal",
+                  "bold",
+                  "300",
+                  "400",
+                  "500",
+                  "600",
+                  "700",
+                  "800",
+                  "900"
+                ]
+              },
+              "fontStyle": {
+                "enum": [
+                  "normal",
+                  "italic"
+                ]
+              },
+              "textTransform": {
+                "enum": [
+                  "none",
+                  "uppercase",
+                  "capitalize",
+                  "lowercase"
+                ]
+              },
+              "objectFit": {
+                "enum": [
+                  "cover",
+                  "contain",
+                  "fill"
+                ],
+                "description": "Image ou vidéo dans son cadre (aspectRatio ou fixedHeight). cover (défaut) remplit le cadre en rognant ce qui dépasse ; contain montre le média entier, avec des marges. Logo, capture d’écran ou visuel contenant du texte : contain, ou un aspectRatio proche de celui du média."
+              },
+              "lineHeight": {
+                "type": "number",
+                "minimum": 0.8,
+                "maximum": 3,
+                "description": "Interligne (multiplicateur). Types : title, text, button, badge, stat, nav, language, countdown, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm, reviewSummary, reviewList, reviewForm, myReviews."
+              },
+              "letterSpacing": {
+                "type": "number",
+                "minimum": -0.1,
+                "maximum": 1,
+                "description": "Espacement des lettres en em. Types : title, text, button, badge, stat, nav, language, countdown, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm, reviewSummary, reviewList, reviewForm, myReviews."
+              },
+              "fontFamily": {
+                "enum": [
+                  "Inter",
+                  "Montserrat",
+                  "Outfit",
+                  "Raleway",
+                  "Playfair Display",
+                  "Anton",
+                  "Bebas Neue",
+                  "Michroma",
+                  "Dancing Script",
+                  "Great Vibes",
+                  "Sacramento",
+                  "Aston Script",
+                  "Syne",
+                  "Manrope",
+                  "JetBrains Mono",
+                  "Lora",
+                  "Poppins",
+                  "Georgia",
+                  "Système"
+                ],
+                "description": "Police chargée par le site. Types : title, text, button, badge, stat, nav, language, countdown, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm, reviewSummary, reviewList, reviewForm, myReviews, container."
+              },
+              "shadow": {
+                "enum": [
+                  "sm",
+                  "md",
+                  "lg",
+                  "glow"
+                ],
+                "description": "Ombre prédéfinie. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+              },
+              "opacity": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 99,
+                "description": "Opacité en %, absente = 100. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+              },
+              "minHeight": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2000,
+                "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+              },
+              "fixedHeight": {
+                "type": "number",
+                "minimum": 8,
+                "maximum": 1200,
+                "description": "Hauteur fixe en px dans une pile, une rangée ou une grille (logo, vignette), aussi sur mobile. Une image s’y ajuste selon objectFit. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+              },
+              "paddingX": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 160,
+                "description": "Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+              },
+              "aspectRatio": {
+                "enum": [
+                  "1/1",
+                  "4/3",
+                  "3/2",
+                  "16/10",
+                  "16/9",
+                  "21/9",
+                  "3/4",
+                  "2/3"
+                ],
+                "description": "Proportions : la hauteur découle de la largeur, h est alors ignoré. Types : image, video, container, carousel, customPreview."
+              },
+              "objectPosition": {
+                "enum": [
+                  "top",
+                  "bottom",
+                  "left",
+                  "right"
+                ],
+                "description": "Point focal de l’image ou de la vidéo, absent = centre. Types : image, video, carousel, customPreview."
+              },
+              "fitContent": {
+                "type": "boolean",
+                "description": "Largeur ajustée au contenu (w est ignoré). Dans une pile, le bloc se place alors selon son propre align et non celui du parent. Types : button, badge, title, text, nav, language, admin, icon, rating, countdown, container, image, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm, reviewSummary, reviewList, reviewForm, myReviews."
+              },
+              "textShadow": {
+                "enum": [
+                  "sm",
+                  "md",
+                  "lg"
+                ],
+                "description": "Ombre portée du texte (texte posé sur une photo). Types : title, text, button, badge, stat, nav, language, countdown, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm, reviewSummary, reviewList, reviewForm, myReviews."
+              },
+              "rotate": {
+                "type": "number",
+                "minimum": -30,
+                "maximum": 30,
+                "description": "Rotation en degrés. Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+              },
+              "valign": {
+                "enum": [
+                  "start",
+                  "center",
+                  "end"
+                ],
+                "description": "Types : container."
+              },
+              "underline": {
+                "type": "boolean",
+                "description": "Texte souligné (lien d’un pied de page…). Types : title, text, button, badge, stat, nav, language, countdown, modeSwitch, price, optionPicker, quantity, addToCart, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, financingForm, newsletterForm, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm, reviewSummary, reviewList, reviewForm, myReviews."
+              },
+              "hover": {
+                "enum": [
+                  "lift",
+                  "glow",
+                  "zoom",
+                  "darken",
+                  "lift-bar",
+                  "nudge",
+                  "rise",
+                  "grow"
+                ],
+                "description": "Effet au survol (hors édition). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+              },
+              "glowColor": {
+                "$ref": "#/$defs/color",
+                "description": "Couleur des halos du bloc : ombre « glow » et effet au survol « glow ». Absente : bleu clair (rgba(56, 189, 248)). Types : container, title, text, button, image, badge, divider, stat, video, carousel, form, embed, nav, language, admin, icon, rating, countdown, field, summary, modeSwitch, price, optionPicker, quantity, addToCart, gallery, stock, rentalPack, bookingCalendar, deposit, techSpecs, share, customizeButton, optionGroups, customPreview, customPrice, customAddToCart, categoryPicker, pagination, cartLines, cartTotals, checkoutButton, cartBadge, checkoutIdentity, checkoutAddress, checkoutLicense, checkoutShipping, checkoutSummary, stripePayment, orderConfirmation, accountMenu, orderList, addressList, carrierList, profileForm, addressForm, orderDetail, subscriptionPlans, subscribeButton, subscriptionCheckout, subscriptionList, reviewSummary, reviewList, reviewForm, myReviews, newsletterForm, financingForm, loginForm, registerForm, passwordResetForm, newPasswordForm, resendVerificationForm."
+              }
+            }
+          }
         }
       },
       "allOf": [
@@ -2322,6 +2760,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -2411,6 +2851,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -2500,6 +2942,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -2709,6 +3153,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -2798,6 +3244,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -2887,6 +3335,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -2976,6 +3426,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -3065,6 +3517,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -3153,6 +3607,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -3242,6 +3698,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -3331,6 +3789,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -3420,6 +3880,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -3828,6 +4290,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -4776,6 +5240,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -4865,6 +5331,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -4954,6 +5422,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -5043,6 +5513,8 @@
                     "icon",
                     "rating",
                     "countdown",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "price",
                     "optionPicker",
@@ -5222,6 +5694,8 @@
                 "not": {
                   "enum": [
                     "container",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "optionPicker",
                     "optionGroups",
@@ -5284,6 +5758,8 @@
                 "not": {
                   "enum": [
                     "container",
+                    "field",
+                    "summary",
                     "modeSwitch",
                     "optionPicker",
                     "optionGroups",
@@ -5472,6 +5948,7 @@
               "type": {
                 "not": {
                   "enum": [
+                    "field",
                     "stat",
                     "price",
                     "customPrice",
@@ -5580,7 +6057,8 @@
                 "not": {
                   "enum": [
                     "form",
-                    "newsletterForm"
+                    "newsletterForm",
+                    "field"
                   ]
                 }
               }
@@ -5590,6 +6068,406 @@
             "not": {
               "required": [
                 "placeholder"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "stepsProgress"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "formName"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "formTarget"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "container"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "stepRole"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "fieldType"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "name"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "hint"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "required"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "minLength"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "maxLength"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "minValue"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "maxValue"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "minDays"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "maxDays"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "options"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "optionsSource"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "optionsGroupBy"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "choiceStyle"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "fieldRole"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "not": {
+                  "enum": [
+                    "summary"
+                  ]
+                }
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "summaryFields"
               ]
             }
           }

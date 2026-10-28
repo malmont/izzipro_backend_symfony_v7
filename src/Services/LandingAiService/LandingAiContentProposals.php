@@ -32,9 +32,15 @@ final class LandingAiContentProposals
         $errors = [];
         $allowed = [];
         if ($content !== null) {
-            $allowed[$content['resource']][] = $content['id'];
+            if (isset($content['resource'])) {
+                $allowed[$content['resource']][] = $content['id'];
+            }
             foreach ($content['presentations'] ?? [] as $presentation) {
                 $allowed['presentations'][] = $presentation['id'];
+            }
+            // prestations proposées par un formulaire de la section (LandingAiContentContext::withServiceOffers)
+            foreach ($content['services'] ?? [] as $service) {
+                $allowed['service-offers'][] = $service['id'];
             }
         }
 
@@ -51,6 +57,10 @@ final class LandingAiContentProposals
                 $errors[] = ['path' => "$path.fields", 'message' => 'objet des champs à modifier attendu'];
                 continue;
             }
+            if ($resource === 'service-offers' && ($others = array_diff(array_keys(get_object_vars($change->fields)), LandingAiContentContext::SERVICE_FIELDS)) !== []) {
+                $errors[] = ['path' => "$path.fields", 'message' => sprintf('prestations : seulement %s (pas %s)', implode(', ', LandingAiContentContext::SERVICE_FIELDS), implode(', ', $others))];
+                continue;
+            }
             ['values' => $values, 'errors' => $fieldErrors] = $this->editor->validate($resource, $change->fields);
             foreach ($fieldErrors as $error) {
                 $errors[] = ['path' => "$path.fields.{$error['path']}", 'message' => $error['message']];
@@ -64,7 +74,7 @@ final class LandingAiContentProposals
         foreach (array_slice(is_array($input->groupChanges ?? null) ? $input->groupChanges : [], 0, self::MAX_CHANGES) as $i => $change) {
             $path = "groupChanges[$i]";
             $groupId = is_object($change) ? ($change->groupId ?? null) : null;
-            if (!is_int($groupId) || ($content['resource'] ?? null) !== 'presentation-groups' || $content['id'] !== $groupId) {
+            if (!is_int($groupId) || ($content['resource'] ?? null) !== 'presentation-groups' || ($content['id'] ?? null) !== $groupId) {
                 $errors[] = ['path' => "$path.groupId", 'message' => 'identifiant du groupe affiché par la section attendu'];
                 continue;
             }

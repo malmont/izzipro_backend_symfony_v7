@@ -211,19 +211,22 @@ final class LandingAiCompositionChecker
     }
 
     /**
-     * Formulaires à étapes (container layout « steps », blocs field et summary, contrat du lot 1) : l'assistant n'en
-     * ajoute pas tant que l'envoi des réponses n'est pas en place (lot 3 ; sinon le visiteur remplirait un formulaire
-     * qui ne part nulle part). Une retouche d'un formulaire posé par l'administrateur reste possible : seul un ajout
-     * est renvoyé au modèle. À retirer au lot 4 (consignes et réparations propres aux formulaires).
+     * Formulaires à étapes (container layout « steps », blocs field et summary ; lot 4, 28/10/2026) : l'assistant n'en
+     * ajoute que si la demande veut un formulaire (LandingAiComposer::asksForm), jamais dans la navbar ni le footer
+     * (règle du document). Une retouche d'un formulaire existant reste toujours possible. Les règles entre blocs
+     * (étapes, name, submit, rôles…) sont celles du validateur (ReglableFormRules), appliquées par check().
      *
      * @return list<array{path: string, message: string}>
      */
-    public function addedForms(object $composition, ?object $before = null): array
+    public function addedForms(object $composition, ?object $before = null, bool $formAsked = false, ?string $componentKey = null): array
     {
-        $added = \App\Services\LandingPageSettingsService\ReglableFormRules::formBlockCount($composition)
-            > ($before !== null ? \App\Services\LandingPageSettingsService\ReglableFormRules::formBlockCount($before) : 0);
+        $rules = \App\Services\LandingPageSettingsService\ReglableFormRules::class;
+        if (in_array($componentKey, ['Navbar', 'Footer'], true) && $rules::hasForm($composition)) {
+            return [['path' => 'blocks', 'message' => 'pas de formulaire à étapes dans la navbar ni le footer : place-le dans une section de la page (famille Presentation, par exemple)']];
+        }
+        $added = $rules::formBlockCount($composition) > ($before !== null ? $rules::formBlockCount($before) : 0);
 
-        return $added ? [['path' => 'blocks', 'message' => 'formulaire à étapes (container layout « steps », blocs field ou summary) : pas encore disponible pour l\'assistant ; pour un formulaire, utilise le bloc form existant (formType contact, reservation…) et signale-le dans limits']] : [];
+        return $added && !$formAsked ? [['path' => 'blocks', 'message' => 'formulaire à étapes (container layout « steps », blocs field ou summary) ajouté alors que la demande n\'en demande pas : retire-le']] : [];
     }
 
     /**

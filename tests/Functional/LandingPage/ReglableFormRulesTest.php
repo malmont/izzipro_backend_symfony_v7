@@ -104,20 +104,29 @@ class ReglableFormRulesTest extends KernelTestCase
         $this->assertContains('navbar.reglableConfig.blocks', array_column($validator->validateConfiguration($configuration([], true)), 'path'));
     }
 
-    public function testTheAssistantDoesNotAddFormsUntilSubmissionsExist(): void
+    public function testTheAssistantAddsFormsOnlyWhenAskedAndNeverInNavbarOrFooter(): void
     {
         self::bootKernel();
         $checker = self::getContainer()->get(\App\Services\LandingAiService\LandingAiCompositionChecker::class);
         $form = $this->blocksComposition($this->form());
         $plain = (object) ['schemaVersion' => 2, 'blocks' => $this->blocks([['id' => 'c', 'type' => 'container', 'layout' => 'stack']])];
 
-        $this->assertStringContainsString('pas encore disponible pour l\'assistant', $checker->addedForms($form)[0]['message'] ?? '', 'création ou page : refusé');
-        $this->assertNotSame([], $checker->addedForms($form, $plain), 'retouche qui ajoute un formulaire : refusé');
+        $this->assertStringContainsString('la demande n\'en demande pas', $checker->addedForms($form)[0]['message'] ?? '', 'formulaire non demandé : refusé');
+        $this->assertSame([], $checker->addedForms($form, null, true, 'Presentation'), 'formulaire demandé : permis');
+        $this->assertNotSame([], $checker->addedForms($form, null, true, 'Footer'), 'jamais dans le footer');
         $this->assertSame([], $checker->addedForms($form, $this->blocksComposition($this->form())), 'retouche d\'un formulaire existant : permise');
         $this->assertSame([], $checker->addedForms($plain), 'sans formulaire : rien');
 
+        foreach (['Formulaire de prise de rendez-vous', 'Un devis en ligne', 'inscription à l\'atelier', 'questionnaire de satisfaction'] as $prompt) {
+            $this->assertTrue(\App\Services\LandingAiService\LandingAiComposer::asksForm($prompt), $prompt);
+        }
+        foreach (['Rends le titre plus grand', 'Section héros avec photo'] as $prompt) {
+            $this->assertFalse(\App\Services\LandingAiService\LandingAiComposer::asksForm($prompt), $prompt);
+        }
+
         $schema = json_decode(file_get_contents(self::getContainer()->getParameter('kernel.project_dir') . '/config/landingpage/' . LandingConfigStore::SCHEMA), false);
-        $this->assertFalse(\App\Services\LandingAiService\LandingAiPromptBuilder::supportsFormSteps($schema), 'contrat actuel : pas de consigne des formulaires');
+        $schema->{'$defs'}->block->properties->layout->enum = array_values(array_diff($schema->{'$defs'}->block->properties->layout->enum, ['steps']));
+        $this->assertFalse(\App\Services\LandingAiService\LandingAiPromptBuilder::supportsFormSteps($schema), 'contrat sans formulaires : pas de consigne');
         $schema->{'$defs'}->block->properties->layout->enum[] = 'steps';
         $this->assertTrue(\App\Services\LandingAiService\LandingAiPromptBuilder::supportsFormSteps($schema));
     }

@@ -101,12 +101,21 @@ Règles :
 TXT;
 
     /**
-     * Formulaires à étapes (contrat du lot 1, 27/10/2026) : consigne ajoutée seulement quand le contrat actif connaît
-     * le layout « steps ». L'envoi des réponses n'existe pas encore : l'assistant n'en compose pas (addedForms).
+     * Formulaires à étapes (lot 4, 28/10/2026) : consigne ajoutée seulement quand le contrat actif connaît le layout
+     * « steps ». Les réponses sont envoyées à POST /api/form-submissions et revalidées sur la composition enregistrée ;
+     * les règles entre blocs sont celles du validateur (ReglableFormRules).
      */
     private const FORM_STEPS_RULE = <<<'TXT'
 
-- Formulaires à étapes (container layout « steps », blocs field et summary, actions de bouton next, prev, submit, restart) : pas encore disponibles pour l'assistant. N'en ajoute jamais ; pour un formulaire demandé, utilise le bloc form existant (formType contact, reservation, candidature, newsletter) et dis dans limits qu'un formulaire à étapes se construit dans l'éditeur. Un formulaire à étapes déjà présent dans la composition se retouche (couleurs, textes, espacements) sans ajouter de question.
+- Formulaires à étapes (réservation, devis, inscription, questionnaire, contact détaillé) : seulement quand la demande veut un formulaire ; jamais dans une section Navbar ou Footer (famille Presentation de préférence, ou la famille imposée si elle accepte field). Structure :
+  · un seul container layout « steps » par section (formName : nom des demandes reçues ; formTarget : « reservation » pour une prise de rendez-vous à une date, « contact » pour une prise de contact, sinon « generic » ; stepsProgress « bar » ou « numbers ») ; chacun de ses enfants directs est une étape : un container layout « stack » avec tabLabel (nom court de l'étape) ; les questions et les boutons d'une étape sont ses enfants ;
+  · une question = un bloc field : name unique (minuscules, chiffres, _ : nom, courriel, jour, creneau…), label clair, fieldType (text, email, tel, textarea, number, date, select, choice, checkbox), required quand l'information est indispensable, hint pour aider, placeholder d'exemple ; select et choice avec options [{ value, label }] (valeurs distinctes) ; pour choisir une prestation du site : fieldType select ou choice, optionsSource « services » et optionsGroupBy « family », sans options ; dates : fieldType date avec minDays (1 : pas aujourd'hui) et maxDays si la demande borne le délai ; 30 questions au plus, en général 2 à 5 par étape ;
+  · fieldRole relie une question à la réservation ou au contact : service (select ou choice), date (date), slot (créneau : select ou choice), name, phone (tel), email (email), address, notes, guests (number) ; un rôle une fois par formulaire. formTarget « reservation » ou « contact » : une question fieldType email, fieldRole email, required true est obligatoire ; « reservation » : ajoute aussi date et, si la demande parle d'horaires, slot avec les créneaux demandés en options (sinon « 09:00 - 12:00 », « 12:00 - 14:00 », « 14:00 - 18:00 », « 18:00 - 21:00 », « Journée entière »), en écrivant le tiret simple ;
+  · boutons (bloc button, avec background) : « Suivant » action « next » et « Retour » action « prev » dans les étapes, « Envoyer » action « submit » dans la dernière étape à remplir (un seul submit) ; avant l'envoi, un bloc summary (summaryFields absent : toutes les réponses) permet de vérifier ;
+  · une étape finale stepRole « success », affichée après l'envoi : un titre de remerciement et un texte qui cite la référence avec le jeton {reference} (ex. « Votre référence : {reference}. Notez-la. ») et, si utile, une réponse avec {answer:<name>} ; un bouton action « restart » facultatif ; pas de question dans cette étape ;
+  · lisibilité (personnes âgées, mobile) : une idée par étape, textes courts, size 16 au moins pour les libellés, contraste suffisant ; mobile.w 100 sur les étapes.
+  Il manque une information qui change le formulaire (but, étapes, questions, prestations à proposer, cible) : pose jusqu'à 5 questions quand elles sont autorisées. N'invente ni prix, ni horaires d'ouverture, ni adresse.
+  Un formulaire à étapes existant se retouche (couleurs, textes, ordre, ajout ou retrait de questions demandés) en gardant ses name, ses rôles et sa cible, sauf demande contraire.
 TXT;
 
     /**
@@ -431,7 +440,7 @@ TXT;
         return [
             '',
             $allowed
-                ? sprintf('Questions : autorisées (%d au plus, seulement si une information indispensable manque ; dans ce cas, pose-les dans questions, avec des réponses proposées, plutôt que de ne rien faire et de l\'expliquer dans warnings).', LandingAiQuestions::MAX_QUESTIONS)
+                ? sprintf('Questions : autorisées (%d au plus, seulement si une information indispensable manque ; dans ce cas, pose-les dans questions, avec des réponses proposées, plutôt que de ne rien faire et de l\'expliquer dans warnings).', $options['maxQuestions'] ?? LandingAiQuestions::MAX_QUESTIONS)
                 : 'Questions : non autorisées' . ($answers !== [] ? ' (l\'administrateur a déjà répondu).' : '.'),
             ...LandingAiQuestions::answerLines($answers),
         ];
@@ -570,7 +579,7 @@ TXT;
                             'type' => 'object',
                             'required' => ['resource', 'id', 'fields'],
                             'properties' => [
-                                'resource' => ['type' => 'string', 'enum' => array_values(LandingAiContentContext::FAMILY_RESOURCES)],
+                                'resource' => ['type' => 'string', 'enum' => [...array_values(LandingAiContentContext::FAMILY_RESOURCES), 'service-offers']],
                                 'id' => ['type' => 'integer'],
                                 'fields' => ['type' => 'object', 'description' => 'seulement les champs à changer'],
                             ],
@@ -686,10 +695,23 @@ TXT;
             fn (array $field) => $field[0] . ($field[3] ? ', obligatoire' : '') . ', ' . $field[2] . ' caractères au plus',
             LandingContentSpec::RESOURCES[$resource]['fields']
         );
-        $lines = [
+        $lines = [];
+        // prestations proposées par un formulaire de la section (optionsSource services) : famille, ordre, réservable, durée
+        if (isset($editable['services'])) {
+            $lines[] = sprintf(
+                'Prestations proposées par le formulaire (contentChanges resource « service-offers », champs %s seulement : familyId = id d\'une famille listée ou 0 pour la retirer, position = ordre croissant, bookable = proposée ou non, durationMinutes) : %s ; familles existantes : %s. Une famille nouvelle se crée dans l\'éditeur : dis-le dans limits.',
+                implode(', ', LandingAiContentContext::SERVICE_FIELDS), $this->json($editable['services']), $this->json($editable['families'] ?? [])
+            );
+            unset($editable['services'], $editable['families']);
+        }
+        if (!isset($editable['resource'])) {
+            return implode("\n", $lines);
+        }
+        array_unshift(
+            $lines,
             'Contenus modifiables (donnée affichée par la section ; à changer par contentChanges, jamais dans la composition) : ' . $this->json($editable),
-            sprintf('Champs de %s : %s', $editable['resource'], $this->json($kinds($editable['resource']))),
-        ];
+            sprintf('Champs de %s : %s', $editable['resource'], $this->json($kinds($editable['resource'])))
+        );
         if (isset($editable['presentations'])) {
             $lines[] = 'Champs de presentations (contentChanges sur une présentation du groupe, ou fields d\'un ajout par groupChanges) : ' . $this->json($kinds('presentations'));
         }

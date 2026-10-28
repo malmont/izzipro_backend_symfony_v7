@@ -120,9 +120,17 @@ contact, assistant IA.
 - **Règles du document** (`ReglableFormRules::documentErrors`, depuis `validateConfiguration`) : une section qui
   contient un formulaire porte un `uid` (`tabs[].sections[].uid`, 100 caractères au plus, sans espace ni `<` `>`)
   qu'aucune autre section du document ne porte ; pas de formulaire dans la navbar ni le footer.
-- **Assistant IA** : tant que l'envoi des réponses n'existe pas, il n'ajoute aucun formulaire à étapes
-  (`LandingAiCompositionChecker::addedForms`, erreur renvoyée au modèle ; une retouche d'un formulaire existant reste
-  possible) ; consigne `FORM_STEPS_RULE` ajoutée seulement quand le contrat actif connaît `steps`. À lever au lot 4.
+- **Assistant IA** (lot 4, 28/10/2026) : compose des formulaires à étapes (création, page, retouche) quand la demande
+  en veut un (`LandingAiComposer::asksForm` : formulaire, réservation, rendez-vous, devis, inscription, questionnaire…),
+  jamais dans la navbar ni le footer (`LandingAiCompositionChecker::addedForms`, erreur renvoyée au modèle ; retouche
+  d'un formulaire existant toujours possible). Consigne `FORM_STEPS_RULE` (seulement si le contrat actif connaît
+  `steps`) : structure, rôles, cibles, boutons, étape success avec `{reference}`, lisibilité. Jusqu'à 5 questions de
+  clarification pour une demande de formulaire (3 sinon ; `answers` : 5 au plus). Étapes et leurs blocs pleine largeur
+  par défaut (`LandingAiOutputRepair::defaultWidths`). En retouche, une section dont une question propose les
+  prestations (`optionsSource: "services"`) reçoit la liste des prestations et des familles : l'assistant peut proposer
+  `contentChanges` resource `service-offers`, champs `familyId`, `position`, `bookable`, `durationMinutes` seulement
+  (`LandingAiContentContext::withServiceOffers`, `LandingAiContentProposals`). Cas d'éval F1 (rendez-vous), F2 (devis),
+  F3 (inscription), en création dans la famille Presentation.
 
 ### Demandes reçues, familles de prestations (lot 1, 28/10/2026)
 

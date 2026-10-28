@@ -883,7 +883,7 @@ class LandingAiComposeTest extends WebTestCase
         $base = ['mode' => 'edit', 'componentKey' => 'PresentationGroup', 'composition' => $this->preset('group-type-s'), 'prompt' => 'x'];
         $cases = [
             'answers : pas une liste' => ['answers' => 'oui'],
-            'answers : trop de réponses' => ['answers' => array_map(fn ($i) => ['id' => "q$i", 'question' => 'Q ?', 'answer' => 'R'], range(1, 4))],
+            'answers : trop de réponses' => ['answers' => array_map(fn ($i) => ['id' => "q$i", 'question' => 'Q ?', 'answer' => 'R'], range(1, \App\Dto\LandingAiComposeInputDto::MAX_ANSWERS + 1))],
             'answer : identifiant invalide' => ['answers' => [['id' => 'Q 1', 'question' => 'Q ?', 'answer' => 'R']]],
             'answer : réponse trop longue' => ['answers' => [['id' => 'q1', 'question' => 'Q ?', 'answer' => str_repeat('a', 501)]]],
             'answer : balise' => ['answers' => [['id' => 'q1', 'question' => 'Q ?', 'answer' => '<script>x</script>']]],
@@ -1274,6 +1274,90 @@ class LandingAiComposeTest extends WebTestCase
         $this->assertStringContainsString('coûte 30 crédits', json_decode($response->getContent(), true)['message']);
         $this->assertSame(0, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM ai_job'));
         $this->assertSame(0, (int) $this->db()->fetchOne('SELECT COUNT(*) FROM ai_usage'));
+    }
+
+    public function testTheAssistantComposesAStepFormOnlyWhenAFormIsAsked(): void
+    {
+        $presentation = $this->availableIds('Presentation')[0];
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->stepForm(), $presentation, 'Formulaire composé.');
+
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Presentation', 'prompt' => 'Formulaire de prise de rendez-vous en deux étapes.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent(), false);
+        $this->assertSame('steps', $this->blocksById($body->composition)['f']->layout);
+        $system = FakeLandingAiClient::$requests[0]['system'][0]['text'];
+        $this->assertStringContainsString('Formulaires à étapes (réservation, devis, inscription', $system, 'consigne présente : le contrat connaît steps');
+        $this->assertStringContainsString('{reference}', $system);
+        $this->assertStringContainsString('Questions : autorisées (5 au plus', FakeLandingAiClient::$requests[0]['messages'][0]['content'], '5 questions pour une demande de formulaire');
+
+        // demande sans formulaire : le formulaire est renvoyé au modèle
+        FakeLandingAiClient::reset();
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->stepForm(), $presentation);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('presentation-type-b'), $presentation);
+        $response = $this->compose(['mode' => 'create', 'componentKey' => 'Presentation', 'prompt' => 'Section héros avec une photo.']);
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertStringContainsString('la demande n\'en demande pas', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+        $this->assertStringContainsString('Questions : autorisées (3 au plus', FakeLandingAiClient::$requests[0]['messages'][0]['content']);
+    }
+
+    public function testFormRequestsMayAskFiveQuestionsOthersThree(): void
+    {
+        $questions = array_map(fn ($i) => ['id' => "q$i", 'question' => "Question $i ?", 'options' => ['Oui', 'Non']], range(1, 4));
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse(new \stdClass(), null, 'J\'ai besoin de précisions.', [], ['questions' => $questions]);
+
+        $form = json_decode($this->compose(['mode' => 'create', 'componentKey' => 'Presentation', 'prompt' => 'Un formulaire de devis.'])->getContent(), true);
+        $this->assertTrue($form['needsAnswers'] ?? false, json_encode($form));
+        $this->assertCount(4, $form['questions']);
+
+        FakeLandingAiClient::reset();
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse(new \stdClass(), null, 'Précisions.', [], ['questions' => $questions]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::createResponse($this->preset('presentation-type-b'), $this->availableIds('Presentation')[0]);
+        $this->assertSame(200, $this->compose(['mode' => 'create', 'componentKey' => 'Presentation', 'prompt' => 'Une section sur notre histoire.'])->getStatusCode());
+        $this->assertStringContainsString('3 questions au plus', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+    }
+
+    public function testEditOfAFormProposesServiceOfferSettingsOnly(): void
+    {
+        $db = $this->db();
+        $offer = (int) $db->fetchOne("INSERT INTO service_offer (id, titre) VALUES (nextval('service_offer_id_seq'), 'Courses accompagnées') RETURNING id");
+        $family = (int) $db->fetchOne("INSERT INTO service_family (name, position) VALUES ('Vie quotidienne', 1) RETURNING id");
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([], 'Je propose de ranger la prestation.', [], [], [
+            'contentChanges' => [['resource' => 'service-offers', 'id' => $offer, 'fields' => ['titre' => 'Autre titre']]],
+        ]);
+        FakeLandingAiClient::$queue[] = FakeLandingAiClient::editResponse([], 'Je propose de ranger la prestation.', [], [], [
+            'contentChanges' => [['resource' => 'service-offers', 'id' => $offer, 'fields' => ['familyId' => $family, 'bookable' => false]]],
+        ]);
+
+        $response = $this->compose(['mode' => 'edit', 'componentKey' => 'Presentation', 'composition' => $this->stepForm(), 'prompt' => 'Range les courses dans la famille Vie quotidienne et ne les propose plus.']);
+
+        $this->assertSame(200, $response->getStatusCode(), $response->getContent());
+        $this->assertSame([['resource' => 'service-offers', 'id' => $offer, 'fields' => ['familyId' => $family, 'bookable' => false]]], json_decode($response->getContent(), true)['contentChanges']);
+        $context = FakeLandingAiClient::$requests[0]['messages'][0]['content'];
+        $this->assertStringContainsString('Prestations proposées par le formulaire', $context);
+        $this->assertStringContainsString('Courses accompagnées', $context);
+        $this->assertStringContainsString('"name":"Vie quotidienne"', $context);
+        $this->assertStringContainsString('prestations : seulement familyId, position, bookable, durationMinutes (pas titre)', FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content']);
+        $this->assertSame('Courses accompagnées', $db->fetchOne('SELECT titre FROM service_offer WHERE id = ?', [$offer]), 'rien n\'est écrit');
+        $db->executeStatement('DELETE FROM service_offer WHERE id = ?', [$offer]);
+        $db->executeStatement('DELETE FROM service_family WHERE id = ?', [$family]);
+    }
+
+    /** Formulaire à étapes valide (contrat actif) : une étape à remplir, une étape success */
+    private function stepForm(): object
+    {
+        return json_decode(json_encode(['schemaVersion' => 2, 'rootLayout' => 'stack', 'blocks' => [
+            ['id' => 'f', 'type' => 'container', 'layout' => 'steps', 'formName' => 'Rendez-vous', 'formTarget' => 'reservation', 'stepsProgress' => 'bar', 'background' => 'transparent', 'w' => 100],
+            ['id' => 'e1', 'type' => 'container', 'parentId' => 'f', 'layout' => 'stack', 'tabLabel' => 'Vous', 'background' => 'transparent', 'w' => 100],
+            ['id' => 'ok', 'type' => 'container', 'parentId' => 'f', 'layout' => 'stack', 'tabLabel' => 'Merci', 'stepRole' => 'success', 'background' => 'transparent', 'w' => 100],
+            ['id' => 'q1', 'type' => 'field', 'parentId' => 'e1', 'fieldType' => 'text', 'name' => 'nom', 'label' => 'Votre nom', 'required' => true, 'fieldRole' => 'name', 'w' => 100],
+            ['id' => 'q2', 'type' => 'field', 'parentId' => 'e1', 'fieldType' => 'email', 'name' => 'courriel', 'label' => 'Courriel', 'required' => true, 'fieldRole' => 'email', 'w' => 100],
+            ['id' => 'q3', 'type' => 'field', 'parentId' => 'e1', 'fieldType' => 'date', 'name' => 'jour', 'label' => 'Jour', 'required' => true, 'fieldRole' => 'date', 'minDays' => 1, 'w' => 100],
+            ['id' => 'q4', 'type' => 'field', 'parentId' => 'e1', 'fieldType' => 'select', 'name' => 'service', 'label' => 'Prestation', 'fieldRole' => 'service', 'optionsSource' => 'services', 'optionsGroupBy' => 'family', 'w' => 100],
+            ['id' => 'r1', 'type' => 'summary', 'parentId' => 'e1', 'w' => 100],
+            ['id' => 'b1', 'type' => 'button', 'parentId' => 'e1', 'action' => 'submit', 'text' => 'Envoyer', 'background' => '#111111', 'color' => '#ffffff'],
+            ['id' => 't1', 'type' => 'text', 'parentId' => 'ok', 'text' => 'Merci ! Votre référence : {reference}', 'w' => 100],
+        ]]), false);
     }
 
     public function testLandingSiteComposesTheHomeThenEachTabWithTheCharter(): void

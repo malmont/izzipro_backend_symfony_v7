@@ -22,6 +22,9 @@ use App\Services\TenantEntityManagerProvider;
 final class LandingAiContentContext
 {
     public const MEDIA_LIMIT = 40;
+    /** Prestations proposées par un formulaire (optionsSource services) : champs modifiables par l'assistant */
+    public const SERVICE_FIELDS = ['familyId', 'position', 'bookable', 'durationMinutes'];
+    public const SERVICES_LIMIT = 40;
     /** Famille de section => ressource modifiable de sa donnée */
     public const FAMILY_RESOURCES = [
         'Presentation' => 'presentations',
@@ -79,6 +82,35 @@ final class LandingAiContentContext
         }
 
         return $content;
+    }
+
+    /**
+     * Ajoute au contenu modifiable les prestations du site quand la composition a une question qui les propose
+     * (optionsSource « services ») : l'assistant peut alors en proposer la famille, l'ordre, la disponibilité et la
+     * durée (contentChanges resource « service-offers »). Contenu sans donnée de section : seulement les prestations.
+     *
+     * @return array|null
+     */
+    public function withServiceOffers(?array $content, object $composition, string $locale): ?array
+    {
+        $usesServices = false;
+        foreach (is_array($composition->blocks ?? null) ? $composition->blocks : [] as $block) {
+            $usesServices = $usesServices || (is_object($block) && ($block->type ?? null) === 'field' && ($block->optionsSource ?? null) === 'services');
+        }
+        if (!$usesServices) {
+            return $content;
+        }
+        $em = $this->emProvider->getEntityManager();
+        $offers = $em->getRepository(\App\Entity\ServiceOffer::class)->findBy([], ['position' => 'ASC', 'id' => 'ASC'], self::SERVICES_LIMIT);
+        $families = $em->getRepository(\App\Entity\ServiceFamily::class)->findBy([], ['position' => 'ASC', 'id' => 'ASC']);
+
+        return ($content ?? []) + [
+            'services' => array_map(fn (\App\Entity\ServiceOffer $o) => [
+                'id' => (int) $o->getId(), 'titre' => (string) $o->getTitre(), 'familyId' => $o->getFamily()?->getId(),
+                'position' => $o->getPosition(), 'bookable' => $o->isBookable(), 'durationMinutes' => $o->getDurationMinutes(),
+            ], $offers),
+            'families' => array_map(fn (\App\Entity\ServiceFamily $f) => ['id' => (int) $f->getId(), 'name' => $f->nameFor($locale)], $families),
+        ];
     }
 
     /** @return list<string> médias de la médiathèque utilisables par les compositions et les contenus */

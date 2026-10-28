@@ -36,7 +36,8 @@ class LandingAiComposeInputDto
     public const MAX_HISTORY_SUMMARY_LENGTH = 1000;
     public const HISTORY_OUTCOMES = ['applied', 'rejected', 'undone'];
     /** Réponses aux questions de l'assistant : nombre, longueur de la question et de chaque réponse, réponses multiples */
-    public const MAX_ANSWERS = 3;
+    /** Réponses aux questions de l'assistant : autant que de questions (5 pour une demande de formulaire) */
+    public const MAX_ANSWERS = 5;
     public const MAX_ANSWER_LENGTH = 500;
     public const MAX_ANSWER_CHOICES = 4;
     /** Réglages de style facultatifs : clé => valeurs acceptées */

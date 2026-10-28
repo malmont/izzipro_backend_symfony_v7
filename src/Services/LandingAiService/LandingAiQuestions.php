@@ -12,6 +12,8 @@ namespace App\Services\LandingAiService;
 final class LandingAiQuestions
 {
     public const MAX_QUESTIONS = 3;
+    /** Demande de formulaire à étapes (lot 4, 28/10/2026) : étapes, questions, cible… manquent plus souvent */
+    public const MAX_FORM_QUESTIONS = 5;
     public const MAX_QUESTION_LENGTH = 300;
     public const MIN_OPTIONS = 2;
     public const MAX_OPTIONS = 4;
@@ -46,11 +48,11 @@ final class LandingAiQuestions
      *
      * @return array{0: list<array{id: string, question: string, options: list<string>, multiple: bool}>, 1: list<array{path: string, message: string}>}
      */
-    public function parse(object $input): array
+    public function parse(object $input, int $max = self::MAX_QUESTIONS): array
     {
         $raw = is_array($input->questions ?? null) ? $input->questions : [];
-        if (count($raw) > self::MAX_QUESTIONS) {
-            return [[], [['path' => 'questions', 'message' => sprintf('%d questions au plus : garde les plus importantes', self::MAX_QUESTIONS)]]];
+        if (count($raw) > $max) {
+            return [[], [['path' => 'questions', 'message' => sprintf('%d questions au plus : garde les plus importantes', $max)]]];
         }
         $questions = [];
         $errors = [];
