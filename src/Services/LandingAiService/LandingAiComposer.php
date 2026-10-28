@@ -432,7 +432,7 @@ final class LandingAiComposer
      */
     public static function asksForm(string $text): bool
     {
-        return preg_match('/\b(formulaires?|questionnaires?|inscriptions?|r[ée]servations?|r[ée]server|rendez-vous|rdv|devis|candidatures?|sondages?|enqu[êe]tes?|demandes? de (contact|devis|rappel|renseignements?|rendez-vous)|prise de contact|[ée]tapes|wizard|form)\b/iu', $text) === 1;
+        return preg_match('/\b(formulaires?|questionnaires?|inscriptions?|r[ée]servations?|r[ée]server|rendez-vous|rdv|devis|candidatures?|sondages?|enqu[êe]tes?|demandes? de (contact|devis|rappel|renseignements?|rendez-vous)|prise de contact|wizard|form)\b/iu', $text) === 1;
     }
 
     /**

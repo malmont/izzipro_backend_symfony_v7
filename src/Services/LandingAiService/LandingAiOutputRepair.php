@@ -28,8 +28,9 @@ final class LandingAiOutputRepair
      * transmet à ses enfants.
      */
     public const STYLE_ONLY_PROPERTIES = ['fontFamily', 'lineHeight', 'letterSpacing', 'textShadow', 'underline', 'underlineColor',
-        // sans effet sur un type qui ne l'utilise pas (15/10/2026 : hideEmpty sur un badge, un essai de page perdu)
-        'hideEmpty'];
+        // sans effet sur un type qui ne l'utilise pas (15/10/2026 : hideEmpty sur un badge, un essai de page perdu ;
+        // 28/10/2026 : fitContent sur une question de formulaire, un essai perdu)
+        'hideEmpty', 'fitContent'];
 
     public function __construct(private readonly ReglableCompositionValidator $validator)
     {

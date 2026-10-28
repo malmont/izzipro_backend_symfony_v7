@@ -120,7 +120,7 @@ class ReglableFormRulesTest extends KernelTestCase
         foreach (['Formulaire de prise de rendez-vous', 'Un devis en ligne', 'inscription à l\'atelier', 'questionnaire de satisfaction'] as $prompt) {
             $this->assertTrue(\App\Services\LandingAiService\LandingAiComposer::asksForm($prompt), $prompt);
         }
-        foreach (['Rends le titre plus grand', 'Section héros avec photo'] as $prompt) {
+        foreach (['Rends le titre plus grand', 'Section héros avec photo', 'Comment ça marche en 3 étapes', 'Accueil : héros, réassurance, 3 étapes, grille de produits'] as $prompt) {
             $this->assertFalse(\App\Services\LandingAiService\LandingAiComposer::asksForm($prompt), $prompt);
         }
 
