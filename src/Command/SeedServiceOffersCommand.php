@@ -12,7 +12,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Contracts\Cache\TagAwareCacheInterface;
 
 #[AsCommand(
     name: 'app:seed-service-offers',
@@ -134,8 +133,7 @@ class SeedServiceOffersCommand extends Command
 
     public function __construct(
         private TenantConnectionManager $tenantManager,
-        private TenantEntityManagerProvider $emProvider,
-        private TagAwareCacheInterface $cache
+        private TenantEntityManagerProvider $emProvider
     ) {
         parent::__construct();
     }
@@ -225,15 +223,7 @@ class SeedServiceOffersCommand extends Command
                 }
             }
 
-            $em->flush();
-
-            // Invalidation du cache des réservations pour ce tenant
-            $this->cache->invalidateTags([
-                $tenantCode . '_reservations',
-                $tenantCode . '_service_offers_all',
-                'reservations',
-                'service_offers_all',
-            ]);
+            $em->flush(); // le cache des prestations est vidé par l'écriture elle-même (registre CacheTags, 28/10/2026)
 
             $io->success("Tenant {$tenantCode} : {$countCreated} créées, {$countUpdated} mises à jour.");
 

@@ -6,8 +6,9 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request; // On importe Request
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class SizeController extends AbstractController
 {
@@ -23,16 +24,14 @@ class SizeController extends AbstractController
     #[Route('/api/sizes', name: 'get_sizes', methods: ['GET'])]
     public function getSizes(Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = CacheLocale::normalize($request->getLocale());
         $cacheKey = 'sizes_all_' . $locale;
 
         $sizesDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($locale) {
-                $item->expiresAfter(3600);
-                $item->tag(['sizes_all']);
-                return $this->getSizesUseCase->execute($locale);
-            }
+            fn () => $this->getSizesUseCase->execute($locale),
+            3600,
+            CacheTags::listTags(CacheTags::SIZES)
         );
 
         return $this->json($sizesDto);

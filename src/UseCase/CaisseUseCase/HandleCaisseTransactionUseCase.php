@@ -7,7 +7,6 @@ use App\Entity\TransactionType;
 use App\Entity\User;
 use App\Services\CaisseService\CashRegisterException;
 use App\Services\OrderService\CaisseTransactionService;
-use App\Services\TenantCacheService;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\DBAL\LockMode;
 
@@ -34,8 +33,7 @@ class HandleCaisseTransactionUseCase
 
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
-        private readonly CaisseTransactionService $caisseTransactionService,
-        private readonly TenantCacheService $cache
+        private readonly CaisseTransactionService $caisseTransactionService
     ) {
     }
 
@@ -125,7 +123,6 @@ class HandleCaisseTransactionUseCase
             if ($ownTransaction) {
                 $connection->commit();
             }
-            $this->cache->invalidateTags(['caisses_tag']); // listes de sessions et transactions (GET /api/caisse*)
         } catch (\Throwable $e) {
             if ($ownTransaction && $connection->isTransactionActive()) {
                 $connection->rollBack();

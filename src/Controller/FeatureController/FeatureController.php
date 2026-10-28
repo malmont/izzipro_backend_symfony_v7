@@ -1,14 +1,15 @@
 <?php
 namespace App\Controller\FeatureController;
 
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Services\MediaUrlResolver;
 use App\UseCase\FeatureUseCase\GetFeaturesUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;     
 use Symfony\Component\Routing\Annotation\Route;
-use App\Services\TenantCacheService; 
-use Symfony\Contracts\Cache\ItemInterface;
+use App\Services\TenantCacheService;
 
 #[Route('/api/features', name: 'api_features', methods: ['GET'])]
 class FeatureController extends AbstractController
@@ -20,19 +21,16 @@ class FeatureController extends AbstractController
         ?MediaUrlResolver $mediaUrlResolver = null
     ): JsonResponse {
         // On force la lecture depuis les paramètres de la requête
-        $locale = $request->query->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->query->get('locale'));
         $cacheKey = 'features_all_' . $locale;
         $host = $mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
             ?? $request->getSchemeAndHttpHost();
 
         $dtos = $cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($useCase, $host, $locale) {
-                $item->expiresAfter(3600);
-                $item->tag(['features_all', 'locale_' . $locale]);
-
-                return $useCase->execute($host, $locale);
-            }
+            fn () => $useCase->execute($host, $locale),
+            3600,
+            CacheTags::listTags(CacheTags::FEATURES)
         );
         return $this->json($dtos);
     }

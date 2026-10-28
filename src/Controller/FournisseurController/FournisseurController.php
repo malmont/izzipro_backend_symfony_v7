@@ -12,8 +12,8 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class FournisseurController extends AbstractController
 {
@@ -42,14 +42,15 @@ class FournisseurController extends AbstractController
 
         $fournisseursArray = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($host) {
-                $item->expiresAfter(3600);
+            function () use ($host) {
                 $fournisseurs = $this->getAllFournisseursUseCase->execute();
                 return array_map(function ($fournisseur) use ($host) {
                     $dto = new FournisseurOutputDTO($fournisseur, $host);
                     return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
-                }, $fournisseur = $fournisseurs);
+                }, $fournisseurs);
             },
+            3600,
+            CacheTags::listTags(CacheTags::FOURNISSEURS)
         );
 
         return new JsonResponse($fournisseursArray, JsonResponse::HTTP_OK);

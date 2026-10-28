@@ -26,7 +26,7 @@ use App\Services\TenantEntityManagerProvider;
 class PosFavoriteService
 {
     public const MAX_PINS = 100;
-    /** Classement des plus vendus gardé 10 minutes (et vidé par toute écriture Doctrine du site) */
+    /** Classement des plus vendus gardé 10 minutes, et vidé par toute vente ou retour (étiquette des commandes, 28/10/2026) */
     private const BEST_SELLERS_TTL = 600;
 
     public function __construct(
@@ -247,7 +247,7 @@ class PosFavoriteService
             [$start, $end] = $this->clock->range($from, $today);
 
             return $this->repo()->bestSellers($start, $end, 200);
-        }, self::BEST_SELLERS_TTL);
+        }, self::BEST_SELLERS_TTL, \App\Cache\CacheTags::listTags(\App\Cache\CacheTags::ORDERS));
     }
 
     private function entry(Product $product, ?ProductVariant $variant, bool $pinned, int $rank, string $productsBaseUrl): array

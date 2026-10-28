@@ -1,6 +1,8 @@
 <?php
 namespace App\Controller\RechercheApiController;
 
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Dto\RechercheInputDto;
 use App\Dto\RechercheOutputDto;
 use App\Services\TenantCacheService;
@@ -14,7 +16,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 use App\UseCase\RechercheUseCase\GetRechercheByIdUseCase;
 
 #[Route('/api/recherches')]
@@ -32,18 +33,15 @@ class RechercheApiController extends AbstractController
    #[Route('', name: 'api_recherche_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = CacheLocale::normalize($request->getLocale());
         $cacheKey = 'recherches_all_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/recherches';
 
         $dtos = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($locale, $baseImageUrl) {
-                $item->expiresAfter(3600);
-                $item->tag(['recherches_all']);
-
-                return $this->getAllRecherchesUseCase->execute($baseImageUrl, $locale);
-            }
+            fn () => $this->getAllRecherchesUseCase->execute($baseImageUrl, $locale),
+            3600,
+            CacheTags::listTags(CacheTags::RECHERCHES)
         );
 
         return $this->json($dtos);
@@ -52,18 +50,15 @@ class RechercheApiController extends AbstractController
     #[Route('/{id}', name: 'api_recherche_get_one', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = CacheLocale::normalize($request->getLocale());
         $cacheKey = 'recherche_' . $id . '_' . $locale;
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/recherches';
 
         $dto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($id, $locale, $baseImageUrl) {
-                $item->expiresAfter(3600);
-                $item->tag(['recherches_all', 'recherche_' . $id]);
-
-                return $this->getRechercheByIdUseCase->execute($id, $baseImageUrl, $locale);
-            }
+            fn () => $this->getRechercheByIdUseCase->execute($id, $baseImageUrl, $locale),
+            3600,
+            CacheTags::itemTags(CacheTags::RECHERCHES, $id)
         );
 
         if (!$dto) {

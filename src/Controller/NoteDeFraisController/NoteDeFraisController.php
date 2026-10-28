@@ -9,12 +9,12 @@ use App\UseCase\NoteDeFraisUseCase\GetNotesDeFraisByCollectionUseCase;
 use App\UseCase\NoteDeFraisUseCase\CreateNoteDeFraisUseCase;
 use App\UseCase\NoteDeFraisUseCase\UpdateNoteDeFraisUseCase;
 use App\UseCase\NoteDeFraisUseCase\DeleteNoteDeFraisUseCase;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class NoteDeFraisController extends AbstractController
 {
@@ -46,11 +46,9 @@ class NoteDeFraisController extends AbstractController
 
         $notes = $this->cache->get(
             $cacheKey,
-            function(ItemInterface $item) use ($collection, $host) {
-                $item->expiresAfter(3600);
-                $item->tag(['notes_de_frais']);
-                return $this->getNotesDeFraisByCollectionUseCase->execute($collection, $host);
-            },
+            fn () => $this->getNotesDeFraisByCollectionUseCase->execute($collection, $host),
+            3600,
+            [...CacheTags::itemTags(CacheTags::COLLECTIONS, $collection->getId()), ...CacheTags::listTags(CacheTags::NOTES_DE_FRAIS)]
         );
 
         return new JsonResponse($notes, JsonResponse::HTTP_OK);

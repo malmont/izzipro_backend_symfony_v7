@@ -2,9 +2,11 @@
 
 namespace App\Controller\LandingPageSettingsController;
 
+use App\Cache\CacheTags;
 use App\Dto\LandingPageSettingsInputDto;
 use App\Services\LandingPageSettingsService\LandingPageSettingsService;
 use App\Services\LandingPageSettingsService\ReglableCompositionValidator;
+use App\Services\TenantCacheService;
 use App\UseCase\LandingPageSettingsUseCase\GetLandingPageSettingsUseCase;
 use App\UseCase\LandingPageSettingsUseCase\UpdateLandingPageSettingsUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -21,22 +23,29 @@ class LandingPageSettingsController extends AbstractController
         private GetLandingPageSettingsUseCase $getUseCase,
         private UpdateLandingPageSettingsUseCase $updateUseCase,
         private LandingPageSettingsService $service,
-        private ReglableCompositionValidator $reglableValidator
+        private ReglableCompositionValidator $reglableValidator,
+        private TenantCacheService $cache
     ) {
     }
 
+    /**
+     * Réglages lus à chaque rendu de la page (12 Ko) : en cache 1 h depuis le 28/10/2026, vidé par toute écriture de
+     * LandingPageSetting (éditeur, modèles de site, assistant IA, retour en arrière).
+     */
     #[Route('', name: 'api_landingpage_settings_get', methods: ['GET'])]
     public function getSettings(): JsonResponse
     {
-        $setting = $this->getUseCase->execute();
-        if (empty($setting->getConfiguration())) {
-            return $this->json(null, Response::HTTP_OK);
-        }
+        $json = $this->cache->get('landingpage_settings', function (): string {
+            $setting = $this->getUseCase->execute();
+            if (empty($setting->getConfiguration())) {
+                return 'null';
+            }
 
-        // JSON stocké restitué sans transformation (un {} reste {}, l'ordre des clés est conservé)
-        $raw = $this->service->getRawConfiguration($setting);
+            // JSON stocké restitué sans transformation (un {} reste {}, l'ordre des clés est conservé)
+            return $this->service->getRawConfiguration($setting) ?? (string) json_encode($setting->getConfiguration());
+        }, 3600, CacheTags::listTags(CacheTags::LANDING_SETTINGS));
 
-        return $raw !== null ? new JsonResponse($raw, Response::HTTP_OK, [], true) : $this->json($setting->getConfiguration());
+        return new JsonResponse($json, Response::HTTP_OK, [], true);
     }
 
     #[Route('', name: 'api_landingpage_settings_update', methods: ['PUT'])]

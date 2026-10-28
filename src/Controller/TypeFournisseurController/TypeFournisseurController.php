@@ -6,8 +6,8 @@ use App\UseCase\TypeFournisseurUseCase\GetListTypeFournisseurUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class TypeFournisseurController extends AbstractController
 {
@@ -27,8 +27,7 @@ class TypeFournisseurController extends AbstractController
 
         $data = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) {
-                $item->expiresAfter(3600); // 1 heure
+            function () {
                 $dtoList = $this->useCase->execute();
                 return array_map(function ($dto) {
                     return [
@@ -38,6 +37,8 @@ class TypeFournisseurController extends AbstractController
                     ];
                 }, $dtoList);
             },
+            3600,
+            CacheTags::listTags(CacheTags::FOURNISSEURS)
         );
 
         return $this->json($data, JsonResponse::HTTP_OK);

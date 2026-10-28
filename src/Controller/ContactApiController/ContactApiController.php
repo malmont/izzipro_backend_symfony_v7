@@ -3,7 +3,6 @@ namespace App\Controller\ContactApiController;
 
 use App\Dto\ContactInputDto;
 use App\Dto\ContactOutputDto;
-use App\Services\TenantCacheService;
 use App\UseCase\ContactUseCase\GetAllContactsUseCase;
 use App\UseCase\ContactUseCase\CreateContactUseCase;
 use App\UseCase\ContactUseCase\UpdateContactUseCase;
@@ -14,7 +13,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 use App\UseCase\ContactUseCase\GetContactByIdUseCase;
 
 #[Route('/api/contacts')]
@@ -25,29 +23,18 @@ class ContactApiController extends AbstractController
         private CreateContactUseCase $createContactUseCase,
         private UpdateContactUseCase $updateContactUseCase,
         private DeleteContactUseCase $deleteContactUseCase,
-        private TenantCacheService $cache,
         private GetContactByIdUseCase $getContactByIdUseCase,
         private ?\App\Services\ContactService\ContactMailerService $contactMailerService = null,
         private ?\App\Services\MediaUrlResolver $mediaUrlResolver = null
     ) {}
 
+    /** Liste d'administration de données personnelles : lue en base, jamais en cache (28/10/2026) */
     #[Route('', name: 'api_contact_list', methods: ['GET'])]
     public function list(): JsonResponse
     {
-        $cacheKey = 'contacts_all';
-        $cacheTags = ['contacts'];
+        $contacts = $this->getAllContactsUseCase->execute();
 
-        $contactsDto = $this->cache->get(
-            $cacheKey,
-            function (ItemInterface $item) {
-                $contacts = $this->getAllContactsUseCase->execute();
-                return array_map(fn($contact) => new ContactOutputDto($contact), $contacts);
-            },
-            3600,
-            $cacheTags
-        );
-
-        return $this->json($contactsDto);
+        return $this->json(array_map(fn($contact) => new ContactOutputDto($contact), $contacts));
     }
 
     #[Route('/{id}', name: 'api_contact_get_one', methods: ['GET'])]

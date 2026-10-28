@@ -12,8 +12,8 @@ use Symfony\Component\Routing\Annotation\Route;
 use App\UseCase\CollectionDashboardUseCase\GetCombinedCollectionsDataUseCase;
 use App\UseCase\CollectionDashboardUseCase\GetCollectionStatistiquesUseCase;
 use App\Services\CollectionDashboardService\CollectionStatistiquesService;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class DashboardListCollectionController extends AbstractController
 {
@@ -46,13 +46,10 @@ class DashboardListCollectionController extends AbstractController
         $cacheKey = 'dashboard_collection_' . $collection->getId() . ($collection->getIsClosed() ? '_closed' : '_open');
         $ttl = $collection->getIsClosed() ? 3600 : 60;
 
+        // tableau de bord d'une collection : ses commandes fournisseurs, notes de frais, produits et leurs ventes
         $data = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($collection) {
-                $ttlInner = $collection->getIsClosed() ? 3600 : 60;
-                $item->expiresAfter($ttlInner);
-                $item->tag(['dashboard_collection']);
-
+            function () use ($collection) {
                 if ($collection->getIsClosed()) {
                     $frozenMetricsDTO = $this->getCollectionStatistiquesUseCase->execute($collection);
                     if ($frozenMetricsDTO === null) {
@@ -64,8 +61,9 @@ class DashboardListCollectionController extends AbstractController
                     return method_exists($metricsDTO, 'toArray') ? $metricsDTO->toArray() : $metricsDTO;
                 }
             },
-            /* ttl */ $ttl,
-            /* extraTags */ ['dashboard_collection']
+            $ttl,
+            [...CacheTags::itemTags(CacheTags::COLLECTIONS, $collection->getId()), ...CacheTags::listTags(CacheTags::COMMANDES),
+                ...CacheTags::listTags(CacheTags::NOTES_DE_FRAIS), ...CacheTags::listTags(CacheTags::PRODUCTS), ...CacheTags::listTags(CacheTags::ORDERS)]
         );
 
         return new JsonResponse($data, JsonResponse::HTTP_OK);

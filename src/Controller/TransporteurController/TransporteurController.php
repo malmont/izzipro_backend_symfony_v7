@@ -10,8 +10,8 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class TransporteurController extends AbstractController
 {
@@ -39,10 +39,9 @@ class TransporteurController extends AbstractController
 
         $transporteursData = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) {
-                $item->expiresAfter(3600);
-                return $this->getTransporteursUseCase->execute();
-            },
+            fn () => $this->getTransporteursUseCase->execute(),
+            3600,
+            CacheTags::listTags(CacheTags::TRANSPORTEURS)
         );
 
         return new JsonResponse($transporteursData, JsonResponse::HTTP_OK);
@@ -55,7 +54,6 @@ class TransporteurController extends AbstractController
         $transporteurDTO = TransporteurDTO::fromArray($data);
         $transporteur = $this->createTransporteurUseCase->execute($transporteurDTO);
 
-        // Invalidation du cache gérée ailleurs si nécessaire
         return $this->json([
             'success' => 'Transporteur created',
             'transporteur_id' => $transporteur->getId(),
@@ -66,7 +64,7 @@ class TransporteurController extends AbstractController
     public function deleteTransporteur(\App\Entity\Transporteur $transporteur): JsonResponse
     {
         $this->deleteTransporteurUseCase->execute($transporteur);
-        // Invalidation du cache gérée ailleurs si nécessaire
+
         return new JsonResponse(['success' => 'Transporteur deleted'], JsonResponse::HTTP_NO_CONTENT);
     }
 }

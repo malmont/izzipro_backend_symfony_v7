@@ -2,10 +2,12 @@
 
 namespace App\Controller\BoutiqueSettingsController;
 
+use App\Cache\CacheTags;
 use App\Dto\BoutiqueSettingsInputDto;
 use App\Services\BoutiqueSettingsService\BoutiqueSettingsException;
 use App\Services\BoutiqueSettingsService\BoutiqueSettingsService;
 use App\Services\ContentAuditService\ContentAuditRecorder;
+use App\Services\TenantCacheService;
 use App\UseCase\BoutiqueSettingsUseCase\GetBoutiqueSettingsUseCase;
 use App\UseCase\BoutiqueSettingsUseCase\UpdateBoutiqueSettingsUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -28,17 +30,22 @@ class BoutiqueSettingsController extends AbstractController
 
     public function __construct(
         private readonly GetBoutiqueSettingsUseCase $getUseCase,
-        private readonly UpdateBoutiqueSettingsUseCase $updateUseCase
+        private readonly UpdateBoutiqueSettingsUseCase $updateUseCase,
+        private readonly TenantCacheService $cache
     ) {
     }
 
+    /**
+     * Réglages lus à chaque rendu de la boutique (jusqu'à 114 Ko) : en cache 1 h depuis le 28/10/2026, vidé par toute
+     * écriture de BoutiqueSetting (éditeur, modèles de site, retour en arrière).
+     */
     #[Route('', name: 'api_boutique_settings_get', methods: ['GET'])]
     public function getSettings(): JsonResponse
     {
-        $raw = $this->getUseCase->execute();
-
         // JSON stocké restitué sans transformation (un {} reste {}, l'ordre des clés est conservé)
-        return $raw !== null ? new JsonResponse($raw, Response::HTTP_OK, [], true) : $this->json(null);
+        $json = $this->cache->get('boutique_settings', fn (): string => $this->getUseCase->execute() ?? 'null', 3600, CacheTags::listTags(CacheTags::BOUTIQUE_SETTINGS));
+
+        return new JsonResponse($json, Response::HTTP_OK, [], true);
     }
 
     #[Route('', name: 'api_boutique_settings_update', methods: ['PUT'])]

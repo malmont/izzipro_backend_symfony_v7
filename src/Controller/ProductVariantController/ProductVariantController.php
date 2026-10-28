@@ -10,10 +10,10 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Cache\CacheTags;
 use App\Entity\Product;
 use App\Entity\ProductVariant;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class ProductVariantController extends AbstractController
 {
@@ -40,11 +40,9 @@ class ProductVariantController extends AbstractController
         $cacheKey = 'product_variants_' . $product->getId();
         $variants = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($product) {
-                $item->expiresAfter(300); 
-                $item->tag(['product_variants']);
-                return $this->getProductVariantsUseCase->execute($product);
-            },
+            fn () => $this->getProductVariantsUseCase->execute($product),
+            300,
+            CacheTags::productItemTags($product->getId())
         );
 
         return $this->json($variants, JsonResponse::HTTP_OK);

@@ -6,10 +6,11 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\UseCase\GetAllHomeSliderUseCase\GetAllHomeSliderUseCase;
 use App\Services\MediaUrlResolver;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class HomeSliderController extends AbstractController
 {
@@ -24,19 +25,14 @@ class HomeSliderController extends AbstractController
     {
         $host = $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
             ?? $request->getSchemeAndHttpHost();
-        $locale = $request->query->get('locale', 'fr');
-        
+        $locale = CacheLocale::normalize($request->query->get('locale'));
         $cacheKey = 'homeslider_all_' . $locale;
-        $tags = ['homeslider_all'];
-
 
         $homeSliderDto = $this->cache->get(
             $cacheKey,
-            function(ItemInterface $item) use ($host, $locale) { 
-                return $this->getAllHomeSliderUseCase->execute($host, $locale);
-            },
+            fn () => $this->getAllHomeSliderUseCase->execute($host, $locale),
             3600,
-            $tags 
+            CacheTags::listTags(CacheTags::HOMESLIDER)
         );
 
         return $this->json($homeSliderDto, JsonResponse::HTTP_OK);

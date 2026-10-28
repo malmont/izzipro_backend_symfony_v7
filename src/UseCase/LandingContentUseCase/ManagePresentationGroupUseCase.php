@@ -6,17 +6,16 @@ use App\Dto\PresentationGroupOutputDto;
 use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\LandingContentService\PresentationGroupEditor;
 use App\Services\MediaUrlResolver;
-use App\Services\TenantCacheService;
 
 /**
  * POST, DELETE et PUT (ordre) /api/presentation-groups/{id}/presentations… : composition d'un groupe de
- * présentations depuis l'éditeur des landing pages. Réponse : le groupe tel que son GET le renvoie.
+ * présentations depuis l'éditeur des landing pages. Réponse : le groupe tel que son GET le renvoie. Le cache du
+ * groupe est vidé par l'écriture Doctrine elle-même (registre CacheTags, 28/10/2026).
  */
 class ManagePresentationGroupUseCase
 {
     public function __construct(
         private readonly PresentationGroupEditor $editor,
-        private readonly TenantCacheService $cache,
         private readonly MediaUrlResolver $mediaUrlResolver,
         private readonly ContentAuditRecorder $audit
     ) {
@@ -29,7 +28,7 @@ class ManagePresentationGroupUseCase
         $presentation = $this->editor->add($group, $body, self::locale($locale));
         $this->audit->record('presentation-groups', $groupId, 'add', null, ['presentation' => $presentation->getId(), 'titre' => $presentation->getTitre(), 'order' => $group->getPresentationOrder()], ['presentations'], $locale);
 
-        return $this->done($group, $locale, $host, [(int) $presentation->getId()]);
+        return $this->done($group, $locale, $host);
     }
 
     /** @throws LandingContentException */
@@ -40,7 +39,7 @@ class ManagePresentationGroupUseCase
         $this->editor->remove($group, $presentationId);
         $this->audit->record('presentation-groups', $groupId, 'remove', $before, ['order' => $group->getPresentationOrder()], ['presentations'], $locale);
 
-        return $this->done($group, $locale, $host, [$presentationId]);
+        return $this->done($group, $locale, $host);
     }
 
     /** @throws LandingContentException */
@@ -51,15 +50,11 @@ class ManagePresentationGroupUseCase
         $this->editor->reorder($group, $body);
         $this->audit->record('presentation-groups', $groupId, 'reorder', ['order' => $before], ['order' => $group->getPresentationOrder()], ['order'], $locale);
 
-        return $this->done($group, $locale, $host, []);
+        return $this->done($group, $locale, $host);
     }
 
-    /** @param list<int> $presentationIds */
-    private function done(\App\Entity\PresentationGroup $group, string $locale, string $host, array $presentationIds): PresentationGroupOutputDto
+    private function done(\App\Entity\PresentationGroup $group, string $locale, string $host): PresentationGroupOutputDto
     {
-        $this->cache->invalidateTags(['presentations_all', 'presentation_groups_all', 'presentation_group_' . $group->getId(),
-            ...array_map(fn ($id) => 'presentation_' . $id, $presentationIds)]);
-
         return new PresentationGroupOutputDto($group, $this->mediaUrlResolver->getSliderBaseUrl($host), self::locale($locale));
     }
 

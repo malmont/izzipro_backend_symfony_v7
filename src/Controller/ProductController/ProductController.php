@@ -17,10 +17,11 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Services\MediaUrlResolver;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class ProductController extends AbstractController
 {
@@ -76,13 +77,9 @@ class ProductController extends AbstractController
 
         $products = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($commande, $host) {
-                $item->expiresAfter(300);
-                $item->tag(['products_command']);
-                return $this->getProductsByCommandeUseCase->execute($commande, $host);
-            },
-            /* ttl */ 300,
-            /* extraTags */ ['products_command']
+            fn () => $this->getProductsByCommandeUseCase->execute($commande, $host),
+            300,
+            [...CacheTags::productListTags(), ...CacheTags::itemTags(CacheTags::COMMANDES, $commande->getId())]
         );
 
         return $this->json($products, JsonResponse::HTTP_OK);
@@ -120,18 +117,14 @@ class ProductController extends AbstractController
     public function getAllProducts(Request $request): JsonResponse
     {
         $host = $this->resolveHost($request);
-        $locale = $request->query->get('locale', 'fr'); 
+        $locale = CacheLocale::normalize($request->query->get('locale'));
         $cacheKey = 'all_products_' . $locale;
 
         $products = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($host, $locale) {
-                $item->expiresAfter(300);
-                $item->tag(['products_all', 'locale_' . $locale]);
-                return $this->getAllProductsUseCase->execute($host, $locale);
-            },
-            /* ttl */ 300,
-            /* extraTags */ ['products_all', 'locale_' . $locale]
+            fn () => $this->getAllProductsUseCase->execute($host, $locale),
+            300,
+            CacheTags::productListTags()
         );
 
         return $this->json($products, JsonResponse::HTTP_OK);
@@ -147,18 +140,14 @@ class ProductController extends AbstractController
     public function getProductsByOffer(string $offer, Request $request): JsonResponse
     {
         $host = $this->resolveHost($request);
-        $locale = $request->query->get('locale', 'fr'); 
+        $locale = CacheLocale::normalize($request->query->get('locale'));
         $cacheKey = 'products_by_offer_' . $offer . '_' . $locale;
 
         $products = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($offer, $host, $locale) {
-                $item->expiresAfter(300);
-                $item->tag(['products_by_offer', 'locale_' . $locale]);
-                return $this->getProductsByOfferUseCase->execute($offer, $host, $locale);
-            },
-            /* ttl */ 300,
-            /* extraTags */ ['products_by_offer', 'locale_' . $locale]
+            fn () => $this->getProductsByOfferUseCase->execute($offer, $host, $locale),
+            300,
+            CacheTags::productListTags()
         );
 
         return $this->json($products, JsonResponse::HTTP_OK);
@@ -174,13 +163,23 @@ class ProductController extends AbstractController
         return $this->json($products, JsonResponse::HTTP_OK);
     }
 
+    /**
+     * Fiche produit en cache 5 min depuis le 28/10/2026 (lue à chaque vue de la fiche), vidée par l'écriture du produit
+     * ou d'un de ses enfants (variante, stock, image, traduction) et par celle d'un référentiel ; une fiche introuvable
+     * (exception) n'est pas mise en cache.
+     */
     #[Route('/api/productsid/{id}', name: 'get_product_by_id', methods: ['GET'])]
     public function getProductById(int $id, Request $request): JsonResponse
     {
         try {
             $host = $this->resolveHost($request);
-            $locale = $request->query->get('locale', 'fr');
-            $product = $this->getProductByIdUseCase->execute($id, $host, $locale); 
+            $locale = CacheLocale::normalize($request->query->get('locale'));
+            $product = $this->cache->get(
+                'product_detail_' . $id . '_' . $locale,
+                fn () => $this->getProductByIdUseCase->execute($id, $host, $locale),
+                300,
+                CacheTags::productItemTags($id)
+            );
             return $this->json($product, JsonResponse::HTTP_OK);
         } catch (\Exception $e) {
             return $this->json(['error' => $e->getMessage()], JsonResponse::HTTP_NOT_FOUND);
@@ -202,8 +201,18 @@ class ProductController extends AbstractController
     {
         try {
             $host = $this->resolveHost($request);
-            $locale = $request->query->get('locale', 'fr');
-            $product = $this->getProductBySlugUseCase->execute($slug, $host, $locale); 
+            $locale = CacheLocale::normalize($request->query->get('locale'));
+            // même entrée de cache que la fiche par identifiant : une fiche est vidée par l'écriture de son produit
+            $id = $this->emProvider->getEntityManager()->getRepository(Product::class)->findBySlugAndLocale($slug, $locale)?->getId();
+            if ($id === null) {
+                return $this->json(['error' => 'Produit introuvable'], JsonResponse::HTTP_NOT_FOUND);
+            }
+            $product = $this->cache->get(
+                'product_detail_' . $id . '_' . $locale,
+                fn () => $this->getProductBySlugUseCase->execute($slug, $host, $locale),
+                300,
+                CacheTags::productItemTags($id)
+            );
             return $this->json($product, JsonResponse::HTTP_OK);
         } catch (\Exception $e) {
             return $this->json(['error' => $e->getMessage()], JsonResponse::HTTP_NOT_FOUND);

@@ -9,9 +9,10 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Services\MediaUrlResolver;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class EntrepriseController extends AbstractController
 {
@@ -48,17 +49,14 @@ class EntrepriseController extends AbstractController
     {
         $host = $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
             ?? $request->getSchemeAndHttpHost();
-        $locale = $request->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->get('locale'));
         $cacheKey = "entreprise_{$id}_{$locale}";
-        $tags = ['entreprise', 'entreprise_' . $id];
+        // la fiche porte ses enfants (traductions, réseaux sociaux, adresse) : étiquettes de liste et de fiche
         $entrepriseDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($id, $host, $locale) {
-                error_log("Cache miss for entreprise_{$id} in locale: {$locale}");
-                return $this->getEntrepriseUseCase->execute($id, $host, $locale);
-            },
+            fn () => $this->getEntrepriseUseCase->execute($id, $host, $locale),
             3600,
-            $tags
+            [...CacheTags::listTags(CacheTags::ENTREPRISE), ...CacheTags::itemTags(CacheTags::ENTREPRISE, $id)]
         );
         if (!$entrepriseDto) {
             return $this->json(['error' => 'Entreprise not found'], JsonResponse::HTTP_NOT_FOUND);
@@ -84,10 +82,7 @@ class EntrepriseController extends AbstractController
             return $this->json(['error' => 'Entreprise not found'], JsonResponse::HTTP_NOT_FOUND);
         }
 
-        // Invalidation du cache de l'entreprise
-        $this->cache->delete("entreprise_{$id}_{$locale}");
-        $this->cache->invalidateTags(['entreprise', 'entreprise_' . $id]);
-
+        // le cache de la fiche est vidé par l'écriture Doctrine elle-même (registre CacheTags, 28/10/2026)
         return $this->json($entrepriseDto);
     }
 }

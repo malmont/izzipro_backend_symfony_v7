@@ -14,24 +14,20 @@ use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\LandingContentService\BoutiqueCatalogEditor;
 use App\Services\LandingContentService\LandingContentEditor;
 use App\Services\LandingContentService\LandingContentOutput;
-use App\Services\LandingContentService\LandingContentSpec;
-use App\Services\TenantCacheService;
 
 /**
  * Créations, suppressions et ordre des données de la boutique depuis l'éditeur de la page (09/10/2026). Chaque
- * écriture est journalisée (add, delete, reorder ; l'ordre des atouts se rétablit), les caches de lecture vidés, et la
- * réponse est l'objet tel que sa lecture publique le renvoie (configuration de la variante pour la personnalisation).
+ * écriture est journalisée (add, delete, reorder ; l'ordre des atouts se rétablit), les caches de lecture sont vidés par
+ * l'écriture Doctrine elle-même (registre CacheTags, 28/10/2026), et la réponse est l'objet tel que sa lecture publique
+ * le renvoie (configuration de la variante pour la personnalisation).
  */
 final class ManageBoutiqueCatalogUseCase
 {
-    private const LOCALES = ['fr', 'en'];
-
     public function __construct(
         private readonly BoutiqueCatalogEditor $catalog,
         private readonly LandingContentEditor $editor,
         private readonly LandingContentOutput $outputs,
-        private readonly ContentAuditRecorder $audit,
-        private readonly TenantCacheService $cache
+        private readonly ContentAuditRecorder $audit
     ) {
     }
 
@@ -49,14 +45,12 @@ final class ManageBoutiqueCatalogUseCase
         $before = $this->editor->snapshot('product-variants', $variant, ['stockQuantity', 'price', 'colorId', 'sizeId'], self::locale($locale)) + ['productId' => $variant->getProduct()?->getId()];
         $this->catalog->deleteVariant($variant);
         $this->audit->record('product-variants', $id, 'delete', $before, null, [], $locale);
-        $this->invalidate('product-variants');
     }
 
     public function createColor(mixed $body, string $locale): ColorOutputDTO
     {
         $color = $this->catalog->createColor(self::object($body), self::locale($locale));
         $this->audit->record('colors', $color->getId(), 'add', null, ['name' => $color->getName(), 'codeHexa' => $color->getCodeHexa()], ['name'], $locale);
-        $this->forget('colors_all_');
 
         return new ColorOutputDTO($color, $locale);
     }
@@ -65,7 +59,6 @@ final class ManageBoutiqueCatalogUseCase
     {
         $size = $this->catalog->createSize(self::object($body), self::locale($locale));
         $this->audit->record('sizes', $size->getId(), 'add', null, ['name' => $size->getName()], ['name'], $locale);
-        $this->forget('sizes_all_');
 
         return SizeDTO::fromEntity($size, $locale);
     }
@@ -84,7 +77,6 @@ final class ManageBoutiqueCatalogUseCase
         $before = $this->editor->snapshot('customization-values', $value, ['name', 'priceDelta', 'icon'], self::locale($locale)) + ['optionId' => $value->getProductOption()?->getId()];
         $this->catalog->deleteValue($value);
         $this->audit->record('customization-values', $id, 'delete', $before, null, [], $locale);
-        $this->invalidate('customization-values');
 
         return $this->outputs->config($variantId);
     }
@@ -106,7 +98,6 @@ final class ManageBoutiqueCatalogUseCase
             + ['variantId' => $combination->getProductVariant()?->getId(), 'optionIds' => array_map(fn ($v) => $v->getId(), $combination->getOptionValues()->toArray())];
         $variant = $this->catalog->deleteCombination($combination);
         $this->audit->record('customization-combinations', $id, 'delete', $before, null, [], $locale);
-        $this->invalidate('customization-combinations');
 
         return $this->outputs->config($variant?->getId());
     }
@@ -115,7 +106,6 @@ final class ManageBoutiqueCatalogUseCase
     {
         $feature = $this->catalog->createFeature(self::object($body), self::locale($locale));
         $this->recordAdd('features', $feature, ['title', 'icon'], $locale);
-        $this->forget('features_all_');
 
         return $this->outputs->output('features', $feature, $locale, $host);
     }
@@ -126,8 +116,6 @@ final class ManageBoutiqueCatalogUseCase
         $before = $this->editor->snapshot('features', $feature, ['title', 'icon'], self::locale($locale));
         $this->catalog->deleteFeature($feature);
         $this->audit->record('features', $id, 'delete', $before, null, [], $locale);
-        $this->invalidate('features');
-        $this->forget('features_all_');
     }
 
     /** @return list<mixed> les atouts dans leur nouvel ordre, comme GET /api/features */
@@ -136,8 +124,6 @@ final class ManageBoutiqueCatalogUseCase
         $before = $this->catalog->featureOrder();
         $this->catalog->reorderFeatures($body);
         $this->audit->record('features', null, 'reorder', ['order' => $before], ['order' => $this->catalog->featureOrder()], ['order'], $locale);
-        $this->invalidate('features');
-        $this->forget('features_all_');
 
         return array_map(fn (int $id) => $this->outputs->output('features', $this->catalog->find(Feature::class, $id, 'Atout'), $locale, $host), $this->catalog->featureOrder());
     }
@@ -146,20 +132,6 @@ final class ManageBoutiqueCatalogUseCase
     private function recordAdd(string $resource, object $entity, array $fields, string $locale, array $extra = []): void
     {
         $this->audit->record($resource, $entity->getId(), 'add', null, $this->editor->snapshot($resource, $entity, $fields, self::locale($locale)) + $extra, $fields, $locale);
-        $this->invalidate($resource);
-    }
-
-    private function invalidate(string $resource): void
-    {
-        $this->cache->invalidateTags(LandingContentSpec::RESOURCES[$resource]['tags']);
-    }
-
-    /** Listes mises en cache par clé (sans étiquette du site) : supprimées une à une */
-    private function forget(string $prefix): void
-    {
-        foreach (self::LOCALES as $locale) {
-            $this->cache->delete($prefix . $locale);
-        }
     }
 
     private static function object(mixed $body): object

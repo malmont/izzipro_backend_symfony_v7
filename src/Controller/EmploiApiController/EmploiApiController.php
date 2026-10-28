@@ -1,6 +1,8 @@
 <?php
 namespace App\Controller\EmploiApiController;
 
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Dto\EmploiInputDto;
 use App\Dto\EmploiOutputDto;
 use App\Services\TenantCacheService;
@@ -14,7 +16,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 
 #[Route('/api/emplois')]
 class EmploiApiController extends AbstractController
@@ -30,16 +31,14 @@ class EmploiApiController extends AbstractController
      #[Route('', name: 'api_emploi_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = CacheLocale::normalize($request->getLocale());
         $cacheKey = 'emplois_all_' . $locale;
 
         $emploisDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($locale) {
-                $item->expiresAfter(3600);
-                $item->tag(['emplois_all']);
-                return $this->getAllEmploisUseCase->execute($locale);
-            }
+            fn () => $this->getAllEmploisUseCase->execute($locale),
+            3600,
+            CacheTags::listTags(CacheTags::EMPLOIS)
         );
 
         return $this->json($emploisDto);

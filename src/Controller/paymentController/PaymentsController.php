@@ -13,9 +13,9 @@ use App\Entity\SquareConfig;
 use App\Entity\Order;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Bundle\SecurityBundle\Security;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
 use App\Services\StripeService\StripeService;
-use Symfony\Contracts\Cache\ItemInterface;
 use App\Entity\StripeConfig;
 use App\Services\TenantConnectionManager;
 
@@ -76,13 +76,12 @@ class PaymentsController extends AbstractController
         $host = $request->getSchemeAndHttpHost();
         $locale = $request->getLocale();
         $cacheKey = 'payments_orderSource_' . $orderSourceId . '_locale_' . $locale . ($days ? '_days_' . (int)$days : '');
+        // 300 s ; un paiement porte sa commande : vidé par les écritures des deux (registre CacheTags)
         $paymentDTOs = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($orderSourceId, $host, $locale, $days) {
-                $item->expiresAfter(300);
-                $item->tag(['payments', 'payments_orderSource_' . $orderSourceId]);
-                return $this->getPaymentsByOrderSourceUseCase->execute((int)$orderSourceId, $host, $locale, $days ? (int)$days : null);
-            },
+            fn () => $this->getPaymentsByOrderSourceUseCase->execute((int)$orderSourceId, $host, $locale, $days ? (int)$days : null),
+            300,
+            [...CacheTags::listTags(CacheTags::PAYMENTS), ...CacheTags::listTags(CacheTags::ORDERS)]
         );
         $paymentData = array_map(fn($dto) => $dto->toArray(), $paymentDTOs);
         return $this->json($paymentData);
@@ -197,9 +196,7 @@ class PaymentsController extends AbstractController
 
         $squareConfigData = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($host) {
-                $item->expiresAfter(3600); 
-                $item->tag(['square_config']);
+            function () use ($host) {
                 $em = $this->emProvider->getEntityManager();
                 $squareConfig = $em
                     ->getRepository(SquareConfig::class)

@@ -83,10 +83,10 @@ final class LandingContentSpec
     public const LOCALIZED_LINES = 'localized-lines';
     public const BOOLEAN = 'boolean';
 
-    /** Étiquettes de cache des listes de produits (une variante, un stock, une personnalisation y apparaissent) */
-    private const PRODUCT_TAGS = ['products_all', 'products_by_category', 'products_by_offer', 'products_command', 'product_variants'];
-
-    /** Ressource => entité, traduction, base des images, champs [nature, traduit, maximum, obligatoire], étiquettes de cache */
+    /**
+     * Ressource => entité, traduction, base des images, champs [nature, traduit, maximum, obligatoire]. Plus d'étiquettes
+     * de cache ici : le cache des lectures est vidé par l'écriture Doctrine (registre App\Cache\CacheTags, 28/10/2026).
+     */
     public const RESOURCES = [
         'presentations' => [
             'entity' => Presentation::class, 'translation' => PresentationTranslation::class, 'images' => 'slider',
@@ -95,13 +95,10 @@ final class LandingContentSpec
                 'texteBouton' => [self::TEXT, true, 255, false], 'lienBouton' => [self::LINK, true, 255, false],
                 'image' => [self::IMAGE, false, 255, false],
             ],
-            // une présentation est aussi lue à travers ses groupes
-            'tags' => ['presentations_all', 'presentation_%d', 'presentation_groups_all'],
         ],
         'presentation-groups' => [
             'entity' => PresentationGroup::class, 'translation' => PresentationGroupTranslation::class, 'images' => 'slider',
             'fields' => ['titre' => [self::TEXT, true, 255, true], 'texte' => [self::TEXT, false, 20000, false]],
-            'tags' => ['presentation_groups_all', 'presentation_group_%d'],
         ],
         'baniere-statiques' => [
             'entity' => BaniereStatique::class, 'translation' => BaniereStatiqueTranslation::class, 'images' => 'slider',
@@ -110,7 +107,6 @@ final class LandingContentSpec
                 'texteBouton' => [self::TEXT, true, 255, false], 'imageDeFond' => [self::IMAGE, false, 255, false],
                 'colorBackground' => [self::COLOR, false, 255, false],
             ],
-            'tags' => ['bannieres_statiques_all', 'baniere_statique_%d'],
         ],
         'bannieres' => [
             'entity' => Banniere::class, 'translation' => BanniereTranslation::class, 'images' => 'slider',
@@ -118,7 +114,6 @@ final class LandingContentSpec
                 'titre' => [self::TEXT, true, 255, true], 'texte' => [self::TEXT, true, 20000, false],
                 'imageDeFond' => [self::IMAGE, false, 255, false],
             ],
-            'tags' => ['bannieres_all', 'banniere_%d'],
         ],
         'videos' => [
             'entity' => Video::class, 'translation' => VideoTranslation::class, 'images' => 'slider',
@@ -127,7 +122,6 @@ final class LandingContentSpec
                 'texteBouton' => [self::TEXT, true, 255, false], 'lienBouton' => [self::LINK, true, 255, false],
                 'imageDeFond' => [self::IMAGE, false, 255, false], 'lienVideo' => [self::VIDEO, false, 255, false],
             ],
-            'tags' => ['videos_all', 'video_%d'],
         ],
         'service-offers' => [
             'entity' => ServiceOffer::class, 'translation' => ServiceOfferTranslation::class, 'images' => 'email-logos',
@@ -140,7 +134,6 @@ final class LandingContentSpec
                 'bookable' => [self::BOOLEAN, false, 0, false], 'durationMinutes' => [self::INTEGER, false, 10080, false],
             ],
             'relations' => ['familyId' => [\App\Entity\ServiceFamily::class, 'family']],
-            'tags' => ['service_offers_all', 'service_offer_%d'],
         ],
         // Boutique réglable (08/10/2026) : fiches affichées par les blocs liés. Montants en cents.
         'products' => [
@@ -153,12 +146,10 @@ final class LandingContentSpec
                 'specialPriceFrom' => [self::DATE, false, 0, false], 'specialPriceTo' => [self::DATE, false, 0, false],
                 'image' => [self::IMAGE, false, 255, false], 'pictures' => [self::IMAGES, false, 10, false],
             ],
-            'tags' => ['products_all', 'products_by_category', 'products_by_offer'],
         ],
         'category' => [
             'entity' => Categories::class, 'translation' => CategoriesTranslation::class, 'images' => 'categories', 'titleField' => 'name',
             'fields' => ['name' => [self::TEXT, true, 255, true], 'description' => [self::TEXT, true, 20000, false], 'image' => [self::IMAGE, false, 255, false]],
-            'tags' => ['categories_all', 'products_by_category'],
         ],
         'homeslider' => [
             'entity' => HomeSlider::class, 'translation' => HomeSliderTranslation::class, 'images' => 'slider', 'titleField' => 'title',
@@ -167,7 +158,6 @@ final class LandingContentSpec
                 'buttonMessage' => [self::TEXT, true, 255, false], 'buttonUrl' => [self::LINK, true, 255, false],
                 'image' => [self::IMAGE, false, 255, false],
             ],
-            'tags' => ['homeslider_all'],
         ],
         'explore-cards' => [
             'entity' => ExploreCard::class, 'translation' => ExploreCardTranslation::class, 'images' => 'explore', 'titleField' => 'standardTitle',
@@ -177,7 +167,6 @@ final class LandingContentSpec
                 'description' => [self::TEXT, true, 20000, false], 'link' => [self::LINK, false, 255, false],
                 'imageUrl' => [self::IMAGE, false, 255, false], 'videoUrl' => [self::VIDEO, false, 255, false],
             ],
-            'tags' => ['explore_cards_all'],
         ],
         // Données de la boutique éditables depuis la page (09/10/2026)
         'product-variants' => [
@@ -187,12 +176,10 @@ final class LandingContentSpec
                 'stockQuantity' => [self::INTEGER, false, 1000000, true], 'price' => [self::NUMBER, false, 100000000, false],
                 'colorId' => [self::RELATION, false, 0, false], 'sizeId' => [self::RELATION, false, 0, false],
             ],
-            'tags' => self::PRODUCT_TAGS,
         ],
         'customization-options' => [
             'entity' => ProductOption::class, 'translation' => ProductOptionTranslation::class, 'images' => 'options', 'titleField' => 'name',
             'fields' => ['name' => [self::PLAIN, true, 255, true]],
-            'tags' => self::PRODUCT_TAGS,
         ],
         'customization-values' => [
             'entity' => ProductOptionValue::class, 'translation' => ProductOptionValueTranslation::class, 'images' => 'options', 'titleField' => 'value',
@@ -201,13 +188,11 @@ final class LandingContentSpec
                 'name' => [self::PLAIN, true, 255, true], 'priceDelta' => [self::DOLLARS, false, 100000000, false],
                 'icon' => [self::IMAGE, false, 255, false],
             ],
-            'tags' => self::PRODUCT_TAGS,
         ],
         'customization-combinations' => [
             'entity' => ProductCustomizationImage::class, 'translation' => null, 'images' => 'customization',
             'aliases' => ['image' => 'imagePath', 'stock' => 'numberOfPieces'],
             'fields' => ['image' => [self::IMAGE, false, 255, true], 'stock' => [self::INTEGER, false, 1000000, true]],
-            'tags' => self::PRODUCT_TAGS,
         ],
         // Formules d'abonnement : textes seulement (prix, périodicité, essai : administration, liés à Stripe)
         'subscription-plans' => [
@@ -218,13 +203,11 @@ final class LandingContentSpec
                 'features' => [self::LOCALIZED_LINES, false, SubscriptionPlan::FEATURES_MAX, false, SubscriptionPlan::FEATURE_LENGTH],
                 'badge' => [self::LOCALIZED, false, SubscriptionPlan::BADGE_LENGTH, false], 'highlighted' => [self::BOOLEAN, false, 0, true],
             ],
-            'tags' => [],
         ],
         'features' => [
             'entity' => Feature::class, 'translation' => FeatureTranslation::class, 'images' => 'icons', 'titleField' => 'title',
             'aliases' => ['icon' => 'iconpath'],
             'fields' => ['title' => [self::PLAIN, true, 100, true], 'icon' => [self::IMAGE, false, 255, false]],
-            'tags' => ['features_all'],
         ],
     ];
 

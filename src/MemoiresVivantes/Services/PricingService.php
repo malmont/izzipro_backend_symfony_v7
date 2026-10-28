@@ -10,6 +10,7 @@ use App\MemoiresVivantes\Exception\ApiErrorException;
 use App\MemoiresVivantes\Repository\PricingSettingRepository;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Contracts\Service\ResetInterface;
 
 /**
  * Tarifs du site (16/10/2026) : grille du livre imprimé par devise (premier exemplaire d'un livre, exemplaires
@@ -18,8 +19,9 @@ use Symfony\Component\Security\Core\User\UserInterface;
  * ou un administrateur commande comme avant (coût Lulu, pas de paiement). Un livre garde la devise de son premier
  * exemplaire.
  */
-class PricingService
+class PricingService implements ResetInterface
 {
+    /** Grille déjà lue, par base du site (28/10/2026 : l'EntityManager est le même objet pour tous les sites) ; vidée entre deux requêtes ou messages (kernel.reset) */
     private array $cache = [];
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider)
@@ -28,9 +30,14 @@ class PricingService
 
     public function settings(): PricingSetting
     {
-        $key = spl_object_id($this->emProvider->getEntityManager());
+        $key = (string) ($this->emProvider->getEntityManager()->getConnection()->getParams()['dbname'] ?? '');
 
         return $this->cache[$key] ??= ($this->repository()->current() ?? new PricingSetting());
+    }
+
+    public function reset(): void
+    {
+        $this->cache = [];
     }
 
     /** @param array<string, array{firstCopy: float, nextCopies: float}> $grid grille validée (PricingInputDto) */

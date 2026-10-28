@@ -11,9 +11,10 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Services\MediaUrlResolver;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 use App\Dto\CategoryOutputDTO;
 
 class CategoryController extends AbstractController
@@ -47,7 +48,7 @@ class CategoryController extends AbstractController
             $categoryIds = json_decode($categoryIds, true);
         }
 
-        $locale = $request->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->get('locale'));
 
         $cacheKey = 'products_by_category_' . md5(json_encode([
             'categories' => $categoryIds,
@@ -63,9 +64,7 @@ class CategoryController extends AbstractController
             ?? $request->getSchemeAndHttpHost();
         $cacheData = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos, $host, $locale) {
-                $item->expiresAfter(300); 
-                $item->tag(['products_by_category', 'locale_' . $locale]); 
+            function () use ($categoryIds, $keyword, $page, $pageSize, $barcode, $isWeb, $isPos, $host, $locale) {
                 $products = $this->getProductsByCategoryUseCase->execute(
                     $locale,
                     $categoryIds,
@@ -86,6 +85,8 @@ class CategoryController extends AbstractController
                     'total'    => $total,
                 ];
             },
+            300,
+            CacheTags::productListTags()
         );
 
         return new JsonResponse([
@@ -101,23 +102,22 @@ class CategoryController extends AbstractController
     #[Route('/api/category', name: 'get_categories', methods: ['GET'])]
     public function getCategories(Request $request): JsonResponse
     {
-        $locale = $request->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->get('locale'));
         $cacheKey = 'categories_all_' . $locale;
         $host = $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
             ?? $request->getSchemeAndHttpHost();
 
         $categoriesArray = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($host, $locale) {
-                $item->expiresAfter(3600);
-                $item->tag(['categories_all', 'locale_' . $locale]);
-
+            function () use ($host, $locale) {
                 $categories = $this->getCategoriesUseCase->execute($locale);
                 return array_map(
                     fn($category) => (new CategoryOutputDTO($category, $host, $locale))->toArray(),
                     $categories
                 );
             },
+            3600,
+            CacheTags::listTags(CacheTags::CATEGORIES)
         );
 
         return new JsonResponse($categoriesArray, JsonResponse::HTTP_OK);

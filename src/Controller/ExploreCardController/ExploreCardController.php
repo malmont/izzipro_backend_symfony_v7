@@ -1,6 +1,8 @@
 <?php
 namespace App\Controller\ExploreCardController;
 
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Services\MediaUrlResolver;
 use App\UseCase\ExploreCardUseCase\GetExploreCardUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -8,7 +10,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 #[Route('/api/explore-cards', name: 'api_explore_cards', methods: ['GET'])]
 class ExploreCardController extends AbstractController
@@ -19,19 +20,16 @@ class ExploreCardController extends AbstractController
         TenantCacheService $cache,
         ?MediaUrlResolver $mediaUrlResolver = null
     ): JsonResponse {
-        $locale = $request->query->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->query->get('locale'));
         $cacheKey = 'explore_cards_all_' . $locale;
-        $tags = ['explore_cards_all'];
         $host = $mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
             ?? $request->getSchemeAndHttpHost();
 
         $dtos = $cache->get(
-            $cacheKey, 
-            function (ItemInterface $item) use ($useCase, $host, $locale) {
-            return $useCase->execute($host, $locale);
-            },
+            $cacheKey,
+            fn () => $useCase->execute($host, $locale),
             3600,
-            $tags 
+            CacheTags::listTags(CacheTags::EXPLORE_CARDS)
         );
         
         return $this->json($dtos);

@@ -10,8 +10,8 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class AdminSettingsController extends AbstractController
 {
@@ -35,8 +35,7 @@ class AdminSettingsController extends AbstractController
     {
         $settingsData = $this->cache->get(
             'admin_settings',
-            function (ItemInterface $item) {
-                $item->expiresAfter(43200);
+            function () {
                 $entityManager = $this->tenantEmProvider->getEntityManager();
                 $entityManager->clear(AdminSettings::class);
                 $settings = $entityManager->find(AdminSettings::class, 1, LockMode::NONE, true);
@@ -82,8 +81,8 @@ class AdminSettingsController extends AbstractController
                     'categorySelectorComponent' => $settings->getCategorySelectorComponent(),
                 ];
             },
-            /* ttl */
-            43200
+            43200,
+            CacheTags::listTags(CacheTags::ADMIN_SETTINGS)
         );
 
         if (!$settingsData) {
@@ -142,9 +141,7 @@ class AdminSettingsController extends AbstractController
         $settings->setFooterComponent($data['footerComponent'] ?? $settings->getFooterComponent());
         $settings->setCategorySelectorComponent($data['categorySelectorComponent'] ?? $settings->getCategorySelectorComponent());
 
-        $entityManager->flush();
-
-        $this->cache->delete('admin_settings');
+        $entityManager->flush(); // le cache est vidé par l'écriture elle-même (registre CacheTags, 28/10/2026)
 
         return new JsonResponse(['message' => 'Settings updated successfully']);
     }

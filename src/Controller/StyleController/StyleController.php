@@ -6,8 +6,8 @@ use App\UseCase\StylesUseCase\GetStylesUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class StyleController extends AbstractController
 {
@@ -27,10 +27,9 @@ class StyleController extends AbstractController
 
         $stylesArray = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) {
-                $item->expiresAfter(3600); 
-                return $this->getStylesUseCase->execute();
-            },
+            fn () => $this->getStylesUseCase->execute(),
+            3600,
+            CacheTags::listTags(CacheTags::STYLES)
         );
 
         return new JsonResponse($stylesArray, JsonResponse::HTTP_OK);

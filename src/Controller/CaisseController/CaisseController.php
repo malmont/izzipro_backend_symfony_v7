@@ -10,7 +10,6 @@ use App\Services\CaisseService\DenominationService;
 use App\UseCase\CaisseUseCase\CashReportsUseCase;
 use App\Services\CaisseService\CashRegisterException;
 use App\Services\CaisseService\CashRegisterResolver;
-use App\Services\TenantCacheService;
 use App\UseCase\CaisseUseCase\CaisseOperationsUseCase;
 use App\UseCase\CaisseUseCase\GestCaisseUseCase;
 use App\UseCase\CaisseUseCase\GetTransactionsForOpenCaisseUseCase;
@@ -19,7 +18,6 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Sessions de caisse (POS, application de gestion). Plusieurs postes par site depuis le 15/10/2026 : chaque route
@@ -35,7 +33,6 @@ class CaisseController extends AbstractController
         private readonly CashRegisterResolver $registers,
         private readonly GestCaisseUseCase $gestCaisseUseCase,
         private readonly GetTransactionsForOpenCaisseUseCase $getTransactionsForOpenCaisseUseCase,
-        private readonly TenantCacheService $cache,
         private readonly CashReportsUseCase $reports,
         private readonly DenominationService $denominations,
         private readonly \App\Services\PosAuditService\PosWriteResponseBuilder $responses,
@@ -154,7 +151,10 @@ class CaisseController extends AbstractController
         return $this->move($request, HandleCaisseTransactionUseCase::CASH_FUND_WITHDRAWAL, 'Withdrawal successful');
     }
 
-    /** Sessions de caisse : ?days= (créées depuis N jours) ; ?cashRegisterId= filtre sur un poste, sinon tous les postes */
+    /**
+     * Sessions de caisse : ?days= (créées depuis N jours) ; ?cashRegisterId= filtre sur un poste, sinon tous les postes.
+     * Donnée vive du caissier, lue en base (plus de cache depuis le 28/10/2026).
+     */
     #[Route('/api/caisse', name: 'get_caisse', methods: ['GET'])]
     public function getCaisse(Request $request): JsonResponse
     {
@@ -163,14 +163,8 @@ class CaisseController extends AbstractController
             $days = $days !== null ? (int) $days : null;
             $registerId = $this->registerIdFromQuery($request);
             $register = $registerId !== null ? $this->registers->resolve($registerId) : null;
-            $cacheKey = 'caisse_data_' . ($days ?? 'all') . '_' . ($registerId ?? 'all');
 
-            $caisseDTOs = $this->cache->get($cacheKey, function (ItemInterface $item) use ($days, $register) {
-                $item->expiresAfter(3600);
-                $item->tag(['caisses_tag']);
-
-                return array_map(fn ($dto) => $dto->toArray(), $this->gestCaisseUseCase->execute($days, $register));
-            }, 3600, ['caisses_tag']);
+            $caisseDTOs = array_map(fn ($dto) => $dto->toArray(), $this->gestCaisseUseCase->execute($days, $register));
 
             return new JsonResponse($caisseDTOs, JsonResponse::HTTP_OK);
         });
@@ -182,18 +176,13 @@ class CaisseController extends AbstractController
     {
         return $this->guard(function () use ($request) {
             $register = $this->registers->resolve($this->registerIdFromQuery($request));
-            $transactions = $this->cache->get('open_caisse_transactions_' . $register->getId(), function (ItemInterface $item) use ($register) {
-                $item->expiresAfter(3600);
-                $item->tag(['caisses_tag']);
-
-                return array_map(fn ($transaction) => [
-                    'id' => $transaction->getId(),
-                    'amount' => $transaction->getAmount(),
-                    'transactionDate' => $transaction->getTransactionDate()->format('Y-m-d H:i:s'),
-                    'transactionType' => $transaction->getTransactionType()->getName(),
-                    'cashRegisterId' => $register->getId(),
-                ], $this->getTransactionsForOpenCaisseUseCase->execute($register));
-            }, 3600, ['caisses_tag']);
+            $transactions = array_map(fn ($transaction) => [
+                'id' => $transaction->getId(),
+                'amount' => $transaction->getAmount(),
+                'transactionDate' => $transaction->getTransactionDate()->format('Y-m-d H:i:s'),
+                'transactionType' => $transaction->getTransactionType()->getName(),
+                'cashRegisterId' => $register->getId(),
+            ], $this->getTransactionsForOpenCaisseUseCase->execute($register));
 
             if (empty($transactions)) {
                 return new JsonResponse(['message' => 'Aucune transaction trouvée pour la caisse ouverte', 'cashRegisterId' => $register->getId()], 404);

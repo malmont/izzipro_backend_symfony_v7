@@ -36,7 +36,12 @@ final class PublicReadCacheSubscriber implements EventSubscriberInterface
         'api_features' => 60,
     ];
 
-    private const STALE_WHILE_REVALIDATE = 600;
+    /**
+     * Délai pendant lequel un cache intermédiaire peut encore servir la réponse périmée en la revalidant en arrière-plan.
+     * 600 s jusqu'au 28/10/2026 : une écriture pouvait rester invisible jusqu'à 11 min pour un visiteur anonyme, alors que
+     * le cache applicatif est désormais vidé à l'écriture ; ramené à 60 s, le temps d'une revalidation.
+     */
+    private const STALE_WHILE_REVALIDATE = 60;
 
     public static function getSubscribedEvents(): array
     {

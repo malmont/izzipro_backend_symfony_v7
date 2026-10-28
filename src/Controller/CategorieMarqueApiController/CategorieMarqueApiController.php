@@ -1,6 +1,8 @@
 <?php
 namespace App\Controller\CategorieMarqueApiController;
 
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Dto\CategorieMarqueInputDto;
 use App\Dto\CategorieMarqueOutputDto;
 use App\Services\TenantCacheService;
@@ -16,7 +18,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 
 #[Route('/api/categories-marque')]
 class CategorieMarqueApiController extends AbstractController
@@ -34,19 +35,17 @@ class CategorieMarqueApiController extends AbstractController
    #[Route('', name: 'api_categorie_marque_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $locale = $request->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->get('locale'));
         $cacheKey = 'categories_marque_all_' . $locale;
-        $baseImageUrl = $this->mediaUrlResolver 
-            ? $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost()) 
-            : $request->getSchemeAndHttpHost(); 
+        $baseImageUrl = $this->mediaUrlResolver
+            ? $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost())
+            : $request->getSchemeAndHttpHost();
 
         $categoriesDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($locale, $baseImageUrl) {
-                $item->expiresAfter(3600);
-                $item->tag(['categories_marque_all']);
-                return $this->getAllCategoriesMarqueUseCase->execute($locale, $baseImageUrl);
-            }
+            fn () => $this->getAllCategoriesMarqueUseCase->execute($locale, $baseImageUrl),
+            3600,
+            CacheTags::listTags(CacheTags::MARQUES)
         );
 
         return $this->json($categoriesDto);
@@ -55,18 +54,17 @@ class CategorieMarqueApiController extends AbstractController
     #[Route('/{id}/marques', name: 'api_categorie_marque_get_marques', methods: ['GET'])]
     public function getMarquesForCategory(int $id, Request $request): JsonResponse
     {
-        $locale = $request->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->get('locale'));
         $cacheKey = 'categorie_marque_' . $id . '_marques_' . $locale;
-        $baseImageUrl = $this->mediaUrlResolver 
-            ? $this->mediaUrlResolver->getEmailLogosBaseUrl($request->getSchemeAndHttpHost()) 
-            : ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos'); 
+        $baseImageUrl = $this->mediaUrlResolver
+            ? $this->mediaUrlResolver->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
+            : ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
+        // les marques d'une catégorie : toute marque ou catégorie écrite peut la changer (étiquette de liste)
         $marquesDto = $this->cache->get(
             $cacheKey,
-            function(ItemInterface $item) use ($id, $locale, $baseImageUrl) {
-                $item->expiresAfter(3600);
-                $item->tag(['marques_all', 'categorie_marque_' . $id]);
-                return $this->getMarquesByCategorieUseCase->execute($id, $locale, $baseImageUrl);
-            }
+            fn () => $this->getMarquesByCategorieUseCase->execute($id, $locale, $baseImageUrl),
+            3600,
+            CacheTags::listTags(CacheTags::MARQUES)
         );
 
         if ($marquesDto === null) {

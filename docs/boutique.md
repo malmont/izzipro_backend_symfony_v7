@@ -190,7 +190,8 @@ inscrite au journal (`GET /api/landingpage-audit?resource=products`…) et resta
 Une image venue de la médiathèque est enregistrée sous `/media/secure/{clé}` et rendue en URL complète par tous les
 DTO de la boutique (`MediaUrlResolver::joinStored`) ; un nom de fichier téléversé dans l'administration reste servi
 sous `/assets/uploads/<dossier>/`. Les caches des lectures publiques sont invalidés à
-chaque écriture (`CacheInvalidationSubscriber` : tout le cache du site, voir `docs/architecture.md`). Code : `LandingContentSpec` (liste blanche, `localeField`,
+chaque écriture, composant par composant (`CacheInvalidationSubscriber` et registre `Cache/CacheTags` : un produit écrit
+vide les listes de produits et sa fiche, pas la landing page ; voir `docs/architecture.md`). Code : `LandingContentSpec` (liste blanche, `localeField`,
 `titleField`, `aliases`), `LandingContentEditor` (natures `number`, `date`, `images` ajoutées). Tests :
 `tests/Functional/Boutique/BoutiqueContentEditApiTest.php`.
 
@@ -535,7 +536,7 @@ publique du commerçant**, nom affiché « Marie D. ». Moyenne et nombre tenus 
 - Code : `Entity/ReviewsProduct` (table historique `reviews_product`, colonnes `note` = rating et `comment` = body),
   `Entity/ReviewSetting`, `Repository/ReviewsProductRepository`, `OrderRepository::findLatestPurchaseOf`,
   `Services/ReviewService/` (`ReviewService` : droit d'écrire, dépôt, modification ; `ReviewModerationService` ;
-  `ReviewAggregateService` : moyenne du produit et caches ; `ReviewSettingsProvider`), `UseCase/ReviewUseCase/`,
+  `ReviewAggregateService` : moyenne recopiée sur le produit, dont l'écriture vide les listes ; `ReviewSettingsProvider`), `UseCase/ReviewUseCase/`,
   `Controller/ReviewController/ReviewController`, `Dto/ReviewInputDto`, `Dto/ReviewOutputDto`, EasyAdmin
   `ReviewCrudController`, `ReviewSettingCrudController`. Limite `review_submit` (`rate_limiter.yaml`). Migration
   `Version20261009170000`, script `scripts/migrate_all_v2_reviews.sh`.
@@ -553,8 +554,9 @@ publique du commerçant**, nom affiché « Marie D. ». Moyenne et nombre tenus 
 `php bin/console app:boutique:seed-demo [--customer-email=…] [--reset-password] [--otp]` (`SeedBoutiqueDemoCommand`,
 `SeedBoutiqueDemoUseCase`, `Services/BoutiqueDemoService/` : `BoutiqueDemoCatalog` pour les données,
 `BoutiqueDemoSeeder`, `DemoImageGenerator`). Refusé sur tout autre site que `demo` (`ALLOWED_TENANTS`, base lue dans
-`tenants`). Rejouable : n'ajoute que ce qui manque (produits repérés par leur code `DEMO-…`), n'efface rien, vide les
-caches des lectures publiques. Le mot de passe du client n'est affiché qu'à sa création (ou avec `--reset-password`).
+`tenants`). Rejouable : n'ajoute que ce qui manque (produits repérés par leur code `DEMO-…`), n'efface rien ; les
+caches des lectures publiques sont vidés par ses écritures (registre `Cache/CacheTags`). Le mot de passe du client n'est
+affiché qu'à sa création (ou avec `--reset-password`).
 
 | Cas (§ 10) | Produit (code) |
 |---|---|

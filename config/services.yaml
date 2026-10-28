@@ -12,6 +12,8 @@ parameters:
     landing_ai.default_model_page: 'claude-opus-5-5'
     # Fichiers de configuration des landing pages synchronisés depuis le frontend (versions, état actif)
     landing_config.dir: '%kernel.project_dir%/var/landingpage-config'
+    # Pool du limiteur de débit (config/packages/cache.yaml) : REDIS_LIMITER_URL, sinon l'instance du cache (28/10/2026)
+    env_redis_url: '%env(REDIS_URL)%'
 
 services:
     # default configuration for services in *this* file

@@ -11,8 +11,8 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class FraisDePortController extends AbstractController
 {
@@ -65,12 +65,12 @@ class FraisDePortController extends AbstractController
             : $request->getSchemeAndHttpHost();
         $cacheKey = 'frais_de_port_commande_' . $commande->getId();
 
+        // frais de port d'une commande fournisseur (enfants de la commande), avec leur transporteur
         $fraisDePort = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($commande, $host) {
-                $item->expiresAfter(3600);
-                return $this->getFraisDePortByCommandeUseCase->execute($commande, $host);
-            },
+            fn () => $this->getFraisDePortByCommandeUseCase->execute($commande, $host),
+            3600,
+            [...CacheTags::itemTags(CacheTags::COMMANDES, $commande->getId()), ...CacheTags::listTags(CacheTags::TRANSPORTEURS)]
         );
         if (!$fraisDePort) {
             return $this->json(

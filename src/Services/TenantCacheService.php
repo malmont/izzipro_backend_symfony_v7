@@ -39,6 +39,18 @@ class TenantCacheService
         return 'db.' . preg_replace('/[{}()\/\\\\@:]/', '_', $dbname);
     }
 
+    /**
+     * Étiquette d'un composant (registre App\Cache\CacheTags), dans la portée de la base du site (la donnée vit dans la
+     * base, pas dans le code de site) ; sans base connue, dans celle du code. Posée par get(), vidée par invalidateTags()
+     * et par CacheInvalidationSubscriber : un seul nom pour les deux côtés.
+     */
+    public static function componentTag(?string $dbname, string $tenantCode, string $tag): string
+    {
+        $scope = $dbname !== null && $dbname !== '' ? self::databaseTag($dbname) : self::tenantTag($tenantCode);
+
+        return $scope . '.' . preg_replace('/[{}()\/\\\\@:]/', '_', $tag);
+    }
+
     private function getDatabaseName(): ?string
     {
         $dbname = $this->tcp->getConnection()->getParams()['dbname'] ?? null;
@@ -59,12 +71,13 @@ class TenantCacheService
         $key = preg_replace('/[{}()\/\\\\@:]/', '_', $rawKey);
 
         $tenantCode = $this->getTenantCode();
+        $dbname = $this->getDatabaseName();
         $tags = [];
         if ($extraTags) {
-            $tags = array_map(fn($tag) => preg_replace('/[{}()\/\\\\@:]/', '_', $tenantCode . '_' . $tag), $extraTags);
+            $tags = array_map(fn($tag) => self::componentTag($dbname, $tenantCode, $tag), $extraTags);
         }
         $tags[] = self::tenantTag($tenantCode);
-        if ($dbname = $this->getDatabaseName()) {
+        if ($dbname !== null) {
             $tags[] = self::databaseTag($dbname);
         }
 
@@ -92,8 +105,19 @@ class TenantCacheService
     public function invalidateTags(array $extraTags): bool
     {
         $tenantCode = $this->getTenantCode();
-        $tags = array_map(fn($tag) => preg_replace('/[{}()\/\\\\@:]/', '_', $tenantCode . '_' . $tag), $extraTags);
+        $dbname = $this->getDatabaseName();
+        $tags = array_map(fn($tag) => self::componentTag($dbname, $tenantCode, $tag), $extraTags);
+
         return $this->cache->invalidateTags($tags);
+    }
+
+    /**
+     * Vide tout un composant du registre (listes et fiches : étiquette nue `<composant>`) du site actuel : après une
+     * écriture en SQL direct qui échappe à Doctrine (ex. fusion de clients de la caisse).
+     */
+    public function invalidateComponents(string ...$components): bool
+    {
+        return $this->invalidateTags($components);
     }
 
     /**

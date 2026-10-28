@@ -12,8 +12,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class CollectionController extends AbstractController
 {
@@ -54,12 +54,12 @@ class CollectionController extends AbstractController
     {
         $host = $request->getSchemeAndHttpHost();
         $cacheKey = 'collections_all';
+        // une collection est listée avec ses commandes fournisseurs : elle suit aussi leurs écritures
         $collections = $this->cache->get(
             $cacheKey,
-            function(ItemInterface $item) use ($host) {
-                $item->expiresAfter(600); 
-                return $this->getCollectionsUseCase->execute($host);
-            },
+            fn () => $this->getCollectionsUseCase->execute($host),
+            600,
+            [...CacheTags::listTags(CacheTags::COLLECTIONS), ...CacheTags::listTags(CacheTags::COMMANDES)]
         );
 
         return new JsonResponse($collections, JsonResponse::HTTP_OK);

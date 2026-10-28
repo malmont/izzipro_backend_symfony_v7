@@ -12,6 +12,7 @@ use App\MemoiresVivantes\Repository\AiQuotaSettingRepository;
 use App\MemoiresVivantes\Repository\AiUsageRepository;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Contracts\Service\ResetInterface;
 
 /**
  * Quotas des appels IA de Mémoires Vivantes (16/10/2026) : transcriptions et améliorations par utilisateur et par
@@ -21,9 +22,12 @@ use Symfony\Component\Security\Core\User\UserInterface;
  * l'a demandé ; jamais un administrateur, jamais un invité venu par un lien (sa règle propre reste : une
  * amélioration par question).
  */
-class AiQuotaService
+class AiQuotaService implements ResetInterface
 {
-    /** Réglages déjà lus, par EntityManager (une bascule de site change l'EntityManager) */
+    /**
+     * Réglages déjà lus, par base du site (28/10/2026 : l'EntityManager est le même objet pour tous les sites, une
+     * bascule ne change que sa connexion) ; vidés entre deux requêtes ou messages du worker (kernel.reset)
+     */
     private array $settingsCache = [];
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider)
@@ -33,9 +37,14 @@ class AiQuotaService
     /** Réglages du site : la ligne existante, sinon les valeurs par défaut (objet non enregistré) */
     public function settings(): AiQuotaSetting
     {
-        $key = spl_object_id($this->emProvider->getEntityManager());
+        $key = (string) ($this->emProvider->getEntityManager()->getConnection()->getParams()['dbname'] ?? '');
 
         return $this->settingsCache[$key] ??= ($this->settingsRepository()->current() ?? new AiQuotaSetting());
+    }
+
+    public function reset(): void
+    {
+        $this->settingsCache = [];
     }
 
     /** Enregistre des réglages (crée la ligne du site au premier enregistrement) */

@@ -1,6 +1,8 @@
 <?php
 namespace App\Controller\ServiceOfferApiController;
 
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Dto\ServiceOfferInputDto;
 use App\Dto\ServiceOfferOutputDto;
 use App\Services\MediaUrlResolver;
@@ -16,7 +18,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 
 #[Route('/api/service-offers')]
 class ServiceOfferApiController extends AbstractController
@@ -34,19 +35,17 @@ class ServiceOfferApiController extends AbstractController
    #[Route('', name: 'api_service_offer_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = CacheLocale::normalize($request->getLocale());
         $cacheKey = 'service_offers_all_' . $locale;
         $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
             ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
 
+        // une prestation porte sa famille (familyId) : elle suit aussi les écritures des familles
         $dtos = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($locale, $baseImageUrl) {
-                $item->expiresAfter(3600);
-                $item->tag(['service_offers_all']);
-
-                return $this->getAllServiceOffersUseCase->execute($baseImageUrl, $locale);
-            }
+            fn () => $this->getAllServiceOffersUseCase->execute($baseImageUrl, $locale),
+            3600,
+            [...CacheTags::listTags(CacheTags::SERVICE_OFFERS), ...CacheTags::listTags(CacheTags::SERVICE_FAMILIES)]
         );
 
         return $this->json($dtos);
@@ -55,19 +54,16 @@ class ServiceOfferApiController extends AbstractController
     #[Route('/{id}', name: 'api_service_offer_get_one', methods: ['GET'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = CacheLocale::normalize($request->getLocale());
         $cacheKey = 'service_offer_' . $id . '_' . $locale;
         $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
             ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
 
         $dto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($id, $locale, $baseImageUrl) {
-                $item->expiresAfter(3600);
-                $item->tag(['service_offers_all', 'service_offer_' . $id]);
-
-                return $this->getServiceOfferByIdUseCase->execute($id, $baseImageUrl, $locale);
-            }
+            fn () => $this->getServiceOfferByIdUseCase->execute($id, $baseImageUrl, $locale),
+            3600,
+            [...CacheTags::itemTags(CacheTags::SERVICE_OFFERS, $id), ...CacheTags::listTags(CacheTags::SERVICE_FAMILIES)]
         );
 
         if (!$dto) {

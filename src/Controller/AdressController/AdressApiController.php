@@ -10,14 +10,12 @@ use App\UseCase\AdressUseCase\CreateAdressUseCase;
 use App\UseCase\AdressUseCase\EditAdressUseCase;
 use App\UseCase\AdressUseCase\DeleteAdressUseCase;
 use App\Services\AdressService\AddressVerificationService;
-use App\Services\TenantCacheService;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 use Doctrine\ORM\EntityManagerInterface;
 
 #[Route('/api/adresses')]
@@ -28,26 +26,23 @@ class AdressApiController extends AbstractController
     private EditAdressUseCase $editAdressUseCase;
     private DeleteAdressUseCase $deleteAdressUseCase;
     private AddressVerificationService $verifier;
-    private TenantCacheService $cache;
 
     public function __construct(
         GetUserAdressesUseCase $getUserAdressesUseCase,
         CreateAdressUseCase $createAdressUseCase,
         EditAdressUseCase $editAdressUseCase,
         DeleteAdressUseCase $deleteAdressUseCase,
-        AddressVerificationService $verifier,
-        TenantCacheService $cache
+        AddressVerificationService $verifier
     ) {
         $this->getUserAdressesUseCase = $getUserAdressesUseCase;
         $this->createAdressUseCase = $createAdressUseCase;
         $this->editAdressUseCase = $editAdressUseCase;
         $this->deleteAdressUseCase = $deleteAdressUseCase;
         $this->verifier = $verifier;
-        $this->cache = $cache;
     }
 
     /**
-     * Récupérer les adresses de l'utilisateur
+     * Récupérer les adresses de l'utilisateur : données personnelles, lues en base, jamais en cache (28/10/2026)
      */
     #[Route('', name: 'get_user_adresses', methods: ['GET'])]
     #[Route('/', name: 'get_user_adresses_slash', methods: ['GET'])]
@@ -59,21 +54,7 @@ class AdressApiController extends AbstractController
             return new JsonResponse(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $cacheKey = "adresses_user_" . $user->getId();
-        $adresses = $this->cache->get(
-            $cacheKey,
-            function (ItemInterface $item) use ($user) {
-                $item->expiresAfter(3600);
-                $item->tag(['adresses_user']);
-                return $this->getUserAdressesUseCase->execute($user);
-            },
-            /* ttl */
-            3600,
-            /* extraTags */
-            ['adresses_user']
-        );
-
-        return $this->json($adresses, Response::HTTP_OK);
+        return $this->json($this->getUserAdressesUseCase->execute($user), Response::HTTP_OK);
     }
 
     /**

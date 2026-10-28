@@ -2,167 +2,123 @@
 
 namespace App\EventSubscriber;
 
-use App\Entity\AiJob;
-use App\Entity\AiUsage;
-use App\Entity\ContentAuditLog;
-use App\Entity\OtpCode;
-use App\Entity\PosAuditLog;
-use App\Entity\PosIdempotencyKey;
-use App\Entity\RefreshToken;
-use App\Entity\SharedMedia;
-use App\Entity\User;
+use App\Cache\CacheInvalidationQueue;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
 use App\Services\TenantConnectionProvider;
 use Doctrine\Common\EventSubscriber;
 use Doctrine\ORM\Event\OnFlushEventArgs;
-use Doctrine\ORM\Event\PostFlushEventArgs;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\UnitOfWork;
-use Symfony\Contracts\Cache\TagAwareCacheInterface;
+use Psr\Log\LoggerInterface;
 
 /**
- * Invalidation du cache applicatif après toute écriture Doctrine (26/10/2026).
+ * Invalidation du cache applicatif après toute écriture Doctrine (26/10/2026, invalidation ciblée depuis le 28/10/2026).
  *
- * Toute écriture d'une entité (création, modification, suppression, liaison d'une collection) vide tout le cache du
- * site courant et de sa base : chaque entrée de TenantCacheService porte ces deux étiquettes, quelles que soient ses
- * autres étiquettes. L'étiquette de la base couvre les codes qui partagent une base (esgboost et esgboost1) et les
- * commandes qui changent de base sans code de site. Aucune table de correspondance entité → clés à tenir à jour : une nouvelle entité, une traduction ou un
- * nouveau composant de la landing page sont couverts sans rien ajouter ici.
+ * Au flush, chaque entité écrite (création, modification, suppression, liaison d'une collection) est traduite en
+ * étiquettes par le registre CacheTags :
+ * - entité déclarée (ENTITY_TAGS) : la liste de son composant et sa fiche (`<composant>.list`, `<composant>.item.<id>`),
+ *   préfixées par la base du site (TenantCacheService::componentTag) ; une traduction ou un enfant vide celles de son
+ *   parent (PARENT) ;
+ * - entité sans lecture en cache (NO_CACHE_READ) : rien ;
+ * - entité non déclarée : **tout le cache du site et de sa base** (étiquettes du code et de la base, posées sur chaque
+ *   entrée), comme avant le 28/10, avec une ligne de journal pour repérer ce qui reste à déclarer.
  *
- * Avant : une table de correspondance par entité, dont les étiquettes ne correspondaient pas à celles posées par les
- * contrôleurs (« demopresentations_all » invalidé, « presentations_all » et « demo_presentations_all » posés), et qui
- * ignorait les traductions (presentation_translation…) : une modification restait invisible jusqu'à une heure.
- *
- * Seules les écritures techniques, fréquentes et sans effet sur une réponse en cache, sont ignorées (IGNORED_CLASSES,
- * IGNORED_FIELDS). Une écriture en SQL direct (DBAL) échappe à Doctrine : appeler TenantCacheService::invalidateTenant().
- *
- * Deux passages : juste après le flush, puis à la fin de la requête, de la commande ou du message
- * (CacheInvalidationFinalizer). Le second couvre le flush fait dans une transaction encore ouverte : une lecture
- * concurrente pouvait remettre en cache l'ancienne valeur avant la validation.
+ * Les étiquettes sont déposées dans CacheInvalidationQueue et vidées au COMMIT réel de la connexion par le middleware
+ * DBAL (Cache\Doctrine\InvalidateOnCommit*), abandonnées au ROLLBACK ; CacheInvalidationFinalizer vide ce qui resterait
+ * en fin de requête, de commande ou de message. Une écriture en SQL direct (DBAL) échappe à Doctrine : appeler
+ * TenantCacheService::invalidateTenant(), ou son invalidation par étiquettes du registre.
  */
 class CacheInvalidationSubscriber implements EventSubscriber
 {
-    /** Entités techniques : jetons, codes, journaux, suivi de l'IA. Aucune réponse en cache ne les lit. */
-    private const IGNORED_CLASSES = [
-        RefreshToken::class,
-        OtpCode::class,
-        AiUsage::class,
-        AiJob::class,
-        ContentAuditLog::class,
-        PosAuditLog::class,
-        PosIdempotencyKey::class,
-    ];
+    /** @var array<string, true> classes non déclarées déjà journalisées pendant ce traitement */
+    private array $reported = [];
 
-    /** Champs dont la seule modification ne change aucune réponse en cache (compteurs écrits pendant une lecture). */
-    private const IGNORED_FIELDS = [
-        SharedMedia::class => ['downloadCount'],
-        User::class => ['lastLoginAt'],
-    ];
-
-    /** @var array<string, string> étiquettes (code du site, base) écrites dans le flush en cours */
-    private array $pending = [];
-
-    /** @var array<string, string> étiquettes écrites depuis le début de la requête, de la commande ou du message */
-    private array $written = [];
-
-    public function __construct(private TagAwareCacheInterface $cache, private TenantConnectionProvider $tcp)
-    {
+    public function __construct(
+        private CacheInvalidationQueue $queue,
+        private TenantConnectionProvider $tcp,
+        private LoggerInterface $logger,
+    ) {
     }
 
     public function getSubscribedEvents(): array
     {
-        return [Events::onFlush, Events::postFlush];
+        return [Events::onFlush];
     }
 
     public function onFlush(OnFlushEventArgs $args): void
     {
         $em = $args->getObjectManager();
-        if (!$this->touchesCachedContent($em->getUnitOfWork())) {
-            return;
-        }
-        $tag = TenantCacheService::tenantTag($this->tcp->getTenantCode() ?: 'master');
-        $this->pending[$tag] = $tag;
         $dbname = $em->getConnection()->getParams()['dbname'] ?? null;
-        if (is_string($dbname) && $dbname !== '') {
-            $tag = TenantCacheService::databaseTag($dbname);
-            $this->pending[$tag] = $tag;
-        }
-    }
+        $dbname = is_string($dbname) ? $dbname : '';
+        $tenantCode = $this->tcp->getTenantCode() ?: 'master';
 
-    public function postFlush(PostFlushEventArgs $args): void
-    {
-        if ($this->pending !== []) {
-            $this->invalidate($this->pending);
-            $this->written += $this->pending;
-        }
-        $this->pending = [];
-    }
-
-    /** Second passage, en fin de requête, de commande ou de message (voir l'en-tête de la classe). */
-    public function invalidateWrittenTenants(): void
-    {
-        if ($this->written !== []) {
-            $this->invalidate($this->written);
-        }
-        $this->written = [];
-    }
-
-    private function touchesCachedContent(UnitOfWork $uow): bool
-    {
-        foreach ([...$uow->getScheduledEntityInsertions(), ...$uow->getScheduledEntityDeletions()] as $entity) {
-            if (!$this->isIgnoredClass($entity)) {
-                return true;
-            }
-        }
-        foreach ($uow->getScheduledEntityUpdates() as $entity) {
-            if ($this->isIgnoredClass($entity)) {
+        $tags = [];
+        $undeclared = false;
+        foreach ($this->writtenEntities($em->getUnitOfWork()) as $entity) {
+            $entityTags = CacheTags::forEntity($entity);
+            if ($entityTags === null) {
+                $undeclared = true;
+                $this->report($entity, $tenantCode);
                 continue;
             }
-            $ignoredFields = $this->ignoredFields($entity);
-            if (array_diff(array_keys($uow->getEntityChangeSet($entity)), $ignoredFields) !== []) {
-                return true;
+            foreach ($entityTags as $tag) {
+                $tags[] = TenantCacheService::componentTag($dbname, $tenantCode, $tag);
+            }
+        }
+        if ($undeclared) {
+            $tags[] = TenantCacheService::tenantTag($tenantCode);
+            if ($dbname !== '') {
+                $tags[] = TenantCacheService::databaseTag($dbname);
+            }
+        }
+        if ($tags !== []) {
+            $this->queue->add($dbname, array_values(array_unique($tags)));
+        }
+    }
+
+    /** Filet de fin de requête, de commande ou de message (CacheInvalidationFinalizer) : vide ce qui attend encore */
+    public function invalidateWrittenTenants(): void
+    {
+        $this->queue->flushAll();
+        $this->reported = [];
+    }
+
+    /**
+     * Entités dont l'écriture peut changer une réponse en cache : créations, suppressions, modifications d'au moins un
+     * champ non ignoré, propriétaires des collections modifiées.
+     *
+     * @return list<object>
+     */
+    private function writtenEntities(UnitOfWork $uow): array
+    {
+        $entities = [...$uow->getScheduledEntityInsertions(), ...$uow->getScheduledEntityDeletions()];
+        foreach ($uow->getScheduledEntityUpdates() as $entity) {
+            if (array_diff(array_keys($uow->getEntityChangeSet($entity)), CacheTags::ignoredFields($entity)) !== []) {
+                $entities[] = $entity;
             }
         }
         foreach ([...$uow->getScheduledCollectionUpdates(), ...$uow->getScheduledCollectionDeletions()] as $collection) {
             $owner = $collection->getOwner();
-            if ($owner === null || !$this->isIgnoredClass($owner)) {
-                return true;
+            if ($owner !== null) {
+                $entities[] = $owner;
             }
         }
 
-        return false;
+        return $entities;
     }
 
-    private function isIgnoredClass(object $entity): bool
+    /** Une ligne par classe et par traitement : le journal dit ce qui vide encore tout le site */
+    private function report(object $entity, string $tenantCode): void
     {
-        foreach (self::IGNORED_CLASSES as $class) {
-            if ($entity instanceof $class) {
-                return true;
-            }
+        $class = get_class($entity);
+        if (isset($this->reported[$class])) {
+            return;
         }
-
-        return false;
-    }
-
-    /** @return list<string> */
-    private function ignoredFields(object $entity): array
-    {
-        foreach (self::IGNORED_FIELDS as $class => $fields) {
-            if ($entity instanceof $class) {
-                return $fields;
-            }
-        }
-
-        return [];
-    }
-
-    /** @param array<string, string> $tags étiquettes de site et de base (TenantCacheService::tenantTag, databaseTag) */
-    private function invalidate(array $tags): void
-    {
-        try {
-            $this->cache->invalidateTags(array_values($tags));
-        } catch (\Throwable) {
-            // Redis indisponible : l'écriture est faite, le cache expirera de lui-même ; ne pas faire échouer la requête
-        }
+        $this->reported[$class] = true;
+        $this->logger->notice('Cache : entité sans étiquette déclarée, tout le cache du site est vidé', [
+            'entity' => $class,
+            'tenant' => $tenantCode,
+        ]);
     }
 }

@@ -1,5 +1,6 @@
 # Limitation de débit des routes publiques sensibles (appliquée par App\EventSubscriber\PublicEndpointRateLimitSubscriber).
-# Stockage : cache applicatif (Redis). lock_factory: null car le composant Lock n'est pas configuré (comme login_throttling).
+# Stockage : pool `cache.rate_limiter` (config/packages/cache.yaml : Redis, REDIS_LIMITER_URL ou REDIS_URL), distinct du
+# cache applicatif à étiquettes depuis le 28/10/2026. lock_factory: null car le composant Lock n'est pas configuré (comme login_throttling).
 framework:
     rate_limiter:
         # Connexion par l'API : essais de mots de passe à la chaîne

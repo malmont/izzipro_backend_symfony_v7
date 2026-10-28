@@ -1,6 +1,8 @@
 <?php
 namespace App\Controller\VideoApiController;
 
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Dto\VideoInputDto;
 use App\Dto\VideoOutputDto;
 use App\Services\TenantCacheService;
@@ -15,7 +17,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 
 #[Route(path: ['/api/videos', '/videos'])]
 class VideoApiController extends AbstractController
@@ -33,20 +34,17 @@ class VideoApiController extends AbstractController
     #[Route('', name: 'api_video_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
     {
-        $locale = $request->query->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->query->get('locale'));
         $cacheKey = 'videos_all_' . $locale;
-        $baseImageUrl = $this->mediaUrlResolver 
-            ? $this->mediaUrlResolver->getSliderBaseUrl($request->getSchemeAndHttpHost()) 
+        $baseImageUrl = $this->mediaUrlResolver
+            ? $this->mediaUrlResolver->getSliderBaseUrl($request->getSchemeAndHttpHost())
             : ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
 
         $dtos = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($locale, $baseImageUrl) {
-                $item->expiresAfter(3600);
-                $item->tag(['videos_all']);
-
-                return $this->getAllVideosUseCase->execute($baseImageUrl, $locale);
-            }
+            fn () => $this->getAllVideosUseCase->execute($baseImageUrl, $locale),
+            3600,
+            CacheTags::listTags(CacheTags::VIDEOS)
         );
 
         return $this->json($dtos);
@@ -55,20 +53,17 @@ class VideoApiController extends AbstractController
     #[Route('/{id}', name: 'api_video_get_one', methods: ['GET'])]
     public function getOne(int $id, Request $request): JsonResponse
     {
-        $locale = $request->query->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->query->get('locale'));
         $cacheKey = 'video_' . $id . '_' . $locale;
-        $baseImageUrl = $this->mediaUrlResolver 
-            ? $this->mediaUrlResolver->getSliderBaseUrl($request->getSchemeAndHttpHost()) 
+        $baseImageUrl = $this->mediaUrlResolver
+            ? $this->mediaUrlResolver->getSliderBaseUrl($request->getSchemeAndHttpHost())
             : ($request->getSchemeAndHttpHost() . '/assets/uploads/slider');
 
         $dto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($id, $locale, $baseImageUrl) {
-                $item->expiresAfter(3600);
-                $item->tag(['videos_all', 'video_' . $id]);
-
-                return $this->getVideoByIdUseCase->execute($id, $baseImageUrl, $locale);
-            }
+            fn () => $this->getVideoByIdUseCase->execute($id, $baseImageUrl, $locale),
+            3600,
+            CacheTags::itemTags(CacheTags::VIDEOS, $id)
         );
 
         if (!$dto) {

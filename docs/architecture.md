@@ -263,17 +263,47 @@ retirés, envoi abandonné s'il n'en reste aucun (hors tests). Refus définitif 
 - Le nom de la file est le **chemin du DSN** (`%env(MESSENGER_TRANSPORT_DSN)%_esg`) : l'option `stream` est ignorée
   quand le DSN a un chemin.
 - Ne jamais vider Redis en entier (`FLUSHALL`) ; le cache applicatif est dans la base 0.
-- **Invalidation du cache applicatif (26/10/2026)** : toute écriture Doctrine d'une entité (création, modification,
-  suppression, liaison d'une collection, traductions comprises) vide **tout le cache du site et de sa base** (étiquettes
-  du code et de la base, posées sur chaque entrée de `TenantCacheService` ; celle de la base couvre les codes qui
-  partagent une base, esgboost/esgboost1 et arkanoa-media/arkanoa-media1, et les commandes sans code de site), juste après le flush puis une seconde fois en fin de requête, de commande
-  ou de message (`EventSubscriber/CacheInvalidationSubscriber` et `CacheInvalidationFinalizer`). Plus aucune table
-  entité → clés à tenir : un nouveau composant est couvert d'office. Exceptions, sans effet sur une réponse en cache :
-  jetons, codes OTP, journaux, suivi de l'IA (`IGNORED_CLASSES`), compteur de consultations des médias et date de
-  dernière connexion (`IGNORED_FIELDS`). Une écriture en SQL direct échappe à Doctrine : appeler
-  `TenantCacheService::invalidateTenant()`. Test : `tests/Functional/Cache/CacheInvalidationTest.php`.
-  Restent hors de ce mécanisme : le cache HTTP des lectures publiques (`PublicReadCacheSubscriber`, 60 s pour un
-  visiteur anonyme, jamais pour un administrateur connecté) et le cache propre au frontend.
+- **Invalidation du cache applicatif** (26/10/2026 ; invalidation ciblée par composant depuis le 28/10/2026) : toute
+  écriture Doctrine d'une entité (création, modification, suppression, liaison d'une collection, traductions comprises)
+  est traduite en étiquettes par le **registre `Cache/CacheTags`**, seule source de vérité des deux côtés (lectures
+  `TenantCacheService::get()` avec `CacheTags::listTags()` / `itemTags()`, écritures `EventSubscriber/CacheInvalidationSubscriber`) :
+  - entité déclarée (`ENTITY_TAGS`) : la liste de son composant (`<composant>.list`) et sa fiche (`<composant>.item.<id>`)
+    sont vidées ; une traduction ou un enfant (`PARENT`) vide celles de son parent ; l'étiquette nue `<composant>` vide
+    tout le composant, à la demande seulement (seeders) ;
+  - entité sans lecture en cache (`NO_CACHE_READ` : jetons, codes OTP, journaux, suivi de l'IA) : rien ; de même pour
+    les champs `IGNORED_FIELDS` (compteur de consultations des médias, date de dernière connexion) ;
+  - entité **non déclarée** : **tout le cache du site et de sa base** (étiquettes du code et de la base posées sur chaque
+    entrée ; celle de la base couvre esgboost/esgboost1, arkanoa-media/arkanoa-media1 et les commandes sans code de
+    site), avec une ligne `notice` dans le journal (« entité sans étiquette déclarée ») : c'est le filet de sécurité, et
+    la liste de ce qui reste à déclarer.
+  Les étiquettes sont préfixées par la base (`db.<base>.<composant>…`, `TenantCacheService::componentTag()`), déposées
+  dans `Cache/CacheInvalidationQueue` et vidées **au COMMIT réel** de la connexion par le middleware DBAL
+  `Cache/Doctrine/InvalidateOnCommitMiddleware` (abandonnées au ROLLBACK) ; `CacheInvalidationFinalizer` vide ce qui
+  resterait en fin de requête, de commande ou de message. Une écriture en SQL direct échappe à Doctrine : appeler
+  `TenantCacheService::invalidateComponents(CacheTags::…)` (ex. fusion de clients de la caisse) ou `invalidateTenant()`.
+  Aucune étiquette à la main hors du registre : garde-fou `tests/Functional/Cache/CacheTagConventionTest.php`.
+  - **Composants déclarés** (tous, depuis le 28/10/2026) : Landing Page (présentations, groupes, bannières, slider, atouts,
+    cartes, vidéos, équipe, recherches, multiliens, marques, emplois, prestations et familles, véhicules, réglages de la
+    page : `landingpage_settings`, 1 h) ; Boutique (produits et fiches `product_detail_{id}_{locale}` 300 s, catégories,
+    couleurs, tailles, styles, transporteurs, réglages `boutique_settings` 1 h, référentiels : `CacheTags::productListTags()`
+    et `productItemTags()`) ; Commun (entreprise, réglages d'administration) ; commandes et paiements (`orders`, `payments`,
+    300 s ; meilleures ventes des favoris de caisse) ; achats (collections, commandes fournisseurs, fournisseurs, notes de
+    frais, tableaux de bord). Une lecture qui mêle plusieurs composants porte les étiquettes de chacun.
+  - **Plus en cache** : contacts, candidatures, adresses et commandes d'un client, sessions et transactions de caisse
+    (données vives ou personnelles, lues en base).
+  - **Langue** : `Cache/CacheLocale::normalize()` ramène `?locale=` à `fr` ou `en` avant toute clé (une valeur inventée
+    ne crée plus d'entrée).
+  - **Réglages gardés en mémoire** (Mémoires Vivantes : `PricingService`, `AiQuotaService`) : par base du site, remis à
+    zéro entre deux requêtes ou messages (`ResetInterface`) ; test `tests/Functional/Cache/InMemorySettingsPerSiteTest.php`.
+  - **Limiteur de débit** : pool `cache.rate_limiter` propre (`config/packages/cache.yaml`, `REDIS_LIMITER_URL`, repli
+    `REDIS_URL`), hors du cache à étiquettes ; en production avec une instance de cache à éviction, le pointer vers une
+    instance sans éviction (comme les sessions et les files).
+  Tests de fraîcheur, un par route en cache : `tests/Functional/Cache/` (`LandingCacheInvalidationTest`,
+  `BoutiqueCacheInvalidationTest`, `OrdersAchatsCacheInvalidationTest`, `CacheInvalidationAfterCommitTest`,
+  `CacheInvalidationTest` ; fabrique d'entités `CacheTestEntityFactory`).
+  Restent hors de ce mécanisme : le cache HTTP des lectures publiques de la boutique (`PublicReadCacheSubscriber`,
+  max-age 60 s et stale-while-revalidate 60 s pour un visiteur anonyme, jamais pour un administrateur connecté) et le
+  cache propre au frontend.
 - **Écran « Workers »** (EasyAdmin, menu Maintenance ; `Controller/Admin/WorkerAdminController`, `/admin/workers`),
   réservé à `ROLE_SUPER_ADMIN` (entrée de menu, contrôleur et `access_control`) : état de chaque worker, contenu des
   files, rédactions de chapitres en cours ou en échec du site (relance, libération), bouton de redémarrage (même signal

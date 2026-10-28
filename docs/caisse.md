@@ -65,8 +65,11 @@ Codes de succès inchangés depuis l'origine : `close` répond **200**, les autr
 | `GET /api/caisse/transactions?cashRegisterId=` | poste (règle ci-dessus) | 200 `[{id, amount, transactionDate, transactionType, cashRegisterId}]` de la session ouverte ; aucune → 404 (comme avant) |
 
 Les montants (`amountTotal`, `new_total`, `amount` des dépôts et retraits) sont en **cents**, comme la part en espèces
-d'une vente qui entre en caisse. Les listes sont en cache (clés par poste, étiquette `caisses_tag`), invalidé à chaque
-écriture.
+d'une vente qui entre en caisse. Les listes de sessions et de transactions sont lues en base à chaque appel (donnée vive
+du caissier ; plus de cache depuis le 28/10/2026). Restent en cache 300 s, vidés par toute vente, retour ou paiement
+(registre `Cache/CacheTags`, étiquettes `orders` et `payments`) : `GET /api/orders?orderSource=2` et
+`GET /api/payments?orderSource=2` ; les meilleures ventes de la grille de favoris suivent la même étiquette (au plus 10 min,
+recalculées à la première lecture qui suit une vente ou un retour).
 
 ## Postes (`/api/cash-registers`)
 
@@ -1802,7 +1805,8 @@ Grille de produits à toucher sur l'écran de vente (articles sans code-barres, 
 
 **Plus vendus** : ventes au comptoir (source caisse, type vente) **non annulées**, des `days` derniers jours **dans le fuseau du magasin**
 (journée en cours comprise), quantités **nettes des retours** faits sur ces ventes, par produit, de la plus grande à la plus petite
-(égalité : identifiant croissant). Une requête d'agrégat, classement gardé 10 minutes (vidé par toute écriture du site). Les épinglés
+(égalité : identifiant croissant). Une requête d'agrégat, classement gardé au plus 10 minutes et recalculé à la première lecture
+qui suit une vente ou un retour (étiquette `orders` du registre `Cache/CacheTags`, 28/10/2026). Les épinglés
 sont lus à chaque appel : un épinglage se voit tout de suite.
 
 ### Épinglage (responsable ; caissier : 403 `FORBIDDEN`)

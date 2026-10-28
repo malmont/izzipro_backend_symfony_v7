@@ -11,7 +11,6 @@ use App\Services\CaisseService\DenominationService;
 use App\Services\CaisseService\CaisseService;
 use App\Services\CaisseService\CashRegisterException;
 use App\Services\CaisseService\CashRegisterResolver;
-use App\Services\TenantCacheService;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 
@@ -27,7 +26,6 @@ class CaisseOperationsUseCase
         private readonly CashRegisterResolver $registers,
         private readonly CaisseService $caisseService,
         private readonly HandleCaisseTransactionUseCase $transactions,
-        private readonly TenantCacheService $cache,
         private readonly CashSessionReportBuilder $reports,
         private readonly DenominationService $denominations,
         private readonly \App\Services\PosAuditService\PosAuditService $audit,
@@ -187,7 +185,6 @@ class CaisseOperationsUseCase
             }
             throw $e;
         }
-        $this->cache->invalidateTags(['caisses_tag']);
 
         return $report;
     }

@@ -35,7 +35,6 @@ use App\Entity\ReviewSetting;
 use App\Entity\ReviewsProduct;
 use App\Services\ReviewService\ReviewAggregateService;
 use App\Services\ReviewService\ReviewService;
-use App\Services\TenantCacheService;
 use App\Services\TenantEntityManagerProvider;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\String\Slugger\AsciiSlugger;
@@ -49,10 +48,6 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 final class BoutiqueDemoSeeder
 {
-    /** Caches des lectures publiques de la boutique (contrôleurs) */
-    public const CACHE_TAGS = ['products_all', 'products_by_category', 'products_by_offer', 'product_variants', 'categories_all', 'carriers_all',
-        'homeslider_all', 'explore_cards_all', 'sizes_all', 'colors_all'];
-
     /** @var list<string> */
     private array $report = [];
 
@@ -60,7 +55,6 @@ final class BoutiqueDemoSeeder
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly DemoImageGenerator $images,
         private readonly UserPasswordHasherInterface $hasher,
-        private readonly TenantCacheService $cache,
         private readonly ReviewAggregateService $reviewAggregates
     ) {
     }
@@ -97,14 +91,7 @@ final class BoutiqueDemoSeeder
         $password = $this->customer($customerEmail, $resetPassword, $otp);
         $em->flush();
         $this->reviews($customerEmail);
-        // Les lectures publiques gardent leur réponse en cache (jusqu'à 1 h) : une liste vide resterait servie. Certains
-        // contrôleurs étiquettent sans le préfixe du site (CarrierControleur) : leurs clés sont aussi supprimées une à une.
-        $this->cache->invalidateTags(self::CACHE_TAGS);
-        foreach (['carriers_', 'categories_all_', 'homeslider_all_', 'explore_cards_all_', 'all_products_'] as $key) {
-            foreach (['fr', 'en'] as $locale) {
-                $this->cache->delete($key . $locale);
-            }
-        }
+        // Les lectures publiques en cache sont vidées par les écritures elles-mêmes (registre CacheTags, 28/10/2026)
 
         return ['report' => $this->report, 'customerPassword' => $password];
     }

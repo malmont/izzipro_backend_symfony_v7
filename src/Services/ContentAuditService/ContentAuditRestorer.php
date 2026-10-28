@@ -21,7 +21,6 @@ use App\Services\LandingSiteModelService\LandingSiteModelException;
 use App\Services\LandingSiteModelService\LandingSiteModelService;
 use App\Services\MediaUrlResolver;
 use App\Services\SharedMedia\SharedMediaLibrary;
-use App\Services\TenantCacheService;
 use App\UseCase\LandingContentUseCase\LandingContentException;
 
 /**
@@ -53,7 +52,6 @@ final class ContentAuditRestorer
         private readonly LandingSiteModelService $models,
         private readonly SharedMediaLibrary $media,
         private readonly MediaUrlResolver $urls,
-        private readonly TenantCacheService $cache,
         private readonly TenantCurrencyProvider $currency,
         private readonly \App\Services\LandingContentService\LandingContentOutput $outputs,
         private readonly \App\Services\LandingContentService\BoutiqueCatalogEditor $catalog,
@@ -112,7 +110,6 @@ final class ContentAuditRestorer
         $required = array_keys(array_filter(LandingContentSpec::RESOURCES[$resource]['fields'], fn ($f) => $f[3]));
         $values = array_filter($before, fn ($value, $field) => isset(LandingContentSpec::RESOURCES[$resource]['fields'][$field]) && ($value !== null || !in_array($field, $required, true)), ARRAY_FILTER_USE_BOTH);
         $this->contentEditor->apply($resource, $entity, $values, $locale);
-        $this->cache->invalidateTags(array_map(fn ($tag) => sprintf($tag, $id), LandingContentSpec::RESOURCES[$resource]['tags']));
 
         return ['resourceId' => $id, 'before' => $current, 'after' => $values, 'result' => $this->outputs->output($resource, $entity, $locale, $host)];
     }
@@ -123,7 +120,6 @@ final class ContentAuditRestorer
         $current = array_map(fn ($p) => (int) $p->getId(), $group->getOrderedPresentations());
         $this->guard($current, $after->order ?? null, $force);
         $this->groupEditor->reorder($group, (object) ['order' => $before->order ?? []]);
-        $this->cache->invalidateTags(['presentations_all', 'presentation_groups_all', 'presentation_group_' . $id]);
 
         return ['resourceId' => $id, 'before' => ['order' => $current], 'after' => ['order' => $before->order ?? []],
             'result' => new PresentationGroupOutputDto($group, $this->urls->getSliderBaseUrl($host), $locale)];
@@ -135,10 +131,6 @@ final class ContentAuditRestorer
         $current = $this->catalog->featureOrder();
         $this->guard($current, $after->order ?? null, $force);
         $this->catalog->reorderFeatures((object) ['order' => $before->order ?? []]);
-        $this->cache->invalidateTags(['features_all']);
-        foreach (['fr', 'en'] as $l) {
-            $this->cache->delete('features_all_' . $l);
-        }
 
         return ['resourceId' => null, 'before' => ['order' => $current], 'after' => ['order' => $before->order ?? []],
             'result' => array_map(fn (int $id) => $this->outputs->output('features', $this->catalog->find(\App\Entity\Feature::class, $id, 'Atout'), $locale, $host), $this->catalog->featureOrder())];
@@ -149,8 +141,6 @@ final class ContentAuditRestorer
         $current = $this->entreprises->snapshot($id, array_keys($before), $locale) ?? throw new ContentAuditException(404, 'Fiche entreprise introuvable.');
         $this->guard($current, $after, $force);
         $result = $this->entreprises->updateEntreprise($id, $before, $this->urls->getPublicHost($host), $locale);
-        $this->cache->invalidateTags(['entreprise', 'entreprise_' . $id]);
-        $this->cache->delete("entreprise_{$id}_{$locale}");
 
         return ['resourceId' => $id, 'before' => $current, 'after' => $before, 'result' => $result];
     }

@@ -14,6 +14,7 @@ use App\Entity\User;
 use App\Services\CaisseService\CashRegisterException;
 use App\Services\PosAuditService\PosApprovalService;
 use App\Services\PosAuditService\PosAuditService;
+use App\Services\TenantCacheService;
 use App\Services\TenantEntityManagerProvider;
 
 /**
@@ -30,7 +31,7 @@ class PosCustomerService
     private const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     private const SEARCH_LIMIT = 20;
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly PosAuditService $audit, private readonly PosApprovalService $approvals, private readonly PosLoyaltyService $loyalty)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly PosAuditService $audit, private readonly PosApprovalService $approvals, private readonly PosLoyaltyService $loyalty, private readonly TenantCacheService $cache)
     {
     }
 
@@ -403,6 +404,8 @@ class PosCustomerService
         $conn = $em->getConnection();
         $conn->executeStatement('UPDATE "order" SET customer_id = ? WHERE customer_id = ?', [$target->getId(), $source->getId()]);
         $conn->executeStatement('UPDATE pos_gift_card SET customer_id = ? WHERE customer_id = ?', [$target->getId(), $source->getId()]);
+        // écriture en SQL direct, hors Doctrine : les listes de commandes en cache sont vidées à la main (28/10/2026)
+        $this->cache->invalidateComponents(\App\Cache\CacheTags::ORDERS);
         foreach (PosCustomerConsent::PURPOSES as $p) {
             if ($this->consentGranted($source, $p) && !$this->consentGranted($target, $p)) {
                 $em->persist(new PosCustomerConsent($target, $p, true, $actor->getId(), $this->settings()['consentTextVersion']));

@@ -7,13 +7,14 @@ use App\UseCase\TeamUseCase\GetTeamUseCase;
 use App\UseCase\TeamUseCase\GetTeamListUseCase;
 use App\UseCase\TeamUseCase\UpdateTeamUseCase;
 use App\UseCase\TeamUseCase\DeleteTeamUseCase;
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Services\MediaUrlResolver;
 use App\Services\TenantCacheService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class TeamController extends AbstractController
 {
@@ -50,18 +51,15 @@ class TeamController extends AbstractController
     public function list(Request $request): JsonResponse
     {
         $host = $this->resolveHost($request);
-        $locale = $request->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->get('locale'));
 
         $cacheKey = "teams_list_{$locale}";
-        $tags = ['teams_all', 'locale_' . $locale];
 
         $teams = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($host, $locale, $tags) {
-                $item->expiresAfter(3600);
-                $item->tag($tags);
-                return $this->getTeamListUseCase->execute($host, $locale);
-            }
+            fn () => $this->getTeamListUseCase->execute($host, $locale),
+            3600,
+            CacheTags::listTags(CacheTags::TEAM)
         );
 
         return $this->json($teams);
@@ -71,18 +69,15 @@ class TeamController extends AbstractController
     public function getTeam(int $id, Request $request): JsonResponse
     {
         $host = $this->resolveHost($request);
-        $locale = $request->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->get('locale'));
 
         $cacheKey = "team_{$id}_{$locale}";
-        $tags = ['teams_all', "team_{$id}", 'locale_' . $locale];
 
         $teamDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($id, $host, $locale, $tags) {
-                $item->expiresAfter(3600);
-                $item->tag($tags);
-                return $this->getTeamUseCase->execute($id, $host, $locale);
-            }
+            fn () => $this->getTeamUseCase->execute($id, $host, $locale),
+            3600,
+            CacheTags::itemTags(CacheTags::TEAM, $id)
         );
 
         return $this->json($teamDto);

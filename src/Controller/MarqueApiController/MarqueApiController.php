@@ -1,6 +1,7 @@
 <?php
 namespace App\Controller\MarqueApiController;
 
+use App\Cache\CacheTags;
 use App\Dto\MarqueInputDto;
 use App\Dto\MarqueOutputDto;
 use App\Services\MediaUrlResolver;
@@ -15,7 +16,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 
 #[Route('/api/marques')]
 class MarqueApiController extends AbstractController
@@ -33,18 +33,17 @@ class MarqueApiController extends AbstractController
     public function list(Request $request): JsonResponse
     {
         $cacheKey = 'marques_all';
-        $cacheTags = ['marques'];
         $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
             ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
 
         $marquesDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($baseImageUrl) {
+            function () use ($baseImageUrl) {
                 $marques = $this->getAllMarquesUseCase->execute();
                 return array_map(fn($marque) => new MarqueOutputDto($marque, $baseImageUrl), $marques);
             },
             3600,
-            $cacheTags
+            CacheTags::listTags(CacheTags::MARQUES)
         );
 
         return $this->json($marquesDto);

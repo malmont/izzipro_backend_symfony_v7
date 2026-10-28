@@ -12,8 +12,8 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\SecurityBundle\Security;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class CommandeController extends AbstractController
 {
@@ -41,9 +41,7 @@ class CommandeController extends AbstractController
         $cacheKey = 'commandes_collection_' . $collection->getId();
         $commandesDTO = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($collection, $host) {
-                $item->expiresAfter(600); 
-                $item->tag(['commandes_by_collection']);
+            function () use ($collection, $host) {
                 $commandes = $this->getCommandesByCollectionUseCase->execute($collection);
                 $commandesArray = $commandes->toArray();
                 return array_map(function ($commande) use ($host) {
@@ -51,6 +49,8 @@ class CommandeController extends AbstractController
                     return method_exists($dto, 'toArray') ? $dto->toArray() : $dto;
                 }, $commandesArray);
             },
+            600,
+            [...CacheTags::itemTags(CacheTags::COLLECTIONS, $collection->getId()), ...CacheTags::listTags(CacheTags::COMMANDES)]
         );
 
         return $this->json($commandesDTO, JsonResponse::HTTP_OK);

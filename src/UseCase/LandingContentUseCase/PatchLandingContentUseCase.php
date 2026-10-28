@@ -5,21 +5,19 @@ namespace App\UseCase\LandingContentUseCase;
 use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
 use App\Services\ContentAuditService\ContentAuditRecorder;
 use App\Services\LandingContentService\LandingContentEditor;
-use App\Services\LandingContentService\LandingContentSpec;
 use App\Services\MediaUrlResolver;
-use App\Services\TenantCacheService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * PATCH /api/{ressource}/{id}?locale= : modifie depuis l'éditeur des landing pages les champs envoyés d'un contenu
  * de section, puis renvoie l'objet tel que le GET de la ressource le renverrait (même langue). Les objets d'un autre
- * site sont dans une autre base : ici, ils sont introuvables (404).
+ * site sont dans une autre base : ici, ils sont introuvables (404). Le cache de la ressource est vidé par l'écriture
+ * Doctrine elle-même (registre CacheTags, 28/10/2026).
  */
 class PatchLandingContentUseCase
 {
     public function __construct(
         private readonly LandingContentEditor $editor,
-        private readonly TenantCacheService $cache,
         private readonly MediaUrlResolver $mediaUrlResolver,
         private readonly ContentAuditRecorder $audit,
         private readonly TenantCurrencyProvider $currency,
@@ -51,13 +49,7 @@ class PatchLandingContentUseCase
         $this->editor->apply($resource, $entity, $values, $locale);
         $after = $this->editor->snapshot($resource, $entity, array_keys($values), $locale);
         $this->audit->record($resource, $id, 'update', $before, $after, array_keys($values), $locale);
-        $this->invalidate($resource, $id);
 
         return $this->outputs->output($resource, $entity, $locale, $host, $variantId);
-    }
-
-    private function invalidate(string $resource, int $id): void
-    {
-        $this->cache->invalidateTags(array_map(fn ($tag) => sprintf($tag, $id), LandingContentSpec::RESOURCES[$resource]['tags']));
     }
 }

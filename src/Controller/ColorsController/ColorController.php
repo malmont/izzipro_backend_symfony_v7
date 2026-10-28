@@ -8,8 +8,9 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class ColorController extends AbstractController
 {
@@ -25,17 +26,14 @@ class ColorController extends AbstractController
     #[Route('/api/colors', name: 'get_colors', methods: ['GET'])]
     public function getColors(Request $request): JsonResponse
     {
-        $locale = $request->getLocale();
+        $locale = CacheLocale::normalize($request->getLocale());
         $cacheKey = 'colors_all_' . $locale;
 
         $colorsDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($locale) {
-                $item->expiresAfter(3600); 
-                $item->tag(['colors_all']);
-                
-                return $this->getAllColorsUseCase->execute($locale);
-            }
+            fn () => $this->getAllColorsUseCase->execute($locale),
+            3600,
+            CacheTags::listTags(CacheTags::COLORS)
         );
         
         return $this->json($colorsDto);

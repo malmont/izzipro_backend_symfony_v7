@@ -10,8 +10,8 @@ use App\Dto\DashboardCommandeDTO;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class DashboardCommandeController extends AbstractController
 {
@@ -54,12 +54,10 @@ class DashboardCommandeController extends AbstractController
     {
         $cacheKey = 'dashboard_commande_' . $commande->getId() . ($commande->getIsClosed() ? '_closed' : '_open');
 
+        // tableau de bord d'une commande fournisseur : la commande, ses frais de port, ses produits et leurs ventes
         $data = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($commande) {
-                $ttl = $commande->getIsClosed() ? 3600 : 60;
-                $item->expiresAfter($ttl);
-                $item->tag(['dashboard_commande']);
+            function () use ($commande) {
                 if ($commande->getIsClosed()) {
                     $frozenMetrics = $this->getLatestCommandeStatistiquesUseCase->execute($commande);
                     if (!$frozenMetrics) {
@@ -71,6 +69,8 @@ class DashboardCommandeController extends AbstractController
                 }
                 return $metricsDTO->toArray();
             },
+            $commande->getIsClosed() ? 3600 : 60,
+            [...CacheTags::itemTags(CacheTags::COMMANDES, $commande->getId()), ...CacheTags::listTags(CacheTags::PRODUCTS), ...CacheTags::listTags(CacheTags::ORDERS)]
         );
 
         return new JsonResponse($data, JsonResponse::HTTP_OK);

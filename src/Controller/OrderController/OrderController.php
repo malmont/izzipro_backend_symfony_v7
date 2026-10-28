@@ -22,9 +22,9 @@ use App\Entity\Adress;
 use App\Entity\Carrier;
 use App\Entity\Order;
 use App\Entity\Payments;
+use App\Cache\CacheTags;
 use App\Services\TenantEntityManagerProvider;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 use App\Services\TenantConnectionManager;
 use Psr\Log\LoggerInterface;
 use App\Services\OrderService\OrderMailerService;
@@ -581,13 +581,12 @@ class OrderController extends AbstractController
         $host = $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost());
         $cacheKey = 'orders_source_' . $orderSourceId . ($days ? '_days_' . (int)$days : '');
 
+        // 300 s, vidé par toute écriture d'une commande, d'un paiement ou de ce qu'elles affichent (registre CacheTags)
         $orderDTOs = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($orderSourceId, $host, $days) {
-                $item->expiresAfter(300);
-                $item->tag(['orders_source']);
-                return $this->getOrdersBySourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null);
-            },
+            fn () => $this->getOrdersBySourceUseCase->execute((int)$orderSourceId, $host, $days ? (int)$days : null),
+            300,
+            CacheTags::listTags(CacheTags::ORDERS)
         );
 
         $orderData = array_map(fn($dto) => $dto->toArray(), $orderDTOs);
@@ -605,23 +604,12 @@ class OrderController extends AbstractController
 
         $host = $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost());
         $locale = $request->getLocale();
-        $cacheKeySuffix = 'orders_user_' . $user->getId() . '_' . $locale;
-        $tags = ['orders_user', 'orders_user_' . $user->getId()];
 
-        $orderDTOs = $this->cache->get(
-            $cacheKeySuffix,
-            function (ItemInterface $item) use ($user, $host, $locale, $cacheKeySuffix) {
-                $this->logger->info('Cache MISS for getUserOrders. Computing...', [
-                    'key_suffix_requested' => $cacheKeySuffix
-                ]);
-                return $this->getOrdersByUserUseCase->execute($user->getId(), $host, $locale);
-            },
-            300,
-            $tags
-        );
+        // commandes d'un client : lues en base, jamais en cache (28/10/2026)
+        $orderDTOs = $this->getOrdersByUserUseCase->execute($user->getId(), $host, $locale);
 
         if (empty($orderDTOs)) {
-            $this->logger->info('No orders found for getUserOrders (after cache check/compute)', [
+            $this->logger->info('No orders found for getUserOrders', [
                 'user_id' => $user->getId(),
                 'locale' => $locale
             ]);

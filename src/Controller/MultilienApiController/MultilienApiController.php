@@ -1,6 +1,7 @@
 <?php
 namespace App\Controller\MultilienApiController;
 
+use App\Cache\CacheTags;
 use App\Dto\MultilienInputDto;
 use App\Dto\MultilienOutputDto;
 use App\Services\TenantCacheService;
@@ -15,7 +16,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Contracts\Cache\ItemInterface;
 
 #[Route('/api/multiliens')]
 class MultilienApiController extends AbstractController
@@ -33,17 +33,16 @@ class MultilienApiController extends AbstractController
     public function list(Request $request): JsonResponse
     {
         $cacheKey = 'multiliens_all';
-        $cacheTags = ['multiliens'];
         $baseImageUrl = $request->getSchemeAndHttpHost() . '/uploads/multiliens';
 
         $multiliensDto = $this->cache->get(
             $cacheKey,
-            function (ItemInterface $item) use ($baseImageUrl) {
+            function () use ($baseImageUrl) {
                 $multiliens = $this->getAllMultiliensUseCase->execute();
                 return array_map(fn($multilien) => new MultilienOutputDto($multilien, $baseImageUrl), $multiliens);
             },
             3600,
-            $cacheTags
+            CacheTags::listTags(CacheTags::MULTILIENS)
         );
 
         return $this->json($multiliensDto);

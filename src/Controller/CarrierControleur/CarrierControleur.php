@@ -8,8 +8,9 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use App\Cache\CacheLocale;
+use App\Cache\CacheTags;
 use App\Services\TenantCacheService;
-use Symfony\Contracts\Cache\ItemInterface;
 
 class CarrierControleur extends AbstractController
 {
@@ -33,17 +34,14 @@ class CarrierControleur extends AbstractController
     {
         $host = $this->mediaUrlResolver?->getPublicHost($request->getSchemeAndHttpHost())
             ?? $request->getSchemeAndHttpHost();
-        $locale = $request->get('locale', 'fr');
+        $locale = CacheLocale::normalize($request->get('locale'));
         $cacheKey = 'carriers_' . $locale;
 
         $carriers = $this->cache->get(
             $cacheKey,
-            function(ItemInterface $item) use ($host, $locale) {
-                $item->expiresAfter(3600);
-                $item->tag(['carriers_all']);
-                error_log("Cache miss for carriers in locale: " . $locale);
-                return $this->getAllCarriersUseCase->execute($host, $locale);
-            }
+            fn () => $this->getAllCarriersUseCase->execute($host, $locale),
+            3600,
+            CacheTags::listTags(CacheTags::CARRIERS)
         );
 
         return $this->json($carriers, JsonResponse::HTTP_OK);

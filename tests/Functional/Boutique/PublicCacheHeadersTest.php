@@ -24,7 +24,7 @@ class PublicCacheHeadersTest extends WebTestCase
             $this->assertSame(200, $response->getStatusCode(), $path . ' ' . $response->getContent());
             $this->assertTrue($response->headers->hasCacheControlDirective('public'), $path . ' : ' . $response->headers->get('Cache-Control'));
             $this->assertSame((string) $maxAge, (string) $response->headers->getCacheControlDirective('max-age'), $path);
-            $this->assertSame('600', (string) $response->headers->getCacheControlDirective('stale-while-revalidate'));
+            $this->assertSame('60', (string) $response->headers->getCacheControlDirective('stale-while-revalidate'), 'réponse périmée servie 60 s au plus pendant la revalidation (28/10/2026)');
             $this->assertContains('X-Tenant-Host', $response->getVary(), 'jamais la boutique d\'un site servie à un autre');
             $this->assertSame([], $response->headers->getCookies(), 'aucun cookie dans une réponse publique');
             $etag = (string) $response->getEtag();
