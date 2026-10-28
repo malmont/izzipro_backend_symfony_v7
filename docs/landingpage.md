@@ -99,6 +99,31 @@ le serveur et dans l'ancienne application).
 - Colonnes `industry`, `company_name`, `job_function`, `phone` facultatif : `scripts/migrate_all_v2_contact_fields.sh`,
   migration `Version20261007160000`.
 
+## Formulaires à étapes (chantier du 27/10/2026)
+
+Contrat du lot 1 figé par le frontend (container `layout: "steps"`, blocs `field` et `summary`, actions de bouton
+`next`, `prev`, `submit`, `restart`) ; schéma publié par le frontend après le feu vert du backend. Lots suivants :
+stockage des demandes reçues (`FormSubmission`), envoi public `POST /api/form-submissions`, cibles réservation et
+contact, assistant IA.
+
+- **Règles entre blocs** : `Services/LandingPageSettingsService/ReglableFormRules` (classe sans dépendance), appelée
+  par `ReglableCompositionValidator::validateComposition` (landing page, boutique, modèles de site, restauration,
+  synchronisation, sorties de l'IA). Identiques à celles de l'éditeur (`formSteps.js`, `formRuleErrors`) : un seul
+  container `steps` par section ; `field` et `summary` dans une étape (enfant direct du container `steps`) ; boutons
+  `next`/`prev`/`submit`/`restart` dans le formulaire ; `stepRole` sur une étape, une seule étape `success` ; un seul
+  `submit` (zéro permis) ; `name` obligatoire (`^[a-z][a-z0-9_]{0,39}$`), unique ; 30 questions au plus (étape
+  `success` exclue) ; `fieldRole` unique, avec le `fieldType` exigé (email → email, phone → tel, date → date,
+  guests → number, service et slot → select ou choice) ; `select`/`choice` avec `options` ou `optionsSource`, refusés
+  ailleurs ; `summaryFields` ne cite que des `name` du formulaire ; `formTarget` `reservation` ou `contact` : une
+  question `fieldType` email, `fieldRole` email, `required` true. Sans container `steps` ni bloc de formulaire, rien
+  n'est contrôlé (aucune composition enregistrée n'en contenait au 28/10/2026).
+- **Règles du document** (`ReglableFormRules::documentErrors`, depuis `validateConfiguration`) : une section qui
+  contient un formulaire porte un `uid` (`tabs[].sections[].uid`, 100 caractères au plus, sans espace ni `<` `>`)
+  qu'aucune autre section du document ne porte ; pas de formulaire dans la navbar ni le footer.
+- **Assistant IA** : tant que l'envoi des réponses n'existe pas, il n'ajoute aucun formulaire à étapes
+  (`LandingAiCompositionChecker::addedForms`, erreur renvoyée au modèle ; une retouche d'un formulaire existant reste
+  possible) ; consigne `FORM_STEPS_RULE` ajoutée seulement quand le contrat actif connaît `steps`. À lever au lot 4.
+
 ## Modèles de site
 
 Depuis le 07/10/2026, l'administrateur enregistre des configurations complètes comme modèles, sans toucher aux réglages

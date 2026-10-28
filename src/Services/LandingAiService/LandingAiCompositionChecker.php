@@ -211,6 +211,22 @@ final class LandingAiCompositionChecker
     }
 
     /**
+     * Formulaires à étapes (container layout « steps », blocs field et summary, contrat du lot 1) : l'assistant n'en
+     * ajoute pas tant que l'envoi des réponses n'est pas en place (lot 3 ; sinon le visiteur remplirait un formulaire
+     * qui ne part nulle part). Une retouche d'un formulaire posé par l'administrateur reste possible : seul un ajout
+     * est renvoyé au modèle. À retirer au lot 4 (consignes et réparations propres aux formulaires).
+     *
+     * @return list<array{path: string, message: string}>
+     */
+    public function addedForms(object $composition, ?object $before = null): array
+    {
+        $added = \App\Services\LandingPageSettingsService\ReglableFormRules::formBlockCount($composition)
+            > ($before !== null ? \App\Services\LandingPageSettingsService\ReglableFormRules::formBlockCount($before) : 0);
+
+        return $added ? [['path' => 'blocks', 'message' => 'formulaire à étapes (container layout « steps », blocs field ou summary) : pas encore disponible pour l\'assistant ; pour un formulaire, utilise le bloc form existant (formType contact, reservation…) et signale-le dans limits']] : [];
+    }
+
+    /**
      * Liens écrits par l'IA : les textes acceptent des liens <a href> depuis le 06/10/2026, mais l'assistant n'en
      * ajoute jamais (une adresse inventée mènerait le visiteur n'importe où). Une adresse de lien absente de la
      * composition de départ est renvoyée au modèle ; les liens déjà posés par l'administrateur sont conservés.

@@ -101,6 +101,15 @@ Règles :
 TXT;
 
     /**
+     * Formulaires à étapes (contrat du lot 1, 27/10/2026) : consigne ajoutée seulement quand le contrat actif connaît
+     * le layout « steps ». L'envoi des réponses n'existe pas encore : l'assistant n'en compose pas (addedForms).
+     */
+    private const FORM_STEPS_RULE = <<<'TXT'
+
+- Formulaires à étapes (container layout « steps », blocs field et summary, actions de bouton next, prev, submit, restart) : pas encore disponibles pour l'assistant. N'en ajoute jamais ; pour un formulaire demandé, utilise le bloc form existant (formType contact, reservation, candidature, newsletter) et dis dans limits qu'un formulaire à étapes se construit dans l'éditeur. Un formulaire à étapes déjà présent dans la composition se retouche (couleurs, textes, espacements) sans ajouter de question.
+TXT;
+
+    /**
      * Scène au défilement (container layout « scroll », contrat du 02/10/2026) : consigne ajoutée seulement quand le
      * contrat actif la connaît, pour qu'un retour à une version antérieure ne fasse pas produire un layout refusé.
      */
@@ -127,6 +136,7 @@ TXT;
     private ?string $editorLabelsFrom = null;
     private ?string $schemaText = null;
     private bool $scrollScene = false;
+    private bool $formSteps = false;
     private bool $commerce = false;
     /** @var list<string> polices du contrat actif (fontFamily.enum), citées dans la consigne sur les polices */
     private array $fonts = ['Système'];
@@ -694,6 +704,7 @@ TXT;
             $schema = json_decode(file_get_contents($path), false, 512, JSON_THROW_ON_ERROR);
             $this->schemaText = $this->json($schema);
             $this->scrollScene = self::supportsScrollScene($schema);
+            $this->formSteps = self::supportsFormSteps($schema);
             $this->commerce = self::supportsCommerce($schema);
             // polices chargées par le site : liste du contrat (le frontend en ajoute, ex. Syne, Manrope, JetBrains Mono)
             $this->fonts = array_values(array_filter((array) ($schema->{'$defs'}->block->properties->fontFamily->enum ?? []), 'is_string')) ?: ['Système'];
@@ -712,7 +723,7 @@ TXT;
             $this->editorLabelsFrom = $path;
         }
 
-        return str_replace('{POLICES}', implode(', ', $this->fonts), self::SYSTEM) . ($this->scrollScene ? self::SCROLL_SCENE_RULE : '') . ($this->commerce ? self::COMMERCE_RULE : '')
+        return str_replace('{POLICES}', implode(', ', $this->fonts), self::SYSTEM) . ($this->scrollScene ? self::SCROLL_SCENE_RULE : '') . ($this->formSteps ? self::FORM_STEPS_RULE : '') . ($this->commerce ? self::COMMERCE_RULE : '')
             . ($this->editorLabels !== '' ? "\n\n<libelles_editeur>\n" . $this->editorLabels . "\n</libelles_editeur>" : '');
     }
 
@@ -720,6 +731,12 @@ TXT;
     public static function supportsScrollScene(object $schema): bool
     {
         return in_array('scroll', (array) ($schema->{'$defs'}->block->properties->layout->enum ?? []), true);
+    }
+
+    /** Le contrat accepte-t-il les formulaires à étapes (container layout « steps ») ? */
+    public static function supportsFormSteps(object $schema): bool
+    {
+        return in_array('steps', (array) ($schema->{'$defs'}->block->properties->layout->enum ?? []), true);
     }
 
     /** Le contrat connaît-il les blocs du commerce (groupe de mode d'un container) ? */

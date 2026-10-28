@@ -54,10 +54,13 @@ final class ReglableCompositionValidator
     public function validateConfiguration(mixed $configuration): array
     {
         $errors = [];
-        foreach ($this->compositions($configuration) as $path => $composition) {
+        $compositions = $this->compositions($configuration);
+        foreach ($compositions as $path => $composition) {
             array_push($errors, ...$this->validateComposition($composition, $path));
         }
         array_push($errors, ...$this->validateSectionNames($configuration));
+        // formulaires à étapes : uid des sections qui en contiennent, pas de formulaire dans la navbar ni le footer
+        array_push($errors, ...ReglableFormRules::documentErrors($configuration, $compositions));
 
         return $errors;
     }
@@ -165,6 +168,8 @@ final class ReglableCompositionValidator
 
         if (is_object($composition) && is_array($composition->blocks ?? null)) {
             array_push($errors, ...$this->validateBlockTree($composition->blocks, $this->join($prefix, 'blocks')));
+            // formulaires à étapes (27/10/2026) : sans container layout « steps » ni bloc de formulaire, rien n'est contrôlé
+            array_push($errors, ...ReglableFormRules::compositionErrors($composition->blocks, $this->join($prefix, 'blocks')));
         }
         if (is_object($composition) || is_array($composition)) {
             $this->validateGradients($composition, $prefix, $errors);
