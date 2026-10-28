@@ -93,13 +93,14 @@ class AdminStripeController extends AbstractController
             return $this->redirect($adminUrlGenerator->setController(StripeConfigCrudController::class)->generateUrl());
         }
 
-        $disconnected = $stripeService->disconnectCurrentTenant();
+        $outcome = $stripeService->disconnectCurrentTenant();
 
-        if ($disconnected) {
-            $this->addFlash('info', 'Le compte Stripe a été déconnecté avec succès pour ce tenant. Vous pouvez en connecter un nouveau à tout moment.');
-        } else {
-            $this->addFlash('warning', 'Aucun compte Stripe actif n\'était associé à ce tenant.');
-        }
+        match ($outcome) {
+            'removed' => $this->addFlash('info', 'Le compte Stripe a été déconnecté avec succès pour ce tenant. Vous pouvez en connecter un nouveau à tout moment.'),
+            'test_only' => $this->addFlash('info', 'Le compte Stripe de test de la boutique a été retiré. Le compte Stripe RÉEL de la caisse, enregistré sur cette même configuration, est conservé (page « Paiements de caisse (Stripe) »).'),
+            'refused_live' => $this->addFlash('danger', 'Déconnexion refusée : les paiements de caisse sont en mode RÉEL et leur compte Stripe est enregistré sur cette configuration. Pour retirer le compte de la boutique, repassez d\'abord la caisse en mode test (menu Caisse, « Paiements de caisse (Stripe) »), puis recommencez : le compte réel de la caisse sera conservé.'),
+            default => $this->addFlash('warning', 'Aucun compte Stripe actif n\'était associé à ce tenant.'),
+        };
 
         return $this->redirect($adminUrlGenerator->setController(StripeConfigCrudController::class)->generateUrl());
     }

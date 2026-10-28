@@ -44,24 +44,30 @@ class StripeAccountResolver
     /** Clé secrète d'un mode ; null si elle n'est pas configurée */
     public function secretKey(string $mode): ?string
     {
+        // Une variable dédiée dont le préfixe ne correspond pas au mode est ignorée (relecture du 28/10/2026) : une clé de test dans
+        // STRIPE_LIVE_SECRET_KEY ne doit jamais donner un mode « réel » qui n'encaisse rien, ni l'inverse
         $platform = self::env('STRIPE_SECRET_KEY');
+        $live = self::env('STRIPE_LIVE_SECRET_KEY');
+        $test = self::env('STRIPE_TEST_SECRET_KEY');
         if ($mode === self::LIVE) {
-            return self::env('STRIPE_LIVE_SECRET_KEY') ?? (self::isLiveKey($platform) ? $platform : null);
+            return self::isLiveKey($live) ? $live : (self::isLiveKey($platform) ? $platform : null);
         }
 
-        return $platform !== null && !self::isLiveKey($platform) ? $platform : self::env('STRIPE_TEST_SECRET_KEY');
+        return $platform !== null && !self::isLiveKey($platform) ? $platform : ($test !== null && !self::isLiveKey($test) ? $test : null);
     }
 
     /** Clé publique d'un mode ; null si elle n'est pas configurée */
     public function publicKey(string $mode): ?string
     {
         $platform = self::env('STRIPE_PUBLIC_KEY');
-        $live = $platform !== null && str_starts_with($platform, 'pk_live');
+        $livePublic = self::env('STRIPE_LIVE_PUBLIC_KEY');
+        $testPublic = self::env('STRIPE_TEST_PUBLIC_KEY');
+        $isLive = fn (?string $k) => $k !== null && str_starts_with($k, 'pk_live');
         if ($mode === self::LIVE) {
-            return self::env('STRIPE_LIVE_PUBLIC_KEY') ?? ($live ? $platform : null);
+            return $isLive($livePublic) ? $livePublic : ($isLive($platform) ? $platform : null);
         }
 
-        return $platform !== null && !$live ? $platform : self::env('STRIPE_TEST_PUBLIC_KEY');
+        return $platform !== null && !$isLive($platform) ? $platform : ($testPublic !== null && !$isLive($testPublic) ? $testPublic : null);
     }
 
     public function keysConfigured(string $mode): bool

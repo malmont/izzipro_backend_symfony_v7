@@ -48,7 +48,7 @@ class StripeConfig
         return $this->accountId;
     }
 
-    public function setAccountId(string $accountId): static
+    public function setAccountId(?string $accountId): static
     {
         $this->accountId = $accountId;
 

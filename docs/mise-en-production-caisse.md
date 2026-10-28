@@ -88,7 +88,9 @@ Permissions (tout le reste sur « Aucun ») ; les libellés de l'interface Strip
 | Connect : Account links | Écriture | lien d'inscription Stripe |
 | Application fees | Lecture | commission de la plateforme sur les paiements des comptes connectés |
 
-La clé publique réelle (`pk_live_…`) n'est pas secrète mais se configure à côté. Installation (variables nouvelles : lues à
+Le serveur n'accepte dans `STRIPE_LIVE_SECRET_KEY` qu'une clé au préfixe `sk_live_` ou `rk_live_` (une clé de test y est ignorée :
+« clés réelles non configurées ») et refuse le passage en réel si le compte relu n'est pas en mode réel chez Stripe
+(`STRIPE_ACCOUNT_NOT_LIVE`). La clé publique réelle (`pk_live_…`) n'est pas secrète mais se configure à côté. Installation (variables nouvelles : lues à
 chaque requête, sans recréer le conteneur) :
 
 ```bash

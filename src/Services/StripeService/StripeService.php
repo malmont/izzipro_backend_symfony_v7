@@ -242,7 +242,8 @@ class StripeService
         }
         $stripeConfig = $this->getStripeConfigForCurrentTenant();
 
-        return $stripeConfig && $stripeConfig->isActive() ? ['stripe_account' => $stripeConfig->getAccountId()] : null;
+        // account_id est facultatif depuis M1 (ligne créée par la caisse pour son compte réel) : actif sans compte = aucun compte (relecture du 28/10/2026)
+        return $stripeConfig && $stripeConfig->isActive() && $stripeConfig->getAccountId() ? ['stripe_account' => $stripeConfig->getAccountId()] : null;
     }
 
     /**
@@ -290,7 +291,7 @@ class StripeService
                 $this->logger->info("Paiement interne (V2V) pour le tenant: $tenantCode");
             } else {
                 $stripeConfig = $this->getStripeConfigForCurrentTenant();
-                if ($stripeConfig && $stripeConfig->isActive()) {
+                if ($stripeConfig && $stripeConfig->isActive() && $stripeConfig->getAccountId()) {
                     $stripeOptions['stripe_account'] = $stripeConfig->getAccountId();
 
                     // Commission de la plateforme (V2V) : 1 % par défaut, réglable par site (R1)
@@ -355,17 +356,33 @@ class StripeService
         return $stripeConfigRepo->findOneBy([]);
     }
 
-    public function disconnectCurrentTenant(): bool
+    /**
+     * « Déconnecter Stripe » (boutique). Sans compte réel de caisse : la ligne est supprimée, comme avant ('removed'). La même ligne porte
+     * depuis M1 le compte Connect RÉEL de la caisse (relecture du 28/10/2026) : caisse en mode réel → refus ('refused_live', rien n'est
+     * modifié) ; caisse en test avec un compte réel enregistré → seul le compte de test est retiré, la ligne et le compte réel restent
+     * ('test_only'). 'none' : aucune configuration.
+     */
+    public function disconnectCurrentTenant(): string
     {
         $stripeConfig = $this->getStripeConfigForCurrentTenant();
-
-        if ($stripeConfig) {
-            $this->getEm()->remove($stripeConfig);
-            $this->getEm()->flush();
-            return true;
+        if (!$stripeConfig) {
+            return 'none';
         }
+        $em = $this->getEm();
+        $posMode = $em->getRepository(\App\Entity\Entreprise::class)->findOneBy([])?->getPosStripeMode() ?? 'test';
+        if ($posMode === 'live') {
+            return 'refused_live';
+        }
+        if ($stripeConfig->getLiveAccountId() !== null) {
+            $stripeConfig->setAccountId(null)->setIsActive(false)->setTerminalLocationId(null);
+            $em->flush();
 
-        return false;
+            return 'test_only';
+        }
+        $em->remove($stripeConfig);
+        $em->flush();
+
+        return 'removed';
     }
 
     public function verifyPaymentIntent(string $paymentIntentId): ?PaymentIntent
@@ -379,7 +396,7 @@ class StripeService
 
             if (!$isInternal) {
                 $stripeConfig = $this->getStripeConfigForCurrentTenant();
-                if ($stripeConfig && $stripeConfig->isActive()) {
+                if ($stripeConfig && $stripeConfig->isActive() && $stripeConfig->getAccountId()) {
                     $stripeOptions['stripe_account'] = $stripeConfig->getAccountId();
                 }
             }
@@ -405,7 +422,7 @@ class StripeService
             $tenantCode = $this->connectionManager->getCurrentTenantCode();
             if (!$this->connectionManager->isTenantInternal($tenantCode)) {
                 $stripeConfig = $this->getStripeConfigForCurrentTenant();
-                if ($stripeConfig && $stripeConfig->isActive()) {
+                if ($stripeConfig && $stripeConfig->isActive() && $stripeConfig->getAccountId()) {
                     $stripeOptions['stripe_account'] = $stripeConfig->getAccountId();
                 }
             }
@@ -430,7 +447,7 @@ class StripeService
 
             if (!$isInternal) {
                 $stripeConfig = $this->getStripeConfigForCurrentTenant();
-                if ($stripeConfig && $stripeConfig->isActive()) {
+                if ($stripeConfig && $stripeConfig->isActive() && $stripeConfig->getAccountId()) {
                     $stripeOptions['stripe_account'] = $stripeConfig->getAccountId();
                 }
             }

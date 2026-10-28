@@ -552,6 +552,7 @@ class PosTerminalPaymentService
     /** POST /api/pos/terminal/payments/{id}/refund : remboursement d'un paiement débité (paiement sans vente, Interac avant annulation) */
     public function startRefund(PosTerminalPayment $payment, ?int $amount, User $user): PosTerminalPayment
     {
+        $this->requireSameMode($payment); // paiement d'un autre mode Stripe (relecture du 28/10/2026) : 409, rembourser autrement
         // Caissier : validation d'un responsable (C3) comme pour l'annulation d'une vente, action « refund », contexte
         // {orderId} du paiement rattaché, sinon {orderId: 0, terminalPaymentId} pour un paiement sans vente
         $this->approvals->requireFor(\App\Services\PosAuditService\PosApprovalService::REFUND, $user,

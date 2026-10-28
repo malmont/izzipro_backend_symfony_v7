@@ -81,6 +81,7 @@ class PosStripeLiveApiTest extends WebTestCase
         $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register, 'cashFund' => 10000]);
         $modes = static::getContainer()->get(PosStripeModeService::class);
         $error = fn (callable $f) => (function () use ($f) { try { $f(); return null; } catch (CashRegisterException $e) { return [$e->status, $e->errorCode]; } })();
+        $error2 = fn (Response $r) => [$r->getStatusCode(), json_decode($r->getContent(), true)['error'] ?? null];
         $items = [['productVariantId' => $this->cap, 'quantity' => 1]];
 
         // Test par défaut, visible par la caisse ; simulation permise
@@ -98,6 +99,8 @@ class PosStripeLiveApiTest extends WebTestCase
         // Sans clés réelles, puis sans compte réel, puis compte réel non prêt : refusé, rien ne change
         self::env('STRIPE_LIVE_SECRET_KEY', null);
         $this->assertSame([409, 'STRIPE_KEYS_MISSING'], $error(fn () => $modes->switchMode('live', $admin)));
+        self::env('STRIPE_LIVE_SECRET_KEY', 'sk_test_par_erreur');
+        $this->assertSame([409, 'STRIPE_KEYS_MISSING'], $error(fn () => $modes->switchMode('live', $admin)), 'une clé de test dans la variable réelle est ignorée');
         self::env('STRIPE_LIVE_SECRET_KEY', 'sk_live_simule');
         $this->assertSame([409, 'STRIPE_ACCOUNT_NOT_READY'], $error(fn () => $modes->switchMode('live', $admin)), 'aucun compte réel');
         $url = $modes->liveOnboardingLink('https://admin.test/refresh', 'https://admin.test/return', $admin);
@@ -115,6 +118,11 @@ class PosStripeLiveApiTest extends WebTestCase
         }
         $this->assertSame('test', $this->db->fetchOne('SELECT pos_stripe_mode FROM entreprise LIMIT 1'));
 
+        // Compte prêt mais pas en mode réel chez Stripe (clé ou compte de test) : refusé
+        FakePosStripeAccountGateway::set($live, true, true, [], false);
+        $this->assertSame([409, 'STRIPE_ACCOUNT_NOT_LIVE'], $error(fn () => $modes->switchMode('live', $admin)));
+        $this->assertSame('test', $this->db->fetchOne('SELECT pos_stripe_mode FROM entreprise LIMIT 1'));
+
         // Compte prêt : passage en réel, lecteur simulé détaché, journal ; plus de simulation possible
         FakePosStripeAccountGateway::set($live, true, true);
         $journal = (int) $this->db->fetchOne("SELECT COUNT(*) FROM pos_audit_log WHERE type = 'STRIPE_MODE_CHANGED'");
@@ -129,6 +137,10 @@ class PosStripeLiveApiTest extends WebTestCase
         $register = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager()->find(CashRegister::class, $this->register);
         $this->assertSame([403, 'SIMULATION_FORBIDDEN'], $error(fn () => static::getContainer()->get(PosTerminalPaymentService::class)->createSimulatedReader($register)), 'jamais de lecteur simulé en réel');
 
+        // Paiement encaissé en test : son remboursement au terminal est refusé en réel (relecture du 28/10/2026), rien n'est écrit
+        $refund = $this->request('POST', '/api/pos/terminal/payments/' . $tp['paymentId'] . '/refund', ['amount' => 1000]);
+        $this->assertSame([409, 'TERMINAL_PAYMENT_OTHER_MODE'], $error2($refund));
+        $this->assertNull($this->db->fetchOne('SELECT refund_status FROM pos_terminal_payment WHERE id = ?', [$tp['paymentId']]), 'aucun remboursement en attente');
         // Vente payée en test, annulée après le passage en réel : remboursement carte refusé (autre mode), espèces possibles
         $cancel = $this->request('POST', "/api/order/cancel/{$sale['orderId']}", ['paymentMethod' => 1, 'cashRegisterId' => $this->register]);
         $this->assertSame([409, 'TERMINAL_PAYMENT_OTHER_MODE', 'test', 'live'], [$cancel->getStatusCode(), json_decode($cancel->getContent(), true)['error'], json_decode($cancel->getContent(), true)['paymentMode'], json_decode($cancel->getContent(), true)['siteMode']]);
@@ -225,6 +237,45 @@ class PosStripeLiveApiTest extends WebTestCase
             putenv($name);
         } else {
             $_ENV[$name] = $value;
+        }
+    }
+
+    public function testDisconnectingTheShopKeepsThePosLiveAccountAndAnActiveRowWithoutAccountIsNoAccount(): void
+    {
+        $em = static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager();
+        $stripe = static::getContainer()->get(\App\Services\StripeService\StripeService::class);
+        $row = $this->db->fetchAssociative('SELECT * FROM stripe_config LIMIT 1');
+        $this->assertNotFalse($row, 'configuration Stripe de la base de test');
+        try {
+            // Compte réel de caisse enregistré, caisse en test : seul le compte de test est retiré, la ligne et le compte réel restent
+            $this->db->executeStatement("UPDATE stripe_config SET live_account_id = 'acct_live_simule', live_is_active = true, live_terminal_location_id = 'tml_live'");
+            $em->clear();
+            $this->assertSame('test_only', $stripe->disconnectCurrentTenant());
+            $after = $this->db->fetchAssociative('SELECT account_id, is_active, terminal_location_id, live_account_id, live_is_active, live_terminal_location_id FROM stripe_config');
+            $this->assertSame([null, false, null, 'acct_live_simule', true, 'tml_live'], [$after['account_id'], (bool) $after['is_active'], $after['terminal_location_id'], $after['live_account_id'], (bool) $after['live_is_active'], $after['live_terminal_location_id']]);
+            // Boutique : configuration active sans compte = aucun compte (jamais le compte de la plateforme avec une commission)
+            $this->db->executeStatement('UPDATE stripe_config SET is_active = true');
+            $em->clear();
+            $this->assertNull($stripe->accountOptions(), 'actif sans compte : aucun compte');
+            // Caisse en réel : refus, rien ne change
+            $this->db->executeStatement("UPDATE stripe_config SET account_id = ?, is_active = true", [$row['account_id']]);
+            $this->db->executeStatement("UPDATE entreprise SET pos_stripe_mode = 'live'");
+            $em->clear();
+            $this->assertSame('refused_live', $stripe->disconnectCurrentTenant());
+            $this->assertSame($row['account_id'], $this->db->fetchOne('SELECT account_id FROM stripe_config'));
+            // Sans compte réel : la ligne est supprimée, comme avant
+            $this->db->executeStatement("UPDATE entreprise SET pos_stripe_mode = 'test'");
+            $this->db->executeStatement('UPDATE stripe_config SET live_account_id = NULL, live_is_active = false, live_terminal_location_id = NULL');
+            $em->clear();
+            $this->assertSame('removed', $stripe->disconnectCurrentTenant());
+            $this->assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM stripe_config'));
+            $this->assertSame('none', $stripe->disconnectCurrentTenant());
+        } finally {
+            // Base partagée : la configuration d'origine est remise pour les tests suivants
+            $this->db->executeStatement('DELETE FROM stripe_config');
+            $this->db->executeStatement('INSERT INTO stripe_config (id, account_id, is_active, terminal_location_id, online_fee_bp, live_is_active) VALUES (?, ?, ?, NULL, ?, false)', [$row['id'], $row['account_id'], (bool) $row['is_active'], $row['online_fee_bp']]);
+            $this->db->executeStatement("UPDATE entreprise SET pos_stripe_mode = 'test'");
+            $em->clear();
         }
     }
 

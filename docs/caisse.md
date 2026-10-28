@@ -1715,9 +1715,19 @@ entrées portent fabricant, préfixe, offre, série et montant, jamais de donné
   (un lecteur appartient à un compte et à un mode) et s'appairent de nouveau depuis la fiche du poste. Journal **`STRIPE_MODE_CHANGED
   {from, to, detachedReaders, account}`** avec l'administrateur. Retour en test : mêmes contrôles de paiements en cours, journalisé.
 - **En réel** : `simulationAllowed` toujours `false`, lecteur simulé refusé (403 `SIMULATION_FORBIDDEN`), carte simulée impossible.
-- Chaque paiement par terminal garde son mode (`pos_terminal_payment.stripe_mode`). Une opération Stripe (capture, annulation,
-  remboursement, carte simulée) sur un paiement de l'autre mode → **409 `TERMINAL_PAYMENT_OTHER_MODE {paymentId, paymentMode, siteMode}`** :
-  rembourser autrement (espèces) ; un tel paiement n'est plus relu chez Stripe.
+- Chaque paiement par terminal garde son mode (`pos_terminal_payment.stripe_mode`). Toute opération Stripe sur un paiement de l'autre
+  mode → **409 `TERMINAL_PAYMENT_OTHER_MODE {paymentId, paymentMode, siteMode}`**, rien n'est écrit : capture par la vente, annulation
+  (`POST …/terminal/payments/{id}/cancel`), **remboursement (`POST …/terminal/payments/{id}/refund`, ajouté le 28/10/2026 : il manquait,
+  un remboursement Interac d'un paiement de test aurait attendu pour toujours en mode réel)**, confirmation du remboursement du kit,
+  remboursement d'une annulation ou d'un retour, carte simulée. Pour la caisse : afficher le message et rembourser autrement (espèces).
+  Un tel paiement n'est plus relu chez Stripe.
+- Passage en réel : le compte relu avec la clé réelle doit être **en mode réel chez Stripe** (`livemode`), sinon 409
+  `STRIPE_ACCOUNT_NOT_LIVE` ; une clé sans préfixe `sk_live` / `rk_live` dans `STRIPE_LIVE_SECRET_KEY` est ignorée (clés réelles
+  « non configurées »), et une clé réelle dans la variable de test aussi (28/10/2026).
+- **« Déconnecter Stripe » (page Stripe de la boutique)** : sans compte réel de caisse, la ligne de configuration est supprimée comme
+  avant ; caisse **en mode réel** → refus (message : repasser la caisse en test d'abord) ; caisse en test avec un compte réel enregistré →
+  seul le compte de test de la boutique est retiré, le compte réel de la caisse est conservé. Boutique : une configuration active sans
+  compte vaut « aucun compte » (jamais le compte de la plateforme avec une commission).
 
 ### Compte Connect réel d'un nouveau magasin (page « Paiements de caisse (Stripe) »)
 

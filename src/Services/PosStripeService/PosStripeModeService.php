@@ -139,6 +139,9 @@ class PosStripeModeService
                 throw new CashRegisterException('STRIPE_ACCOUNT_NOT_READY', 'Aucun compte Stripe réel : lancez l\'inscription Stripe du magasin', 409, [], ['chargesEnabled' => false, 'payoutsEnabled' => false]);
             }
             $account = $this->gateway->retrieveAccount(StripeAccountResolver::LIVE, $id);
+            if (!$account['livemode']) { // clé ou compte de test derrière le mode réel (relecture du 28/10/2026) : jamais de « réel » qui n'encaisse rien
+                throw new CashRegisterException('STRIPE_ACCOUNT_NOT_LIVE', 'Le compte Stripe relu avec la clé réelle n\'est pas en mode réel : vérifiez STRIPE_LIVE_SECRET_KEY et le compte réel du magasin', 409, [], ['livemode' => false]);
+            }
             if (!$account['chargesEnabled'] || !$account['payoutsEnabled']) {
                 if (!$this->accounts->isInternal()) {
                     $this->accounts->config()?->setLiveIsActive(false);
