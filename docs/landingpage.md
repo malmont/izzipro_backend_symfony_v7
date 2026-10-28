@@ -124,6 +124,50 @@ contact, assistant IA.
   (`LandingAiCompositionChecker::addedForms`, erreur renvoyée au modèle ; une retouche d'un formulaire existant reste
   possible) ; consigne `FORM_STEPS_RULE` ajoutée seulement quand le contrat actif connaît `steps`. À lever au lot 4.
 
+### Demandes reçues, familles de prestations (lot 1, 28/10/2026)
+
+- **Table `form_submission`** (`Entity/FormSubmission`) : `reference` (unique), `formName`, `app` (landingpage |
+  boutique), `sectionUid`, `formId` (id du container `steps`), `formHash`, `answers` (JSON
+  `[{ name, label, type, value, display }]`, libellés au moment de l'envoi), `locale`, `status` (new, read, done,
+  archived), `target` (generic, reservation, contact), `reservationId`, `contactId`, `notifiedAt`, `createdAt`,
+  `updatedAt`. Aucune adresse IP. L'envoi public (`POST /api/form-submissions`) arrive au lot 3.
+- **API d'administration** (`FormSubmissionAdminController`, `ROLE_ADMIN` par `access_control` et `#[IsGranted]`) :
+  `GET /api/form-submissions` (filtres `formId`, `status`, `from`, `to` en AAAA-MM-JJ inclus dans le fuseau du site,
+  `page` dès 1, `limit` 1 à 100, 25 par défaut ; réponse `{ items, total, page, limit }`, chaque élément sans les
+  réponses complètes mais avec `preview` : 3 premières réponses non vides), `GET /api/form-submissions/forms`
+  (`[{ formId, formName, count, lastAt }]`), `GET /api/form-submissions/{id}` (avec `answers` et `formHash`),
+  `PATCH /api/form-submissions/{id}` `{ status }` (422 sinon), `DELETE /api/form-submissions/{id}` (204),
+  `GET /api/form-submissions/export` (mêmes filtres ; CSV UTF-8 avec BOM, séparateur `;`, une colonne par question,
+  cellules commençant par `= + - @` préfixées d'une apostrophe ; 5 000 demandes au plus, en-têtes `X-Export-Count`,
+  `X-Export-Truncated`). Erreurs `{ error, message, errors? }` (400 paramètre, 404, 422).
+- **Fuseau des dates** : `Entreprise.posTimezone`, sinon `America/Toronto` (`FormSubmissionService::timezone`).
+- **Journal** : `content_audit_log`, ressource `form-submissions`, actions `status` et `delete`, avec seulement la
+  référence, le statut, le nom du formulaire et la date ; jamais les réponses ; non restaurables.
+- **EasyAdmin** « Demandes reçues » (`FormSubmissionCrudController`, section Réservations & Clients) : liste, filtres
+  (statut, formulaire, date), détail des réponses, actions « Marquer lue / traitée », « Archiver », « Remettre en
+  nouvelle » (jeton CSRF), suppression (unitaire et groupée), export CSV ; tout passe par `FormSubmissionService`.
+- **Destinataire et conservation** (fiche entreprise, panneau « Demandes reçues (formulaires) ») :
+  `formSubmissionsEmail` (vide : courriel de l'entreprise), `formSubmissionsRetentionMonths` (1 à 120, vide : 12).
+  Purge : à chaque envoi (lot 3) et chaque nuit, `app:form-submissions:purge [--db=db_demo]` lancée par
+  `ops/systemd/form-submissions-purge.timer` (3 h 40). Installation (une fois, avec sudo) :
+  `sudo cp ops/systemd/form-submissions-purge.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload &&
+  sudo systemctl enable --now form-submissions-purge.timer`. Les copies créées en réservation ou en contact ne sont pas
+  purgées (décision de l'utilisateur).
+- **Familles de prestations** (`Entity/ServiceFamily` + traductions) : `GET /api/service-families` (public,
+  `[{ id, name, position, translations: [{ language, name }] }]`, ordre position puis id), `POST` (201), `PUT /{id}`
+  (clés présentes remplacées, `translations` remplace toutes les traductions), `DELETE /{id}` (204 ; les prestations
+  perdent leur famille) : `ROLE_ADMIN`. EasyAdmin « Familles de prestations ».
+- **Prestations** (`ServiceOffer`) : `family`, `position` (défaut 0), `bookable` (défaut vrai, prestations existantes
+  comprises), `durationMinutes`. `POST`/`PUT /api/service-offers` acceptent `familyId` (0 retire la famille, inconnue :
+  422), `position`, `bookable`, `durationMinutes` ; la réponse les renvoie (`familyId`, `family { id, name, position }`).
+  Corrigé le 28/10/2026 : ces deux routes répondaient 500 après l'écriture (langue absente du DTO de sortie).
+- **`GET /api/reservations/services`** : champs historiques inchangés (`id` = slug du titre, `label`, `subtitle`,
+  `description`) ; ajoutés `serviceOfferId` (null pour la liste de secours), `family { id, name, position,
+  translations }`, `position`, `bookable`, `durationMinutes`, `translations: [{ language, label, subtitle,
+  description }]`. Ordre : position, puis id.
+- Migration `Version20261105100000`, script `scripts/migrate_all_v2_form_submissions.sh` (additif, appliqué à toutes les
+  bases le 28/10/2026). Tests : `tests/Functional/Forms/FormSubmissionAdminTest.php`.
+
 ## Modèles de site
 
 Depuis le 07/10/2026, l'administrateur enregistre des configurations complètes comme modèles, sans toucher aux réglages

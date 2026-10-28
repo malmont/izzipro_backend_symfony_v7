@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (250)
+## Boutique et commun (260)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -331,6 +331,12 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/features/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::deleteFeature` |
 | GET | `/api/features` | PUBLIC_ACCESS | `App\Controller\FeatureController\FeatureController` |
 | POST | `/api/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createFeature` |
+| GET | `/api/form-submissions/export` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\FormSubmissionController\FormSubmissionAdminController::export` |
+| GET | `/api/form-submissions/forms` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\FormSubmissionController\FormSubmissionAdminController::forms` |
+| DELETE | `/api/form-submissions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\FormSubmissionController\FormSubmissionAdminController::delete` |
+| GET | `/api/form-submissions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\FormSubmissionController\FormSubmissionAdminController::show` |
+| PATCH | `/api/form-submissions/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\FormSubmissionController\FormSubmissionAdminController::status` |
+| GET | `/api/form-submissions` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\FormSubmissionController\FormSubmissionAdminController::index` |
 | DELETE | `/api/fournisseurs/{id}` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::deleteFournisseur` |
 | GET | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::getAllFournisseurs` |
 | POST | `/api/fournisseurs` | ROLE_ADMIN | `Controller\FournisseurController\FournisseurController::createFournisseur` |
@@ -431,6 +437,10 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/reviews/mine` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::mine` |
 | DELETE | `/api/reviews/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::delete` |
 | PUT, PATCH | `/api/reviews/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ReviewController\ReviewController::update` |
+| DELETE | `/api/service-families/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ServiceFamilyController\ServiceFamilyController::delete` |
+| PUT | `/api/service-families/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ServiceFamilyController\ServiceFamilyController::update` |
+| GET | `/api/service-families` | PUBLIC_ACCESS | `Controller\ServiceFamilyController\ServiceFamilyController::index` |
+| POST | `/api/service-families` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\ServiceFamilyController\ServiceFamilyController::create` |
 | POST | `/api/shipping/buy` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ShippingController\ShippingController::buy` |
 | POST | `/api/shipping/parcels` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\ShippingController\ShippingController::parcels` |
 | POST | `/api/shipping/rates` | PUBLIC_ACCESS | `Controller\ShippingController\ShippingController::rates` |

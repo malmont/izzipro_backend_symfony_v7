@@ -120,26 +120,52 @@ class ReservationService
         return $reservation;
     }
 
+    /**
+     * Prestations proposées à la réservation (GET /api/reservations/services). Champs historiques inchangés : `id` est le
+     * slug du titre (envoyé par les formulaires de réservation B, C, D et gardé dans Reservation.serviceId). Ajoutés le
+     * 28/10/2026 : serviceOfferId (id numérique, null pour la liste de secours), family, position, bookable,
+     * durationMinutes, translations. Ordre : position, puis identifiant. Site sans prestation : liste de secours.
+     */
     public function getReservableServices(): array
     {
         $tenantEm = $this->emProvider->getEntityManager();
-        $dbOffers = $tenantEm->getRepository(ServiceOffer::class)->findAll();
+        $dbOffers = $tenantEm->getRepository(ServiceOffer::class)->findBy([], ['position' => 'ASC', 'id' => 'ASC']);
 
         if (!empty($dbOffers)) {
             $slugger = new \Symfony\Component\String\Slugger\AsciiSlugger();
             $result = [];
             foreach ($dbOffers as $offer) {
                 $slug = $slugger->slug($offer->getTitre() ?: '')->lower()->toString();
+                $family = $offer->getFamily();
                 $result[] = [
                     'id' => $slug ?: (string)$offer->getId(),
                     'label' => $offer->getTitre(),
                     'subtitle' => $offer->getTitreCommentaire() ?: '',
                     'description' => $offer->getDescriptions() ?: $offer->getTitreCommentaire() ?: '',
+                    'serviceOfferId' => $offer->getId(),
+                    'family' => $family ? [
+                        'id' => (int) $family->getId(), 'name' => $family->getName(), 'position' => $family->getPosition(),
+                        'translations' => array_values(array_map(fn ($t) => ['language' => $t->getLanguage(), 'name' => $t->getName()], $family->getTranslations()->toArray())),
+                    ] : null,
+                    'position' => $offer->getPosition(),
+                    'bookable' => $offer->isBookable(),
+                    'durationMinutes' => $offer->getDurationMinutes(),
+                    'translations' => array_values(array_map(fn ($t) => [
+                        'language' => $t->getLanguage(), 'label' => $t->getTitre(), 'subtitle' => $t->getTitreCommentaire() ?: '', 'description' => $t->getDescriptions() ?: '',
+                    ], $offer->getTranslations()->toArray())),
                 ];
             }
             return $result;
         }
 
+        return array_map(fn (array $service, int $i) => $service + [
+            'serviceOfferId' => null, 'family' => null, 'position' => $i, 'bookable' => true, 'durationMinutes' => null, 'translations' => [],
+        ], $this->fallbackServices(), array_keys($this->fallbackServices()));
+    }
+
+    /** Liste de secours (site sans prestation enregistrée) */
+    private function fallbackServices(): array
+    {
         return [
             // Pôle 1 : Art de vivre et accompagnement
             [

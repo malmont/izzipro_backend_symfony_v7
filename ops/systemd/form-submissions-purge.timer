@@ -1,0 +1,12 @@
+# Formulaires : purge quotidienne des demandes reçues, à 3 h 40 (heure du serveur)
+[Unit]
+Description=Formulaires : purge quotidienne des demandes recues
+
+[Timer]
+OnCalendar=*-*-* 03:40:00
+RandomizedDelaySec=10min
+Persistent=true
+Unit=form-submissions-purge.service
+
+[Install]
+WantedBy=timers.target

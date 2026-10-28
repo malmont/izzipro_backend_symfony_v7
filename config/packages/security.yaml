@@ -64,6 +64,12 @@ security:
         - { path: ^/api/memoires/mobile/, roles: IS_AUTHENTICATED_FULLY }
         - { path: ^/api/memoires/, roles: PUBLIC_ACCESS }
 
+        # 🔹 Demandes reçues des formulaires à étapes (28/10/2026) : lecture, statut, suppression, export pour l'administrateur
+        #    (vérifié aussi par #[IsGranted] sur FormSubmissionAdminController). L'envoi public (POST) viendra au lot 3.
+        - { path: ^/api/form-submissions, methods: [GET, PATCH, DELETE], roles: ROLE_ADMIN }
+        # 🔹 Familles de prestations : lecture publique (formulaires), écritures administrateur
+        - { path: ^/api/service-families, methods: [GET], roles: PUBLIC_ACCESS }
+        - { path: ^/api/service-families, roles: ROLE_ADMIN }
         # 🔹 Confirmation d'un rendez-vous : connexion obligatoire (administrateur ou biographe, vérifié dans
         #    ReservationApiController::confirm). Publique jusqu'au 27/10/2026.
         - { path: ^/api/reservations/[^/]+/confirm$, roles: IS_AUTHENTICATED_FULLY }

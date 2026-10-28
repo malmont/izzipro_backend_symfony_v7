@@ -1,0 +1,16 @@
+# Formulaires à étapes : suppression des demandes reçues au-delà de la durée de conservation de chaque site
+# (Entreprise.formSubmissionsRetentionMonths, 12 mois par défaut). Lancée chaque nuit par form-submissions-purge.timer ;
+# la même purge a lieu à chaque envoi. Installation : docs/landingpage.md, « Formulaires à étapes ».
+[Unit]
+Description=Formulaires : purge des demandes recues (app:form-submissions:purge)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=arkanoa
+Group=arkanoa
+ExecStart=/usr/bin/docker exec -w /var/www symfony_app_v2 php bin/console app:form-submissions:purge --no-interaction
+TimeoutStartSec=10min
+StandardOutput=append:/var/log/form-submissions-purge.log
+StandardError=append:/var/log/form-submissions-purge.log

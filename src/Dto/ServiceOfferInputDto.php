@@ -18,4 +18,16 @@ class ServiceOfferInputDto
 
     #[Assert\Length(max: 255)]
     public ?string $descriptions = null;
+
+    /** Famille (id de /api/service-families) ; 0 retire la famille ; absent ou null : inchangée (28/10/2026) */
+    #[Assert\PositiveOrZero]
+    public ?int $familyId = null;
+
+    #[Assert\Range(min: 0, max: 100000)]
+    public ?int $position = null;
+
+    public ?bool $bookable = null;
+
+    #[Assert\Range(min: 1, max: 1440)]
+    public ?int $durationMinutes = null;
 }

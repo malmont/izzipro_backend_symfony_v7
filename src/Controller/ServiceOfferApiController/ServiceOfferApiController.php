@@ -82,7 +82,8 @@ class ServiceOfferApiController extends AbstractController
         $serviceOffer = $this->createServiceOfferUseCase->execute($dto);
         $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
             ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
-        return $this->json(new ServiceOfferOutputDto($serviceOffer, $baseImageUrl), Response::HTTP_CREATED);
+        // langue passée au DTO depuis le 28/10/2026 : sans elle, la réponse tombait en 500 après l'écriture
+        return $this->json(new ServiceOfferOutputDto($serviceOffer, $baseImageUrl, $request->getLocale()), Response::HTTP_CREATED);
     }
 
     #[Route('/{id}', name: 'api_service_offer_update', methods: ['PUT'])]
@@ -91,7 +92,7 @@ class ServiceOfferApiController extends AbstractController
         $serviceOffer = $this->updateServiceOfferUseCase->execute($id, $dto);
         $baseImageUrl = $this->mediaUrlResolver?->getEmailLogosBaseUrl($request->getSchemeAndHttpHost())
             ?? ($request->getSchemeAndHttpHost() . '/assets/uploads/email-logos');
-        return $this->json(new ServiceOfferOutputDto($serviceOffer, $baseImageUrl));
+        return $this->json(new ServiceOfferOutputDto($serviceOffer, $baseImageUrl, $request->getLocale()));
     }
 
     #[Route('/{id}', name: 'api_service_offer_delete', methods: ['DELETE'])]

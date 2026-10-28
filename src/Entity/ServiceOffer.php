@@ -36,6 +36,22 @@ class ServiceOffer implements TranslatableInterface, DemoContentInterface
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $photoService = null;
 
+    /** Famille de la prestation (formulaires à étapes, optionsGroupBy « family », 28/10/2026) */
+    #[ORM\ManyToOne(targetEntity: ServiceFamily::class)]
+    #[ORM\JoinColumn(name: 'family_id', nullable: true, onDelete: 'SET NULL')]
+    private ?ServiceFamily $family = null;
+
+    /** Ordre d'affichage (croissant ; à égalité, l'identifiant) */
+    #[ORM\Column(options: ['default' => 0])]
+    private int $position = 0;
+
+    /** Proposée dans les formulaires de réservation ; vrai par défaut (prestations existantes comprises) */
+    #[ORM\Column(options: ['default' => true])]
+    private bool $bookable = true;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $durationMinutes = null;
+
     /**
      * @var Collection<int, ServiceOfferTranslation>
      */
@@ -57,6 +73,15 @@ class ServiceOffer implements TranslatableInterface, DemoContentInterface
     {
         return $this->id;
     }
+
+    public function getFamily(): ?ServiceFamily { return $this->family; }
+    public function setFamily(?ServiceFamily $family): static { $this->family = $family; return $this; }
+    public function getPosition(): int { return $this->position; }
+    public function setPosition(int $position): static { $this->position = $position; return $this; }
+    public function isBookable(): bool { return $this->bookable; }
+    public function setBookable(bool $bookable): static { $this->bookable = $bookable; return $this; }
+    public function getDurationMinutes(): ?int { return $this->durationMinutes; }
+    public function setDurationMinutes(?int $minutes): static { $this->durationMinutes = $minutes; return $this; }
 
     public function getTitre(): ?string
     {

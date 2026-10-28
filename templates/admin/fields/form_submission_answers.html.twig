@@ -1,0 +1,16 @@
+{# Réponses d'une demande reçue (FormSubmissionCrudController) : libellé au moment de l'envoi, réponse affichée #}
+{% set answers = entity.instance.answers %}
+{% if answers is empty %}
+    <span class="text-muted">Aucune réponse</span>
+{% else %}
+    <table class="table table-sm mb-0">
+        <tbody>
+        {% for answer in answers %}
+            <tr>
+                <th style="width: 35%; font-weight: 600;">{{ answer.label ?? answer.name }}</th>
+                <td style="white-space: pre-wrap;">{{ answer.display ?? '' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endif %}

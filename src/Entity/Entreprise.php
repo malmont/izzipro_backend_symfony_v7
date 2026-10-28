@@ -416,6 +416,14 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(length: 180, nullable: true)]
     private ?string $posAlertsEmail = null;
 
+    /** Destinataire des demandes reçues par les formulaires à étapes (vide : courriel de l'entreprise), 28/10/2026 */
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $formSubmissionsEmail = null;
+
+    /** Durée de conservation des demandes reçues, en mois (vide : FORM_SUBMISSIONS_DEFAULT_RETENTION_MONTHS) */
+    #[ORM\Column(nullable: true)]
+    private ?int $formSubmissionsRetentionMonths = null;
+
     // Article libre et prix manuel (F7, 26/10/2026) : désactivés par défaut ; montant maximal sans validation d'un responsable
     // (cents, null = jamais de validation, 0 = toujours) ; motif du prix manuel obligatoire, motifs (un par ligne)
     #[ORM\Column(options: ['default' => false])]
@@ -1057,6 +1065,15 @@ class Entreprise implements TranslatableInterface
     public function setPosAlertsEnabled(bool $v): static { $this->posAlertsEnabled = $v; return $this; }
     public function getPosAlertsEmail(): ?string { return $this->posAlertsEmail; }
     public function setPosAlertsEmail(?string $email): static { $email = trim((string) $email); $this->posAlertsEmail = $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) ? mb_strtolower($email) : null; return $this; }
+    public const FORM_SUBMISSIONS_DEFAULT_RETENTION_MONTHS = 12;
+    public function getFormSubmissionsEmail(): ?string { return $this->formSubmissionsEmail; }
+    public function setFormSubmissionsEmail(?string $email): static { $email = trim((string) $email); $this->formSubmissionsEmail = $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) ? mb_strtolower($email) : null; return $this; }
+    public function getFormSubmissionsRetentionMonths(): ?int { return $this->formSubmissionsRetentionMonths; }
+    public function setFormSubmissionsRetentionMonths(?int $months): static { $this->formSubmissionsRetentionMonths = $months !== null && $months >= 1 && $months <= 120 ? $months : null; return $this; }
+    /** Durée appliquée : réglage du site, sinon 12 mois */
+    public function formSubmissionsRetention(): int { return $this->formSubmissionsRetentionMonths ?? self::FORM_SUBMISSIONS_DEFAULT_RETENTION_MONTHS; }
+    /** Destinataire appliqué : adresse dédiée, sinon le courriel de l'entreprise */
+    public function formSubmissionsRecipient(): ?string { return $this->formSubmissionsEmail ?: ($this->getEmail() ?: null); }
     public function isPosGiftCardEnabled(): bool { return $this->posGiftCardEnabled; }
     public function setPosGiftCardEnabled(bool $v): static { $this->posGiftCardEnabled = $v; return $this; }
     public function getPosGiftCardAmounts(): ?string { return $this->posGiftCardAmounts; }

@@ -19,6 +19,9 @@ class ReglableFormRulesTest extends KernelTestCase
     public function testAValidFormHasNoError(): void
     {
         $this->assertSame([], $this->errors($this->form()));
+        $blocks = $this->form();
+        $blocks[3] += ['minLength' => 2, 'maxLength' => 2];
+        $this->assertSame([], $this->errors($blocks), 'minimum égal au maximum : permis');
     }
 
     public function testCompositionsWithoutFormAreNotConcerned(): void
@@ -47,6 +50,9 @@ class ReglableFormRulesTest extends KernelTestCase
             '8. optionsSource sur un texte' => [fn (array &$b) => $b[3]['optionsSource'] = 'services', 'blocks[3].optionsSource'],
             '9. summaryFields inconnu' => [fn (array &$b) => $b[7]['summaryFields'] = ['nom', 'age'], 'blocks[7].summaryFields'],
             '10. reservation sans courriel obligatoire' => [fn (array &$b) => $b[4]['required'] = false, 'blocks[0].formTarget'],
+            '11. minLength > maxLength' => [fn (array &$b) => [$b[3]['minLength'], $b[3]['maxLength']] = [50, 10], 'blocks[3].minLength'],
+            '11. minValue > maxValue' => [fn (array &$b) => $b[] = ['id' => 'n1', 'type' => 'field', 'parentId' => 'e1', 'fieldType' => 'number', 'name' => 'age', 'minValue' => 10, 'maxValue' => 5], 'blocks[9].minValue'],
+            '11. minDays > maxDays' => [fn (array &$b) => $b[] = ['id' => 'd1', 'type' => 'field', 'parentId' => 'e1', 'fieldType' => 'date', 'name' => 'jour', 'minDays' => 30, 'maxDays' => 2], 'blocks[9].minDays'],
         ];
         foreach ($cases as $name => [$change, $path]) {
             $blocks = $this->form();

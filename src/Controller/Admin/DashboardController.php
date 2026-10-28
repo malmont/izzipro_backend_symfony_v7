@@ -447,6 +447,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Multiliens', 'fas fa-link', Multilien::class);
         yield MenuItem::linkToCrud('Section Recherche', 'fas fa-search', Recherche::class);
         yield MenuItem::linkToCrud('Offres de Service', 'fas fa-concierge-bell', ServiceOffer::class);
+        yield MenuItem::linkToCrud('Familles de prestations', 'fas fa-layer-group', \App\Entity\ServiceFamily::class);
         yield MenuItem::linkToCrud('Vidéos', 'fas fa-video', Video::class);
         yield MenuItem::linkToCrud('Contenus Intégrés', 'fas fa-code', Embed::class);
         yield MenuItem::linkToCrud('Configuration', 'fas fa-cogs', LandingPageSetting::class);
@@ -497,6 +498,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Réservations & Clients');
         yield MenuItem::linkToCrud('Réservations de Prestations', 'fas fa-calendar-check', Reservation::class)
             ->setController(ReservationCrudController::class);
+        yield MenuItem::linkToCrud('Demandes reçues', 'fas fa-inbox', \App\Entity\FormSubmission::class);
         yield MenuItem::linkToCrud('Contact', 'fas fa-envelope', Contact::class);
         yield MenuItem::linkToCrud('Users', 'fas fa-user', User::class);
         yield MenuItem::linkToCrud('Adresse user', 'fas fa-shipping-fast', Adress::class);

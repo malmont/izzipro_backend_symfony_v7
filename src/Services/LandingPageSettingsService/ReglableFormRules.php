@@ -219,7 +219,7 @@ final class ReglableFormRules
         return is_object($block) && ($block->type ?? null) === 'container' && ($block->layout ?? null) === 'steps';
     }
 
-    /** 6, 7, 8 : une question */
+    /** 6, 7, 8, 11 : une question */
     private static function fieldErrors(object $block, int $i, int $form, bool $inSuccess, callable $at, array &$seenNames, array &$seenRoles, array &$questions): array
     {
         $errors = [];
@@ -244,6 +244,13 @@ final class ReglableFormRules
             $seenRoles[$form][$role] = true;
             if (isset(self::ROLE_TYPES[$role]) && !in_array($fieldType, self::ROLE_TYPES[$role], true)) {
                 $errors[] = ['path' => $at($i, 'fieldType'), 'message' => sprintf('fieldRole « %s » exige fieldType %s', $role, implode(' ou ', self::ROLE_TYPES[$role]))];
+            }
+        }
+
+        // 11. Bornes cohérentes (28/10/2026) : minimum ≤ maximum, erreur sur le minimum
+        foreach (['minLength' => 'maxLength', 'minValue' => 'maxValue', 'minDays' => 'maxDays'] as $min => $max) {
+            if (is_numeric($block->$min ?? null) && is_numeric($block->$max ?? null) && $block->$min > $block->$max) {
+                $errors[] = ['path' => $at($i, $min), 'message' => sprintf('%s (%s) dépasse %s (%s)', $min, $block->$min, $max, $block->$max)];
             }
         }
 

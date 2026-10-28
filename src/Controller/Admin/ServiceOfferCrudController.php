@@ -40,6 +40,11 @@ class ServiceOfferCrudController extends BaseTenantCrudController
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false)
                 ->hideOnIndex(),
+            // Formulaires à étapes (28/10/2026) : famille, ordre, réservable, durée
+            \EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField::new('family', 'Famille')->setRequired(false),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('position', 'Ordre')->setHelp('Croissant ; à égalité, l\'ordre de création.'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\BooleanField::new('bookable', 'Réservable')->setHelp('Proposée dans les formulaires de réservation.'),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('durationMinutes', 'Durée (minutes)')->setRequired(false)->hideOnIndex(),
             CollectionField::new('translations', 'Traductions')
                 ->setEntryType(ServiceOfferTranslationType::class)
                 ->setFormTypeOption('by_reference', false)

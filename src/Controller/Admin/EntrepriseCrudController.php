@@ -196,6 +196,11 @@ class EntrepriseCrudController extends BaseTenantCrudController
             BooleanField::new('posAlertsEnabled', 'Alertes de surveillance par courriel au contact du site')->hideOnIndex(),
             EmailField::new('posAlertsEmail', 'Adresse des alertes (vide : courriel de l\'entreprise)')->setRequired(false)->hideOnIndex(),
 
+            // Formulaires à étapes (28/10/2026) : destinataire et conservation des demandes reçues
+            FormField::addPanel('Demandes reçues (formulaires)')->setHelp('Demandes envoyées par les formulaires à étapes du site (menu « Demandes reçues »). Notification à l\'adresse ci-dessous, sinon au courriel de l\'entreprise. Les demandes sont supprimées après la durée de conservation (12 mois par défaut).'),
+            EmailField::new('formSubmissionsEmail', 'Adresse qui reçoit les demandes (vide : courriel de l\'entreprise)')->setRequired(false)->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('formSubmissionsRetentionMonths', 'Conservation des demandes (mois, 1 à 120 ; vide : 12)')->setRequired(false)->hideOnIndex(),
+
             // Grille de favoris (F10) : désactivée par défaut
             FormField::addPanel('Grille de favoris (caisse)')->setHelp('Grille de produits à toucher sur l\'écran de vente (articles sans code-barres, ventes fréquentes) : produits épinglés par le responsable d\'abord, dans l\'ordre choisi (menu « Favoris de la caisse » ; les épinglés d\'un poste remplacent ceux du site pour ce poste), puis les plus vendus en caisse sur la période, nets des retours, pour compléter la grille.'),
             BooleanField::new('posFavoritesEnabled', 'Grille de favoris activée')->hideOnIndex(),
