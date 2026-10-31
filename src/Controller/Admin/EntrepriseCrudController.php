@@ -31,7 +31,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
         TenantEntityManagerProvider $emProvider,
         private readonly \App\Services\AppKeyService\AppActivationService $appActivation,
         private readonly \App\Services\TenantConnectionProvider $tenant,
-        private readonly \Symfony\Component\HttpFoundation\RequestStack $requestStack
+        private readonly \Symfony\Component\HttpFoundation\RequestStack $requestStack,
+        private readonly \App\Services\TenantConnectionManager $tenantManager
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
@@ -54,6 +55,21 @@ class EntrepriseCrudController extends BaseTenantCrudController
     public static function getEntityFqcn(): string
     {
         return Entreprise::class;
+    }
+
+    /** Code court du site (31/10/2026), lecture seule : régénération par le propriétaire de la plateforme (page « Code court de la boutique ») */
+    private function shortCodeHelp(): string
+    {
+        try {
+            $code = \App\Services\TenantShortCode::format($this->tenantManager->shortCodeOf($this->tenant->getTenantCode() ?? ''));
+        } catch (\Throwable) {
+            $code = null;
+        }
+        if ($code === null) {
+            return 'Aucun code court attribué à ce site pour le moment (commande app:tenant:short-codes).';
+        }
+
+        return sprintf('<span style="font-size:1.6em;font-weight:700;letter-spacing:.15em">%s</span><br>À imprimer sur vos reçus et vos affiches : vos clients le tapent dans l\'application. Lecture seule ; régénération par le propriétaire de la plateforme (menu Entreprise, « Code court de la boutique »).', htmlspecialchars($code));
     }
 
     public function configureFields(string $pageName): iterable
@@ -103,6 +119,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             BooleanField::new('isMemoireVivanteActive', 'Mémoire Vivante')
                 ->setHelp('Activer l\'application Mémoire Vivante'),
 
+            FormField::addPanel('Code court de la boutique')->collapsible()->setHelp($this->shortCodeHelp()),
             FormField::addPanel('Applications mobiles')->collapsible()
                 ->setHelp('Activer génère une clé d\'activation et l\'envoie (clé + code QR) à l\'e-mail de l\'entreprise ; désactiver révoque les clés de l\'application. Détail : menu Caisse → Clés des applications.'),
             BooleanField::new('isPosActive', 'Caisse (POS)'),

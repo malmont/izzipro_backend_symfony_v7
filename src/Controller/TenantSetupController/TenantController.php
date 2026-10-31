@@ -69,21 +69,34 @@ class TenantController extends AbstractController
      * frontend web, qui n'est pas modifiée. Pas de redirection vers la création d'un site.
      */
     #[Route('/api/tenant/check-mobile', name: 'api_tenant_check_mobile', methods: ['GET'])]
-    public function checkMobile(Request $request, TenantConnectionManager $tenantManager, \App\Services\TenantPublicHostResolver $hosts): JsonResponse
+    public function checkMobile(Request $request, TenantConnectionManager $tenantManager, \App\Services\TenantPublicHostResolver $hosts, \Symfony\Component\RateLimiter\RateLimiterFactory $tenantShortCodeIpLimiter): JsonResponse
     {
-        $input = strtolower(trim((string) $request->headers->get('X-Tenant-Host', '')));
+        $raw = (string) $request->headers->get('X-Tenant-Host', '');
+        $input = strtolower(trim($raw));
         $input = explode(':', explode('/', preg_replace('#^https?://#', '', $input))[0])[0]; // tolérance : schéma, chemin, port
         if ($input === '') {
             return new JsonResponse(['error' => 'TENANT_HOST_MISSING', 'message' => 'Indiquez le code ou le domaine de votre boutique'], 400);
         }
 
+        // 1. Recherche exacte (code de site ou hôte), inchangée et sans limite
         $config = $tenantManager->findTenantConfigByHost($input);
+
+        // 2. Sinon, code court (31/10/2026) : saisie de 6 caractères corrigée selon Crockford, 20 essais par minute et par IP
+        if (!$config && ($shortCode = \App\Services\TenantShortCode::normalize($raw)) !== null) {
+            $limit = $tenantShortCodeIpLimiter->create($request->getClientIp() ?? 'unknown')->consume(1);
+            if (!$limit->isAccepted()) {
+                $retryAfter = max(1, $limit->getRetryAfter()->getTimestamp() - time());
+
+                return new JsonResponse(['error' => 'TOO_MANY_ATTEMPTS', 'message' => 'Trop d\'essais, réessayez dans un instant', 'retryAfter' => $retryAfter], 429, ['Retry-After' => (string) $retryAfter]);
+            }
+            $config = $tenantManager->findTenantConfigByShortCode($shortCode);
+        }
         if (!$config) {
             return new JsonResponse(['exists' => false, 'error' => 'TENANT_NOT_FOUND', 'message' => 'Boutique introuvable'], 404);
         }
 
         try {
-            $tenant = $hosts->describe($config->getCode());
+            $tenant = $hosts->describe($config->getCode(), true);
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => 'MASTER_UNAVAILABLE', 'message' => 'Annuaire des sites indisponible'], 500);
         }

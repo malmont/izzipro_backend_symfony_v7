@@ -1,0 +1,26 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}Code court de la boutique{% endblock %}
+
+{% block body %}
+<div class="container-fluid">
+    <h1 class="mb-3">Code court de la boutique</h1>
+    {% for message in app.flashes('success') %}<div class="alert alert-success">{{ message }}</div>{% endfor %}
+    {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+    {% if code %}
+        <p class="display-5 fw-bold" style="letter-spacing: .2em" data-short-code>{{ code }}</p>
+        <p class="fs-5">À imprimer sur vos reçus et vos affiches : vos clients le tapent dans l'application.</p>
+        <p class="text-muted">Six caractères, sans I, L, O ni U pour éviter les confusions ; le tiret est facultatif et les majuscules ne comptent pas. Le code est permanent : seul le propriétaire de la plateforme peut le remplacer.</p>
+    {% else %}
+        <p class="alert alert-warning">Aucun code court n'est encore attribué à ce site (commande <code>app:tenant:short-codes</code>).</p>
+    {% endif %}
+
+    {% if canRegenerate %}
+        <form method="post" class="mt-4" onsubmit="return confirm('Régénérer le code court du site {{ site|e('js') }} ? L\'ancien code {{ code|default('')|e('js') }} ne fonctionnera plus : les reçus et affiches déjà imprimés seront à refaire.');">
+            <input type="hidden" name="_token" value="{{ csrf_token('admin_short_code') }}">
+            <button type="submit" class="btn btn-danger">Régénérer le code (propriétaire de la plateforme)</button>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

@@ -532,6 +532,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
         yield MenuItem::linkToCrud('Profils des applications', 'fas fa-id-card', \App\Entity\AppProfile::class)->setController(AppProfileCrudController::class);
         yield MenuItem::linkToRoute('Apparence de l\'app mobile', 'fas fa-mobile-alt', 'admin_mobile_theme'); // thème de l'application e-commerce mobile (31/10/2026)
+        yield MenuItem::linkToRoute('Code court de la boutique', 'fas fa-hashtag', 'admin_short_code'); // code tapé dans l'application mobile (31/10/2026)
         yield MenuItem::linkToCrud('AddressEntreprise', 'fa fa-map-marker', AddressEntreprise::class);
         yield MenuItem::linkToCrud('Réseaux Sociaux', 'fa fa-share-alt', SocialNetwork::class);
         yield MenuItem::linkToCrud('Équipes', 'fa fa-users', Team::class);

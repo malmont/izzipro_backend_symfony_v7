@@ -45,9 +45,10 @@ class TenantPublicHostResolver
     }
 
     /** @return array{code: string, name: string, host: string}|null */
-    public function describe(string $code): ?array
+    /** @param bool $withShortCode true pour check-mobile seulement (31/10/2026) : l'activation des applications garde sa réponse d'avant */
+    public function describe(string $code, bool $withShortCode = false): ?array
     {
-        $stmt = $this->tenantManager->getPdoMaster()->prepare('SELECT code, name, custom_domain FROM tenants WHERE code = :code LIMIT 1');
+        $stmt = $this->tenantManager->getPdoMaster()->prepare('SELECT code, name, custom_domain, short_code FROM tenants WHERE code = :code LIMIT 1');
         $stmt->execute(['code' => $code]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         if (!$row) {
@@ -55,10 +56,16 @@ class TenantPublicHostResolver
         }
         $customDomain = trim((string) ($row['custom_domain'] ?? ''));
 
-        return [
+        $tenant = [
             'code' => (string) $row['code'],
             'name' => (string) ($row['name'] ?? $row['code']),
             'host' => $customDomain !== '' ? $customDomain : $row['code'] . '.' . $this->frontendBaseDomain,
         ];
+        if ($withShortCode) {
+            // Code court (31/10/2026) : « DEM042 », null tant que le site n'en a pas (champ ajouté à check-mobile, le reste ne change pas)
+            $tenant['shortCode'] = \is_string($row['short_code'] ?? null) && $row['short_code'] !== '' ? $row['short_code'] : null;
+        }
+
+        return $tenant;
     }
 }

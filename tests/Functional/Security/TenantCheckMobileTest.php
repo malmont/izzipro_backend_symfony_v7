@@ -33,7 +33,7 @@ class TenantCheckMobileTest extends WebTestCase
             $this->assertSame(200, $response->getStatusCode(), "$input : " . $response->getContent());
             $body = json_decode($response->getContent(), true);
             $this->assertTrue($body['exists']);
-            $this->assertSame(['code' => MV_TEST_TENANT_CODE, 'name' => 'Tenant de test', 'host' => MV_TEST_TENANT_HOST], $body['tenant'], "$input");
+            $this->assertSame(['code' => MV_TEST_TENANT_CODE, 'name' => 'Tenant de test', 'host' => MV_TEST_TENANT_HOST, 'shortCode' => 'MVT001'], $body['tenant'], "$input"); // shortCode ajouté le 31/10/2026
             $this->assertSame(MV_TEST_TENANT_CODE, $manager->findTenantConfigByHost($body['tenant']['host'])?->getCode(), 'le même hôte résout bien le même site pour les appels suivants');
             $this->assertStringNotContainsString('max-age=300', (string) $response->headers->get('Cache-Control'), 'pas le cache public de tenant/check');
         }
@@ -44,7 +44,7 @@ class TenantCheckMobileTest extends WebTestCase
         $pdo->prepare('INSERT INTO tenants (code, name, dbname, custom_domain) VALUES (?, ?, ?, NULL)')->execute([$code, 'Site mobile', MV_TEST_TENANT_DB]);
         try {
             $body = json_decode($this->check($code)->getContent(), true);
-            $this->assertSame(['code' => $code, 'name' => 'Site mobile', 'host' => $code . '.' . $this->baseDomain], $body['tenant'] ?? null, json_encode($body));
+            $this->assertSame(['code' => $code, 'name' => 'Site mobile', 'host' => $code . '.' . $this->baseDomain, 'shortCode' => null], $body['tenant'] ?? null, json_encode($body));
             $this->assertSame($code, $manager->findTenantConfigByHost($body['tenant']['host'])?->getCode());
         } finally {
             $pdo->prepare('DELETE FROM tenants WHERE code = ?')->execute([$code]);

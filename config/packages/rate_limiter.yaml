@@ -50,6 +50,15 @@ framework:
             limit: 60
             interval: '10 minutes'
             lock_factory: null
+        # Choix du site par code court dans l'application mobile (31/10/2026) : seule la recherche par code court est
+        # limitée (20 essais par minute et par IP, 429 + Retry-After) ; la recherche exacte reste sans limite (IP partagées).
+        # Même limite en test : le 429 se prouve par TenantShortCodeTest, jamais sur la production.
+        tenant_short_code_ip:
+            policy: sliding_window
+            limit: 20
+            interval: '1 minute'
+            lock_factory: null
+
         # Assistant IA des landing pages : 5 demandes par minute et par tenant
         landing_ai_tenant:
             policy: sliding_window

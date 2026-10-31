@@ -171,6 +171,11 @@ class TenantConnectionManager
 
             $stmt->execute();
 
+            try {
+                $this->assignShortCode($code);
+            } catch (\Throwable $shortCodeEx) {
+                $this->logger->error(sprintf('Code court non attribué au site "%s" (app:tenant:short-codes le complètera) : %s', $code, $shortCodeEx->getMessage()));
+            }
 
             $this->cache->invalidateTags(['tenants']);
             $this->logger->info("Cache 'tenants' invalidé après création de '$code'.");
@@ -433,6 +438,106 @@ class TenantConnectionManager
     public function getSiteBaseDomains(): array
     {
         return $this->siteBaseDomains;
+    }
+
+    /**
+     * Site désigné par un code court déjà normalisé (TenantShortCode::normalize), 31/10/2026. Seuls les codes trouvés
+     * sont mis en cache (tag « tenants ») : un échec n'y entre jamais, pour qu'une énumération ne remplisse pas Redis.
+     */
+    public function findTenantConfigByShortCode(string $shortCode): ?TenantConfig
+    {
+        if (!TenantShortCode::isValid($shortCode)) {
+            return null;
+        }
+        $cacheKey = 'tenant_conf_short_' . $shortCode;
+        $config = $this->cache->get($cacheKey, function (ItemInterface $item) use ($shortCode): ?TenantConfig {
+            $item->expiresAfter(3600);
+            $item->tag(['tenants']);
+            try {
+                $stmt = $this->pdoMaster->prepare('SELECT code, name, dbname FROM tenants WHERE short_code = :code LIMIT 1');
+                $stmt->execute(['code' => $shortCode]);
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            } catch (\Throwable $e) {
+                $this->logger->warning('Erreur SQL recherche par code court : ' . $e->getMessage());
+                $row = null;
+            }
+            if (!$row) {
+                return null;
+            }
+
+            return (new TenantConfig())->setCode($row['code'])->setName($row['name'] ?? $row['code'])->setDbname($row['dbname']);
+        });
+        if ($config === null) {
+            $this->cache->delete($cacheKey);
+        }
+
+        return $config;
+    }
+
+    /** Code court d'un site (stocké, sans tiret), null s'il n'en a pas encore */
+    public function shortCodeOf(string $code): ?string
+    {
+        $stmt = $this->pdoMaster->prepare('SELECT short_code FROM tenants WHERE code = :code LIMIT 1');
+        $stmt->execute(['code' => $code]);
+        $value = $stmt->fetchColumn();
+
+        return \is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * Attribue (ou remplace, $force) le code court d'un site : code fixe (TenantShortCode::FIXED) ou tirage aléatoire
+     * relancé tant que le code existe déjà. $draw permet d'injecter le tirage (tests de collision). Vide le cache « tenants ».
+     */
+    public function assignShortCode(string $code, bool $force = false, ?callable $draw = null): string
+    {
+        $current = $this->shortCodeOf($code);
+        if ($current !== null && !$force) {
+            return $current;
+        }
+        $draw ??= static fn (): string => TenantShortCode::generate();
+        $fixed = TenantShortCode::FIXED[$code] ?? null;
+        $exists = $this->pdoMaster->prepare('SELECT code FROM tenants WHERE short_code = :s LIMIT 1');
+        for ($attempt = 0; $attempt < 50; $attempt++) {
+            $candidate = $fixed ?? $draw();
+            if (!TenantShortCode::isValid($candidate)) {
+                throw new \RuntimeException(sprintf('Code court invalide "%s"', $candidate));
+            }
+            $exists->execute(['s' => $candidate]);
+            $owner = $exists->fetchColumn();
+            if ($owner === false || $owner === $code) {
+                $update = $this->pdoMaster->prepare('UPDATE tenants SET short_code = :s WHERE code = :c');
+                $update->execute(['s' => $candidate, 'c' => $code]);
+                if ($update->rowCount() === 0) {
+                    throw new \RuntimeException(sprintf('Site "%s" introuvable dans la base maître', $code));
+                }
+                $this->cache->invalidateTags(['tenants']);
+
+                return $candidate;
+            }
+            if ($fixed !== null) {
+                throw new \RuntimeException(sprintf('Le code fixe %s du site "%s" est déjà pris par "%s"', $fixed, $code, $owner));
+            }
+        }
+        throw new \RuntimeException('Aucun code court libre trouvé après 50 tirages');
+    }
+
+    /**
+     * Attribue un code court à chaque site qui n'en a pas (idempotent : les codes existants ne bougent pas).
+     *
+     * @return array{before: int, assigned: int, missing: int} lignes de la table, codes attribués, lignes encore sans code
+     */
+    public function assignMissingShortCodes(): array
+    {
+        $before = (int) $this->pdoMaster->query('SELECT COUNT(*) FROM tenants')->fetchColumn();
+        $codes = $this->pdoMaster->query("SELECT code FROM tenants WHERE short_code IS NULL OR short_code = '' ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
+        $assigned = 0;
+        foreach ($codes as $code) {
+            $this->assignShortCode((string) $code);
+            $assigned++;
+        }
+        $missing = (int) $this->pdoMaster->query("SELECT COUNT(*) FROM tenants WHERE short_code IS NULL OR short_code = ''")->fetchColumn();
+
+        return ['before' => $before, 'assigned' => $assigned, 'missing' => $missing];
     }
 
     public function findTenantConfigByHost(string $host): ?TenantConfig
