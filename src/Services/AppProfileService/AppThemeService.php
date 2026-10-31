@@ -24,10 +24,15 @@ class AppThemeService
     }
 
     /** @return array{app: string, theme: array<string, mixed>, sources: array<string, ?string>} */
+    /** Seul code d'application dont le thème se replie sur la charte de la boutique web */
+    public const CHARTER_APP = 'mobile';
+
     public function resolve(string $app): array
     {
         $profile = $this->repository()->findOneByApp($app);
-        $charter = $this->boutique->charter();
+        // Repli sur la charte de la boutique web réservé à l'application e-commerce mobile (décision du 31/10/2026) :
+        // pour les autres codes, un réglage absent reste null (l'application applique son propre défaut)
+        $charter = $app === self::CHARTER_APP ? $this->boutique->charter() : [];
 
         // Valeurs lues telles qu'enregistrées, puis re-contrôlées (une écriture hors formulaire pourrait les fausser)
         $own = [

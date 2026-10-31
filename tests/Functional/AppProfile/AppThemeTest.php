@@ -171,12 +171,34 @@ class AppThemeTest extends WebTestCase
 
         // Autre code d'application : ses propres réglages, même charte
         $pos = $this->theme('pos');
-        $this->assertSame(['pos', 'charter', null], [$pos['app'], $pos['sources']['accentColor'], $pos['theme']['mode']]);
+        $this->assertSame(['pos', null, null], [$pos['app'], $pos['sources']['accentColor'], $pos['theme']['mode']], 'depuis le 31/10/2026, la charte ne comble que le code mobile');
 
         // Code inconnu
         $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/mobile/app-theme?app=boutique', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertSame(404, $this->client->getResponse()->getStatusCode());
         $this->assertSame('APP_UNKNOWN', json_decode($this->client->getResponse()->getContent(), true)['error']);
+    }
+
+    /** Repli sur la charte réservé au code mobile (31/10/2026) : pour les autres applications, non réglé = null, sources null */
+    public function testOnlyTheMobileAppFallsBackOnTheCharter(): void
+    {
+        $this->putCharter(['primaryColor' => '#1d4ed8', 'accentColor' => '#ffc800', 'headingFont' => 'Lora', 'radius' => 40, 'buttonStyle' => 'outline']);
+        $mobile = $this->theme();
+        $this->assertSame(['#1d4ed8', '#ffc800', null, 'Lora', 28, 'outline', null, null], array_values(array_slice($mobile['theme'], 0, 8)), 'mobile : la charte comble les champs vides');
+        $nulls = array_fill_keys(['primaryColor', 'accentColor', 'mode', 'font', 'radius', 'buttonStyle', 'productCard', 'homeHero'], null);
+        foreach (['livingmemory', 'memoires', 'boussole', 'pos', 'admin'] as $app) {
+            $other = $this->theme($app);
+            $this->assertSame($app, $other['app']);
+            $this->assertSame($nulls + ['updatedAt' => null], $other['theme'], "$app : aucune valeur de la charte");
+            $this->assertSame($nulls, $other['sources'], "$app : sources null");
+            // Un réglage propre à l'application reste servi, source « app », sans que la charte comble le reste
+            $this->db(MV_TEST_TENANT_DB)->executeStatement("INSERT INTO app_profile (app, accent_color, theme_mode) VALUES ('$app', '#ff0000', 'dark')");
+            $own = $this->theme($app);
+            $this->assertSame(['primaryColor' => null, 'accentColor' => '#ff0000', 'mode' => 'dark', 'font' => null, 'radius' => null, 'buttonStyle' => null, 'productCard' => null, 'homeHero' => null], array_slice($own['theme'], 0, 8), $app);
+            $this->assertSame(['primaryColor' => null, 'accentColor' => 'app', 'mode' => 'app'] + $nulls, $own['sources'], $app);
+            $this->assertNotNull($own['theme']['updatedAt']);
+            $this->db(MV_TEST_TENANT_DB)->executeStatement("DELETE FROM app_profile WHERE app = '$app'");
+        }
     }
 
     public function testASiteWithoutAnySettingHasAnEntirelyNullTheme(): void
