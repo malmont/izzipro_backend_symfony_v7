@@ -109,7 +109,8 @@ use App\Entity\ProductType;
 use App\Entity\ProductVariant;
 use App\Entity\Recherche;
 use App\Entity\RechercheTranslation;
-use App\Entity\RefreshToken;
+use App\Entity\AppProfile;
+use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenInterface;
 use App\Entity\RelatedProduct;
 use App\Entity\RentalPack;
 use App\Entity\RentalPackTranslation;
@@ -365,7 +366,10 @@ final class CacheTags
      * @var list<class-string>
      */
     public const NO_CACHE_READ = [
-        RefreshToken::class,
+        // Jeton de rafraîchissement JWT : le bundle Gesdinet persiste sa propre classe, pas App\Entity\RefreshToken
+        // (journal du 28/10/2026 : chaque connexion vidait tout le cache du site), d'où l'interface du bundle
+        RefreshTokenInterface::class,
+        AppProfile::class, // profils d'application (thème, image de marque) : aucune lecture en cache applicatif
         OtpCode::class,
         ResetPasswordRequest::class,
         AiUsage::class,
