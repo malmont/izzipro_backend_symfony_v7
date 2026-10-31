@@ -94,7 +94,8 @@ class AppThemeTest extends WebTestCase
         $this->assertStringContainsString('Apparence de l\'application', $html);
         // Couleurs facultatives : sélecteur désactivé et case « Aucune » cochée tant que rien n'est réglé
         $this->assertSame(2, substr_count($html, 'class="d-flex align-items-center gap-3 optional-color"'), 'primaryColor et accentColor');
-        $this->assertMatchesRegularExpression('/<input type="color" id="AppProfile_accentColor" name="AppProfile\[accentColor\]"[^>]*disabled/', $html);
+        $this->assertMatchesRegularExpression('/<input type="hidden" id="AppProfile_accentColor" name="AppProfile\[accentColor\]"[^>]*value=""/', $html, 'champ vide tant que « Aucune » est cochée');
+        $this->assertMatchesRegularExpression('/<input type="color" class="form-control form-control-color optional-color-picker" value="#000000" disabled/', $html, 'sélecteur désactivé, hors formulaire');
         $this->assertStringContainsString('Aucune (réglage vide)', $html);
         $this->assertStringContainsString('Couleur des boutons et des éléments mis en avant', $html, 'texte d\'aide');
         $this->assertMatchesRegularExpression('/name="AppProfile\[themeRadius\]"[^>]*max="28"/', $html);
@@ -123,7 +124,7 @@ class AppThemeTest extends WebTestCase
         // Sans couleur cochée (sélecteur désactivé, champ absent de l'envoi) : la couleur reste vide
         $crawler = $this->admin('edit', (int) $this->db(MV_TEST_TENANT_DB)->fetchOne("SELECT id FROM app_profile WHERE app = 'mobile'"));
         $editHtml = $this->client->getResponse()->getContent();
-        $this->assertMatchesRegularExpression('/<input type="color" id="AppProfile_accentColor" name="AppProfile\[accentColor\]"(?:(?!disabled)[^>])* value="#ffc800"/', $editHtml, 'couleur réglée : sélecteur actif avec sa valeur');
+        $this->assertMatchesRegularExpression('/<input type="hidden" id="AppProfile_accentColor" name="AppProfile\[accentColor\]"[^>]*value="#ffc800"/', $editHtml, 'couleur réglée : sélecteur actif avec sa valeur');
         $form = $crawler->filter('form[name="AppProfile"]')->form();
         $edit = $form->getPhpValues();
         unset($edit['AppProfile']['accentColor']);

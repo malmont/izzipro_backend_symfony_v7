@@ -1,17 +1,21 @@
-{# Couleur facultative (31/10/2026) : un <input type="color"> envoie toujours une valeur (#000000 par défaut), ce qui
-   rendrait toute couleur obligatoire dès l'enregistrement. La case « Aucune » désactive le sélecteur : un champ désactivé
-   n'est pas envoyé, le réglage reste vide (null) et l'application applique son défaut (ou la charte de la boutique). #}
+{# Couleur facultative (31/10/2026, revu le 01/11/2026) : un <input type="color"> envoie toujours une valeur (#000000 par
+   défaut), ce qui rendrait toute couleur obligatoire dès l'enregistrement. Le champ du formulaire est un <input hidden>
+   (vide = réglage null) ; le sélecteur de couleur, hors formulaire, l'alimente quand la case « Aucune » est décochée.
+   Décocher la case ouvre le sélecteur et copie sa couleur aussitôt, pour que l'aperçu et la valeur enregistrée soient
+   ce que l'on voit ; recocher vide le champ. Aucune dépendance à un champ « disabled » (non envoyé par les navigateurs). #}
 {% block optional_color_widget %}
     {%- set has_value = value is not empty -%}
     {%- set required = false -%}
-    {%- set disabled = not has_value -%}
-    {%- set type = 'color' -%}
+    {%- set disabled = false -%}
     <div class="d-flex align-items-center gap-3 optional-color">
-        <input type="color" {{ block('widget_attributes') }} value="{{ has_value ? value : '#000000' }}" class="form-control form-control-color">
+        <input type="hidden" {{ block('widget_attributes') }} value="{{ has_value ? value : '' }}">
+        <input type="color" class="form-control form-control-color optional-color-picker" value="{{ has_value ? value : '#000000' }}" {% if not has_value %}disabled{% endif %}
+               aria-label="{{ label|default('Couleur')|trans }}"
+               oninput="var h = this.closest('.optional-color').querySelector('input[type=hidden]'); h.value = this.value; h.dispatchEvent(new Event('input', {bubbles: true}));">
         <label class="form-check mb-0">
-            <input type="checkbox" class="form-check-input" {% if not has_value %}checked{% endif %}
-                   onchange="this.closest('.optional-color').querySelector('input[type=color]').disabled = this.checked">
-            <span class="form-check-label">Aucune (réglage vide)</span>
+            <input type="checkbox" class="form-check-input optional-color-none" {% if not has_value %}checked{% endif %}
+                   onchange="var w = this.closest('.optional-color'), p = w.querySelector('input[type=color]'), h = w.querySelector('input[type=hidden]'); p.disabled = this.checked; h.value = this.checked ? '' : p.value; h.dispatchEvent(new Event('input', {bubbles: true})); if (!this.checked) { try { p.showPicker(); } catch (e) { p.focus(); } }">
+            <span class="form-check-label">Aucune (réglage vide) : décocher pour choisir une couleur</span>
         </label>
     </div>
 {% endblock %}
