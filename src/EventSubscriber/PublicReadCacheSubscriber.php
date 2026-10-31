@@ -34,6 +34,7 @@ final class PublicReadCacheSubscriber implements EventSubscriberInterface
         'get_home_slider' => 60,
         'api_explore_cards' => 60,
         'api_features' => 60,
+        'api_mobile_app_theme' => 60, // thème de l'application e-commerce mobile (31/10/2026), lu à chaque lancement
     ];
 
     /**

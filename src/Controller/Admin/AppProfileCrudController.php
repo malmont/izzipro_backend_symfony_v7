@@ -15,6 +15,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\EmailField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\FormField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ImageField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TelephoneField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
@@ -23,6 +24,9 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\UrlField;
 /**
  * Profils des applications du site (20/10/2026) : une fiche par application (code fixe choisi dans la liste), tous
  * les champs facultatifs ; un champ vide est pris dans la fiche entreprise par GET /api/app-profile/{app}.
+ * Panneau « Apparence de l'application » (31/10/2026) : réglages lus par l'application e-commerce mobile
+ * (GET /api/mobile/app-theme), contrôlés par le validateur (contraintes de l'entité AppProfile) ; une erreur est
+ * affichée dans le formulaire et rien n'est enregistré. Couleurs facultatives : gabarit admin/form/optional_color.
  */
 class AppProfileCrudController extends BaseTenantCrudController
 {
@@ -41,7 +45,8 @@ class AppProfileCrudController extends BaseTenantCrudController
             ->setEntityLabelInPlural('Profils des applications')
             ->setPageTitle(Crud::PAGE_INDEX, 'Profils des applications')
             ->setHelp(Crud::PAGE_INDEX, 'Nom, logo, coordonnées et textes propres à une application (Living Memory, Mémoires Vivantes, Boussole ESG, caisse…). Tout champ laissé vide reprend la fiche Entreprise. La landing page et la boutique utilisent toujours la fiche Entreprise.')
-            ->setDefaultSort(['app' => 'ASC']);
+            ->setDefaultSort(['app' => 'ASC'])
+            ->addFormTheme('admin/form/optional_color.html.twig');
     }
 
     public function configureActions(Actions $actions): Actions
@@ -59,7 +64,26 @@ class AppProfileCrudController extends BaseTenantCrudController
         yield TextField::new('tagline', 'Accroche')->setRequired(false)->hideOnIndex();
         yield ImageField::new('logo', 'Logo')->setBasePath(self::BASE_PATH)->setUploadDir(self::UPLOAD_DIR)->setUploadedFileNamePattern('[randomhash].[extension]')->setRequired(false);
         yield ImageField::new('icon', 'Icône')->setBasePath(self::BASE_PATH)->setUploadDir(self::UPLOAD_DIR)->setUploadedFileNamePattern('[randomhash].[extension]')->setRequired(false)->hideOnIndex();
-        yield ColorField::new('primaryColor', 'Couleur principale')->setRequired(false)->hideOnIndex();
+        yield FormField::addPanel('Apparence de l\'application')->setHelp('Lue par l\'application e-commerce mobile (GET /api/mobile/app-theme). Un réglage vide est pris dans la charte de la boutique web (réglages de la boutique) quand elle en a un, sinon l\'application applique son propre défaut.');
+        yield ColorField::new('primaryColor', 'Couleur principale')->setRequired(false)->hideOnIndex()
+            ->setFormTypeOption('block_prefix', 'optional_color')
+            ->setHelp('Couleur des boutons et des éléments mis en avant, au format #RRGGBB. Vide : couleur principale de la charte de la boutique.');
+        yield ColorField::new('accentColor', 'Couleur d\'accent')->setRequired(false)->hideOnIndex()
+            ->setFormTypeOption('block_prefix', 'optional_color')
+            ->setHelp('Couleur secondaire (badges, liens, détails), au format #RRGGBB. Vide : couleur d\'accent de la charte de la boutique.');
+        yield ChoiceField::new('themeMode', 'Mode')->setChoices(['Clair' => 'light', 'Sombre' => 'dark', 'Selon l\'appareil' => 'system'])->setRequired(false)->hideOnIndex()
+            ->setHelp('Clair, sombre, ou le réglage de l\'appareil. Vide : défaut de l\'application.');
+        yield ChoiceField::new('themeFont', 'Police')->setChoices(array_combine(AppProfile::THEME_FONTS, AppProfile::THEME_FONTS))->setRequired(false)->hideOnIndex()
+            ->setHelp('Police des titres et des textes ; « System » est celle de l\'appareil. Vide : police des titres de la charte de la boutique si elle est dans cette liste.');
+        yield IntegerField::new('themeRadius', 'Arrondi des coins')->setRequired(false)->hideOnIndex()
+            ->setFormTypeOption('attr', ['min' => 0, 'max' => AppProfile::RADIUS_MAX, 'step' => 1])
+            ->setHelp(sprintf('De 0 (angles droits) à %d (très arrondi), en points. Vide : arrondi de la charte de la boutique, borné à %d.', AppProfile::RADIUS_MAX, AppProfile::RADIUS_MAX));
+        yield ChoiceField::new('buttonStyle', 'Style des boutons')->setChoices(['Plein' => 'solid', 'Contour' => 'outline', 'Pilule' => 'pill'])->setRequired(false)->hideOnIndex()
+            ->setHelp('Plein (fond coloré), contour (bordure seule) ou pilule (coins ronds). Vide : style de la charte de la boutique.');
+        yield ChoiceField::new('productCard', 'Carte produit')->setChoices(['Classique' => 'classic', 'Texte sur l\'image' => 'overlay', 'Compacte' => 'compact'])->setRequired(false)->hideOnIndex()
+            ->setHelp('Présentation des produits dans les listes : image puis texte (classique), texte sur l\'image (overlay) ou compacte. Vide : défaut de l\'application.');
+        yield ChoiceField::new('homeHero', 'En-tête de l\'accueil')->setChoices(['Carrousel' => 'carousel', 'Bannière' => 'banner', 'Aucun' => 'none'])->setRequired(false)->hideOnIndex()
+            ->setHelp('Haut de l\'écran d\'accueil : carrousel d\'images, bannière fixe ou aucun. Vide : défaut de l\'application.');
         yield FormField::addPanel('Coordonnées');
         yield EmailField::new('email', 'E-mail')->setRequired(false);
         yield TelephoneField::new('phone', 'Téléphone')->setRequired(false)->hideOnIndex();

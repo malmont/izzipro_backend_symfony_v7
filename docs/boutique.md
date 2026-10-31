@@ -54,7 +54,11 @@ Code : `Controller/BoutiqueSettingsController/`, `UseCase/BoutiqueSettingsUseCas
 - **Charte** (`charter`, clés connues seulement ; `null` = non réglé) : `primaryColor`, `accentColor`, `textColor`,
   `backgroundColor` : couleur (`#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`, `transparent`) ; `headingFont`,
   `bodyFont` : 1 à 100 caractères sans `<` ni `>` ; `radius` : nombre de 0 à 100 ou taille CSS (`px`, `rem`, `em`,
-  `%`) ; `buttonStyle` : `solid`, `outline` ou `pill`.
+  `%`) ; `buttonStyle` : `solid`, `outline` ou `pill`. Depuis le 31/10/2026, la charte sert aussi de **repli au thème de
+  l'application e-commerce mobile** (`GET /api/mobile/app-theme`, `docs/architecture.md`, « Thème de l'application
+  e-commerce mobile ») : `primaryColor`, `accentColor` (ramenées à `#rrggbb`), `headingFont` (si la police est dans la
+  liste de l'application), `radius` (borné à 28) et `buttonStyle`, chacun seulement quand le profil d'application
+  `mobile` ne règle pas le champ. Lecture en SQL de la seule clé `charter`, sans passer par le cache des réglages.
 - **Commerce** (`commerce`) : `guestCheckout`, `subscriptionsEnabled` : booléens ; `currency` : code ISO 4217
   (3 majuscules). Ces réglages ne sont pas encore appliqués par les routes du commerce (`order/create-guest`…) :
   voir les demandes § 6 et § 7.

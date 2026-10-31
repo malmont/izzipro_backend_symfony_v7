@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (261)
+## Boutique et commun (262)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -347,6 +347,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | PATCH | `/api/media/{id}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::rename` |
 | GET | `/api/media` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::list` |
 | POST | `/api/media` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\MediaApiController\MediaApiController::upload` |
+| GET | `/api/mobile/app-theme` | PUBLIC_ACCESS | `Controller\AppProfileController\AppThemeController::show` |
 | DELETE | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::deleteNoteDeFrais` |
 | PUT | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::updateNoteDeFrais` |
 | GET | `/api/order-statuses` | PUBLIC_ACCESS | `Controller\OrderController\OrderController::getOrderStatuses` |

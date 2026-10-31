@@ -1,0 +1,17 @@
+{# Couleur facultative (31/10/2026) : un <input type="color"> envoie toujours une valeur (#000000 par défaut), ce qui
+   rendrait toute couleur obligatoire dès l'enregistrement. La case « Aucune » désactive le sélecteur : un champ désactivé
+   n'est pas envoyé, le réglage reste vide (null) et l'application applique son défaut (ou la charte de la boutique). #}
+{% block optional_color_widget %}
+    {%- set has_value = value is not empty -%}
+    {%- set required = false -%}
+    {%- set disabled = not has_value -%}
+    {%- set type = 'color' -%}
+    <div class="d-flex align-items-center gap-3 optional-color">
+        <input type="color" {{ block('widget_attributes') }} value="{{ has_value ? value : '#000000' }}" class="form-control form-control-color">
+        <label class="form-check mb-0">
+            <input type="checkbox" class="form-check-input" {% if not has_value %}checked{% endif %}
+                   onchange="this.closest('.optional-color').querySelector('input[type=color]').disabled = this.checked">
+            <span class="form-check-label">Aucune (réglage vide)</span>
+        </label>
+    </div>
+{% endblock %}

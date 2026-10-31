@@ -3,6 +3,7 @@
 namespace App\Services\BoutiqueSettingsService;
 
 use App\Entity\BoutiqueSetting;
+use App\Entity\ContentAuditLog;
 use App\Services\TenantEntityManagerProvider;
 
 /**
@@ -56,6 +57,33 @@ class BoutiqueSettingsService
         $setting = $this->emProvider->getEntityManager()->getRepository(BoutiqueSetting::class)->findOneBy([]);
 
         return $setting?->getConfiguration()['commerce'][$key] ?? null;
+    }
+
+    /**
+     * Charte publiée de la boutique (clé « charter » des réglages : primaryColor, accentColor, textColor, backgroundColor,
+     * headingFont, bodyFont, radius, buttonStyle), [] si rien n'est réglé. Lue seule, en SQL : la configuration entière
+     * pèse jusqu'à 114 Ko et n'a pas à être décodée pour cela (thème de l'application mobile, AppThemeService).
+     *
+     * @return array<string, mixed>
+     */
+    public function charter(): array
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $table = $tenantEm->getClassMetadata(BoutiqueSetting::class)->getTableName();
+        $raw = $tenantEm->getConnection()->fetchOne("SELECT configuration->'charter' FROM $table ORDER BY id ASC LIMIT 1");
+        $charter = is_string($raw) ? json_decode($raw, true) : null;
+
+        return is_array($charter) ? $charter : [];
+    }
+
+    /** Date du dernier enregistrement des réglages par l'éditeur (journal « boutique-settings »), null s'il n'y en a pas */
+    public function lastEditorChangeAt(): ?\DateTimeImmutable
+    {
+        $tenantEm = $this->emProvider->getEntityManager();
+        $table = $tenantEm->getClassMetadata(ContentAuditLog::class)->getTableName();
+        $raw = $tenantEm->getConnection()->fetchOne("SELECT MAX(created_at) FROM $table WHERE resource = 'boutique-settings'");
+
+        return is_string($raw) && $raw !== '' ? new \DateTimeImmutable($raw) : null;
     }
 
     public function updateSettings(BoutiqueSetting $setting, array $newConfig): void
