@@ -42,7 +42,7 @@ class CashRegisterCrudController extends BaseTenantCrudController
             TextField::new('receiptPrefix', 'Préfixe des numéros de ticket')->setRequired(false)->setMaxLength(10)
                 ->setHelp('Présentation seulement (ex. « C1- » donne C1-123) : la suite numérique du poste reste continue, les numéros déjà attribués ne changent pas.'),
             // Terminal de paiement Stripe (C4, 23/10/2026) : lecteur du poste sur le compte connecté du site
-            \EasyCorp\Bundle\EasyAdminBundle\Field\FormField::addPanel('Terminal de paiement Stripe')->onlyOnForms()
+            \EasyCorp\Bundle\EasyAdminBundle\Field\FormField::addPanel('Terminal de paiement Stripe')->collapsible()->onlyOnForms()
                 ->setHelp('Le POS demande le paiement au serveur, qui l\'envoie au lecteur par Internet : la tablette ne voit jamais la carte. Un lecteur réel s\'appaire par le code affiché sur son écran (menu Réglages) ; avec une clé Stripe de test, un lecteur simulé sert aux essais.'),
             TextField::new('stripeReaderLabel', 'Lecteur rattaché')->hideOnForm(),
             TextField::new('stripeReaderId', 'Identifiant du lecteur')->onlyOnDetail(),

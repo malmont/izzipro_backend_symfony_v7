@@ -50,7 +50,7 @@ class EmailConfigurationCrudController extends BaseTenantCrudController
     public function configureFields(string $pageName): iterable
     {
         return [
-            FormField::addPanel('Informations Générales'),
+            FormField::addPanel('Informations Générales')->collapsible(),
             IdField::new('id')->hideOnForm(),
             TextField::new('fromEmail', 'Email d\'envoi'),
             ImageField::new('logo', 'Logo')
@@ -65,7 +65,7 @@ class EmailConfigurationCrudController extends BaseTenantCrudController
             TextField::new('fromName', 'Nom (Défaut)'),
             TextEditorField::new('signature', 'Signature')->setRequired(false),
 
-            FormField::addPanel('Configuration SMTP Dédiée (Multi-tenant)')
+            FormField::addPanel('Configuration SMTP Dédiée (Multi-tenant)')->collapsible()
                 ->setHelp('Renseignez ces champs pour que le tenant envoie ses emails avec sa propre boîte sans utiliser le SMTP global.'),
             TextField::new('smtpHost', 'Serveur SMTP')
                 ->setHelp('Exemple : smtp.hostinger.com, in-v3.mailjet.com')

@@ -3,7 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\BoutiqueSetting;
-use App\Form\Type\JsonTextType;
+use App\Controller\Admin\Field\JsonTextField;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CodeEditorField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
@@ -33,8 +33,7 @@ class BoutiqueSettingCrudController extends BaseTenantCrudController
     {
         return [
             IdField::new('id')->onlyOnIndex(),
-            Field::new('configuration', 'Configuration JSON')
-                ->setFormType(JsonTextType::class)
+            JsonTextField::new('configuration', 'Configuration JSON')
                 ->setFormTypeOption('attr', ['data-ea-code-editor-language' => 'javascript', 'rows' => 30])
                 ->hideOnIndex(),
             CodeEditorField::new('configuration', 'Aperçu de la configuration')

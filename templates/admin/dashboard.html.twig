@@ -37,6 +37,7 @@
                     <div>
                         <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Chiffre d'Affaires</div>
                         <div class="h3 mb-0 font-weight-bold text-gray-800">{{ totalSales|number_format(2, ',', ' ') }} $</div>
+                        <span class="small text-muted d-block">Commandes validées, retours déduits (hors annulées et incomplètes)</span>
                         {% if salesDiffPercent >= 0 %}
                             <span class="badge bg-light text-success mt-2"><i class="fas fa-arrow-up"></i> +{{ salesDiffPercent }}% vs mois dernier</span>
                         {% else %}
@@ -57,6 +58,7 @@
                     <div>
                         <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Total Commandes</div>
                         <div class="h3 mb-0 font-weight-bold text-gray-800">{{ totalOrders }}</div>
+                        <span class="small text-muted d-block">Web, caisse et application, hors annulées et incomplètes</span>
                         {% if ordersDiffPercent >= 0 %}
                             <span class="badge bg-light text-success mt-2"><i class="fas fa-arrow-up"></i> +{{ ordersDiffPercent }}% vs mois dernier</span>
                         {% else %}
@@ -97,7 +99,7 @@
                     <div>
                         <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Taxes Collectées</div>
                         <div class="h3 mb-0 font-weight-bold text-gray-800">{{ totalTaxes|number_format(2, ',', ' ') }} $</div>
-                        <span class="badge bg-light text-warning mt-2"><i class="fas fa-receipt"></i> Cumul Taxes</span>
+                        <span class="badge bg-light text-warning mt-2"><i class="fas fa-receipt"></i> Cumul des commandes validées</span>
                     </div>
                     <div class="icon-circle text-warning p-3 rounded-circle" style="background-color: rgba(246, 194, 62, 0.1);">
                         <i class="fas fa-percent fa-2x"></i>
@@ -189,9 +191,9 @@
                 <span class="badge shadow-sm border px-3 py-2 rounded-pill mr-2 live-badge">
                     <span class="live-dot mr-1"></span> Suivi Temps Réel (Redis)
                 </span>
-                <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 shadow-sm" type="button" data-toggle="collapse" data-target="#allTenantsCollapse" aria-expanded="false" aria-controls="allTenantsCollapse">
+                {% if trafficMetrics %}<button class="btn btn-sm btn-outline-secondary rounded-pill px-3 shadow-sm" type="button" data-toggle="collapse" data-target="#allTenantsCollapse" aria-expanded="false" aria-controls="allTenantsCollapse">
                     <i class="fas fa-network-wired mr-1"></i> Comparer tous les sites
-                </button>
+                </button>{% endif %}
             </div>
         </div>
     </div>
@@ -378,7 +380,8 @@
         </div>
     </div>
 
-    <!-- Collapsible Multi-Tenant Comparison (Optional Network View) -->
+    <!-- Comparaison de tous les sites : propriétaire de la plateforme seulement -->
+    {% if trafficMetrics %}
     <div class="collapse mb-4" id="allTenantsCollapse">
         <div class="card border-0 shadow-sm rounded-lg bg-white p-3">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -424,6 +427,8 @@
         </div>
     </div>
 
+    {% endif %}
+
     {# ------------------ MAIN CHART & PERIOD SWITCHER ------------------ #}
     <div class="row mb-4">
         <div class="col-12">
@@ -452,7 +457,9 @@
                     <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-credit-card mr-2"></i>Répartition des Modes de Paiement</h6>
                 </div>
                 <div class="card-body">
-                    <div id="paymentsDonutChart" style="min-height: 280px;"></div>
+                    {% if paymentSeries != '[]' %}<div id="paymentsDonutChart" style="min-height: 280px;"></div>
+                    <p class="small text-muted mb-0">Encaissements terminés, en dollars, remboursements exclus.</p>
+                    {% else %}<p class="text-muted mb-0">Aucun encaissement enregistré.</p>{% endif %}
                 </div>
             </div>
         </div>
@@ -464,7 +471,9 @@
                     <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-truck mr-2"></i>Répartition des Transporteurs & Livraisons</h6>
                 </div>
                 <div class="card-body">
-                    <div id="carrierDonutChart" style="min-height: 280px;"></div>
+                    {% if carrierSeries != '[]' %}<div id="carrierDonutChart" style="min-height: 280px;"></div>
+                    <p class="small text-muted mb-0">Nombre de commandes validées par transporteur.</p>
+                    {% else %}<p class="text-muted mb-0">Aucune commande validée.</p>{% endif %}
                 </div>
             </div>
         </div>
@@ -642,29 +651,32 @@
             activeBtn.classList.add('active');
         }
 
-        // --- PAYMENTS DONUT CHART ---
-        var paymentOptions = {
-            series: {{ paymentSeries|raw }},
-            labels: {{ paymentLabels|raw }},
-            chart: { type: 'donut', height: 280 },
-            colors: ['#1cc88a', '#4e73df', '#36b9cc'],
-            legend: { position: 'bottom' },
-            dataLabels: { enabled: true }
-        };
-        var paymentChart = new ApexCharts(document.querySelector("#paymentsDonutChart"), paymentOptions);
-        paymentChart.render();
+        // --- PAYMENTS DONUT CHART --- (rendu seulement quand il y a des données)
+        var donutColors = ['#2F8BFF', '#7B3FF0', '#E0158A', '#33C3FF', '#1B5FE6', '#9DB3DA', '#B80F70', '#5F7DB5']; // palette Arkanoa (admin-arkanoa.css)
+        if (document.querySelector("#paymentsDonutChart")) {
+            new ApexCharts(document.querySelector("#paymentsDonutChart"), {
+                series: {{ paymentSeries|raw }},
+                labels: {{ paymentLabels|raw }},
+                chart: { type: 'donut', height: 280 },
+                colors: donutColors,
+                legend: { position: 'bottom' },
+                dataLabels: { enabled: true },
+                tooltip: { y: { formatter: function (v) { return v.toFixed(2) + ' $'; } } }
+            }).render();
+        }
 
         // --- CARRIER DONUT CHART ---
-        var carrierOptions = {
-            series: {{ carrierSeries|raw }},
-            labels: {{ carrierLabels|raw }},
-            chart: { type: 'donut', height: 280 },
-            colors: ['#f6c23e', '#fd7e14', '#6f42c1'],
-            legend: { position: 'bottom' },
-            dataLabels: { enabled: true }
-        };
-        var carrierChart = new ApexCharts(document.querySelector("#carrierDonutChart"), carrierOptions);
-        carrierChart.render();
+        if (document.querySelector("#carrierDonutChart")) {
+            new ApexCharts(document.querySelector("#carrierDonutChart"), {
+                series: {{ carrierSeries|raw }},
+                labels: {{ carrierLabels|raw }},
+                chart: { type: 'donut', height: 280 },
+                colors: donutColors.slice(3).concat(donutColors.slice(0, 3)),
+                legend: { position: 'bottom' },
+                dataLabels: { enabled: true },
+                tooltip: { y: { formatter: function (v) { return v + ' commande(s)'; } } }
+            }).render();
+        }
 
         // --- CURRENT TENANT 7-DAY VISITS HISTORY CHART ---
         var historyLabels = {{ tenantReport.labels_7days|raw }};

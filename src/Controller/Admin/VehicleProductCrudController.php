@@ -57,7 +57,7 @@ class VehicleProductCrudController extends BaseTenantCrudController
 
         return [
             FormField::addTab('Caractéristiques du Véhicule'),
-            FormField::addPanel('Informations Générales'),
+            FormField::addPanel('Informations Générales')->collapsible(),
 
             TextField::new('name', 'Nom / Titre du Véhicule'),
             SlugField::new('slug', 'Slug')->setTargetFieldName('name'),
@@ -66,7 +66,7 @@ class VehicleProductCrudController extends BaseTenantCrudController
             TextField::new('model', 'Modèle')->setColumns('col-md-4'),
             IntegerField::new('year', 'Année (ex: 2026)')->setColumns('col-md-4'),
 
-            FormField::addPanel('Spécifications Techniques'),
+            FormField::addPanel('Spécifications Techniques')->collapsible(),
             TextField::new('vin', 'N° de Série / VIN')->setColumns('col-md-4'),
             ChoiceField::new('transmission', 'Transmission')
                 ->setChoices([
@@ -97,7 +97,7 @@ class VehicleProductCrudController extends BaseTenantCrudController
                 ->setColumns('col-md-4'),
 
             FormField::addTab('Prix & Commercialisation'),
-            FormField::addPanel('Tarification & Commercialisation'),
+            FormField::addPanel('Tarification & Commercialisation')->collapsible(),
 
             // Stocké en cents comme tous les prix (create-intent et la boutique le lisent ainsi)
             MoneyField::new('price', 'Prix de Vente / Tarif de Base ($)')->setCurrency('CAD')->setStoredAsCents(true)

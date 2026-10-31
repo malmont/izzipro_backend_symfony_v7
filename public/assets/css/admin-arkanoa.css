@@ -974,3 +974,66 @@ dl.datalist dd,
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, var(--ark-blue-bright), var(--ark-magenta));
 }
+
+/* =========================================================
+   Panneaux repliables et onglets des formulaires (31/10/2026)
+   ========================================================= */
+.form-fieldset-header.collapsible .form-fieldset-title a {
+  color: var(--ark-text-title);
+  font-family: var(--font-body);
+  font-weight: 600;
+  text-decoration: none;
+}
+.form-fieldset-header.collapsible .form-fieldset-title a:hover { color: var(--ark-cyan); }
+.form-fieldset-collapse-marker { color: var(--ark-cyan); transition: transform .2s var(--ease); }
+.form-fieldset-collapse.collapsed .form-fieldset-collapse-marker { transform: rotate(0deg); }
+.form-fieldset-collapse:not(.collapsed) .form-fieldset-collapse-marker { transform: rotate(90deg); }
+.form-tabs .nav-tabs .nav-link { color: var(--ark-text-muted); font-family: var(--font-body); font-weight: 600; }
+.form-tabs .nav-tabs .nav-link.active { color: var(--ark-text-title); border-bottom: 2px solid var(--ark-blue-bright); }
+.form-tabs .nav-tabs .nav-link .badge { background: var(--ark-magenta); }
+
+/* =========================================================
+   Menu de gauche : sections repliables (31/10/2026)
+   Le titre du groupe garde le look des anciens en-têtes de section (tiret cristal, cyan, majuscules) et porte la flèche.
+   ========================================================= */
+#main-menu .menu .menu-item.has-submenu > a.submenu-toggle,
+ul.menu li.menu-item.has-submenu > a.submenu-toggle,
+ul.menu li.menu-item.has-submenu.expanded > a.submenu-toggle,
+ul.menu li.menu-item.has-submenu.active > a.submenu-toggle {
+  font-family: var(--font-display) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.22em !important;
+  text-transform: uppercase !important;
+  color: var(--ark-cyan) !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  padding: 14px 16px 6px !important;
+  margin: 8px 10px 0 !important;
+  gap: 10px !important;
+  cursor: pointer;
+}
+ul.menu li.menu-item.has-submenu > a.submenu-toggle:hover {
+  color: #FFFFFF !important;
+  background: rgba(47, 139, 255, 0.10) !important;
+  transform: none;
+}
+ul.menu li.menu-item.has-submenu > a.submenu-toggle::before {
+  content: "";
+  width: 14px; height: 2.5px; border-radius: 2px;
+  background: var(--crystal);
+  display: inline-block; flex-shrink: 0;
+}
+ul.menu li.menu-item.has-submenu > a.submenu-toggle .menu-icon { display: none !important; }
+ul.menu li.menu-item.has-submenu > a.submenu-toggle .menu-item-label { flex: 1; }
+ul.menu li.menu-item.has-submenu > a.submenu-toggle .submenu-toggle-icon {
+  color: var(--ark-cyan) !important;
+  font-size: 11px !important;
+  transition: transform .2s var(--ease);
+}
+ul.menu li.menu-item.has-submenu.expanded > a.submenu-toggle .submenu-toggle-icon { transform: rotate(90deg); }
+ul.menu li.menu-item.has-submenu.expanded > a.submenu-toggle .menu-item-label,
+ul.menu li.menu-item.has-submenu.active > a.submenu-toggle .menu-item-label { color: #FFFFFF !important; }
+ul.menu .submenu { margin: 2px 10px 6px 14px !important; }
+ul.menu .submenu li.menu-item a.menu-item-contents .menu-icon { font-size: 14px !important; }

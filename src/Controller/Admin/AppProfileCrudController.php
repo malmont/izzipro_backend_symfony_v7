@@ -56,7 +56,7 @@ class AppProfileCrudController extends BaseTenantCrudController
 
     public function configureFields(string $pageName): iterable
     {
-        yield FormField::addPanel('Application');
+        yield FormField::addPanel('Application')->collapsible();
         yield ChoiceField::new('app', 'Application')->setChoices(array_flip(AppProfile::APPS))
             ->setHelp('Code fixe, connu de l\'application : il ne se change pas après création.')
             ->setFormTypeOption('disabled', $pageName === Crud::PAGE_EDIT);
@@ -64,7 +64,7 @@ class AppProfileCrudController extends BaseTenantCrudController
         yield TextField::new('tagline', 'Accroche')->setRequired(false)->hideOnIndex();
         yield ImageField::new('logo', 'Logo')->setBasePath(self::BASE_PATH)->setUploadDir(self::UPLOAD_DIR)->setUploadedFileNamePattern('[randomhash].[extension]')->setRequired(false);
         yield ImageField::new('icon', 'Icône')->setBasePath(self::BASE_PATH)->setUploadDir(self::UPLOAD_DIR)->setUploadedFileNamePattern('[randomhash].[extension]')->setRequired(false)->hideOnIndex();
-        yield FormField::addPanel('Apparence de l\'application')->setHelp('Lue par l\'application e-commerce mobile (GET /api/mobile/app-theme). Un réglage vide est pris dans la charte de la boutique web (réglages de la boutique) quand elle en a un, sinon l\'application applique son propre défaut.');
+        yield FormField::addPanel('Apparence de l\'application')->collapsible()->setHelp('Lue par l\'application e-commerce mobile (GET /api/mobile/app-theme). Un réglage vide est pris dans la charte de la boutique web (réglages de la boutique) quand elle en a un, sinon l\'application applique son propre défaut.');
         yield ColorField::new('primaryColor', 'Couleur principale')->setRequired(false)->hideOnIndex()
             ->setFormTypeOption('block_prefix', 'optional_color')
             ->setHelp('Couleur des boutons et des éléments mis en avant, au format #RRGGBB. Vide : couleur principale de la charte de la boutique.');
@@ -84,25 +84,25 @@ class AppProfileCrudController extends BaseTenantCrudController
             ->setHelp('Présentation des produits dans les listes : image puis texte (classique), texte sur l\'image (overlay) ou compacte. Vide : défaut de l\'application.');
         yield ChoiceField::new('homeHero', 'En-tête de l\'accueil')->setChoices(['Carrousel' => 'carousel', 'Bannière' => 'banner', 'Aucun' => 'none'])->setRequired(false)->hideOnIndex()
             ->setHelp('Haut de l\'écran d\'accueil : carrousel d\'images, bannière fixe ou aucun. Vide : défaut de l\'application.');
-        yield FormField::addPanel('Coordonnées');
+        yield FormField::addPanel('Coordonnées')->collapsible();
         yield EmailField::new('email', 'E-mail')->setRequired(false);
         yield TelephoneField::new('phone', 'Téléphone')->setRequired(false)->hideOnIndex();
         yield UrlField::new('website', 'Site web')->setRequired(false)->hideOnIndex();
         yield UrlField::new('supportUrl', 'Page d\'assistance')->setRequired(false)->hideOnIndex();
         yield UrlField::new('privacyPolicyUrl', 'Lien de la politique de confidentialité')->setRequired(false)->hideOnIndex();
-        yield FormField::addPanel('Adresse')->setHelp('Saisie, elle remplace en entier celle de l\'entreprise ; vide, celle de l\'entreprise est utilisée.');
+        yield FormField::addPanel('Adresse')->collapsible()->setHelp('Saisie, elle remplace en entier celle de l\'entreprise ; vide, celle de l\'entreprise est utilisée.');
         yield TextField::new('street1', 'Adresse')->setRequired(false)->hideOnIndex();
         yield TextField::new('street2', 'Complément')->setRequired(false)->hideOnIndex();
         yield TextField::new('zip', 'Code postal')->setRequired(false)->hideOnIndex();
         yield TextField::new('city', 'Ville')->setRequired(false)->hideOnIndex();
         yield TextField::new('province', 'Province / région')->setRequired(false)->hideOnIndex();
         yield TextField::new('country', 'Pays')->setRequired(false)->hideOnIndex();
-        yield FormField::addPanel('Textes (langue par défaut)')->setHelp('Utilisés quand aucune traduction n\'existe pour la langue demandée ; vides, ceux de la fiche Entreprise.');
+        yield FormField::addPanel('Textes (langue par défaut)')->collapsible()->setHelp('Utilisés quand aucune traduction n\'existe pour la langue demandée ; vides, ceux de la fiche Entreprise.');
         yield TextareaField::new('apropos', 'À propos')->setRequired(false)->hideOnIndex();
         yield TextareaField::new('privacyPolicy', 'Politique de confidentialité')->setRequired(false)->hideOnIndex();
         yield TextareaField::new('conditionOfUse', 'Conditions d\'utilisation')->setRequired(false)->hideOnIndex();
         yield TextareaField::new('legalNotice', 'Mentions légales')->setRequired(false)->hideOnIndex();
-        yield FormField::addPanel('Traductions')->setHelp('Nom affiché, accroche et textes par langue, comme les « Contenus traduits » de la fiche Entreprise. Un champ vide reprend la langue par défaut.');
+        yield FormField::addPanel('Traductions')->collapsible()->setHelp('Nom affiché, accroche et textes par langue, comme les « Contenus traduits » de la fiche Entreprise. Un champ vide reprend la langue par défaut.');
         yield CollectionField::new('translations', 'Contenus traduits')
             ->setEntryType(AppProfileTranslationType::class)
             ->setFormTypeOption('by_reference', false)

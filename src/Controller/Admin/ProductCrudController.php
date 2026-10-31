@@ -56,7 +56,7 @@ class ProductCrudController extends BaseTenantCrudController
     public function configureFields(string $pageName): iterable
     {
         yield FormField::addTab('Informations Générales');
-        yield FormField::addPanel('Détails du Produit');
+        yield FormField::addPanel('Détails du Produit')->collapsible();
 
         yield IdField::new('id')->hideOnForm();
         yield TextField::new('name', 'Nom du produit');
@@ -70,7 +70,7 @@ class ProductCrudController extends BaseTenantCrudController
         ])
         ->renderExpanded()
         ->setColumns('col-12');
-        yield FormField::addPanel('Informations Commerciales');
+        yield FormField::addPanel('Informations Commerciales')->collapsible();
         yield MoneyField::new('price', 'Prix de Vente ($)')->setCurrency('USD')->setStoredAsCents(true)->setColumns('col-md-4');
         yield MoneyField::new('purchasePrice', "Prix d'achat ($)")->setCurrency('USD')->setStoredAsCents(true)->setColumns('col-md-4');
         yield NumberField::new('coefficientMultiplier', 'Coefficient')->setColumns('col-md-4');
@@ -80,7 +80,7 @@ class ProductCrudController extends BaseTenantCrudController
         yield DateTimeField::new('specialPriceTo', 'Promotion au')->setColumns('col-md-4')->hideOnIndex();
         yield IntegerField::new('quantity', 'Quantité')->onlyOnIndex();
         // Modes de la boutique réglable (08/10/2026) : un produit peut cumuler vente et location
-        yield FormField::addPanel('Modes de vente')->setHelp('Un produit peut se vendre et se louer à la fois. La location se règle dans « Configuration de location ».');
+        yield FormField::addPanel('Modes de vente')->collapsible()->setHelp('Un produit peut se vendre et se louer à la fois. La location se règle dans « Configuration de location ».');
         yield BooleanField::new('saleEnabled', 'Vente')->setColumns('col-md-3');
         yield BooleanField::new('rentalEnabled', 'Location / réservation')->setColumns('col-md-3');
         yield BooleanField::new('subscriptionEnabled', 'Abonnement')->setColumns('col-md-3');
@@ -88,7 +88,7 @@ class ProductCrudController extends BaseTenantCrudController
         // combinaisons saisies (Combinaisons de personnalisation), comme le calcule Product::hasCustomizationConfig
 
         yield FormField::addTab('Organisation & Média');
-        yield FormField::addPanel('Catégorisation');
+        yield FormField::addPanel('Catégorisation')->collapsible();
 
         $tenantEm = $this->emProvider->getEntityManager();
         yield AssociationField::new('productType', 'Type de Produit')
@@ -103,7 +103,7 @@ class ProductCrudController extends BaseTenantCrudController
             ->setColumns('col-md-6');
         yield TextField::new('tags')->setColumns('col-md-6');
         
-        yield FormField::addPanel('Média');
+        yield FormField::addPanel('Média')->collapsible();
         yield ImageField::new('image', 'Image Principale')
             ->setBasePath('/bucket-simulator/assets/uploads/products/')
             ->setUploadDir('var/storage/public_bucket/assets/uploads/products/')
@@ -119,7 +119,7 @@ class ProductCrudController extends BaseTenantCrudController
 
 
         yield FormField::addTab('Visibilité & Options');
-        yield FormField::addPanel('Options d\'Affichage (Flags)');
+        yield FormField::addPanel('Options d\'Affichage (Flags)')->collapsible();
         
         yield BooleanField::new('isbestseller', 'BestSeller')->setColumns('col-md-3');
         yield BooleanField::new('isnewarrival', 'Nouveauté')->setColumns('col-md-3');
@@ -128,11 +128,11 @@ class ProductCrudController extends BaseTenantCrudController
         yield BooleanField::new('isAccessory', 'Accessoire')->setColumns('col-md-3');
         yield BooleanField::new('isLandingPage', 'isLandingPage')->setColumns('col-md-3');
         
-        yield FormField::addPanel('Statut de Publication');
+        yield FormField::addPanel('Statut de Publication')->collapsible();
         yield BooleanField::new('isWeb', 'Actif sur le site Web')->setColumns('col-md-3');
         yield BooleanField::new('isPos', 'Actif sur le Point de vente')->setColumns('col-md-3');
         
-        yield FormField::addPanel('Données Externes');
+        yield FormField::addPanel('Données Externes')->collapsible();
         yield AssociationField::new('commande', 'Commande Associée')
             ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn(CommandeRepository $repo) => $repo->createQueryBuilder('cmd')->orderBy('cmd.date', 'DESC')])
             ->hideOnIndex()

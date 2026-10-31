@@ -4,7 +4,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\BookingConfiguration;
-use App\Form\Type\JsonTextType;
+use App\Controller\Admin\Field\JsonTextField;
 use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ArrayField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
@@ -65,7 +65,7 @@ class BookingConfigurationCrudController extends BaseTenantCrudController
             ->hideOnIndex();
 
         // Boutique réglable (08/10/2026) : réglages facultatifs lus par la page produit (bookingConfig)
-        yield FormField::addPanel('Boutique réglable (facultatif)')->setHelp('Montants en cents (1 500 $ = 150000). Heures au format HH:MM.');
+        yield FormField::addPanel('Boutique réglable (facultatif)')->collapsible()->setHelp('Montants en cents (1 500 $ = 150000). Heures au format HH:MM.');
         yield IntegerField::new('maxDuration', 'Durée maximum')->hideOnIndex()->setColumns('col-md-4');
         yield IntegerField::new('minDaysStandard', 'Jours minimum (à la journée)')->hideOnIndex()->setColumns('col-md-4');
         yield IntegerField::new('arrivalLeadMinutes', 'Arrivée en avance (min)')->hideOnIndex()->setColumns('col-md-4');
@@ -76,9 +76,9 @@ class BookingConfigurationCrudController extends BaseTenantCrudController
         yield ArrayField::new('allowedDates', 'Dates autorisées (AAAA-MM-JJ)')->hideOnIndex()->setHelp('Vide : toutes les dates.');
         yield ArrayField::new('included', 'Inclus')->hideOnIndex();
         yield ArrayField::new('excluded', 'Non inclus')->hideOnIndex();
-        yield Field::new('halfDays', 'Demi-journées (JSON)')->hideOnIndex()->setFormType(JsonTextType::class)
+        yield JsonTextField::new('halfDays', 'Demi-journées (JSON)')->hideOnIndex()
             ->setHelp('[{"label": "Matin", "start": "09:00", "end": "13:00"}, {"label": "Après-midi", "start": "14:00", "end": "18:00"}]');
-        yield Field::new('eveningSlot', 'Créneau du soir (JSON)')->hideOnIndex()->setFormType(JsonTextType::class)
+        yield JsonTextField::new('eveningSlot', 'Créneau du soir (JSON)')->hideOnIndex()
             ->setHelp('{"start": "20:30", "end": "23:00"}');
         yield TextareaField::new('cancellationPolicy', 'Politique d\'annulation')->hideOnIndex();
         yield TextareaField::new('notes', 'Notes (essence, nourriture, FAQ…)')->hideOnIndex();

@@ -148,7 +148,8 @@ class DashboardController extends AbstractDashboardController
         private TenantEntityManagerProvider $emProvider,
         private TenantConnectionManager $tenantConnectionManager,
         private TenantVisitorTrackingService $visitorTrackingService,
-        private RequestStack $requestStack
+        private RequestStack $requestStack,
+        private \App\Services\CaisseService\StoreClock $storeClock
     ) {}
 
     #[Route('/admin', name: 'admin')]
@@ -156,41 +157,50 @@ class DashboardController extends AbstractDashboardController
     {
         $em = $this->emProvider->getEntityManager();
 
-        $now = new \DateTime();
-        $startThisMonth = (clone $now)->modify('first day of this month')->setTime(0, 0, 0);
-        $endThisMonth = (clone $now)->modify('last day of this month')->setTime(23, 59, 59);
-        
-        $startLastMonth = (clone $now)->modify('first day of last month')->setTime(0, 0, 0);
-        $endLastMonth = (clone $now)->modify('last day of last month')->setTime(23, 59, 59);
+        // Journées et mois dans le fuseau du magasin (réglage de la caisse, sinon pays et province), bornes converties en UTC pour la base
+        $tz = $this->storeClock->timezone();
+        $utc = new \DateTimeZone('UTC');
+        $now = new \DateTimeImmutable('now', $tz);
+        $today = $now->setTime(0, 0);
+        $startThisMonth = $today->modify('first day of this month');
+        $startNextMonth = $startThisMonth->modify('+1 month');
+        $startLastMonth = $startThisMonth->modify('-1 month');
 
-        // 1. Total Sales (Overall & Month-over-Month Comparison)
+        // Commandes comptées : toutes sauf « Incomplete » (paiement jamais finalisé) et « Annulation » ; les retours (montant négatif) restent déduits
+        $excludedStatuses = [];
+        try {
+            $excludedStatuses = array_map('intval', $em->getConnection()->fetchFirstColumn("SELECT id FROM status_commande WHERE name IN ('Incomplete', 'Annulation')"));
+        } catch (\Throwable) {
+        }
+        $valid = $excludedStatuses === [] ? '1 = 1' : '(o.status IS NULL OR IDENTITY(o.status) NOT IN (' . implode(',', $excludedStatuses) . '))';
+        $between = fn (\DateTimeImmutable $start, \DateTimeImmutable $end) => ['start' => $start->setTimezone($utc), 'end' => $end->setTimezone($utc)];
+        $sumBetween = function (\DateTimeImmutable $start, \DateTimeImmutable $end) use ($em, $valid, $between): float {
+            return ((float) ($em->createQuery("SELECT COALESCE(SUM(o.totalAmount), 0) FROM App\Entity\Order o WHERE $valid AND o.orderDate >= :start AND o.orderDate < :end")
+                ->setParameters($between($start, $end))->getSingleScalarResult() ?? 0)) / 100.0;
+        };
+        $countBetween = function (\DateTimeImmutable $start, \DateTimeImmutable $end) use ($em, $valid, $between): int {
+            return (int) ($em->createQuery("SELECT COUNT(o.id) FROM App\Entity\Order o WHERE $valid AND o.orderDate >= :start AND o.orderDate < :end")
+                ->setParameters($between($start, $end))->getSingleScalarResult() ?? 0);
+        };
+
+        // 1. Chiffre d'affaires et commandes (total, mois courant, mois précédent)
         $totalSales = 0.0;
         $salesThisMonth = 0.0;
         $salesLastMonth = 0.0;
         $totalOrders = 0;
         $ordersThisMonth = 0;
         $ordersLastMonth = 0;
-
         try {
-            $totalSales = ((float) ($em->createQuery('SELECT SUM(o.totalAmount) FROM App\Entity\Order o')->getSingleScalarResult() ?? 0)) / 100.0;
-            $totalOrders = (int) ($em->createQuery('SELECT COUNT(o.id) FROM App\Entity\Order o')->getSingleScalarResult() ?? 0);
-
-            $salesThisMonth = ((float) ($em->createQuery('SELECT SUM(o.totalAmount) FROM App\Entity\Order o WHERE o.orderDate >= :start AND o.orderDate <= :end')
-                ->setParameter('start', $startThisMonth)->setParameter('end', $endThisMonth)->getSingleScalarResult() ?? 0)) / 100.0;
-
-            $salesLastMonth = ((float) ($em->createQuery('SELECT SUM(o.totalAmount) FROM App\Entity\Order o WHERE o.orderDate >= :start AND o.orderDate <= :end')
-                ->setParameter('start', $startLastMonth)->setParameter('end', $endLastMonth)->getSingleScalarResult() ?? 0)) / 100.0;
-
-            $ordersThisMonth = (int) ($em->createQuery('SELECT COUNT(o.id) FROM App\Entity\Order o WHERE o.orderDate >= :start AND o.orderDate <= :end')
-                ->setParameter('start', $startThisMonth)->setParameter('end', $endThisMonth)->getSingleScalarResult() ?? 0);
-
-            $ordersLastMonth = (int) ($em->createQuery('SELECT COUNT(o.id) FROM App\Entity\Order o WHERE o.orderDate >= :start AND o.orderDate <= :end')
-                ->setParameter('start', $startLastMonth)->setParameter('end', $endLastMonth)->getSingleScalarResult() ?? 0);
+            $totalSales = ((float) ($em->createQuery("SELECT COALESCE(SUM(o.totalAmount), 0) FROM App\Entity\Order o WHERE $valid")->getSingleScalarResult() ?? 0)) / 100.0;
+            $totalOrders = (int) ($em->createQuery("SELECT COUNT(o.id) FROM App\Entity\Order o WHERE $valid")->getSingleScalarResult() ?? 0);
+            $salesThisMonth = $sumBetween($startThisMonth, $startNextMonth);
+            $salesLastMonth = $sumBetween($startLastMonth, $startThisMonth);
+            $ordersThisMonth = $countBetween($startThisMonth, $startNextMonth);
+            $ordersLastMonth = $countBetween($startLastMonth, $startThisMonth);
         } catch (\Exception $e) {
-            // fallback
+            // tables absentes sur ce site : zéros
         }
 
-        // Percentage calculations
         $salesDiffPercent = $salesLastMonth > 0 ? round((($salesThisMonth - $salesLastMonth) / $salesLastMonth) * 100, 1) : 0;
         $ordersDiffPercent = $ordersLastMonth > 0 ? round((($ordersThisMonth - $ordersLastMonth) / $ordersLastMonth) * 100, 1) : 0;
 
@@ -199,12 +209,12 @@ class DashboardController extends AbstractDashboardController
         $avgLastMonth = $ordersLastMonth > 0 ? ($salesLastMonth / $ordersLastMonth) : 0.0;
         $avgDiffPercent = $avgLastMonth > 0 ? round((($avgThisMonth - $avgLastMonth) / $avgLastMonth) * 100, 1) : 0;
 
-        // 2. Customers & Taxes
+        // 2. Clients et taxes (taxes des seules commandes comptées)
         $totalCustomers = 0;
         $totalTaxes = 0.0;
         try {
             $totalCustomers = (int) ($em->createQuery('SELECT COUNT(u.id) FROM App\Entity\User u')->getSingleScalarResult() ?? 0);
-            $totalTaxes = ((float) ($em->createQuery('SELECT SUM(ot.amount) FROM App\Entity\OrderTax ot')->getSingleScalarResult() ?? 0)) / 100.0;
+            $totalTaxes = ((float) ($em->createQuery("SELECT COALESCE(SUM(ot.amount), 0) FROM App\Entity\OrderTax ot JOIN ot.orderTax o WHERE $valid")->getSingleScalarResult() ?? 0)) / 100.0;
         } catch (\Exception $e) {
             // fallback
         }
@@ -230,66 +240,67 @@ class DashboardController extends AbstractDashboardController
             // fallback
         }
 
-        // 4. Multi-Period Sales Graphs (7 Days, Month, Year)
-        // a) 7 Days
+        // 4. Courbes des ventes : 7 jours, semaines du mois (le mois entier, 1 au 7 … 29 au 31), mois de l'année
         $labels7Days = [];
         $values7Days = [];
         for ($i = 6; $i >= 0; $i--) {
-            $date = new \DateTime("-$i days");
-            $labels7Days[] = $date->format('d M');
-            $start = (clone $date)->setTime(0, 0, 0);
-            $end = (clone $date)->setTime(23, 59, 59);
-
+            $day = $today->modify("-$i days");
+            $labels7Days[] = $day->format('d M');
             try {
-                $val = $em->createQuery('SELECT SUM(o.totalAmount) FROM App\Entity\Order o WHERE o.orderDate >= :start AND o.orderDate <= :end')
-                    ->setParameter('start', $start)->setParameter('end', $end)->getSingleScalarResult();
-                $values7Days[] = round(((float) ($val ?? 0)) / 100.0, 2);
+                $values7Days[] = round($sumBetween($day, $day->modify('+1 day')), 2);
             } catch (\Exception $e) {
                 $values7Days[] = 0.0;
             }
         }
 
-        // b) Current Month Weeks
-        $labelsMonth = ['Semaine 1', 'Semaine 2', 'Semaine 3', 'Semaine 4'];
-        $valuesMonth = [0.0, 0.0, 0.0, 0.0];
-        try {
-            for ($w = 0; $w < 4; $w++) {
-                $wStart = (clone $startThisMonth)->modify('+' . ($w * 7) . ' days');
-                $wEnd = (clone $wStart)->modify('+6 days')->setTime(23, 59, 59);
-                if ($wEnd > $endThisMonth) $wEnd = clone $endThisMonth;
-                $val = $em->createQuery('SELECT SUM(o.totalAmount) FROM App\Entity\Order o WHERE o.orderDate >= :start AND o.orderDate <= :end')
-                    ->setParameter('start', $wStart)->setParameter('end', $wEnd)->getSingleScalarResult();
-                $valuesMonth[$w] = round(((float) ($val ?? 0)) / 100.0, 2);
+        $labelsMonth = [];
+        $valuesMonth = [];
+        for ($wStart = $startThisMonth; $wStart < $startNextMonth; $wStart = $wStart->modify('+7 days')) {
+            $wEnd = min($wStart->modify('+7 days'), $startNextMonth);
+            $labelsMonth[] = sprintf('%d au %d', (int) $wStart->format('j'), (int) $wEnd->modify('-1 day')->format('j'));
+            try {
+                $valuesMonth[] = round($sumBetween($wStart, $wEnd), 2);
+            } catch (\Exception $e) {
+                $valuesMonth[] = 0.0;
             }
-        } catch (\Exception $e) {}
+        }
 
-        // c) Current Year Months
         $labelsYear = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
         $valuesYear = array_fill(0, 12, 0.0);
         try {
             $currentYear = (int) $now->format('Y');
             for ($m = 1; $m <= 12; $m++) {
-                $mStart = new \DateTime("$currentYear-$m-01 00:00:00");
-                $mEnd = (clone $mStart)->modify('last day of this month')->setTime(23, 59, 59);
-                $val = $em->createQuery('SELECT SUM(o.totalAmount) FROM App\Entity\Order o WHERE o.orderDate >= :start AND o.orderDate <= :end')
-                    ->setParameter('start', $mStart)->setParameter('end', $mEnd)->getSingleScalarResult();
-                $valuesYear[$m - 1] = round(((float) ($val ?? 0)) / 100.0, 2);
+                $mStart = new \DateTimeImmutable(sprintf('%d-%02d-01 00:00:00', $currentYear, $m), $tz);
+                $valuesYear[$m - 1] = round($sumBetween($mStart, $mStart->modify('+1 month')), 2);
             }
         } catch (\Exception $e) {}
 
-        // 5. Payment Methods Breakdown
-        $paymentLabels = ['Carte / Stripe', 'Caisse Espèces', 'Virement / Autre'];
-        $paymentSeries = [0, 0, 0];
+        // 5. Modes de paiement : encaissements client terminés, par mode, cumul en dollars (remboursements exclus)
+        $paymentLabels = [];
+        $paymentSeries = [];
         try {
-            $stripeTotal = ((float) ($em->createQuery('SELECT SUM(o.totalAmount) FROM App\Entity\Order o WHERE o.orderSource = 1 OR o.totalAmount > 0')->getSingleScalarResult() ?? 0)) / 100.0;
-            $paymentSeries = [$stripeTotal > 0 ? round($stripeTotal, 2) : 100, 45, 15];
+            $rows = $em->createQuery("SELECT pm.name AS label, SUM(p.amount) AS total FROM App\Entity\Payments p LEFT JOIN p.paymentMethod pm LEFT JOIN p.paymentType pt LEFT JOIN p.statutPayment sp
+                WHERE p.amount > 0 AND (pt.id IS NULL OR pt.name = 'PaiementClient') AND (sp.id IS NULL OR sp.name = 'Complété') GROUP BY pm.name ORDER BY total DESC")->getArrayResult();
+            foreach ($rows as $row) {
+                $paymentLabels[] = $row['label'] ?: 'Non précisé';
+                $paymentSeries[] = round(((float) $row['total']) / 100.0, 2);
+            }
         } catch (\Exception $e) {
-            $paymentSeries = [100, 50, 20];
+            // fallback : aucun graphique
         }
 
-        // 6. Carrier Breakdown
-        $carrierLabels = ['Transporteur Default', 'Express', 'Retrait'];
-        $carrierSeries = [60, 25, 15];
+        // 6. Transporteurs : commandes comptées, par transporteur (sans transporteur : retrait ou vente en caisse)
+        $carrierLabels = [];
+        $carrierSeries = [];
+        try {
+            $rows = $em->createQuery("SELECT c.name AS label, COUNT(o.id) AS n FROM App\Entity\Order o LEFT JOIN o.carrier c WHERE $valid GROUP BY c.name ORDER BY n DESC")->getArrayResult();
+            foreach ($rows as $row) {
+                $carrierLabels[] = $row['label'] ?: 'Sans livraison (retrait ou caisse)';
+                $carrierSeries[] = (int) $row['n'];
+            }
+        } catch (\Exception $e) {
+            // fallback : aucun graphique
+        }
 
         // 7. Recent Orders (optimized query with user eager join to prevent N+1)
         $recentOrders = [];
@@ -346,11 +357,12 @@ class DashboardController extends AbstractDashboardController
             $tenantDomain
         );
 
-        // Métriques globales de tous les tenants
-        $trafficMetrics = $this->visitorTrackingService->getGlobalTrafficMetrics($tenants);
+        // Métriques de tous les sites : réservées au propriétaire de la plateforme (un administrateur de site ne voit que le sien)
+        $trafficMetrics = $this->isGranted('ROLE_SUPER_ADMIN') ? $this->visitorTrackingService->getGlobalTrafficMetrics($tenants) : null;
 
         return $this->render('admin/dashboard.html.twig', [
             'tenantReport' => $tenantReport,
+            'storeTimezone' => $tz->getName(),
             'currentTenantCode' => $currentTenantCode,
             'trafficMetrics' => $trafficMetrics,
             'totalSales' => $totalSales,
@@ -398,7 +410,14 @@ class DashboardController extends AbstractDashboardController
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
                 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=Outfit:wght@300;400;500;600;700&display=swap">
             ')
-            ->addCssFile('assets/css/admin-arkanoa.css');
+            ->addCssFile('assets/css/admin-arkanoa.css?v=' . $this->assetVersion('assets/css/admin-arkanoa.css'))
+            ->addJsFile('assets/js/admin-arkanoa.js?v=' . $this->assetVersion('assets/js/admin-arkanoa.js'));
+    }
+
+    /** Date de modification du fichier en suffixe : nginx fait garder les fichiers statiques 30 jours au navigateur, une version changée force le rechargement */
+    private function assetVersion(string $publicPath): string
+    {
+        return (string) (@filemtime($this->getParameter('kernel.project_dir') . '/public/' . $publicPath) ?: 1);
     }
 
     /** « Avis clients », avec le nombre d'avis en attente de modération */
@@ -417,7 +436,53 @@ class DashboardController extends AbstractDashboardController
         return $item;
     }
 
+    /** Icône de chaque groupe du menu (sections repliables, 31/10/2026) */
+    private const MENU_GROUP_ICONS = [
+        'Maintenance' => 'fas fa-tools', 'UI' => 'fas fa-palette', 'Landing Page' => 'fas fa-window-maximize', 'Médiathèque & Partage' => 'fas fa-photo-video',
+        'Entreprise' => 'fa fa-building', 'Livraison' => 'fas fa-truck', 'IIZIMANAGER' => 'fas fa-briefcase', 'Réservations & Clients' => 'fas fa-users',
+        'Mouvements stock' => 'fas fa-dolly', 'Caisse' => 'fas fa-cash-register', 'Order' => 'fas fa-shopping-bag', 'Payment' => 'fas fa-credit-card',
+        'Taxe' => 'fas fa-percent', 'Catalogue & Véhicules' => 'fas fa-boxes', 'Location / Réservation' => 'fas fa-calendar-check',
+        'Boussole ESG' => 'fas fa-compass', 'Mémoires Vivantes' => 'fas fa-book-open',
+    ];
+
+    /**
+     * Menu de gauche : le tableau de bord, puis chaque section de menuEntries() devient un groupe repliable (flèche),
+     * ouvert seulement s'il contient la page courante ; les groupes ouverts à la main sont mémorisés par admin-arkanoa.js.
+     */
     public function configureMenuItems(): iterable
+    {
+        $group = null;
+        $items = [];
+        $flush = function () use (&$group, &$items) {
+            if ($group === null) {
+                return null;
+            }
+            $label = (string) $group->getAsDto()->getLabel();
+            $subMenu = MenuItem::subMenu($label, self::MENU_GROUP_ICONS[$label] ?? 'fas fa-folder')->setSubItems($items);
+            $group = null;
+            $items = [];
+
+            return $subMenu;
+        };
+        foreach ($this->menuEntries() as $entry) {
+            if ($entry instanceof \EasyCorp\Bundle\EasyAdminBundle\Config\Menu\SectionMenuItem) {
+                if (($done = $flush()) !== null) {
+                    yield $done;
+                }
+                $group = $entry;
+            } elseif ($group === null) {
+                yield $entry;
+            } else {
+                $items[] = $entry;
+            }
+        }
+        if (($done = $flush()) !== null) {
+            yield $done;
+        }
+    }
+
+    /** Entrées du menu à plat : une section (`MenuItem::section`) ouvre un groupe, les liens qui suivent en font partie */
+    private function menuEntries(): iterable
     {
         yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
         
@@ -466,6 +531,7 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::section('Entreprise');
         yield MenuItem::linkToCrud('Entreprise', 'fa fa-building', Entreprise::class);
         yield MenuItem::linkToCrud('Profils des applications', 'fas fa-id-card', \App\Entity\AppProfile::class)->setController(AppProfileCrudController::class);
+        yield MenuItem::linkToRoute('Apparence de l\'app mobile', 'fas fa-mobile-alt', 'admin_mobile_theme'); // thème de l'application e-commerce mobile (31/10/2026)
         yield MenuItem::linkToCrud('AddressEntreprise', 'fa fa-map-marker', AddressEntreprise::class);
         yield MenuItem::linkToCrud('Réseaux Sociaux', 'fa fa-share-alt', SocialNetwork::class);
         yield MenuItem::linkToCrud('Équipes', 'fa fa-users', Team::class);

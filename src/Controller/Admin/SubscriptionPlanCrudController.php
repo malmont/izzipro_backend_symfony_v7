@@ -3,7 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\SubscriptionPlan;
-use App\Form\Type\JsonTextType;
+use App\Controller\Admin\Field\JsonTextField;
 use App\Services\TenantEntityManagerProvider;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
@@ -43,7 +43,7 @@ class SubscriptionPlanCrudController extends BaseTenantCrudController
             'em' => $tenantEm,
             'query_builder' => fn ($repo) => $repo->createQueryBuilder('p')->where('p.subscriptionEnabled = true')->orderBy('p.name', 'ASC'),
         ])->setHelp('Seuls les produits dont l\'abonnement est activé apparaissent.');
-        yield Field::new('names', 'Noms par langue (JSON)')->setFormType(JsonTextType::class)->setHelp('{"fr": "Panier hebdo", "en": "Weekly basket"}')
+        yield JsonTextField::new('names', 'Noms par langue (JSON)')->setHelp('{"fr": "Panier hebdo", "en": "Weekly basket"}')
             ->formatValue(fn ($value) => is_array($value) ? ($value['fr'] ?? reset($value)) : $value);
         yield ChoiceField::new('interval', 'Périodicité')->setChoices(['Semaine' => 'week', 'Mois' => 'month', 'Année' => 'year']);
         yield IntegerField::new('intervalCount', 'Toutes les N périodes')->setHelp('1 = chaque semaine / mois / année ; 2 = toutes les deux…');
@@ -53,11 +53,11 @@ class SubscriptionPlanCrudController extends BaseTenantCrudController
         yield IntegerField::new('minimumTerms', 'Engagement minimal (périodes)')->hideOnIndex();
         yield BooleanField::new('active', 'Active');
         yield BooleanField::new('highlighted', 'Recommandée (mise en avant)')->setHelp('Une seule par produit : cocher une formule décoche les autres du même produit.');
-        yield Field::new('descriptions', 'Sous-titre par langue (JSON)')->setFormType(JsonTextType::class)->hideOnIndex()
+        yield JsonTextField::new('descriptions', 'Sous-titre par langue (JSON)')->hideOnIndex()
             ->setHelp('{"fr": "Solution discount", "en": "Budget plan"} — texte en clair, 160 caractères au plus.');
-        yield Field::new('features', 'Avantages par langue (JSON)')->setFormType(JsonTextType::class)->hideOnIndex()
+        yield JsonTextField::new('features', 'Avantages par langue (JSON)')->hideOnIndex()
             ->setHelp('{"fr": ["Livraison offerte", "Sans engagement"], "en": ["Free delivery", "No commitment"]} — 20 avantages au plus, 120 caractères chacun, texte en clair.');
-        yield Field::new('badges', 'Texte du badge par langue (JSON)')->setFormType(JsonTextType::class)->hideOnIndex()
+        yield JsonTextField::new('badges', 'Texte du badge par langue (JSON)')->hideOnIndex()
             ->setHelp('Facultatif, pour la formule recommandée : {"fr": "Le plus choisi", "en": "Most popular"}. Sans texte, le site affiche « Recommandé ».');
         yield TextField::new('stripePriceId', 'Prix Stripe')->onlyOnDetail();
     }

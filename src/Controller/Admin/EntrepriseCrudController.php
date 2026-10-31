@@ -61,9 +61,10 @@ class EntrepriseCrudController extends BaseTenantCrudController
         $tenantEm = $this->emProvider->getEntityManager();
 
         return [
+            // Onglets (31/10/2026) : Entreprise, Applications, Caisse, Site web et SEO, Traductions ; panneaux repliables
+            FormField::addTab('Entreprise', 'fa fa-building'),
+            FormField::addPanel('Identité et coordonnées')->collapsible(),
             IdField::new('id')->onlyOnIndex(),
-            
-            // --- Champs non traduits ---
             TextField::new('name', 'Nom de l\'entreprise'),
             ImageField::new('logo', 'Logo')
                 ->setBasePath('/bucket-simulator/assets/uploads/email-logos/')
@@ -83,7 +84,16 @@ class EntrepriseCrudController extends BaseTenantCrudController
             TextField::new('tvaIntracommunautaire', 'TVA intracommunautaire'),
             TextField::new('gstNumber', 'Numéro de TPS (Canada)')->setRequired(false)->hideOnIndex()->setHelp('Imprimé sur les tickets de caisse (store.taxNumbers.gst)'),
             TextField::new('qstNumber', 'Numéro de TVQ (Québec)')->setRequired(false)->hideOnIndex()->setHelp('Imprimé sur les tickets de caisse (store.taxNumbers.qst)'),
-            FormField::addPanel('Activation des Applications (Multi-Module)'),
+            FormField::addPanel('Réseaux sociaux')->collapsible(),
+            AssociationField::new('socialNetworks', 'Réseaux Sociaux')
+                ->setFormTypeOptions([
+                    'em' => $tenantEm,
+                    'query_builder' => fn(SocialNetworkRepository $repo) => $repo->createQueryBuilder('sn')->orderBy('sn.name', 'ASC'),
+                ])
+                ->setColumns('col-md-6'),
+
+            FormField::addTab('Applications', 'fa fa-th-large'),
+            FormField::addPanel('Activation des Applications (Multi-Module)')->collapsible(),
             BooleanField::new('isBoutiqueActive', 'Boutique / e-Commerce')
                 ->setHelp('Activer la boutique et le catalogue e-commerce pour ce tenant'),
             BooleanField::new('isLandingPageActive', 'Landing Page')
@@ -93,14 +103,16 @@ class EntrepriseCrudController extends BaseTenantCrudController
             BooleanField::new('isMemoireVivanteActive', 'Mémoire Vivante')
                 ->setHelp('Activer l\'application Mémoire Vivante'),
 
-            FormField::addPanel('Applications mobiles')
+            FormField::addPanel('Applications mobiles')->collapsible()
                 ->setHelp('Activer génère une clé d\'activation et l\'envoie (clé + code QR) à l\'e-mail de l\'entreprise ; désactiver révoque les clés de l\'application. Détail : menu Caisse → Clés des applications.'),
             BooleanField::new('isPosActive', 'Caisse (POS)'),
             BooleanField::new('isMobileShopActive', 'E-commerce mobile'),
             BooleanField::new('isManagementAppActive', 'Application de gestion'),
             BooleanField::new('isLivingMemoryActive', 'LivingMemory (Mémoires Vivantes)'),
 
-            FormField::addPanel('Caisse (POS)'),
+            FormField::addTab('Caisse', 'fa fa-cash-register'),
+            FormField::addPanel('Réglages généraux de la caisse')->collapsible()
+                ->setHelp('Écarts, validations, PIN, paiements acceptés, ticket. Les autres sections sont repliées : cliquer sur un titre pour l\'ouvrir.'),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posDiscrepancyThreshold', 'Écart de caisse toléré sans motif (cents)')
                 ->setHelp('À la fermeture, un écart entre espèces comptées et attendues au-delà de ce montant exige un motif. 0 : tout écart demande un motif.')
                 ->hideOnIndex(),
@@ -143,7 +155,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCashAlertThreshold', 'Alerte « trop d\'espèces » au-delà de (cents)')->setRequired(false)->setHelp('Vide : aucune alerte ; le POS invite à un retrait')->hideOnIndex(),
             BooleanField::new('posTerminalHeaderRequired', 'Exiger un terminal identifié (X-Pos-Terminal) sur les routes de caisse')->setHelp('Désactivé par défaut ; à activer quand toutes les tablettes envoient l\'en-tête')->hideOnIndex(),
             // Mode hors ligne (C5 partie 2, 25/10/2026) : désactivé par défaut
-            FormField::addPanel('Mode hors ligne (caisse)')->setHelp('Ventes en espèces sans réseau, synchronisées ensuite ; désactivé d\'office si les taxes du site viennent de Stripe Tax.'),
+            FormField::addPanel('Mode hors ligne (caisse)')->collapsible()->renderCollapsed()->setHelp('Ventes en espèces sans réseau, synchronisées ensuite ; désactivé d\'office si les taxes du site viennent de Stripe Tax.'),
             BooleanField::new('posOfflineEnabled', 'Mode hors ligne autorisé')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflineMaxHours', 'Durée maximale hors ligne (heures)')->setHelp('défaut 24')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflineMaxQueuedSales', 'Ventes en file au plus')->setHelp('défaut 100')->hideOnIndex(),
@@ -152,18 +164,18 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posOfflinePackValidityHours', 'Validité du pack hors ligne (heures)')->setHelp('défaut 24')->hideOnIndex(),
 
             // Conservation des données de vente (A1, 30/10/2026)
-            FormField::addPanel('Conservation des données de vente (caisse)')->setHelp('Durée de conservation : défaut du pays (Canada 6 ans après la fin de l\'année, France et DROM 10 ans), jamais moins que le plancher légal ; exercice supposé = année civile (à confirmer par le comptable). Pendant la durée, la suppression des données de caisse et des commandes payées est refusée ; les modifications sont journalisées (mode observation) ou refusées (mode blocage). Aucune purge automatique à l\'échéance.'),
+            FormField::addPanel('Conservation des données de vente (caisse)')->collapsible()->renderCollapsed()->setHelp('Durée de conservation : défaut du pays (Canada 6 ans après la fin de l\'année, France et DROM 10 ans), jamais moins que le plancher légal ; exercice supposé = année civile (à confirmer par le comptable). Pendant la durée, la suppression des données de caisse et des commandes payées est refusée ; les modifications sont journalisées (mode observation) ou refusées (mode blocage). Aucune purge automatique à l\'échéance.'),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('dataRetentionYears', 'Durée de conservation (années)')->setRequired(false)->setHelp('Vide = défaut du pays')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('retentionWriteMode', 'Modifications des données de caisse')->setChoices(['Observation : journalisées (RETENTION_WRITE_OBSERVED)' => 'observe', 'Blocage : refusées' => 'block'])->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posGiftCardCodeAttempts', 'Codes de cartes-cadeaux refusés : essais par 10 minutes')->setHelp('Par utilisateur et par terminal ; défaut 10, 0 = sans limite')->hideOnIndex(),
 
             // Fuseau horaire et comptabilité (F14, 29/10/2026)
-            FormField::addPanel('Fuseau horaire et comptabilité (caisse)')->setHelp('Fuseau horaire du magasin pour les journées des statistiques et des exports (vide = déduit du pays et de la province : Québec et Ontario America/Toronto, Manitoba America/Winnipeg, Alberta America/Edmonton, Colombie-Britannique America/Vancouver, Martinique America/Martinique, France Europe/Paris). Plan de comptes : une ligne par clé « cle=numero;Nom » ; vide = plan par défaut québécois (voir docs/caisse.md). Les réservations gardent leur fuseau actuel.'),
+            FormField::addPanel('Fuseau horaire et comptabilité (caisse)')->collapsible()->renderCollapsed()->setHelp('Fuseau horaire du magasin pour les journées des statistiques et des exports (vide = déduit du pays et de la province : Québec et Ontario America/Toronto, Manitoba America/Winnipeg, Alberta America/Edmonton, Colombie-Britannique America/Vancouver, Martinique America/Martinique, France Europe/Paris). Plan de comptes : une ligne par clé « cle=numero;Nom » ; vide = plan par défaut québécois (voir docs/caisse.md). Les réservations gardent leur fuseau actuel.'),
             TextField::new('posTimezone', 'Fuseau horaire du magasin (IANA)')->setRequired(false)->setHelp('p. ex. America/Toronto, America/Martinique, Europe/Paris')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField::new('accountingAccounts', 'Plan de comptes (une ligne par clé : cle=numero;Nom)')->setRequired(false)->setHelp('Clés : sales, sales_rate_<taux>, returns, discounts, shipping_revenue, tax_gst, tax_qst, tax_hst, tax_hst_<province>, tax_pst, tax_vat, tax_vat_<taux>, cash, bank, card_clearing, interac_clearing, stripe_clearing, stripe_fees, commission, stripe_payout, gift_card_liability, store_credit_liability, cash_discrepancy, cash_rounding, loyalty_rewards')->hideOnIndex(),
 
             // Fiche client et fidélité (F8, 28/10/2026)
-            FormField::addPanel('Clients et fidélité (caisse)')->setHelp('Fiche client de caisse (nom, téléphone, courriel, consentements) distincte du compte web, rattachable à un compte existant avec le consentement du client ; aucun compte web ni courriel n\'est créé. Fidélité : points gagnés sur le net des articles (hors taxes, hors part payée par carte-cadeau), rachetés en remise de ticket calculée par le serveur. Données personnelles (Loi 25, RGPD) : consentements datés par finalité, marketing séparé et désactivé par défaut, journal des consultations, effacement = anonymisation.'),
+            FormField::addPanel('Clients et fidélité (caisse)')->collapsible()->renderCollapsed()->setHelp('Fiche client de caisse (nom, téléphone, courriel, consentements) distincte du compte web, rattachable à un compte existant avec le consentement du client ; aucun compte web ni courriel n\'est créé. Fidélité : points gagnés sur le net des articles (hors taxes, hors part payée par carte-cadeau), rachetés en remise de ticket calculée par le serveur. Données personnelles (Loi 25, RGPD) : consentements datés par finalité, marketing séparé et désactivé par défaut, journal des consultations, effacement = anonymisation.'),
             BooleanField::new('posCustomersEnabled', 'Fiche client activée')->hideOnIndex(),
             BooleanField::new('posCustomerLinkEnabled', 'Rattachement d\'un compte web autorisé (avec consentement)')->hideOnIndex(),
             BooleanField::new('posLoyaltyEnabled', 'Programme de fidélité activé')->hideOnIndex(),
@@ -176,7 +188,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCustomerSearchPerMinute', 'Recherches de clients par utilisateur et par minute')->setHelp('Empêche de tester des courriels un par un pour savoir qui a un compte web ; défaut 30, 0 = sans limite')->hideOnIndex(),
 
             // Cartes-cadeaux et avoirs (F9, 27/10/2026) : désactivés par défaut
-            FormField::addPanel('Cartes-cadeaux et avoirs (caisse)')->setHelp('Carte-cadeau vendue en caisse (code unique non devinable, ticket Code 128 et QR, ou carte physique pré-imprimée) et avoir émis par un retour, utilisables comme moyen de paiement. La vente d\'une carte est un passif, pas un chiffre d\'affaires : taxes à l\'utilisation. Expiration : la règle dépend du pays. Au Québec, une carte prépayée vendue contre de l\'argent ne peut pas expirer et un solde de 5,00 $ ou moins doit être remboursé en espèces sur demande (vide = jamais d\'expiration, seuil 500). La France ou d\'autres pays ont d\'autres règles : ajustez ces valeurs.'),
+            FormField::addPanel('Cartes-cadeaux et avoirs (caisse)')->collapsible()->renderCollapsed()->setHelp('Carte-cadeau vendue en caisse (code unique non devinable, ticket Code 128 et QR, ou carte physique pré-imprimée) et avoir émis par un retour, utilisables comme moyen de paiement. La vente d\'une carte est un passif, pas un chiffre d\'affaires : taxes à l\'utilisation. Expiration : la règle dépend du pays. Au Québec, une carte prépayée vendue contre de l\'argent ne peut pas expirer et un solde de 5,00 $ ou moins doit être remboursé en espèces sur demande (vide = jamais d\'expiration, seuil 500). La France ou d\'autres pays ont d\'autres règles : ajustez ces valeurs.'),
             BooleanField::new('posGiftCardEnabled', 'Cartes-cadeaux activées')->hideOnIndex(),
             TextField::new('posGiftCardAmounts', 'Montants proposés (cents, séparés par des virgules)')->setRequired(false)->setHelp('Vide : 2500, 5000, 10000 (25, 50 et 100 $) ; le montant libre reste possible')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posGiftCardExpiryMonths', 'Expiration des cartes (mois)')->setRequired(false)->setHelp('Vide = jamais (Québec)')->hideOnIndex(),
@@ -186,23 +198,18 @@ class EntrepriseCrudController extends BaseTenantCrudController
             BooleanField::new('posGiftCardCashRefundBeyond', 'Remboursement en espèces au-delà du seuil (avec validation d\'un responsable)')->hideOnIndex(),
 
             // Coupons de fabricant (F17, 01/11/2026) : désactivés par défaut
-            FormField::addPanel('Coupons de fabricant (caisse)')->setHelp('Bons de réduction émis par une marque et remboursés au commerçant par le fabricant ou une chambre de compensation. Acceptés comme un moyen de paiement : la TPS et la TVQ restent calculées sur le prix plein (Loi sur la taxe d\'accise, art. 181(2)). Rapport des coupons à réclamer : menu « Coupons de fabricant (caisse) ».'),
+            FormField::addPanel('Coupons de fabricant (caisse)')->collapsible()->renderCollapsed()->setHelp('Bons de réduction émis par une marque et remboursés au commerçant par le fabricant ou une chambre de compensation. Acceptés comme un moyen de paiement : la TPS et la TVQ restent calculées sur le prix plein (Loi sur la taxe d\'accise, art. 181(2)). Rapport des coupons à réclamer : menu « Coupons de fabricant (caisse) ».'),
             BooleanField::new('posCouponEnabled', 'Coupons de fabricant acceptés')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCouponMaxWithoutApproval', 'Coupons : montant maximal par vente sans validation (cents)')->setHelp('Total des coupons d\'une vente ; au-delà, validation d\'un responsable (action manufacturer_coupon). 0 = toujours une validation. Défaut 2000 (20 $).')->hideOnIndex(),
 
             // Paiements de caisse en production (M1) : mode affiché ici, changé seulement depuis la page « Paiements de caisse (Stripe) » (contrôles, journal)
-            FormField::addPanel('Paiements de caisse et surveillance (caisse)')->setHelp('Mode Stripe de la caisse (test | réel) : page « Paiements de caisse (Stripe) » du menu Caisse, qui contrôle le compte Stripe réel avant le passage. Alertes : courriel au contact du site quand la surveillance relève un point à vérifier ou critique (réconciliation arrêtée, paiements sans vente, remboursements Interac expirés, sessions ouvertes depuis plus de 24 h, échecs de capture, compte Stripe suspendu) ; même situation renvoyée au plus toutes les 6 heures ; aucune donnée de carte.'),
+            FormField::addPanel('Paiements de caisse et surveillance (caisse)')->collapsible()->renderCollapsed()->setHelp('Mode Stripe de la caisse (test | réel) : page « Paiements de caisse (Stripe) » du menu Caisse, qui contrôle le compte Stripe réel avant le passage. Alertes : courriel au contact du site quand la surveillance relève un point à vérifier ou critique (réconciliation arrêtée, paiements sans vente, remboursements Interac expirés, sessions ouvertes depuis plus de 24 h, échecs de capture, compte Stripe suspendu) ; même situation renvoyée au plus toutes les 6 heures ; aucune donnée de carte.'),
             TextField::new('posStripeMode', 'Paiements de caisse')->hideOnForm()->hideOnIndex()->formatValue(fn ($v) => $v === 'live' ? 'RÉEL' : 'test'),
             BooleanField::new('posAlertsEnabled', 'Alertes de surveillance par courriel au contact du site')->hideOnIndex(),
             EmailField::new('posAlertsEmail', 'Adresse des alertes (vide : courriel de l\'entreprise)')->setRequired(false)->hideOnIndex(),
 
-            // Formulaires à étapes (28/10/2026) : destinataire et conservation des demandes reçues
-            FormField::addPanel('Demandes reçues (formulaires)')->setHelp('Demandes envoyées par les formulaires à étapes du site (menu « Demandes reçues »). Notification à l\'adresse ci-dessous, sinon au courriel de l\'entreprise. Les demandes sont supprimées après la durée de conservation (12 mois par défaut).'),
-            EmailField::new('formSubmissionsEmail', 'Adresse qui reçoit les demandes (vide : courriel de l\'entreprise)')->setRequired(false)->hideOnIndex(),
-            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('formSubmissionsRetentionMonths', 'Conservation des demandes (mois, 1 à 120 ; vide : 12)')->setRequired(false)->hideOnIndex(),
-
             // Grille de favoris (F10) : désactivée par défaut
-            FormField::addPanel('Grille de favoris (caisse)')->setHelp('Grille de produits à toucher sur l\'écran de vente (articles sans code-barres, ventes fréquentes) : produits épinglés par le responsable d\'abord, dans l\'ordre choisi (menu « Favoris de la caisse » ; les épinglés d\'un poste remplacent ceux du site pour ce poste), puis les plus vendus en caisse sur la période, nets des retours, pour compléter la grille.'),
+            FormField::addPanel('Grille de favoris (caisse)')->collapsible()->renderCollapsed()->setHelp('Grille de produits à toucher sur l\'écran de vente (articles sans code-barres, ventes fréquentes) : produits épinglés par le responsable d\'abord, dans l\'ordre choisi (menu « Favoris de la caisse » ; les épinglés d\'un poste remplacent ceux du site pour ce poste), puis les plus vendus en caisse sur la période, nets des retours, pour compléter la grille.'),
             BooleanField::new('posFavoritesEnabled', 'Grille de favoris activée')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('posFavoritesMode', 'Contenu de la grille')->hideOnIndex()
                 ->setChoices(['Épinglés puis plus vendus' => 'both', 'Épinglés seulement' => 'pinned', 'Plus vendus seulement' => 'bestSellers']),
@@ -210,7 +217,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posFavoritesGridSize', 'Taille de la grille')->setHelp('Nombre de cases, de 1 à 100. Défaut 24.')->hideOnIndex(),
 
             // Article libre et prix manuel (F7, 26/10/2026) : désactivés par défaut
-            FormField::addPanel('Article libre et prix manuel (caisse)')->setHelp('Article libre : vente d\'un article absent du catalogue (libellé, prix saisi, taxable ou non), sans mouvement de stock. Prix manuel : prix catalogue remplacé sur une ligne, avec motif. Au-delà du montant maximal, validation d\'un responsable ; vide = jamais, 0 = toujours.'),
+            FormField::addPanel('Article libre et prix manuel (caisse)')->collapsible()->renderCollapsed()->setHelp('Article libre : vente d\'un article absent du catalogue (libellé, prix saisi, taxable ou non), sans mouvement de stock. Prix manuel : prix catalogue remplacé sur une ligne, avec motif. Au-delà du montant maximal, validation d\'un responsable ; vide = jamais, 0 = toujours.'),
             BooleanField::new('posCustomItemEnabled', 'Article libre autorisé')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCustomItemMaxAmount', 'Article libre : montant maximal par vente sans validation (cents)')->setRequired(false)->setHelp('Total des articles libres de la vente ; vide = jamais de validation')->hideOnIndex(),
             BooleanField::new('posPriceOverrideEnabled', 'Prix manuel autorisé')->hideOnIndex(),
@@ -219,7 +226,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField::new('posPriceOverrideReasons', 'Motifs de prix manuel (un par ligne)')->setRequired(false)->setHelp('Vide : Article abîmé, Prix concurrent, Prix négocié, Erreur d\'étiquette, Autre')->hideOnIndex(),
 
             // Remises de caisse (F1, 24/10/2026)
-            FormField::addPanel('Remises (caisse)')->setHelp('Remises de ligne et de ticket accordées par le caissier, calculées par le serveur (taxes sur le net). Plafonds par rôle ; au-delà du plafond caissier, validation d\'un responsable ; l\'administrateur n\'a pas de plafond.'),
+            FormField::addPanel('Remises (caisse)')->collapsible()->renderCollapsed()->setHelp('Remises de ligne et de ticket accordées par le caissier, calculées par le serveur (taxes sur le net). Plafonds par rôle ; au-delà du plafond caissier, validation d\'un responsable ; l\'administrateur n\'a pas de plafond.'),
             BooleanField::new('posDiscountEnabled', 'Remises autorisées')->hideOnIndex(),
             BooleanField::new('posDiscountTicketEnabled', 'Remise sur le ticket entier autorisée')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posDiscountCashierMaxPercentBp', 'Caissier : pourcentage maximal (centièmes de %)')->setHelp('1000 = 10 %')->hideOnIndex(),
@@ -230,7 +237,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField::new('posDiscountReasons', 'Motifs de remise (un par ligne)')->setRequired(false)->setHelp('Vide : Article abîmé, Fidélité, Prix affiché, Geste commercial, Autre')->hideOnIndex(),
 
             // Retours partiels et échanges (F2, 24/10/2026)
-            FormField::addPanel('Retours et échanges (caisse)')->setHelp('Retour d\'un ou plusieurs articles d\'une vente retrouvée par son ticket, et échanges. Défauts = comportement livré.'),
+            FormField::addPanel('Retours et échanges (caisse)')->collapsible()->renderCollapsed()->setHelp('Retour d\'un ou plusieurs articles d\'une vente retrouvée par son ticket, et échanges. Défauts = comportement livré.'),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posReturnMaxDays', 'Délai maximal de retour (jours)')->setRequired(false)->setHelp('Vide : aucun délai')->hideOnIndex(),
             BooleanField::new('posReturnWithoutReceipt', 'Retour sans ticket autorisé')->setHelp('Articles repris aux prix actuels, sans vente d\'origine ; désactivé par défaut')->hideOnIndex(),
             BooleanField::new('posReturnRestockDefault', 'Remise en stock par défaut')->hideOnIndex(),
@@ -240,7 +247,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posApprovalReturn', 'Validation : retour au-delà de (cents)')->setHelp('Seuil propre : 0 toujours ; vide : jamais')->setRequired(false)->hideOnIndex(),
 
             // Terminal de paiement Stripe (C4, 23/10/2026) : valeurs par défaut = comportement livré (1 %, Interac selon le pays, 120 s, 30 min, 5 min)
-            FormField::addPanel('Terminal de paiement Stripe (caisse)')
+            FormField::addPanel('Terminal de paiement Stripe (caisse)')->collapsible()->renderCollapsed()
                 ->setHelp('Lecteur par poste : menu Postes de caisse. Commissions de la plateforme en centièmes de pour cent (100 = 1 %). Les paiements en ligne gardent leur commission actuelle.'),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalFeeCardBp', 'Commission en magasin, carte de crédit (centièmes de %)')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalFeeInteracBp', 'Commission en magasin, Interac (centièmes de %)')->hideOnIndex(),
@@ -261,8 +268,15 @@ class EntrepriseCrudController extends BaseTenantCrudController
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalRefundPendingMinutes', 'Remboursement Interac en attente sur le lecteur : expiration (minutes)')
                 ->setHelp('Kit seulement : au-delà, le serveur relit Stripe (remboursement fait → enregistré ; sinon demande expirée, paiement de nouveau remboursable)')->hideOnIndex(),
 
-            FormField::addPanel('Informations Générales'),
+            FormField::addTab('Site web et SEO', 'fa fa-globe'),
+            FormField::addPanel('Suivi')->collapsible(),
             TextField::new('facebookPixelId', 'Facebook Pixel ID')->hideOnIndex(),
+            // Formulaires à étapes (28/10/2026) : destinataire et conservation des demandes reçues
+            FormField::addPanel('Demandes reçues (formulaires)')->collapsible()->setHelp('Demandes envoyées par les formulaires à étapes du site (menu « Demandes reçues »). Notification à l\'adresse ci-dessous, sinon au courriel de l\'entreprise. Les demandes sont supprimées après la durée de conservation (12 mois par défaut).'),
+            EmailField::new('formSubmissionsEmail', 'Adresse qui reçoit les demandes (vide : courriel de l\'entreprise)')->setRequired(false)->hideOnIndex(),
+            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('formSubmissionsRetentionMonths', 'Conservation des demandes (mois, 1 à 120 ; vide : 12)')->setRequired(false)->hideOnIndex(),
+
+            FormField::addPanel('Textes légaux et à propos')->collapsible(),
             TextareaField::new('conditionOfUse', 'Conditions d\'utilisation'),
             TextareaField::new('LegalNotice', 'Mentions légales'),
             TextareaField::new('privacyPolicy', 'Politique de confidentialité'),
@@ -285,7 +299,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->onlyOnIndex(),
 
 
-            FormField::addPanel('Référencement & SEO'),
+            FormField::addPanel('Référencement & SEO')->collapsible(),
             TextField::new('metaTitle', 'Meta Title')
                 ->setHelp('Titre pour les moteurs de recherche (60-70 caractères)')
                 ->hideOnIndex(),
@@ -306,17 +320,12 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->setHelp('Code de vérification Google Search Console')
                 ->hideOnIndex(),
 
+            FormField::addTab('Traductions', 'fa fa-language'),
             CollectionField::new('translations', 'Contenus Traduits')
                 ->setEntryType(EntrepriseTranslationType::class)
                 ->setFormTypeOption('by_reference', false)
                 ->onlyOnForms(),
 
-            AssociationField::new('socialNetworks', 'Réseaux Sociaux')
-                ->setFormTypeOptions([
-                    'em' => $tenantEm,
-                    'query_builder' => fn(SocialNetworkRepository $repo) => $repo->createQueryBuilder('sn')->orderBy('sn.name', 'ASC'),
-                ])
-                ->setColumns('col-md-6'),
         ];
     }
 }

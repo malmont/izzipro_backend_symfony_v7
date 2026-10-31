@@ -32,7 +32,7 @@ class PackagingTypeCrudController extends BaseTenantCrudController
                 ->setRequired(false)
                 ->setColumns(6),
             
-            FormField::addPanel('Dimensions Internes (pour le "bin packing")')
+            FormField::addPanel('Dimensions Internes (pour le "bin packing")')->collapsible()
                 ->setIcon('fa fa-box-open')
                 ->setHelp('Dimensions à l\'intérieur du carton.'),
 
@@ -50,7 +50,7 @@ class PackagingTypeCrudController extends BaseTenantCrudController
                 ->setRequired(true)
                 ->setColumns(4),
 
-            FormField::addPanel('Dimensions Extérieures (pour le transporteur)')
+            FormField::addPanel('Dimensions Extérieures (pour le transporteur)')->collapsible()
                 ->setIcon('fa fa-ruler-combined')
                 ->setHelp('Dimensions extérieures et poids total (carton + contenu).'),
 

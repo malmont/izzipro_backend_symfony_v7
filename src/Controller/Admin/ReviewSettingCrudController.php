@@ -3,7 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\ReviewSetting;
-use App\Form\Type\JsonTextType;
+use App\Controller\Admin\Field\JsonTextField;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -47,7 +47,7 @@ class ReviewSettingCrudController extends BaseTenantCrudController
             'Publication immédiate, retrait possible ensuite' => ReviewSetting::MODERATION_AUTO,
         ]);
         yield IntegerField::new('minLength', 'Longueur minimale du texte')->setHelp('En caractères, de 0 à 500.');
-        yield Field::new('policy', 'Politique des avis (JSON par langue)')->setFormType(JsonTextType::class)->hideOnIndex()
+        yield JsonTextField::new('policy', 'Politique des avis (JSON par langue)')->hideOnIndex()
             ->setHelp('Affichée sous la liste des avis. Exemple : {"fr": "Avis vérifiés : seuls nos clients ayant acheté le produit peuvent écrire. Nous publions tous les avis, positifs ou négatifs, sauf contenu injurieux ou hors sujet.", "en": "…"}');
     }
 }
