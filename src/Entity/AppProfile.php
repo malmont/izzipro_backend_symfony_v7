@@ -35,7 +35,7 @@ class AppProfile
     ];
 
     public const THEME_MODES = ['light', 'dark', 'system'];
-    public const THEME_FONTS = ['Inter', 'Poppins', 'Montserrat', 'Playfair Display', 'Lora', 'System'];
+    public const THEME_FONTS = ['Inter', 'Poppins', 'Montserrat', 'Playfair Display', 'Lora', 'Outfit', 'System'];
     public const BUTTON_STYLES = ['solid', 'outline', 'pill'];
     public const PRODUCT_CARDS = ['classic', 'overlay', 'compact'];
     public const HOME_HEROS = ['carousel', 'banner', 'none'];

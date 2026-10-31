@@ -58,7 +58,7 @@ class AppThemeTest extends WebTestCase
             'primaryColor' => ['setPrimaryColor', ['#1d4ed8', '#1D4ED8', '1d4ed8', null, ''], ['#12', 'bleu', 'rgb(1,2,3)', '#1d4ed8ff', '#ggg000']],
             'accentColor' => ['setAccentColor', ['#ffc800', 'FFC800', null], ['#fc8', 'orange', '#ffc80']],
             'themeMode' => ['setThemeMode', ['light', 'dark', 'system', null], ['auto', 'Light', 'ghost']],
-            'themeFont' => ['setThemeFont', ['Inter', 'Poppins', 'Montserrat', 'Playfair Display', 'Lora', 'System', null], ['Comic Sans', 'inter', 'Outfit']],
+            'themeFont' => ['setThemeFont', ['Inter', 'Poppins', 'Montserrat', 'Playfair Display', 'Lora', 'Outfit', 'System', null], ['Comic Sans', 'inter', 'Roboto']],
             'themeRadius' => ['setThemeRadius', [0, 12, 28, null], [-1, 29, 100]],
             'buttonStyle' => ['setButtonStyle', ['solid', 'outline', 'pill', null], ['ghost', 'Solid', 'rounded']],
             'productCard' => ['setProductCard', ['classic', 'overlay', 'compact', null], ['grid', 'Classic', 'card']],
@@ -147,8 +147,10 @@ class AppThemeTest extends WebTestCase
         $charterAt = $charter['theme']['updatedAt'];
 
         // Formes de la charte hors du format mobile : #rgb étendu, alpha ignoré, police inconnue, taille CSS, pourcentage
-        $this->putCharter(['primaryColor' => '#abc', 'accentColor' => '#aabbcc80', 'headingFont' => 'Outfit', 'radius' => '12px', 'buttonStyle' => 'pill']);
+        $this->putCharter(['primaryColor' => '#abc', 'accentColor' => '#aabbcc80', 'headingFont' => 'Roboto', 'radius' => '12px', 'buttonStyle' => 'pill']);
         $this->assertSame(['#aabbcc', '#aabbcc', null, null, 12, 'pill', null, null], array_values(array_slice($this->theme()['theme'], 0, 8)));
+        $this->putCharter(['headingFont' => 'outfit', 'accentColor' => 'transparent', 'radius' => '1.5rem']);
+        $this->assertSame('Outfit', $this->theme()['theme']['font'], 'Outfit (ajoutée le 31/10/2026) est renvoyée sous son nom canonique');
         $this->putCharter(['accentColor' => 'transparent', 'radius' => '1.5rem']);
         $this->assertSame([null, null, null, null, 24, null, null, null], array_values(array_slice($this->theme()['theme'], 0, 8)));
         $this->putCharter(['radius' => '50%']);
