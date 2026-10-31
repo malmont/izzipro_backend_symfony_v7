@@ -526,6 +526,15 @@ sauf mention), jamais en constantes ; valeurs par défaut = comportement d'avant
 | Exiger un terminal identifié (X-Pos-Terminal) sur les routes de caisse | désactivé | voir « Terminaux » ci-dessous |
 | Commission plateforme en ligne (page Stripe, centièmes de %) | 100 (1 %) | `application_fee_amount` des paiements de la **boutique en ligne** (`create-intent`, mise à jour du montant, tunnel) : même troncature qu'avant (`(montant × bp) / 10000` tronqué) ; 0 pour un site interne |
 
+### Apparence de la caisse (thème par site, 31/10/2026)
+
+Le site peut régler l'apparence de la caisse dans EasyAdmin, fiche Entreprise > « Profils des applications », fiche `pos`, panneau
+« Apparence de l'application ». La caisse la lit par `GET /api/mobile/app-theme?app=pos` (**public**, en-tête `X-Tenant-Host`, cache HTTP 60 s
+avec ETag) : `{app: "pos", theme: {primaryColor, accentColor, mode, font, radius, buttonStyle, productCard, homeHero, updatedAt}, sources}`, les neuf
+clés de `theme` toujours présentes, `null` = garder le défaut de l'application (`productCard` et `homeHero` concernent l'application e-commerce).
+`GET /api/app-profile/pos` (nom, logo) et `POST /api/app/activate` ne changent pas. Contrat complet : `docs/architecture.md`, ligne « Thème de
+l'application e-commerce mobile ».
+
 ### Terminaux (prolongement S1)
 
 La page EasyAdmin `/admin/app-keys` liste les clés par site (libellé, poste, créée, expire, **dernier usage**, état) et
