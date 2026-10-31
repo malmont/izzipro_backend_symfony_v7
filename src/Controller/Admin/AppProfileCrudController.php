@@ -38,6 +38,18 @@ class AppProfileCrudController extends BaseTenantCrudController
         return AppProfile::class;
     }
 
+    /** Note propre à l'application de la fiche (31/10/2026) : la caisse n'applique pas encore le thème (décision du propriétaire, lot U9 côté caisse) */
+    private function appearanceNote(): string
+    {
+        try {
+            $app = $this->getContext()?->getEntity()?->getInstance()?->getApp();
+        } catch (\Throwable) {
+            $app = null;
+        }
+
+        return $app === 'pos' ? '<strong>Aperçu non disponible : la caisse n\'applique pas encore ces réglages</strong> (lot U9 prévu côté caisse : couleur principale, couleur d\'accent et mode seulement). ' : '';
+    }
+
     public function configureCrud(Crud $crud): Crud
     {
         return parent::configureCrud($crud)
@@ -64,7 +76,7 @@ class AppProfileCrudController extends BaseTenantCrudController
         yield TextField::new('tagline', 'Accroche')->setRequired(false)->hideOnIndex();
         yield ImageField::new('logo', 'Logo')->setBasePath(self::BASE_PATH)->setUploadDir(self::UPLOAD_DIR)->setUploadedFileNamePattern('[randomhash].[extension]')->setRequired(false);
         yield ImageField::new('icon', 'Icône')->setBasePath(self::BASE_PATH)->setUploadDir(self::UPLOAD_DIR)->setUploadedFileNamePattern('[randomhash].[extension]')->setRequired(false)->hideOnIndex();
-        yield FormField::addPanel('Apparence de l\'application')->collapsible()->setHelp('Lue par l\'application e-commerce mobile (GET /api/mobile/app-theme). Un réglage vide est pris dans la charte de la boutique web (réglages de la boutique) quand elle en a un, sinon l\'application applique son propre défaut.');
+        yield FormField::addPanel('Apparence de l\'application')->collapsible()->setHelp($this->appearanceNote() . 'Lue par l\'application e-commerce mobile (GET /api/mobile/app-theme). Un réglage vide est pris dans la charte de la boutique web (réglages de la boutique) quand elle en a un, sinon l\'application applique son propre défaut.');
         yield ColorField::new('primaryColor', 'Couleur principale')->setRequired(false)->hideOnIndex()
             ->setFormTypeOption('block_prefix', 'optional_color')
             ->setHelp('Couleur des boutons et des éléments mis en avant, au format #RRGGBB. Vide : couleur principale de la charte de la boutique.');
