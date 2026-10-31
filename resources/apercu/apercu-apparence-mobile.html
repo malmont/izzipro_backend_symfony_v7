@@ -1,4 +1,5 @@
-<!-- Gabarit d'aperçu de l'apparence : application « mobile ». Source : dépôt de l'application, docs/apercu/apercu-apparence-mobile.html (copie déposée le 31/10/2026). Copié tel quel le 31/10/2026 ; seule modification : le module @material/material-color-utilities est chargé depuis /assets/vendor/ (aucun CDN). Pour le remplacer : docs/architecture.md, « Aperçu de l'apparence ». -->
+<!-- Gabarit d'aperçu de l'apparence : application « mobile ». Source : dépôt de l'application, docs/apercu/apercu-apparence-mobile.html (copie déposée le 31/10/2026). Copié tel quel le 31/10/2026 ; seule modification : le module @material/material-color-utilities est chargé depuis /assets/vendor/ (aucun CDN). Pour le remplacer : docs/architecture.md, « Aperçu en direct de l'apparence ». -->
+<meta charset="utf-8">
 <title>Aperçu de l'apparence mobile</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -92,7 +93,7 @@ button { font: inherit; cursor: pointer; }
 .ap-phone {
   /* Valeurs initiales = aucun réglage, mode clair (remplacées par le script) */
   --ap-p: #ff8900; --ap-on-p: #000000; --ap-pc: #ffdcc2; --ap-on-pc: #2e1500;
-  --ap-sc: #f6decd; --ap-on-sc: #261909; --ap-acc: #626034; --ap-on-acc: #ffffff;
+  --ap-sc: #f6decd; --ap-on-sc: #261909; --ap-acc: #626034; --ap-on-acc: #ffffff; --ap-acc-text: #626034;
   --ap-tc: #e9e5ad; --ap-on-tc: #1d1d00;
   --ap-sf: #fff8f5; --ap-sf1: #fcf2ec; --ap-sf2: #f6ece6; --ap-sf3: #f0e6e0;
   --ap-on-sf: #211a15; --ap-on-sfv: #52443c; --ap-ol: #84746a; --ap-olv: #d7c3b8;
@@ -111,7 +112,8 @@ button { font: inherit; cursor: pointer; }
 .ap-status i::after { content: ""; position: absolute; inset: 1px 4px 1px 1px; background: currentColor; border-radius: 1px; }
 .ap-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 6px 16px 16px; display: grid; gap: 14px; align-content: start; scrollbar-width: none; }
 .ap-body::-webkit-scrollbar { display: none; }
-.ap-screen button { color: inherit; font-family: inherit; }
+.ap-screen button { font-family: inherit; }
+.ap-screen button:not(.ap-btn) { color: inherit; }
 
 .ap-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .ap-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -128,7 +130,7 @@ button { font: inherit; cursor: pointer; }
 .ap-hero { border-radius: var(--ap-r); padding: 18px; display: grid; gap: 8px; align-content: end; min-height: 150px;
   background: linear-gradient(135deg, var(--ap-p), color-mix(in srgb, var(--ap-p) 55%, var(--ap-acc))); color: var(--ap-on-p); position: relative; overflow: hidden; }
 .ap-hero::after { content: ""; position: absolute; width: 180px; height: 180px; right: -50px; top: -60px; border-radius: 50%; background: color-mix(in srgb, var(--ap-on-p) 12%, transparent); }
-.ap-hero small { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+.ap-hero small { font-size: 12px; opacity: .85; position: relative; z-index: 1; }
 .ap-hero strong { font-size: 20px; line-height: 1.15; font-weight: 600; max-width: 14ch; position: relative; z-index: 1; }
 .ap-hero.banner { min-height: 210px; }
 .ap-dots { display: flex; gap: 5px; justify-content: center; }
@@ -153,7 +155,7 @@ button { font: inherit; cursor: pointer; }
 .c-classic .ap-cbody { padding: 8px 10px 10px; display: grid; gap: 2px; }
 .ap-pname { font-size: 13px; font-weight: 500; line-height: 1.25; }
 .ap-price { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.ap-price.sale { color: var(--ap-acc); }
+.ap-price.sale { color: var(--ap-acc-text); }
 .ap-old { font-size: 11px; color: var(--ap-on-sfv); text-decoration: line-through; margin-left: 4px; font-weight: 400; }
 .c-overlay { position: relative; }
 .c-overlay .ap-img { aspect-ratio: 3 / 4; }
@@ -166,7 +168,7 @@ button { font: inherit; cursor: pointer; }
 .c-compact .ap-img { width: 64px; flex: none; border-radius: var(--ap-r-img); }
 .c-compact .ap-cbody { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .c-compact .ap-cat { font-size: 11px; color: var(--ap-on-sfv); }
-.ap-add { width: 34px; height: 34px; border-radius: var(--ap-r-btn); background: var(--ap-sc); color: var(--ap-on-sc); display: grid; place-items: center; flex: none; font-size: 18px; }
+.ap-chev { flex: none; font-size: 22px; line-height: 1; color: var(--ap-on-sfv); padding: 0 4px; }
 
 .ap-nav { display: grid; grid-template-columns: repeat(4, 1fr); padding: 8px 6px 16px; background: var(--ap-sf2); }
 .ap-nav button { border: 0; background: none; display: grid; justify-items: center; gap: 3px; font-size: 11px; color: var(--ap-on-sfv); padding: 0; }
@@ -370,7 +372,7 @@ details summary { cursor: pointer; font-weight: 600; }
             <li>Palette : schéma Material « fidelity » calculé depuis la couleur principale (Flutter : <code>ColorScheme.fromSeed(seedColor, dynamicSchemeVariant: DynamicSchemeVariant.fidelity)</code> ; JavaScript : <code>SchemeFidelity</code> de <code>@material/material-color-utilities</code>).</li>
             <li>Mode clair : la couleur principale du marchand est utilisée telle quelle pour les boutons ; le texte posé dessus est noir ou blanc, celui qui contraste le plus.</li>
             <li>Mode sombre : la couleur principale est celle du schéma sombre (plus claire), pour rester lisible sur fond sombre.</li>
-            <li>Accent : la couleur d'accent telle quelle, sinon la couleur « tertiary » du schéma ; texte noir ou blanc selon le contraste.</li>
+            <li>Accent : la couleur d'accent telle quelle, sinon la couleur « tertiary » du schéma ; texte noir ou blanc selon le contraste. Pour un prix soldé posé sur le fond, l'accent n'est gardé que s'il se lit (contraste 4,5:1), sinon « tertiary ».</li>
             <li>Valeurs nulles : couleur principale <code>#ff8900</code>, mode clair, police du téléphone, arrondi 12, boutons pleins, cartes classiques, diaporama.</li>
             <li>Les valeurs de la palette ci-dessus servent de référence aux tests Flutter du lot L1b.</li>
           </ul>
@@ -461,7 +463,9 @@ function palette(theme) {
   const s = MCU ? schemeMcu(seed, dark) : schemeFallback(seed, dark);
   if (!dark) { s.primary = seed; s.onPrimary = bestOn(seed); }
   const accent = hexOk(theme.accentColor) ? theme.accentColor.toLowerCase() : s.tertiary;
-  return { ...s, accent, onAccent: bestOn(accent), dark, seed };
+  // Texte d'accent (prix soldé) : l'accent s'il se lit sur le fond des cartes (4,5:1), sinon tertiary.
+  const accentText = contrast(accent, s.surfaceContainerLow) >= 4.5 ? accent : s.tertiary;
+  return { ...s, accent, onAccent: bestOn(accent), accentText, dark, seed };
 }
 
 // ---------- rendu ----------
@@ -472,6 +476,7 @@ const ICON = {
   grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>',
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c1.4-3.6 4.2-5.4 7.5-5.4s6.1 1.8 7.5 5.4"/></svg>',
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg>',
   heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-7.5-10.1A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.3C19.5 15.4 12 20 12 20z"/></svg>',
   hanger: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6.5a2 2 0 1 1 2.8 1.8c-.5.2-.8.7-.8 1.2V10l8.6 5.8c.8.5.4 1.7-.5 1.7H3.9c-.9 0-1.3-1.2-.5-1.7L12 10"/></svg>',
   bag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M5 8h14l-1 12H6z"/><path d="M9 10V7a3 3 0 0 1 6 0v3" stroke-linecap="round"/></svg>',
@@ -500,7 +505,7 @@ function cards(kind) {
       <button type="button" class="ap-card c-compact" data-go="produit">
         <span class="ap-img">${ICON[p.icon]}</span>
         <span class="ap-cbody"><span class="ap-pname">${p.name}</span><span class="ap-cat">${p.cat}</span>${priceHtml(p)}</span>
-        <span class="ap-add" aria-hidden="true">+</span>
+        ${p.old ? promo(p).replace('ap-promo', 'ap-promo" style="position:static') : ''}<span class="ap-chev" aria-hidden="true">›</span>
       </button>`).join('')}</div>`;
   }
   return `<div class="ap-grid">${PRODUCTS.map(p => `
@@ -512,9 +517,9 @@ function cards(kind) {
 function hero(kind) {
   if (kind === 'none') return '';
   if (kind === 'banner') {
-    return `<div class="ap-hero banner"><small>Nouvelle saison</small><strong>La collection d'automne est arrivée</strong></div>`;
+    return `<div class="ap-hero banner"><strong>La collection d'automne est arrivée</strong><small>Nouvelle saison</small></div>`;
   }
-  return `<div class="ap-hero"><small>Jusqu'au 15 novembre</small><strong>−20 % sur les vestes</strong></div>
+  return `<div class="ap-hero"><strong>−20 % sur les vestes</strong><small>Jusqu'au 15 novembre</small></div>
     <div class="ap-dots" aria-hidden="true"><span class="on"></span><span></span><span></span></div>`;
 }
 function logo(pr) {
@@ -536,7 +541,7 @@ function screenAccueil(t, pr) {
     <div class="ap-search">${ICON.search}Rechercher un produit</div>
     ${hero(t.homeHero)}
     <div class="ap-chips"><span class="ap-chip on">Tout</span><span class="ap-chip">Vêtements</span><span class="ap-chip">Chaussures</span><span class="ap-chip">Accessoires</span></div>
-    <div class="ap-sec"><h3>Nouveautés</h3><span>Tout voir</span></div>
+    <div class="ap-sec"><h3>Nouveautés</h3></div>
     ${cards(t.productCard)}
   </div>${nav('accueil')}`;
 }
@@ -545,7 +550,6 @@ function screenProduit() {
   return `${status}<div class="ap-body">
     <div class="ap-pimg">${ICON.hanger.replace('<svg', '<svg class="big"')}
       <button type="button" class="ap-icon back" data-go="accueil" aria-label="Retour">${ICON.back}</button>
-      <button type="button" class="ap-icon fav" aria-label="Favori">${ICON.heart}</button>
       <div class="ap-dots" aria-hidden="true"><span class="on"></span><span></span><span></span><span></span></div></div>
     <div class="ap-kicker">${p.cat}</div>
     <h2 class="ap-title">${p.name}</h2>
@@ -554,8 +558,8 @@ function screenProduit() {
     <div class="ap-sizes"><span class="ap-size">S</span><span class="ap-size on">M</span><span class="ap-size">L</span><span class="ap-size">XL</span></div>
     <p class="ap-desc">Maille fine en laine mérinos, douce et respirante. Coupe droite, col rond, fabriqué au Portugal.</p>
   </div>
-  <div class="ap-buybar"><button type="button" class="ap-sq" aria-label="Favori">${ICON.heart}</button>
-    <button type="button" class="ap-btn" data-go="panier">Ajouter au panier · ${fmt(p.price)}</button></div>`;
+  <div class="ap-buybar"><button type="button" class="ap-sq" aria-label="Personnaliser">${ICON.edit}</button>
+    <button type="button" class="ap-btn" data-go="panier">Ajouter au panier</button></div>`;
 }
 function screenPanier() {
   const items = [PRODUCTS[0], PRODUCTS[1]];
@@ -591,7 +595,7 @@ function render() {
   set('--ap-p', pal.primary); set('--ap-on-p', pal.onPrimary);
   set('--ap-pc', pal.primaryContainer); set('--ap-on-pc', pal.onPrimaryContainer);
   set('--ap-sc', pal.secondaryContainer); set('--ap-on-sc', pal.onSecondaryContainer);
-  set('--ap-acc', pal.accent); set('--ap-on-acc', pal.onAccent);
+  set('--ap-acc', pal.accent); set('--ap-on-acc', pal.onAccent); set('--ap-acc-text', pal.accentText);
   set('--ap-tc', pal.tertiaryContainer); set('--ap-on-tc', pal.onTertiaryContainer);
   set('--ap-sf', pal.surface); set('--ap-sf1', pal.surfaceContainerLow); set('--ap-sf2', pal.surfaceContainer); set('--ap-sf3', pal.surfaceContainerHigh);
   set('--ap-on-sf', pal.onSurface); set('--ap-on-sfv', pal.onSurfaceVariant); set('--ap-ol', pal.outline); set('--ap-olv', pal.outlineVariant);
@@ -681,7 +685,11 @@ window.ApercuApparence = {
   },
 };
 
-if (new URLSearchParams(location.search).has('embed')) document.documentElement.classList.add('embed');
+const params = new URLSearchParams(location.search);
+if (params.has('embed')) document.documentElement.classList.add('embed');
+// ?preset=demo|fonce|pale|vide et ?page=accueil|produit|panier : captures et liens directs.
+if (PRESETS[params.get('preset')]) state.theme = { ...PRESETS[params.get('preset')] };
+if (['accueil', 'produit', 'panier'].includes(params.get('page'))) page = params.get('page');
 fillForm(state.theme);
 render();
 </script>
