@@ -1,0 +1,672 @@
+<!-- Gabarit d'aperçu de l'apparence : application « livingmemory ». Source : dépôt de l'application, docs/apercu/apercu-apparence-livingmemory.html (copie déposée le 31/10/2026). Copié tel quel le 31/10/2026 ; seule modification : le module @material/material-color-utilities est chargé depuis /assets/vendor/ (aucun CDN). Pour le remplacer : docs/architecture.md, « Aperçu de l'apparence ». -->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aperçu de l'apparence Living Memory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Montserrat:wght@400;500;600&family=Outfit:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&family=Poppins:wght@400;500;600&display=swap">
+<style>
+/*
+  Aperçu de l'apparence de l'application mobile Living Memory (code « livingmemory », site memoiresvivantes).
+  Même contrat que le modèle apercu-apparence-mobile.html (EcommerceFlutter) : le backend l'intègre dans le panneau
+  « Apparence » d'EasyAdmin, fiche « livingmemory ».
+
+  Mise en page : formulaire | téléphone | palette et réponse de app-theme ; une colonne sur téléphone.
+  Le cadre autour du téléphone suit le thème de l'admin. Le téléphone a ses propres couleurs, calculées par la MÊME
+  règle que l'application (lib/core/ui/app_theme.dart, Charter.resolve), posées par le script dans les variables --ap-*.
+  Écrans dessinés d'après le code : Bienvenue (welcome_page.dart), Accueil du livre (book_home_tab.dart et
+  book_shell_page.dart), Question (questionnaire_page.dart).
+*/
+:root {
+  --bg: #f3f5f7;
+  --panel: #ffffff;
+  --ink: #18212b;
+  --muted: #5b6875;
+  --line: #d9dfe5;
+  --focus: #0f6b66;
+  --focus-soft: #e3f1ef;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171c; --panel: #1a2128; --ink: #e6ebef; --muted: #9aa7b2; --line: #2c3640;
+    --focus: #5fc8bf; --focus-soft: #1c3533; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171c; --panel: #1a2128; --ink: #e6ebef; --muted: #9aa7b2; --line: #2c3640;
+  --focus: #5fc8bf; --focus-soft: #1c3533; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.page { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px; }
+header.head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+.crumb { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 2px 0 0; font-size: 22px; font-weight: 600; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 62ch; }
+
+.layout { display: grid; gap: 20px; grid-template-columns: 300px minmax(0, 392px) minmax(0, 1fr); align-items: start; }
+@media (max-width: 1100px) { .layout { grid-template-columns: 300px minmax(0, 1fr); } .side { grid-column: 1 / -1; } }
+@media (max-width: 720px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.panel h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+
+/* Formulaire de démonstration (remplacé par le formulaire EasyAdmin) */
+form { display: grid; gap: 14px; }
+.field { display: grid; gap: 6px; }
+.field > label, .field > .lbl { font-weight: 500; }
+.hint { font-size: 12px; color: var(--muted); }
+.unused { font-size: 12px; color: var(--muted); font-style: italic; }
+.row { display: flex; gap: 8px; align-items: center; }
+input[type="text"], select {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 9px; width: 100%; min-width: 0;
+}
+input[type="text"] { font-family: var(--font-mono); font-size: 13px; }
+input[type="color"] { width: 40px; height: 36px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); flex: none; }
+input[type="range"] { flex: 1; accent-color: var(--focus); min-width: 0; }
+button { font: inherit; cursor: pointer; }
+.ghost { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 6px; padding: 6px 10px; white-space: nowrap; }
+.ghost:hover { border-color: var(--focus); color: var(--focus); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { text-align: center; padding: 6px 4px; font-size: 13px; cursor: pointer; border-left: 1px solid var(--line); }
+.seg label:first-of-type { border-left: 0; }
+.seg input:checked + label { background: var(--focus-soft); color: var(--focus); font-weight: 600; }
+.seg input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: -2px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets .ghost { font-size: 12px; }
+.null-note { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* Téléphone */
+.stage { display: grid; gap: 12px; justify-items: center; min-width: 0; }
+.tabs { display: inline-flex; flex-wrap: wrap; justify-content: center; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--panel); }
+.tabs button { border: 0; background: none; color: var(--muted); padding: 6px 14px; border-radius: 999px; font-size: 13px; }
+.tabs button[aria-selected="true"] { background: var(--focus-soft); color: var(--focus); font-weight: 600; }
+
+.ap-phone {
+  /* Valeurs initiales = aucun réglage, mode clair : la charte (remplacées par le script) */
+  --ap-bg: #f6f2ea; --ap-card: #fffdf7; --ap-card-border: #ece4d3;
+  --ap-p: #3e5c4e; --ap-on-p: #f6f2ea; --ap-p-text: #3e5c4e; --ap-text: #2e3a33;
+  --ap-acc: #c8963e; --ap-acc-on-p: #e4c27f; --ap-muted-on-p: #d9dccb;
+  --ap-muted: #6e7a62; --ap-subtle: #a5b08c; --ap-subtle-light: #d9dccb; --ap-info: #f1e8d6;
+  --ap-r-card: 20px; --ap-r-field: 16px; --ap-r-btn: 999px;
+  --ap-serif: "Lora", Georgia, serif; --ap-sans: "Poppins", system-ui, sans-serif;
+  width: 360px; max-width: 100%; height: 740px; border-radius: 44px; padding: 10px;
+  background: #0d0f12; box-shadow: 0 1px 0 1px #2b2f36 inset, 0 18px 40px -18px rgba(0,0,0,.45);
+}
+.ap-screen {
+  height: 100%; border-radius: 34px; overflow: hidden; display: flex; flex-direction: column;
+  background: var(--ap-bg); color: var(--ap-text); font-family: var(--ap-sans); font-size: 14px; line-height: 1.45;
+  transition: background-color .25s, color .25s;
+}
+.ap-screen button { font-family: inherit; }
+.ap-status { display: flex; justify-content: space-between; align-items: center; padding: 12px 22px 4px; font-size: 12px; font-weight: 600; font-family: system-ui, sans-serif; color: var(--ap-text); }
+.ap-status i { display: inline-block; width: 16px; height: 9px; border-radius: 2px; border: 1.5px solid currentColor; margin-left: 4px; position: relative; }
+.ap-status i::after { content: ""; position: absolute; inset: 1px 4px 1px 1px; background: currentColor; border-radius: 1px; }
+.ap-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 4px 24px 16px; display: flex; flex-direction: column; gap: 0; scrollbar-width: none; }
+.ap-body::-webkit-scrollbar { display: none; }
+.gap-s { height: 8px; flex: none; } .gap-m { height: 16px; flex: none; } .gap-l { height: 32px; flex: none; } .spacer { flex: 1; min-height: 16px; }
+
+/* Barre du haut (AppBar) : fond de page, titre en capitales espacées accent, icônes en couleur de titre */
+.ap-appbar { display: grid; grid-template-columns: 48px 1fr 48px; align-items: center; height: 52px; padding: 0 4px; flex: none; color: var(--ap-p-text); }
+.ap-appbar .t { text-align: center; font-family: var(--ap-sans); font-size: 13px; font-weight: 600; letter-spacing: 3px; color: var(--ap-acc); text-transform: uppercase; }
+.ap-iconbtn { width: 48px; height: 48px; border: 0; background: none; color: inherit; display: grid; place-items: center; padding: 0; }
+.ap-iconbtn svg { width: 22px; height: 22px; }
+
+/* Textes (textTheme de l'application) */
+.ap-label { font-family: var(--ap-sans); font-size: 13px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: var(--ap-acc); }
+.ap-display { margin: 0; font-family: var(--ap-serif); font-weight: 500; font-size: 36px; line-height: 1.2; color: var(--ap-p-text); }
+.ap-h-large { margin: 0; font-family: var(--ap-serif); font-weight: 500; font-size: 32px; line-height: 1.25; color: var(--ap-p-text); }
+.ap-h-small { margin: 0; font-family: var(--ap-serif); font-weight: 500; font-size: 24px; line-height: 1.33; color: var(--ap-p-text); }
+.ap-body-lg { margin: 0; font-size: 16px; line-height: 1.45; color: var(--ap-text); }
+.ap-body-md { margin: 0; font-size: 14px; line-height: 1.4; color: var(--ap-muted); }
+.ap-tip { margin: 0; font-family: var(--ap-serif); font-style: italic; font-size: 16px; line-height: 1.45; color: var(--ap-muted); }
+
+/* Boutons (thème : FilledButton, OutlinedButton, TextButton) */
+.ap-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 56px; padding: 0 20px;
+  font-family: var(--ap-sans); font-size: 17px; font-weight: 500; white-space: nowrap; border-radius: var(--ap-r-btn);
+  border: 1.5px solid transparent; background: var(--ap-p); color: var(--ap-on-p); }
+.ap-btn svg { width: 20px; height: 20px; }
+.btn-outline .ap-btn.filled { background: transparent; color: var(--ap-p-text); border-color: var(--ap-p-text); }
+.ap-btn.outlined { background: transparent; color: var(--ap-p-text); border: 1px solid var(--ap-subtle); }
+.ap-btn.text { min-height: 40px; background: transparent; border-color: transparent; color: var(--ap-p-text); font-size: 15px; }
+.ap-link { align-self: center; border: 0; background: none; min-height: 40px; padding: 0 12px; font-size: 15px; font-weight: 500; text-decoration: underline; color: var(--ap-acc); }
+
+/* Bienvenue */
+.ap-logo { display: grid; place-items: center; gap: 8px; text-align: center; }
+.ap-logo img { max-width: 100%; height: 120px; object-fit: contain; }
+.ap-logo svg { width: 56px; height: 56px; color: var(--ap-acc); }
+.ap-logo .tag { font-size: 14px; font-style: italic; color: var(--ap-muted); }
+
+/* Accueil du livre */
+.ap-progress-row { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.ap-progress-row b { color: var(--ap-acc); font-weight: 600; }
+.ap-progress { height: 6px; border-radius: 4px; background: var(--ap-subtle-light); overflow: hidden; flex: none; }
+.ap-progress i { display: block; height: 100%; background: var(--ap-acc); }
+.ap-panel { background: var(--ap-p); color: var(--ap-on-p); border-radius: 24px; padding: 24px; display: flex; flex-direction: column; }
+.ap-panel .kicker { display: flex; align-items: center; gap: 10px; }
+.ap-panel .kicker svg { width: 12px; height: 12px; color: var(--ap-acc-on-p); flex: none; }
+.ap-panel .ap-label { color: var(--ap-acc-on-p); }
+.ap-panel .ap-h-small { color: var(--ap-on-p); font-weight: 400; }
+/* « Continuer mon histoire » : couleurs inversées dans l'écran, forme (et bordure « contour ») du thème */
+.ap-panel .ap-btn.filled { background: var(--ap-on-p); color: var(--ap-p); }
+.btn-outline .ap-panel .ap-btn.filled { background: var(--ap-on-p); color: var(--ap-p); border-color: var(--ap-p-text); }
+.ap-panel .ap-link { color: var(--ap-acc-on-p); }
+.ap-nav { display: grid; grid-template-columns: repeat(4, 1fr); height: 72px; padding: 10px 4px 12px; background: var(--ap-card); flex: none; }
+.ap-nav button { border: 0; background: none; display: grid; justify-items: center; align-content: center; gap: 4px; font-size: 12px; color: var(--ap-muted); padding: 0; }
+.ap-nav .ind { width: 64px; height: 32px; border-radius: 999px; display: grid; place-items: center; }
+.ap-nav svg { width: 22px; height: 22px; }
+.ap-nav button.on { color: var(--ap-p-text); font-weight: 600; }
+.ap-nav button.on .ind { background: var(--ap-subtle-light); }
+
+/* Question */
+.ap-qhead { display: flex; align-items: center; gap: 8px; }
+.ap-qhead .ap-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-send { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ap-muted); white-space: nowrap; }
+.ap-send svg { width: 18px; height: 18px; color: var(--ap-subtle); }
+.ap-card { background: var(--ap-card); border: 1px solid var(--ap-card-border); border-radius: var(--ap-r-card); padding: 16px 12px 8px 20px; display: flex; flex-direction: column; }
+.ap-card .head { display: flex; align-items: center; justify-content: space-between; }
+.ap-card .head svg { width: 22px; height: 22px; color: var(--ap-p-text); }
+.ap-answer { margin: 8px 0; font-family: var(--ap-serif); font-size: 18px; line-height: 1.6; color: var(--ap-text); }
+.ap-improve { align-self: flex-end; display: flex; align-items: center; gap: 8px; border: 0; background: none; min-height: 40px; padding: 0 12px; font-size: 15px; font-weight: 500; color: var(--ap-p-text); }
+.ap-improve svg { width: 18px; height: 18px; color: var(--ap-acc); }
+.ap-bottom { display: flex; gap: 12px; padding: 8px 24px 20px; flex: none; }
+.ap-bottom .ap-btn { flex: 1; }
+
+/* Colonne de droite */
+.side { display: grid; gap: 20px; min-width: 0; }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.sw { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.sw i { display: block; height: 34px; }
+.sw div { padding: 6px 8px; display: grid; }
+.sw b { font-size: 12px; font-weight: 500; }
+.sw code { font-family: var(--font-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.code { overflow-x: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 0;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--ink); }
+.status { font-size: 12px; color: var(--muted); text-align: center; max-width: 360px; margin: 0; }
+.notes { display: grid; gap: 8px; color: var(--ink); }
+.notes p, .notes li { max-width: 70ch; }
+.notes ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.notes code { font-family: var(--font-mono); font-size: 12px; background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+details summary { cursor: pointer; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .ap-screen { transition: none; } }
+/* Mode intégré (?embed=1) : EasyAdmin garde son formulaire, le cadre n'affiche que l'appareil et ses onglets */
+.embed body { padding-block: 12px; background: transparent; }
+.embed header.head, .embed .form-panel, .embed .side { display: none; }
+.embed .layout { grid-template-columns: minmax(0, 1fr); }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="head">
+    <div>
+      <div class="crumb">EasyAdmin · Entreprise · Profils des applications · livingmemory</div>
+      <h1>Apparence de l'application Living Memory</h1>
+    </div>
+    <p class="lede">Chaque réglage change l'aperçu tout de suite, sans enregistrer. Un champ vide veut dire « non réglé » : l'application garde alors sa charte (fond crème, vert profond, or, Lora et Poppins).</p>
+  </header>
+
+  <div class="layout">
+    <section class="panel form-panel" aria-labelledby="t-form">
+      <h2 id="t-form">Réglages</h2>
+      <form id="theme-form" autocomplete="off">
+        <div class="field">
+          <span class="lbl">Exemples</span>
+          <div class="presets" id="presets">
+            <button type="button" class="ghost" data-preset="actuel">memoiresvivantes aujourd'hui</button>
+            <button type="button" class="ghost" data-preset="vide">Aucun réglage (charte)</button>
+            <button type="button" class="ghost" data-preset="bordeaux">Bordeaux, contour</button>
+            <button type="button" class="ghost" data-preset="pale">Couleur pâle, sombre</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-primary-hex">Couleur principale</label>
+          <div class="row">
+            <input type="color" id="f-primary" aria-label="Choisir la couleur principale">
+            <input type="text" id="f-primary-hex" data-champ="primaryColor" placeholder="Non réglée (vert)" maxlength="7" spellcheck="false">
+            <button type="button" class="ghost" data-clear="f-primary-hex">Effacer</button>
+          </div>
+          <span class="hint">Boutons, carte « À continuer », dictée, titres et onglet actif.</span>
+        </div>
+
+        <div class="field">
+          <label for="f-accent-hex">Couleur d'accent</label>
+          <div class="row">
+            <input type="color" id="f-accent" aria-label="Choisir la couleur d'accent">
+            <input type="text" id="f-accent-hex" data-champ="accentColor" placeholder="Non réglée (or)" maxlength="7" spellcheck="false">
+            <button type="button" class="ghost" data-clear="f-accent-hex">Effacer</button>
+          </div>
+          <span class="hint">Intitulés en capitales, barres de progression, liens « ou écrire ma réponse ».</span>
+        </div>
+
+        <div class="field">
+          <label for="f-mode">Mode</label>
+          <select id="f-mode" data-champ="mode">
+            <option value="">Non réglé (clair)</option>
+            <option value="light">Clair</option>
+            <option value="dark">Sombre</option>
+            <option value="system">Selon le téléphone</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="f-font">Police</label>
+          <select id="f-font" data-champ="font">
+            <option value="">Non réglée (Lora pour les titres, Poppins pour le texte)</option>
+            <option>Inter</option><option>Poppins</option><option>Montserrat</option>
+            <option>Playfair Display</option><option>Lora</option><option>Outfit</option>
+            <option value="System">Police du téléphone</option>
+          </select>
+          <span class="hint">Une police réglée s'applique à tous les textes, titres compris.</span>
+        </div>
+
+        <div class="field">
+          <label for="f-radius">Arrondi des coins</label>
+          <div class="row">
+            <input type="range" id="f-radius" data-champ="radius" min="0" max="28" step="1">
+            <span class="null-note" id="f-radius-out" aria-live="polite">non réglé</span>
+            <button type="button" class="ghost" data-clear="f-radius">Effacer</button>
+          </div>
+          <span class="hint">Cartes et champs ; boutons « Plein » et « Contour ». Non réglé : cartes 20, champs 16.</span>
+        </div>
+
+        <div class="field">
+          <span class="lbl" id="l-btn">Style des boutons</span>
+          <div class="seg" role="radiogroup" aria-labelledby="l-btn">
+            <input type="radio" name="buttonStyle" id="b-null" value=""><label for="b-null">Défaut</label>
+            <input type="radio" name="buttonStyle" id="b-solid" value="solid"><label for="b-solid">Plein</label>
+            <input type="radio" name="buttonStyle" id="b-outline" value="outline"><label for="b-outline">Contour</label>
+            <input type="radio" name="buttonStyle" id="b-pill" value="pill"><label for="b-pill">Pilule</label>
+          </div>
+          <span class="hint">Défaut : pilule, comme la charte.</span>
+        </div>
+
+        <div class="field">
+          <label for="f-card">Cartes produit</label>
+          <select id="f-card" data-champ="productCard">
+            <option value="">Non réglé</option>
+            <option value="classic">Classique</option>
+            <option value="overlay">Surimpression</option>
+            <option value="compact">Liste compacte</option>
+          </select>
+          <span class="unused">Non utilisé par cette application.</span>
+        </div>
+
+        <div class="field">
+          <label for="f-hero">Haut de l'accueil</label>
+          <select id="f-hero" data-champ="homeHero">
+            <option value="">Non réglé</option>
+            <option value="carousel">Diaporama</option>
+            <option value="banner">Grande bannière</option>
+            <option value="none">Rien</option>
+          </select>
+          <span class="unused">Non utilisé par cette application.</span>
+        </div>
+      </form>
+    </section>
+
+    <section class="stage" aria-label="Aperçu sur téléphone">
+      <div class="tabs" role="tablist" aria-label="Écran affiché">
+        <button type="button" role="tab" data-go="bienvenue" aria-selected="false">Bienvenue</button>
+        <button type="button" role="tab" data-go="accueil" aria-selected="true">Accueil du livre</button>
+        <button type="button" role="tab" data-go="question" aria-selected="false">Question</button>
+      </div>
+      <div class="ap-phone" id="apercu-mobile">
+        <div class="ap-screen" id="ap-screen"></div>
+      </div>
+      <p class="status" id="palette-status"></p>
+    </section>
+
+    <div class="side">
+      <section class="panel" aria-labelledby="t-pal">
+        <h2 id="t-pal">Couleurs calculées (rôles de la charte)</h2>
+        <div class="swatches" id="swatches"></div>
+      </section>
+      <section class="panel" aria-labelledby="t-json">
+        <h2 id="t-json">Réponse de GET /api/mobile/app-theme?app=livingmemory</h2>
+        <pre class="code" id="json"></pre>
+      </section>
+      <section class="panel notes" aria-labelledby="t-notes">
+        <h2 id="t-notes">Pour l'intégration</h2>
+        <details open>
+          <summary>Règle des couleurs : celle de l'application (lib/core/ui/app_theme.dart, Charter.resolve)</summary>
+          <ul>
+            <li>Pas de schéma Material calculé : l'application garde sa charte (fond crème <code>#f6f2ea</code>, cartes <code>#fffdf7</code>, texte <code>#2e3a33</code>, olive, sauge) et n'y remplace que la couleur principale et l'accent.</li>
+            <li>Couleur principale : en mode clair, telle quelle pour les fonds pleins (boutons, carte « À continuer », dictée). Texte posé dessus : blanc ou noir selon la luminance (<code>ThemeData.estimateBrightnessForColor</code>) ; crème avec le vert de la charte.</li>
+            <li>Titres, icônes et liens sur le fond : la couleur principale si son contraste avec le fond atteint 3:1, sinon rapprochée du noir (fond clair) ou du blanc (fond sombre) par pas de 10 % jusqu'à l'atteindre.</li>
+            <li>Accent : la couleur d'accent, sinon l'or <code>#c8963e</code> ; rapprochée du noir ou du blanc jusqu'à 2:1 avec le fond.</li>
+            <li>Sur un panneau de la couleur principale : or clair <code>#e4c27f</code> (ou l'accent réglé) et sauge clair <code>#d9dccb</code> s'ils atteignent 2,5:1 avec le panneau, sinon le blanc ou le noir du panneau à 80 %.</li>
+            <li>Mode sombre (<code>dark</code>, ou <code>system</code> sur un téléphone en sombre) : fond <code>#161b18</code>, cartes <code>#1f2622</code>, texte <code>#ece6d8</code> ; la couleur principale des fonds pleins est éclaircie jusqu'à 2:1 avec le fond, celle des titres jusqu'à 3:1.</li>
+            <li>Valeurs nulles : vert <code>#3e5c4e</code>, or <code>#c8963e</code>, mode clair, Lora (titres) et Poppins (texte), cartes arrondies à 20, champs à 16, boutons en pilule. Un bouton « Plein » ou « Contour » sans arrondi réglé : 12.</li>
+            <li>Polices : les six sont intégrées à l'application ; <code>System</code> = police du téléphone.</li>
+            <li><code>productCard</code>, <code>homeHero</code> : non utilisés. La couleur principale du profil (<code>app-profile</code>) n'est pas un repli : sans <code>primaryColor</code> dans app-theme, la charte.</li>
+          </ul>
+        </details>
+        <details>
+          <summary>Brancher le formulaire EasyAdmin</summary>
+          <ul>
+            <li>Le script expose <code>window.ApercuApparence</code> : <code>app</code> (<code>livingmemory</code>) et <code>update(theme, profil)</code> : <code>theme</code> a les neuf clés de app-theme (<code>null</code> = non réglé), <code>profil</code> donne <code>name</code> et <code>logo</code> (adresse de l'image), affichés sur l'écran Bienvenue.</li>
+            <li>Chaque champ du formulaire porte <code>data-champ="&lt;clé du thème&gt;"</code> ; un écouteur <code>input</code> relit le formulaire et appelle <code>update</code>. Rien n'est enregistré avant « Sauvegarder ».</li>
+            <li>Un champ laissé vide dans EasyAdmin peut être repris de la charte de la boutique web : passer à <code>update</code> la valeur que renverra app-theme, pour que l'aperçu corresponde à ce que les clients verront.</li>
+            <li>Mode intégré : avec <code>?embed=1</code> dans l'adresse, seuls l'appareil et ses onglets s'affichent.</li>
+          </ul>
+        </details>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- règle de couleurs : copie de Charter.resolve (lib/core/ui/app_theme.dart) ----------
+const CHARTE = {
+  cream: '#f6f2ea', card: '#fffdf7', cardBorder: '#ece4d3', green: '#3e5c4e', greenDark: '#2e3a33', gold: '#c8963e',
+  goldLight: '#e4c27f', olive: '#6e7a62', sage: '#a5b08c', sageLight: '#d9dccb', info: '#f1e8d6',
+};
+const SOMBRE = {
+  background: '#161b18', card: '#1f2622', cardBorder: '#2f3833', text: '#ece6d8', muted: '#b5bca8', subtle: '#7e8a72',
+  subtleLight: '#333d36', info: '#2d2a22',
+};
+const FONT_STACKS = {
+  System: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+  Inter: '"Inter", system-ui, sans-serif',
+  Poppins: '"Poppins", system-ui, sans-serif',
+  Montserrat: '"Montserrat", system-ui, sans-serif',
+  Outfit: '"Outfit", system-ui, sans-serif',
+  'Playfair Display': '"Playfair Display", Georgia, serif',
+  Lora: '"Lora", Georgia, serif',
+};
+const PRESETS = {
+  // Réponse réelle de memoiresvivantes le 31/10/2026 : seule la couleur principale est réglée (noir).
+  actuel:   { primaryColor: '#000000', accentColor: null, mode: null, font: null, radius: null, buttonStyle: null, productCard: null, homeHero: null },
+  vide:     { primaryColor: null, accentColor: null, mode: null, font: null, radius: null, buttonStyle: null, productCard: null, homeHero: null },
+  bordeaux: { primaryColor: '#7a2e3a', accentColor: '#b08d57', mode: 'light', font: 'Playfair Display', radius: 6, buttonStyle: 'outline', productCard: null, homeHero: null },
+  pale:     { primaryColor: '#a5d8ff', accentColor: null, mode: 'dark', font: 'Outfit', radius: 28, buttonStyle: 'solid', productCard: null, homeHero: null },
+};
+const PROFILE = { name: 'Living Memory', logo: null };
+
+const hexOk = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+// Couleurs en composantes réelles 0..1, comme Color dans Flutter (Color.lerp ne les arrondit pas).
+const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+const hex = c => '#' + c.map(v => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('');
+const WHITE = [1, 1, 1], BLACK = [0, 0, 0];
+const same = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-9);
+function lum(c) { // Color.computeLuminance
+  const l = c.map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
+}
+function contrast(a, b) { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); }
+const isDarkColor = c => (lum(c) + 0.05) ** 2 <= 0.15; // ThemeData.estimateBrightnessForColor
+const contentColorFor = c => isDarkColor(c) ? WHITE : BLACK;
+const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+function readableOn(color, background, minimum) {
+  if (contrast(color, background) >= minimum) return color;
+  const target = isDarkColor(background) ? WHITE : BLACK;
+  for (let t = 0.1; t < 1; t += 0.1) {
+    const candidate = lerp(color, target, t);
+    if (contrast(candidate, background) >= minimum) return candidate;
+  }
+  return target;
+}
+// Sur un panneau principal : gardée si lisible (2,5:1), sinon blanc ou noir du panneau à 80 %.
+function onPanel(color, panel) {
+  if (contrast(color, panel) >= 2.5) return hex(color);
+  const [r, g, b] = contentColorFor(panel).map(v => Math.round(v * 255));
+  return `rgba(${r}, ${g}, ${b}, 0.8)`;
+}
+
+function charter(theme, dark) {
+  const background = rgb(dark ? SOMBRE.background : CHARTE.cream);
+  const primarySet = hexOk(theme.primaryColor) ? rgb(theme.primaryColor.toLowerCase()) : null;
+  const accentSet = hexOk(theme.accentColor) ? rgb(theme.accentColor.toLowerCase()) : null;
+  const basePrimary = primarySet ?? rgb(CHARTE.green);
+  const primary = dark ? readableOn(basePrimary, background, 2) : basePrimary;
+  const onPrimary = same(primary, rgb(CHARTE.green)) ? rgb(CHARTE.cream) : contentColorFor(primary);
+  return {
+    background: hex(background),
+    card: dark ? SOMBRE.card : CHARTE.card,
+    cardBorder: dark ? SOMBRE.cardBorder : CHARTE.cardBorder,
+    primary: hex(primary),
+    onPrimary: hex(onPrimary),
+    primaryText: hex(readableOn(basePrimary, background, 3)),
+    text: dark ? SOMBRE.text : CHARTE.greenDark,
+    accent: hex(readableOn(accentSet ?? rgb(CHARTE.gold), background, 2)),
+    accentOnPrimary: onPanel(accentSet ?? rgb(CHARTE.goldLight), primary),
+    mutedOnPrimary: onPanel(rgb(CHARTE.sageLight), primary),
+    muted: dark ? SOMBRE.muted : CHARTE.olive,
+    subtle: dark ? SOMBRE.subtle : CHARTE.sage,
+    subtleLight: dark ? SOMBRE.subtleLight : CHARTE.sageLight,
+    info: dark ? SOMBRE.info : CHARTE.info,
+    dark,
+  };
+}
+
+// Valeurs tolérées comme dans l'application (appearance_dto.dart) : hors liste ou mal formée = non réglée.
+function resolved(theme) {
+  const font = typeof theme.font === 'string'
+    ? Object.keys(FONT_STACKS).find(f => f.toLowerCase() === theme.font.trim().toLowerCase()) ?? null : null;
+  const r = Number(theme.radius);
+  const radius = theme.radius != null && Number.isInteger(r) && r >= 0 && r <= 28 ? r : null;
+  const mode = ['light', 'dark', 'system'].includes(theme.mode) ? theme.mode : null;
+  const buttonStyle = ['solid', 'outline', 'pill'].includes(theme.buttonStyle) ? theme.buttonStyle : null;
+  return { font, radius, mode, buttonStyle };
+}
+
+// ---------- rendu ----------
+const ICON = {
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M11 5l-7 7 7 7"/></svg>',
+  photo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4.5 3.5"/></svg>',
+  book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 6.5C10 5 7 4.6 4 5v13c3-.4 6 0 8 1.5 2-1.5 5-1.9 8-1.5V5c-3-.4-6 0-8 1.5zM12 6.5v13"/></svg>',
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5V20h-5.5v-6h-5v6H4z"/></svg>',
+  chapters: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 7C10.3 5.8 7.7 5.5 5 5.8v12c2.7-.3 5.3 0 7 1.2 1.7-1.2 4.3-1.5 7-1.2v-12c-2.7-.3-5.3 0-7 1.2zM12 7v12"/></svg>',
+  group: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="9" r="3"/><path d="M3.5 19c.9-3 3-4.5 5.5-4.5s4.6 1.5 5.5 4.5"/><circle cx="16.5" cy="9.5" r="2.4"/><path d="M15.5 14.6c2.3-.3 4.3 1 5 3.9"/></svg>',
+  doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 3.5h8l4 4V20.5H6z"/><path d="M14 3.5v4h4M9 12h6M9 15.5h6" stroke-linecap="round"/></svg>',
+  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></svg>',
+  diamond: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 22 12 12 22 2 12z"/></svg>',
+  cloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5h10.5a4 4 0 0 0 .4-8A6 6 0 0 0 6.4 9.2 4.7 4.7 0 0 0 7 18.5z"/><path d="m9.5 13.5 2 2 3.5-3.5"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z" fill="currentColor" stroke="none"/></svg>',
+  magic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m4 20 11-11M13.5 7.5l3 3M18 3v3M16.5 4.5h3M20 9v2M19 10h2M10 3v2M9 4h2"/></svg>',
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const status = '<div class="ap-status"><span>9:41</span><span>5G<i></i></span></div>';
+
+let page = 'accueil';
+let state = { theme: { ...PRESETS.actuel }, profile: { ...PROFILE } };
+
+function screenBienvenue(pr) {
+  const logo = pr.logo
+    ? `<img src="${esc(pr.logo)}" alt="${esc(pr.name || '')}">`
+    : ICON.book;
+  return `${status}<div class="ap-body">
+    <div class="gap-m"></div>
+    <div class="ap-label">Living Memory</div>
+    <div class="spacer"></div>
+    <div class="ap-logo">${logo}</div>
+    <div class="gap-m"></div>
+    <h1 class="ap-display">Bienvenue</h1>
+    <div class="gap-m"></div>
+    <p class="ap-body-lg">Recueillez les souvenirs de vos proches, améliorez-les avec l'IA et faites-en un livre.</p>
+    <div class="gap-s"></div>
+    <p class="ap-body-md">Site : ${esc(pr.name || 'Mémoires Vivantes')}</p>
+    <div class="spacer"></div>
+    <button type="button" class="ap-btn filled" data-go="accueil">Créer un compte</button>
+    <div class="gap-s"></div>
+    <button type="button" class="ap-btn outlined" data-go="accueil">J'ai déjà un compte</button>
+    <div class="gap-s"></div>
+    <button type="button" class="ap-btn text">Changer de site</button>
+  </div>`;
+}
+
+function screenAccueil() {
+  const nav = [['Accueil', 'home'], ['Chapitres', 'chapters'], ['Mes proches', 'group'], ['Mon livre', 'doc']];
+  return `${status}<div class="ap-appbar"></div><div class="ap-body" style="padding-top:0">
+    <div class="ap-label">Les souvenirs de Gustave</div>
+    <div class="gap-s"></div>
+    <h2 class="ap-h-large">Bonjour Gustave</h2>
+    <div class="gap-s"></div>
+    <p class="ap-body-lg">3 chapitres rédigés sur 12</p>
+    <div class="gap-m"></div>
+    <div class="ap-progress-row"><span>Chapitre 4 sur 12</span><b>25 %</b></div>
+    <div class="gap-s"></div>
+    <div class="ap-progress"><i style="width:25%"></i></div>
+    <div class="gap-l"></div>
+    <div class="ap-panel">
+      <div class="kicker">${ICON.diamond}<span class="ap-label">À continuer</span></div>
+      <div class="gap-m"></div>
+      <h3 class="ap-h-small">Chapitre 4 — Les années d'école</h3>
+      <div class="gap-l"></div>
+      <button type="button" class="ap-btn filled" data-go="question">${ICON.mic}Continuer mon histoire</button>
+      <button type="button" class="ap-link">voir tous les chapitres</button>
+    </div>
+  </div>
+  <nav class="ap-nav">${nav.map(([label, ic], i) => `
+    <button type="button" class="${i === 0 ? 'on' : ''}"><span class="ind">${ICON[ic]}</span>${label}</button>`).join('')}</nav>`;
+}
+
+function screenQuestion() {
+  return `${status}<div class="ap-appbar">
+      <button type="button" class="ap-iconbtn" data-go="accueil" aria-label="Retour">${ICON.back}</button>
+      <span class="t">Question 2 sur 8</span>
+      <button type="button" class="ap-iconbtn" aria-label="Photos">${ICON.photo}</button>
+    </div>
+    <div style="padding:0 24px"><div class="ap-progress"><i style="width:25%"></i></div></div>
+    <div class="ap-body" style="padding-top:20px">
+      <div class="ap-qhead"><span class="ap-label">Chapitre 4 — Les années d'école</span>
+        <span class="ap-send">${ICON.cloud}Enregistré</span></div>
+      <div class="gap-m"></div>
+      <h2 class="ap-h-small">Quel souvenir gardez-vous de votre premier jour d'école ?</h2>
+      <div class="gap-s"></div>
+      <p class="ap-tip">Pensez aux odeurs, aux bruits, à la personne qui vous tenait la main.</p>
+      <div class="gap-l"></div>
+      <button type="button" class="ap-btn filled">${ICON.mic}Répondre à voix haute</button>
+      <button type="button" class="ap-link">ou écrire ma réponse</button>
+      <div class="gap-s"></div>
+      <div class="ap-card">
+        <div class="head"><span class="ap-label">Vos mots</span><span>${ICON.play}</span></div>
+        <p class="ap-answer">C'était à Fort-de-France, en septembre 1958. Ma mère m'avait repassé un tablier bleu, et l'école sentait la craie et la cire.</p>
+        <button type="button" class="ap-improve">${ICON.magic}Améliorer</button>
+      </div>
+    </div>
+    <div class="ap-bottom">
+      <button type="button" class="ap-btn outlined">Précédent</button>
+      <button type="button" class="ap-btn filled">Suivant</button>
+    </div>`;
+}
+
+function render() {
+  const t = resolved(state.theme);
+  const dark = t.mode === 'dark' || (t.mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const c = charter(state.theme, dark);
+  const phone = document.getElementById('apercu-mobile');
+  const set = (k, v) => phone.style.setProperty(k, v);
+  set('--ap-bg', c.background); set('--ap-card', c.card); set('--ap-card-border', c.cardBorder);
+  set('--ap-p', c.primary); set('--ap-on-p', c.onPrimary); set('--ap-p-text', c.primaryText); set('--ap-text', c.text);
+  set('--ap-acc', c.accent); set('--ap-acc-on-p', c.accentOnPrimary); set('--ap-muted-on-p', c.mutedOnPrimary);
+  set('--ap-muted', c.muted); set('--ap-subtle', c.subtle); set('--ap-subtle-light', c.subtleLight); set('--ap-info', c.info);
+  set('--ap-r-card', (t.radius ?? 20) + 'px');
+  set('--ap-r-field', (t.radius ?? 16) + 'px');
+  set('--ap-r-btn', t.buttonStyle === 'solid' || t.buttonStyle === 'outline' ? (t.radius ?? 12) + 'px' : '999px');
+  set('--ap-serif', t.font ? FONT_STACKS[t.font] : FONT_STACKS.Lora);
+  set('--ap-sans', t.font ? FONT_STACKS[t.font] : FONT_STACKS.Poppins);
+  phone.classList.toggle('btn-outline', t.buttonStyle === 'outline');
+
+  document.getElementById('ap-screen').innerHTML =
+    page === 'bienvenue' ? screenBienvenue(state.profile) : page === 'question' ? screenQuestion() : screenAccueil();
+  document.querySelectorAll('.tabs [role="tab"]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.go === page)));
+
+  const sw = [['Fond', c.background], ['Cartes', c.card], ['Principale (fonds pleins)', c.primary], ['Texte sur principale', c.onPrimary],
+    ['Titres et icônes', c.primaryText], ['Texte', c.text], ['Accent', c.accent], ['Accent sur principale', c.accentOnPrimary],
+    ['Secondaire sur principale', c.mutedOnPrimary], ['Texte secondaire', c.muted], ['Contours', c.subtle], ['Piste, onglet actif', c.subtleLight]];
+  document.getElementById('swatches').innerHTML = sw.map(([n, h]) =>
+    `<div class="sw"><i style="background:${h}"></i><div><b>${n}</b><code>${h}</code></div></div>`).join('');
+
+  const th = state.theme;
+  const json = { app: 'livingmemory', theme: {
+    primaryColor: th.primaryColor ?? null, accentColor: th.accentColor ?? null, mode: th.mode ?? null,
+    font: th.font ?? null, radius: th.radius ?? null, buttonStyle: th.buttonStyle ?? null,
+    productCard: th.productCard ?? null, homeHero: th.homeHero ?? null, updatedAt: '2026-10-31T09:41:00+00:00' } };
+  document.getElementById('json').textContent = JSON.stringify(json, null, 2);
+  document.getElementById('palette-status').textContent =
+    `Règle de l'application (Charter.resolve), mode ${dark ? 'sombre' : 'clair'}.`;
+}
+
+// ---------- formulaire de démonstration ----------
+const form = document.getElementById('theme-form');
+const $ = id => document.getElementById(id);
+function fillForm(t) {
+  $('f-primary-hex').value = t.primaryColor ?? ''; $('f-primary').value = hexOk(t.primaryColor) ? t.primaryColor : CHARTE.green;
+  $('f-accent-hex').value = t.accentColor ?? ''; $('f-accent').value = hexOk(t.accentColor) ? t.accentColor : CHARTE.gold;
+  $('f-mode').value = t.mode ?? ''; $('f-font').value = t.font ?? '';
+  const r = resolved(t).radius;
+  $('f-radius').value = r ?? 20; $('f-radius').dataset.null = r == null ? '1' : '';
+  $('f-radius-out').textContent = r == null ? 'non réglé' : r;
+  const b = form.querySelector(`input[name="buttonStyle"][value="${t.buttonStyle ?? ''}"]`); if (b) b.checked = true;
+  $('f-card').value = t.productCard ?? ''; $('f-hero').value = t.homeHero ?? '';
+}
+function readForm() {
+  const v = id => $(id).value.trim() || null;
+  const hx = id => { const x = v(id); return hexOk(x) ? x.toLowerCase() : null; };
+  return {
+    primaryColor: hx('f-primary-hex'), accentColor: hx('f-accent-hex'), mode: v('f-mode'), font: v('f-font'),
+    radius: $('f-radius').dataset.null ? null : Number($('f-radius').value),
+    buttonStyle: form.querySelector('input[name="buttonStyle"]:checked')?.value || null,
+    productCard: v('f-card'), homeHero: v('f-hero'),
+  };
+}
+form.addEventListener('input', e => {
+  const id = e.target.id;
+  if (id === 'f-primary') $('f-primary-hex').value = e.target.value;
+  if (id === 'f-accent') $('f-accent-hex').value = e.target.value;
+  if (id === 'f-primary-hex' && hexOk(e.target.value)) $('f-primary').value = e.target.value;
+  if (id === 'f-accent-hex' && hexOk(e.target.value)) $('f-accent').value = e.target.value;
+  if (id === 'f-radius') { e.target.dataset.null = ''; $('f-radius-out').textContent = e.target.value; }
+  window.ApercuApparence.update(readForm());
+});
+form.addEventListener('submit', e => e.preventDefault());
+form.addEventListener('click', e => {
+  const clear = e.target.closest('[data-clear]');
+  if (clear) {
+    const f = $(clear.dataset.clear);
+    if (f.type === 'range') { f.dataset.null = '1'; f.value = 20; $('f-radius-out').textContent = 'non réglé'; }
+    else f.value = '';
+    window.ApercuApparence.update(readForm());
+    return;
+  }
+  const preset = e.target.closest('[data-preset]');
+  if (preset) window.ApercuApparence.update({ ...PRESETS[preset.dataset.preset] });
+});
+document.addEventListener('click', e => {
+  const go = e.target.closest('[data-go]');
+  if (go && (go.closest('#apercu-mobile') || go.closest('.tabs'))) { page = go.dataset.go; render(); }
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (state.theme.mode === 'system') render(); });
+
+window.ApercuApparence = {
+  app: 'livingmemory',
+  update(theme, profile) {
+    state.theme = { ...PRESETS.vide, ...(theme || {}) };
+    if (profile) state.profile = { ...state.profile, ...profile };
+    fillForm(state.theme); render();
+  },
+};
+
+if (new URLSearchParams(location.search).has('embed')) document.documentElement.classList.add('embed');
+fillForm(state.theme);
+render();
+</script>
+</body>
+</html>

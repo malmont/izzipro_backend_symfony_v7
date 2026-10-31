@@ -23,10 +23,30 @@ class AppThemeService
     {
     }
 
-    /** @return array{app: string, theme: array<string, mixed>, sources: array<string, ?string>} */
     /** Seul code d'application dont le thème se replie sur la charte de la boutique web */
     public const CHARTER_APP = 'mobile';
 
+    /**
+     * Valeurs que la charte de la boutique web fournirait à un thème (mêmes conversions que resolve()), null sinon ;
+     * sert à l'aperçu d'EasyAdmin (B3, 31/10/2026) pour montrer ce que verra le client quand un champ est vide.
+     *
+     * @return array<string, mixed> les huit champs de FIELDS
+     */
+    public function charterTheme(): array
+    {
+        $charter = $this->boutique->charter();
+        $fromCharter = [
+            'primaryColor' => self::hexColor($charter['primaryColor'] ?? null),
+            'accentColor' => self::hexColor($charter['accentColor'] ?? null),
+            'font' => self::knownFont($charter['headingFont'] ?? null),
+            'radius' => self::boundedRadius($charter['radius'] ?? null),
+            'buttonStyle' => self::oneOf($charter['buttonStyle'] ?? null, AppProfile::BUTTON_STYLES),
+        ];
+
+        return array_map(static fn (string $field) => $fromCharter[$field] ?? null, array_combine(self::FIELDS, self::FIELDS));
+    }
+
+    /** @return array{app: string, theme: array<string, mixed>, sources: array<string, ?string>} */
     public function resolve(string $app): array
     {
         $profile = $this->repository()->findOneByApp($app);

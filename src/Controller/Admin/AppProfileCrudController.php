@@ -33,9 +33,42 @@ class AppProfileCrudController extends BaseTenantCrudController
     private const UPLOAD_DIR = 'var/storage/public_bucket/assets/uploads/email-logos/';
     private const BASE_PATH = '/bucket-simulator/assets/uploads/email-logos/';
 
+    public function __construct(\App\Services\TenantEntityManagerProvider $emProvider, private readonly \App\Services\AppProfileService\AppThemePreviewService $previews)
+    {
+        parent::__construct($emProvider);
+    }
+
     public static function getEntityFqcn(): string
     {
         return AppProfile::class;
+    }
+
+    /** Aperçu en direct (B3, 31/10/2026) : script du formulaire, chargé pour ce seul CRUD */
+    public function configureAssets(\EasyCorp\Bundle\EasyAdminBundle\Config\Assets $assets): \EasyCorp\Bundle\EasyAdminBundle\Config\Assets
+    {
+        $file = $this->getParameter('kernel.project_dir') . '/public/assets/js/admin-apercu.js';
+
+        return parent::configureAssets($assets)->addJsFile('assets/js/admin-apercu.js?v=' . (@filemtime($file) ?: 1));
+    }
+
+    /**
+     * Données de l'aperçu posées dans l'aide du panneau « Apparence » (lues par admin-apercu.js) : gabarits, adresse du
+     * cadre, repli des champs vides, profil. Sans gabarit pour l'application de la fiche, le message est affiché ici même.
+     */
+    private function previewData(): string
+    {
+        try {
+            $app = $this->getContext()?->getEntity()?->getInstance()?->getApp();
+        } catch (\Throwable) {
+            $app = null;
+        }
+        $payload = $this->previews->payload($app);
+        $html = sprintf('<span class="apercu-data" data-apercu="%s" hidden></span>', htmlspecialchars(json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES));
+        if ($app !== null && $payload['url'] === null) {
+            $html .= sprintf('<br><em class="apercu-unavailable">%s.</em>', \App\Services\AppProfileService\AppThemePreviewService::UNAVAILABLE);
+        }
+
+        return $html;
     }
 
     /** Note propre à l'application de la fiche (31/10/2026) : la caisse n'applique pas encore le thème (décision du propriétaire, lot U9 côté caisse) */
@@ -76,7 +109,7 @@ class AppProfileCrudController extends BaseTenantCrudController
         yield TextField::new('tagline', 'Accroche')->setRequired(false)->hideOnIndex();
         yield ImageField::new('logo', 'Logo')->setBasePath(self::BASE_PATH)->setUploadDir(self::UPLOAD_DIR)->setUploadedFileNamePattern('[randomhash].[extension]')->setRequired(false);
         yield ImageField::new('icon', 'Icône')->setBasePath(self::BASE_PATH)->setUploadDir(self::UPLOAD_DIR)->setUploadedFileNamePattern('[randomhash].[extension]')->setRequired(false)->hideOnIndex();
-        yield FormField::addPanel('Apparence de l\'application')->collapsible()->setHelp($this->appearanceNote() . 'Lue par l\'application e-commerce mobile (GET /api/mobile/app-theme). Un réglage vide est pris dans la charte de la boutique web (réglages de la boutique) quand elle en a un, sinon l\'application applique son propre défaut.');
+        yield FormField::addPanel('Apparence de l\'application')->collapsible()->setHelp($this->appearanceNote() . 'Lue par l\'application e-commerce mobile (GET /api/mobile/app-theme). Un réglage vide est pris dans la charte de la boutique web (réglages de la boutique) quand elle en a un, sinon l\'application applique son propre défaut.' . $this->previewData());
         yield ColorField::new('primaryColor', 'Couleur principale')->setRequired(false)->hideOnIndex()
             ->setFormTypeOption('block_prefix', 'optional_color')
             ->setHelp('Couleur des boutons et des éléments mis en avant, au format #RRGGBB. Vide : couleur principale de la charte de la boutique.');

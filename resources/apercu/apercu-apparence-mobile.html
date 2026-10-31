@@ -1,0 +1,687 @@
+<!-- Gabarit d'aperçu de l'apparence : application « mobile ». Source : dépôt de l'application, docs/apercu/apercu-apparence-mobile.html (copie déposée le 31/10/2026). Copié tel quel le 31/10/2026 ; seule modification : le module @material/material-color-utilities est chargé depuis /assets/vendor/ (aucun CDN). Pour le remplacer : docs/architecture.md, « Aperçu de l'apparence ». -->
+<title>Aperçu de l'apparence mobile</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;600&family=Lora:wght@400;600&family=Montserrat:wght@400;600&family=Outfit:wght@400;600&family=Playfair+Display:wght@400;600&family=Poppins:wght@400;600&display=swap">
+<style>
+/*
+  Aperçu de l'apparence de l'application mobile (décision D11).
+  Modèle commun : le backend l'intègre dans le panneau « Apparence » d'EasyAdmin (prompt B3),
+  Gemini reproduit les mêmes pages en Flutter au lot L1b.
+
+  Mise en page : formulaire | téléphone | palette et réponse de app-theme ; une colonne sur téléphone.
+  Le cadre autour du téléphone suit le thème de l'admin. Le téléphone a ses propres couleurs,
+  calculées à partir des réglages de la boutique (variables --ap-*, posées par le script).
+*/
+:root {
+  --bg: #f3f5f7;
+  --panel: #ffffff;
+  --ink: #18212b;
+  --muted: #5b6875;
+  --line: #d9dfe5;
+  --focus: #0f6b66;
+  --focus-soft: #e3f1ef;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171c; --panel: #1a2128; --ink: #e6ebef; --muted: #9aa7b2; --line: #2c3640;
+    --focus: #5fc8bf; --focus-soft: #1c3533; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171c; --panel: #1a2128; --ink: #e6ebef; --muted: #9aa7b2; --line: #2c3640;
+  --focus: #5fc8bf; --focus-soft: #1c3533; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.page { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px; }
+header.head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; }
+.crumb { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 2px 0 0; font-size: 22px; font-weight: 600; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 62ch; }
+
+.layout { display: grid; gap: 20px; grid-template-columns: 300px minmax(0, 392px) minmax(0, 1fr); align-items: start; }
+@media (max-width: 1100px) { .layout { grid-template-columns: 300px minmax(0, 1fr); } .side { grid-column: 1 / -1; } }
+@media (max-width: 720px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.panel h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+
+/* Formulaire de démonstration (remplacé par le formulaire EasyAdmin) */
+form { display: grid; gap: 14px; }
+.field { display: grid; gap: 6px; }
+.field > label, .field > .lbl { font-weight: 500; }
+.hint { font-size: 12px; color: var(--muted); }
+.row { display: flex; gap: 8px; align-items: center; }
+input[type="text"], select {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 9px; width: 100%; min-width: 0;
+}
+input[type="text"] { font-family: var(--font-mono); font-size: 13px; }
+input[type="color"] { width: 40px; height: 36px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); flex: none; }
+input[type="range"] { flex: 1; accent-color: var(--focus); }
+button { font: inherit; cursor: pointer; }
+.ghost { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 6px; padding: 6px 10px; white-space: nowrap; }
+.ghost:hover { border-color: var(--focus); color: var(--focus); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { text-align: center; padding: 6px 4px; font-size: 13px; cursor: pointer; border-left: 1px solid var(--line); }
+.seg label:first-of-type { border-left: 0; }
+.seg input:checked + label { background: var(--focus-soft); color: var(--focus); font-weight: 600; }
+.seg input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: -2px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets .ghost { font-size: 12px; }
+.null-note { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+/* Téléphone */
+.stage { display: grid; gap: 12px; justify-items: center; min-width: 0; }
+.tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--panel); }
+.tabs button { border: 0; background: none; color: var(--muted); padding: 6px 14px; border-radius: 999px; font-size: 13px; }
+.tabs button[aria-selected="true"] { background: var(--focus-soft); color: var(--focus); font-weight: 600; }
+
+.ap-phone {
+  /* Valeurs initiales = aucun réglage, mode clair (remplacées par le script) */
+  --ap-p: #ff8900; --ap-on-p: #000000; --ap-pc: #ffdcc2; --ap-on-pc: #2e1500;
+  --ap-sc: #f6decd; --ap-on-sc: #261909; --ap-acc: #626034; --ap-on-acc: #ffffff;
+  --ap-tc: #e9e5ad; --ap-on-tc: #1d1d00;
+  --ap-sf: #fff8f5; --ap-sf1: #fcf2ec; --ap-sf2: #f6ece6; --ap-sf3: #f0e6e0;
+  --ap-on-sf: #211a15; --ap-on-sfv: #52443c; --ap-ol: #84746a; --ap-olv: #d7c3b8;
+  --ap-r: 12px; --ap-r-btn: 12px; --ap-r-chip: 8px; --ap-r-img: 8px;
+  --ap-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  width: 360px; max-width: 100%; height: 740px; border-radius: 44px; padding: 10px;
+  background: #0d0f12; box-shadow: 0 1px 0 1px #2b2f36 inset, 0 18px 40px -18px rgba(0,0,0,.45);
+}
+.ap-screen {
+  height: 100%; border-radius: 34px; overflow: hidden; display: flex; flex-direction: column;
+  background: var(--ap-sf); color: var(--ap-on-sf); font-family: var(--ap-font); font-size: 14px; line-height: 1.4;
+  transition: background-color .25s, color .25s;
+}
+.ap-status { display: flex; justify-content: space-between; align-items: center; padding: 12px 22px 4px; font-size: 12px; font-weight: 600; font-family: system-ui, sans-serif; }
+.ap-status i { display: inline-block; width: 16px; height: 9px; border-radius: 2px; border: 1.5px solid currentColor; margin-left: 4px; position: relative; }
+.ap-status i::after { content: ""; position: absolute; inset: 1px 4px 1px 1px; background: currentColor; border-radius: 1px; }
+.ap-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 6px 16px 16px; display: grid; gap: 14px; align-content: start; scrollbar-width: none; }
+.ap-body::-webkit-scrollbar { display: none; }
+.ap-screen button { color: inherit; font-family: inherit; }
+
+.ap-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ap-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ap-logo { width: 38px; height: 38px; border-radius: calc(var(--ap-r) * .6 + 4px); background: var(--ap-p); color: var(--ap-on-p); display: grid; place-items: center; font-weight: 600; flex: none; overflow: hidden; }
+.ap-logo img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.ap-brand small { display: block; font-size: 11px; color: var(--ap-on-sfv); }
+.ap-brand b { display: block; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ap-icon { position: relative; width: 40px; height: 40px; border-radius: 999px; border: 0; background: var(--ap-sf2); display: grid; place-items: center; flex: none; }
+.ap-icon svg { width: 20px; height: 20px; }
+.ap-badge { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--ap-acc); color: var(--ap-on-acc); font-size: 11px; font-weight: 600; display: grid; place-items: center; }
+.ap-search { display: flex; align-items: center; gap: 8px; padding: 11px 14px; background: var(--ap-sf2); border-radius: var(--ap-r); color: var(--ap-on-sfv); font-size: 13px; }
+.ap-search svg { width: 18px; height: 18px; flex: none; }
+
+.ap-hero { border-radius: var(--ap-r); padding: 18px; display: grid; gap: 8px; align-content: end; min-height: 150px;
+  background: linear-gradient(135deg, var(--ap-p), color-mix(in srgb, var(--ap-p) 55%, var(--ap-acc))); color: var(--ap-on-p); position: relative; overflow: hidden; }
+.ap-hero::after { content: ""; position: absolute; width: 180px; height: 180px; right: -50px; top: -60px; border-radius: 50%; background: color-mix(in srgb, var(--ap-on-p) 12%, transparent); }
+.ap-hero small { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+.ap-hero strong { font-size: 20px; line-height: 1.15; font-weight: 600; max-width: 14ch; position: relative; z-index: 1; }
+.ap-hero.banner { min-height: 210px; }
+.ap-dots { display: flex; gap: 5px; justify-content: center; }
+.ap-dots span { width: 6px; height: 6px; border-radius: 999px; background: var(--ap-olv); }
+.ap-dots span.on { width: 18px; background: var(--ap-p); }
+
+.ap-chips { display: flex; gap: 8px; overflow: hidden; }
+.ap-chip { flex: none; padding: 7px 13px; border-radius: var(--ap-r-chip); border: 1px solid var(--ap-olv); font-size: 13px; background: transparent; }
+.ap-chip.on { background: var(--ap-sc); color: var(--ap-on-sc); border-color: transparent; font-weight: 600; }
+.ap-sec { display: flex; justify-content: space-between; align-items: baseline; }
+.ap-sec h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.ap-sec span { font-size: 12px; color: var(--ap-p); font-weight: 600; }
+
+.ap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ap-card { border-radius: var(--ap-r); overflow: hidden; cursor: pointer; text-align: left; border: 0; padding: 0; background: none; }
+.ap-img { aspect-ratio: 1; max-width: 100%; display: grid; place-items: center; position: relative;
+  background: linear-gradient(150deg, var(--ap-pc), var(--ap-tc)); color: var(--ap-on-pc); }
+.ap-img svg { width: 44%; height: 44%; opacity: .55; }
+.ap-promo { position: absolute; top: 8px; left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--ap-acc); color: var(--ap-on-acc); font-size: 11px; font-weight: 600; }
+.c-classic { background: var(--ap-sf1); }
+.c-classic .ap-img { border-radius: var(--ap-r-img); margin: 6px 6px 0; }
+.c-classic .ap-cbody { padding: 8px 10px 10px; display: grid; gap: 2px; }
+.ap-pname { font-size: 13px; font-weight: 500; line-height: 1.25; }
+.ap-price { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ap-price.sale { color: var(--ap-acc); }
+.ap-old { font-size: 11px; color: var(--ap-on-sfv); text-decoration: line-through; margin-left: 4px; font-weight: 400; }
+.c-overlay { position: relative; }
+.c-overlay .ap-img { aspect-ratio: 3 / 4; }
+.c-overlay .ap-cbody { position: absolute; inset: auto 0 0 0; padding: 30px 10px 10px; display: grid; gap: 2px; color: #fff;
+  background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0)); }
+.c-overlay .ap-price.sale { color: #fff; }
+.c-overlay .ap-old { color: rgba(255,255,255,.75); }
+.ap-list { display: grid; gap: 8px; }
+.c-compact { display: flex; gap: 12px; align-items: center; padding: 8px; background: var(--ap-sf1); width: 100%; }
+.c-compact .ap-img { width: 64px; flex: none; border-radius: var(--ap-r-img); }
+.c-compact .ap-cbody { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.c-compact .ap-cat { font-size: 11px; color: var(--ap-on-sfv); }
+.ap-add { width: 34px; height: 34px; border-radius: var(--ap-r-btn); background: var(--ap-sc); color: var(--ap-on-sc); display: grid; place-items: center; flex: none; font-size: 18px; }
+
+.ap-nav { display: grid; grid-template-columns: repeat(4, 1fr); padding: 8px 6px 16px; background: var(--ap-sf2); }
+.ap-nav button { border: 0; background: none; display: grid; justify-items: center; gap: 3px; font-size: 11px; color: var(--ap-on-sfv); padding: 0; }
+.ap-nav .ind { width: 54px; height: 30px; border-radius: 999px; display: grid; place-items: center; position: relative; }
+.ap-nav svg { width: 20px; height: 20px; }
+.ap-nav button.on { color: var(--ap-on-sf); font-weight: 600; }
+.ap-nav button.on .ind { background: var(--ap-sc); color: var(--ap-on-sc); }
+.ap-nav .ap-badge { top: -2px; right: 6px; }
+
+.ap-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 13px 16px; font-weight: 600; font-size: 14px;
+  border-radius: var(--ap-r-btn); border: 1.5px solid var(--ap-p); background: var(--ap-p); color: var(--ap-on-p); cursor: pointer; }
+.btn-outline .ap-btn { background: transparent; color: var(--ap-p); }
+.ap-btn.text { background: transparent; border-color: transparent; color: var(--ap-p); }
+
+.ap-pimg { margin: -6px -16px 0; aspect-ratio: 1 / .92; max-width: none; background: linear-gradient(150deg, var(--ap-pc), var(--ap-tc)); color: var(--ap-on-pc); display: grid; place-items: center; position: relative; }
+.ap-pimg svg.big { width: 40%; height: 40%; opacity: .5; }
+.ap-pimg .ap-icon { position: absolute; top: 10px; background: var(--ap-sf); }
+.ap-pimg .back { left: 14px; } .ap-pimg .fav { right: 14px; }
+.ap-pimg .ap-dots { position: absolute; bottom: 12px; left: 0; right: 0; }
+.ap-kicker { font-size: 12px; color: var(--ap-on-sfv); }
+.ap-title { margin: 0; font-size: 21px; line-height: 1.2; font-weight: 600; }
+.ap-prow { display: flex; align-items: baseline; gap: 8px; }
+.ap-prow .ap-price { font-size: 20px; }
+.ap-lbl { font-size: 13px; font-weight: 600; }
+.ap-sizes { display: flex; gap: 8px; }
+.ap-size { width: 46px; height: 40px; display: grid; place-items: center; border-radius: var(--ap-r-chip); border: 1px solid var(--ap-olv); font-size: 13px; }
+.ap-size.on { background: var(--ap-sc); color: var(--ap-on-sc); border-color: transparent; font-weight: 600; }
+.ap-desc { margin: 0; font-size: 13px; color: var(--ap-on-sfv); }
+.ap-buybar { display: flex; gap: 10px; align-items: center; padding: 12px 16px 18px; background: var(--ap-sf1); border-top: 1px solid var(--ap-olv); }
+.ap-buybar .ap-btn { flex: 1; }
+.ap-sq { width: 48px; height: 48px; flex: none; border-radius: var(--ap-r-btn); border: 1px solid var(--ap-olv); display: grid; place-items: center; background: none; }
+.ap-sq svg { width: 20px; height: 20px; }
+
+.ap-bar { display: flex; align-items: center; gap: 10px; }
+.ap-bar h3 { margin: 0; font-size: 18px; font-weight: 600; }
+.ap-item { display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: var(--ap-r); background: var(--ap-sf1); }
+.ap-item .ap-img { width: 68px; flex: none; border-radius: var(--ap-r-img); }
+.ap-item .info { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.ap-item .meta { font-size: 12px; color: var(--ap-on-sfv); }
+.ap-qty { display: inline-flex; align-items: center; border: 1px solid var(--ap-olv); border-radius: var(--ap-r-chip); width: max-content; }
+.ap-qty span { width: 28px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ap-qty b { width: 28px; text-align: center; font-weight: 400; color: var(--ap-on-sfv); }
+.ap-sum { border-radius: var(--ap-r); background: var(--ap-sf2); padding: 14px; display: grid; gap: 8px; font-size: 13px; }
+.ap-sum div { display: flex; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
+.ap-sum .muted { color: var(--ap-on-sfv); }
+.ap-sum .total { font-size: 16px; font-weight: 600; padding-top: 8px; border-top: 1px solid var(--ap-olv); }
+
+/* Colonne de droite */
+.side { display: grid; gap: 20px; min-width: 0; }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.sw { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.sw i { display: block; height: 34px; }
+.sw div { padding: 6px 8px; display: grid; }
+.sw b { font-size: 12px; font-weight: 500; }
+.sw code { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.code { overflow-x: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 0;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--ink); }
+.status { font-size: 12px; color: var(--muted); }
+.notes { display: grid; gap: 8px; color: var(--ink); }
+.notes p, .notes li { max-width: 70ch; }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.notes code { font-family: var(--font-mono); font-size: 12px; background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+details summary { cursor: pointer; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .ap-screen { transition: none; } }
+/* Mode intégré (?embed=1) : EasyAdmin garde son formulaire, le cadre n'affiche que l'appareil et ses onglets */
+.embed body { padding-block: 12px; background: transparent; }
+.embed header.head, .embed .form-panel, .embed .side { display: none; }
+.embed .layout { grid-template-columns: minmax(0, 1fr); }
+</style>
+
+<div class="page">
+  <header class="head">
+    <div>
+      <div class="crumb">EasyAdmin · Entreprise · Profils des applications · E-commerce mobile</div>
+      <h1>Apparence de l'application</h1>
+    </div>
+    <p class="lede">Chaque réglage change l'aperçu tout de suite, sans enregistrer. Un champ vide veut dire « non réglé » : l'application reprend la charte du site web, puis ses propres valeurs par défaut.</p>
+  </header>
+
+  <div class="layout">
+    <section class="panel form-panel" aria-labelledby="t-form">
+      <h2 id="t-form">Réglages</h2>
+      <form id="theme-form" autocomplete="off">
+        <div class="field">
+          <span class="lbl">Exemples</span>
+          <div class="presets" id="presets">
+            <button type="button" class="ghost" data-preset="demo">Demo aujourd'hui</button>
+            <button type="button" class="ghost" data-preset="fonce">Couleur foncée</button>
+            <button type="button" class="ghost" data-preset="pale">Couleur pâle, sombre</button>
+            <button type="button" class="ghost" data-preset="vide">Aucun réglage</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-primary-hex">Couleur principale</label>
+          <div class="row">
+            <input type="color" id="f-primary" aria-label="Choisir la couleur principale">
+            <input type="text" id="f-primary-hex" data-champ="primaryColor" placeholder="Non réglée" maxlength="7" spellcheck="false">
+            <button type="button" class="ghost" data-clear="f-primary-hex">Effacer</button>
+          </div>
+          <span class="hint">Boutons, liens, onglet actif. Toute la palette en découle.</span>
+        </div>
+
+        <div class="field">
+          <label for="f-accent-hex">Couleur d'accent</label>
+          <div class="row">
+            <input type="color" id="f-accent" aria-label="Choisir la couleur d'accent">
+            <input type="text" id="f-accent-hex" data-champ="accentColor" placeholder="Calculée" maxlength="7" spellcheck="false">
+            <button type="button" class="ghost" data-clear="f-accent-hex">Effacer</button>
+          </div>
+          <span class="hint">Promotions, prix soldés, pastille du panier.</span>
+        </div>
+
+        <div class="field">
+          <label for="f-mode">Mode</label>
+          <select id="f-mode" data-champ="mode">
+            <option value="">Non réglé (clair)</option>
+            <option value="light">Clair</option>
+            <option value="dark">Sombre</option>
+            <option value="system">Selon le téléphone</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="f-font">Police</label>
+          <select id="f-font" data-champ="font">
+            <option value="">Non réglée (police du téléphone)</option>
+            <option>Inter</option><option>Poppins</option><option>Montserrat</option>
+            <option>Playfair Display</option><option>Lora</option><option>Outfit</option>
+            <option value="System">Police du téléphone</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="f-radius">Arrondi des coins</label>
+          <div class="row">
+            <input type="range" id="f-radius" data-champ="radius" min="0" max="28" step="1">
+            <span class="null-note" id="f-radius-out" aria-live="polite">12</span>
+            <button type="button" class="ghost" data-clear="f-radius">Effacer</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="lbl" id="l-btn">Style des boutons</span>
+          <div class="seg" role="radiogroup" aria-labelledby="l-btn">
+            <input type="radio" name="buttonStyle" id="b-null" value=""><label for="b-null">Défaut</label>
+            <input type="radio" name="buttonStyle" id="b-solid" value="solid"><label for="b-solid">Plein</label>
+            <input type="radio" name="buttonStyle" id="b-outline" value="outline"><label for="b-outline">Contour</label>
+            <input type="radio" name="buttonStyle" id="b-pill" value="pill"><label for="b-pill">Pilule</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-card">Cartes produit</label>
+          <select id="f-card" data-champ="productCard">
+            <option value="">Non réglé (classique)</option>
+            <option value="classic">Classique : image, texte dessous</option>
+            <option value="overlay">Surimpression : texte sur l'image</option>
+            <option value="compact">Liste compacte</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="f-hero">Haut de l'accueil</label>
+          <select id="f-hero" data-champ="homeHero">
+            <option value="">Non réglé (diaporama)</option>
+            <option value="carousel">Diaporama</option>
+            <option value="banner">Grande bannière</option>
+            <option value="none">Rien, catégories directement</option>
+          </select>
+        </div>
+      </form>
+    </section>
+
+    <section class="stage" aria-label="Aperçu sur téléphone">
+      <div class="tabs" role="tablist" aria-label="Page affichée">
+        <button type="button" role="tab" id="tab-accueil" data-go="accueil" aria-selected="true">Accueil</button>
+        <button type="button" role="tab" id="tab-produit" data-go="produit" aria-selected="false">Fiche produit</button>
+        <button type="button" role="tab" id="tab-panier" data-go="panier" aria-selected="false">Panier</button>
+      </div>
+      <div class="ap-phone" id="apercu-mobile">
+        <div class="ap-screen" id="ap-screen"></div>
+      </div>
+      <p class="status" id="palette-status">Palette : calcul en cours…</p>
+    </section>
+
+    <div class="side">
+      <section class="panel" aria-labelledby="t-pal">
+        <h2 id="t-pal">Palette calculée</h2>
+        <div class="swatches" id="swatches"></div>
+      </section>
+      <section class="panel" aria-labelledby="t-json">
+        <h2 id="t-json">Réponse de GET /api/mobile/app-theme</h2>
+        <pre class="code" id="json"></pre>
+      </section>
+      <section class="panel notes" aria-labelledby="t-notes">
+        <h2 id="t-notes">Pour l'intégration</h2>
+        <details open>
+          <summary>Règle des couleurs, identique dans EasyAdmin et dans Flutter</summary>
+          <ul>
+            <li>Palette : schéma Material « fidelity » calculé depuis la couleur principale (Flutter : <code>ColorScheme.fromSeed(seedColor, dynamicSchemeVariant: DynamicSchemeVariant.fidelity)</code> ; JavaScript : <code>SchemeFidelity</code> de <code>@material/material-color-utilities</code>).</li>
+            <li>Mode clair : la couleur principale du marchand est utilisée telle quelle pour les boutons ; le texte posé dessus est noir ou blanc, celui qui contraste le plus.</li>
+            <li>Mode sombre : la couleur principale est celle du schéma sombre (plus claire), pour rester lisible sur fond sombre.</li>
+            <li>Accent : la couleur d'accent telle quelle, sinon la couleur « tertiary » du schéma ; texte noir ou blanc selon le contraste.</li>
+            <li>Valeurs nulles : couleur principale <code>#ff8900</code>, mode clair, police du téléphone, arrondi 12, boutons pleins, cartes classiques, diaporama.</li>
+            <li>Les valeurs de la palette ci-dessus servent de référence aux tests Flutter du lot L1b.</li>
+          </ul>
+        </details>
+        <details>
+          <summary>Brancher le formulaire EasyAdmin</summary>
+          <ul>
+            <li>Le script expose <code>window.ApercuApparence</code> : <code>app</code> (code de l'application) et <code>update(theme, profil)</code> : <code>theme</code> a les neuf clés de app-theme (<code>null</code> = non réglé), <code>profil</code> donne <code>name</code> et <code>logo</code> (adresse de l'image).</li>
+            <li>Chaque champ du formulaire porte <code>data-champ="&lt;clé du thème&gt;"</code> ; un écouteur <code>input</code> relit le formulaire et appelle <code>update</code>. Rien n'est enregistré avant « Sauvegarder ».</li>
+            <li>Un champ non réglé montre la valeur reprise de la charte du site (le même repli que app-theme), pour que l'aperçu corresponde à ce que les clients verront.</li>
+            <li>Un gabarit par code d'application, même contrat pour tous : un fichier <code>apercu-apparence-&lt;code&gt;.html</code>, un conteneur <code>.ap-phone</code> (ou <code>.ap-frame</code> pour une tablette ou un ordinateur), des variables CSS <code>--ap-*</code>, <code>window.ApercuApparence</code>, et un mode intégré : avec <code>?embed=1</code> dans l'adresse, seuls l'appareil et ses onglets s'affichent. Celui-ci est <code>mobile</code>.</li>
+          </ul>
+        </details>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// Règle de couleurs partagée avec Flutter (voir « Pour l'intégration »). Sans la bibliothèque Material
+// (réseau coupé), un repli approché garde l'aperçu utilisable.
+let MCU = null;
+try {
+  MCU = await import('/assets/vendor/material-color-utilities-0.3.0.mjs');
+} catch (e) { MCU = null; }
+
+const DEFAULTS = { primaryColor: '#ff8900', mode: 'light', font: 'System', radius: 12, buttonStyle: 'solid', productCard: 'classic', homeHero: 'carousel' };
+const FONT_STACKS = {
+  System: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+  Inter: '"Inter", system-ui, sans-serif',
+  Poppins: '"Poppins", system-ui, sans-serif',
+  Montserrat: '"Montserrat", system-ui, sans-serif',
+  Outfit: '"Outfit", system-ui, sans-serif',
+  'Playfair Display': '"Playfair Display", Georgia, serif',
+  Lora: '"Lora", Georgia, serif',
+};
+const PRESETS = {
+  demo:  { primaryColor: '#4f46e5', accentColor: '#7c3aed', mode: null, font: 'Outfit', radius: 20, buttonStyle: 'pill', productCard: null, homeHero: null },
+  fonce: { primaryColor: '#1d4d3a', accentColor: '#d97706', mode: 'light', font: 'Playfair Display', radius: 4, buttonStyle: 'solid', productCard: 'overlay', homeHero: 'banner' },
+  pale:  { primaryColor: '#a5d8ff', accentColor: null, mode: 'dark', font: 'Poppins', radius: 28, buttonStyle: 'outline', productCard: 'compact', homeHero: 'none' },
+  vide:  { primaryColor: null, accentColor: null, mode: null, font: null, radius: null, buttonStyle: null, productCard: null, homeHero: null },
+};
+const PROFILE = { name: 'Arkanoa Média (démo)', logo: null };
+
+// ---------- couleurs ----------
+const hexOk = v => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+const toRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+function lum(h) {
+  const c = toRgb(h).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+const bestOn = h => contrast(h, '#ffffff') >= contrast(h, '#000000') ? '#ffffff' : '#000000';
+
+const ROLES = ['primary', 'onPrimary', 'primaryContainer', 'onPrimaryContainer', 'secondaryContainer', 'onSecondaryContainer',
+  'tertiary', 'tertiaryContainer', 'onTertiaryContainer', 'surface', 'surfaceContainerLow', 'surfaceContainer',
+  'surfaceContainerHigh', 'onSurface', 'onSurfaceVariant', 'outline', 'outlineVariant'];
+
+function schemeMcu(seed, dark) {
+  const s = new MCU.SchemeFidelity(MCU.Hct.fromInt(MCU.argbFromHex(seed)), dark, 0);
+  const out = {};
+  for (const r of ROLES) {
+    const dc = MCU.MaterialDynamicColors[r];
+    out[r] = dc ? MCU.hexFromArgb(dc.getArgb(s)) : null;
+  }
+  out.surfaceContainerLow ??= out.surface; out.surfaceContainer ??= out.surface; out.surfaceContainerHigh ??= out.surface;
+  return out;
+}
+function schemeFallback(seed, dark) {
+  const [r, g, b] = toRgb(seed).map(v => v / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b); let h = 0;
+  if (mx !== mn) { const d = mx - mn; h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+  const hsl = (hh, s, l) => { const k = n => (n + hh / 30) % 12, a = s * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return '#' + [f(0), f(8), f(4)].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join(''); };
+  const t = (s, lL, lD, hh = h) => hsl(hh, s, dark ? lD : lL);
+  return { primary: t(.6, .4, .8), onPrimary: t(.6, 1, .2), primaryContainer: t(.6, .9, .3), onPrimaryContainer: t(.6, .1, .9),
+    secondaryContainer: t(.25, .9, .3), onSecondaryContainer: t(.25, .1, .9), tertiary: t(.45, .4, .8, (h + 60) % 360),
+    tertiaryContainer: t(.45, .9, .3, (h + 60) % 360), onTertiaryContainer: t(.45, .1, .9, (h + 60) % 360),
+    surface: t(.1, .98, .07), surfaceContainerLow: t(.1, .96, .1), surfaceContainer: t(.1, .94, .12), surfaceContainerHigh: t(.1, .92, .17),
+    onSurface: t(.1, .1, .9), onSurfaceVariant: t(.1, .3, .8), outline: t(.08, .5, .6), outlineVariant: t(.1, .8, .3) };
+}
+
+function palette(theme) {
+  const seed = hexOk(theme.primaryColor) ? theme.primaryColor.toLowerCase() : DEFAULTS.primaryColor;
+  const mode = theme.mode || DEFAULTS.mode;
+  const dark = mode === 'dark' || (mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const s = MCU ? schemeMcu(seed, dark) : schemeFallback(seed, dark);
+  if (!dark) { s.primary = seed; s.onPrimary = bestOn(seed); }
+  const accent = hexOk(theme.accentColor) ? theme.accentColor.toLowerCase() : s.tertiary;
+  return { ...s, accent, onAccent: bestOn(accent), dark, seed };
+}
+
+// ---------- rendu ----------
+const ICON = {
+  cart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6.2"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>',
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5V20h-5.5v-6h-5v6H4z"/></svg>',
+  grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c1.4-3.6 4.2-5.4 7.5-5.4s6.1 1.8 7.5 5.4"/></svg>',
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-7.5-10.1A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.3C19.5 15.4 12 20 12 20z"/></svg>',
+  hanger: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6.5a2 2 0 1 1 2.8 1.8c-.5.2-.8.7-.8 1.2V10l8.6 5.8c.8.5.4 1.7-.5 1.7H3.9c-.9 0-1.3-1.2-.5-1.7L12 10"/></svg>',
+  bag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M5 8h14l-1 12H6z"/><path d="M9 10V7a3 3 0 0 1 6 0v3" stroke-linecap="round"/></svg>',
+};
+const fmt = n => n.toLocaleString('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' $';
+const PRODUCTS = [
+  { name: 'Veste coupe-vent', cat: 'Vêtements', price: 119, icon: 'hanger' },
+  { name: 'Pull laine mérinos', cat: 'Vêtements', price: 69, old: 89, icon: 'hanger' },
+  { name: 'Sac à dos urbain', cat: 'Accessoires', price: 75, icon: 'bag' },
+  { name: 'Casquette brodée', cat: 'Accessoires', price: 29, icon: 'bag' },
+];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+let page = 'accueil';
+let state = { theme: { ...PRESETS.demo }, profile: { ...PROFILE } };
+
+function priceHtml(p) {
+  return p.old
+    ? `<span class="ap-price sale">${fmt(p.price)}<span class="ap-old">${fmt(p.old)}</span></span>`
+    : `<span class="ap-price">${fmt(p.price)}</span>`;
+}
+function promo(p) { return p.old ? `<span class="ap-promo">-${Math.round((1 - p.price / p.old) * 100)} %</span>` : ''; }
+function cards(kind) {
+  if (kind === 'compact') {
+    return `<div class="ap-list">${PRODUCTS.map(p => `
+      <button type="button" class="ap-card c-compact" data-go="produit">
+        <span class="ap-img">${ICON[p.icon]}</span>
+        <span class="ap-cbody"><span class="ap-pname">${p.name}</span><span class="ap-cat">${p.cat}</span>${priceHtml(p)}</span>
+        <span class="ap-add" aria-hidden="true">+</span>
+      </button>`).join('')}</div>`;
+  }
+  return `<div class="ap-grid">${PRODUCTS.map(p => `
+    <button type="button" class="ap-card c-${kind}" data-go="produit">
+      <span class="ap-img">${ICON[p.icon]}${promo(p)}</span>
+      <span class="ap-cbody"><span class="ap-pname">${p.name}</span>${priceHtml(p)}</span>
+    </button>`).join('')}</div>`;
+}
+function hero(kind) {
+  if (kind === 'none') return '';
+  if (kind === 'banner') {
+    return `<div class="ap-hero banner"><small>Nouvelle saison</small><strong>La collection d'automne est arrivée</strong></div>`;
+  }
+  return `<div class="ap-hero"><small>Jusqu'au 15 novembre</small><strong>−20 % sur les vestes</strong></div>
+    <div class="ap-dots" aria-hidden="true"><span class="on"></span><span></span><span></span></div>`;
+}
+function logo(pr) {
+  return pr.logo ? `<span class="ap-logo"><img src="${esc(pr.logo)}" alt=""></span>`
+    : `<span class="ap-logo" aria-hidden="true">${esc((pr.name || '?').trim().charAt(0).toUpperCase())}</span>`;
+}
+function nav(active) {
+  const items = [['accueil', 'Accueil', 'home'], ['accueil', 'Catégories', 'grid'], ['panier', 'Panier', 'cart'], ['accueil', 'Compte', 'user']];
+  return `<nav class="ap-nav">${items.map(([go, label, ic], i) => `
+    <button type="button" data-go="${go}" class="${(active === 'accueil' && i === 0) || (active === 'panier' && i === 2) ? 'on' : ''}">
+      <span class="ind">${ICON[ic]}${i === 2 ? '<span class="ap-badge">2</span>' : ''}</span>${label}</button>`).join('')}</nav>`;
+}
+const status = '<div class="ap-status"><span>9:41</span><span>5G<i></i></span></div>';
+
+function screenAccueil(t, pr) {
+  return `${status}<div class="ap-body">
+    <div class="ap-top"><div class="ap-brand">${logo(pr)}<div><small>Bienvenue chez</small><b>${esc(pr.name)}</b></div></div>
+      <button type="button" class="ap-icon" data-go="panier" aria-label="Panier">${ICON.cart}<span class="ap-badge">2</span></button></div>
+    <div class="ap-search">${ICON.search}Rechercher un produit</div>
+    ${hero(t.homeHero)}
+    <div class="ap-chips"><span class="ap-chip on">Tout</span><span class="ap-chip">Vêtements</span><span class="ap-chip">Chaussures</span><span class="ap-chip">Accessoires</span></div>
+    <div class="ap-sec"><h3>Nouveautés</h3><span>Tout voir</span></div>
+    ${cards(t.productCard)}
+  </div>${nav('accueil')}`;
+}
+function screenProduit() {
+  const p = PRODUCTS[1];
+  return `${status}<div class="ap-body">
+    <div class="ap-pimg">${ICON.hanger.replace('<svg', '<svg class="big"')}
+      <button type="button" class="ap-icon back" data-go="accueil" aria-label="Retour">${ICON.back}</button>
+      <button type="button" class="ap-icon fav" aria-label="Favori">${ICON.heart}</button>
+      <div class="ap-dots" aria-hidden="true"><span class="on"></span><span></span><span></span><span></span></div></div>
+    <div class="ap-kicker">${p.cat}</div>
+    <h2 class="ap-title">${p.name}</h2>
+    <div class="ap-prow">${priceHtml(p)}${promo(p).replace('ap-promo', 'ap-promo" style="position:static')}</div>
+    <div class="ap-lbl">Taille</div>
+    <div class="ap-sizes"><span class="ap-size">S</span><span class="ap-size on">M</span><span class="ap-size">L</span><span class="ap-size">XL</span></div>
+    <p class="ap-desc">Maille fine en laine mérinos, douce et respirante. Coupe droite, col rond, fabriqué au Portugal.</p>
+  </div>
+  <div class="ap-buybar"><button type="button" class="ap-sq" aria-label="Favori">${ICON.heart}</button>
+    <button type="button" class="ap-btn" data-go="panier">Ajouter au panier · ${fmt(p.price)}</button></div>`;
+}
+function screenPanier() {
+  const items = [PRODUCTS[0], PRODUCTS[1]];
+  const sub = items.reduce((s, p) => s + p.price, 0);
+  return `${status}<div class="ap-body">
+    <div class="ap-bar"><button type="button" class="ap-icon" data-go="accueil" aria-label="Retour">${ICON.back}</button><h3>Panier</h3></div>
+    ${items.map(p => `<div class="ap-item"><span class="ap-img">${ICON[p.icon]}</span>
+      <div class="info"><span class="ap-pname">${p.name}</span><span class="meta">Taille M</span>${priceHtml(p)}</div>
+      <span class="ap-qty"><b>−</b><span>1</span><b>+</b></span></div>`).join('')}
+    <div class="ap-sum">
+      <div><span class="muted">Sous-total (2 articles)</span><span>${fmt(sub)}</span></div>
+      <div><span class="muted">Livraison</span><span class="muted">À l'étape suivante</span></div>
+      <div class="total"><span>Total</span><span>${fmt(sub)}</span></div>
+    </div>
+    <button type="button" class="ap-btn">Passer la commande</button>
+    <button type="button" class="ap-btn text" data-go="accueil">Continuer mes achats</button>
+  </div>${nav('panier')}`;
+}
+
+function resolved(theme) {
+  const t = {};
+  for (const k of Object.keys(DEFAULTS)) t[k] = theme[k] ?? DEFAULTS[k];
+  if (!FONT_STACKS[t.font]) t.font = DEFAULTS.font;
+  const r = Number(t.radius); t.radius = Number.isInteger(r) && r >= 0 && r <= 28 ? r : DEFAULTS.radius;
+  return t;
+}
+
+function render() {
+  const t = resolved(state.theme);
+  const pal = palette(state.theme);
+  const phone = document.getElementById('apercu-mobile');
+  const set = (k, v) => phone.style.setProperty(k, v);
+  set('--ap-p', pal.primary); set('--ap-on-p', pal.onPrimary);
+  set('--ap-pc', pal.primaryContainer); set('--ap-on-pc', pal.onPrimaryContainer);
+  set('--ap-sc', pal.secondaryContainer); set('--ap-on-sc', pal.onSecondaryContainer);
+  set('--ap-acc', pal.accent); set('--ap-on-acc', pal.onAccent);
+  set('--ap-tc', pal.tertiaryContainer); set('--ap-on-tc', pal.onTertiaryContainer);
+  set('--ap-sf', pal.surface); set('--ap-sf1', pal.surfaceContainerLow); set('--ap-sf2', pal.surfaceContainer); set('--ap-sf3', pal.surfaceContainerHigh);
+  set('--ap-on-sf', pal.onSurface); set('--ap-on-sfv', pal.onSurfaceVariant); set('--ap-ol', pal.outline); set('--ap-olv', pal.outlineVariant);
+  set('--ap-r', t.radius + 'px');
+  set('--ap-r-btn', t.buttonStyle === 'pill' ? '999px' : t.radius + 'px');
+  set('--ap-r-chip', t.radius >= 16 ? '999px' : Math.max(4, Math.round(t.radius * .7)) + 'px');
+  set('--ap-r-img', Math.max(0, t.radius - 4) + 'px');
+  set('--ap-font', FONT_STACKS[t.font]);
+  phone.classList.toggle('btn-outline', t.buttonStyle === 'outline');
+
+  const screen = document.getElementById('ap-screen');
+  screen.innerHTML = page === 'produit' ? screenProduit() : page === 'panier' ? screenPanier() : screenAccueil(t, state.profile);
+
+  document.querySelectorAll('.tabs [role="tab"]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.go === page)));
+
+  const sw = [['Principale', pal.primary], ['Texte sur principale', pal.onPrimary], ['Conteneur principal', pal.primaryContainer],
+    ['Conteneur secondaire', pal.secondaryContainer], ['Accent', pal.accent], ['Fond', pal.surface], ['Fond des cartes', pal.surfaceContainerLow],
+    ['Barre de navigation', pal.surfaceContainer], ['Texte', pal.onSurface], ['Contour', pal.outlineVariant]];
+  document.getElementById('swatches').innerHTML = sw.map(([n, h]) =>
+    `<div class="sw"><i style="background:${h}"></i><div><b>${n}</b><code>${h}</code></div></div>`).join('');
+
+  const json = { app: 'mobile', theme: {
+    primaryColor: state.theme.primaryColor ?? null, accentColor: state.theme.accentColor ?? null, mode: state.theme.mode ?? null,
+    font: state.theme.font ?? null, radius: state.theme.radius ?? null, buttonStyle: state.theme.buttonStyle ?? null,
+    productCard: state.theme.productCard ?? null, homeHero: state.theme.homeHero ?? null, updatedAt: '2026-10-31T09:41:00+00:00' } };
+  document.getElementById('json').textContent = JSON.stringify(json, null, 2);
+  document.getElementById('palette-status').textContent = (MCU
+    ? 'Palette Material « fidelity », mode '
+    : 'Bibliothèque Material indisponible : palette approchée, mode ') + (pal.dark ? 'sombre.' : 'clair.');
+}
+
+// ---------- formulaire de démonstration ----------
+const form = document.getElementById('theme-form');
+const $ = id => document.getElementById(id);
+function fillForm(t) {
+  $('f-primary-hex').value = t.primaryColor ?? ''; $('f-primary').value = t.primaryColor ?? DEFAULTS.primaryColor;
+  $('f-accent-hex').value = t.accentColor ?? ''; $('f-accent').value = t.accentColor ?? '#808080';
+  $('f-mode').value = t.mode ?? ''; $('f-font').value = t.font ?? '';
+  $('f-radius').value = t.radius ?? DEFAULTS.radius; $('f-radius').dataset.null = t.radius == null ? '1' : '';
+  $('f-radius-out').textContent = t.radius == null ? 'non réglé (12)' : t.radius;
+  const b = form.querySelector(`input[name="buttonStyle"][value="${t.buttonStyle ?? ''}"]`); if (b) b.checked = true;
+  $('f-card').value = t.productCard ?? ''; $('f-hero').value = t.homeHero ?? '';
+}
+function readForm() {
+  const v = id => $(id).value.trim() || null;
+  const hex = id => { const x = v(id); return hexOk(x) ? x.toLowerCase() : null; };
+  return {
+    primaryColor: hex('f-primary-hex'), accentColor: hex('f-accent-hex'), mode: v('f-mode'), font: v('f-font'),
+    radius: $('f-radius').dataset.null ? null : Number($('f-radius').value),
+    buttonStyle: form.querySelector('input[name="buttonStyle"]:checked')?.value || null,
+    productCard: v('f-card'), homeHero: v('f-hero'),
+  };
+}
+form.addEventListener('input', e => {
+  const id = e.target.id;
+  if (id === 'f-primary') $('f-primary-hex').value = e.target.value;
+  if (id === 'f-accent') $('f-accent-hex').value = e.target.value;
+  if (id === 'f-primary-hex' && hexOk(e.target.value)) $('f-primary').value = e.target.value;
+  if (id === 'f-accent-hex' && hexOk(e.target.value)) $('f-accent').value = e.target.value;
+  if (id === 'f-radius') { e.target.dataset.null = ''; $('f-radius-out').textContent = e.target.value; }
+  state.theme = readForm(); render();
+});
+form.addEventListener('submit', e => e.preventDefault());
+form.addEventListener('click', e => {
+  const clear = e.target.closest('[data-clear]');
+  if (clear) {
+    const f = $(clear.dataset.clear);
+    if (f.type === 'range') { f.dataset.null = '1'; f.value = DEFAULTS.radius; $('f-radius-out').textContent = 'non réglé (12)'; }
+    else f.value = '';
+    state.theme = readForm(); render(); return;
+  }
+  const preset = e.target.closest('[data-preset]');
+  if (preset) { state.theme = { ...PRESETS[preset.dataset.preset] }; fillForm(state.theme); render(); }
+});
+document.addEventListener('click', e => {
+  const go = e.target.closest('[data-go]');
+  if (go && (go.closest('#apercu-mobile') || go.closest('.tabs'))) { page = go.dataset.go; render(); }
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (state.theme.mode === 'system') render(); });
+
+window.ApercuApparence = {
+  app: 'mobile',
+  update(theme, profile) {
+    state.theme = { ...PRESETS.vide, ...(theme || {}) };
+    if (profile) state.profile = { ...state.profile, ...profile };
+    fillForm(state.theme); render();
+  },
+};
+
+if (new URLSearchParams(location.search).has('embed')) document.documentElement.classList.add('embed');
+fillForm(state.theme);
+render();
+</script>

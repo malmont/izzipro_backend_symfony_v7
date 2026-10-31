@@ -551,10 +551,11 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (28)
+## Administration (EasyAdmin) (29)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
+| GET | `/admin/apercu/{code}` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ApercuController::show` |
 | POST | `/admin/app-keys/generate` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::generate` |
 | POST | `/admin/app-keys/{id}/revoke` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::revoke` |
 | GET | `/admin/app-keys` | ROLE_ADMIN | `Controller\Admin\AppKeyAdminController::index` |
