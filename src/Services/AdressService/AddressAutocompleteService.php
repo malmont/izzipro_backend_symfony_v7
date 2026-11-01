@@ -16,6 +16,21 @@ class AddressAutocompleteService
         private LoggerInterface         $logger // <-- AJOUT
     ) {}
 
+    /** Clé Google Places du site ; AddressAutocompleteUnavailableException si aucune n'est configurée (31/10/2026) */
+    private function configuredKey(): string
+    {
+        try {
+            $key = $this->keyProvider->getKey();
+        } catch (\LogicException $e) {
+            throw new AddressAutocompleteUnavailableException($e->getMessage(), 0, $e);
+        }
+        if ($key === '') {
+            throw new AddressAutocompleteUnavailableException('La clé API Google Places n\'est pas configurée pour ce tenant.');
+        }
+
+        return $key;
+    }
+
     /**
      * Récupère les suggestions d’adresse (description + place_id).
      *
@@ -25,10 +40,7 @@ class AddressAutocompleteService
      */
     public function suggest(string $input): array
     {
-        $key = $this->keyProvider->getKey();
-        if (empty($key)) {
-            throw new \RuntimeException('La clé API Google Places n\'est pas configurée pour ce tenant.');
-        }
+        $key = $this->configuredKey();
 
         $response = $this->client->request('GET', 'https://maps.googleapis.com/maps/api/place/autocomplete/json', [
             'query' => [
@@ -90,10 +102,7 @@ class AddressAutocompleteService
      */
     public function getDetails(string $placeId): array
     {
-        $key = $this->keyProvider->getKey();
-        if (empty($key)) {
-            throw new \RuntimeException('La clé API Google Places n\'est pas configurée pour ce tenant.');
-        }
+        $key = $this->configuredKey();
 
         $response = $this->client->request('GET', 'https://maps.googleapis.com/maps/api/place/details/json', [
             'query' => [
@@ -117,6 +126,10 @@ class AddressAutocompleteService
 
         if (isset($data['status']) && $data['status'] !== 'OK') {
             $errorMessage = $data['error_message'] ?? $data['status'];
+            // Identifiant inconnu ou mal formé : 404 côté API, pas une erreur du serveur (31/10/2026)
+            if (in_array($data['status'], ['NOT_FOUND', 'INVALID_REQUEST', 'ZERO_RESULTS'], true)) {
+                throw new PlaceNotFoundException('Google Places: ' . $errorMessage);
+            }
             $this->logger->error('Erreur Google Places (Details)', [
                 'status' => $data['status'],
                 'message' => $errorMessage

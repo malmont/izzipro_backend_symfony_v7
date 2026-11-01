@@ -3,6 +3,7 @@
 namespace App\Controller\AdressController;
 
 use App\Dto\AdressInputDTO;
+use App\Dto\AdressOutputDTO;
 use App\Entity\Adress;
 use App\Entity\User;
 use App\UseCase\AdressUseCase\GetUserAdressesUseCase;
@@ -82,9 +83,9 @@ class AdressApiController extends AbstractController
             return $this->json(['error' => $errors], Response::HTTP_BAD_REQUEST);
         }
 
-        // Vérification & normalisation via EasyPost
+        // Vérification & normalisation via EasyPost ; sans EasyPost sur le site, adresse gardée telle quelle (31/10/2026)
         try {
-            $normalized = $this->verifier->verify([
+            $normalized = $this->verifier->verifyOrKeep([
                 'street1'     => $dto->addressLineOne,
                 'street2'     => $dto->addressLineTwo,
                 'city'        => $dto->city,
@@ -112,7 +113,8 @@ class AdressApiController extends AbstractController
             $user->setPrimaryAddress($adress);
         }
         $em->flush();
-        return $this->json(['success' => 'Adresse créée avec succès'], Response::HTTP_CREATED);
+        // L'adresse créée est rendue avec le message (31/10/2026) : le client n'a plus à relire la liste
+        return $this->json(['success' => 'Adresse créée avec succès', 'address' => new AdressOutputDTO($adress)], Response::HTTP_CREATED);
     }
 
     /**
@@ -140,9 +142,9 @@ class AdressApiController extends AbstractController
             return $this->json(['error' => $errors], Response::HTTP_BAD_REQUEST);
         }
 
-        // Vérification & normalisation via EasyPost
+        // Vérification & normalisation via EasyPost ; sans EasyPost sur le site, adresse gardée telle quelle (31/10/2026)
         try {
-            $normalized = $this->verifier->verify([
+            $normalized = $this->verifier->verifyOrKeep([
                 'street1'     => $dto->addressLineOne,
                 'street2'     => $dto->addressLineTwo,
                 'city'        => $dto->city,
@@ -173,7 +175,7 @@ class AdressApiController extends AbstractController
         }
 
         $em->flush();
-        return $this->json(['success' => 'Adresse mise à jour avec succès'], Response::HTTP_OK);
+        return $this->json(['success' => 'Adresse mise à jour avec succès', 'address' => new AdressOutputDTO($adress)], Response::HTTP_OK);
     }
 
     /**
@@ -192,7 +194,7 @@ class AdressApiController extends AbstractController
         $em->persist($user);
         $em->flush();
 
-        return $this->json(['success' => 'Adresse principale mise à jour avec succès']);
+        return $this->json(['success' => 'Adresse principale mise à jour avec succès', 'address' => new AdressOutputDTO($adress)]);
     }
 
     /**

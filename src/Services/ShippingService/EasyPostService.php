@@ -63,6 +63,25 @@ class EasyPostService
         return $this->getTenantClient();
     }
 
+    /**
+     * Le site a-t-il une clé EasyPost pour l'environnement courant ? Sans lever d'exception : les adresses d'un site
+     * sans EasyPost sont gardées telles quelles (31/10/2026).
+     */
+    public function hasConfiguration(): bool
+    {
+        $config = $this->emProvider->getEntityManager()->getRepository(EasyPostConfiguration::class)->findOneBy([]);
+        if (!$config) {
+            return false;
+        }
+        try {
+            $key = $this->appEnv === 'prod' ? $config->getEasypostApiKeyProd() : $config->getEasypostApiKeySandbox();
+        } catch (RuntimeException) {
+            return false;
+        }
+
+        return (string) $key !== '';
+    }
+
     public function getRates(array $data): array
     {
         $client = $this->getTenantClient();

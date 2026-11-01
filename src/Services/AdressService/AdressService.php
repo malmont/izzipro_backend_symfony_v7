@@ -79,7 +79,10 @@ class AdressService
 
     public function deleteAdress(Adress $adress): void
     {
-        $repo = $this->getAdressRepository();
-        $repo->remove($adress, true);
+        // Sans clear() avant : l'adresse chargée par la route devenait détachée et la suppression répondait 500
+        // (« Detached entity cannot be removed », site web et application, corrigé le 31/10/2026)
+        $entityManager = $this->tenantEmProvider->getEntityManager();
+        $entityManager->remove($adress);
+        $entityManager->flush();
     }
 }

@@ -41,6 +41,14 @@ services:
             $httpClient: '@App\Tests\Fake\FakeFrontendConfigHttpClient'
             $baseUrl: !php/const App\Tests\Fake\FakeFrontendConfigHttpClient::BASE_URL
 
+    # Autocomplétion d'adresses : Google Places simulé (aucun appel réseau ; un seul place_id connu)
+    App\Tests\Fake\FakeGooglePlacesHttpClient:
+        public: true
+    App\Services\AdressService\AddressAutocompleteService:
+        autowire: true
+        arguments:
+            $client: '@App\Tests\Fake\FakeGooglePlacesHttpClient'
+
     # Médiathèque : aucun ffmpeg pendant les tests
     App\Tests\Fake\FakeScrollVideoEncoder:
         public: true

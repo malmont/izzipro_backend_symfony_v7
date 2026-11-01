@@ -286,6 +286,25 @@ intent Stripe) et la commande naît **une seule fois par paiement**, du navigate
   `POST /api/subscriptions/{id}/change-plan`). Deux souscriptions simultanées du même client au même produit : verrou
   PostgreSQL (`pg_advisory_lock`, clé client + produit, 13/10/2026), la seconde attend la première puis la trouve.
 
+## Adresses du client (31/10/2026)
+
+Routes `GET|POST /api/adresses`, `PUT|DELETE /api/adresses/{id}`, `PUT /api/adresses/{id}/set-primary` (`AdressApiController`,
+`AdressService`), lues en base à chaque appel (aucun cache depuis le 28/10/2026). Contrat inchangé pour le site web et la caisse ;
+ajouts pour l'application e-commerce mobile :
+
+| Point | Règle |
+|---|---|
+| Vérification EasyPost | `AddressVerificationService::verifyOrKeep` : avec une clé EasyPost sur le site (`EasyPostService::hasConfiguration`), vérification et normalisation inchangées (400 `error.address` si l'adresse est refusée) ; **sans EasyPost** (demo, sites sans expédition), l'adresse est gardée telle quelle, province ramenée à son code quand le nom est connu (`ProvinceCodes` : provinces canadiennes et États américains, FR/EN, sans accent). Avant : 500 (`LogicException`) à toute création |
+| Réponse de POST, PUT et set-primary | `success` (inchangé) **et** `address` : l'adresse telle que la rend `GET /api/adresses` (`AdressOutputDTO`, `isPrimary` à jour) |
+| Code postal | par pays (01/11/2026, `PostalCodeRules`, décision du propriétaire : format international) : Canada `A1A 1A1` inchangé (`CA`, `Canada`), États-Unis `12345` ou `12345-6789` (`US`, `USA`, `États-Unis`), tout autre pays ou pays non reconnu 3 à 10 lettres ou chiffres (espaces et tirets admis). 400 `error.zipCode` avec le message du pays. Avant, le format canadien était exigé quel que soit le pays |
+| `GET /api/adresses/autocomplete?q=` | suggestions `{ description, placeId }` ; `[]` sans clé Google Places sur le site ou en cas d'erreur (inchangé) |
+| `GET /api/adresses/details?place_id=` | `{ street1, street2, city, province, postalCode, country }` ; **jamais 500** : 400 `PLACE_ID_REQUIRED`, 404 `PLACE_NOT_FOUND` (identifiant inconnu ou mal formé : statuts Google `NOT_FOUND`, `INVALID_REQUEST`, `ZERO_RESULTS`) ou 404 `AUTOCOMPLETE_NOT_CONFIGURED` (aucune clé `google_places_config` sur le site ; en 4xx car nginx remplace le corps de toute réponse 5xx), 503 `AUTOCOMPLETE_UNAVAILABLE` (API injoignable, corps neutre de nginx) |
+| `DELETE /api/adresses/{id}` | 204 ; répondait 500 depuis l'origine (entité détachée par un `clear()` avant la suppression), corrigé le 31/10/2026 |
+| Clé Google Places | table `google_places_config` du site (EasyAdmin « Google Places ») : `google_api_key_test` hors production, clé chiffrée en production ; aucune clé sur `demo` au 31/10/2026 |
+
+Tests : `tests/Functional/Boutique/AdressApiTest.php` (Google Places simulé par `tests/Fake/FakeGooglePlacesHttpClient.php`, un seul
+`place_id` connu ; le modèle de base de test porte une clé EasyPost sandbox, retirée le temps des scénarios « sans EasyPost »).
+
 ## Taxes par région (09/10/2026, `TaxEngine`)
 
 Le devis, `create-intent` et la commande calculent les taxes de la même façon, selon l'adresse de livraison

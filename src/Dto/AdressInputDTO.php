@@ -3,7 +3,9 @@
 
 namespace App\Dto;
 
+use App\Services\AdressService\PostalCodeRules;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 class AdressInputDTO
 {
@@ -26,11 +28,9 @@ class AdressInputDTO
     #[Assert\NotBlank(message: "La province / région est obligatoire.")]
     public string $province;
 
+    // Format selon le pays (01/11/2026, PostalCodeRules) : canadien A1A 1A1 inchangé, américain 12345(-6789),
+    // autres pays 3 à 10 caractères ; avant, le format canadien était exigé quel que soit le pays
     #[Assert\NotBlank(message: "Le code postal est obligatoire.")]
-    #[Assert\Regex(
-        pattern: '/^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/',
-        message: "Le code postal doit être au format canadien A1A 1A1."
-    )]
     public string $zipCode;
 
     #[Assert\NotBlank(message: "Le pays est obligatoire.")]
@@ -45,6 +45,18 @@ class AdressInputDTO
 
     // --- NOUVELLE PROPRIÉTÉ ---
     public bool $isPrimary = false;
+
+    #[Assert\Callback]
+    public function validateZipCode(ExecutionContextInterface $context): void
+    {
+        if ($this->zipCode === '') {
+            return; // NotBlank s'en charge
+        }
+        $message = PostalCodeRules::violation($this->zipCode, $this->country);
+        if ($message !== null) {
+            $context->buildViolation($message)->atPath('zipCode')->addViolation();
+        }
+    }
 
     public function __construct(array $data)
     {
