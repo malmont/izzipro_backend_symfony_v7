@@ -237,9 +237,10 @@ class AppThemeTest extends WebTestCase
         $this->putCharter(['primaryColor' => '#1d4ed8', 'accentColor' => '#ffc800', 'headingFont' => 'Lora', 'radius' => 40, 'buttonStyle' => 'outline']);
         $keys = static::getContainer()->get(AppKeyService::class);
         foreach (['pos', 'admin', 'mobile'] as $app) {
+            $profileKeys = $app === 'pos' ? [...self::PROFILE_KEYS, 'currency'] : self::PROFILE_KEYS; // caisse : devise du site ajoutée (F18 partie 1, 01/11/2026)
             // Sans profil : forme de la réponse documentée le 20/10/2026, sans « theme », et la charte n'y entre pas
             $none = $this->profile($app);
-            $this->assertSame(self::PROFILE_KEYS, array_keys($none), "$app : forme du profil inchangée");
+            $this->assertSame($profileKeys, array_keys($none), "$app : forme du profil inchangée");
             $this->assertSame([false, null, null], [$none['hasProfile'], $none['primaryColor'], $none['sources']['primaryColor']], "$app : la charte n'entre pas dans le profil");
 
             // Avec un profil : réponse identique, champ par champ, avant et après le réglage de l'apparence
@@ -250,12 +251,12 @@ class AppThemeTest extends WebTestCase
             $this->db(MV_TEST_TENANT_DB)->executeStatement("UPDATE app_profile SET accent_color = '#ffc800', theme_mode = 'dark', theme_font = 'Poppins', theme_radius = 12, button_style = 'pill', product_card = 'compact', home_hero = 'banner' WHERE app = '$app'");
             $after = $this->profile($app);
             $this->assertSame($before, $after, "$app : GET /api/app-profile identique champ par champ");
-            $this->assertSame(self::PROFILE_KEYS, array_keys($after));
+            $this->assertSame($profileKeys, array_keys($after));
             $this->assertSame([true, '#123abc', 'app'], [$after['hasProfile'], $after['primaryColor'], $after['sources']['primaryColor']]);
             $key = $keys->generate(MV_TEST_TENANT_CODE, $app, "Essai $app bis", 'test', null)['key'];
             $activationAfter = $this->activate($key, $app);
             $this->assertSame($activationBefore['profile'], $activationAfter['profile'], "$app : profil de l'activation identique");
-            $this->assertSame(self::PROFILE_KEYS, array_keys($activationAfter['profile']));
+            $this->assertSame($profileKeys, array_keys($activationAfter['profile']));
             $this->assertSame(array_keys($activationBefore), array_keys($activationAfter), "$app : forme de l'activation inchangée");
             $this->assertArrayNotHasKey('theme', $activationAfter);
         }

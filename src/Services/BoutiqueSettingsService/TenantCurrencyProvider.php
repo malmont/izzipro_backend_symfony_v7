@@ -20,10 +20,14 @@ final class TenantCurrencyProvider
     {
     }
 
-    public function code(): string
+    /** @param bool $fresh relire la base (commande qui parcourt les sites, devise changée dans le même processus) ; sinon une lecture par requête */
+    public function code(bool $fresh = false): string
     {
         $em = $this->emProvider->getEntityManager();
         $db = (string) ($em->getConnection()->getParams()['dbname'] ?? '');
+        if ($fresh) {
+            unset($this->codes[$db]);
+        }
         if (!isset($this->codes[$db])) {
             $currency = $em->getRepository(Entreprise::class)->findOneBy([])?->getCurrency();
             $this->codes[$db] = is_string($currency) && preg_match('/^[A-Z]{3}$/', $currency) ? $currency : self::DEFAULT;

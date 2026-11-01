@@ -23,7 +23,8 @@ class AppProfileService
         'conditionOfUse' => 'conditionOfUse', 'legalNotice' => 'LegalNotice',
     ];
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly EntrepriseService $entreprises)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly EntrepriseService $entreprises,
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null) // devise du site pour la caisse (F18 partie 1, 01/11/2026)
     {
     }
 
@@ -73,7 +74,7 @@ class AppProfileService
             $sources['address'] = ($address['street1'] ?? $address['city'] ?? $address['oneLine']) === null ? null : 'entreprise';
         }
 
-        return [
+        $result = [
             'app' => $app,
             'appLabel' => AppProfile::APPS[$app],
             'hasProfile' => $profile !== null,
@@ -88,6 +89,11 @@ class AppProfileService
             'translation' => $translation?->getLanguage(),
             'updatedAt' => $profile?->getUpdatedAt()->format(\DateTimeInterface::ATOM),
         ];
+        if ($app === 'pos') { // la caisse affiche des prix avant toute connexion : devise du site (ISO 4217), les autres applications ne changent pas
+            $result['currency'] = strtoupper($this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT);
+        }
+
+        return $result;
     }
 
     /** Fiche entreprise du site (la première : une seule par site), dans la langue demandée */

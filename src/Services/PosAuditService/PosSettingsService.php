@@ -15,7 +15,8 @@ class PosSettingsService
     /** Règles du PIN par défaut (lot R1 : modifiables par site, voir pinRules()) */
     public const PIN = ['minLength' => 4, 'maxLength' => 6, 'maxAttempts' => PosPinService::MAX_ATTEMPTS, 'lockMinutes' => PosPinService::LOCK_MINUTES];
 
-    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly \App\Services\PosTerminalService\PosTerminalSettingsService $terminal, private readonly \App\Services\PosOfflineService\PosOfflineSettings $offline)
+    public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly \App\Services\PosTerminalService\PosTerminalSettingsService $terminal, private readonly \App\Services\PosOfflineService\PosOfflineSettings $offline,
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, private readonly ?\App\Services\CaisseService\CashRoundingService $rounding = null) // devise et arrondi (F18 partie 1, 01/11/2026)
     {
     }
 
@@ -27,6 +28,10 @@ class PosSettingsService
         $lines = \App\Services\PosLineService\PosLineService::settingsOf($e); // article libre et prix manuel (F7, 26/10/2026)
 
         return [
+            // Devise du site (ISO 4217, majuscules) et pas d'arrondi des espèces en cents (1 = aucun arrondi ; même valeur que la vente et que
+            // pack.site.cashRoundingStep) : connus dès le démarrage de la caisse (F18 partie 1, 01/11/2026). Défauts d'un site non réglé : CAD, 5
+            'currency' => strtoupper($this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT),
+            'cashRoundingStep' => $this->rounding?->step() ?? 5,
             'lockAfterMinutes' => $e?->getPosLockMinutes() ?? 5,
             'approvals' => [
                 'refund' => $threshold($e ? $e->getPosApprovalRefund() : 0),

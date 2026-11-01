@@ -55,7 +55,7 @@ Codes de succès inchangés depuis l'origine : `close` répond **200**, les autr
 |---|---|---|
 | `POST /api/caisse/open` | `cashRegisterId?`, `cashFund?` (cents, ≥ 0 : fond de caisse ajouté à l'ouverture, enregistré comme « Ajout fond de caisse ») | 201 `{message, caisse_id, cashRegisterId, amountTotal, fonDeCaisse, createdAt}` ; session déjà ouverte sur le poste → 400 `CAISSE_ALREADY_OPEN` ; `cashFund` invalide → 400 `INVALID_AMOUNT` (rien n'est ouvert) |
 | `POST /api/caisse/close` | `cashRegisterId?`, `countedCash?`, `cashDetails?`, `discrepancyReason?`, `keptFund?` (voir « Clôture ») | 200 `{message, caisse_id, cashRegisterId, report}` (`report` = rapport Z créé) ; pas de session ouverte → 400 `CASH_REGISTER_CLOSED` (+ `lastReport {id, number}`) |
-| `GET /api/caisse/denominations` | — | 200 `[{id, label, valueCents, kind, active}]` pour la devise du site |
+| `GET /api/caisse/denominations` | — | 200 `[{id, label, valueCents, kind, active}]` pour la devise du site ; **`[]` (200) quand le site n'a aucune coupure dans sa devise** : la caisse affiche « aucune coupure réglée pour cette devise » au lieu d'un comptage vide (lecture seule, jamais d'écriture ; création : voir « Devise du site ») |
 | `GET /api/caisse/report/x?cashRegisterId=&locale=&purpose=` | poste (règle du poste) ; `purpose=closing` quand le dialogue de fermeture le charge | 200 rapport X (voir « Clôture ») ; aucune session ouverte → 409 `CASH_REGISTER_CLOSED`. Journalisé : `X_REPORT_VIEWED`, ou `CLOSING_PREVIEW` avec `purpose=closing` |
 | `POST /api/caisse/drawer-open` | `{cashRegisterId?, reason}` | 201 `{auditId, sequence, occurredAt, cashRegisterId}` : ouverture du tiroir hors encaissement, journalisée (`DRAWER_OPENED`) ; motif absent → 400 `REASON_REQUIRED` ; pas de session ouverte → 400 `CASH_REGISTER_CLOSED` |
 | `GET /api/caisse/report/z?cashRegisterId=&from=&to=` | `from`/`to` : `AAAA-MM-JJ` (journées entières) ou ISO 8601 | 200 `[{id, number, cashRegister, sessionId, openedAt, closedAt, closedBy, salesTotal, expectedCash, countedCash, discrepancy}]`, plus récent d'abord ; date invalide → 400 `INVALID_DATE` |
@@ -500,6 +500,8 @@ sauf mention), jamais en constantes ; valeurs par défaut = comportement d'avant
 
 ```json
 {
+  "currency": "CAD",
+  "cashRoundingStep": 5,
   "lockAfterMinutes": 5,
   "approvals": { "refund": {"required": true, "threshold": 0}, "withdrawal": {}, "fundWithdrawal": {}, "drawerOpen": {"required": true}, "closeWithoutCount": {"required": true}, "discount": {} },
   "pin": { "minLength": 4, "maxLength": 6, "maxAttempts": 5, "lockMinutes": 15 },
@@ -515,6 +517,8 @@ sauf mention), jamais en constantes ; valeurs par défaut = comportement d'avant
 
 | Réglage (EasyAdmin) | Défaut | Effet |
 |---|---|---|
+| Devise du site (fiche Entreprise, « Entreprise », F18 partie 1) | `CAD` | `settings.currency` (ISO 4217, majuscules), `GET /api/app-profile/pos` → `currency` ; même valeur que le devis, le ticket et `pack.site.currency`. Verrouillée dès la première vente (voir « Devise du site ») |
+| Arrondi des paiements en espèces (cents ; déjà là depuis C1) | vide → 5 en CAD, 1 ailleurs | `settings.cashRoundingStep` : pas en cents appliqué par le serveur à la part espèces de la vente, **1 = aucun arrondi** (jamais 0 ; même convention que `pack.site.cashRoundingStep`) |
 | PIN : longueur min (4 à 8), max (jusqu'à 12), essais avant blocage (3 à 10), durée du blocage (min) | 4, 6, 5, 15 | `settings.pin` ; `POST /api/pos/pin` refuse hors longueur (422 `VALIDATION_FAILED`), blocage `PIN_LOCKED` selon essais et durée |
 | Fond suggéré à l'ouverture, fond laissé suggéré à la fermeture (cents) | vides | `settings.cashFund` : suggestions pour les écrans du POS ; `open` et `close` inchangés |
 | Moyens du POS : espèces, carte déclarée, PayPal, plusieurs parts ; refuser la carte déclarée sur un poste à terminal actif | tous actifs ; refus désactivé | `settings.paymentMethods` ; `create-multi-payment` (vente de caisse seulement) : 422 `PAYMENT_METHOD_DISABLED {type}`, 422 `MULTI_PAYMENT_DISABLED`, 422 `DECLARED_CARD_BLOCKED {cashRegisterId}` (part carte sans `terminalPaymentId` sur un poste dont le terminal est actif). Retours, annulations, web, EasyAdmin : non concernés |
@@ -1370,7 +1374,7 @@ prouve (`tests/Functional/...`, « — » = aucun test dédié).
 | POST | `/api/caisse/cashfunddeposit` | caisse | session ouverte du poste ; poste du terminal si rattaché (`CashRegisterResolver`) | CashRegisterApiTest, PosRoleMatrixTest |
 | POST | `/api/caisse/cashfundwithdraw` | caisse | idem ; fond négatif refusé | CashRegisterApiTest |
 | POST | `/api/caisse/close` | caisse | session du poste ; C3 `close_without_count` si comptage absent et réglage actif ; poste du terminal | CashClosingApiTest, PosRoleMatrixTest |
-| GET | `/api/caisse/denominations` | caisse | lecture, coupures du site | CashClosingApiTest |
+| GET | `/api/caisse/denominations` | caisse | lecture, coupures du site (`[]` sans coupure dans la devise) | CashClosingApiTest, SiteCurrencyApiTest |
 | POST | `/api/caisse/deposit` | caisse | session ouverte du poste ; poste du terminal | CashRegisterApiTest, PosRoleMatrixTest |
 | POST | `/api/caisse/drawer-open` | caisse | C3 `drawer_open` hors vente si réglage actif ; poste du terminal | PosPinApiTest, PosRoleMatrixTest |
 | POST | `/api/caisse/open` | caisse | poste actif sans session ouverte ; poste du terminal | CashRegisterApiTest |
@@ -1833,6 +1837,52 @@ sont lus à chaque appel : un épinglage se voit tout de suite.
 
 Index de performance sur les commandes : non créé (volume actuel faible, cache) ; à reconsidérer au-delà de quelques milliers de ventes
 de caisse par mois. Test : `PosFavoritesApiTest`.
+
+## Devise du site et arrondi des espèces connus au démarrage (lot F18 partie 1, 01/11/2026)
+
+La caisse sert des magasins en CAD, EUR et USD : elle doit connaître la devise avant tout devis ou ticket, pour la grille et le panier.
+Aucun calcul de taxe ni de total ne change dans ce lot (prix taxes comprises, taux par produit, TVA : partie 2).
+
+### Contrat
+
+- `GET /api/pos/settings` : deux clés racine ajoutées, le reste inchangé. `currency` : code ISO 4217 du site en majuscules
+  (`TenantCurrencyProvider`, colonne `entreprise.currency`, repli `CAD`), la même valeur que `quote.currency`, le ticket et
+  `pack.site.currency`. `cashRoundingStep` : pas d'arrondi des espèces en cents appliqué par le serveur à la vente
+  (`CashRoundingService::step()` : réglage du site, sinon 5 en CAD, 1 pour les autres devises) ; **1 = aucun arrondi, jamais 0**, même
+  convention que `pack.site.cashRoundingStep` ; la caisse traite 0 et 1 de la même façon. `settings.terminal.currency` (minuscules, sens
+  Stripe) ne change pas. Site non réglé : `"currency": "CAD", "cashRoundingStep": 5` (comportement d'avant).
+- `GET /api/app-profile/pos` (public, avant connexion) : clé `currency` ajoutée **pour `app=pos` seulement** ; les profils `mobile`, `admin`,
+  `memoires`, `boussole`, `livingmemory` ne changent pas. Le profil inclus dans la réponse de `POST /api/app/activate` pour `pos` la porte aussi
+  (même objet). `GET /api/entreprise` la donnait déjà (`currency`), sans changement.
+- `GET /api/caisse/denominations` : lecture seule, inchangée ; un site **sans aucune coupure dans sa devise** reçoit `[]` (200). Les comptages
+  `cashDetails` exigent de vrais identifiants `type_cash` : une liste « virtuelle » n'est pas servie.
+
+### Coupures par défaut d'une devise (`Services/CaisseService/DenominationDefaults`)
+
+Créées **seulement** quand le site n'a aucune ligne `type_cash` dans sa devise (active ou non) ; insertions seulement, rien n'est modifié ni
+supprimé ; idempotent ; journal `DENOMINATIONS_CREATED {source, currency, count, typeCashIds}`. Jamais à la lecture (deux postes qui
+démarrent ensemble ne créent rien ; un caissier n'écrit rien). Trois déclencheurs :
+- l'enregistrement d'une nouvelle devise dans la fiche Entreprise (source `entreprise`) ;
+- la commande `php bin/console app:pos:denominations-create [--tenant=CODE] [--dry-run]` (source `command`), tous les sites ou un seul ;
+- le bouton EasyAdmin « Créer les coupures de la devise » (menu Caisse → Coupures, source `easyadmin`).
+Listes : **CAD** billets 100, 50, 20, 10, 5 $ ; pièces 2 $, 1 $, 25, 10, 5 ¢, 1 ¢ inactive (la liste d'origine). **EUR** billets 200, 100, 50, 20,
+10, 5 € ; pièces 2 €, 1 €, 50, 20, 10, 5, 2, 1 ¢. **USD** billets 100, 50, 20, 10, 5, 2, 1 $ ; pièces 1 $ et 50 ¢ **inactives**, 25, 10, 5, 1 ¢.
+Libellés comme l'origine (« 20 € », « 25 ¢ »), `position` dans l'ordre d'affichage. La séquence `type_cash_id_seq` est remise à `MAX(id) + 1`
+avant l'insertion (les coupures d'origine ont été copiées avec leurs identifiants : séquence en retard sur plusieurs sites). Une devise sans
+liste par défaut : rien de créé, message d'aide (saisie manuelle).
+
+### Devise du site dans la fiche Entreprise (`Services/BoutiqueSettingsService/SiteCurrencyService`)
+
+Champ « Devise du site » (onglet Entreprise, `CAD` / `EUR` / `USD`), **modifiable tant que le site n'a ni commande (web ou caisse), ni
+carte-cadeau ou avoir, ni session de caisse** ; ensuite le champ est en lecture seule avec le motif : « Devise verrouillée : ce site a déjà
+N commandes, M cartes-cadeaux ou avoirs, P sessions de caisse, dont les montants sont dans cette devise… ». Garde-fou aussi dans
+`updateEntity` (requête forgée : changement refusé, message, les autres champs sont enregistrés). Au changement accepté : journal
+`CURRENCY_CHANGED {source, from, to}`, puis coupures par défaut si le site n'en a aucune dans la nouvelle devise. Un site neuf se règle avant
+sa première vente ; après, c'est une opération de base assistée par la plateforme.
+
+Tests : `SiteCurrencyApiTest` (réglages et profil, liste vide puis création par la commande et le bouton, idempotence, journal, fiche
+Entreprise modifiable puis verrouillée, requête forgée refusée) ; `PosSettingsApiTest`, `AppProfileTest`, `AppThemeTest` (forme du profil
+`pos` : `+ currency`), `CashClosingApiTest` inchangés.
 
 ## Mécanique interne
 

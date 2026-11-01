@@ -32,7 +32,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
         private readonly \App\Services\AppKeyService\AppActivationService $appActivation,
         private readonly \App\Services\TenantConnectionProvider $tenant,
         private readonly \Symfony\Component\HttpFoundation\RequestStack $requestStack,
-        private readonly \App\Services\TenantConnectionManager $tenantManager
+        private readonly \App\Services\TenantConnectionManager $tenantManager,
+        private readonly ?\App\Services\BoutiqueSettingsService\SiteCurrencyService $siteCurrency = null // devise du site (F18 partie 1, 01/11/2026)
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
@@ -44,7 +45,25 @@ class EntrepriseCrudController extends BaseTenantCrudController
         $tenantEm = $this->emProvider->getEntityManager();
         $tenantEm->getUnitOfWork()->computeChangeSets();
         $changeSet = $tenantEm->getUnitOfWork()->getEntityChangeSet($entityInstance);
+        // Devise du site (F18 partie 1) : refusée si le site a déjà des montants enregistrés, même par requête forgée (champ désactivé dans le formulaire)
+        $currencyChange = isset($changeSet['currency']) && $entityInstance instanceof Entreprise ? array_map(fn ($v) => strtoupper((string) $v), $changeSet['currency']) : null;
+        if ($currencyChange !== null && $this->siteCurrency !== null) {
+            try {
+                $this->siteCurrency->assertChangeAllowed($currencyChange[0], $currencyChange[1]);
+                $entityInstance->setCurrency($currencyChange[1]);
+            } catch (\DomainException $e) {
+                $entityInstance->setCurrency($currencyChange[0]);
+                $currencyChange = null;
+                $this->addFlash('danger', $e->getMessage());
+            }
+        }
         parent::updateEntity($entityManager, $entityInstance);
+        if ($currencyChange !== null && $this->siteCurrency !== null) {
+            $outcome = $this->siteCurrency->afterChange($entityInstance, $currencyChange[0], 'entreprise');
+            $this->addFlash('success', $outcome['created'] > 0
+                ? sprintf('Devise du site : %s. %d coupures par défaut créées pour la caisse (menu Caisse → Coupures).', $outcome['currency'], $outcome['created'])
+                : sprintf('Devise du site : %s.', $outcome['currency']));
+        }
 
         $request = $this->requestStack->getCurrentRequest();
         foreach ($this->appActivation->applyChanges($changeSet, $this->tenant->getTenantCode() ?? '', $this->getUser()?->getUserIdentifier() ?? 'admin', $request?->getSchemeAndHttpHost() ?? '') as $app => $message) {
@@ -55,6 +74,24 @@ class EntrepriseCrudController extends BaseTenantCrudController
     public static function getEntityFqcn(): string
     {
         return Entreprise::class;
+    }
+
+    /**
+     * Devise du site (F18 partie 1, 01/11/2026) : CAD, EUR ou USD ; modifiable tant que le site n'a ni commande, ni carte-cadeau ou avoir,
+     * ni session de caisse, puis en lecture seule avec le motif. Tous les montants du site (boutique, caisse) sont dans cette devise.
+     */
+    private function currencyField(): \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField
+    {
+        $lock = $this->siteCurrency?->lockMessage();
+        $field = \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('currency', 'Devise du site')
+            ->setChoices(['Dollar canadien (CAD)' => 'CAD', 'Euro (EUR)' => 'EUR', 'Dollar américain (USD)' => 'USD'])
+            ->setRequired(true)->hideOnIndex()->setFormTypeOption('placeholder', false)
+            ->setHelp($lock ?? 'Devise de tous les montants du site (boutique et caisse), à choisir avant la première vente : ensuite elle est verrouillée. La caisse la lit dans GET /api/pos/settings et GET /api/app-profile/pos ; les coupures par défaut de la devise sont créées si le site n\'en a aucune.');
+        if ($lock !== null) {
+            $field->setFormTypeOption('disabled', true);
+        }
+
+        return $field;
     }
 
     /** Code court du site (31/10/2026), lecture seule : régénération par le propriétaire de la plateforme (page « Code court de la boutique ») */
@@ -98,6 +135,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             UrlField::new('website', 'Site web'),
             TextField::new('ein', 'SIRET'),
             TextField::new('tvaIntracommunautaire', 'TVA intracommunautaire'),
+            $this->currencyField(),
             TextField::new('gstNumber', 'Numéro de TPS (Canada)')->setRequired(false)->hideOnIndex()->setHelp('Imprimé sur les tickets de caisse (store.taxNumbers.gst)'),
             TextField::new('qstNumber', 'Numéro de TVQ (Québec)')->setRequired(false)->hideOnIndex()->setHelp('Imprimé sur les tickets de caisse (store.taxNumbers.qst)'),
             FormField::addPanel('Réseaux sociaux')->collapsible(),
