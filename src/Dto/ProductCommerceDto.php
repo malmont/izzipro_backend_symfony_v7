@@ -100,6 +100,36 @@ final class ProductCommerceDto
     }
 
     /**
+     * Variantes d'un produit par identifiant croissant (ordre de création). Aucune position n'est saisie dans
+     * EasyAdmin ; sans ce tri, l'ordre dépendait de la requête (la fiche par slug rendait « L, XL, M, S », 31/10/2026).
+     *
+     * @return list<ProductVariant>
+     */
+    public static function orderedVariants(Product $product): array
+    {
+        $variants = $product->getVariants()->toArray();
+        usort($variants, fn (ProductVariant $a, ProductVariant $b) => ($a->getId() ?? PHP_INT_MAX) <=> ($b->getId() ?? PHP_INT_MAX));
+
+        return array_values($variants);
+    }
+
+    /**
+     * Valeurs d'option d'une variante par type d'option (identifiant croissant) puis par valeur : le même ordre
+     * que les types ont été créés, identique sur toutes les routes.
+     *
+     * @return list<ProductOptionValue>
+     */
+    public static function orderedOptionValues(ProductVariant $variant): array
+    {
+        $values = $variant->getOptionValues()->toArray();
+        usort($values, fn (ProductOptionValue $a, ProductOptionValue $b) =>
+            [$a->getProductOption()?->getId() ?? PHP_INT_MAX, $a->getId() ?? PHP_INT_MAX]
+            <=> [$b->getProductOption()?->getId() ?? PHP_INT_MAX, $b->getId() ?? PHP_INT_MAX]);
+
+        return array_values($values);
+    }
+
+    /**
      * Variantes : prix explicite en cents (null = prix du produit), stock, options { code, name, value } (les anciens
      * noms value_id, option_name… restent).
      *
@@ -124,7 +154,7 @@ final class ProductCommerceDto
                     'image_preview' => $optionValue->getImagePreview(),
                     'price_delta' => $optionValue->getPriceDelta(),
                 ];
-            }, $variant->getOptionValues()->toArray()));
+            }, self::orderedOptionValues($variant)));
 
             return [
                 'id' => $variant->getId(),
@@ -134,7 +164,7 @@ final class ProductCommerceDto
                 'stockQuantity' => $variant->getStockQuantity(),
                 'options' => $options,
             ];
-        }, $product->getVariants()->toArray()));
+        }, self::orderedVariants($product)));
     }
 
     /** @return array<string, mixed> */

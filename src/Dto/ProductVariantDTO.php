@@ -48,7 +48,7 @@ class ProductVariantDTO
                 'image_preview' => $optionValue->getImagePreview(),
                 'price_delta'   => $optionValue->getPriceDelta(),
             ];
-        }, $variant->getOptionValues()->toArray());
+        }, ProductCommerceDto::orderedOptionValues($variant)); // même ordre que la fiche produit (31/10/2026)
         // --- FIN DE L'AJOUT ---
 
         return new self(

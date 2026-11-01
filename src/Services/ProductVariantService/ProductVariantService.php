@@ -6,6 +6,7 @@ use App\Entity\Color;
 use App\Entity\Size;
 use App\Entity\ProductVariant;
 use App\Dto\ProductVariantInputDTO;
+use App\Dto\ProductCommerceDto;
 use App\Dto\ProductVariantDTO;
 use App\UseCase\OrderUseCase\UpdateStockAndInventoryUseCase;
 use App\Services\TenantEntityManagerProvider; // <-- On importe notre provider
@@ -34,7 +35,7 @@ class ProductVariantService
      */
     public function getProductVariants(Product $product): array
     {
-        $variants = $product->getVariants();
+        $variants = ProductCommerceDto::orderedVariants($product); // par identifiant, comme la fiche produit (31/10/2026)
         $variantsDTOs = [];
 
         foreach ($variants as $variant) {
