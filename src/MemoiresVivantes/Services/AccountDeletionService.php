@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\BookPrintOrder;
 use App\MemoiresVivantes\UseCase\DeleteBookUseCase;
+use App\Services\AccountService\PersonalDataEraser;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
 
@@ -22,7 +23,8 @@ class AccountDeletionService
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly DeleteBookUseCase $deleteBook,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly PersonalDataEraser $eraser, // données personnelles du compte : service partagé avec la boutique (01/11/2026)
     ) {}
 
     /** @return array{booksDeleted: int, printOrdersAnonymized: int} */
@@ -56,28 +58,9 @@ class AccountDeletionService
             }
         }
 
-        $anonymous = sprintf('supprime-%d@compte-supprime.invalid', $userId);
-        $user->setEmail($anonymous)->setUsername($anonymous)->setFirstname('Compte')->setLastname('supprimé')
-            ->setPassword('!' . bin2hex(random_bytes(32)))->setRoles([])->setIsVerified(false)
-            ->setVerificationToken(null)->setResetToken(null)->setOtpEnabled(false)->setDeletedAt(new \DateTimeImmutable());
-        if (method_exists($user, 'setStripeCustomerId')) {
-            $user->setStripeCustomerId(null);
-        }
-        $em->flush();
-
-        // Sessions : jetons de rafraîchissement (tables partagées du site), codes à usage unique, adresses
-        foreach ([
-            ['DELETE FROM refresh_tokens WHERE username = ?', [$originalEmail]],
-            ['DELETE FROM otp_code WHERE user_otp_id = ?', [$userId]],
-            ['DELETE FROM reset_password_request WHERE user_id = ?', [$userId]],
-            ['UPDATE adress SET user_adress_id = NULL WHERE user_adress_id = ?', [$userId]],
-        ] as [$sql, $params]) {
-            try {
-                $connection->executeStatement($sql, $params);
-            } catch (\Throwable $e) {
-                $this->logger->warning('Suppression de compte : nettoyage partiel (' . $sql . ') : ' . $e->getMessage());
-            }
-        }
+        // Compte, adresses (anonymisées sur place et non plus seulement détachées, 01/11/2026), avis, infolettre, client Stripe,
+        // jetons de rafraîchissement, codes à usage unique, demandes de réinitialisation : PersonalDataEraser
+        $this->eraser->erase($user);
         $this->logger->info(sprintf('Compte %d supprimé à sa demande : %d livre(s) effacé(s), %d commande(s) d\'impression anonymisée(s)', $userId, count($books), count($orders)));
 
         return ['booksDeleted' => count($books), 'printOrdersAnonymized' => count($orders)];

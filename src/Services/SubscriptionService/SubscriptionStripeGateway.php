@@ -50,6 +50,11 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
         return $customer->id;
     }
 
+    public function deleteCustomer(string $customerId): void
+    {
+        $this->call(fn (StripeClient $c, array $o) => $c->customers->delete($customerId, [], $o));
+    }
+
     public function ensurePrice(SubscriptionPlan $plan): array
     {
         if ($plan->getStripePriceId()) {

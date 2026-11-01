@@ -362,6 +362,56 @@ Détails dans `docs/caisse.md`.
   `order_items.customization_id`, migration `Version20261009150000`).
 - Tests : `tests/Functional/Boutique/CustomerAccountApiTest.php`.
 
+## Compte : inscription, session mobile, suppression (01/11/2026, application e-commerce mobile)
+
+### `POST /api/register`
+- **Faille fermée** : `platform: "pos"` créait un compte de caisse (`ROLE_USER_POS`) pour n'importe qui. Désormais 400
+  `{error: "PLATFORM_INVALID"}` (casse et espaces indifférents) ; tout compte créé ici porte `ROLE_USER_INTERNET`. Les comptes de
+  caisse se créent dans EasyAdmin ; la caisse (posflutter) n'appelle jamais cette route (vérifié le 01/11/2026). Sites : aucun
+  compte `ROLE_USER_POS` ne porte `signup_channel = web_register` (tous créés avant le 16/10/2026 ou par EasyAdmin).
+- **Mot de passe** : 8 caractères au moins (400 `{error: "PASSWORD_TOO_SHORT", message}`), comme `/api/password-reset/confirm` ;
+  avant, une chaîne vide passait.
+- **Origine du compte** : `app: "mobile"` → `user.signup_channel = mobile_shop` (`User::SIGNUP_MOBILE_SHOP`) ; `app: "livingmemory"`
+  → `mobile` (inchangé) ; sinon `web_register`.
+
+### Session de l'application mobile
+- `POST /api/token/refresh { refresh_token, platform: "mobile" }` : le jeton de rafraîchissement est **prolongé de 7 jours** à chaque
+  rafraîchissement (expiration glissante, même jeton, pas de rotation : le corps reste `{message, csrf_token, token}`). Sans `platform`,
+  rien ne change (jeton de 7 jours fixes) ; session web par cookie inchangée. Living Memory (plateforme « mobile ») peut l'envoyer aussi.
+- `POST /api/password-reset/confirm` révoque tous les jetons de rafraîchissement du compte : chaque appareil se reconnecte avec le
+  nouveau mot de passe. La suppression du compte les révoque aussi.
+
+### `DELETE /api/account` (ROLE_USER_INTERNET) : suppression du compte
+Exigence App Store 5.1.1(v) et Google Play. `AccountApiController`, `DeleteAccountUseCase`, `AccountDeletionGuard` (conditions),
+`PersonalDataEraser` (effacement, partagé avec Mémoires Vivantes).
+
+| Réponse | Cas |
+|---|---|
+| 403 `ADMIN_ACCOUNT` | administrateur : se supprime depuis la console |
+| 429 `TOO_MANY_ATTEMPTS` + `retryAfterSeconds` + `Retry-After` | limiteur `account_delete_account`, 10 essais par 15 min par compte |
+| 409 `SUBSCRIPTION_ACTIVE` (+ `count`) | abonnement Stripe `active`, `trialing`, `past_due` ou `paused` : le client le résilie d'abord (rien n'est résilié à son insu) |
+| 409 `RESERVATION_UPCOMING` (+ `count`) | réservation à venir non annulée au courriel du compte : à annuler d'abord |
+| 403 `PASSWORD_REQUIRED` / `PASSWORD_INVALID` | compte avec mot de passe choisi : `{password}` (ou `currentPassword`) |
+| 403 `OTP_REQUIRED` (`sentTo`, `lifetimeSeconds: 300`) / `OTP_INVALID` | compte sans mot de passe choisi (`passwordSet` faux) ou `otpEnabled` : code envoyé au courriel du compte, puis `{otpCode}` ; même mécanique que le changement de courriel |
+| 200 `{deleted: true, addressesAnonymized, reviewsAnonymized, reservationsAnonymized, newsletterRemoved, stripeCustomerDeleted}` | effacé |
+
+Avant l'effacement, courriel de confirmation à l'adresse du compte (`emails/account_deleted_notice.html.twig`). Effacé ou anonymisé :
+courriel (`supprime-<id>@compte-supprime.invalid`), nom, mot de passe, rôles, jetons de vérification et de réinitialisation, permis,
+adresses (**anonymisées sur place** : nom, rue, téléphone « - », ville, code postal, province ; le pays reste pour les taxes ; les commandes
+qui les désignent gardent donc une ligne sans donnée personnelle), client Stripe (supprimé chez Stripe sur le compte connecté du site),
+avis (`author_name` « Client anonyme », lien au compte rompu, avis conservé), inscription à l'infolettre (retirée), réservations passées
+(nom, courriel, téléphone), sessions de paiement en cours, PIN de caisse, jetons de rafraîchissement, codes à usage unique, demandes de
+réinitialisation ; `deleted_at` posé. **Conservé** pour la comptabilité : la ligne du compte anonymisée, commandes, paiements, abonnements
+terminés. Le jeton d'accès en cours cesse de fonctionner (le courriel qu'il désigne n'existe plus).
+
+Tests : `tests/Functional/Security/RegisterRulesApiTest.php`, `tests/Functional/Security/MobileSessionLifetimeTest.php`,
+`tests/Functional/Boutique/AccountDeletionApiTest.php`.
+
+À noter (vérifié le 01/11/2026, non modifié) : les codes OTP de connexion, de changement de courriel et de suppression partagent la
+table `otp_code` sans champ d'usage : un code envoyé pour un changement de courriel ouvre aussi une session par `/api/otp-verify`
+(même compte, même courriel, 5 minutes). Les limites de débit par compte ou par IP sont clefées par l'hôte du backend (`getHost()`),
+pas par `X-Tenant-Host` : un même courriel compte pour tous les sites servis par ce backend.
+
 ## Sécurité du compte et du paiement (S7, 31/10/2026)
 
 Code : `Services/PaymentService/PaymentOwnershipService`, `Services/AccountService/EmailChangeGuard`, `Controller/paymentController/PaymentsController::processPayment`,

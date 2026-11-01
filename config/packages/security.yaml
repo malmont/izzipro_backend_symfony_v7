@@ -187,6 +187,8 @@ security:
         - { path: ^/api/order-statuses$, methods: [GET], roles: PUBLIC_ACCESS }
         # 🔹 Encaissement multi-paiements (espèces, carte...) : réservé à la caisse et aux admins, pas aux clients en ligne
         - { path: ^/api/order/create-multi-payment, roles: [ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
+        # Suppression du compte par le client de la boutique (01/11/2026)
+        - { path: ^/api/account$, methods: [DELETE], roles: ROLE_USER_INTERNET }
         - { path: ^/api, roles: [ROLE_USER_INTERNET, ROLE_USER_POS, ROLE_POS_MANAGER, ROLE_ADMIN] }
 
         

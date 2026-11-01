@@ -26,6 +26,7 @@ use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\EmailConfigurationService\EmailLogoHelper;
 use Psr\Log\LoggerInterface;
 use App\Dto\TenantConfig;
+use App\Services\AuthenticationService;
 
 class RegistrationController extends AbstractController
 {
@@ -119,6 +120,17 @@ class RegistrationController extends AbstractController
         $lastName = $decoded['lastName'];
         $username = $email;
 
+        // Règle de mot de passe (01/11/2026) : 8 caractères au moins, comme la réinitialisation (avant, une chaîne vide passait)
+        if (!is_string($password) || strlen($password) < 8 || strlen($password) > 4096) {
+            return $this->json(['error' => 'PASSWORD_TOO_SHORT', 'message' => 'Le mot de passe doit comporter au moins 8 caractères.'], Response::HTTP_BAD_REQUEST);
+        }
+        // Faille fermée le 01/11/2026 : cette route publique créait un compte de caisse (ROLE_USER_POS) pour « platform: pos ».
+        // Les comptes de caisse se créent dans EasyAdmin ; la caisse n'appelle jamais cette route (vérifié avec posflutter).
+        $platform = strtolower(trim((string) ($decoded['platform'] ?? 'mobile')));
+        if ($platform === 'pos') {
+            return AuthenticationService::invalidPlatformResponse();
+        }
+
         // Validation Email
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return $this->json(['error' => 'Invalid email format'], Response::HTTP_BAD_REQUEST);
@@ -158,15 +170,15 @@ class RegistrationController extends AbstractController
         $user->setUsername($username);
         $user->setPassword($passwordHasher->hashPassword($user, $password));
 
-        // Origine du compte (16/10/2026) : l'application Living Memory envoie {"app": "livingmemory"} ; sinon inscription web
-        $user->setSignupChannel(($decoded['app'] ?? null) === 'livingmemory' ? User::SIGNUP_MOBILE : User::SIGNUP_WEB_REGISTER);
+        // Origine du compte (16/10/2026) : l'application Living Memory envoie {"app": "livingmemory"} ; l'application e-commerce
+        // mobile {"app": "mobile"} (01/11/2026, `mobile_shop`) ; sinon inscription web
+        $user->setSignupChannel(match ($decoded['app'] ?? null) {
+            'livingmemory' => User::SIGNUP_MOBILE,
+            'mobile' => User::SIGNUP_MOBILE_SHOP,
+            default => User::SIGNUP_WEB_REGISTER,
+        });
 
-        $platform = $decoded['platform'] ?? 'mobile';
-        if ($platform === 'pos') {
-            $user->setRoles(['ROLE_USER_POS']);
-        } else {
-            $user->setRoles(['ROLE_USER_INTERNET']);
-        }
+        $user->setRoles(['ROLE_USER_INTERNET']);
 
         $user->setIsVerified(false);
         $verificationToken = bin2hex(random_bytes(32));

@@ -266,8 +266,10 @@ App Store et Google Play ; `Controller/MobileAccountController`, `UseCase/Accoun
 console, pas depuis l'application).
 - **Effacé** : le contenu de tous ses livres (chapitres, réponses, enregistrements audio, photos, proches, PDF
   générés, couverture), ses jetons de rafraîchissement, codes à usage unique et demandes de réinitialisation, ses
-  adresses, et toute donnée personnelle du compte (e-mail remplacé par `supprime-<id>@compte-supprime.invalid`, nom
-  « Compte supprimé », mot de passe invalidé, rôles vidés, `deleted_at` posé).
+  adresses (anonymisées sur place depuis le 01/11/2026 ; avant, seulement détachées du compte), son client Stripe, ses
+  avis et son inscription à l'infolettre, et toute donnée personnelle du compte (e-mail remplacé par
+  `supprime-<id>@compte-supprime.invalid`, nom « Compte supprimé », mot de passe invalidé, rôles vidés, `deleted_at`
+  posé) : `App\Services\AccountService\PersonalDataEraser`, partagé avec `DELETE /api/account` de la boutique.
 - **Conservé, anonymisé, pour la comptabilité** : la ligne du compte, les achats de chapitre (RevenueCat), les
   commandes d'impression (montants, statut Lulu ; destinataire remplacé par « Compte supprimé »), et une coquille
   du livre (« Livre supprimé », sans aucun contenu) seulement quand une commande ou un achat y est rattaché. Un livre

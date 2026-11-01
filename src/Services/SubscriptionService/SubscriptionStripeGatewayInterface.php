@@ -23,6 +23,9 @@ interface SubscriptionStripeGatewayInterface
     /** Produit et prix Stripe de la formule (créés au besoin) ; renvoie [stripeProductId, stripePriceId] */
     public function ensurePrice(SubscriptionPlan $plan): array;
 
+    /** Supprime le client Stripe (suppression du compte, 01/11/2026) ; SubscriptionException si Stripe refuse */
+    public function deleteCustomer(string $customerId): void;
+
     /**
      * Identifiants des taux de taxe Stripe (créés au besoin, par libellé et pourcentage) pour les taxes de la table.
      *

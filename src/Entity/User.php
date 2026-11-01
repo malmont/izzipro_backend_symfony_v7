@@ -521,6 +521,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public const SIGNUP_WEB_INVITE = 'web_invite';
     public const SIGNUP_WEB_REGISTER = 'web_register';
     public const SIGNUP_MOBILE = 'mobile';
+    /** Application e-commerce mobile (01/11/2026) */
+    public const SIGNUP_MOBILE_SHOP = 'mobile_shop';
 
     #[ORM\Column(name: 'signup_channel', length: 20, nullable: true)]
     private ?string $signupChannel = null;

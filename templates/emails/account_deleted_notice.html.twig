@@ -1,0 +1,27 @@
+{% extends 'base.email.html.twig' %}
+
+{% block title %}Votre compte a été supprimé{% endblock %}
+
+{% block body %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr>
+        <td align="center">
+            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+                <tr>
+                    <td align="center" style="background: #1e293b; padding: 28px 20px;">
+                        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700;">Votre compte a été supprimé</h1>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 30px; font-size: 15px; color: #1e293b;">
+                        <p style="margin-top: 0;">Bonjour {{ firstname|default('') }},</p>
+                        <p>À votre demande, votre compte associé à l'adresse <strong>{{ email }}</strong> a été supprimé le {{ deletedAt|date('d/m/Y à H:i') }}.</p>
+                        <p>Vos données personnelles (nom, adresses, téléphone, adresse courriel) ont été effacées. Seules vos commandes et vos paiements sont conservés, anonymisés, pour la comptabilité, comme la loi l'exige.</p>
+                        <p>Si vous n'êtes pas à l'origine de cette demande, répondez à ce message ou contactez-nous sans attendre.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+{% endblock %}

@@ -245,7 +245,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (262)
+## Boutique et commun (263)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -259,6 +259,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET, POST | `/adress/{id}/edit` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\Account\AdressController::edit` |
 | POST | `/adress/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_ADMIN | `Controller\Account\AdressController::delete` |
 | GET | `/api/Carrier` | PUBLIC_ACCESS | `Controller\CarrierControleur\CarrierControleur::getCarrier` |
+| DELETE | `/api/account` | ROLE_USER_INTERNET | `Controller\Account\AccountApiController::delete` |
 | DELETE | `/api/admin-settings/presets/{id}` | ROLE_ADMIN | `Controller\AdminSettingsController\AdminSettingsController::deletePreset` |
 | GET | `/api/admin-settings/presets` | PUBLIC_ACCESS | `Controller\AdminSettingsController\AdminSettingsController::getPresets` |
 | POST | `/api/admin-settings/presets` | ROLE_ADMIN | `Controller\AdminSettingsController\AdminSettingsController::savePreset` |

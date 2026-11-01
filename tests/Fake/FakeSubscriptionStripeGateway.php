@@ -37,6 +37,11 @@ final class FakeSubscriptionStripeGateway implements SubscriptionStripeGatewayIn
         return $user->getStripeCustomerId();
     }
 
+    public function deleteCustomer(string $customerId): void
+    {
+        self::$calls[] = ['deleteCustomer', $customerId];
+    }
+
     public function ensurePrice(SubscriptionPlan $plan): array
     {
         if (!$plan->getStripePriceId()) {

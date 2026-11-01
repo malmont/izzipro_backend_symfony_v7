@@ -89,9 +89,13 @@ class SecurityController extends AbstractController
         $isWebSession = (bool) $refreshToken;
 
         // 2. Fallback payload JSON si le front envoie le token dans le body
+        $slidingMobile = false;
         if (!$refreshToken) {
             $data = json_decode($request->getContent(), true) ?? [];
             $refreshToken = $data['refresh_token'] ?? $data['refreshToken'] ?? null;
+            // Application mobile (01/11/2026) : {"platform": "mobile"} dans le corps → le jeton de rafraîchissement est prolongé de 7 jours
+            // à chaque rafraîchissement (expiration glissante, même jeton) ; sans ce champ, rien ne change pour les clients existants
+            $slidingMobile = strtolower(trim((string) ($data['platform'] ?? ''))) === 'mobile';
         }
 
         if (!$refreshToken) {
@@ -139,6 +143,11 @@ class SecurityController extends AbstractController
             ]));
 
             return $response;
+        }
+
+        if ($slidingMobile) {
+            $validRefreshToken->setValid((new DateTime())->modify('+7 days'));
+            $refreshTokenManager->save($validRefreshToken);
         }
 
         $newToken = $JWTManager->create($user);

@@ -142,6 +142,12 @@ class ResetPasswordController extends AbstractController
         $user->setResetToken(null);
         $user->setResetTokenExpiresAt(null);
         $em->flush();
+        // Nouveau mot de passe = toutes les sessions ouvertes sont closes (01/11/2026) : jetons de rafraîchissement révoqués
+        try {
+            $em->getConnection()->executeStatement('DELETE FROM refresh_tokens WHERE username = ?', [(string) $user->getUserIdentifier()]);
+        } catch (\Throwable $e) {
+            $this->logger->warning('[Pwd Reset] jetons de rafraîchissement non révoqués : ' . $e->getMessage());
+        }
 
         return $this->json(['message' => 'Mot de passe modifié. Vous pouvez vous connecter.']);
     }

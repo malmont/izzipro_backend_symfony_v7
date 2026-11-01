@@ -26,6 +26,12 @@ framework:
             limit: 10
             interval: '15 minutes'
             lock_factory: null
+        # Suppression du compte (DELETE /api/account, 01/11/2026) : essais de mot de passe ou de code, par compte
+        account_delete_account:
+            policy: sliding_window
+            limit: 10
+            interval: '15 minutes'
+            lock_factory: null
         # Mot de passe oublié : évite d'inonder une boîte mail
         password_reset_account:
             policy: sliding_window
