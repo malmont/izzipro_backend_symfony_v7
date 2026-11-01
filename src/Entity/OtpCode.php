@@ -23,6 +23,26 @@ class OtpCode
     #[ORM\Column(type: Types::DATETIME_MUTABLE, nullable: true)]
     private ?\DateTimeInterface $expiration = null;
 
+    /** Usage du code (01/11/2026) : un code n'est accepté que par le flux qui l'a demandé */
+    public const PURPOSE_LOGIN = 'login';
+    public const PURPOSE_EMAIL_CHANGE = 'email_change';
+    public const PURPOSE_ACCOUNT_DELETION = 'account_deletion';
+
+    #[ORM\Column(length: 20, options: ['default' => self::PURPOSE_LOGIN])]
+    private string $purpose = self::PURPOSE_LOGIN;
+
+    public function getPurpose(): string
+    {
+        return $this->purpose;
+    }
+
+    public function setPurpose(string $purpose): static
+    {
+        $this->purpose = $purpose;
+
+        return $this;
+    }
+
     public function getId(): ?int
     {
         return $this->id;

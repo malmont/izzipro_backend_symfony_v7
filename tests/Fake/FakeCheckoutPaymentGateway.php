@@ -54,10 +54,20 @@ final class FakeCheckoutPaymentGateway implements CheckoutPaymentGatewayInterfac
         return self::$intents[$id] ?? null;
     }
 
-    public function cancel(string $id): void
+    /** Annulation simulée : une entrée « cancelFails » sur l'intent fait échouer l'annulation (test de authorizationCanceled faux) */
+    public function cancel(string $id): bool
     {
-        if (isset(self::$intents[$id])) {
-            self::$intents[$id]['status'] = 'canceled';
+        if (!isset(self::$intents[$id])) {
+            return false;
         }
+        if (self::$intents[$id]['status'] === 'canceled') {
+            return true;
+        }
+        if (!empty(self::$intents[$id]['cancelFails'])) {
+            return false;
+        }
+        self::$intents[$id]['status'] = 'canceled';
+
+        return true;
     }
 }

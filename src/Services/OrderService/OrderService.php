@@ -40,6 +40,12 @@ class OrderService
         return $orderRepository->findWithDetailsByUser($userId);
     }
 
+    /** @return array{items: list<Order>, total: int} */
+    public function getOrdersByUserPage(int $userId, int $page, int $limit): array
+    {
+        return $this->getOrderRepository()->findWithDetailsByUserPage($userId, $page, $limit);
+    }
+
     public function getOrderDetailsForUser(int $orderId, int $userId): ?Order
     {
         $orderRepository = $this->getOrderRepository();

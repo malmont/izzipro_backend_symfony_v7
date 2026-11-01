@@ -69,12 +69,31 @@ final class StripeCheckoutPaymentGateway implements CheckoutPaymentGatewayInterf
         return $this->call(fn (StripeClient $c) => $c->paymentIntents->capture($id, ['expand' => ['latest_charge']], $options), 'capture');
     }
 
-    public function cancel(string $id): void
+    public function cancel(string $id): bool
     {
         $current = $this->retrieve($id);
-        if ($current !== null && in_array($current['status'], ['requires_capture', ...self::UPDATABLE], true)) {
-            $this->call(fn (StripeClient $c) => $c->paymentIntents->cancel($id, [], $this->stripe->accountOptions() ?? []), 'annulation');
+        if ($current === null) {
+            $this->logger->error(sprintf('[Checkout] Annulation de l\'autorisation %s impossible : intent illisible', $id));
+
+            return false;
         }
+        if ($current['status'] === 'canceled') {
+            return true;
+        }
+        if (!in_array($current['status'], ['requires_capture', ...self::UPDATABLE], true)) {
+            $this->logger->error(sprintf('[Checkout] Annulation de l\'autorisation %s impossible : statut %s', $id, $current['status']));
+
+            return false;
+        }
+        $result = $this->call(fn (StripeClient $c) => $c->paymentIntents->cancel($id, [], $this->stripe->accountOptions() ?? []), 'annulation');
+        if ($result === null || $result['status'] !== 'canceled') {
+            // Avant le 01/11/2026, cet échec n'était que journalisé par call() sans l'identifiant ; le client restait autorisé
+            $this->logger->error(sprintf('[Checkout] Annulation de l\'autorisation %s en échec (statut %s)', $id, $result['status'] ?? 'inconnu'));
+
+            return false;
+        }
+
+        return true;
     }
 
     private function call(callable $action, string $label): ?array

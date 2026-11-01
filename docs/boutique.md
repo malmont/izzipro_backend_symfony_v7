@@ -263,7 +263,12 @@ intent Stripe) et la commande naît **une seule fois par paiement**, du navigate
   autre client ou autre e-mail : 409. Deux appels simultanés (navigateur et webhook) : réservation atomique de la trace
   (`open` → `processing`), le second attend la commande (8 s au plus, sinon 409 « en cours »). Montant autorisé ≠ total
   calculé (1 centime de tolérance), stock insuffisant : 400 et **autorisation annulée** (client non débité) ; donnée
-  invalide (adresse, transporteur) : l'autorisation reste, le navigateur peut corriger. Personnel sans paiement Stripe
+  invalide (adresse, transporteur) : l'autorisation reste, le navigateur peut corriger. **`authorizationCanceled`** (01/11/2026) :
+  booléen ajouté à toute réponse 400 (et au 402 d'un intent devenu impayable) de `order/create` et `create-guest` : vrai seulement si
+  l'annulation a réussi pendant cet appel ou si l'intent est déjà `canceled` (relu chez Stripe), faux sinon (données invalides,
+  annulation en échec : journalisée en erreur avec l'identifiant de l'intent par `StripeCheckoutPaymentGateway::cancel`, qui rend
+  désormais un booléen). L'application n'a plus à relire l'intent. Après une commande refusée, un second appel répond 402 avec
+  `authorizationCanceled: true`. Personnel sans paiement Stripe
   (caisse) : ancien chemin, inchangé.
 - **Webhook** `payment_intent.amount_capturable_updated` (capture manuelle) et `payment_intent.succeeded` : site lu dans
   les métadonnées de l'intent (`tenant_code`), signature exigée hors tests ; crée la commande si le navigateur ne l'a pas
@@ -355,6 +360,17 @@ Détails dans `docs/caisse.md`.
   (`OrderPresenter`). Colonne : migration `Version20261009090000`, script `scripts/migrate_all_v2_order_guest_token.sh`.
 - **Statuts** : `GET /api/order-statuses?locale=` → `[{ id, name, description }]` (identifiants communs à tous les
   sites : 1 Incomplete … 7 Annulation).
+- **`GET /api/ordersuser` : pagination facultative (01/11/2026, application mobile)** : `?page=1&limit=20` (limite 1 à 100, 20 par
+  défaut) → même corps (tableau des commandes de la page, de la plus récente à la plus ancienne), total dans les en-têtes
+  `X-Total-Count`, `X-Page`, `X-Limit` (exposés par nginx, `Access-Control-Expose-Headers`). Sans ces paramètres : tableau complet,
+  inchangé, sans en-tête. Test : `tests/Functional/Boutique/CustomerOrdersApiTest.php`.
+- **Champs ajoutés à la commande (liste et détail, 01/11/2026, `OrderPresenter`)** : `paymentStatus` (valeurs stables :
+  `canceled` commande annulée, statut 7 ; `refunded` commande de retour, ou commande ayant un retour ou un paiement de type
+  remboursement ; `paid` un paiement client complété, statut « Complété » ou Stripe `succeeded` ; `authorized` paiement Stripe
+  autorisé non capturé, `requires_capture` ; `failed` seulement des paiements en échec ; `pending` aucun paiement ou en cours) ;
+  `shipment` : `{carrier, trackingNumber, trackingUrl}` dès qu'une étiquette (`shipping_label`) existe sur un colis de la commande
+  (transporteur dans la langue demandée ; page de suivi connue pour Postes Canada, Purolator, UPS, FedEx, USPS, DHL, sinon
+  `trackingUrl` null), sinon `null`.
 - **`GET /api/ordersuser`** : montants en **cents entiers** (`totalAmount`, `subTotal`, `priceTax`, `priceShipping`,
   lignes `unitPrice`, `totalPrice`), `currency`, `statusId`, `carrier { id, name }`, lignes avec `productVariantId`,
   `booking { start, end, status, rateId }` et `customizationId` (combinaison de `GET /api/customization/config/{variantId}`
@@ -407,10 +423,18 @@ terminés. Le jeton d'accès en cours cesse de fonctionner (le courriel qu'il d�
 Tests : `tests/Functional/Security/RegisterRulesApiTest.php`, `tests/Functional/Security/MobileSessionLifetimeTest.php`,
 `tests/Functional/Boutique/AccountDeletionApiTest.php`.
 
-À noter (vérifié le 01/11/2026, non modifié) : les codes OTP de connexion, de changement de courriel et de suppression partagent la
-table `otp_code` sans champ d'usage : un code envoyé pour un changement de courriel ouvre aussi une session par `/api/otp-verify`
-(même compte, même courriel, 5 minutes). Les limites de débit par compte ou par IP sont clefées par l'hôte du backend (`getHost()`),
-pas par `X-Tenant-Host` : un même courriel compte pour tous les sites servis par ce backend.
+### Codes à usage unique et limites de débit (01/11/2026, suite du lot « Compte »)
+- **Usage des codes** : colonne `otp_code.purpose` (`login`, `email_change`, `account_deletion` ; `login` pour les codes existants ;
+  migration `Version20261107100000`, script `scripts/migrate_all_v2_otp_purpose.sh`). `/api/otp-verify` et le formulaire OTP du
+  back-office n'acceptent que `login` ; `EmailChangeGuard` que `email_change` ; `AccountDeletionGuard` que `account_deletion`. Un
+  code d'un autre usage répond comme un code invalide (401 « Code OTP invalide ou expiré », 403 `OTP_INVALID`). Générer un code
+  (`OtpService::generateAndSendOtp(user, request, purpose)`) supprime les codes non utilisés du même compte et du même usage.
+- **Limites par compte, par site** : connexion (`api_login_account`), code (`otp_verify_account`), réinitialisation
+  (`password_reset_account`), changement de courriel et suppression sont comptés par site **et** par compte : clé `code du site`
+  (tenant résolu par `X-Tenant-Host` ; à défaut l'hôte appelé) + courriel ou identifiant. Avant, la clé était l'hôte du backend : un
+  même courriel partageait son compteur entre toutes les boutiques. Les limites **par IP** restent globales (connexion 50 par 15 min,
+  réinitialisation, formulaires publics, activation, PIN).
+- Tests : `tests/Functional/Security/OtpPurposeTest.php`, `tests/Functional/Security/RateLimitPerSiteTest.php`.
 
 ## Sécurité du compte et du paiement (S7, 31/10/2026)
 

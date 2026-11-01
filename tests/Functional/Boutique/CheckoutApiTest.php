@@ -141,7 +141,44 @@ class CheckoutApiTest extends WebTestCase
             $refused = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi]));
             $this->assertSame(400, $refused->getStatusCode(), $refused->getContent());
             $this->assertSame('canceled', FakeCheckoutPaymentGateway::$intents[$pi]['status'], 'autorisation libérée : le client n\'est pas débité');
+            $this->assertTrue(json_decode($refused->getContent(), true)['authorizationCanceled'], 'authorizationCanceled vrai : annulée pendant cet appel (01/11/2026)');
             $this->assertSame('failed', $this->db->fetchOne('SELECT status FROM checkout_session WHERE payment_intent_id = ?', [$pi]));
+            // Second appel après l'échec : l'intent annulé n'est plus payable (402), et la réponse dit qu'il est déjà annulé
+            $again = $this->request('POST', '/api/order/create', json_encode($order + ['paymentIntentId' => $pi]));
+            $this->assertSame(402, $again->getStatusCode(), $again->getContent());
+            $this->assertTrue(json_decode($again->getContent(), true)['authorizationCanceled'], 'déjà annulée : vrai');
+        } finally {
+            $this->db->executeStatement('UPDATE product_variant SET stock_quantity = ? WHERE id = ?', [$stock, $variant]);
+        }
+    }
+
+    public function testAuthorizationCanceledIsFalseWhenTheAuthorizationRemains(): void
+    {
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        $variant = $this->variant('DEMO-CASQUETTE');
+        $items = [['productVariantId' => $variant, 'quantity' => 1]];
+        // Données invalides (adresse absente) : l'autorisation reste
+        $pi = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items])))['paymentIntentId'];
+        FakeCheckoutPaymentGateway::confirm($pi);
+        $invalid = $this->request('POST', '/api/order/create', json_encode(['items' => $items, 'paymentIntentId' => $pi]));
+        $this->assertSame(400, $invalid->getStatusCode(), $invalid->getContent());
+        $this->assertFalse(json_decode($invalid->getContent(), true)['authorizationCanceled']);
+        $this->assertSame('requires_capture', FakeCheckoutPaymentGateway::$intents[$pi]['status'], 'autorisation conservée');
+        // Second appel après cet échec : même réponse, toujours faux
+        $again = $this->request('POST', '/api/order/create', json_encode(['items' => $items, 'paymentIntentId' => $pi]));
+        $this->assertSame([400, false], [$again->getStatusCode(), json_decode($again->getContent(), true)['authorizationCanceled']]);
+
+        // Commande refusée mais annulation en échec chez Stripe : faux, l'application sait que le client reste autorisé
+        $pi2 = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items])))['paymentIntentId'];
+        FakeCheckoutPaymentGateway::confirm($pi2);
+        FakeCheckoutPaymentGateway::$intents[$pi2]['cancelFails'] = true;
+        $stock = (int) $this->db->fetchOne('SELECT stock_quantity FROM product_variant WHERE id = ?', [$variant]);
+        $this->db->executeStatement('UPDATE product_variant SET stock_quantity = 0 WHERE id = ?', [$variant]);
+        try {
+            $refused = $this->request('POST', '/api/order/create', json_encode(['addressId' => $this->address(), 'items' => $items, 'paymentIntentId' => $pi2]));
+            $this->assertSame(400, $refused->getStatusCode(), $refused->getContent());
+            $this->assertFalse(json_decode($refused->getContent(), true)['authorizationCanceled'], 'annulation en échec : faux');
+            $this->assertSame('requires_capture', FakeCheckoutPaymentGateway::$intents[$pi2]['status']);
         } finally {
             $this->db->executeStatement('UPDATE product_variant SET stock_quantity = ? WHERE id = ?', [$stock, $variant]);
         }

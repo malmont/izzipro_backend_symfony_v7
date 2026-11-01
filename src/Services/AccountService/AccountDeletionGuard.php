@@ -6,6 +6,7 @@ use App\Entity\OtpCode;
 use App\Entity\Subscription;
 use App\Entity\User;
 use App\Services\OtpService;
+use App\Services\TenantConnectionProvider;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -33,7 +34,14 @@ final class AccountDeletionGuard
         private readonly OtpService $otp,
         #[Autowire(service: 'limiter.account_delete_account')] private readonly RateLimiterFactory $limiter,
         private readonly LoggerInterface $securityLogger,
+        private readonly ?TenantConnectionProvider $tenant = null,
     ) {
+    }
+
+    /** Compteur par site et par compte (01/11/2026) */
+    private function limiterKey(User $user): string
+    {
+        return ($this->tenant?->getTenantCode() ?? 'default') . ':user:' . $user->getId();
     }
 
     /** @return array{status: int, body: array}|null null = suppression autorisée */
@@ -42,7 +50,7 @@ final class AccountDeletionGuard
         if (array_intersect(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'], $user->getRoles()) !== []) {
             return ['status' => 403, 'body' => ['error' => 'ADMIN_ACCOUNT', 'message' => 'Un compte administrateur ne peut pas être supprimé depuis l\'application.']];
         }
-        $limit = $this->limiter->create('user:' . $user->getId())->consume();
+        $limit = $this->limiter->create($this->limiterKey($user))->consume();
         if (!$limit->isAccepted()) {
             $retry = max(1, $limit->getRetryAfter()->getTimestamp() - time());
             $this->securityLogger->warning('account.delete.rate_limited', ['userId' => $user->getId(), 'ip' => $request->getClientIp()]);
@@ -62,19 +70,19 @@ final class AccountDeletionGuard
 
                 return ['status' => 403, 'body' => ['error' => 'PASSWORD_INVALID', 'message' => 'Mot de passe incorrect']];
             }
-            $this->limiter->create('user:' . $user->getId())->reset();
+            $this->limiter->create($this->limiterKey($user))->reset();
 
             return null;
         }
         $code = $data['otpCode'] ?? null;
         if (!is_string($code) || trim($code) === '') {
-            $this->otp->generateAndSendOtp($user, $request);
+            $this->otp->generateAndSendOtp($user, $request, OtpCode::PURPOSE_ACCOUNT_DELETION);
             $this->securityLogger->info('account.delete.otp_sent', ['userId' => $user->getId()]);
 
             return ['status' => 403, 'body' => ['error' => 'OTP_REQUIRED', 'message' => 'Un code de confirmation a été envoyé à votre adresse courriel ; renvoyez la demande avec otpCode', 'sentTo' => EmailChangeGuard::mask((string) $user->getEmail()), 'lifetimeSeconds' => 300]];
         }
         $em = $this->emProvider->getEntityManager();
-        $otp = $em->getRepository(OtpCode::class)->findOneBy(['userOtp' => $user, 'code' => trim($code)]);
+        $otp = $em->getRepository(OtpCode::class)->findOneBy(['userOtp' => $user, 'code' => trim($code), 'purpose' => OtpCode::PURPOSE_ACCOUNT_DELETION]);
         if ($otp === null || $otp->getExpiration() < new \DateTime()) {
             $this->securityLogger->warning('account.delete.otp_invalid', ['userId' => $user->getId(), 'ip' => $request->getClientIp()]);
 
@@ -82,7 +90,7 @@ final class AccountDeletionGuard
         }
         $em->remove($otp);
         $em->flush();
-        $this->limiter->create('user:' . $user->getId())->reset();
+        $this->limiter->create($this->limiterKey($user))->reset();
 
         return null;
     }

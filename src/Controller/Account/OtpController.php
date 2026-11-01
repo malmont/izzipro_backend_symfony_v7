@@ -64,6 +64,7 @@ class OtpController extends AbstractController
                     $otpCode = $em->getRepository(OtpCode::class)->findOneBy([
                         'userOtp' => $user,
                         'code' => $otp,
+                        'purpose' => OtpCode::PURPOSE_LOGIN, // codes de connexion seulement (01/11/2026)
                     ]);
                 
                     if (!$otpCode || $otpCode->getExpiration() < new DateTime()) {

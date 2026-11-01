@@ -2,6 +2,7 @@
 
 namespace App\EventSubscriber;
 
+use App\Services\TenantConnectionProvider;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -44,6 +45,7 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
         #[Autowire(service: 'limiter.public_form_attempts_ip')] private readonly RateLimiterFactory $publicFormAttemptsIp,
         #[Autowire(service: 'limiter.app_activation_ip')] private readonly RateLimiterFactory $appActivationIp,
         #[Autowire(service: 'limiter.pos_pin_login')] private readonly RateLimiterFactory $posPinLogin,
+        private readonly ?TenantConnectionProvider $tenant = null,
     ) {}
 
     public static function getSubscribedEvents(): array
@@ -128,7 +130,17 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
     }
 
     /**
-     * Compte visé par la requête (champ JSON), propre au tenant. null si absent : seules les limites par IP s'appliquent.
+     * Site de la requête (01/11/2026) : code du tenant résolu par X-Tenant-Host (TenantDoctrineSwitcherListener, priorité 100,
+     * passe avant), à défaut l'hôte appelé. Avant, les compteurs par compte étaient clefés par l'hôte du backend : un même
+     * courriel partageait son compteur entre toutes les boutiques.
+     */
+    private function siteKey(Request $request): string
+    {
+        return $this->tenant?->getTenantCode() ?? $request->getHost();
+    }
+
+    /**
+     * Compte visé par la requête (champ JSON), propre au site. null si absent : seules les limites par IP s'appliquent.
      */
     private function accountKey(Request $request, array $fields): ?string
     {
@@ -138,7 +150,7 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
         }
         foreach ($fields as $field) {
             if (isset($data[$field]) && is_string($data[$field]) && trim($data[$field]) !== '') {
-                return $request->getHost() . '|' . mb_strtolower(trim($data[$field]));
+                return $this->siteKey($request) . '|' . mb_strtolower(trim($data[$field]));
             }
         }
         return null;

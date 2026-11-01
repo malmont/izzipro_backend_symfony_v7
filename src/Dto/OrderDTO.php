@@ -23,6 +23,10 @@ class OrderDTO
     public ?array $carrier = null;
     /** Vente au comptoir (C2) : {receiptNumber, creditNoteNumber, cashRegister} ; null pour toute autre commande (clés absentes) */
     public ?array $pos = null;
+    /** État du paiement (01/11/2026) : pending, authorized, paid, failed, refunded, canceled (OrderPresenter::paymentStatus) */
+    public ?string $paymentStatus = null;
+    /** Expédition (01/11/2026) : {carrier, trackingNumber, trackingUrl} dès qu'une étiquette existe, sinon null */
+    public ?array $shipment = null;
 
     public function __construct(
         int $id,
@@ -71,6 +75,8 @@ class OrderDTO
             'orderSource' => $this->orderSource,
             'status' => $this->status,
             'orderItems' => array_map(fn($item) => $item->toArray(), $this->orderItems),
+            'paymentStatus' => $this->paymentStatus,
+            'shipment' => $this->shipment,
         ] + ($this->pos ?? []);
     }
 

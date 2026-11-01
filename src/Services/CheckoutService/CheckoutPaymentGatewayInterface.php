@@ -20,5 +20,9 @@ interface CheckoutPaymentGatewayInterface
     public function capture(string $id): ?array;
 
     /** Libère une autorisation non capturée (le client n'est pas débité) */
-    public function cancel(string $id): void;
+    /**
+     * Annule l'autorisation (01/11/2026 : rend vrai si l'intent est annulé à l'issue de l'appel, déjà annulé compris ; faux si
+     * l'annulation a échoué ou n'est pas possible dans son état, l'échec étant journalisé en erreur avec l'identifiant)
+     */
+    public function cancel(string $id): bool;
 }

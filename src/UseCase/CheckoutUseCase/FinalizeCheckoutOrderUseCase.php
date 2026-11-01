@@ -101,6 +101,23 @@ final class FinalizeCheckoutOrderUseCase
         if ($existing !== null) {
             return $this->existing($existing, $mode, $data, $user);
         }
+        try {
+            return $this->create($mode, $paymentIntentId, $data, $user, $locale, $host);
+        } catch (CheckoutException $e) {
+            // Tout 400 (et le 402 d'un intent devenu impayable) dit si l'autorisation est annulée (01/11/2026) : l'application n'a
+            // plus à relire l'intent chez Stripe. Commande refusée : résultat de l'annulation ; données invalides ou second appel
+            // après un échec : état de l'intent.
+            if (in_array($e->getStatusCode(), [400, 402], true) && $e->authorizationCanceled === null) {
+                $e->authorizationCanceled = ($this->payments->retrieve($paymentIntentId)['status'] ?? null) === 'canceled';
+            }
+
+            throw $e;
+        }
+    }
+
+    /** @return array{created: bool, order: Order, body: array<string, mixed>} */
+    private function create(string $mode, string $paymentIntentId, array $data, ?User $user, string $locale, string $host): array
+    {
         $intent = $this->payments->retrieve($paymentIntentId);
         if ($intent === null || !in_array($intent['status'], self::PAID, true)) {
             throw new CheckoutException(402, 'Payment verification failed or payment not completed');
@@ -143,9 +160,11 @@ final class FinalizeCheckoutOrderUseCase
             $result = $this->createOrder->execute($dto, $user);
             if (!$result instanceof Order) {
                 // Commande refusée après le paiement (stock, montant…) : l'autorisation est libérée, le client n'est pas débité
-                $this->payments->cancel($paymentIntentId);
+                $canceled = $this->payments->cancel($paymentIntentId);
                 $message = $result instanceof JsonResponse ? (json_decode((string) $result->getContent(), true)['error'] ?? 'Commande refusée.') : 'Commande refusée.';
-                throw new CheckoutException(400, $message);
+                $refused = new CheckoutException(400, $message);
+                $refused->authorizationCanceled = $canceled;
+                throw $refused;
             }
         } catch (CheckoutException $e) {
             // Données invalides (adresse, transporteur…) : l'autorisation reste, le navigateur peut corriger et renvoyer

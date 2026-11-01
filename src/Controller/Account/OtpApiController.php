@@ -53,9 +53,11 @@ class OtpApiController extends AbstractController
             ], Response::HTTP_UNAUTHORIZED);
         }
 
+        // Codes de connexion seulement (01/11/2026) : un code de changement de courriel ou de suppression n'ouvre pas de session
         $otpCode = $em->getRepository(OtpCode::class)->findOneBy([
             'userOtp' => $user,
-            'code'    => $otpProvided
+            'code'    => $otpProvided,
+            'purpose' => OtpCode::PURPOSE_LOGIN,
         ]);
 
         if (!$otpCode || $otpCode->getExpiration() < new DateTime()) {

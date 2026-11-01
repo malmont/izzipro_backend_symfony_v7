@@ -37,7 +37,7 @@ class OtpService
      *
      * @throws \RuntimeException Si on ne retrouve pas l’utilisateur existant dans ce tenant.
      */
-    public function generateAndSendOtp(User $user, Request $request): void
+    public function generateAndSendOtp(User $user, Request $request, string $purpose = OtpCode::PURPOSE_LOGIN): void
     {
         $em = $this->tenantEmProvider->getEntityManager();
         $locale = $request->getLocale(); // On récupère la locale
@@ -58,12 +58,18 @@ class OtpService
             $em->flush();
         }
 
+        // Un nouveau code invalide les codes non utilisés du même compte et du même usage (01/11/2026)
+        foreach ($em->getRepository(OtpCode::class)->findBy(['userOtp' => $userManaged, 'purpose' => $purpose]) as $previous) {
+            $em->remove($previous);
+        }
+
         // Générer un OTP à 6 chiffres
         $otp = random_int(100000, 999999);
 
         // Créer et sauvegarder l’entité OtpCode
         $otpCode = new OtpCode();
         $otpCode->setUserOtp($userManaged);
+        $otpCode->setPurpose($purpose);
         $otpCode->setCode((string)$otp);
         $otpCode->setExpiration((new DateTime())->modify('+5 minutes'));
 

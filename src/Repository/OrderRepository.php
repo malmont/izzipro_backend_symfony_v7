@@ -141,6 +141,26 @@ class OrderRepository extends EntityRepository
             ->getResult();
     }
 
+    /**
+     * Page des commandes d'un client (01/11/2026, application mobile) : mêmes jointures que la liste complète, de la plus
+     * récente à la plus ancienne ; le total sert à l'en-tête X-Total-Count.
+     *
+     * @return array{items: list<Order>, total: int}
+     */
+    public function findWithDetailsByUserPage(int $userId, int $page, int $limit): array
+    {
+        $qb = $this->createDetailsQueryBuilder()
+            ->andWhere('o.userId = :userId')
+            ->setParameter('userId', $userId)
+            ->orderBy('o.orderDate', 'DESC')
+            ->addOrderBy('o.id', 'DESC')
+            ->setFirstResult(($page - 1) * $limit)
+            ->setMaxResults($limit);
+        $paginator = new \Doctrine\ORM\Tools\Pagination\Paginator($qb, true);
+
+        return ['items' => iterator_to_array($paginator, false), 'total' => count($paginator)];
+    }
+
     public function findWithDetailsByIdAndUser(int $id, int $userId): ?Order
     {
         return $this->createDetailsQueryBuilder()

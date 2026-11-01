@@ -47,7 +47,104 @@ final class OrderPresenter
         if ($order->getOrderSource()?->getId() === 2 && $this->emProvider) { // vente au comptoir : numéros (C2)
             $dto->pos = OrderDTO::posFields($this->emProvider->getEntityManager()->getRepository(\App\Entity\PosReceipt::class)->forOrders([(int) $order->getId()])[$order->getId()] ?? []);
         }
+        $dto->paymentStatus = $this->paymentStatus($order);
+        $dto->shipment = $this->shipment($order, $locale);
 
         return $dto;
+    }
+
+    public const PAYMENT_PENDING = 'pending';
+    public const PAYMENT_AUTHORIZED = 'authorized';
+    public const PAYMENT_PAID = 'paid';
+    public const PAYMENT_FAILED = 'failed';
+    public const PAYMENT_REFUNDED = 'refunded';
+    public const PAYMENT_CANCELED = 'canceled';
+
+    private const STATUS_CANCELED_ID = 7;
+    private const ORDER_TYPE_RETURN_ID = 2;
+
+    /**
+     * État du paiement d'une commande (01/11/2026), valeurs stables :
+     *  canceled  : commande annulée (statut 7) ;
+     *  refunded  : commande de retour, ou commande ayant un retour ou un paiement de type remboursement ;
+     *  paid      : un paiement client complété (statut « Complété » ou Stripe succeeded) ;
+     *  authorized: paiement Stripe autorisé, pas encore capturé (requires_capture) ;
+     *  failed    : seulement des paiements en échec ;
+     *  pending   : aucun paiement ou paiement en cours.
+     */
+    public function paymentStatus(Order $order): string
+    {
+        if ($order->getStatus()?->getId() === self::STATUS_CANCELED_ID) {
+            return self::PAYMENT_CANCELED;
+        }
+        if ($order->getOrderType()?->getId() === self::ORDER_TYPE_RETURN_ID) {
+            return self::PAYMENT_REFUNDED;
+        }
+        $paid = $authorized = $failed = $refunded = false;
+        foreach ($order->getPayments() as $payment) {
+            $type = (string) $payment->getPaymentType()?->getName();
+            $statut = (string) $payment->getStatutPayment()?->getName();
+            $stripe = (string) $payment->getStripeStatus();
+            if ($type === 'RemboursementClient') {
+                $refunded = true;
+                continue;
+            }
+            if ($stripe === 'succeeded' || $statut === 'Complété') {
+                $paid = true;
+            } elseif ($stripe === 'requires_capture') {
+                $authorized = true;
+            } elseif ($stripe === 'canceled' || $statut === 'Echoué' || $statut === 'Échoué') {
+                $failed = true;
+            }
+        }
+        if (!$refunded && $this->emProvider !== null && $order->getId() !== null) {
+            $refunded = $this->emProvider->getEntityManager()->getRepository(Order::class)->count(['returnedFrom' => $order]) > 0;
+        }
+
+        return match (true) {
+            $refunded => self::PAYMENT_REFUNDED,
+            $paid => self::PAYMENT_PAID,
+            $authorized => self::PAYMENT_AUTHORIZED,
+            $failed => self::PAYMENT_FAILED,
+            default => self::PAYMENT_PENDING,
+        };
+    }
+
+    /** @return array{carrier: ?string, trackingNumber: ?string, trackingUrl: ?string}|null null tant qu'aucune étiquette n'existe */
+    public function shipment(Order $order, string $locale): ?array
+    {
+        $shippingOrder = $order->getShippingOrder();
+        if ($shippingOrder === null) {
+            return null;
+        }
+        foreach ($shippingOrder->getParcels() as $parcel) {
+            $label = $parcel->getShippingLabel();
+            if ($label === null) {
+                continue;
+            }
+            $carrier = $order->getCarrier() ? ($order->getCarrier()->getTranslation($locale)?->getName() ?? $order->getCarrier()->getName()) : null;
+            $tracking = $label->getTrackingCode();
+
+            return ['carrier' => $carrier, 'trackingNumber' => $tracking, 'trackingUrl' => $tracking !== null && $tracking !== '' ? self::trackingUrl((string) $order->getCarrier()?->getName(), $tracking) : null];
+        }
+
+        return null;
+    }
+
+    /** Page de suivi du transporteur, pour les transporteurs connus ; null sinon */
+    public static function trackingUrl(string $carrierName, string $trackingNumber): ?string
+    {
+        $name = strtolower($carrierName);
+        $code = rawurlencode($trackingNumber);
+
+        return match (true) {
+            str_contains($name, 'canada post'), str_contains($name, 'postes canada'), str_contains($name, 'canadapost') => 'https://www.canadapost-postescanada.ca/track-reperage/fr#/search?searchFor=' . $code,
+            str_contains($name, 'purolator') => 'https://www.purolator.com/fr/expedition/suivi?pin=' . $code,
+            str_contains($name, 'ups') => 'https://www.ups.com/track?tracknum=' . $code,
+            str_contains($name, 'fedex') => 'https://www.fedex.com/fedextrack/?trknbr=' . $code,
+            str_contains($name, 'usps') => 'https://tools.usps.com/go/TrackConfirmAction?tLabels=' . $code,
+            str_contains($name, 'dhl') => 'https://www.dhl.com/global-en/home/tracking.html?tracking-id=' . $code,
+            default => null,
+        };
     }
 }

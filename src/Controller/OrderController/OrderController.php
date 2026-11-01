@@ -314,7 +314,10 @@ class OrderController extends AbstractController
 
             return $this->json($result['body'], $result['created'] ? JsonResponse::HTTP_CREATED : JsonResponse::HTTP_OK);
         } catch (\App\Services\CheckoutService\CheckoutException $e) {
-            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]), $e->getStatusCode());
+            // 400 et 402 : authorizationCanceled (01/11/2026) dit si l'autorisation Stripe est annulée ; les autres statuts sont inchangés
+            $extra = in_array($e->getStatusCode(), [400, 402], true) ? ['authorizationCanceled' => (bool) $e->authorizationCanceled] : [];
+
+            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]) + $extra, $e->getStatusCode());
         }
     }
 
@@ -604,6 +607,18 @@ class OrderController extends AbstractController
 
         $host = $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost());
         $locale = $request->getLocale();
+
+        // Pagination facultative (01/11/2026, application mobile) : ?page=1&limit=20 → même corps (tableau de la page), total dans
+        // les en-têtes X-Total-Count, X-Page, X-Limit (exposés par nginx). Sans ces paramètres : tableau complet, inchangé.
+        if ($request->query->has('page') || $request->query->has('limit')) {
+            $page = max(1, $request->query->getInt('page', 1));
+            $limit = min(100, max(1, $request->query->getInt('limit', 20)));
+            $result = $this->getOrdersByUserUseCase->executePage($user->getId(), $page, $limit, $host, $locale);
+
+            return $this->json(array_map(fn ($dto) => $dto->toArray(), $result['items']), JsonResponse::HTTP_OK, [
+                'X-Total-Count' => (string) $result['total'], 'X-Page' => (string) $page, 'X-Limit' => (string) $limit,
+            ]);
+        }
 
         // commandes d'un client : lues en base, jamais en cache (28/10/2026)
         $orderDTOs = $this->getOrdersByUserUseCase->execute($user->getId(), $host, $locale);

@@ -18,4 +18,16 @@ class GetOrdersByUserUseCase
     {
         return array_map(fn ($order) => $this->presenter->toDto($order, $host, $locale), $this->orderService->getOrdersByUser($userId));
     }
+
+    /**
+     * Page de commandes (?page&limit, 01/11/2026) : même forme que la liste complète, plus le total.
+     *
+     * @return array{items: list<OrderDTO>, total: int}
+     */
+    public function executePage(int $userId, int $page, int $limit, string $host, string $locale): array
+    {
+        $result = $this->orderService->getOrdersByUserPage($userId, $page, $limit);
+
+        return ['items' => array_map(fn ($order) => $this->presenter->toDto($order, $host, $locale), $result['items']), 'total' => $result['total']];
+    }
 }

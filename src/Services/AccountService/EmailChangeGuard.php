@@ -6,6 +6,7 @@ use App\Entity\OtpCode;
 use App\Entity\User;
 use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\OtpService;
+use App\Services\TenantConnectionProvider;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -34,7 +35,14 @@ final class EmailChangeGuard
         private readonly EmailSenderService $mailer,
         #[Autowire(service: 'limiter.profile_email_change_account')] private readonly RateLimiterFactory $limiter,
         private readonly LoggerInterface $securityLogger,
+        private readonly ?TenantConnectionProvider $tenant = null,
     ) {
+    }
+
+    /** Compteur par site et par compte (01/11/2026) : les identifiants de compte se répètent d'une base de site à l'autre */
+    private function limiterKey(User $user): string
+    {
+        return ($this->tenant?->getTenantCode() ?? 'default') . ':user:' . $user->getId();
     }
 
     /** true si l'adresse demandée diffère de l'actuelle (après trim et minuscules) ; vide ou absente : jamais un changement */
@@ -56,7 +64,7 @@ final class EmailChangeGuard
      */
     public function authorize(User $user, array $data, Request $request): ?array
     {
-        $limit = $this->limiter->create('user:' . $user->getId())->consume();
+        $limit = $this->limiter->create($this->limiterKey($user))->consume();
         if (!$limit->isAccepted()) {
             $retry = max(1, $limit->getRetryAfter()->getTimestamp() - time());
             $this->securityLogger->warning('profile.email_change.rate_limited', ['userId' => $user->getId(), 'ip' => $request->getClientIp()]);
@@ -74,20 +82,20 @@ final class EmailChangeGuard
                 return ['status' => 403, 'body' => ['error' => 'PASSWORD_INVALID', 'message' => 'Mot de passe actuel incorrect']];
             }
             $limit->ensureAccepted();
-            $this->limiter->create('user:' . $user->getId())->reset();
+            $this->limiter->create($this->limiterKey($user))->reset();
 
             return null;
         }
         // Connexion par code : le code part à l'adresse actuelle (l'ancienne), jamais à la nouvelle
         $code = $data['otpCode'] ?? null;
         if (!is_string($code) || trim($code) === '') {
-            $this->otp->generateAndSendOtp($user, $request);
+            $this->otp->generateAndSendOtp($user, $request, OtpCode::PURPOSE_EMAIL_CHANGE);
             $this->securityLogger->info('profile.email_change.otp_sent', ['userId' => $user->getId()]);
 
             return ['status' => 403, 'body' => ['error' => 'OTP_REQUIRED', 'message' => 'Un code de confirmation a été envoyé à votre adresse courriel actuelle ; renvoyez la demande avec otpCode', 'sentTo' => self::mask((string) $user->getEmail()), 'lifetimeSeconds' => 300]];
         }
         $em = $this->emProvider->getEntityManager();
-        $otp = $em->getRepository(OtpCode::class)->findOneBy(['userOtp' => $user, 'code' => trim($code)]);
+        $otp = $em->getRepository(OtpCode::class)->findOneBy(['userOtp' => $user, 'code' => trim($code), 'purpose' => OtpCode::PURPOSE_EMAIL_CHANGE]);
         if ($otp === null || $otp->getExpiration() < new \DateTime()) {
             $this->securityLogger->warning('profile.email_change.otp_invalid', ['userId' => $user->getId(), 'ip' => $request->getClientIp()]);
 
@@ -95,7 +103,7 @@ final class EmailChangeGuard
         }
         $em->remove($otp);
         $em->flush();
-        $this->limiter->create('user:' . $user->getId())->reset();
+        $this->limiter->create($this->limiterKey($user))->reset();
 
         return null;
     }
