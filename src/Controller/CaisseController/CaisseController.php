@@ -37,7 +37,8 @@ class CaisseController extends AbstractController
         private readonly DenominationService $denominations,
         private readonly \App\Services\PosAuditService\PosWriteResponseBuilder $responses,
         private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments,
-        private readonly \Psr\Log\LoggerInterface $logger
+        private readonly \Psr\Log\LoggerInterface $logger,
+        private readonly ?\App\Services\CaisseService\SiteLocaleResolver $siteLocale = null // langue du site (F18 partie 2b)
     ) {
     }
 
@@ -122,7 +123,7 @@ class CaisseController extends AbstractController
 
     private function locale(Request $request): string
     {
-        $locale = (string) $request->query->get('locale', 'fr');
+        $locale = $this->siteLocale?->fromRequest($request) ?? (string) $request->query->get('locale', 'fr'); // sans ?locale= : langue du site (F18 partie 2b)
 
         return preg_match('/^[a-z]{2}$/', $locale) ? $locale : 'fr';
     }

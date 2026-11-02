@@ -51,12 +51,13 @@ class ProcessOrderItemsUseCase
             }
             $order->setPendingTaxCalculationId($quote['taxCalculationId']); // transaction Stripe Tax enregistrée après le paiement
             $order->setPendingTaxes($quote['taxes']); // mêmes taxes que le devis et que le montant autorisé
+            $order->setPricesIncludeTax((bool) ($quote['pricesIncludeTax'] ?? false)); // lignes TTC figées sur la commande (F18 partie 2b)
         } catch (CartQuoteException $e) {
             throw new BadRequestHttpException($e->getMessage(), $e);
         }
 
         $order->setShippingCost((float) $quote['shipping']);
-        $subtotal = (float) $quote['shipping'];
+        $subtotal = 0.0; // sous-total = lignes seules (02/11/2026, F18 partie 2b) ; la livraison est ajoutée au total par CalculateTotalAmountUseCase (avant : comprise dans sub_total)
 
         foreach ($quote['lines'] as $i => $line) {
             $itemData = $items[$i];

@@ -87,11 +87,15 @@ final class TaxEngine
      * @param list<array{amount: int, quantity: int, kind: string, reference: string, taxable?: bool, taxCategory?: ?string}> $lines lignes (montant unitaire en cents ; taxable false = exclue de l'assiette, F7 ; taxCategory : catégorie fiscale, vide = standard)
      * @return array{taxes: list<array{label: string, rate: float, base: int, amount: int, total: int, category?: ?string, jurisdiction?: string}>, total: int, status: string, provider: string, calculationId: ?string}
      */
-    public function compute(?array $address, array $lines, int $shipping, string $currency): array
+    public function compute(?array $address, array $lines, int $shipping, string $currency, ?bool $inclusive = null): array
     {
         $provider = $this->provider();
+        $inclusive ??= $this->pricesIncludeTax();
         if ($address === null || ($address['country'] ?? null) === null) {
-            return ['taxes' => [], 'total' => 0, 'status' => self::STATUS_ADDRESS_REQUIRED, 'provider' => $provider, 'calculationId' => null];
+            return ['taxes' => [], 'total' => 0, 'status' => self::STATUS_ADDRESS_REQUIRED, 'provider' => $provider, 'calculationId' => null, 'inclusive' => $inclusive];
+        }
+        if ($inclusive) { // prix TTC (F18 partie 2b) : table seulement (Stripe Tax refusé à l'activation) ; la taxe est extraite des montants
+            return $this->tableInclusive($address, $lines, $shipping);
         }
         if ($provider === self::PROVIDER_STRIPE) {
             try {
@@ -106,6 +110,12 @@ final class TaxEngine
         }
 
         return $this->table($address, $lines, $shipping);
+    }
+
+    /** Le site vend-il à prix taxes comprises (entreprise.prices_include_tax, F18 partie 2b) ? */
+    public function pricesIncludeTax(): bool
+    {
+        return $this->emProvider->getEntityManager()->getRepository(\App\Entity\Entreprise::class)->findOneBy([])?->isPricesIncludeTax() ?? false;
     }
 
     /** Fournisseur réglé pour le site (commerce.taxProvider), table par défaut */
@@ -191,11 +201,86 @@ final class TaxEngine
                 }
             }
             $amount = (int) round($base * (float) $tax->getRate());
+            if ($base === 0 && $amount === 0) {
+                continue; // taxe qui ne frappe aucune ligne (catégorie absente du panier) : non servie, non enregistrée (02/11/2026)
+            }
             $intTotal += $amount;
             $taxes[] = ['label' => (string) $tax->getName(), 'rate' => (float) $tax->getRate(), 'base' => $base, 'amount' => $amount, 'total' => $base + $amount, 'category' => $tax->getCategory(), 'taxId' => (int) $tax->getId()];
         }
 
-        return ['taxes' => $taxes, 'total' => $intTotal, 'status' => $taxes ? self::STATUS_CALCULATED : self::STATUS_NO_TAX, 'provider' => self::PROVIDER_TABLE, 'calculationId' => null];
+        return ['taxes' => $taxes, 'total' => $intTotal, 'status' => $taxes ? self::STATUS_CALCULATED : self::STATUS_NO_TAX, 'provider' => self::PROVIDER_TABLE, 'calculationId' => null, 'inclusive' => false];
+    }
+
+    /**
+     * Prix taxes comprises (F18 partie 2b) : les montants des lignes sont TTC. Les lignes sont groupées par ensemble de taxes applicables
+     * (France : un taux par ligne ; taxes empilées possibles) ; la livraison TTC est répartie entre les groupes taxés au prorata de leurs
+     * TTC (écart sur le dernier ; panier entièrement exonéré → livraison exonérée) ; pour chaque groupe, base = TaxInclusive::base(ttc, Σ taux)
+     * et taxe = ttc − base, la taxe du groupe étant ventilée entre ses taxes (dernière taxe porte l'écart). taxes[].base = assiette HT de la
+     * taxe, taxes[].total = base + amount ; total = Σ amount (déjà compris dans les montants : le devis ne l'ajoute pas).
+     */
+    private function tableInclusive(array $address, array $lines, int $shipping): array
+    {
+        $applicable = $this->applicableTaxes($address);
+        $byId = [];
+        foreach ($applicable as $tax) {
+            $byId[(int) $tax->getId()] = $tax;
+        }
+        // Groupes de lignes : clé = identifiants des taxes qui frappent la ligne ('' = aucune)
+        $groups = [];
+        foreach ($lines as $line) {
+            $category = ($line['taxable'] ?? true) === false ? TaxCategory::EXEMPT : TaxCategory::of($line['taxCategory'] ?? null);
+            $ids = [];
+            foreach ($applicable as $tax) {
+                if (TaxCategory::applies($tax->getCategory(), $category)) {
+                    $ids[] = (int) $tax->getId();
+                }
+            }
+            $key = implode(',', $ids);
+            $groups[$key] = ($groups[$key] ?? 0) + $line['amount'] * $line['quantity'];
+        }
+        // Livraison TTC : au prorata des groupes taxés ; aucun groupe taxé → exonérée
+        if ($shipping > 0) {
+            $taxed = array_filter($groups, fn ($ttc, $key) => $key !== '', ARRAY_FILTER_USE_BOTH);
+            if ($taxed === []) {
+                $groups[''] = ($groups[''] ?? 0) + $shipping;
+            } else {
+                foreach (TaxInclusive::prorate($shipping, $taxed) as $key => $share) {
+                    $groups[$key] += $share;
+                }
+            }
+        }
+        $perTax = [];
+        foreach ($applicable as $tax) {
+            $perTax[(int) $tax->getId()] = ['base' => 0, 'amount' => 0];
+        }
+        foreach ($groups as $key => $ttc) {
+            if ($key === '') {
+                continue;
+            }
+            $ids = array_map('intval', explode(',', (string) $key));
+            $rates = array_map(fn ($id) => TaxInclusive::rateTenThousandths((float) $byId[$id]->getRate()) ?? (int) round((float) $byId[$id]->getRate() * TaxInclusive::SCALE), $ids);
+            $base = TaxInclusive::base($ttc, (int) array_sum($rates));
+            $groupTax = $ttc - $base;
+            $spread = 0;
+            foreach ($ids as $n => $id) {
+                $amount = $n === count($ids) - 1 ? $groupTax - $spread : TaxInclusive::taxOn($base, $rates[$n]);
+                $spread += $amount;
+                $perTax[$id]['base'] += $base;
+                $perTax[$id]['amount'] += $amount;
+            }
+        }
+        $taxes = [];
+        $total = 0;
+        foreach ($applicable as $tax) {
+            $p = $perTax[(int) $tax->getId()];
+            if ($p['base'] === 0 && $p['amount'] === 0) {
+                continue; // taxe sans ligne : non servie
+            }
+            $total += $p['amount'];
+            $taxes[] = ['label' => (string) $tax->getName(), 'rate' => (float) $tax->getRate(), 'base' => $p['base'], 'amount' => $p['amount'], 'total' => $p['base'] + $p['amount'], 'category' => $tax->getCategory(), 'taxId' => (int) $tax->getId()];
+        }
+
+        return ['taxes' => $taxes, 'total' => $total, 'status' => $taxes ? self::STATUS_CALCULATED : self::STATUS_NO_TAX, 'provider' => self::PROVIDER_TABLE, 'calculationId' => null, 'inclusive' => true];
     }
 
     private function stripe(array $address, array $lines, int $shipping, string $currency): array

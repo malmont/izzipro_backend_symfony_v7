@@ -87,7 +87,7 @@ class PosReturnApiTest extends WebTestCase
         $return = $this->json($r, 201);
         $this->assertSame([$this->capTotal, 'original', 3335, 0, 1, true], [$return['amount'], $return['refund']['method'], $return['refund']['cash'], $return['refund']['card'], $return['refund']['cashRounding'], $return['restock']], 'espèces arrondies au 5 ¢ (C1)');
         $this->assertSame([$creditNotes + 1, 'C1-' . ($creditNotes + 1), "IZ-A-$this->register-" . ($creditNotes + 1)], [$return['creditNoteNumber'], $return['creditNoteReference'], $return['barcode']]);
-        $this->assertSame([['label' => 'TPS', 'amount' => 145], ['label' => 'TVQ', 'amount' => 289]], $return['taxes'], 'taxes au prorata : 5 % et 9,975 % de 29,00');
+        $this->assertSame([['label' => 'TPS', 'amount' => 145], ['label' => 'TVQ', 'amount' => 289]], array_map(fn ($t) => array_intersect_key($t, ['label' => 1, 'amount' => 1]), $return['taxes']), 'taxes au prorata : 5 % et 9,975 % de 29,00');
         $replay = $this->request('POST', '/api/pos/returns', ['orderId' => $sale['orderId'], 'lines' => [['orderItemId' => $capLine['orderItemId'], 'quantity' => 1]], 'reasonCode' => 'defectueux', 'cashRegisterId' => $this->register]);
         $this->assertSame(['true', $r->getContent()], [$replay->headers->get('Idempotent-Replayed'), $replay->getContent()], 'rejeu C5 : aucun second retour');
         $this->key = null;

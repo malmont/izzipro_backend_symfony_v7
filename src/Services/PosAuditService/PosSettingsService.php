@@ -16,7 +16,8 @@ class PosSettingsService
     public const PIN = ['minLength' => 4, 'maxLength' => 6, 'maxAttempts' => PosPinService::MAX_ATTEMPTS, 'lockMinutes' => PosPinService::LOCK_MINUTES];
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider, private readonly \App\Services\PosTerminalService\PosTerminalSettingsService $terminal, private readonly \App\Services\PosOfflineService\PosOfflineSettings $offline,
-        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, private readonly ?\App\Services\CaisseService\CashRoundingService $rounding = null) // devise et arrondi (F18 partie 1, 01/11/2026)
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null, private readonly ?\App\Services\CaisseService\CashRoundingService $rounding = null, // devise et arrondi (F18 partie 1, 01/11/2026)
+        private readonly ?\App\Services\OrderService\TaxEngine $taxes = null, private readonly ?\App\Services\OrderService\OrderTaxAddressResolver $storeAddress = null) // catégories des taxes du magasin (F18 partie 2b)
     {
     }
 
@@ -33,7 +34,7 @@ class PosSettingsService
             'currency' => strtoupper($this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT),
             'cashRoundingStep' => $this->rounding?->step() ?? 5,
             'pricesIncludeTax' => $e?->isPricesIncludeTax() ?? false, // F18 partie 2a : prix du catalogue TTC (réglage en 2b ; faux partout aujourd'hui)
-            'taxCategories' => \App\Services\OrderService\TaxCategory::ALL, // catégories fiscales acceptées par custom.taxCategory (F18 partie 2a)
+            'taxCategories' => $this->taxCategories(), // [{category, rate}] des taxes du magasin qui portent une catégorie (vide au Québec) : choix du taux d'un article libre
             'lockAfterMinutes' => $e?->getPosLockMinutes() ?? 5,
             'approvals' => [
                 'refund' => $threshold($e ? $e->getPosApprovalRefund() : 0),
@@ -81,6 +82,23 @@ class PosSettingsService
             // Terminal de paiement Stripe (C4) : réglages utiles au POS (les commissions restent côté serveur)
             'terminal' => array_intersect_key($this->terminal->settings(), array_flip(['interac', 'cardWaitSeconds', 'customerCancel', 'orphanMinutes', 'authCancelMinutes', 'currency', 'tapToPay', 'bluetoothReader', 'refundPendingMinutes'])), // + kit (F13/F16)
         ];
+    }
+
+    /** @return list<array{category: string, rate: float}> catégories portées par les taxes applicables au magasin, avec leur taux, dans l'ordre de la table ; vide sans catégorie */
+    public function taxCategories(): array
+    {
+        if ($this->taxes === null || $this->storeAddress === null) {
+            return [];
+        }
+        $address = \App\Services\OrderService\TaxEngine::normalizeAddress($this->storeAddress->forStore());
+        $out = [];
+        foreach ($address ? $this->taxes->applicableTaxes($address) : [] as $tax) {
+            if ($tax->getCategory() !== null && !isset($out[$tax->getCategory()])) {
+                $out[$tax->getCategory()] = ['category' => $tax->getCategory(), 'rate' => (float) $tax->getRate()];
+            }
+        }
+
+        return array_values($out);
     }
 
     /** @return array{minLength: int, maxLength: int, maxAttempts: int, lockMinutes: int} règles du PIN du site (R1) */

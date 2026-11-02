@@ -202,7 +202,7 @@ class PosReturnService
             // Net payé de la prochaine unité (F1 : total_price est le net des remises ; cumul exact comme pour les taxes)
             $unit = self::taxForQuantity((int) round((float) $item->getTotalPrice()), $qty, $before, 1);
             // Taxes de la prochaine unité retournée (méthode cumulative : la somme des retours égale la part de la ligne)
-            $taxes = array_map(fn ($t) => ['label' => $t['label'], 'tax' => $t['tax'], 'amount' => self::taxForQuantity($t['amount'], $qty, $before, 1)], $this->lineTaxShare($order, $item, $itemsTotal));
+            $taxes = array_values(array_map(fn ($t) => ['label' => $t['label'], 'tax' => $t['tax'], 'applies' => $t['applies'], 'amount' => self::taxForQuantity($t['amount'], $qty, $before, 1)], array_filter($this->lineTaxShare($order, $item, $itemsTotal), fn ($t) => $t['applies']))); // seules les taxes qui frappent la ligne
             $variant = $item->getProductVariant();
             $lines[] = [
                 'orderItemId' => $item->getId(), 'productVariantId' => $variant?->getId(), 'name' => $item->displayName(),
@@ -211,8 +211,9 @@ class PosReturnService
                 'returnableQuantity' => max(0, $qty - ($returned[$item->getId()] ?? 0)),
                 // unitPrice = NET payé de la prochaine unité (remises déduites, F1) ; unitGross = prix unitaire brut ; discountAmount = remises de la ligne
                 'unitPrice' => $unit, 'unitGross' => (int) round((float) $item->getUnitPrice()), 'discountAmount' => $item->getDiscountAmount(),
-                'unitTaxes' => array_sum(array_column($taxes, 'amount')), 'unitRefundable' => $unit + array_sum(array_column($taxes, 'amount')),
-                'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'rate' => $t['tax'] ? (float) $t['tax']->getRate() : null, 'amount' => $t['amount']], $taxes), // jamais l'entité (sérialisation)
+                'unitTaxes' => array_sum(array_column($taxes, 'amount')), 'unitRefundable' => $order->isPricesIncludeTax() ? $unit : $unit + array_sum(array_column($taxes, 'amount')), // TTC : le net remboursé contient la taxe (2b)
+                'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'rate' => $t['tax'] ? (float) $t['tax']->getRate() : null, 'amount' => $t['amount'],
+                    'base' => $t['applies'] ? ($order->isPricesIncludeTax() ? $unit - array_sum(array_column($taxes, 'amount')) : $unit) : 0, 'total' => ($t['applies'] ? ($order->isPricesIncludeTax() ? $unit - array_sum(array_column($taxes, 'amount')) : $unit) : 0) + $t['amount']], $taxes), // jamais l'entité (sérialisation) ; base/total : F18 partie 2
             ];
         }
 
@@ -250,7 +251,8 @@ class PosReturnService
         // Lignes et montants
         [$lines, $subtotal, $taxes] = $original ? $this->linesFromSale($original, $input['lines'] ?? null, $settings) : $this->linesFromCatalog($input['items'] ?? null);
         $taxTotal = (int) array_sum(array_map(fn ($t) => $t['amount'], $taxes));
-        $total = $subtotal + $taxTotal;
+        $inclusive = $this->inclusive($original); // lignes TTC (F18 partie 2b) : la taxe est déjà dans les nets remboursés
+        $total = $inclusive ? $subtotal : $subtotal + $taxTotal;
         if ($total <= 0) {
             throw new CashRegisterException('RETURN_EMPTY', 'Aucun article à retourner', 422);
         }
@@ -326,7 +328,7 @@ class PosReturnService
                 $em->persist($orderTax);
             }
         }
-        $returnOrder->setSubTotal(-$subtotal)->setTotalTax(-$taxTotal)->setTotalAmount(-$total)->setCashRounding(-$cashRounding);
+        $returnOrder->setSubTotal(-$subtotal)->setTotalTax(-$taxTotal)->setTotalAmount(-$total)->setCashRounding(-$cashRounding)->setPricesIncludeTax($inclusive);
         $returnOrder->setCreditApplied($creditApplied);
         $em->persist($returnOrder);
         $em->flush();
@@ -378,7 +380,8 @@ class PosReturnService
             'customerId' => $customerId, 'loyaltyReturned' => $loyaltyReturned,
             'manufacturerCoupons' => ['notRefunded' => $couponPart['notRefunded'], 'voided' => $couponsVoided['voided'], 'returnedAfterClaim' => $couponsVoided['returnedAfterClaim']], // F17
             'terminal' => $terminal ? ['paymentId' => $terminal->getId(), 'refundId' => $terminalRefundId, 'paymentMethodType' => $terminal->getPaymentMethodType()] : null,
-            'subTotal' => $subtotal, 'totalTax' => $taxTotal, 'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'amount' => $t['amount']], $taxes),
+            'subTotal' => $subtotal, 'totalTax' => $taxTotal, 'pricesIncludeTax' => $inclusive,
+            'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'amount' => $t['amount'], 'base' => $t['base'] ?? null, 'total' => isset($t['base']) ? $t['base'] + $t['amount'] : null], $taxes), // base et total : F18 partie 2
         ], $caisse, null, 'order', $returnOrder->getId(), $user);
 
         return $return;
@@ -414,7 +417,8 @@ class PosReturnService
             // Coupons de fabricant (F17) : part coupon non remboursée au client (= montant − crédit − espèces exactes − carte − carte-cadeau − avoir), coupons annulés par ce retour
             'manufacturerCoupons' => $this->couponSummary($return),
             'lines' => $lines,
-            'taxes' => array_values(array_map(fn (OrderTax $t) => ['label' => $t->getTax()?->getName(), 'amount' => -(int) round((float) $t->getAmount())], $returnOrder->getOrderTaxes()->toArray())),
+            'pricesIncludeTax' => $return->getOrder()?->isPricesIncludeTax() ?? false, // lignes TTC (F18 partie 2b) ; taxes avec base et total
+            'taxes' => array_values(array_map(fn (OrderTax $t) => ['label' => $t->getTax()?->getName(), 'amount' => -(int) round((float) $t->getAmount()), 'base' => $t->getBase() !== null ? -(int) $t->getBase() : null, 'total' => $t->getBase() !== null ? -(int) $t->getBase() - (int) round((float) $t->getAmount()) : null], array_filter($returnOrder->getOrderTaxes()->toArray(), fn (OrderTax $t) => (int) round((float) $t->getAmount()) !== 0 || ($t->getBase() ?? 0) !== 0))),
             'createdAt' => $return->getCreatedAt()->format(\DateTimeInterface::ATOM),
             'store' => \App\Dto\StoreInfoDto::fromEntreprise($this->emProvider->getEntityManager()->getRepository(Entreprise::class)->findOneBy([]), $locale),
         ];
@@ -431,13 +435,31 @@ class PosReturnService
     }
 
     /** Total d'un retour avant toute écriture (pour décider du crédit d'un échange) */
+    /**
+     * Détail d'un retour sans l'enregistrer (devis d'échange, F18 partie 2b) : montant remboursable, sous-total, taxes par taux {label, rate, base, amount, total}, TTC ou non.
+     *
+     * @return array{amount: int, subtotal: int, totalTax: int, pricesIncludeTax: bool, taxes: list<array{label: string, rate: ?float, base: int, amount: int, total: int}>}
+     */
+    public function previewDetail(array $input): array
+    {
+        $original = is_numeric($input['orderId'] ?? null) ? $this->findSale((int) $input['orderId'], null, null, null) : null;
+        [, $subtotal, $taxes] = $original ? $this->linesFromSale($original, $input['lines'] ?? null, $this->settings()) : $this->linesFromCatalog($input['items'] ?? null);
+        $taxTotal = (int) array_sum(array_map(fn ($t) => $t['amount'], $taxes));
+        $inclusive = $this->inclusive($original);
+
+        return ['amount' => $inclusive ? $subtotal : $subtotal + $taxTotal, 'subtotal' => $subtotal, 'totalTax' => $taxTotal, 'pricesIncludeTax' => $inclusive,
+            'taxes' => array_values(array_map(fn ($t) => ['label' => $t['label'], 'rate' => $t['tax'] ? (float) $t['tax']->getRate() : null, 'base' => (int) ($t['base'] ?? 0), 'amount' => (int) $t['amount'], 'total' => (int) ($t['base'] ?? 0) + (int) $t['amount']], array_filter($taxes, fn ($t) => (int) $t['amount'] !== 0 || (int) ($t['base'] ?? 0) !== 0)))];
+    }
+
+    /** Lignes TTC (2b) : celles de la vente d'origine, sinon le réglage du site (retour sans ticket) */
+    private function inclusive(?Order $original): bool
+    {
+        return $original?->isPricesIncludeTax() ?? ($this->emProvider->getEntityManager()->getRepository(\App\Entity\Entreprise::class)->findOneBy([])?->isPricesIncludeTax() ?? false);
+    }
+
     public function preview(array $input): int
     {
-        $settings = $this->settings();
-        $original = is_numeric($input['orderId'] ?? null) ? $this->findSale((int) $input['orderId'], null, null, null) : null;
-        [, $subtotal, $taxes] = $original ? $this->linesFromSale($original, $input['lines'] ?? null, $settings) : $this->linesFromCatalog($input['items'] ?? null);
-
-        return $subtotal + (int) array_sum(array_map(fn ($t) => $t['amount'], $taxes));
+        return $this->previewDetail($input)['amount']; // TTC : sans les taxes, déjà comprises (F18 partie 2b)
     }
 
     public function settings(): array
@@ -499,14 +521,17 @@ class PosReturnService
             $subtotal += $net;
             // Taxes : part de la ligne dans la vente, répartie en cumul (déjà retourné + ce retour) : la somme des retours d'une
             // ligne égale exactement sa part, sans dérive d'arrondi
-            foreach ($this->lineTaxShare($original, $item, $itemsTotal) as $tax) {
+            $shares = $this->lineTaxShare($original, $item, $itemsTotal);
+            $lineTax = (int) array_sum(array_map(fn ($t) => self::taxForQuantity($t['amount'], (int) $item->getQuantity(), $returned[$itemId] ?? 0, $qty), $shares));
+            foreach ($shares as $tax) {
                 $taxSums[$tax['label']] ??= ['label' => $tax['label'], 'amount' => 0, 'tax' => $tax['tax'], 'base' => 0];
                 $taxSums[$tax['label']]['amount'] += self::taxForQuantity($tax['amount'], (int) $item->getQuantity(), $returned[$itemId] ?? 0, $qty);
-                $taxSums[$tax['label']]['base'] += $tax['applies'] ? $net : 0; // assiette HT du retour pour cette taxe (F18 partie 2a)
+                // assiette HT du retour pour cette taxe (F18 partie 2a) ; lignes TTC (2b) : net remboursé moins les taxes de la ligne
+                $taxSums[$tax['label']]['base'] += $tax['applies'] ? ($original->isPricesIncludeTax() ? $net - $lineTax : $net) : 0;
             }
         }
 
-        return [$lines, $subtotal, array_values($taxSums)];
+        return [$lines, $subtotal, array_values(array_filter($taxSums, fn ($t) => $t['amount'] !== 0 || ($t['base'] ?? 0) !== 0))]; // taxes qui ne frappent aucune ligne retournée : écartées
     }
 
     /** Retour sans ticket : articles aux prix et taxes actuels du magasin (devis du serveur) */

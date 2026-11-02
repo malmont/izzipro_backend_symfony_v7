@@ -112,6 +112,7 @@ class CashSessionReportBuilder
             'currentFund' => (int) round((float) ($session->getFonDeCaisse() ?? 0)),
             'sales' => $sales,
             'taxes' => $this->taxes($saleOrders + $refundOrders),
+            'pricesIncludeTax' => $entreprise?->isPricesIncludeTax() ?? false, // F18 partie 2b : ventes TTC (taxes comprises dans sales.total)
             'refunds' => $refunds,
             'discounts' => $this->discounts($saleOrders), // remises de caisse (F1, 24/10/2026)
             'movements' => $movements,
@@ -329,6 +330,6 @@ class CashSessionReportBuilder
             }
         }
 
-        return array_values($groups);
+        return array_values(array_filter($groups, fn ($g) => $g['amount'] !== 0 || $g['base'] !== 0)); // taxes sans aucune ligne : non servies
     }
 }

@@ -52,6 +52,9 @@ class PosQuoteController extends AbstractController
             // Coupons de fabricant (F17) : contrôlés contre les lignes (montant ≤ prix de l'article, expiration, doublon de série) ; taxes et total
             // inchangés (prix plein), seul le dû diminue ; clés ajoutées seulement si coupons est envoyé
             if (!empty($data['coupons'])) {
+                if (!empty($quote['pricesIncludeTax'])) { // prix TTC (F18 partie 2b) : la règle « taxes sur le prix plein » (Québec) n'a pas de sens, coupons refusés
+                    throw new \App\Services\CaisseService\CashRegisterException('COUPONS_NOT_AVAILABLE_TTC', 'Les coupons de fabricant ne sont pas acceptés sur un site à prix taxes comprises', 409);
+                }
                 $due = (int) ($quote['amountDue'] ?? $quote['total']);
                 $preview = $this->coupons->preview($data['coupons'], $quote, $due);
                 $quote['manufacturerCoupons'] = ['count' => $preview['count'], 'total' => $preview['total'], 'coupons' => $preview['coupons']];

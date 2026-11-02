@@ -161,9 +161,9 @@ final class CartQuoteCalculator
         return ($discounts !== null ? ['discounts' => $discounts, 'grossSubtotal' => $discounts['gross']] : []) + $posLines + [
             'lines' => $lines, 'subtotal' => $subtotal, 'shipping' => $shipping,
             'taxes' => $tax['taxes'], 'taxStatus' => $tax['status'], 'taxProvider' => $tax['provider'],
-            'pricesIncludeTax' => $em->getRepository(\App\Entity\Entreprise::class)->findOneBy([])?->isPricesIncludeTax() ?? false, // F18 partie 2a : toujours faux tant que le réglage (2b) n'existe pas
+            'pricesIncludeTax' => (bool) ($tax['inclusive'] ?? false), // F18 partie 2b : TTC → les taxes sont dans subtotal et shipping, total = subtotal + shipping
             'taxCalculationId' => $tax['calculationId'], 'deposit' => $deposit,
-            'total' => $subtotal + $shipping + $tax['total'], 'currency' => $currency,
+            'total' => $subtotal + $shipping + (($tax['inclusive'] ?? false) ? 0 : $tax['total']), 'currency' => $currency,
             'shippingAddress' => $input->address,
             'carrier' => $carrier ? ['id' => (int) $carrier->getId(), 'name' => $carrier->getName(), 'isFree' => $carrier->isFree()] : null,
         ];

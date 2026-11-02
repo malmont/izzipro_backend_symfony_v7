@@ -122,7 +122,7 @@ class TaxCategoryApiTest extends WebTestCase
 
         // Rapport X : base = assiette de la seule ligne taxable (pas 15,00 $), net des retours ; export comptable : même assiette par taxe
         $x = $this->json($this->request('GET', '/api/caisse/report/x?cashRegisterId=' . $this->register));
-        $this->assertSame(['Sales tax NY', 0, 0, 0], [$x['taxes'][0]['label'], $x['taxes'][0]['base'], $x['taxes'][0]['amount'], $x['taxes'][0]['total']], 'après retour complet : tout est rendu');
+        $this->assertSame([], $x['taxes'], 'après retour complet : tout est rendu, aucune taxe servie (base et montant nets à 0)');
         $this->json($this->request('POST', '/api/caisse/close', ['cashRegisterId' => $this->register, 'countedCash' => $x['expectedCash'], 'keptFund' => 0]));
         $this->loginAs(['ROLE_ADMIN', 'ROLE_USER_POS']);
         $today = (new \DateTimeImmutable('now', new \DateTimeZone('America/Toronto')))->format('Y-m-d');
@@ -147,16 +147,16 @@ class TaxCategoryApiTest extends WebTestCase
         $items = [['productVariantId' => $this->cap, 'quantity' => 1], ['productVariantId' => $this->tshirt, 'quantity' => 1]];
         $q = $this->json($this->request('POST', '/api/pos/quote', ['items' => $items, 'cashRegisterId' => $this->register]));
         $this->assertSame([1521, 1750, 1750, 1], [$q['subtotal'], $q['total'], $q['cashTotal'], $this->json($this->request('GET', '/api/pos/settings'))['cashRoundingStep']], '10,00 € HT à 20 % + 5,21 € HT à 5,5 % = 17,50 € ; aucun arrondi des espèces en EUR');
-        $this->assertSame([['TVA 20 %', 1000, 200, 'standard'], ['TVA 10 %', 0, 0, 'intermediate'], ['TVA 5,5 %', 521, 29, 'reduced'], ['TVA 2,1 %', 0, 0, 'super_reduced']], array_map(fn ($t) => [$t['label'], $t['base'], $t['amount'], $t['category']], $q['taxes']), 'assiette par taux : chaque taxe ne frappe que sa catégorie');
+        $this->assertSame([['TVA 20 %', 1000, 200, 'standard'], ['TVA 5,5 %', 521, 29, 'reduced']], array_map(fn ($t) => [$t['label'], $t['base'], $t['amount'], $t['category']], $q['taxes']), 'assiette par taux : chaque taxe ne frappe que sa catégorie ; les TVA sans ligne (10 %, 2,1 %) ne sont pas servies');
         $this->assertSame(229, $q['total'] - $q['subtotal']);
 
         // Remise de ticket de 10 % : répartie au prorata des nets (F1), puis taxes par catégorie sur les nets → 9,00 + 4,69 = 13,69 € HT, TVA 1,80 + 0,26
         $q = $this->json($this->request('POST', '/api/pos/quote', ['items' => $items, 'cashRegisterId' => $this->register, 'ticketDiscount' => ['type' => 'percent', 'value' => 10, 'reasonCode' => 'fidelite']]));
-        $this->assertSame([1369, 1575, [900, 0, 469, 0], [180, 0, 26, 0]], [$q['subtotal'], $q['total'], array_column($q['taxes'], 'base'), array_column($q['taxes'], 'amount')]);
+        $this->assertSame([1369, 1575, [900, 469], [180, 26]], [$q['subtotal'], $q['total'], array_column($q['taxes'], 'base'), array_column($q['taxes'], 'amount')]);
 
         // Article libre à 10 % (custom.taxCategory) et article libre non taxable ; catégorie inconnue refusée
         $q = $this->json($this->request('POST', '/api/pos/quote', ['items' => [['quantity' => 2, 'custom' => ['label' => 'Plat du jour', 'unitPrice' => 1250, 'taxCategory' => 'intermediate']], ['quantity' => 1, 'custom' => ['label' => 'Pourboire', 'unitPrice' => 300, 'taxable' => false]]], 'cashRegisterId' => $this->register]));
-        $this->assertSame([2800, 3050, [0, 2500, 0, 0], [0, 250, 0, 0], ['intermediate', 'exempt']], [$q['subtotal'], $q['total'], array_column($q['taxes'], 'base'), array_column($q['taxes'], 'amount'), array_column($q['lines'], 'taxCategory')]);
+        $this->assertSame([2800, 3050, [2500], [250], ['intermediate', 'exempt']], [$q['subtotal'], $q['total'], array_column($q['taxes'], 'base'), array_column($q['taxes'], 'amount'), array_column($q['lines'], 'taxCategory')]);
         $bad = $this->request('POST', '/api/pos/quote', ['items' => [['quantity' => 1, 'custom' => ['label' => 'X', 'unitPrice' => 100, 'taxCategory' => 'luxe']]], 'cashRegisterId' => $this->register]);
         $this->assertSame(422, $bad->getStatusCode());
         $this->assertStringContainsString('custom.taxCategory', $bad->getContent());
@@ -166,35 +166,35 @@ class TaxCategoryApiTest extends WebTestCase
         $sale = $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => $items, 'paymentMethods' => [['type' => 2, 'amount' => 17.5]], 'cashRegisterId' => $this->register]), 201);
         $this->assertSame([1750.0, 229.0], array_map('floatval', $this->db->fetchNumeric('SELECT total_amount, total_tax FROM "order" WHERE id = ?', [$sale['orderId']])));
         $this->assertSame([['standard', 1000.0], ['reduced', 521.0]], array_map(fn ($r) => [$r['tax_category'], (float) $r['total_price']], $this->db->fetchAllAssociative('SELECT tax_category, total_price FROM order_items WHERE order_associated_id = ? ORDER BY id', [$sale['orderId']])));
-        $this->assertSame([['TVA 20 %', 1000, 200.0], ['TVA 10 %', 0, 0.0], ['TVA 5,5 %', 521, 29.0], ['TVA 2,1 %', 0, 0.0]], array_map(fn ($r) => [$r['name'], (int) $r['base'], (float) $r['amount']], $this->db->fetchAllAssociative('SELECT t.name, ot.base, ot.amount FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id = ? ORDER BY ot.id', [$sale['orderId']])));
+        $this->assertSame([['TVA 20 %', 1000, 200.0], ['TVA 5,5 %', 521, 29.0]], array_map(fn ($r) => [$r['name'], (int) $r['base'], (float) $r['amount']], $this->db->fetchAllAssociative('SELECT t.name, ot.base, ot.amount FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id = ? ORDER BY ot.id', [$sale['orderId']])), 'order_tax : aucune ligne à 0');
         $receipt = $this->json($this->request('GET', '/api/pos/receipts?orderId=' . $sale['orderId']));
         $this->assertSame([['label' => 'SIRET', 'number' => '732 829 320 00074'], ['label' => 'TVA intracom.', 'number' => 'FR40303265045']], $receipt['store']['taxIds'], 'magasin français : SIRET puis TVA intracom., jamais l\'EIN');
         $this->assertSame(['TVA 20 %', 10.0, 2.0, 12.0, 'standard'], [$receipt['taxes'][0]['label'], (float) $receipt['taxes'][0]['base'], (float) $receipt['taxes'][0]['amount'], (float) $receipt['taxes'][0]['total'], $receipt['taxes'][0]['category']]);
         // Retour de l'article à 5,5 % : TVA 5,5 % seule, 0,29 €
         $found = $this->json($this->request('GET', '/api/pos/returns/lookup?orderId=' . $sale['orderId']));
         $line = array_column($found['lines'], null, 'productVariantId')[$this->tshirt];
-        $this->assertSame([29, [0, 0, 29, 0]], [$line['unitTaxes'], array_column($line['taxes'], 'amount')], 'taux de la vente d\'origine, par catégorie');
+        $this->assertSame([29, ['TVA 5,5 %'], [29]], [$line['unitTaxes'], array_column($line['taxes'], 'label'), array_column($line['taxes'], 'amount')], 'taux de la vente d\'origine, par catégorie ; seules les taxes qui frappent la ligne');
         // SIRET vide : l'ancien champ ein (étiqueté « SIRET » avant le 01/11/2026) est imprimé à sa place
         $this->db->executeStatement("UPDATE entreprise SET siret = NULL, ein = '732 829 320 00075'");
         $receipt = $this->json($this->request('GET', '/api/pos/receipts?orderId=' . $sale['orderId']));
         $this->assertSame('732 829 320 00075', $receipt['store']['taxIds'][0]['number']);
 
         $pack = $this->json($this->request('GET', '/api/pos/offline-pack?cashRegisterId=' . $this->register));
-        $this->assertSame(['pos-offline-v2', false, ['standard', 'intermediate', 'reduced', 'super_reduced']], [$pack['calculationRule'], $pack['site']['pricesIncludeTax'], array_column($pack['taxes'], 'category')]);
+        $this->assertSame([\App\Services\PosOfflineService\PosOfflineCalculator::RULE, false, ['standard', 'intermediate', 'reduced', 'super_reduced']], [$pack['calculationRule'], $pack['site']['pricesIncludeTax'], array_column($pack['taxes'], 'category')]); // v3 depuis 2b
         $byId = array_column($pack['products'], null, 'id');
         $this->assertSame('reduced', $byId[(int) $this->db->fetchOne("SELECT id FROM product WHERE code = 'DEMO-TSHIRT'")]['taxCategory']);
         $cases = $this->json($this->request('GET', '/api/pos/offline-cases'));
-        $this->assertSame('pos-offline-v2', $cases['rule']);
+        $this->assertSame(\App\Services\PosOfflineService\PosOfflineCalculator::RULE, $cases['rule']);
         $this->assertContains('fr-ht-deux-taux-standard-et-reduit', array_column($cases['cases'], 'id'));
         $settings = $this->json($this->request('GET', '/api/pos/settings'));
-        $this->assertSame([false, ['standard', 'intermediate', 'reduced', 'super_reduced', 'exempt']], [$settings['pricesIncludeTax'], $settings['taxCategories']]);
+        $this->assertSame([false, ['standard', 'intermediate', 'reduced', 'super_reduced']], [$settings['pricesIncludeTax'], array_column($settings['taxCategories'], 'category')], 'taxCategories = catégories des taxes du magasin, avec leur taux (2b)');
 
         // Point C : un produit « super_reduced » sans taxe de cette catégorie n'est pas taxé du tout → alerte EasyAdmin, devis sans taxe sur cette ligne
         $this->db->executeStatement("UPDATE tax SET category = 'standard' WHERE name = 'TVA 2,1 %'"); // plus aucune taxe ne vise « super_reduced » (la ligne reste : des commandes la référencent)
         $this->db->executeStatement("UPDATE product SET tax_category = 'super_reduced' WHERE code = 'DEMO-TSHIRT'");
         $this->assertSame(['super_reduced'], static::getContainer()->get(TaxCategoryAudit::class)->orphanCategories());
         $q = $this->json($this->request('POST', '/api/pos/quote', ['items' => [['productVariantId' => $this->tshirt, 'quantity' => 1]], 'cashRegisterId' => $this->register]));
-        $this->assertSame([521, 521, [0, 0, 0, 0]], [$q['subtotal'], $q['total'], array_column($q['taxes'], 'amount')], 'devis : aucune taxe sur la ligne orpheline (les quatre taxes à 0, statut calculated)');
+        $this->assertSame([521, 521, []], [$q['subtotal'], $q['total'], $q['taxes']], 'devis : aucune taxe sur la ligne orpheline (liste vide, statut calculated)');
         $this->loginAdmin();
         $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query(['crudAction' => 'index', 'crudControllerFqcn' => TaxCrudController::class]), [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());

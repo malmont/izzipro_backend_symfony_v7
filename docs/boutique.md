@@ -335,6 +335,14 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
   `commerce.siteCountry` (pays ISO de l'adresse du site, `address_entreprise.country`, null sans adresse ; c'est aussi le pays des taxes
   d'une vente au comptoir). Le PUT continue de remplacer l'objet `commerce` tel quel (seul l'éditeur Next.js écrit cette route).
   Détail et cas chiffrés : `docs/caisse.md`, « Catégories fiscales ».
+- **Prix taxes comprises (F18 partie 2b, 02/11/2026)** : réglage de site `entreprise.prices_include_tax` (fiche Entreprise ; refusé avec Stripe
+  Tax ou un taux non multiple de 0,01 % ; verrouillé après la première vente). Pour un site TTC, les prix du catalogue sont TTC tels que saisis ;
+  le devis renvoie `pricesIncludeTax: true`, `subtotal` et `shipping` TTC, **`total = subtotal + shipping`**, `taxes[]` avec `base`/`amount`/`total`
+  par groupe de taux (livraison répartie au prorata des TTC ; seules les taxes qui frappent une ligne sont servies) ; `create-intent` autorise ce
+  total ; la commande porte `prices_include_tax` et se lit avec `pricesIncludeTax`, `subTotal` (lignes seules : depuis le 02/11/2026 la livraison
+  n'est plus comprise dans `sub_total`, dans les deux modes ; `totalAmount = subTotal + priceShipping (+ priceTax en HT)`), `priceTax` inclus,
+  `taxes[]`. Fronts : afficher « TTC » et « dont TVA » quand `pricesIncludeTax` est vrai ;
+  rien ne change pour les sites hors taxes. Détail, formule et cas : `docs/caisse.md`, « Prix taxes comprises ».
 - **`stripe`** : Stripe Tax (`Tax Calculations`) sur le compte connecté du site, une ligne par article (code fiscal
   « bien physique » `txcd_99999999`, « service » `txcd_20030000` pour une location, livraison `txcd_92010001`),
   montants par juridiction (`taxes[].jurisdiction`), calcul gardé 10 min pour un même panier et une même adresse. À la

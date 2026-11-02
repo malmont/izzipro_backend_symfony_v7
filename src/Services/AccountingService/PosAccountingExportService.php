@@ -220,10 +220,18 @@ class PosAccountingExportService
         // Mouvements de la session
         $mv = $conn->fetchAssociative('SELECT COALESCE(SUM(CASE WHEN transaction_type_id = 3 THEN cash_amount END), 0) AS deposits, COALESCE(SUM(CASE WHEN transaction_type_id = 6 THEN -cash_amount END), 0) AS withdrawals, COALESCE(SUM(CASE WHEN transaction_type_id = 8 THEN cash_amount END), 0) AS fund_in, COALESCE(SUM(CASE WHEN transaction_type_id = 7 THEN -cash_amount END), 0) AS fund_out FROM transaction_caisse WHERE caisse_id = ?', [$caisseId]);
         $netHt = (int) round((float) $items['net']);
+        $grossHt = (int) round((float) $items['gross']);
+        $discountsHt = (int) round((float) $items['discounts']);
+        // Ventes à prix TTC (F18 partie 2b) : salesNetHt = Σ order_tax.base (HT extrait), salesGrossHt = HT avant remises par la même extraction, remises en HT ; le TTC reste dans salesTtc
+        if ($saleIds !== [] && ($ttc = $this->inclusiveHt($conn, $saleIds)) !== null) {
+            $netHt = $ttc['netOther'] + $ttc['net'];
+            $grossHt = $ttc['grossOther'] + $ttc['gross'];
+            $discountsHt = $grossHt - $netHt;
+        }
 
         return [
-            'salesCount' => (int) $sales['n'], 'salesTtc' => (int) round((float) $sales['ttc']), 'salesNetHt' => $netHt, 'salesGrossHt' => (int) round((float) $items['gross']),
-            'discounts' => (int) round((float) $items['discounts']), 'loyaltyRewards' => $rewards, 'salesByTax' => $taxes, 'cashRounding' => (int) $sales['rounding'],
+            'salesCount' => (int) $sales['n'], 'salesTtc' => (int) round((float) $sales['ttc']), 'salesNetHt' => $netHt, 'salesGrossHt' => $grossHt,
+            'discounts' => $discountsHt, 'loyaltyRewards' => $rewards, 'salesByTax' => $taxes, 'cashRounding' => (int) $sales['rounding'],
             'receipts' => ['cash' => $receipts['cash'], 'card' => $receipts['card'] + $receipts['declaredCard'], 'declaredCard' => $receipts['declaredCard'], 'interac' => $receipts['interac'], 'paypal' => $receipts['paypal'], 'giftCard' => max(0, $receipts['giftCard']), 'storeCredit' => $receipts['storeCredit'], 'coupon' => $receipts['coupon']], // coupon : F17
             'returnsCount' => (int) $returns['n'], 'refundsTtc' => (int) round((float) $returns['ttc']), 'refundsHt' => $refundsHt, 'refundsTaxes' => $refundTaxes, 'refunds' => $refunds,
             'giftCardsSoldCount' => $giftSoldCount, 'giftCardsSold' => ['cash' => $giftSold['cash'], 'card' => $giftSold['card'] + $giftSold['declaredCard'], 'interac' => $giftSold['interac'], 'stripe' => 0], 'giftCardsRefunded' => ['cash' => $giftRefunded],
@@ -292,5 +300,42 @@ class PosAccountingExportService
         $d['giftCardsRefunded'] += (int) $a['giftCardsRefunded']['cash'];
 
         return $d;
+    }
+
+    /**
+     * Ventes TTC du lot (F18 partie 2b) : HT net = Σ order_tax.base ; HT brut = Σ par ligne de TaxInclusive::base(TTC brut de la ligne, Σ taux des
+     * taxes de la commande qui frappent sa catégorie) ; les ventes HT du même lot gardent net = Σ total_price et brut = Σ (total_price + remise).
+     *
+     * @return array{net: int, gross: int, netOther: int, grossOther: int}|null null si aucune vente TTC dans le lot
+     */
+    private function inclusiveHt(\Doctrine\DBAL\Connection $conn, array $saleIds): ?array
+    {
+        $in = implode(',', array_map('intval', $saleIds));
+        $ttcIds = array_map('intval', $conn->fetchFirstColumn('SELECT id FROM "order" WHERE prices_include_tax AND id IN (' . $in . ')'));
+        if ($ttcIds === []) {
+            return null;
+        }
+        $ttcIn = implode(',', $ttcIds);
+        $otherIds = array_values(array_diff(array_map('intval', $saleIds), $ttcIds));
+        $other = $otherIds !== [] ? $conn->fetchAssociative('SELECT COALESCE(SUM(total_price), 0) AS net, COALESCE(SUM(total_price + discount_amount), 0) AS gross FROM order_items WHERE order_associated_id IN (' . implode(',', $otherIds) . ')') : ['net' => 0, 'gross' => 0];
+        $net = (int) $conn->fetchOne('SELECT COALESCE(SUM(base), 0) FROM order_tax WHERE order_tax_id IN (' . $ttcIn . ')');
+        $taxesByOrder = [];
+        foreach ($conn->fetchAllAssociative('SELECT ot.order_tax_id AS order_id, t.rate, t.category FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $ttcIn . ')') as $t) {
+            $taxesByOrder[(int) $t['order_id']][] = $t;
+        }
+        $gross = 0;
+        foreach ($conn->fetchAllAssociative('SELECT order_associated_id AS order_id, total_price, discount_amount, taxable, tax_category FROM order_items WHERE order_associated_id IN (' . $ttcIn . ')') as $item) {
+            $ttcGross = (int) round((float) $item['total_price']) + (int) $item['discount_amount'];
+            $category = $item['taxable'] ? \App\Services\OrderService\TaxCategory::of($item['tax_category']) : \App\Services\OrderService\TaxCategory::EXEMPT;
+            $rate = 0;
+            foreach ($taxesByOrder[(int) $item['order_id']] ?? [] as $t) {
+                if (\App\Services\OrderService\TaxCategory::applies($t['category'], $category)) {
+                    $rate += \App\Services\OrderService\TaxInclusive::rateTenThousandths((float) $t['rate']) ?? (int) round((float) $t['rate'] * \App\Services\OrderService\TaxInclusive::SCALE);
+                }
+            }
+            $gross += \App\Services\OrderService\TaxInclusive::base($ttcGross, $rate);
+        }
+
+        return ['net' => $net, 'gross' => $gross, 'netOther' => (int) round((float) $other['net']), 'grossOther' => (int) round((float) $other['gross'])];
     }
 }

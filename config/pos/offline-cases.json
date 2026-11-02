@@ -1,6 +1,6 @@
 {
-  "rule": "pos-offline-v2",
-  "description": "Jeu de cas partagé backend / POS : le total hors ligne calculé par la tablette doit être identique, au cent, au résultat attendu. Montants en cents ; rate = taux décimal ; step = pas d'arrondi des espèces (1 = aucun). Lignes facultatives (F7) : custom {label, unitPrice, taxable} = article libre (unitPrice de la ligne ignoré), priceOverride {unitPrice} = prix manuel ; taxes sur taxableSubtotal. Règle v2 (F18 partie 2a, 01/11/2026) : une ligne peut porter taxCategory (standard, intermediate, reduced, super_reduced, exempt ; vide = standard ; custom.taxCategory pour un article libre, custom.taxable=false ≡ exempt) et une taxe category (vide = tous les produits non exonérés) ; base_i = Σ nets des lignes frappées par la taxe i, amount_i = round(base_i × rate_i), total = subtotal + Σ amount_i ; expected.taxes donne label, rate, category, base, amount, total. Les cas v1 donnent le même résultat sous v2. chainVectors : vecteurs de test du chaînage (clé à part, F14).",
+  "rule": "pos-offline-v3",
+  "description": "Jeu de cas partagé backend / POS : le total hors ligne calculé par la tablette doit être identique, au cent, au résultat attendu. Montants en cents ; rate = taux décimal ; step = pas d'arrondi des espèces (1 = aucun). Lignes facultatives (F7) : custom {label, unitPrice, taxable} = article libre (unitPrice de la ligne ignoré), priceOverride {unitPrice} = prix manuel ; taxes sur taxableSubtotal. Règle v2 (F18 partie 2a, 01/11/2026) : une ligne peut porter taxCategory (standard, intermediate, reduced, super_reduced, exempt ; vide = standard ; custom.taxCategory pour un article libre, custom.taxable=false ≡ exempt) et une taxe category (vide = tous les produits non exonérés) ; base_i = Σ nets des lignes frappées par la taxe i, amount_i = round(base_i × rate_i), total = subtotal + Σ amount_i ; expected.taxes donne label, rate, category, base, amount, total. Les cas v1 donnent le même résultat sous v2. chainVectors : vecteurs de test du chaînage (clé à part, F14). Règle v3 (F18 partie 2b, 02/11/2026) : un cas peut porter pricesIncludeTax: true (prix TTC) : les nets de ligne sont TTC, les lignes sont groupées par ensemble de taxes applicables, base = round_demi_haut(ttc × 10000 / (10000 + Σ taux en dix-millièmes)) en entiers, taxe = ttc − base (ventilée entre les taxes du groupe, la dernière porte l'écart), total = subtotal (taxes comprises), cashTotal = round(total / step) × step ; expected.taxes garde {label, amount} (base = TTC du groupe − amount). Sans le drapeau, v3 = v2.",
   "cases": [
     {
       "id": "simple-une-ligne-qc",
@@ -1342,6 +1342,566 @@
         "cashTotal": 3335,
         "cashRounding": 1,
         "change": null
+      }
+    },
+    {
+      "id": "fr-ttc-deux-taux-12-00-et-5-50",
+      "pricesIncludeTax": true,
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "category": "standard"
+        },
+        {
+          "label": "TVA 10 %",
+          "rate": 0.1,
+          "category": "intermediate"
+        },
+        {
+          "label": "TVA 5,5 %",
+          "rate": 0.055,
+          "category": "reduced"
+        },
+        {
+          "label": "TVA 2,1 %",
+          "rate": 0.021,
+          "category": "super_reduced"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1200,
+          "quantity": 1
+        },
+        {
+          "unitPrice": 550,
+          "quantity": 1,
+          "taxCategory": "reduced"
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 2000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1200,
+            "discountAmount": 0,
+            "net": 1200
+          },
+          {
+            "gross": 550,
+            "discountAmount": 0,
+            "net": 550,
+            "taxCategory": "reduced"
+          }
+        ],
+        "subtotal": 1750,
+        "discountTotal": 0,
+        "taxableSubtotal": 1750,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "amount": 200
+          },
+          {
+            "label": "TVA 10 %",
+            "amount": 0
+          },
+          {
+            "label": "TVA 5,5 %",
+            "amount": 29
+          },
+          {
+            "label": "TVA 2,1 %",
+            "amount": 0
+          }
+        ],
+        "total": 1750,
+        "cashTotal": 1750,
+        "cashRounding": 0,
+        "change": 250
+      }
+    },
+    {
+      "id": "fr-ttc-remise-ticket-10-pourcent",
+      "pricesIncludeTax": true,
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "category": "standard"
+        },
+        {
+          "label": "TVA 10 %",
+          "rate": 0.1,
+          "category": "intermediate"
+        },
+        {
+          "label": "TVA 5,5 %",
+          "rate": 0.055,
+          "category": "reduced"
+        },
+        {
+          "label": "TVA 2,1 %",
+          "rate": 0.021,
+          "category": "super_reduced"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1200,
+          "quantity": 1
+        },
+        {
+          "unitPrice": 550,
+          "quantity": 1,
+          "taxCategory": "reduced"
+        }
+      ],
+      "ticketDiscount": {
+        "type": "percent",
+        "value": 10
+      },
+      "cashReceived": null,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1200,
+            "discountAmount": 120,
+            "net": 1080
+          },
+          {
+            "gross": 550,
+            "discountAmount": 55,
+            "net": 495,
+            "taxCategory": "reduced"
+          }
+        ],
+        "subtotal": 1575,
+        "discountTotal": 175,
+        "taxableSubtotal": 1575,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "amount": 180
+          },
+          {
+            "label": "TVA 10 %",
+            "amount": 0
+          },
+          {
+            "label": "TVA 5,5 %",
+            "amount": 26
+          },
+          {
+            "label": "TVA 2,1 %",
+            "amount": 0
+          }
+        ],
+        "total": 1575,
+        "cashTotal": 1575,
+        "cashRounding": 0,
+        "change": null
+      }
+    },
+    {
+      "id": "fr-ttc-egalite-0-03-a-20",
+      "pricesIncludeTax": true,
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "category": "standard"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 3,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": null,
+      "expected": {
+        "lines": [
+          {
+            "gross": 3,
+            "discountAmount": 0,
+            "net": 3
+          }
+        ],
+        "subtotal": 3,
+        "discountTotal": 0,
+        "taxableSubtotal": 3,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "amount": 0
+          }
+        ],
+        "total": 3,
+        "cashTotal": 3,
+        "cashRounding": 0,
+        "change": null
+      }
+    },
+    {
+      "id": "fr-ttc-egalite-0-09-a-20",
+      "pricesIncludeTax": true,
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "category": "standard"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 9,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": null,
+      "expected": {
+        "lines": [
+          {
+            "gross": 9,
+            "discountAmount": 0,
+            "net": 9
+          }
+        ],
+        "subtotal": 9,
+        "discountTotal": 0,
+        "taxableSubtotal": 9,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "amount": 1
+          }
+        ],
+        "total": 9,
+        "cashTotal": 9,
+        "cashRounding": 0,
+        "change": null
+      }
+    },
+    {
+      "id": "fr-ttc-remise-ligne-et-ticket",
+      "pricesIncludeTax": true,
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "category": "standard"
+        },
+        {
+          "label": "TVA 10 %",
+          "rate": 0.1,
+          "category": "intermediate"
+        },
+        {
+          "label": "TVA 5,5 %",
+          "rate": 0.055,
+          "category": "reduced"
+        },
+        {
+          "label": "TVA 2,1 %",
+          "rate": 0.021,
+          "category": "super_reduced"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2000,
+          "quantity": 2,
+          "discounts": [
+            {
+              "type": "percent",
+              "value": 10
+            }
+          ]
+        },
+        {
+          "unitPrice": 550,
+          "quantity": 1,
+          "taxCategory": "reduced"
+        }
+      ],
+      "ticketDiscount": {
+        "type": "amount",
+        "value": 300
+      },
+      "cashReceived": 5000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 4000,
+            "discountAmount": 660,
+            "net": 3340
+          },
+          {
+            "gross": 550,
+            "discountAmount": 40,
+            "net": 510,
+            "taxCategory": "reduced"
+          }
+        ],
+        "subtotal": 3850,
+        "discountTotal": 700,
+        "taxableSubtotal": 3850,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "amount": 557
+          },
+          {
+            "label": "TVA 10 %",
+            "amount": 0
+          },
+          {
+            "label": "TVA 5,5 %",
+            "amount": 27
+          },
+          {
+            "label": "TVA 2,1 %",
+            "amount": 0
+          }
+        ],
+        "total": 3850,
+        "cashTotal": 3850,
+        "cashRounding": 0,
+        "change": 1150
+      }
+    },
+    {
+      "id": "fr-ttc-exonere-et-deux-taux",
+      "pricesIncludeTax": true,
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "category": "standard"
+        },
+        {
+          "label": "TVA 10 %",
+          "rate": 0.1,
+          "category": "intermediate"
+        },
+        {
+          "label": "TVA 5,5 %",
+          "rate": 0.055,
+          "category": "reduced"
+        },
+        {
+          "label": "TVA 2,1 %",
+          "rate": 0.021,
+          "category": "super_reduced"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1200,
+          "quantity": 1
+        },
+        {
+          "unitPrice": 550,
+          "quantity": 1,
+          "taxCategory": "reduced"
+        },
+        {
+          "unitPrice": 700,
+          "quantity": 1,
+          "taxCategory": "exempt"
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": null,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1200,
+            "discountAmount": 0,
+            "net": 1200
+          },
+          {
+            "gross": 550,
+            "discountAmount": 0,
+            "net": 550,
+            "taxCategory": "reduced"
+          },
+          {
+            "gross": 700,
+            "discountAmount": 0,
+            "net": 700,
+            "taxCategory": "exempt"
+          }
+        ],
+        "subtotal": 2450,
+        "discountTotal": 0,
+        "taxableSubtotal": 2450,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "amount": 200
+          },
+          {
+            "label": "TVA 10 %",
+            "amount": 0
+          },
+          {
+            "label": "TVA 5,5 %",
+            "amount": 29
+          },
+          {
+            "label": "TVA 2,1 %",
+            "amount": 0
+          }
+        ],
+        "total": 2450,
+        "cashTotal": 2450,
+        "cashRounding": 0,
+        "change": null
+      }
+    },
+    {
+      "id": "fr-ttc-article-libre-taux-choisi",
+      "pricesIncludeTax": true,
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "category": "standard"
+        },
+        {
+          "label": "TVA 10 %",
+          "rate": 0.1,
+          "category": "intermediate"
+        },
+        {
+          "label": "TVA 5,5 %",
+          "rate": 0.055,
+          "category": "reduced"
+        },
+        {
+          "label": "TVA 2,1 %",
+          "rate": 0.021,
+          "category": "super_reduced"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 0,
+          "quantity": 2,
+          "custom": {
+            "label": "Plat du jour",
+            "unitPrice": 1250,
+            "taxable": true,
+            "taxCategory": "intermediate"
+          }
+        },
+        {
+          "unitPrice": 0,
+          "quantity": 1,
+          "custom": {
+            "label": "Pourboire",
+            "unitPrice": 300,
+            "taxable": false
+          }
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 3000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 2500,
+            "discountAmount": 0,
+            "net": 2500,
+            "taxCategory": "intermediate"
+          },
+          {
+            "gross": 300,
+            "discountAmount": 0,
+            "net": 300,
+            "taxable": false
+          }
+        ],
+        "subtotal": 2800,
+        "discountTotal": 0,
+        "taxableSubtotal": 2500,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "amount": 0
+          },
+          {
+            "label": "TVA 10 %",
+            "amount": 227
+          },
+          {
+            "label": "TVA 5,5 %",
+            "amount": 0
+          },
+          {
+            "label": "TVA 2,1 %",
+            "amount": 0
+          }
+        ],
+        "total": 2800,
+        "cashTotal": 2800,
+        "cashRounding": 0,
+        "change": 200
+      }
+    },
+    {
+      "id": "ttc-arrondi-especes-pas-5",
+      "pricesIncludeTax": true,
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "category": "standard"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1752,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 2000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1752,
+            "discountAmount": 0,
+            "net": 1752
+          }
+        ],
+        "subtotal": 1752,
+        "discountTotal": 0,
+        "taxableSubtotal": 1752,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "amount": 292
+          }
+        ],
+        "total": 1752,
+        "cashTotal": 1750,
+        "cashRounding": -2,
+        "change": 250
       }
     }
   ],

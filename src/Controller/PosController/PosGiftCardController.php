@@ -17,7 +17,7 @@ use Symfony\Component\Routing\Attribute\Route;
  */
 class PosGiftCardController extends AbstractController
 {
-    public function __construct(private readonly PosGiftCardUseCase $cards, private readonly PosIdempotencyService $idempotency)
+    public function __construct(private readonly PosGiftCardUseCase $cards, private readonly PosIdempotencyService $idempotency, private readonly ?\App\Services\CaisseService\SiteLocaleResolver $siteLocale = null)
     {
     }
 
@@ -106,7 +106,7 @@ class PosGiftCardController extends AbstractController
 
     private function locale(Request $request): string
     {
-        return preg_match('/^[a-z]{2}$/', (string) $request->query->get('locale', 'fr')) ? (string) $request->query->get('locale') : 'fr';
+        return $this->siteLocale?->fromRequest($request) ?? (preg_match('/^[a-z]{2}$/', (string) $request->query->get('locale', 'fr')) ? (string) $request->query->get('locale') : 'fr'); // sans ?locale= : langue du site (F18 partie 2b)
     }
 
     private function user(): User

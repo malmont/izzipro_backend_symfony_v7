@@ -22,17 +22,21 @@ use App\Services\PosDiscountService\PosDiscountCalculator;
  * 5'. base_i = Σ nets des lignes auxquelles la taxe i s'applique (TaxCategory::applies) ; taxe_i = round(base_i × taux_i) ; total =
  * sousTotal + Σ taxes (montants arrondis, donc Σ taxes[].amount = total − sousTotal). Sans catégorie nulle part, base_i =
  * sousTotalTaxable : les cas v1 donnent exactement le même résultat. Sortie des taxes : {label, rate, category, base, amount, total}.
+ * Règle « pos-offline-v3 » (F18 partie 2b, 02/11/2026) = v2 + prix taxes comprises (`pricesIncludeTax`, drapeau du pack `site.pricesIncludeTax`
+ * et du cas) : les nets de ligne sont TTC ; les lignes sont groupées par ensemble de taxes applicables, base_groupe = TaxInclusive::base(ttc,
+ * Σ taux en dix-millièmes), taxe = ttc − base ventilée entre les taxes du groupe (dernière porte l'écart) ; subtotal TTC, total = subtotal
+ * (les taxes sont dedans), taxTotal à part ; cashTotal sur le total TTC. Sans le drapeau, v3 = v2.
  */
 final class PosOfflineCalculator
 {
-    public const RULE = 'pos-offline-v2';
+    public const RULE = 'pos-offline-v3';
 
     /**
      * @param list<array{unitPrice: int, quantity: int, discounts?: list<array>}> $lines
      * @param list<array{label: string, rate: float}> $taxes
      * @return array{lines: list<array>, subtotal: int, discountTotal: int, ticketDiscount: ?array, taxes: list<array>, total: int, cashTotal: int, cashRounding: int, change: ?int}
      */
-    public static function compute(array $lines, ?array $ticketDiscount, array $taxes, int $step, ?int $cashReceived = null): array
+    public static function compute(array $lines, ?array $ticketDiscount, array $taxes, int $step, ?int $cashReceived = null, bool $pricesIncludeTax = false): array
     {
         $quoteLines = [];
         $items = [];
@@ -62,25 +66,55 @@ final class PosOfflineCalculator
         }
         $taxLines = [];
         $taxTotal = 0;
-        foreach ($taxes as $tax) {
-            $category = isset($tax['category']) && \App\Services\OrderService\TaxCategory::isValid($tax['category']) ? $tax['category'] : null;
-            $base = 0;
+        $taxCategories = array_map(fn ($tax) => isset($tax['category']) && \App\Services\OrderService\TaxCategory::isValid($tax['category']) ? $tax['category'] : null, $taxes);
+        if ($pricesIncludeTax) { // v3 : extraction par groupe de taxes applicables, en entiers
+            $groups = [];
             foreach ($nets as $i => $net) {
-                if (\App\Services\OrderService\TaxCategory::applies($category, $categories[$i])) {
-                    $base += $net;
+                $ids = array_keys(array_filter($taxCategories, fn ($c) => \App\Services\OrderService\TaxCategory::applies($c, $categories[$i])));
+                $key = implode(',', $ids);
+                $groups[$key] = ($groups[$key] ?? 0) + $net;
+            }
+            $perTax = array_fill(0, max(1, count($taxes)), ['base' => 0, 'amount' => 0]);
+            foreach ($groups as $key => $ttc) {
+                if ($key === '') {
+                    continue;
+                }
+                $ids = array_map('intval', explode(',', (string) $key));
+                $rates = array_map(fn ($k) => \App\Services\OrderService\TaxInclusive::rateTenThousandths((float) $taxes[$k]['rate']) ?? (int) round((float) $taxes[$k]['rate'] * \App\Services\OrderService\TaxInclusive::SCALE), $ids);
+                $base = \App\Services\OrderService\TaxInclusive::base($ttc, (int) array_sum($rates));
+                $spread = 0;
+                foreach ($ids as $n => $k) {
+                    $amount = $n === count($ids) - 1 ? ($ttc - $base) - $spread : \App\Services\OrderService\TaxInclusive::taxOn($base, $rates[$n]);
+                    $spread += $amount;
+                    $perTax[$k]['base'] += $base;
+                    $perTax[$k]['amount'] += $amount;
                 }
             }
-            $amount = (int) round($base * (float) $tax['rate']);
-            $taxLines[] = ['label' => (string) $tax['label'], 'rate' => (float) $tax['rate'], 'category' => $category, 'base' => $base, 'amount' => $amount, 'total' => $base + $amount];
-            $taxTotal += $amount;
+            foreach ($taxes as $k => $tax) {
+                $taxLines[] = ['label' => (string) $tax['label'], 'rate' => (float) $tax['rate'], 'category' => $taxCategories[$k], 'base' => $perTax[$k]['base'], 'amount' => $perTax[$k]['amount'], 'total' => $perTax[$k]['base'] + $perTax[$k]['amount']];
+                $taxTotal += $perTax[$k]['amount'];
+            }
+        } else {
+            foreach ($taxes as $k => $tax) {
+                $category = $taxCategories[$k];
+                $base = 0;
+                foreach ($nets as $i => $net) {
+                    if (\App\Services\OrderService\TaxCategory::applies($category, $categories[$i])) {
+                        $base += $net;
+                    }
+                }
+                $amount = (int) round($base * (float) $tax['rate']);
+                $taxLines[] = ['label' => (string) $tax['label'], 'rate' => (float) $tax['rate'], 'category' => $category, 'base' => $base, 'amount' => $amount, 'total' => $base + $amount];
+                $taxTotal += $amount;
+            }
         }
-        $total = $subtotal + $taxTotal;
+        $total = $pricesIncludeTax ? $subtotal : $subtotal + $taxTotal;
         $step = max(1, $step);
         $cashTotal = $step > 1 ? (int) (round($total / $step) * $step) : $total;
 
         return [
             'lines' => $out, 'subtotal' => $subtotal, 'discountTotal' => $applied['summary']['total'], 'ticketDiscount' => $applied['summary']['ticket'],
-            'taxableSubtotal' => $taxableSubtotal, 'taxes' => $taxLines, 'total' => $total, 'cashTotal' => $cashTotal, 'cashRounding' => $cashTotal - $total,
+            'taxableSubtotal' => $taxableSubtotal, 'taxes' => $taxLines, 'taxTotal' => $taxTotal, 'pricesIncludeTax' => $pricesIncludeTax, 'total' => $total, 'cashTotal' => $cashTotal, 'cashRounding' => $cashTotal - $total,
             'change' => $cashReceived !== null ? $cashReceived - $cashTotal : null,
         ];
     }

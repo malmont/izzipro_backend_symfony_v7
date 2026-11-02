@@ -48,6 +48,7 @@ class GetOrdersBySourceUseCase
                 $order->getStatus() ? $order->getStatus()->getName() : null,
                 $orderItemDTOs
             );
+            $orderDTOs[array_key_last($orderDTOs)]->withTaxDetails($order); // taxes par taux et drapeau TTC (F18 partie 2b)
             if ($orderSourceId === 2) {
                 $orderDTOs[array_key_last($orderDTOs)]->pos = OrderDTO::posFields($receipts[$order->getId()] ?? []);
             }

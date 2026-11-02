@@ -118,7 +118,8 @@ class PosReturnUseCase
             throw new CashRegisterException('VALIDATION_FAILED', 'sale.items : au moins un article', 422, [['path' => 'sale.items', 'message' => 'au moins un article attendu']]);
         }
         $ticketDiscount = is_array($saleInput['ticketDiscount'] ?? null) ? $saleInput['ticketDiscount'] : null;
-        $returnTotal = $this->returns->preview($returnInput);
+        $returnDetail = $this->returns->previewDetail($returnInput); // détail par taux du retour (F18 partie 2b)
+        $returnTotal = $returnDetail['amount'];
         // Fiche client et rachat de points de la vente d'échange (F8) : comme l'échange ; clé sale.loyalty seulement si des points sont rachetés
         $loyalty = null;
         if (\App\Services\PosCustomerService\PosLoyaltyQuote::redeemPoints($saleInput) > 0 || is_numeric($saleInput['customerId'] ?? null)) {
@@ -133,6 +134,7 @@ class PosReturnUseCase
 
         return [
             'returnAmount' => $returnTotal,
+            'return' => ['subtotal' => $returnDetail['subtotal'], 'totalTax' => $returnDetail['totalTax'], 'taxes' => $returnDetail['taxes'], 'pricesIncludeTax' => $returnDetail['pricesIncludeTax']], // F18 partie 2b
             'sale' => ['subtotal' => $quote['subtotal'], 'grossSubtotal' => $quote['grossSubtotal'] ?? $quote['subtotal'], 'discounts' => $quote['discounts'], 'taxes' => $quote['taxes'], 'total' => $quote['total'], 'cashTotal' => $quote['cashTotal']] + ($loyalty !== null ? ['loyalty' => $loyalty] : []),
             'creditApplied' => $credit,
             'amountDue' => $gift ? $gift['amountDue'] : $amountDue,

@@ -295,7 +295,7 @@ class PosOfflineSyncService
         $this->posLines->check(array_map(fn ($l) => array_intersect_key($l, ['custom' => 1, 'priceOverride' => 1]), $lines)); // motifs du prix manuel
         $ticketDiscount = is_array($sale['ticketDiscount'] ?? null) && $sale['ticketDiscount'] !== [] ? $sale['ticketDiscount'] : null;
         $this->discounts->check(array_map(fn ($l) => ['discounts' => $l['discounts']], $lines), $ticketDiscount);
-        $expected = PosOfflineCalculator::compute($lines, $ticketDiscount, $snapshot['taxes'], (int) $snapshot['step'], $cashPaid);
+        $expected = PosOfflineCalculator::compute($lines, $ticketDiscount, $snapshot['taxes'], (int) $snapshot['step'], $cashPaid, (bool) ($snapshot['pricesIncludeTax'] ?? false)); // v3 : TTC de l'instantané
         // Remises : plafond du vendeur (sans validation possible hors ligne)
         if ($expected['discountTotal'] > 0) {
             $summary = ['lines' => $expected['discountTotal'] - ($expected['ticketDiscount']['amount'] ?? 0), 'ticket' => $expected['ticketDiscount'], 'total' => $expected['discountTotal'], 'gross' => (int) array_sum(array_map(fn ($l) => $l['gross'], $expected['lines']))];
@@ -423,7 +423,7 @@ class PosOfflineSyncService
             }
         }
         $cashRounding = $declaredCash - $declaredTotal;
-        $order->setSubTotal($declaredSubtotal)->setTotalTax($declaredTaxTotal)->setTotalAmount($declaredTotal)->setCashRounding($cashRounding);
+        $order->setSubTotal($declaredSubtotal)->setTotalTax($declaredTaxTotal)->setTotalAmount($declaredTotal)->setCashRounding($cashRounding)->setPricesIncludeTax((bool) ($snapshot['pricesIncludeTax'] ?? false));
         $em->persist($order);
         $em->flush();
         $this->payments->handlePayment($order, $declaredCash, 2, 2, 2, \DateTime::createFromImmutable($soldAtCorrected), null);

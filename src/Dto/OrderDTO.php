@@ -25,6 +25,28 @@ class OrderDTO
     public ?array $pos = null;
     /** État du paiement (01/11/2026) : pending, authorized, paid, failed, refunded, canceled (OrderPresenter::paymentStatus) */
     public ?string $paymentStatus = null;
+    /** Lignes TTC (F18 partie 2b) : subTotal TTC, priceTax = taxe incluse (information), totalAmount = payé ; faux : totalAmount = subTotal + priceTax */
+    public bool $pricesIncludeTax = false;
+    /** @var list<array{label: string, rate: ?float, base: ?int, amount: int, total: ?int}> taxes de la commande par taux (cents ; base null sur une commande antérieure sans assiette) */
+    public array $taxes = [];
+
+    /** Détail des taxes et drapeau TTC depuis l'entité (F18 partie 2b) */
+    public function withTaxDetails(\App\Entity\Order $order): static
+    {
+        $this->pricesIncludeTax = $order->isPricesIncludeTax();
+        $this->taxes = [];
+        foreach ($order->getOrderTaxes() as $orderTax) {
+            $tax = $orderTax->getTax();
+            $amount = (int) round((float) $orderTax->getAmount());
+            $base = $orderTax->getBase();
+            if ($amount === 0 && ($base ?? 0) === 0) {
+                continue; // taxe à 0 : non servie
+            }
+            $this->taxes[] = ['label' => $tax?->getName() ?? 'Taxe', 'rate' => $tax ? (float) $tax->getRate() : null, 'base' => $base, 'amount' => $amount, 'total' => $base !== null ? $base + $amount : null];
+        }
+
+        return $this;
+    }
     /** Expédition (01/11/2026) : {carrier, trackingNumber, trackingUrl} dès qu'une étiquette existe, sinon null */
     public ?array $shipment = null;
 
@@ -76,6 +98,8 @@ class OrderDTO
             'status' => $this->status,
             'orderItems' => array_map(fn($item) => $item->toArray(), $this->orderItems),
             'paymentStatus' => $this->paymentStatus,
+            'pricesIncludeTax' => $this->pricesIncludeTax, // F18 partie 2b
+            'taxes' => $this->taxes,
             'shipment' => $this->shipment,
         ] + ($this->pos ?? []);
     }

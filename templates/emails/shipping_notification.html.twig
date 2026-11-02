@@ -65,7 +65,7 @@
 							<div style="margin-top: 20px; padding: 10px; border: 1px solid #eee; background: #f9f9f9; border-radius: 5px;">
 								{% if order.subTotal is not null %}
 									<p style="margin: 5px 0;">
-										<strong>Sous-total :</strong>
+										<strong>{{ order.pricesIncludeTax ? 'Sous-total TTC :' : 'Sous-total :' }}</strong>
 										{{ (order.subTotal / 100) | format_currency('CAD') }}</p>
 								{% endif %}
 								{% if order.shippingCost is not null %}
@@ -75,7 +75,7 @@
 								{% endif %}
 								{% if order.totalTax is not null %}
 									<p style="margin: 5px 0;">
-										<strong>Taxes :</strong>
+										<strong>{{ order.pricesIncludeTax ? 'dont taxes :' : 'Taxes :' }}</strong>
 										{{ (order.totalTax / 100) | format_currency('CAD') }}</p>
 								{% endif %}
 								<p style="margin: 5px 0; font-size: 1.1em; color: #d9534f;">

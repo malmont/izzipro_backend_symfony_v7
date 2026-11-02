@@ -33,7 +33,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
         private readonly \App\Services\TenantConnectionProvider $tenant,
         private readonly \Symfony\Component\HttpFoundation\RequestStack $requestStack,
         private readonly \App\Services\TenantConnectionManager $tenantManager,
-        private readonly ?\App\Services\BoutiqueSettingsService\SiteCurrencyService $siteCurrency = null // devise du site (F18 partie 1, 01/11/2026)
+        private readonly ?\App\Services\BoutiqueSettingsService\SiteCurrencyService $siteCurrency = null, // devise du site (F18 partie 1, 01/11/2026)
+        private readonly ?\App\Services\OrderService\TaxInclusiveGuard $taxInclusive = null // prix taxes comprises (F18 partie 2b)
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
@@ -57,7 +58,21 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 $this->addFlash('danger', $e->getMessage());
             }
         }
+        // Prix taxes comprises (F18 partie 2b) : Stripe Tax, taux non multiple de 0,01 % ou montants déjà enregistrés → refus, même par requête forgée
+        $ttcChange = isset($changeSet['pricesIncludeTax']) && $entityInstance instanceof Entreprise ? $changeSet['pricesIncludeTax'] : null;
+        if ($ttcChange !== null && $this->taxInclusive !== null) {
+            try {
+                $this->taxInclusive->assertCanChange((bool) $ttcChange[1]);
+            } catch (\DomainException $e) {
+                $entityInstance->setPricesIncludeTax((bool) $ttcChange[0]);
+                $ttcChange = null;
+                $this->addFlash('danger', $e->getMessage());
+            }
+        }
         parent::updateEntity($entityManager, $entityInstance);
+        if ($ttcChange !== null) {
+            $this->addFlash('success', $ttcChange[1] ? 'Prix taxes comprises activés : les prix du catalogue sont désormais TTC, la TVA est extraite par taux.' : 'Prix taxes comprises désactivés : les prix du catalogue sont hors taxes.');
+        }
         if ($currencyChange !== null && $this->siteCurrency !== null) {
             $outcome = $this->siteCurrency->afterChange($entityInstance, $currencyChange[0], 'entreprise');
             $this->addFlash('success', $outcome['created'] > 0
@@ -80,6 +95,22 @@ class EntrepriseCrudController extends BaseTenantCrudController
      * Devise du site (F18 partie 1, 01/11/2026) : CAD, EUR ou USD ; modifiable tant que le site n'a ni commande, ni carte-cadeau ou avoir,
      * ni session de caisse, puis en lecture seule avec le motif. Tous les montants du site (boutique, caisse) sont dans cette devise.
      */
+    /** Prix taxes comprises (F18 partie 2b) : verrouillé comme la devise dès le premier montant enregistré ; refusé avec Stripe Tax ou un taux non multiple de 0,01 % */
+    private function pricesIncludeTaxField(): BooleanField
+    {
+        $lock = $this->siteCurrency?->lockMessage();
+        $field = BooleanField::new('pricesIncludeTax', 'Prix affichés taxes comprises')->renderAsSwitch(false)->hideOnIndex()
+            ->setHelp(($lock !== null ? '🔒 ' . str_replace('Devise verrouillée', 'Prix taxes comprises verrouillés', $lock) . ' ' : '')
+                . 'Obligatoire en France pour la vente aux particuliers : les prix du catalogue sont TTC, la TVA est extraite par taux (base = round(TTC / (1 + taux))). '
+                . 'À activer seulement quand les applications (caisse, e-commerce) qui savent l\'afficher sont publiées : une application plus ancienne afficherait « TVA 20 % » comme si la taxe s\'ajoutait. '
+                . 'Impossible avec Stripe Tax ou un taux non multiple de 0,01 % (ex. 9,975 %). Verrouillé après la première vente, carte-cadeau ou session de caisse.');
+        if ($lock !== null) {
+            $field->setFormTypeOption('disabled', true);
+        }
+
+        return $field;
+    }
+
     private function currencyField(): \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField
     {
         $lock = $this->siteCurrency?->lockMessage();
@@ -137,6 +168,7 @@ class EntrepriseCrudController extends BaseTenantCrudController
             TextField::new('siret', 'SIRET (France)')->setRequired(false)->hideOnIndex()->setHelp('Imprimé sur les tickets de caisse d\'un magasin en France (store.taxIds), avec le n° de TVA intracommunautaire.'),
             TextField::new('tvaIntracommunautaire', 'TVA intracommunautaire'),
             $this->currencyField(),
+            $this->pricesIncludeTaxField(),
             TextField::new('gstNumber', 'Numéro de TPS (Canada)')->setRequired(false)->hideOnIndex()->setHelp('Imprimé sur les tickets de caisse (store.taxNumbers.gst)'),
             TextField::new('qstNumber', 'Numéro de TVQ (Québec)')->setRequired(false)->hideOnIndex()->setHelp('Imprimé sur les tickets de caisse (store.taxNumbers.qst)'),
             FormField::addPanel('Réseaux sociaux')->collapsible(),

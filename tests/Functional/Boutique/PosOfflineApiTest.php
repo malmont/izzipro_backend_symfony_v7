@@ -61,7 +61,7 @@ class PosOfflineApiTest extends WebTestCase
         $this->assertSame(PosOfflineCalculator::RULE, $cases['rule']);
         $this->assertGreaterThanOrEqual(10, count($cases['cases']));
         foreach ($cases['cases'] as $case) {
-            $r = PosOfflineCalculator::compute($case['lines'], $case['ticketDiscount'], $case['taxes'], $case['step'], $case['cashReceived']);
+            $r = PosOfflineCalculator::compute($case['lines'], $case['ticketDiscount'], $case['taxes'], $case['step'], $case['cashReceived'], (bool) ($case['pricesIncludeTax'] ?? false)); // v3 : cas TTC
             $got = ['lines' => $r['lines'], 'subtotal' => $r['subtotal'], 'discountTotal' => $r['discountTotal'], 'taxes' => array_map(fn ($t) => ['label' => $t['label'], 'amount' => $t['amount']], $r['taxes']),
                 'total' => $r['total'], 'cashTotal' => $r['cashTotal'], 'cashRounding' => $r['cashRounding'], 'change' => $r['change']];
             if (array_key_exists('taxableSubtotal', $case['expected'])) { // cas F7 (article libre, prix manuel) : assiette taxable exposée

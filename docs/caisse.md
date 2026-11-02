@@ -503,7 +503,7 @@ sauf mention), jamais en constantes ; valeurs par défaut = comportement d'avant
   "currency": "CAD",
   "cashRoundingStep": 5,
   "pricesIncludeTax": false,
-  "taxCategories": ["standard", "intermediate", "reduced", "super_reduced", "exempt"],
+  "taxCategories": [],
   "lockAfterMinutes": 5,
   "approvals": { "refund": {"required": true, "threshold": 0}, "withdrawal": {}, "fundWithdrawal": {}, "drawerOpen": {"required": true}, "closeWithoutCount": {"required": true}, "discount": {} },
   "pin": { "minLength": 4, "maxLength": 6, "maxAttempts": 5, "lockMinutes": 15 },
@@ -1982,6 +1982,102 @@ cent d'écart entre le montant autorisé par Stripe ou affiché au devis et la c
 tolérance d'un cent de `checkCounterPayment`). Depuis : **total = Σ amount_i partout** ; 14,99 $ → 17,24 $ au devis de caisse
 (`cashTotal` 17,25), au devis web et à `create-intent`, comme la commande. Aucun changement sur les cas sans fraction litigieuse
 (29,00 $ → 33,34 $, captures identiques) ; MAUI lit les commandes enregistrées, qui ne changent pas.
+
+## Prix taxes comprises (lot F18 partie 2b, 02/11/2026)
+
+Réglage de site **« Prix affichés taxes comprises »** (fiche Entreprise, à côté de la devise ; colonne `entreprise.prices_include_tax`, faux
+par défaut ; exposé dans `GET /api/pos/settings`, le devis, le ticket, le paquet, `commerce.pricesIncludeTax` en lecture seule). Obligatoire
+en France pour la vente aux particuliers. **Garde-fous** (`Services/OrderService/TaxInclusiveGuard`, EasyAdmin et requête forgée) : refusé
+avec Stripe Tax (`commerce.taxProvider = stripe`, et l'éditeur de la boutique refuse `stripe` quand le site est TTC : 422
+`commerce.taxProvider`), refusé si un taux du magasin n'est pas un multiple exact de 0,01 % (9,975 % : l'extraction en dix-millièmes serait
+fausse), **verrouillé** dès la première commande, carte-cadeau ou session de caisse (comme la devise). Aide du champ : à activer seulement quand
+les applications (caisse, e-commerce) qui savent l'afficher sont publiées. Tous les sites actuels restent hors taxes : aucun changement.
+
+### Calcul (`TaxEngine::tableInclusive`, `Services/OrderService/TaxInclusive`), cents entiers, sans flottant
+
+1. Nets de ligne TTC après remises de ligne, puis remise de ticket **au prorata des TTC** (F1 inchangé, écart sur la dernière ligne).
+2. Lignes groupées par **ensemble de taxes applicables** (catégories de 2a ; France : une TVA par ligne ; taxes empilées possibles).
+   Livraison TTC (boutique en ligne) répartie entre les groupes taxés **au prorata de leurs TTC**, écart sur le dernier groupe ; panier
+   entièrement exonéré → livraison exonérée.
+3. Pour chaque groupe : taux en **dix-millièmes** (`r` = 2000 pour 20 %, 550 pour 5,5 %, 850 pour 8,5 %, 175 pour 1,75 %…),
+   `base = ⌊(2 × ttc × 10000 + (10000 + R)) / (2 × (10000 + R))⌋` (arrondi demi vers le haut), `taxe = ttc − base` ; plusieurs taxes dans le
+   groupe : `taxe_i = round_demi_haut(base × r_i / 10000)`, la dernière porte l'écart. **Σ bases + Σ taxes = TTC exactement.**
+4. `taxes[] {label, rate, category, base, amount, total}` avec `total` = TTC du groupe (base + amount) ; `subtotal` et `shipping` **TTC** ;
+   **`total = subtotal + shipping`** (les taxes sont dedans) ; `pricesIncludeTax: true`. `cashTotal` : arrondi des espèces sur le total TTC,
+   inchangé. **Taxes à 0** : le devis, le ticket, les rapports X/Z, la commande lue et les retours ne servent que les taxes qui frappent au
+   moins une ligne (base ou montant non nul), jamais toutes les TVA du site à 0 (HT comme TTC, depuis le 02/11/2026).
+
+### Contrat
+
+- **Devis caisse** `POST /api/pos/quote` et `/api/pos/exchanges/quote` (bloc `sale`), **devis web** `POST /api/cart/quote` et `create-intent`
+  (montant autorisé = total TTC) : comme ci-dessus. Exemple France : A 12,00 € (20 %) + B 5,50 € (5,5 %) → `subtotal 1750, total 1750,
+  taxes [{TVA 20 %, base 1000, amount 200, total 1200}, {TVA 5,5 %, base 521, amount 29, total 550}]` ; avec livraison 5,00 € (web) : `shipping 500,
+  total 2250, taxes [{…, base 1286, amount 257, total 1543}, {…, base 670, amount 37, total 707}]` (3,43 / 1,57 de livraison par groupe).
+- **Commande** : lignes TTC telles que payées (`unit_price`, `total_price`), `order.prices_include_tax` (snapshot, migration
+  `Version20261109100000`), **même règle que le devis dans les deux modes (02/11/2026)** : `sub_total` = Σ lignes **sans la livraison**
+  (avant, la livraison y était comprise), `shipping_cost` à part, `total_tax` = taxe (incluse en TTC, information), **`total_amount =
+  sub_total + shipping_cost` en TTC** et `sub_total + shipping_cost + total_tax` en HT ; `order_tax.base` HT par taux ; **aucune ligne
+  `order_tax` à 0** n'est plus enregistrée (seules les taxes qui frappent au moins une ligne ; les commandes antérieures peuvent en avoir,
+  elles ne sont plus servies). **Commande lue** (`OrderDTO`, compte client et listes) : `subTotal` (lignes), `priceShipping`, `priceTax` =
+  taxe **incluse** en TTC (ne s'ajoute pas), `totalAmount` = payé (`subTotal + priceShipping` en TTC), ajouts `pricesIncludeTax` et
+  `taxes[] {label, rate, base, amount, total}` (aussi sur les commandes HT : `total = base + amount`, `base` null sur une commande
+  antérieure sans assiette ; taxes à 0 omises). Exemple web France : devis `subtotal 1750, shipping 500, total 2250` → commande
+  `sub_total 1750, shipping_cost 500, total_amount 2250, total_tax 294`, `order_tax` 1286/257 et 670/37 (test).
+- **Ticket** : `pricesIncludeTax` (de la commande), `subTotal`/`totalAmount` TTC, `taxes[]` avec `base`/`total` en dollars. **Rapports X/Z** :
+  `pricesIncludeTax` (site), `sales.total` TTC, `taxes[]` par taux avec base. **Réglages** : `pricesIncludeTax`, `taxCategories: [{category,
+  rate}]` = catégories portées par les taxes du magasin (vide au Québec : la caisse n'affiche le choix du taux d'un article libre que si la
+  liste n'est pas vide ; demo → `[]` ; site français → 20, 10, 5,5, 2,1 %).
+- **Retours (F2)** : remboursement = **net TTC payé** (`unitRefundable = unitPrice`), taxe du retour extraite au **taux de la vente d'origine**
+  par groupe (`order_items.tax_category`), `taxes[] {label, rate, base, amount, total}` dans le lookup, la réponse du retour et le bloc
+  `return` du devis d'échange ; commande de retour `prices_include_tax` = celui de la vente, `order_tax.base` négative. Exemple : retour du
+  t-shirt 5,50 € → `amount 550, totalTax 29, taxes[TVA 5,5 %] {base 521, amount 29, total 550}`.
+- **Coupons de fabricant (F17)** : refusés sur un site TTC, **409 `COUPONS_NOT_AVAILABLE_TTC`** au devis (`coupons` envoyé) et à la vente
+  (part `type 6`) ; la caisse masque le bouton grâce à `pricesIncludeTax`. Québec : inchangé.
+- **Cartes-cadeaux (F9)** : vente non taxée, inchangée. **Remises (F1)** : sur les TTC, puis extraction.
+- **Hors ligne** : règle **`pos-offline-v3`** = v2 + `pricesIncludeTax` (`site.pricesIncludeTax` du pack, figé dans l'instantané ; `pricesIncludeTax`
+  du cas, absent = faux) : mêmes groupes et extraction, `total = subtotal`, `taxTotal` à part ; 8 cas v3 dans `config/pos/offline-cases.json`
+  (même format : égalités 0,03 € et 0,09 €, deux taux, remise de ticket, remise de ligne et de ticket, exonéré + deux taux, article libre à
+  taux choisi, arrondi des espèces au pas de 5 ¢ sur un TTC) ; les cas v1 et v2 sont inchangés.
+- **Langue des réponses de la caisse** (`Services/CaisseService/SiteLocaleResolver`) : `?locale=` s'il est donné, sinon la **langue du site**
+  déduite de l'adresse du magasin (Québec → fr, autre province canadienne → en, France → fr, États-Unis → en) ; `Accept-Language` n'est pas lu.
+  Vaut pour les libellés de `store.taxIds` (GST/QST en anglais) et les traductions des moyens de paiement du ticket et des rapports.
+
+### Cas chiffrés TTC (tests `TaxInclusiveApiTest`, jeu partagé v3 ; cents)
+
+| Cas | Entrée | Résultat |
+|---|---|---|
+| Deux taux | 1200 (20 %) + 550 (5,5 %) | 20 % : base 1000, TVA 200 ; 5,5 % : base 521 (521,3), TVA 29 ; total 1750 |
+| Remise de ticket 10 % | idem, remise 175 répartie 120 + 55 | 20 % : 900 / 180 ; 5,5 % : 469 (469,2) / 26 ; total 1575 |
+| Égalités | 3 à 20 % ; 9 à 20 % | 2,5 → base 3, TVA 0 ; 7,5 → base 8, TVA 1 |
+| Remise de ligne et de ticket | 2 × 2000 −10 % + 550 (5,5 %), ticket −300 | nets 3340 et 510 ; 20 % : 2783 / 557 ; 5,5 % : 483 / 27 ; total 3850 |
+| Exonéré + deux taux | 1200 + 550 (5,5 %) + 700 `exempt` | mêmes taxes que « deux taux », total 2450 |
+| Article libre à taux choisi | 2 × 1250 `intermediate` + 300 non taxable | 10 % : base 2273 (2272,7), TVA 227 ; total 2800 |
+| Arrondi des espèces | 1752 à 20 %, pas 5 | base 1460, TVA 292 ; total 1752, espèces 1750 (−2) |
+| Livraison (web) | 1200 + 550 + livraison 500 | livraison 343 / 157 ; 20 % : 1286 / 257 ; 5,5 % : 670 / 37 ; total 2250 |
+| Retour partiel | t-shirt 550 (5,5 %) de la vente « deux taux » | remboursement 550 ; TVA 5,5 % : base 521, TVA 29 |
+
+### Recompositions « total = sous-total + taxes » (inventaire, chacune traitée)
+
+| Endroit | Avant | En TTC |
+|---|---|---|
+| `CalculateTotalAmountUseCase` (vente, caisse et web) | `sub + tax` | `sub` (livraison comprise dans `sub`) : `order.prices_include_tax` |
+| `create-intent` / montant Stripe | total du devis | total du devis TTC : suit |
+| Devis web et caisse (`CartQuoteCalculator`) | `sub + shipping + tax` | `sub + shipping` |
+| Retours (`PosReturnService`), devis d'échange | `sub + Σ taxes` | `sub` (TTC) |
+| Hors ligne (`PosOfflineCalculator`) | `sub + Σ taxes` | `sub` (v3) ; synchronisation : drapeau de l'instantané |
+| Courriels `order_confirmation`, `shipping_notification` | « Sous-total », « Taxes », « Total » | « Sous-total TTC », « dont taxes », « Total » (`order.pricesIncludeTax`) |
+| Statistiques, exports comptables (F14) | lisent `total_amount`, `order_tax`, `order_items` | `salesTtc` = TTC ; `salesByTax.base` = HT par taux ; **`salesNetHt` et `salesGrossHt` ne contiennent jamais de TTC** : pour les ventes TTC, `salesNetHt` = Σ `order_tax.base` (HT extrait) et `salesGrossHt` = HT avant remises par la même extraction ligne par ligne (`TaxInclusive::base(TTC brut de la ligne, Σ taux de sa catégorie)`), `discounts` = brut HT − net HT ; les ventes HT du même lot gardent le calcul d'avant (exemple : vente TTC 15,75 € avec remise 10 % → `salesTtc 1575, salesNetHt 1369, salesGrossHt 1521, discounts 152`) |
+| Rapports X/Z | `sales.total`, `taxes` | `sales.total` TTC, `pricesIncludeTax`, `taxes[].base` |
+| `CartServices::subTotalTTC` (ancien panier Twig) | `sub × (1 + tva)` | **non touché** : code hérité hors des fronts actuels (Next.js, applications), aucune route de production ne l'utilise |
+
+### Ce que MAUI doit changer (lecteur des commandes et des écritures)
+
+1. Lire `order.pricesIncludeTax` (`GET /api/orders…` → `pricesIncludeTax`) et ne plus recomposer `total = subTotal + priceTax` : en TTC,
+   `totalAmount = subTotal` et `priceTax` est **inclus**. 2. Afficher les taxes par taux depuis `taxes[] {label, rate, base, amount, total}` au lieu
+   du seul `priceTax`. 3. Écritures comptables : format inchangé ; `salesByTax.base`, `salesNetHt` et `salesGrossHt` sont **toujours HT** (extraits sur un site TTC), le
+   TTC est dans `salesTtc`. 4. `subTotal` d'une commande = lignes seules dans les deux modes (la livraison est dans `priceShipping`) : si MAUI
+   recomposait `total = subTotal + priceTax` en supposant la livraison dans `subTotal`, lire `totalAmount` tel quel. 5. Rien d'autre pour les
+   sites hors taxes.
 
 ## Mécanique interne
 

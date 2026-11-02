@@ -42,6 +42,7 @@ final class OrderPresenter
             $items
         );
         $dto->currency = $this->currency->code();
+        $dto->withTaxDetails($order); // taxes par taux et drapeau TTC (F18 partie 2b)
         $dto->statusId = $status?->getId();
         $dto->carrier = $order->getCarrier() ? ['id' => $order->getCarrier()->getId(), 'name' => $order->getCarrier()->getTranslation($locale)?->getName() ?? $order->getCarrier()->getName()] : null;
         if ($order->getOrderSource()?->getId() === 2 && $this->emProvider) { // vente au comptoir : numéros (C2)

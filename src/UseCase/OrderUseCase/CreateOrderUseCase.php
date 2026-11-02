@@ -137,6 +137,9 @@ class CreateOrderUseCase
                 if ($orderDTO->getOrderSource() !== 2 || $typeOrderId !== 1) {
                     throw new CashRegisterException('COUPON_PAYMENT_INVALID', 'Un coupon de fabricant ne règle qu\'une vente au comptoir', 409);
                 }
+                if ($em->getRepository(\App\Entity\Entreprise::class)->findOneBy([])?->isPricesIncludeTax()) { // prix TTC (F18 partie 2b) : coupons refusés
+                    throw new CashRegisterException('COUPONS_NOT_AVAILABLE_TTC', 'Les coupons de fabricant ne sont pas acceptés sur un site à prix taxes comprises', 409);
+                }
                 $couponList = $this->coupons->fromParts($couponParts);
                 $couponDemand = $this->coupons->demand($user, (int) array_sum(array_column($couponList, 'amount')));
             }
@@ -188,7 +191,8 @@ class CreateOrderUseCase
             if ($totalTax instanceof JsonResponse) {
                 throw new \Exception('Tax calculation failed');
             }
-            $totalAmount = $this->calculateTotalAmountUseCase->execute($subtotal, $totalTax);
+            $shipping = ($typeOrderId === 1 ? 1 : -1) * (float) ($order->getShippingCost() ?? 0); // livraison à part du sous-total (02/11/2026), signée comme lui
+            $totalAmount = $this->calculateTotalAmountUseCase->execute($subtotal, $totalTax, $order->isPricesIncludeTax(), $shipping); // TTC : total = sous-total + livraison (F18 partie 2b)
 
             // Paiement Stripe vérifié (web) ou somme des moyens de paiement (caisse, 15/10/2026) : le montant doit
             // correspondre au total calculé par le serveur (sinon un petit paiement pouvait valider une grosse commande).

@@ -102,7 +102,7 @@ class PosOfflinePackService
         $etag = hash('sha256', json_encode($content, JSON_UNESCAPED_UNICODE));
         $now = new \DateTimeImmutable();
         $validUntil = $now->modify('+' . $settings['packValidityHours'] . ' hours');
-        $snapshot = ['step' => $step, 'taxes' => $taxes, 'prices' => $prices];
+        $snapshot = ['step' => $step, 'taxes' => $taxes, 'prices' => $prices, 'pricesIncludeTax' => $e?->isPricesIncludeTax() ?? false]; // TTC figé dans l'instantané (v3)
         $repo = $em->getRepository(PosOfflinePack::class);
         /** @var ?PosOfflinePack $pack */
         $pack = $repo->findOneBy(['etag' => $etag], ['id' => 'DESC']);

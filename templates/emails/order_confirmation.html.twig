@@ -87,7 +87,7 @@
 								{# Sous-total #}
 								{% if order.subTotal is not null %}
 									<tr>
-										<td style="font-size: 14px; color: #666;">Sous-total :</td>
+										<td style="font-size: 14px; color: #666;">{{ order.pricesIncludeTax ? 'Sous-total TTC :' : 'Sous-total :' }}</td>
 										<td align="right" style="font-size: 14px;">
 											{{ (order.subTotal / 100) | format_currency('CAD') }}
 										</td>
@@ -109,7 +109,7 @@
 								{# Taxes #}
 								{% if order.totalTax is not null %}
 									<tr>
-										<td style="font-size: 14px; color: #666;">Taxes :</td>
+										<td style="font-size: 14px; color: #666;">{{ order.pricesIncludeTax ? 'dont taxes :' : 'Taxes :' }}</td>
 										<td align="right" style="font-size: 14px;">
 											{{ (order.totalTax / 100) | format_currency('CAD') }}
 										</td>

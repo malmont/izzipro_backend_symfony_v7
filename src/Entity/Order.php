@@ -66,6 +66,10 @@ class Order
     #[ORM\Column(nullable: true)]
     private ?float $subTotal = null;
 
+    /** Lignes TTC telles que payées (F18 partie 2b) : total_amount = sub_total (+ livraison), total_tax = TVA extraite ; faux = HT, total = sous-total + taxes */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $pricesIncludeTax = false;
+
     #[ORM\Column(nullable: true)]
     private ?float $total_tax = null;
 
@@ -608,4 +612,7 @@ class Order
 
         return $this;
     }
+
+    public function isPricesIncludeTax(): bool { return $this->pricesIncludeTax; }
+    public function setPricesIncludeTax(bool $v): static { $this->pricesIncludeTax = $v; return $this; }
 }

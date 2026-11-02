@@ -38,7 +38,8 @@ final class BoutiqueConfigurationValidator
 
     public function __construct(
         private readonly ReglableCompositionValidator $compositions,
-        private readonly LandingAiCatalogue $catalogue
+        private readonly LandingAiCatalogue $catalogue,
+        private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null // prix TTC du site (F18 partie 2b)
     ) {
     }
 
@@ -178,6 +179,8 @@ final class BoutiqueConfigurationValidator
         }
         if (isset($commerce->taxProvider) && !in_array($commerce->taxProvider, ['table', 'stripe'], true)) {
             $errors[] = ['path' => 'commerce.taxProvider', 'message' => 'valeur attendue : table ou stripe'];
+        } elseif (($commerce->taxProvider ?? null) === 'stripe' && ($this->emProvider?->getEntityManager()->getRepository(\App\Entity\Entreprise::class)->findOneBy([])?->isPricesIncludeTax() ?? false)) {
+            $errors[] = ['path' => 'commerce.taxProvider', 'message' => 'Stripe Tax impossible avec les prix taxes comprises (fiche Entreprise) : garder la table des taxes']; // F18 partie 2b
         }
 
         return $errors;

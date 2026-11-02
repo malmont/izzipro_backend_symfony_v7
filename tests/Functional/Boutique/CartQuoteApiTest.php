@@ -220,8 +220,9 @@ class CartQuoteApiTest extends WebTestCase
         $this->assertSame(201, $response->getStatusCode(), $response->getContent());
         $orderId = json_decode($response->getContent())->orderId;
         $order = $this->db->fetchAssociative('SELECT sub_total, shipping_cost, total_tax, total_amount FROM "order" WHERE id = ?', [$orderId]);
-        $this->assertSame([$shipping, 2 * 3900 + $shipping], [(float) $order['shipping_cost'], (float) $order['sub_total']], 'livraison : prix fixe du transporteur 1, pas le montant envoyé');
+        $this->assertSame([$shipping, 2 * 3900.0], [(float) $order['shipping_cost'], (float) $order['sub_total']], 'livraison : prix fixe du transporteur 1, pas le montant envoyé ; sous-total = lignes seules (02/11/2026, la livraison est dans shipping_cost)');
         $this->assertEqualsWithDelta((2 * 3900 + $shipping) * 1.14975, (float) $order['total_amount'], 1.0);
+        $this->assertSame((float) $order['total_amount'], (float) $order['sub_total'] + (float) $order['shipping_cost'] + (float) $order['total_tax'], 'total = sous-total + livraison + taxes, comme le devis');
         $this->assertSame(3900.0, (float) $this->db->fetchOne('SELECT unit_price FROM order_items WHERE order_associated_id = ?', [$orderId]), 'prix de la variante');
         $this->assertSame($stockBefore - 2, (int) $this->db->fetchOne('SELECT stock_quantity FROM product_variant WHERE id = ?', [$xl]));
 
