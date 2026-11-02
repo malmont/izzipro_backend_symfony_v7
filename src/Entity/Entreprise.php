@@ -308,6 +308,10 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(options: ['default' => 90])]
     private int $posReceiptLinkDays = 90;
 
+    /** Ticket imprimé « auto » (à chaque vente) ou « on_demand » (sur demande du client : loi AGEC en France depuis le 01/08/2023) ; null = selon le pays du magasin (lot France, 02/11/2026) */
+    #[ORM\Column(length: 16, nullable: true)]
+    private ?string $posReceiptPrintMode = null;
+
     #[ORM\Column(options: ['default' => true])]
     private bool $posReceiptQrPrintDefault = true;
 
@@ -967,6 +971,8 @@ class Entreprise implements TranslatableInterface
     public function setPosReceiptEmailEnabled(bool $v): static { $this->posReceiptEmailEnabled = $v; return $this; }
     public function isPosReceiptQrEnabled(): bool { return $this->posReceiptQrEnabled; }
     public function setPosReceiptQrEnabled(bool $v): static { $this->posReceiptQrEnabled = $v; return $this; }
+    public function getPosReceiptPrintMode(): ?string { return $this->posReceiptPrintMode; }
+    public function setPosReceiptPrintMode(?string $m): static { $this->posReceiptPrintMode = in_array($m, ['auto', 'on_demand'], true) ? $m : null; return $this; }
     public function getPosReceiptLinkDays(): int { return $this->posReceiptLinkDays; }
     public function setPosReceiptLinkDays(?int $d): static { $this->posReceiptLinkDays = min(3650, max(1, (int) $d)); return $this; }
     public function isPosReceiptQrPrintDefault(): bool { return $this->posReceiptQrPrintDefault; }

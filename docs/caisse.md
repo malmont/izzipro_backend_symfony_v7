@@ -510,7 +510,7 @@ sauf mention), jamais en constantes ; valeurs par défaut = comportement d'avant
   "terminal": { "interac": true, "cardWaitSeconds": 120, "customerCancel": true, "orphanMinutes": 5, "authCancelMinutes": 30, "currency": "cad" },
   "cashFund": { "openingSuggested": null, "closingKeptSuggested": null },
   "paymentMethods": { "cash": true, "declaredCard": true, "paypal": true, "multiPayment": true, "declaredCardBlockedWithTerminal": false },
-  "receipt": { "header": null, "footer": null, "showTaxNumbers": true },
+  "receipt": { "header": null, "footer": null, "showTaxNumbers": true, "printMode": "auto" },
   "heldCarts": { "max": 10, "alertHours": 24 },
   "cashAlertThreshold": null,
   "terminalRequired": false
@@ -2290,6 +2290,19 @@ même code sont séparés par « / ». Les codes à message variable sont décri
 | `INVALID_DATE` | (Date invalide (message : paramètre concerné)) |
 | `QUOTE_INVALID` | (Devis refusé (message : détail du devis, ex. « items[0].quantity : stock insuffisant (3 disponible(s)) »)) |
 | `TERMINAL_MODE_NOT_ALLOWED` | (Mode de terminal non autorisé sur ce site (message selon le réglage)) |
+
+## France : ticket sur demande et version de la caisse (lot France, 02/11/2026)
+
+- **`settings.receipt.printMode`** : `auto` (ticket imprimé à chaque vente) ou `on_demand` (remis sur demande du client : loi AGEC, depuis le
+  01/08/2023). Réglage `entreprise.pos_receipt_print_mode` (fiche Entreprise, panneau du ticket, « Ticket : impression » ; migration
+  `Version20261110100000`, additive) ; **vide = selon le pays du magasin** : `on_demand` si l'adresse du site est en France ou dans un DROM
+  (`FR`, `MQ`, `GP`, `GF`, `RE`, `YT` : même liste que la caisse et la conservation légale), `auto` ailleurs, y compris les collectivités
+  d'outre-mer PM, BL et MF (le réglage du site peut l'imposer) ; Québec : rien ne change. Présent aussi dans `settings.receipt` du
+  paquet hors ligne. La caisse n'imprime pas d'elle-même en `on_demand` ; le ticket numérique (F3) reste disponible.
+- **`X-App-Version`** : la caisse envoie sa version (ex. `1.4.0+12`) ; l'en-tête est autorisé par CORS (`docker/nginx/default.conf`,
+  `Access-Control-Allow-Headers`) et gardé dans le journal : **`data.appVersion` des entrées `LOGIN`** (connexion `/api/login` plateforme
+  `pos`, connexion par PIN) **et `SALE`** (vente `create-multi-payment`, synchronisation hors ligne). Format accepté `[0-9A-Za-z.+_-]{1,40}` ;
+  en-tête absent ou mal formé : clé absente. Début du journal des événements techniques (NF525, `docs/conception-a3-nf525.md` du dépôt posflutter).
 
 ## Mécanique interne
 

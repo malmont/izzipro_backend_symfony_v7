@@ -60,7 +60,8 @@ class PosSettingsService
             'paymentMethods' => $this->paymentMethods(),
             'receipt' => ['header' => $e?->getPosReceiptHeader(), 'footer' => $e?->getPosReceiptFooter(), 'showTaxNumbers' => $e?->isPosReceiptShowTaxNumbers() ?? true,
                 // Ticket numérique (F3, 24/10/2026)
-                'emailEnabled' => $e?->isPosReceiptEmailEnabled() ?? true, 'qrEnabled' => $e?->isPosReceiptQrEnabled() ?? true, 'linkDays' => $e?->getPosReceiptLinkDays() ?? 90, 'qrPrintDefault' => $e?->isPosReceiptQrPrintDefault() ?? true],
+                'emailEnabled' => $e?->isPosReceiptEmailEnabled() ?? true, 'qrEnabled' => $e?->isPosReceiptQrEnabled() ?? true, 'linkDays' => $e?->getPosReceiptLinkDays() ?? 90, 'qrPrintDefault' => $e?->isPosReceiptQrPrintDefault() ?? true,
+                'printMode' => $this->receiptPrintMode($e)], // lot France (02/11/2026) : auto | on_demand
             'heldCarts' => ['max' => $e?->getPosHeldCartsMax() ?? 10, 'alertHours' => $e?->getPosHeldCartsAlertHours() ?? 24],
             'cashAlertThreshold' => $e?->getPosCashAlertThreshold(),
             'terminalRequired' => $e?->isPosTerminalHeaderRequired() ?? false,
@@ -82,6 +83,20 @@ class PosSettingsService
             // Terminal de paiement Stripe (C4) : réglages utiles au POS (les commissions restent côté serveur)
             'terminal' => array_intersect_key($this->terminal->settings(), array_flip(['interac', 'cardWaitSeconds', 'customerCancel', 'orphanMinutes', 'authCancelMinutes', 'currency', 'tapToPay', 'bluetoothReader', 'refundPendingMinutes'])), // + kit (F13/F16)
         ];
+    }
+
+    /** Pays où le ticket n'est remis que sur demande par défaut (loi AGEC) : France et DROM, même liste que la caisse et la conservation légale ; les collectivités d'outre-mer (PM, BL, MF) restent « auto », le réglage du site peut changer cela */
+    public const RECEIPT_ON_DEMAND_COUNTRIES = ['FR', 'MQ', 'GP', 'GF', 'RE', 'YT'];
+
+    /** Mode d'impression du ticket : réglage du site, sinon « on_demand » si le pays du magasin est la France ou un DROM, « auto » ailleurs */
+    public function receiptPrintMode(?Entreprise $e): string
+    {
+        if ($e?->getPosReceiptPrintMode() !== null) {
+            return $e->getPosReceiptPrintMode();
+        }
+        $address = $this->storeAddress !== null ? \App\Services\OrderService\TaxEngine::normalizeAddress($this->storeAddress->forStore()) : null;
+
+        return in_array($address['country'] ?? null, self::RECEIPT_ON_DEMAND_COUNTRIES, true) ? 'on_demand' : 'auto';
     }
 
     /** @return list<array{category: string, rate: float}> catégories portées par les taxes applicables au magasin, avec leur taux, dans l'ordre de la table ; vide sans catégorie */

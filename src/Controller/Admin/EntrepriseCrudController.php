@@ -238,6 +238,10 @@ class EntrepriseCrudController extends BaseTenantCrudController
             BooleanField::new('posReceiptQrEnabled', 'Ticket : reçu par QR code (lien public signé)')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posReceiptLinkDays', 'Ticket : validité du lien du reçu (jours)')->setHelp('défaut 90')->hideOnIndex(),
             BooleanField::new('posReceiptQrPrintDefault', 'Ticket : QR imprimé par défaut')->hideOnIndex(),
+            // Lot France (02/11/2026) : ticket imprimé à chaque vente ou remis sur demande (loi AGEC depuis le 01/08/2023)
+            \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('posReceiptPrintMode', 'Ticket : impression')->setChoices(['Selon le pays du magasin (défaut)' => '', 'Automatique à chaque vente' => 'auto', 'Sur demande du client' => 'on_demand'])
+                ->setRequired(false)->setFormTypeOption('placeholder', false)->hideOnIndex()
+                ->setHelp('Vide : « sur demande » si le magasin est en France ou dans un DROM (Martinique, Guadeloupe, Guyane, Réunion, Mayotte ; loi AGEC : ticket remis seulement sur demande depuis le 01/08/2023), « automatique » ailleurs. La caisse lit settings.receipt.printMode.'),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posHeldCartsMax', 'Paniers en attente : nombre maximal')->setHelp('défaut 10')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posHeldCartsAlertHours', 'Paniers en attente : alerte après (heures)')->setHelp('défaut 24')->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posCashAlertThreshold', 'Alerte « trop d\'espèces » au-delà de (cents)')->setRequired(false)->setHelp('Vide : aucune alerte ; le POS invite à un retrait')->hideOnIndex(),

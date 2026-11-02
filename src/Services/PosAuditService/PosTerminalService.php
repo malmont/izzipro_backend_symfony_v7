@@ -71,6 +71,14 @@ class PosTerminalService
     }
 
     /** Terminal de la requête en cours : {id, label} si l'en-tête est valide (signature et clé « pos » non révoquée), sinon null */
+    /** Version de l'application de caisse annoncée par l'en-tête X-App-Version (ex. « 1.4.0+12 »), ou null ; journal des événements techniques (lot France, 02/11/2026) */
+    public function appVersion(): ?string
+    {
+        $raw = trim((string) $this->requestStack->getMainRequest()?->headers->get('X-App-Version', ''));
+
+        return $raw !== '' && preg_match('/^[0-9A-Za-z.+_-]{1,40}$/', $raw) ? $raw : null;
+    }
+
     public function current(): ?array
     {
         $header = $this->requestStack->getMainRequest()?->headers->get(self::HEADER);

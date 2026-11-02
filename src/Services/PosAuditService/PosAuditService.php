@@ -139,6 +139,9 @@ class PosAuditService
         }
         $register ??= $session?->getCashRegister();
         $terminal = $this->terminals->current();
+        if (in_array($type, [self::LOGIN, self::SALE], true) && !array_key_exists('appVersion', $data) && ($version = $this->terminals->appVersion()) !== null) {
+            $data['appVersion'] = $version; // version de la caisse (X-App-Version), début du journal technique NF525 (lot France, 02/11/2026)
+        }
         $connection = $this->emProvider->getEntityManager()->getConnection();
         $own = !$connection->isTransactionActive();
         if ($own) {

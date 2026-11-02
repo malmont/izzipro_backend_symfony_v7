@@ -53,7 +53,7 @@ class PosReceiptApiTest extends WebTestCase
         $cashier = $this->loginAs(['ROLE_USER_POS']);
         $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register, 'cashFund' => 10000]);
         $s = $this->json($this->request('GET', '/api/pos/settings'));
-        $this->assertSame(['header' => 'Merci de votre visite', 'footer' => 'Retours sous 30 jours', 'showTaxNumbers' => true, 'emailEnabled' => true, 'qrEnabled' => true, 'linkDays' => 90, 'qrPrintDefault' => true], $s['receipt']);
+        $this->assertSame(['header' => 'Merci de votre visite', 'footer' => 'Retours sous 30 jours', 'showTaxNumbers' => true, 'emailEnabled' => true, 'qrEnabled' => true, 'linkDays' => 90, 'qrPrintDefault' => true, 'printMode' => 'auto'], $s['receipt']);
 
         // Vente : 2 casquettes, 10 % sur la ligne, 40,00 en espèces (monnaie rendue) + le reste par carte déclarée
         $items = [['productVariantId' => $this->cap, 'quantity' => 2, 'discounts' => [['type' => 'percent', 'value' => 10, 'reasonCode' => 'fidelite']]]];
