@@ -124,7 +124,7 @@ class CashSessionReportBuilder
             'cashAlert' => ($entreprise?->getPosCashAlertThreshold() ?? null) !== null ? ($openingAmount + $cashFlow) > $entreprise->getPosCashAlertThreshold() : null,
             'receiptPrefix' => $register?->getReceiptPrefix(),
             'discrepancyThreshold' => $entreprise?->getPosDiscrepancyThreshold() ?? 0,
-            'store' => StoreInfoDto::fromEntreprise($entreprise),
+            'store' => StoreInfoDto::fromEntreprise($entreprise, $locale),
             // Terminal de paiement Stripe (C4, 23/10/2026) : ajout, ventilation par moyen inchangée
             'cardTerminal' => $this->cardTerminal($saleOrders, $register, $giftOrders),
             // Retours partiels et échanges (F2, 24/10/2026) : ajout ; les remboursements correspondants sont déjà dans refunds

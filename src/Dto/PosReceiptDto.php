@@ -128,7 +128,7 @@ class PosReceiptDto
             'pricesIncludeTax' => $entreprise?->isPricesIncludeTax() ?? false, // F18 partie 2a (toujours faux avant 2b)
             'payments' => $payments,
             'cashRegister' => $register ? ['id' => $register->getId(), 'name' => $register->getName()] : null,
-            'store' => StoreInfoDto::fromEntreprise($entreprise),
+            'store' => StoreInfoDto::fromEntreprise($entreprise, $locale), // identifiants dans la langue du site (F18 partie 2a)
         ];
     }
 }

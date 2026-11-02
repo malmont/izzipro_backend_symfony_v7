@@ -32,7 +32,8 @@ class BoutiqueSettingsController extends AbstractController
         private readonly GetBoutiqueSettingsUseCase $getUseCase,
         private readonly UpdateBoutiqueSettingsUseCase $updateUseCase,
         private readonly TenantCacheService $cache,
-        private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null // devise et TTC du site (F18 partie 2a)
+        private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null, // devise et TTC du site (F18 partie 2a)
+        private readonly ?\App\Services\OrderService\OrderTaxAddressResolver $storeAddress = null // pays du site (F18 partie 2a, complément)
     ) {
     }
 
@@ -50,8 +51,9 @@ class BoutiqueSettingsController extends AbstractController
     }
 
     /**
-     * F18 partie 2a : `commerce.pricesIncludeTax` vient de la fiche Entreprise (réglage de site, pas de l'éditeur) et s'ajoute en lecture
-     * à la configuration restituée ; objets et ordre des clés conservés (décodage en objets) ; rien d'enregistré.
+     * F18 partie 2a : `commerce.pricesIncludeTax` (fiche Entreprise) et `commerce.siteCountry` (pays ISO de l'adresse du site, null sans
+     * adresse) s'ajoutent en lecture à la configuration restituée ; objets et ordre des clés conservés (décodage en objets) ; rien
+     * d'enregistré, et un PUT les ignore (BoutiqueSettingsService::READ_ONLY_COMMERCE).
      */
     private function withSiteCommerce(string $json): string
     {
@@ -68,6 +70,7 @@ class BoutiqueSettingsController extends AbstractController
             return $json;
         }
         $decoded->commerce->pricesIncludeTax = $entreprise->isPricesIncludeTax();
+        $decoded->commerce->siteCountry = \App\Services\OrderService\TaxEngine::normalizeAddress($this->storeAddress?->forStore())['country'] ?? null;
 
         return json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION) ?: $json;
     }

@@ -43,8 +43,10 @@ class BoutiqueSettingsApiTest extends WebTestCase
         // Même document JSON : ordre des clés, 1.0, pages système, charte et commerce conservés tels quels ; seule clé ajoutée en lecture :
         // commerce.pricesIncludeTax, venue de la fiche Entreprise (F18 partie 2a), jamais enregistrée dans les réglages
         $returned = json_decode($get->getContent(), false);
-        $this->assertFalse($returned->commerce->pricesIncludeTax, 'site hors taxes : faux');
-        unset($returned->commerce->pricesIncludeTax);
+        $this->assertSame([false, 'CA'], [$returned->commerce->pricesIncludeTax, $returned->commerce->siteCountry], 'site hors taxes, au Canada');
+        foreach (\App\Services\BoutiqueSettingsService\BoutiqueSettingsService::READ_ONLY_COMMERCE as $key) {
+            unset($returned->commerce->$key);
+        }
         $this->assertSame(
             json_encode(json_decode($body, false)->configuration, JSON_PRESERVE_ZERO_FRACTION),
             json_encode($returned, JSON_PRESERVE_ZERO_FRACTION)
@@ -301,6 +303,31 @@ class BoutiqueSettingsApiTest extends WebTestCase
      * Configuration de la boutique : navbar et pied de page réglables, un onglet visible (id numérique), deux pages
      * système (panier, paiement ; id texte « sys-… ») prises dans les modèles du catalogue, charte et commerce.
      */
+    /** F18 partie 2a : commerce.pricesIncludeTax et commerce.siteCountry viennent de la fiche Entreprise ; servis en lecture, jamais écrits par un PUT */
+    public function testReadOnlyCommerceKeysAreServedFromTheCompanyAndIgnoredByPut(): void
+    {
+        $this->loginAsAdmin();
+        $this->db()->executeStatement('UPDATE entreprise SET prices_include_tax = true');
+        $this->db()->executeStatement("UPDATE address_entreprise SET country = 'Canada'");
+        $configuration = $this->configuration();
+        $configuration['commerce'] = ['guestCheckout' => true, 'currency' => 'CAD', 'subscriptionsEnabled' => false, 'pricesIncludeTax' => false, 'siteCountry' => 'FR']; // le front renvoie ce qu'il a lu, ou l'inverse
+        $put = $this->request('PUT', $this->encode(['configuration' => $configuration]));
+        $this->assertSame(200, $put->getStatusCode(), $put->getContent());
+        $stored = json_decode($this->db()->fetchOne('SELECT configuration FROM boutique_setting ORDER BY id DESC LIMIT 1'), true);
+        $this->assertSame(['guestCheckout' => true, 'currency' => 'CAD', 'subscriptionsEnabled' => false], $stored['commerce'], 'rien d\'enregistré pour les clés en lecture seule');
+        $this->assertTrue((bool) $this->db()->fetchOne('SELECT prices_include_tax FROM entreprise'), 'le réglage de la fiche Entreprise n\'est pas touché par le PUT');
+        $get = json_decode($this->request('GET')->getContent(), true);
+        $this->assertSame([true, 'CA'], [$get['commerce']['pricesIncludeTax'], $get['commerce']['siteCountry']], 'lecture : valeurs de la fiche Entreprise (pays normalisé en ISO)');
+        $journal = json_decode($this->request('GET', null, '/api/landingpage-audit?resource=boutique-settings')->getContent(), true);
+        $this->assertStringNotContainsString('pricesIncludeTax', json_encode($journal), 'journal sans les clés en lecture seule');
+        // Sans commerce du tout dans le PUT : rien ne casse, la lecture ajoute quand même les deux clés
+        unset($configuration['commerce']);
+        $this->assertSame(200, $this->request('PUT', $this->encode(['configuration' => $configuration]))->getStatusCode());
+        $get = json_decode($this->request('GET')->getContent(), true);
+        $this->assertSame([true, 'CA'], [$get['commerce']['pricesIncludeTax'], $get['commerce']['siteCountry']]);
+        $this->db()->executeStatement('UPDATE entreprise SET prices_include_tax = false');
+    }
+
     private function configuration(): array
     {
         $features = $this->preset('features-type-a');

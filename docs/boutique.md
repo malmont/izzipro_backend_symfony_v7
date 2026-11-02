@@ -329,8 +329,12 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
   `reduced`, `super_reduced`, `exempt` ; vide = standard pour un produit, « tous les produits non exonérés » pour une taxe) ; assiette
   par taxe (`taxes[].base`, `taxes[].total`, `taxes[].category`, `lines[].taxCategory` ajoutés au devis ; `pricesIncludeTax: false`
   tant que la partie 2b n'existe pas), catégorie figée sur `order_items.tax_category`, `order_tax.base`. Sans catégorie, montants et
-  totaux inchangés au centime. `commerce.pricesIncludeTax` est ajouté en lecture à `GET /api/boutique-settings` depuis la fiche
-  Entreprise. Détail et cas chiffrés : `docs/caisse.md`, « Catégories fiscales ».
+  totaux inchangés au centime. **Clés de `commerce` en lecture seule** (`BoutiqueSettingsService::READ_ONLY_COMMERCE`), ajoutées
+  à `GET /api/boutique-settings` depuis la fiche Entreprise et **ignorées par le PUT** (jamais enregistrées ni journalisées, donc jamais
+  remises à faux parce que le front ne les renvoie pas) : `commerce.pricesIncludeTax` (`entreprise.prices_include_tax`) et
+  `commerce.siteCountry` (pays ISO de l'adresse du site, `address_entreprise.country`, null sans adresse ; c'est aussi le pays des taxes
+  d'une vente au comptoir). Le PUT continue de remplacer l'objet `commerce` tel quel (seul l'éditeur Next.js écrit cette route).
+  Détail et cas chiffrés : `docs/caisse.md`, « Catégories fiscales ».
 - **`stripe`** : Stripe Tax (`Tax Calculations`) sur le compte connecté du site, une ligne par article (code fiscal
   « bien physique » `txcd_99999999`, « service » `txcd_20030000` pour une location, livraison `txcd_92010001`),
   montants par juridiction (`taxes[].jurisdiction`), calcul gardé 10 min pour un même panier et une même adresse. À la

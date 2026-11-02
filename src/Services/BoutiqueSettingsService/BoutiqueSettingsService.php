@@ -15,8 +15,27 @@ class BoutiqueSettingsService
     /** Octets de la configuration encodée (une page de démonstration pèse environ 120 Ko ; la boutique en compte une quinzaine) */
     public const MAX_CONFIGURATION_BYTES = 4194304;
 
+    /**
+     * Clés de « commerce » servies en lecture seule par GET /api/boutique-settings depuis la fiche Entreprise (F18 partie 2a) :
+     * pricesIncludeTax (entreprise.prices_include_tax), siteCountry (pays de l'adresse du site). Un PUT les ignore : jamais enregistrées,
+     * donc jamais remises à faux parce que le front ne les renvoie pas.
+     */
+    public const READ_ONLY_COMMERCE = ['pricesIncludeTax', 'siteCountry'];
+
     public function __construct(private readonly TenantEntityManagerProvider $emProvider)
     {
+    }
+
+    /** Retire de la configuration reçue les clés de « commerce » en lecture seule (objet modifié en place, renvoyé) */
+    public static function stripReadOnlyCommerce(object $configuration): object
+    {
+        if (isset($configuration->commerce) && is_object($configuration->commerce)) {
+            foreach (self::READ_ONLY_COMMERCE as $key) {
+                unset($configuration->commerce->$key);
+            }
+        }
+
+        return $configuration;
     }
 
     public function findOrCreateSettings(): BoutiqueSetting

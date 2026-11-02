@@ -416,7 +416,7 @@ class PosReturnService
             'lines' => $lines,
             'taxes' => array_values(array_map(fn (OrderTax $t) => ['label' => $t->getTax()?->getName(), 'amount' => -(int) round((float) $t->getAmount())], $returnOrder->getOrderTaxes()->toArray())),
             'createdAt' => $return->getCreatedAt()->format(\DateTimeInterface::ATOM),
-            'store' => \App\Dto\StoreInfoDto::fromEntreprise($this->emProvider->getEntityManager()->getRepository(Entreprise::class)->findOneBy([])),
+            'store' => \App\Dto\StoreInfoDto::fromEntreprise($this->emProvider->getEntityManager()->getRepository(Entreprise::class)->findOneBy([]), $locale),
         ];
     }
 

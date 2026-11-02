@@ -25,6 +25,8 @@ class UpdateBoutiqueSettingsUseCase
     /** @throws BoutiqueSettingsException 422 */
     public function execute(BoutiqueSettingsInputDto $dto): void
     {
+        // Clés de commerce en lecture seule (F18 partie 2a) : renvoyées par le front telles que lues, jamais enregistrées ni journalisées
+        $dto = new BoutiqueSettingsInputDto(BoutiqueSettingsService::stripReadOnlyCommerce($dto->configuration), json_encode($dto->configuration, ContentAuditRecorder::JSON_FLAGS | JSON_THROW_ON_ERROR));
         $errors = $this->validator->validateConfiguration($dto->configuration);
         if ($errors) {
             throw new BoutiqueSettingsException(422,
