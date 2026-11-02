@@ -22,9 +22,10 @@ class FormSubmitTest extends WebTestCase
     protected function setUp(): void
     {
         $this->client = static::createClient();
-        $key = MV_TEST_TENANT_HOST . '|127.0.0.1';
+        $key = MV_TEST_TENANT_CODE . '|127.0.0.1' /* clé par site (code) et IP, 01/11/2026 */;
         static::getContainer()->get('limiter.public_form_ip')->create($key)->reset();
         static::getContainer()->get('limiter.public_form_attempts_ip')->create($key)->reset();
+        static::getContainer()->get('limiter.public_form_global_ip')->create('127.0.0.1')->reset();
         $db = $this->db();
         $db->executeStatement('DELETE FROM form_submission');
         $db->executeStatement("DELETE FROM reservation WHERE client_email LIKE '%@formulaire.test'");

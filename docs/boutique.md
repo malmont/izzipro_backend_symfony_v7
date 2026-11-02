@@ -450,8 +450,11 @@ Tests : `tests/Functional/Security/RegisterRulesApiTest.php`, `tests/Functional/
 - **Limites par compte, par site** : connexion (`api_login_account`), code (`otp_verify_account`), réinitialisation
   (`password_reset_account`), changement de courriel et suppression sont comptés par site **et** par compte : clé `code du site`
   (tenant résolu par `X-Tenant-Host` ; à défaut l'hôte appelé) + courriel ou identifiant. Avant, la clé était l'hôte du backend : un
-  même courriel partageait son compteur entre toutes les boutiques. Les limites **par IP** restent globales (connexion 50 par 15 min,
-  réinitialisation, formulaires publics, activation, PIN).
+  même courriel partageait son compteur entre toutes les boutiques. **Par site et IP** aussi (suite du 01/11/2026) : connexion 50 par
+  15 min, réinitialisation 20 par heure, formulaires publics 10 envois acceptés par 10 min ; puis **plafond global par IP seule**,
+  toutes boutiques confondues (connexion 200 par 15 min, réinitialisation 60 par heure, formulaires 30 envois acceptés par 10 min),
+  que rien ne contourne (ni la répartition sur plusieurs sites, ni l'absence de `X-Tenant-Host`). Inchangés : PIN de caisse,
+  activation, code court.
 - Tests : `tests/Functional/Security/OtpPurposeTest.php`, `tests/Functional/Security/RateLimitPerSiteTest.php`.
 
 ## Sécurité du compte et du paiement (S7, 31/10/2026)

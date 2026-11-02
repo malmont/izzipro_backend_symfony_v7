@@ -26,9 +26,10 @@ class ReservationConfirmAccessTest extends WebTestCase
     {
         $this->client = static::createClient();
         // formulaires publics limités par IP : toute la suite partage 127.0.0.1
-        $key = MV_TEST_TENANT_HOST . '|127.0.0.1';
+        $key = MV_TEST_TENANT_CODE . '|127.0.0.1' /* clé par site (code) et IP, 01/11/2026 */;
         static::getContainer()->get('limiter.public_form_ip')->create($key)->reset();
         static::getContainer()->get('limiter.public_form_attempts_ip')->create($key)->reset();
+        static::getContainer()->get('limiter.public_form_global_ip')->create('127.0.0.1')->reset();
     }
 
     public function testAnonymousCannotConfirmAReservation(): void

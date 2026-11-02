@@ -3,15 +3,24 @@
 # cache applicatif à étiquettes depuis le 28/10/2026. lock_factory: null car le composant Lock n'est pas configuré (comme login_throttling).
 framework:
     rate_limiter:
-        # Connexion par l'API : essais de mots de passe à la chaîne
+        # Connexion par l'API : essais de mots de passe à la chaîne. Clés (01/11/2026) : par site et compte, par site et IP,
+        # puis plafond global par IP seule (un excès sur une boutique derrière une IP partagée, NAT d'opérateur mobile, ne bloque
+        # plus les clients des autres boutiques ; une IP qui vise toutes les boutiques reste bornée par le plafond global).
         api_login_account:
             policy: sliding_window
             limit: 10
             interval: '15 minutes'
             lock_factory: null
+        # par site + IP
         api_login_ip:
             policy: sliding_window
             limit: 50
+            interval: '15 minutes'
+            lock_factory: null
+        # plafond global, IP seule, toutes boutiques confondues
+        api_login_global_ip:
+            policy: sliding_window
+            limit: 200
             interval: '15 minutes'
             lock_factory: null
         # Code OTP à 6 chiffres valable 5 minutes : sans limite, il peut être deviné
@@ -32,18 +41,27 @@ framework:
             limit: 10
             interval: '15 minutes'
             lock_factory: null
-        # Mot de passe oublié : évite d'inonder une boîte mail
+        # Mot de passe oublié : évite d'inonder une boîte mail. Même schéma que la connexion : par site et compte, par site et IP,
+        # plafond global par IP (01/11/2026)
         password_reset_account:
             policy: sliding_window
             limit: 3
             interval: '1 hour'
             lock_factory: null
+        # par site + IP
         password_reset_ip:
             policy: sliding_window
             limit: 20
             interval: '1 hour'
             lock_factory: null
-        # Formulaires publics (contact, newsletter, candidature, inscription, réservation...) : anti-spam.
+        # plafond global, IP seule
+        password_reset_global_ip:
+            policy: sliding_window
+            limit: 60
+            interval: '1 hour'
+            lock_factory: null
+        # Formulaires publics (contact, newsletter, candidature, inscription, réservation...) : anti-spam, par site + IP (01/11/2026 :
+        # code du site résolu, et non plus l'hôte du backend, commun à toutes les boutiques).
         # public_form_ip compte les envois ACCEPTÉS (réponse 2xx) : un refus 422 corrigé par le visiteur ne compte pas.
         public_form_ip:
             policy: sliding_window
@@ -54,6 +72,13 @@ framework:
         public_form_attempts_ip:
             policy: sliding_window
             limit: 60
+            interval: '10 minutes'
+            lock_factory: null
+        # Plafond global des envois acceptés, IP seule, toutes boutiques confondues : ces formulaires envoient des courriels, une
+        # même IP ne peut pas en faire partir 10 par boutique sur toutes les boutiques
+        public_form_global_ip:
+            policy: sliding_window
+            limit: 30
             interval: '10 minutes'
             lock_factory: null
         # Choix du site par code court dans l'application mobile (31/10/2026) : seule la recherche par code court est
@@ -134,6 +159,23 @@ when@test:
                 policy: sliding_window
                 limit: 10000
                 interval: '15 minutes'
+                lock_factory: null
+            api_login_global_ip:
+                policy: sliding_window
+                limit: 10000
+                interval: '15 minutes'
+                lock_factory: null
+            # Plafond global de la réinitialisation abaissé à 30 pour le prouver dans RateLimitPerSiteTest (par site : 20, comme en
+            # production) ; les formulaires publics viennent tous de la même IP dans la suite : plafond global relevé
+            password_reset_global_ip:
+                policy: sliding_window
+                limit: 30
+                interval: '1 hour'
+                lock_factory: null
+            public_form_global_ip:
+                policy: sliding_window
+                limit: 10000
+                interval: '10 minutes'
                 lock_factory: null
             # Validations (S2) : la suite enchaîne les validations sur peu de terminaux ; la limite est testée à part
             pos_approval_terminal:

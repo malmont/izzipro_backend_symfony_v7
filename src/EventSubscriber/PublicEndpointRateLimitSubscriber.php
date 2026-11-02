@@ -38,11 +38,14 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
     public function __construct(
         #[Autowire(service: 'limiter.api_login_account')] private readonly RateLimiterFactory $loginAccount,
         #[Autowire(service: 'limiter.api_login_ip')] private readonly RateLimiterFactory $loginIp,
+        #[Autowire(service: 'limiter.api_login_global_ip')] private readonly RateLimiterFactory $loginGlobalIp,
         #[Autowire(service: 'limiter.otp_verify_account')] private readonly RateLimiterFactory $otpAccount,
         #[Autowire(service: 'limiter.password_reset_account')] private readonly RateLimiterFactory $resetAccount,
         #[Autowire(service: 'limiter.password_reset_ip')] private readonly RateLimiterFactory $resetIp,
+        #[Autowire(service: 'limiter.password_reset_global_ip')] private readonly RateLimiterFactory $resetGlobalIp,
         #[Autowire(service: 'limiter.public_form_ip')] private readonly RateLimiterFactory $publicFormIp,
         #[Autowire(service: 'limiter.public_form_attempts_ip')] private readonly RateLimiterFactory $publicFormAttemptsIp,
+        #[Autowire(service: 'limiter.public_form_global_ip')] private readonly RateLimiterFactory $publicFormGlobalIp,
         #[Autowire(service: 'limiter.app_activation_ip')] private readonly RateLimiterFactory $appActivationIp,
         #[Autowire(service: 'limiter.pos_pin_login')] private readonly RateLimiterFactory $posPinLogin,
         private readonly ?TenantConnectionProvider $tenant = null,
@@ -68,9 +71,11 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
         $ip = $request->getClientIp() ?? 'unknown';
 
         $checks = match (true) {
+            // Connexion (01/11/2026) : par site et compte, par site et IP, plafond global par IP seule
             $path === '/api/login', $path === '/api/boussole/auth/login' => [
                 [$this->loginAccount, $this->accountKey($request, ['username', 'email'])],
-                [$this->loginIp, $ip],
+                [$this->loginIp, $this->siteIpKey($request)],
+                [$this->loginGlobalIp, $ip],
             ],
             $path === '/api/otp-verify' => [
                 [$this->otpAccount, $this->accountKey($request, ['username', 'email'])],
@@ -85,12 +90,15 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
             ],
             $path === '/api/password-reset/request', $path === '/api/password-reset/confirm' => [
                 [$this->resetAccount, $this->accountKey($request, ['email'])],
-                [$this->resetIp, $ip],
+                [$this->resetIp, $this->siteIpKey($request)],
+                [$this->resetGlobalIp, $ip],
             ],
-            // envois acceptés : vérifiés ici sans être comptés (comptés à la réponse 2xx) ; tentatives : comptées
+            // envois acceptés : vérifiés ici sans être comptés (comptés à la réponse 2xx), par site puis plafond global par IP ;
+            // tentatives : comptées
             in_array($path, self::PUBLIC_FORMS, true) => [
                 [$this->publicFormIp, $this->publicFormKey($request), 0],
                 [$this->publicFormAttemptsIp, $this->publicFormKey($request)],
+                [$this->publicFormGlobalIp, $ip, 0],
             ],
             default => [],
         };
@@ -121,12 +129,20 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
         if ($event->isMainRequest() && $request->getMethod() === 'POST' && $event->getResponse()->isSuccessful()
             && in_array(rtrim($request->getPathInfo(), '/'), self::PUBLIC_FORMS, true)) {
             $this->publicFormIp->create($this->publicFormKey($request))->consume();
+            $this->publicFormGlobalIp->create($request->getClientIp() ?? 'unknown')->consume();
         }
     }
 
+    /** Formulaires publics : par site (code résolu) et IP (01/11/2026 ; avant, l'hôte du backend, commun à toutes les boutiques) */
     private function publicFormKey(Request $request): string
     {
-        return $request->getHost() . '|' . ($request->getClientIp() ?? 'unknown');
+        return $this->siteIpKey($request);
+    }
+
+    /** Site + IP : un excès sur une boutique derrière une IP partagée ne bloque pas les autres boutiques */
+    private function siteIpKey(Request $request): string
+    {
+        return $this->siteKey($request) . '|' . ($request->getClientIp() ?? 'unknown');
     }
 
     /**
