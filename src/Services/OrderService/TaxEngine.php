@@ -30,9 +30,9 @@ use Symfony\Contracts\Cache\ItemInterface;
  *
  * Catégories fiscales (F18 partie 2a, 01/11/2026, fournisseur « table ») : chaque ligne porte `taxCategory` (TaxCategory, vide =
  * standard ; `taxable: false` ≡ exempt) et chaque taxe une catégorie facultative. Assiette de la taxe i = Σ nets des lignes auxquelles
- * elle s'applique (+ la livraison pour une taxe sans catégorie ou standard) ; amount_i = round(base_i × taux_i). Sans aucune
- * catégorie (tous les sites d'avant), toutes les taxes ont la même assiette qu'avant et le total garde la formule d'avant,
- * round(Σ montants non arrondis) ; dès qu'une catégorie entre en jeu, total = Σ montants arrondis (Σ taxes[].amount = total).
+ * elle s'applique (+ la livraison pour une taxe sans catégorie ou standard) ; amount_i = round(base_i × taux_i) ; total = Σ amount_i
+ * (depuis le 02/11/2026 : jusque-là le devis totalisait round(Σ montants non arrondis), un cent de moins que la vente, le ticket et le
+ * hors-ligne dans un cas sur quelques dizaines, ex. 14,99 $ au Québec : 2,24 au devis contre 2,25 enregistrés ; Σ taxes[].amount = total).
  * Stripe Tax ignore les catégories (codes fiscaux bien / service / livraison inchangés).
  */
 final class TaxEngine
@@ -179,12 +179,9 @@ final class TaxEngine
     private function table(array $address, array $lines, int $shipping): array
     {
         $applicable = $this->applicableTaxes($address);
-        // Catégorie de chaque ligne (taxable: false ≡ exempt) ; « legacy » = aucune catégorie nulle part : formule d'avant à l'identique
+        // Catégorie de chaque ligne (taxable: false ≡ exempt)
         $categories = array_map(fn ($line) => ($line['taxable'] ?? true) === false ? TaxCategory::EXEMPT : TaxCategory::of($line['taxCategory'] ?? null), $lines);
-        $legacy = !array_filter($categories, fn ($c) => $c !== TaxCategory::STANDARD && $c !== TaxCategory::EXEMPT) && !array_filter($applicable, fn (Tax $t) => $t->getCategory() !== null)
-            && !array_filter($lines, fn ($line) => ($line['taxCategory'] ?? null) === TaxCategory::EXEMPT && ($line['taxable'] ?? true) !== false); // produit exonéré par catégorie (l'article libre non taxable de F7 reste la formule d'avant)
         $taxes = [];
-        $floatTotal = 0.0;
         $intTotal = 0;
         foreach ($applicable as $tax) {
             $base = TaxCategory::applies($tax->getCategory(), TaxCategory::STANDARD) ? $shipping : 0; // livraison : taxes sans catégorie ou standard
@@ -193,14 +190,12 @@ final class TaxEngine
                     $base += $line['amount'] * $line['quantity'];
                 }
             }
-            $raw = $base * (float) $tax->getRate();
-            $amount = (int) round($raw);
-            $floatTotal += $raw;
+            $amount = (int) round($base * (float) $tax->getRate());
             $intTotal += $amount;
             $taxes[] = ['label' => (string) $tax->getName(), 'rate' => (float) $tax->getRate(), 'base' => $base, 'amount' => $amount, 'total' => $base + $amount, 'category' => $tax->getCategory(), 'taxId' => (int) $tax->getId()];
         }
 
-        return ['taxes' => $taxes, 'total' => $legacy ? (int) round($floatTotal) : $intTotal, 'status' => $taxes ? self::STATUS_CALCULATED : self::STATUS_NO_TAX, 'provider' => self::PROVIDER_TABLE, 'calculationId' => null];
+        return ['taxes' => $taxes, 'total' => $intTotal, 'status' => $taxes ? self::STATUS_CALCULATED : self::STATUS_NO_TAX, 'provider' => self::PROVIDER_TABLE, 'calculationId' => null];
     }
 
     private function stripe(array $address, array $lines, int $shipping, string $currency): array

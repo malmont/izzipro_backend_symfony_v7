@@ -59,16 +59,24 @@ class TaxCategoryApiTest extends WebTestCase
         $this->assertSame([['TPS', 0.05, 2900, 145, 3045, null], ['TVQ', 0.09975, 2900, 289, 3189, null]], array_map(fn ($t) => [$t['label'], $t['rate'], $t['base'], $t['amount'], $t['total'], $t['category']], $q['taxes']), 'base et total par taux ajoutés, montants inchangés');
         $this->assertSame('standard', $q['lines'][0]['taxCategory']);
 
-        // Point B : 14,99 $ au Québec, chaque taxe arrondie à part (75 + 150 = 225) mais total des taxes = round(224,475) = 224 en ligne (formule d'avant, gardée)
+        // Point B (correctif du 02/11/2026) : 14,99 $ au Québec, TPS 74,95 → 75 et TVQ 149,525 → 150 ; total des taxes = Σ arrondis = 225 partout
+        // (avant : round(224,475) = 224 au devis et à create-intent, 225 à la vente, au ticket et hors ligne : un cent d'écart)
         $this->db->executeStatement("UPDATE product SET price = 1499 WHERE code = 'DEMO-CASQUETTE'");
         $q = $this->json($this->request('POST', '/api/pos/quote', ['items' => [['productVariantId' => $this->cap, 'quantity' => 1]], 'cashRegisterId' => $this->register]));
-        $this->assertSame([[75, 150], 1723], [array_column($q['taxes'], 'amount'), $q['total']], 'devis : 14,99 + 2,24 = 17,23 (Σ taxes affichées 2,25)');
+        $this->assertSame([[75, 150], 1724, 1725], [array_column($q['taxes'], 'amount'), $q['total'], $q['cashTotal']], 'devis : 14,99 + 2,25 = 17,24, espèces 17,25');
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/api/cart/quote', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json'],
+            json_encode(['items' => [['productVariantId' => $this->cap, 'quantity' => 1]], 'shippingAddress' => ['country' => 'CA', 'province' => 'QC', 'city' => 'Montréal', 'postalCode' => 'H1M 0A9']]));
+        $web = json_decode($this->client->getResponse()->getContent(), true);
+        $this->assertSame([1724, [75, 150]], [$web['total'], array_column($web['taxes'], 'amount')], 'boutique web : même total que la commande (montant autorisé par create-intent = total du devis)');
         $this->request('POST', '/api/caisse/open', ['cashRegisterId' => $this->register, 'cashFund' => 10000]);
         $sale = $this->json($this->request('POST', '/api/order/create-multi-payment', ['items' => [['productVariantId' => $this->cap, 'quantity' => 1]], 'paymentMethods' => [['type' => 2, 'amount' => 17.25]], 'cashRegisterId' => $this->register]), 201);
-        $this->assertSame([1724.0, 225.0], array_map('floatval', $this->db->fetchNumeric('SELECT total_amount, total_tax FROM "order" WHERE id = ?', [$sale['orderId']])), 'vente : Σ des taxes arrondies = 2,25 → 17,24 (écart d\'un cent avec le devis, point B, non corrigé en 2a)');
+        $this->assertSame([1724.0, 225.0], array_map('floatval', $this->db->fetchNumeric('SELECT total_amount, total_tax FROM "order" WHERE id = ?', [$sale['orderId']])), 'vente : Σ des taxes arrondies = 2,25 → 17,24, comme le devis');
         $receipt = $this->json($this->request('GET', '/api/pos/receipts?orderId=' . $sale['orderId']));
         $this->assertSame([0.75, 1.5, 14.99, 15.74], [$receipt['taxes'][0]['amount'], $receipt['taxes'][1]['amount'], $receipt['taxes'][0]['base'], $receipt['taxes'][0]['total']], 'ticket : taxes avec base et total en dollars');
         $this->assertSame([false, ['label' => 'TPS', 'number' => '123456789 RT0001'], ['label' => 'TVQ', 'number' => '1234567890 TQ0001']], [$receipt['pricesIncludeTax'], $receipt['store']['taxIds'][0], $receipt['store']['taxIds'][1]], 'store.taxIds au Québec : TPS, TVQ');
+        $en = $this->json($this->request('GET', '/api/pos/receipts?orderId=' . $sale['orderId'] . '&locale=en'));
+        $this->assertSame(['GST', 'QST'], array_column($en['store']['taxIds'], 'label'), 'site canadien en anglais : GST, QST');
+        $this->assertSame(['TPS', 'TVQ'], array_column($this->json($this->request('GET', '/api/caisse/report/x?cashRegisterId=' . $this->register))['store']['taxIds'], 'label'), 'rapport X : même règle');
         $this->assertSame([1499, 1499], $this->db->fetchFirstColumn('SELECT base FROM order_tax WHERE order_tax_id = ? ORDER BY id', [$sale['orderId']]), 'assiette HT par taxe enregistrée');
         $this->assertSame('standard', $this->db->fetchOne('SELECT tax_category FROM order_items WHERE order_associated_id = ?', [$sale['orderId']]), 'produit sans catégorie : catégorie effective « standard » figée sur la ligne (null = lignes d\'avant 2a)');
         $x = $this->json($this->request('GET', '/api/caisse/report/x?cashRegisterId=' . $this->register));

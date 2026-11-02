@@ -1948,7 +1948,8 @@ taxe sur la commande, cents, signée comme le montant ; `null` sur les commandes
 
 `store.taxIds: [{label, number}]` dans l'ordre d'impression, selon le pays de l'adresse du magasin : **FR** → `SIRET` (champ `siret`,
 sinon `ein` : un site français a pu y saisir son SIRET, le champ était étiqueté « SIRET » jusqu'au 01/11/2026), `TVA intracom.` ;
-**CA** → `TPS`, `TVQ` ; **US** → `EIN` ; autre → tous ceux renseignés. Même interrupteur `posReceiptShowTaxNumbers` (liste vide s'il
+**CA** → `TPS`, `TVQ` ; **US** → `EIN` ; autre → tous ceux renseignés. Libellés dans la **langue demandée** (`?locale=` du ticket, du
+rapport X/Z et du retour, `fr` par défaut) : en anglais `GST`, `QST`, `VAT no.` (le numéro de TVH est celui de la TPS : pas d'identifiant à part). Même interrupteur `posReceiptShowTaxNumbers` (liste vide s'il
 est désactivé). `taxNumber` et `taxNumbers {gst, qst}` gardés tels quels. Fiche Entreprise : nouveau champ « SIRET (France) », le champ
 `ein` est maintenant étiqueté « EIN (États-Unis) » (aucune donnée touchée).
 
@@ -1964,7 +1965,7 @@ la ligne orpheline ne porte **aucune taxe** (les taxes à catégorie restent lis
 | Cas | Entrée | Taxes attendues | Total |
 |---|---|---|---|
 | Québec HT sans catégorie (inchangé) | casquette 2900 ; TPS 5 %, TVQ 9,975 % | TPS base 2900 → 145 ; TVQ base 2900 → 289 (289,275) | 3334 ; espèces 3335 |
-| Québec, point B | 1499 ; TPS, TVQ | TPS 75 (74,95) ; TVQ 150 (149,525) : le ticket affiche 2,25 | devis en ligne `round(224,475)` = 224 → **1723** ; vente et ticket Σ arrondis 225 → **1724** ; hors ligne 1724 |
+| Québec, point B | 1499 ; TPS, TVQ | TPS 75 (74,95) ; TVQ 150 (149,525) ; Σ 225 | **1724** partout (devis caisse et web, create-intent, vente, ticket, hors ligne) ; espèces 1725 ; avant le 02/11/2026 le devis donnait 1723 |
 | États-Unis HT | 1000 taxable + 500 `exempt` ; 8,875 % | base 1000 → 89 (88,75) | 1589 |
 | États-Unis, égalité | 1000 ; 8,875 % | 88,75 ¢ → 89 | 1089 |
 | France HT deux taux | 1000 standard + 521 `reduced` ; TVA 20 / 10 / 5,5 / 2,1 % par catégorie | 20 % base 1000 → 200 ; 5,5 % base 521 → 29 (28,655) ; 10 % et 2,1 % base 0 | 1750 |
@@ -1972,14 +1973,15 @@ la ligne orpheline ne porte **aucune taxe** (les taxes à catégorie restent lis
 | France HT, article libre à 10 % | 2 × 1250 `custom.taxCategory: intermediate` + 300 non taxable | 10 % base 2500 → 250 | 3050 (2800 + 250) |
 | Catégorie orpheline | 521 `super_reduced`, aucune taxe de cette catégorie | toutes à 0 | 521 |
 
-### Point B : total des taxes en ligne et hors ligne (constaté, non corrigé en 2a)
+### Point B : total des taxes (corrigé le 02/11/2026, commit séparé)
 
-`TaxEngine::table()` arrondit chaque taxe à part mais totalise `round(Σ montants non arrondis)` ; `pos-offline-v1`/`v2` et la vente
-(`TaxCalculationService` : Σ des `order_tax.amount`) additionnent les montants arrondis. Vérifié par test sur 14,99 $ au Québec :
-**`POST /api/pos/quote` → total 1723, `cashTotal` 1725** ; **vente `create-multi-payment` → `total_amount` 1724, `total_tax` 225** ;
-**ticket → 17,24 et taxes 0,75 + 1,50** ; hors ligne → 1724. Le devis et la vente diffèrent donc d'un cent dans ce cas (la vente passe
-grâce à la tolérance d'un cent de `checkCounterPayment`). Correctif proposé, **séparé et à valider** (il change des totaux au Québec) :
-aligner le devis sur `Σ amount_i` partout (`TaxEngine::table` sans le chemin « legacy »), avec mise à jour des captures et des cas.
+Jusqu'au 02/11/2026, `TaxEngine::table()` arrondissait chaque taxe à part mais totalisait `round(Σ montants non arrondis)`, alors que la
+vente (`TaxCalculationService` : Σ des `order_tax.amount`), le ticket et `pos-offline` additionnent les montants arrondis. Constaté par
+test sur 14,99 $ au Québec : devis et `create-intent` **17,23 $** (2,24), vente, ticket et hors ligne **17,24 $** (0,75 + 1,50 = 2,25) : un
+cent d'écart entre le montant autorisé par Stripe ou affiché au devis et la commande enregistrée (la vente de caisse passait grâce à la
+tolérance d'un cent de `checkCounterPayment`). Depuis : **total = Σ amount_i partout** ; 14,99 $ → 17,24 $ au devis de caisse
+(`cashTotal` 17,25), au devis web et à `create-intent`, comme la commande. Aucun changement sur les cas sans fraction litigieuse
+(29,00 $ → 33,34 $, captures identiques) ; MAUI lit les commandes enregistrées, qui ne changent pas.
 
 ## Mécanique interne
 
