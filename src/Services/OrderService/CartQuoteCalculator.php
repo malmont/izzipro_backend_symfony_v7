@@ -67,7 +67,8 @@ final class CartQuoteCalculator
                 if ($custom === null) {
                     continue;
                 }
-                $lines[] = $custom + ['productVariantId' => null, 'productId' => null, 'kind' => 'sale', 'quantity' => $quantity, 'total' => $custom['unitPrice'] * $quantity];
+                $lines[] = $custom + ['productVariantId' => null, 'productId' => null, 'kind' => 'sale', 'quantity' => $quantity, 'total' => $custom['unitPrice'] * $quantity,
+                    'taxCategory' => $custom['custom']['taxable'] ? ($custom['custom']['taxCategory'] ?? TaxCategory::STANDARD) : TaxCategory::EXEMPT]; // catégorie fiscale (F18 partie 2a)
                 $subtotal += $custom['unitPrice'] * $quantity;
                 continue;
             }
@@ -94,6 +95,7 @@ final class CartQuoteCalculator
             $line = [
                 'productVariantId' => $variant->getId(), 'productId' => $product->getId(), 'name' => $product->getName(),
                 'kind' => $isRental ? 'rental' : 'sale', 'quantity' => $quantity,
+                'taxCategory' => TaxCategory::of($product->getTaxCategory()), // catégorie fiscale du produit (F18 partie 2a) ; un prix manuel la garde
             ];
             if ($isRental) {
                 $priced = $this->rental($product, $booking, $quantity, $path, $errors);
@@ -153,12 +155,13 @@ final class CartQuoteCalculator
             'amount' => (int) $line['total'], 'quantity' => 1, 'kind' => $line['kind'], 'reference' => sprintf('line-%d-variant-%d', $i, $line['productVariantId']),
         ] : [
             'amount' => (int) $line['unitPrice'], 'quantity' => (int) $line['quantity'], 'kind' => $line['kind'], 'reference' => sprintf('line-%d-variant-%d', $i, $line['productVariantId']),
-        ]) + (isset($line['custom']) && !$line['custom']['taxable'] ? ['taxable' => false] : []), $lines, array_keys($lines)), $shipping, $currency);
+        ]) + (isset($line['custom']) && !$line['custom']['taxable'] ? ['taxable' => false] : []) + ['taxCategory' => $line['taxCategory'] ?? TaxCategory::STANDARD], $lines, array_keys($lines)), $shipping, $currency);
         $posLines = \App\Services\PosLineService\PosLineService::summary($lines); // résumés (F7) présents seulement si la vente en contient
 
         return ($discounts !== null ? ['discounts' => $discounts, 'grossSubtotal' => $discounts['gross']] : []) + $posLines + [
             'lines' => $lines, 'subtotal' => $subtotal, 'shipping' => $shipping,
             'taxes' => $tax['taxes'], 'taxStatus' => $tax['status'], 'taxProvider' => $tax['provider'],
+            'pricesIncludeTax' => $em->getRepository(\App\Entity\Entreprise::class)->findOneBy([])?->isPricesIncludeTax() ?? false, // F18 partie 2a : toujours faux tant que le réglage (2b) n'existe pas
             'taxCalculationId' => $tax['calculationId'], 'deposit' => $deposit,
             'total' => $subtotal + $shipping + $tax['total'], 'currency' => $currency,
             'shippingAddress' => $input->address,

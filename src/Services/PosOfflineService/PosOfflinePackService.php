@@ -51,7 +51,7 @@ class PosOfflinePackService
         $e = $em->getRepository(Entreprise::class)->findOneBy([]);
         $settings = $this->settings();
         $address = $this->storeAddress();
-        $taxes = $address ? array_map(fn ($t) => ['id' => (int) $t->getId(), 'label' => (string) $t->getName(), 'rate' => (float) $t->getRate()], $this->taxes->applicableTaxes($address)) : [];
+        $taxes = $address ? array_map(fn ($t) => ['id' => (int) $t->getId(), 'label' => (string) $t->getName(), 'rate' => (float) $t->getRate(), 'category' => $t->getCategory()], $this->taxes->applicableTaxes($address)) : []; // category : F18 partie 2a
         $step = $this->rounding->step();
         $products = [];
         $prices = [];
@@ -67,20 +67,22 @@ class PosOfflinePackService
                     'customizable' => !$variant->getProductCustomizationImages()->isEmpty(),
                 ];
                 $prices[(int) $variant->getId()] = ['unit' => (int) round((float) ($variant->getPrice() ?? $product->getPrice())), 'special' => $product->getSpecialPrice() !== null && $product->getSpecialPrice() > 0 ? (int) round((float) $product->getSpecialPrice()) : null,
-                    'from' => $product->getSpecialPriceFrom()?->format(\DateTimeInterface::ATOM), 'to' => $product->getSpecialPriceTo()?->format(\DateTimeInterface::ATOM), 'variantPrice' => $variant->getPrice() !== null];
+                    'from' => $product->getSpecialPriceFrom()?->format(\DateTimeInterface::ATOM), 'to' => $product->getSpecialPriceTo()?->format(\DateTimeInterface::ATOM), 'variantPrice' => $variant->getPrice() !== null,
+                    'taxCategory' => \App\Services\OrderService\TaxCategory::of($product->getTaxCategory())]; // catégorie figée dans l'instantané (F18 partie 2a)
             }
             $products[] = [
                 'id' => (int) $product->getId(), 'code' => $product->getCode(), 'barcode' => $product->getBarcode(), 'name' => $product->getName(),
                 'saleUnit' => $product->getSaleUnit()?->getName(), 'categoryIds' => array_values(array_map(fn ($c) => (int) $c->getId(), $product->getCategory()->toArray())),
                 'price' => (int) round((float) $product->getPrice()), 'specialPrice' => $product->getSpecialPrice() !== null && $product->getSpecialPrice() > 0 ? (int) round((float) $product->getSpecialPrice()) : null,
                 'specialPriceFrom' => $product->getSpecialPriceFrom()?->format(\DateTimeInterface::ATOM), 'specialPriceTo' => $product->getSpecialPriceTo()?->format(\DateTimeInterface::ATOM),
+                'taxCategory' => \App\Services\OrderService\TaxCategory::of($product->getTaxCategory()), // F18 partie 2a
                 'variants' => $variants,
             ];
         }
         $posSettings = $this->settings->settings();
         $content = [
             'site' => ['code' => (string) $this->tenants->getCurrentTenantCode(), 'currency' => strtoupper($this->currency->code()), 'taxProvider' => $this->offline->taxProvider(), 'cashRoundingStep' => $step,
-                'country' => $address['country'] ?? null, 'province' => $address['province'] ?? null, 'name' => $e?->getName()],
+                'country' => $address['country'] ?? null, 'province' => $address['province'] ?? null, 'name' => $e?->getName(), 'pricesIncludeTax' => $e?->isPricesIncludeTax() ?? false], // pricesIncludeTax : F18 partie 2a (toujours faux avant 2b)
             'cashRegisters' => array_map(fn (CashRegister $r) => ['id' => $r->getId(), 'name' => $r->getName(), 'receiptPrefix' => $r->getReceiptPrefix(), 'terminalEnabled' => $r->hasTerminal()],
                 $em->getRepository(CashRegister::class)->findAllOrdered(true)),
             'taxes' => $taxes,

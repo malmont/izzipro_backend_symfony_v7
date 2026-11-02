@@ -305,7 +305,7 @@ class PosReturnService
         foreach ($lines as $line) {
             if ($line['variant'] === null) { // article libre (F7) : ligne sans variante, au prix payé, aucun stock
                 $item = (new OrderItems())->setOrderAssociated($returnOrder)->setQuantity($line['quantity'])->setUnitPrice((float) $line['unitPrice'])->setTotalPrice((float) ($line['net'] ?? $line['unitPrice'] * $line['quantity']))
-                    ->setCustomLabel($line['item']?->getCustomLabel())->setTaxable($line['item']?->isTaxable() ?? true);
+                    ->setCustomLabel($line['item']?->getCustomLabel())->setTaxable($line['item']?->isTaxable() ?? true)->setTaxCategory($line['item']?->getTaxCategory() ?? $line['taxCategory'] ?? null); // catégorie d'origine (F18 partie 2a)
                 $returnOrder->addOrderItem($item);
             } else {
                 $item = $this->orderItems->createOrderItem($returnOrder, $line['variant'], $line['quantity'], (float) $line['unitPrice']);
@@ -321,7 +321,7 @@ class PosReturnService
         }
         foreach ($taxes as $tax) {
             if ($tax['tax'] !== null) {
-                $orderTax = (new OrderTax())->setOrderTax($returnOrder)->setTax($tax['tax'])->setAmount(-$tax['amount']);
+                $orderTax = (new OrderTax())->setOrderTax($returnOrder)->setTax($tax['tax'])->setAmount(-$tax['amount'])->setBase(isset($tax['base']) ? -(int) $tax['base'] : null);
                 $returnOrder->addOrderTax($orderTax);
                 $em->persist($orderTax);
             }
@@ -500,8 +500,9 @@ class PosReturnService
             // Taxes : part de la ligne dans la vente, répartie en cumul (déjà retourné + ce retour) : la somme des retours d'une
             // ligne égale exactement sa part, sans dérive d'arrondi
             foreach ($this->lineTaxShare($original, $item, $itemsTotal) as $tax) {
-                $taxSums[$tax['label']] ??= ['label' => $tax['label'], 'amount' => 0, 'tax' => $tax['tax']];
+                $taxSums[$tax['label']] ??= ['label' => $tax['label'], 'amount' => 0, 'tax' => $tax['tax'], 'base' => 0];
                 $taxSums[$tax['label']]['amount'] += self::taxForQuantity($tax['amount'], (int) $item->getQuantity(), $returned[$itemId] ?? 0, $qty);
+                $taxSums[$tax['label']]['base'] += $tax['applies'] ? $net : 0; // assiette HT du retour pour cette taxe (F18 partie 2a)
             }
         }
 
@@ -527,7 +528,7 @@ class PosReturnService
             }
             $lines[] = ['item' => null, 'variant' => $em->find(ProductVariant::class, (int) $line['productVariantId']), 'quantity' => (int) $line['quantity'], 'unitPrice' => (int) $line['unitPrice'], 'net' => (int) $line['total']];
         }
-        $taxes = array_map(fn ($t) => ['label' => (string) ($t['label'] ?? 'Taxe'), 'amount' => (int) $t['amount'], 'tax' => isset($t['taxId']) ? $em->find(Tax::class, (int) $t['taxId']) : null], $quote['taxes'] ?? []);
+        $taxes = array_map(fn ($t) => ['label' => (string) ($t['label'] ?? 'Taxe'), 'amount' => (int) $t['amount'], 'base' => isset($t['base']) ? (int) $t['base'] : null, 'tax' => isset($t['taxId']) ? $em->find(Tax::class, (int) $t['taxId']) : null], $quote['taxes'] ?? []);
 
         return [$lines, (int) $quote['subtotal'], $taxes];
     }
@@ -535,12 +536,17 @@ class PosReturnService
     /** Part de chaque taxe de la vente revenant à une ligne (au prorata de son total dans les articles) */
     private function lineTaxShare(Order $order, OrderItems $item, int $itemsTotal): array
     {
-        // Article libre non taxable (F7) : aucune part de taxe ; les autres lignes se partagent les taxes de la vente
+        // Article libre non taxable (F7) : aucune part de taxe ; les autres lignes se partagent les taxes de la vente.
+        // Catégories (F18 partie 2a) : chaque taxe n'est partagée qu'entre les lignes qu'elle frappe (taux de la vente d'origine) ;
+        // lignes antérieures sans catégorie = standard, donc même résultat qu'avant.
         $lineTotal = $item->isTaxable() ? (int) round((float) $item->getTotalPrice()) : 0;
         $out = [];
         foreach ($order->getOrderTaxes() as $orderTax) {
             $amount = (int) round((float) $orderTax->getAmount());
-            $out[] = ['label' => (string) ($orderTax->getTax()?->getName() ?? 'Taxe'), 'tax' => $orderTax->getTax(), 'amount' => $itemsTotal > 0 ? (int) round($amount * $lineTotal / $itemsTotal) : 0];
+            $category = $orderTax->getTax()?->getCategory();
+            $applies = $item->isTaxable() && \App\Services\OrderService\TaxCategory::applies($category, $item->getTaxCategory());
+            $pool = (int) array_sum(array_map(fn (OrderItems $i) => $i->isTaxable() && \App\Services\OrderService\TaxCategory::applies($category, $i->getTaxCategory()) ? (int) round((float) $i->getTotalPrice()) : 0, $order->getOrderItems()->toArray()));
+            $out[] = ['label' => (string) ($orderTax->getTax()?->getName() ?? 'Taxe'), 'tax' => $orderTax->getTax(), 'amount' => $applies && $pool > 0 ? (int) round($amount * $lineTotal / $pool) : 0, 'applies' => $applies];
         }
 
         return $out;

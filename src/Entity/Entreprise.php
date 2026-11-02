@@ -228,6 +228,14 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(length: 30, nullable: true)]
     private ?string $qstNumber = null;
 
+    /** SIRET (France, F18 partie 2a) ; le champ ein reste l'EIN américain, mais un site français a pu y saisir son SIRET (étiquette d'avant) */
+    #[ORM\Column(length: 30, nullable: true)]
+    private ?string $siret = null;
+
+    /** Prix du catalogue taxes comprises (F18 partie 2b ; colonne créée en 2a, toujours faux tant que le réglage n'existe pas) */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $pricesIncludeTax = false;
+
     #[ORM\Column(options: ['default' => 10])]
     private int $posHeldCartsMax = 10;
 
@@ -924,6 +932,10 @@ class Entreprise implements TranslatableInterface
     public function setPosReceiptFooter(?string $text): static { $this->posReceiptFooter = self::plainText($text); return $this; }
     public function isPosReceiptShowTaxNumbers(): bool { return $this->posReceiptShowTaxNumbers; }
     public function setPosReceiptShowTaxNumbers(bool $v): static { $this->posReceiptShowTaxNumbers = $v; return $this; }
+    public function getSiret(): ?string { return $this->siret; }
+    public function setSiret(?string $n): static { $this->siret = $n !== null && trim($n) !== '' ? mb_substr(trim($n), 0, 30) : null; return $this; }
+    public function isPricesIncludeTax(): bool { return $this->pricesIncludeTax; }
+    public function setPricesIncludeTax(bool $v): static { $this->pricesIncludeTax = $v; return $this; }
     public function getGstNumber(): ?string { return $this->gstNumber; }
     public function setGstNumber(?string $n): static { $this->gstNumber = $n !== null && trim($n) !== '' ? mb_substr(trim($n), 0, 30) : null; return $this; }
     public function getQstNumber(): ?string { return $this->qstNumber; }

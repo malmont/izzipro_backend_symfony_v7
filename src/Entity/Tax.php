@@ -32,6 +32,10 @@ class Tax
     #[ORM\Column(length: 2, nullable: true, options: ['default' => 'CA'])]
     private ?string $country = 'CA';
 
+    /** Catégorie fiscale visée (F18 partie 2a) : null = tous les produits non exonérés ; sinon les produits de cette catégorie seulement (TaxCategory) */
+    #[ORM\Column(length: 16, nullable: true)]
+    private ?string $category = null;
+
     /**
      * @var Collection<int, OrderTax>
      */
@@ -137,4 +141,7 @@ class Tax
 
         return $this;
     }
+
+    public function getCategory(): ?string { return $this->category; }
+    public function setCategory(?string $category): static { $this->category = \App\Services\OrderService\TaxCategory::isValid($category) ? $category : null; return $this; }
 }

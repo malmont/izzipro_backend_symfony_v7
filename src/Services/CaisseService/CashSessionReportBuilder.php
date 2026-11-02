@@ -319,8 +319,13 @@ class CashSessionReportBuilder
             foreach ($order->getOrderTaxes() as $orderTax) {
                 $tax = $orderTax->getTax();
                 $key = ($tax?->getName() ?? 'Taxe') . '|' . ($tax?->getRate() ?? '');
-                $groups[$key] ??= ['label' => $tax?->getName() ?? 'Taxe', 'rate' => $tax ? (float) $tax->getRate() : null, 'amount' => 0];
-                $groups[$key]['amount'] += (int) round((float) $orderTax->getAmount());
+                $groups[$key] ??= ['label' => $tax?->getName() ?? 'Taxe', 'rate' => $tax ? (float) $tax->getRate() : null, 'amount' => 0, 'base' => 0, 'total' => 0, 'category' => $tax?->getCategory()];
+                $amount = (int) round((float) $orderTax->getAmount());
+                // Assiette HT (F18 partie 2a) : celle de la commande ; commande antérieure sans assiette : net taxable de la commande (même signe que la taxe)
+                $base = $orderTax->getBase() ?? ($amount < 0 ? -1 : 1) * (int) array_sum(array_map(fn ($i) => $i->isTaxable() ? abs((int) round((float) $i->getTotalPrice())) : 0, $order->getOrderItems()->toArray()));
+                $groups[$key]['amount'] += $amount;
+                $groups[$key]['base'] += $base;
+                $groups[$key]['total'] += $base + $amount;
             }
         }
 

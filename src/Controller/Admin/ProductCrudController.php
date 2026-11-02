@@ -42,7 +42,8 @@ class ProductCrudController extends BaseTenantCrudController
 
     public function __construct(
         TenantEntityManagerProvider $emProvider,
-        AdminUrlGenerator $adminUrlGenerator
+        AdminUrlGenerator $adminUrlGenerator,
+        private readonly ?\App\Services\OrderService\TaxCategoryAudit $taxAudit = null // alerte « catégorie sans taxe » (F18 partie 2a)
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
@@ -76,6 +77,9 @@ class ProductCrudController extends BaseTenantCrudController
         yield NumberField::new('coefficientMultiplier', 'Coefficient')->setColumns('col-md-4');
         yield TextField::new('barcode', 'Code Barre')->setColumns('col-md-4');
         yield MoneyField::new('specialPrice', 'Prix promotionnel ($)')->setCurrency('USD')->setStoredAsCents(true)->setColumns('col-md-4');
+        // Catégorie fiscale (F18 partie 2a) : vide = standard ; « exonéré » = aucune taxe ; figée sur chaque ligne de commande à la vente
+        yield \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('taxCategory', 'Catégorie fiscale')->setChoices(array_flip(\App\Services\OrderService\TaxCategory::LABELS))->setRequired(false)->setColumns('col-md-4')->hideOnIndex()
+            ->setHelp(($this->taxAudit?->warning() ?? 'Vide : taux normal. Au Québec, laisser vide (TPS et TVQ sans catégorie). France : la catégorie choisit la TVA (20, 10, 5,5 ou 2,1 %).'));
         yield DateTimeField::new('specialPriceFrom', 'Promotion du')->setColumns('col-md-4')->hideOnIndex();
         yield DateTimeField::new('specialPriceTo', 'Promotion au')->setColumns('col-md-4')->hideOnIndex();
         yield IntegerField::new('quantity', 'Quantité')->onlyOnIndex();

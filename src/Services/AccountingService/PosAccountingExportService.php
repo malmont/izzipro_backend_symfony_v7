@@ -178,9 +178,9 @@ class PosAccountingExportService
         $items = $conn->fetchAssociative('SELECT COALESCE(SUM(total_price), 0) AS net, COALESCE(SUM(total_price + discount_amount), 0) AS gross, COALESCE(SUM(discount_amount), 0) AS discounts FROM order_items WHERE order_associated_id IN (' . $in($saleIds) . ')');
         $rewards = (int) $conn->fetchOne('SELECT COALESCE(SUM(amount), 0) FROM pos_loyalty_transaction WHERE kind = \'redeem\' AND order_id IN (' . $in($saleIds) . ')');
         $taxes = [];
-        foreach ($conn->fetchAllAssociative('SELECT t.name AS label, t.rate, COALESCE(SUM(ot.amount), 0) AS tax FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $in($saleIds) . ') GROUP BY t.name, t.rate ORDER BY MIN(t.id)') as $t) {
-            // assiette = net HT taxable des ventes (lignes taxables)
-            $taxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'base' => (int) $conn->fetchOne('SELECT COALESCE(SUM(total_price), 0) FROM order_items WHERE taxable AND order_associated_id IN (' . $in($saleIds) . ')'), 'tax' => (int) round((float) $t['tax'])];
+        // Assiette par taxe (F18 partie 2a) : order_tax.base (HT de la taxe sur la commande) ; commande antérieure sans assiette : net HT taxable de la commande
+        foreach ($conn->fetchAllAssociative('SELECT t.name AS label, t.rate, COALESCE(SUM(ot.amount), 0) AS tax, COALESCE(SUM(COALESCE(ot.base, (SELECT SUM(oi.total_price) FROM order_items oi WHERE oi.taxable AND oi.order_associated_id = ot.order_tax_id))), 0) AS base FROM order_tax ot JOIN tax t ON t.id = ot.tax_id WHERE ot.order_tax_id IN (' . $in($saleIds) . ') GROUP BY t.name, t.rate ORDER BY MIN(t.id)') as $t) {
+            $taxes[] = ['label' => $t['label'], 'rate' => (float) $t['rate'], 'base' => (int) round((float) $t['base']), 'tax' => (int) round((float) $t['tax'])];
         }
         // Encaissements des ventes par moyen (paiements positifs), terminal / Interac / déclarée pour la carte
         $receipts = ['cash' => 0, 'declaredCard' => 0, 'card' => 0, 'interac' => 0, 'paypal' => 0, 'giftCard' => (int) $sales['gift'], 'storeCredit' => 0, 'coupon' => (int) $sales['coupon']]; // coupon : F17

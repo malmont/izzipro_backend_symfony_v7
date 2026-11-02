@@ -264,7 +264,7 @@ class PosOfflineSyncService
                 if ($custom === null) {
                     throw new CashRegisterException('OFFLINE_SALE_INVALID', "items[$i] : article libre invalide", 422, $lineErrors ?: [['path' => "items[$i].quantity", 'message' => 'quantité invalide']]);
                 }
-                $lines[] = ['unitPrice' => $custom['unitPrice'], 'quantity' => $qty, 'discounts' => is_array($item['discounts'] ?? null) ? $item['discounts'] : [], 'custom' => ['label' => $custom['custom']['label'], 'unitPrice' => $custom['unitPrice'], 'taxable' => $custom['custom']['taxable']]];
+                $lines[] = ['unitPrice' => $custom['unitPrice'], 'quantity' => $qty, 'discounts' => is_array($item['discounts'] ?? null) ? $item['discounts'] : [], 'custom' => ['label' => $custom['custom']['label'], 'unitPrice' => $custom['unitPrice'], 'taxable' => $custom['custom']['taxable'], 'taxCategory' => $custom['custom']['taxCategory']]]; // taxCategory : F18 partie 2a
                 $variants[] = null;
                 continue;
             }
@@ -277,7 +277,7 @@ class PosOfflineSyncService
             if (!$price['variantPrice'] && $price['special'] !== null && ($price['from'] === null || $soldAtCorrected >= new \DateTimeImmutable($price['from'])) && ($price['to'] === null || $soldAtCorrected <= new \DateTimeImmutable($price['to']))) {
                 $unit = $price['special'];
             }
-            $line = ['unitPrice' => $unit, 'quantity' => $qty, 'discounts' => is_array($item['discounts'] ?? null) ? $item['discounts'] : []];
+            $line = ['unitPrice' => $unit, 'quantity' => $qty, 'discounts' => is_array($item['discounts'] ?? null) ? $item['discounts'] : [], 'taxCategory' => $price['taxCategory'] ?? null]; // catégorie de l'instantané (F18 partie 2a)
             if (is_array($item['priceOverride'] ?? null)) { // prix manuel : remplace le prix du pack, prix du pack gardé comme prix catalogue
                 if (!$lineSettings['priceOverride']['enabled']) {
                     throw new CashRegisterException('OFFLINE_SALE_INVALID', "items[$i] : le prix manuel est désactivé sur ce site", 422, [['path' => "items[$i].priceOverride", 'message' => 'prix manuel désactivé']]);
@@ -380,7 +380,7 @@ class PosOfflineSyncService
             $computed = $expected['lines'][$i];
             if ($variant === null) { // article libre (F7) : ligne sans variante, aucun stock
                 $item = (new \App\Entity\OrderItems())->setOrderAssociated($order)->setQuantity($line['quantity'])->setUnitPrice((float) $line['unitPrice'])->setTotalPrice((float) $computed['net'])
-                    ->setCustomLabel($line['custom']['label'])->setTaxable($line['custom']['taxable']);
+                    ->setCustomLabel($line['custom']['label'])->setTaxable($line['custom']['taxable'])->setTaxCategory($line['custom']['taxCategory'] ?? null);
                 $order->addOrderItem($item);
                 if ($computed['discountAmount'] > 0) {
                     $applied = PosDiscountCalculator::apply([['kind' => 'sale', 'unitPrice' => $line['unitPrice'], 'quantity' => $line['quantity'], 'total' => $line['unitPrice'] * $line['quantity']]], [['discounts' => $line['discounts']]], null);
@@ -391,6 +391,7 @@ class PosOfflineSyncService
             }
             $unitPrice = isset($line['priceOverride']) ? (int) $line['priceOverride']['unitPrice'] : (int) $line['unitPrice'];
             $item = $this->orderItems->createOrderItem($order, $variant, $line['quantity'], (float) $unitPrice);
+            $item->setTaxCategory($line['taxCategory'] ?? null); // F18 partie 2a
             if (isset($line['priceOverride'])) { // prix manuel (F7) : prix du pack gardé comme prix catalogue, motif
                 $item->setCatalogUnitPrice((int) $line['catalogUnitPrice'])->setPriceReasonCode($line['priceOverride']['reasonCode'])->setPriceReasonText($line['priceOverride']['reasonText']);
             }
@@ -416,7 +417,7 @@ class PosOfflineSyncService
             $declaredTaxTotal += $amount;
             $tax = isset($snapshot['taxes'][$k]['id']) ? $em->find(Tax::class, (int) $snapshot['taxes'][$k]['id']) : null;
             if ($tax) {
-                $orderTax = (new OrderTax())->setOrderTax($order)->setTax($tax)->setAmount($amount);
+                $orderTax = (new OrderTax())->setOrderTax($order)->setTax($tax)->setAmount($amount)->setBase(isset($t['base']) ? (int) $t['base'] : null); // assiette (F18 partie 2a)
                 $order->addOrderTax($orderTax);
                 $em->persist($orderTax);
             }

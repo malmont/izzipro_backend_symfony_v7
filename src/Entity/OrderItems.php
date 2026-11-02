@@ -67,6 +67,10 @@ class OrderItems
     #[ORM\Column(options: ['default' => true])]
     private bool $taxable = true;
 
+    /** Catégorie fiscale figée à la vente (F18 partie 2a) : null sur les lignes antérieures = standard */
+    #[ORM\Column(length: 16, nullable: true)]
+    private ?string $taxCategory = null;
+
     #[ORM\Column(nullable: true)]
     private ?int $catalogUnitPrice = null;
 
@@ -216,6 +220,8 @@ class OrderItems
     public function isCustom(): bool { return $this->customLabel !== null && $this->productVariant === null; }
     public function isTaxable(): bool { return $this->taxable; }
     public function setTaxable(bool $taxable): static { $this->taxable = $taxable; return $this; }
+    public function getTaxCategory(): ?string { return $this->taxCategory; }
+    public function setTaxCategory(?string $taxCategory): static { $this->taxCategory = \App\Services\OrderService\TaxCategory::isValid($taxCategory) ? $taxCategory : null; return $this; }
     public function getCatalogUnitPrice(): ?int { return $this->catalogUnitPrice; }
     public function setCatalogUnitPrice(?int $cents): static { $this->catalogUnitPrice = $cents; return $this; }
     public function hasPriceOverride(): bool { return $this->catalogUnitPrice !== null; }

@@ -62,7 +62,7 @@ class ProcessOrderItemsUseCase
             $itemData = $items[$i];
             if (isset($line['custom'])) { // article libre (F7) : ligne sans variante, libellé, taxable ou non, aucun mouvement de stock
                 $orderItem = (new \App\Entity\OrderItems())->setOrderAssociated($order)->setQuantity($line['quantity'])->setUnitPrice((float) $line['unitPrice'])->setTotalPrice((float) $line['total'])
-                    ->setCustomLabel($line['custom']['label'])->setTaxable($line['custom']['taxable']);
+                    ->setCustomLabel($line['custom']['label'])->setTaxable($line['custom']['taxable'])->setTaxCategory($line['taxCategory'] ?? null); // catégorie figée (F18 partie 2a)
                 $order->addOrderItem($orderItem);
                 if (!empty($line['discountAmount'])) {
                     $orderItem->setDiscounts($line['discounts'])->setDiscountAmount((int) $line['discountAmount']);
@@ -79,6 +79,7 @@ class ProcessOrderItemsUseCase
             }
 
             $orderItem = $this->orderItemService->createOrderItem($order, $productVariant, $line['quantity'], (float) $line['unitPrice']);
+            $orderItem->setTaxCategory($line['taxCategory'] ?? null); // catégorie fiscale du produit figée à la vente (F18 partie 2a)
             if (!empty($line['discountAmount'])) { // remises de caisse (F1) : unit_price brut, total_price net
                 $orderItem->setDiscounts($line['discounts'])->setDiscountAmount((int) $line['discountAmount'])->setTotalPrice((float) $line['total']);
             }

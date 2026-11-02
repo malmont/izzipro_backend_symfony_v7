@@ -22,6 +22,10 @@ class OrderTax
     #[ORM\Column]
     private ?float $amount = null;
 
+    /** Assiette HT de cette taxe sur la commande, en cents (F18 partie 2a) ; null sur les commandes antérieures */
+    #[ORM\Column(nullable: true)]
+    private ?int $base = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -62,4 +66,7 @@ class OrderTax
 
         return $this;
     }
+
+    public function getBase(): ?int { return $this->base; }
+    public function setBase(?int $base): static { $this->base = $base; return $this; }
 }

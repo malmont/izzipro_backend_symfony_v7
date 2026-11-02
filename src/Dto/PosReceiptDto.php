@@ -37,7 +37,10 @@ class PosReceiptDto
         $taxes = [];
         foreach ($order->getOrderTaxes() as $orderTax) {
             $tax = $orderTax->getTax();
-            $taxes[] = ['name' => $tax?->getName() ?? 'Taxe', 'rate' => $tax ? (float) $tax->getRate() : null, 'amount' => $dollars($orderTax->getAmount())];
+            // F18 partie 2a : label (= name), base HT et total TTC du taux en dollars (null sur une commande antérieure sans assiette), catégorie
+            $base = $orderTax->getBase();
+            $taxes[] = ['name' => $tax?->getName() ?? 'Taxe', 'label' => $tax?->getName() ?? 'Taxe', 'rate' => $tax ? (float) $tax->getRate() : null, 'amount' => $dollars($orderTax->getAmount()),
+                'base' => $base !== null ? $dollars($base) : null, 'total' => $base !== null ? $dollars($base + (int) round((float) $orderTax->getAmount())) : null, 'category' => $tax?->getCategory()];
         }
         $payments = [];
         $paid = 0;
@@ -122,6 +125,7 @@ class PosReceiptDto
             // Fiche client et fidélité (F8, 28/10/2026) : client rattaché (prénom et initiale), points de la vente et solde ; null sans client
             'customer' => $customer,
             'taxes' => $taxes,
+            'pricesIncludeTax' => $entreprise?->isPricesIncludeTax() ?? false, // F18 partie 2a (toujours faux avant 2b)
             'payments' => $payments,
             'cashRegister' => $register ? ['id' => $register->getId(), 'name' => $register->getName()] : null,
             'store' => StoreInfoDto::fromEntreprise($entreprise),

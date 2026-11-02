@@ -502,6 +502,8 @@ sauf mention), jamais en constantes ; valeurs par défaut = comportement d'avant
 {
   "currency": "CAD",
   "cashRoundingStep": 5,
+  "pricesIncludeTax": false,
+  "taxCategories": ["standard", "intermediate", "reduced", "super_reduced", "exempt"],
   "lockAfterMinutes": 5,
   "approvals": { "refund": {"required": true, "threshold": 0}, "withdrawal": {}, "fundWithdrawal": {}, "drawerOpen": {"required": true}, "closeWithoutCount": {"required": true}, "discount": {} },
   "pin": { "minLength": 4, "maxLength": 6, "maxAttempts": 5, "lockMinutes": 15 },
@@ -1883,6 +1885,101 @@ sa première vente ; après, c'est une opération de base assistée par la plate
 Tests : `SiteCurrencyApiTest` (réglages et profil, liste vide puis création par la commande et le bouton, idempotence, journal, fiche
 Entreprise modifiable puis verrouillée, requête forgée refusée) ; `PosSettingsApiTest`, `AppProfileTest`, `AppThemeTest` (forme du profil
 `pos` : `+ currency`), `CashClosingApiTest` inchangés.
+
+## Catégories fiscales et détail des taxes par taux (lot F18 partie 2a, 01/11/2026)
+
+La caisse sert aussi des magasins en France (plusieurs taux de TVA) et aux États-Unis (taux combiné de l'État, produits exonérés).
+Ce lot ajoute les **catégories fiscales**, l'**assiette et le TTC de chaque taxe** partout, les **identifiants du magasin** et la règle
+hors ligne **`pos-offline-v2`**. Il ne change **aucun montant** pour un site sans catégorie (tous les sites du Québec) : prouvé par
+`TaxCategoryApiTest` (casquette 29,00 $ → 33,34 $), les 17 cas v1 du jeu partagé, les 50 captures et les 11 statistiques. Les prix
+restent **hors taxes** dans ce lot (`pricesIncludeTax: false` partout) ; le mode TTC est la partie 2b.
+
+### Modèle (migration `Version20261108100000`, script `scripts/migrate_all_v2_tax_categories.sh`, additif)
+
+`tax.category` (nullable), `product.tax_category` (nullable), `order_items.tax_category` (catégorie **effective** figée à la vente :
+`standard` quand le produit n'en a pas ; `null` seulement sur les lignes antérieures = standard), `order_tax.base` (assiette HT de la
+taxe sur la commande, cents, signée comme le montant ; `null` sur les commandes antérieures), `entreprise.siret`,
+`entreprise.prices_include_tax` (faux ; réglage en 2b). Catégories fermées (`Services/OrderService/TaxCategory`) : `standard`,
+`intermediate`, `reduced`, `super_reduced`, `exempt`.
+
+### Règle
+
+- Une taxe **sans catégorie** s'applique à tous les produits non exonérés (TPS, TVQ : comportement d'avant). Une taxe **avec
+  catégorie** ne s'applique qu'aux produits de cette catégorie. Un produit **sans catégorie** est `standard`. **`exempt`** : aucune
+  taxe (comme l'article libre `taxable: false` de F7, qui vaut `exempt`). La livraison suit les taxes sans catégorie ou `standard`.
+- Catégorie au niveau du **produit** (pas de la variante) ; un **prix manuel** (F7) garde la catégorie du produit ; un **article libre**
+  accepte `custom.taxCategory` (facultatif, défaut `standard` ; 422 `VALIDATION_FAILED` sur `items[i].custom.taxCategory` hors liste).
+- **Calcul (`TaxEngine::table`)**, cents entiers, `round()` de PHP (demi-cent vers le haut en valeur absolue), dans cet ordre :
+  1. nets de ligne après remises de ligne, puis remise de ticket répartie au prorata des nets (F1, écart sur la dernière ligne) ;
+  2. pour chaque taxe *i* : `base_i` = Σ nets des lignes qu'elle frappe (+ livraison si elle est sans catégorie ou standard) ;
+  3. `amount_i = round(base_i × taux_i)` ; `total_i = base_i + amount_i` ;
+  4. total des taxes : **sans aucune catégorie en jeu** (ni sur une taxe, ni sur une ligne autre que `standard` / article libre non
+     taxable), formule d'avant gardée à l'identique : `round(Σ base_i × taux_i)` non arrondis ; **dès qu'une catégorie entre en jeu** :
+     `Σ amount_i` (donc `Σ taxes[].amount = totalTax`, garanti pour les règles nouvelles).
+- États-Unis : `TaxEngine::normalizeAddress` accepte `US` (« USA », « United States »), les 50 États en toutes lettres sont ramenés à
+  leur code (« New York » → `NY`) ; `applicableTaxes` compare `country = US` et `province` contenant le code de l'État. Une ligne
+  `tax {country: US, province: NY, rate: 0.08875}` et la catégorie `exempt` sur les produits non taxés suffisent (Stripe Tax reste le
+  choix de la boutique en ligne).
+- Stripe Tax ignore les catégories (codes fiscaux bien / service / livraison inchangés) ; `base` = assiette de la juridiction.
+
+### Contrat (ajouts seulement)
+
+- Chaque entrée de `taxes[]` porte désormais **`base`** (assiette HT, cents), **`total`** (`base + amount`) et **`category`** (null = sans
+  catégorie) : devis `POST /api/pos/quote` et `/api/pos/exchanges/quote` (+ `lines[].taxCategory`, + `pricesIncludeTax`),
+  `POST /api/cart/quote` (web, mêmes ajouts), rapports X et Z (`taxes [{label, rate, category, base, amount, total}]`, net des
+  retours ; commande antérieure sans assiette : net taxable de la commande), retour `GET /api/pos/returns/lookup` (part de taxe par
+  ligne **selon sa catégorie**). Ticket (`PosReceiptDto`) : `taxes [{name, label, rate, amount, base, total, category}]` en dollars
+  (`base`/`total` null sur une commande antérieure) et `pricesIncludeTax`.
+- `GET /api/pos/settings` : `pricesIncludeTax` (faux) et `taxCategories` (liste acceptée par `custom.taxCategory`).
+- Paquet hors ligne : `site.pricesIncludeTax`, `taxes[].category`, `products[].taxCategory`, `calculationRule: "pos-offline-v2"`
+  (v2 = v1 + catégories : `base_i` = Σ nets des lignes frappées, `amount_i = round(base_i × rate_i)`, `total = subtotal + Σ amount_i` ;
+  les 17 cas v1 donnent le même résultat ; 7 cas v2 ajoutés à `config/pos/offline-cases.json`, même format : `lines[].taxCategory`,
+  `custom.taxCategory`, `taxes[].category` en entrée, `expected` inchangé de forme). Les paquets déjà émis restent recalculés sous
+  leur instantané (catégories figées dans `prices`).
+- `/api/boutique-settings` : `commerce.pricesIncludeTax` ajouté **en lecture** depuis la fiche Entreprise (objets et ordre des clés
+  conservés ; rien d'enregistré).
+- Comptabilité (F14) : `salesByTax[].base` = Σ `order_tax.base` de la taxe (repli : net HT taxable de la commande pour les commandes
+  antérieures) ; écritures et formats d'export inchangés (MAUI : mêmes clés, assiette par taxe désormais juste quand plusieurs taux).
+- Retours (F2) : taxe du retour au **taux de la vente d'origine**, part de chaque taxe limitée aux lignes qu'elle frappe
+  (`order_items.tax_category`) ; `order_tax.base` négative sur la commande de retour.
+- Coupons (F17), cartes-cadeaux (F9), arrondi des espèces : inchangés (la vente d'une carte reste une ligne non taxable).
+
+### Identifiants du magasin (`store.taxIds`)
+
+`store.taxIds: [{label, number}]` dans l'ordre d'impression, selon le pays de l'adresse du magasin : **FR** → `SIRET` (champ `siret`,
+sinon `ein` : un site français a pu y saisir son SIRET, le champ était étiqueté « SIRET » jusqu'au 01/11/2026), `TVA intracom.` ;
+**CA** → `TPS`, `TVQ` ; **US** → `EIN` ; autre → tous ceux renseignés. Même interrupteur `posReceiptShowTaxNumbers` (liste vide s'il
+est désactivé). `taxNumber` et `taxNumbers {gst, qst}` gardés tels quels. Fiche Entreprise : nouveau champ « SIRET (France) », le champ
+`ein` est maintenant étiqueté « EIN (États-Unis) » (aucune donnée touchée).
+
+### EasyAdmin
+
+Taxes : champ « Catégorie fiscale » (vide = tous les produits non exonérés) ; en tête de la liste, **alerte** « des produits portent la
+catégorie X mais aucune taxe de ce site ne la frappe » (`TaxCategoryAudit`, taxes du lieu de vente seulement). Produit : champ
+« Catégorie fiscale » (panneau Informations commerciales), même alerte dans son aide. Dans ce cas, le **devis** calcule normalement et
+la ligne orpheline ne porte **aucune taxe** (les taxes à catégorie restent listées à 0, statut `calculated`).
+
+### Cas chiffrés (tests `TaxCategoryApiTest`, `PosOfflineApiTest` ; cents)
+
+| Cas | Entrée | Taxes attendues | Total |
+|---|---|---|---|
+| Québec HT sans catégorie (inchangé) | casquette 2900 ; TPS 5 %, TVQ 9,975 % | TPS base 2900 → 145 ; TVQ base 2900 → 289 (289,275) | 3334 ; espèces 3335 |
+| Québec, point B | 1499 ; TPS, TVQ | TPS 75 (74,95) ; TVQ 150 (149,525) : le ticket affiche 2,25 | devis en ligne `round(224,475)` = 224 → **1723** ; vente et ticket Σ arrondis 225 → **1724** ; hors ligne 1724 |
+| États-Unis HT | 1000 taxable + 500 `exempt` ; 8,875 % | base 1000 → 89 (88,75) | 1589 |
+| États-Unis, égalité | 1000 ; 8,875 % | 88,75 ¢ → 89 | 1089 |
+| France HT deux taux | 1000 standard + 521 `reduced` ; TVA 20 / 10 / 5,5 / 2,1 % par catégorie | 20 % base 1000 → 200 ; 5,5 % base 521 → 29 (28,655) ; 10 % et 2,1 % base 0 | 1750 |
+| France HT, remise de ticket 10 % | idem ; remise 152 répartie 100 + 52 | 20 % base 900 → 180 ; 5,5 % base 469 → 26 (25,795) | 1575 |
+| France HT, article libre à 10 % | 2 × 1250 `custom.taxCategory: intermediate` + 300 non taxable | 10 % base 2500 → 250 | 3050 (2800 + 250) |
+| Catégorie orpheline | 521 `super_reduced`, aucune taxe de cette catégorie | toutes à 0 | 521 |
+
+### Point B : total des taxes en ligne et hors ligne (constaté, non corrigé en 2a)
+
+`TaxEngine::table()` arrondit chaque taxe à part mais totalise `round(Σ montants non arrondis)` ; `pos-offline-v1`/`v2` et la vente
+(`TaxCalculationService` : Σ des `order_tax.amount`) additionnent les montants arrondis. Vérifié par test sur 14,99 $ au Québec :
+**`POST /api/pos/quote` → total 1723, `cashTotal` 1725** ; **vente `create-multi-payment` → `total_amount` 1724, `total_tax` 225** ;
+**ticket → 17,24 et taxes 0,75 + 1,50** ; hors ligne → 1724. Le devis et la vente diffèrent donc d'un cent dans ce cas (la vente passe
+grâce à la tolérance d'un cent de `checkCounterPayment`). Correctif proposé, **séparé et à valider** (il change des totaux au Québec) :
+aligner le devis sur `Σ amount_i` partout (`TaxEngine::table` sans le chemin « legacy »), avec mise à jour des captures et des cas.
 
 ## Mécanique interne
 

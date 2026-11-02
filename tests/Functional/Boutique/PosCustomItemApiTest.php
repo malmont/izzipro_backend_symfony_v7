@@ -77,7 +77,7 @@ class PosCustomItemApiTest extends WebTestCase
         $q = $this->json($this->request('POST', '/api/pos/quote', ['items' => [$override, $custom, $exempt], 'cashRegisterId' => $this->register]));
         // Prix manuel : 29,00 → 25,00 (baisse 4,00) ; retouche 2 × 15,00 taxable ; pain 4,50 détaxé
         $this->assertSame([2500, 2900, 2500, ['unitPrice' => 2500, 'reasonCode' => 'prix_concurrent', 'reasonText' => null, 'difference' => 400]], [$q['lines'][0]['unitPrice'], $q['lines'][0]['catalogUnitPrice'], $q['lines'][0]['total'], $q['lines'][0]['priceOverride']]);
-        $this->assertSame([null, 'Retouche ourlet', ['label' => 'Retouche ourlet', 'taxable' => true], 3000], [$q['lines'][1]['productVariantId'], $q['lines'][1]['name'], $q['lines'][1]['custom'], $q['lines'][1]['total']]);
+        $this->assertSame([null, 'Retouche ourlet', ['label' => 'Retouche ourlet', 'taxable' => true, 'taxCategory' => 'standard'], 3000], [$q['lines'][1]['productVariantId'], $q['lines'][1]['name'], $q['lines'][1]['custom'], $q['lines'][1]['total']]);
         $this->assertSame([false, 450], [$q['lines'][2]['custom']['taxable'], $q['lines'][2]['total']]);
         $this->assertSame(5950, $q['subtotal']);
         $this->assertSame([275, 549], array_column($q['taxes'], 'amount'), 'taxes sur 55,00 (le pain détaxé est exclu de l\'assiette)');

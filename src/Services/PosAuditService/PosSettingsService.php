@@ -32,6 +32,8 @@ class PosSettingsService
             // pack.site.cashRoundingStep) : connus dès le démarrage de la caisse (F18 partie 1, 01/11/2026). Défauts d'un site non réglé : CAD, 5
             'currency' => strtoupper($this->currency?->code() ?? \App\Services\BoutiqueSettingsService\TenantCurrencyProvider::DEFAULT),
             'cashRoundingStep' => $this->rounding?->step() ?? 5,
+            'pricesIncludeTax' => $e?->isPricesIncludeTax() ?? false, // F18 partie 2a : prix du catalogue TTC (réglage en 2b ; faux partout aujourd'hui)
+            'taxCategories' => \App\Services\OrderService\TaxCategory::ALL, // catégories fiscales acceptées par custom.taxCategory (F18 partie 2a)
             'lockAfterMinutes' => $e?->getPosLockMinutes() ?? 5,
             'approvals' => [
                 'refund' => $threshold($e ? $e->getPosApprovalRefund() : 0),

@@ -17,10 +17,15 @@ use App\Services\PosDiscountService\PosDiscountCalculator;
  * Lignes (F7, 26/10/2026, ajouts facultatifs) : {custom: {label, unitPrice, taxable}} = article libre (prix = custom.unitPrice,
  * pas de prix du pack) ; {priceOverride: {unitPrice}} = prix manuel (remplace le prix du pack avant les remises). Les cas
  * existants donnent le même résultat qu'avant.
+ * Règle « pos-offline-v2 » (F18 partie 2a, 01/11/2026) = v1 + catégories fiscales : une ligne porte `taxCategory` (vide = standard ;
+ * `custom.taxable: false` ≡ exempt, `custom.taxCategory` facultatif), une taxe porte `category` (vide = tous les produits non exonérés).
+ * 5'. base_i = Σ nets des lignes auxquelles la taxe i s'applique (TaxCategory::applies) ; taxe_i = round(base_i × taux_i) ; total =
+ * sousTotal + Σ taxes (montants arrondis, donc Σ taxes[].amount = total − sousTotal). Sans catégorie nulle part, base_i =
+ * sousTotalTaxable : les cas v1 donnent exactement le même résultat. Sortie des taxes : {label, rate, category, base, amount, total}.
  */
 final class PosOfflineCalculator
 {
-    public const RULE = 'pos-offline-v1';
+    public const RULE = 'pos-offline-v2';
 
     /**
      * @param list<array{unitPrice: int, quantity: int, discounts?: list<array>}> $lines
@@ -39,21 +44,34 @@ final class PosOfflineCalculator
             $quoteLines[] = ['kind' => 'sale', 'unitPrice' => $unit, 'quantity' => $qty, 'total' => $unit * $qty];
             $items[] = ['discounts' => $line['discounts'] ?? []];
             $taxable[] = !isset($line['custom']) || ($line['custom']['taxable'] ?? true) !== false;
+            // Catégorie fiscale (v2) : ligne libre non taxable = exempt ; sinon custom.taxCategory, sinon taxCategory de la ligne, sinon standard
+            $categories[] = !$taxable[count($taxable) - 1] ? \App\Services\OrderService\TaxCategory::EXEMPT
+                : \App\Services\OrderService\TaxCategory::of(isset($line['custom']) ? ($line['custom']['taxCategory'] ?? null) : ($line['taxCategory'] ?? null));
         }
+        $nets = [];
         $applied = PosDiscountCalculator::apply($quoteLines, $items, $ticketDiscount !== null && $ticketDiscount !== [] ? $ticketDiscount : null);
         $out = [];
         $subtotal = 0;
         $taxableSubtotal = 0;
         foreach ($applied['lines'] as $i => $l) {
-            $out[] = ['gross' => $l['gross'] ?? $l['total'], 'discountAmount' => $l['discountAmount'] ?? 0, 'net' => (int) $l['total']] + ($taxable[$i] ? [] : ['taxable' => false]);
+            $out[] = ['gross' => $l['gross'] ?? $l['total'], 'discountAmount' => $l['discountAmount'] ?? 0, 'net' => (int) $l['total']] + ($taxable[$i] ? [] : ['taxable' => false])
+                + ($categories[$i] !== \App\Services\OrderService\TaxCategory::STANDARD && $taxable[$i] ? ['taxCategory' => $categories[$i]] : []);
             $subtotal += (int) $l['total'];
             $taxableSubtotal += $taxable[$i] ? (int) $l['total'] : 0;
+            $nets[] = (int) $l['total'];
         }
         $taxLines = [];
         $taxTotal = 0;
         foreach ($taxes as $tax) {
-            $amount = (int) round($taxableSubtotal * (float) $tax['rate']);
-            $taxLines[] = ['label' => (string) $tax['label'], 'rate' => (float) $tax['rate'], 'amount' => $amount];
+            $category = isset($tax['category']) && \App\Services\OrderService\TaxCategory::isValid($tax['category']) ? $tax['category'] : null;
+            $base = 0;
+            foreach ($nets as $i => $net) {
+                if (\App\Services\OrderService\TaxCategory::applies($category, $categories[$i])) {
+                    $base += $net;
+                }
+            }
+            $amount = (int) round($base * (float) $tax['rate']);
+            $taxLines[] = ['label' => (string) $tax['label'], 'rate' => (float) $tax['rate'], 'category' => $category, 'base' => $base, 'amount' => $amount, 'total' => $base + $amount];
             $taxTotal += $amount;
         }
         $total = $subtotal + $taxTotal;

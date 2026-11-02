@@ -325,6 +325,12 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
   noms des provinces canadiennes sont acceptés. Taux sur articles + livraison. Table canadienne complète posée sur
   `demo` (`BoutiqueDemoCatalog::TAXES` : TPS hors provinces à TVH, TVQ, TVH 13/14/15 %, TVP BC/MB/SK) ; **les sites
   clients gardent leurs lignes** (Kara & B : TVQ à 10 % et TPS « Toutes », à corriger dans leur administration).
+- **Catégories fiscales (F18 partie 2a, 01/11/2026)** : `tax.category` et `product.tax_category` (`standard`, `intermediate`,
+  `reduced`, `super_reduced`, `exempt` ; vide = standard pour un produit, « tous les produits non exonérés » pour une taxe) ; assiette
+  par taxe (`taxes[].base`, `taxes[].total`, `taxes[].category`, `lines[].taxCategory` ajoutés au devis ; `pricesIncludeTax: false`
+  tant que la partie 2b n'existe pas), catégorie figée sur `order_items.tax_category`, `order_tax.base`. Sans catégorie, montants et
+  totaux inchangés au centime. `commerce.pricesIncludeTax` est ajouté en lecture à `GET /api/boutique-settings` depuis la fiche
+  Entreprise. Détail et cas chiffrés : `docs/caisse.md`, « Catégories fiscales ».
 - **`stripe`** : Stripe Tax (`Tax Calculations`) sur le compte connecté du site, une ligne par article (code fiscal
   « bien physique » `txcd_99999999`, « service » `txcd_20030000` pour une location, livraison `txcd_92010001`),
   montants par juridiction (`taxes[].jurisdiction`), calcul gardé 10 min pour un même panier et une même adresse. À la

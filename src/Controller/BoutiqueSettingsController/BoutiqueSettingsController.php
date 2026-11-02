@@ -31,7 +31,8 @@ class BoutiqueSettingsController extends AbstractController
     public function __construct(
         private readonly GetBoutiqueSettingsUseCase $getUseCase,
         private readonly UpdateBoutiqueSettingsUseCase $updateUseCase,
-        private readonly TenantCacheService $cache
+        private readonly TenantCacheService $cache,
+        private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null // devise et TTC du site (F18 partie 2a)
     ) {
     }
 
@@ -45,7 +46,30 @@ class BoutiqueSettingsController extends AbstractController
         // JSON stocké restitué sans transformation (un {} reste {}, l'ordre des clés est conservé)
         $json = $this->cache->get('boutique_settings', fn (): string => $this->getUseCase->execute() ?? 'null', 3600, CacheTags::listTags(CacheTags::BOUTIQUE_SETTINGS));
 
-        return new JsonResponse($json, Response::HTTP_OK, [], true);
+        return new JsonResponse($this->withSiteCommerce($json), Response::HTTP_OK, [], true);
+    }
+
+    /**
+     * F18 partie 2a : `commerce.pricesIncludeTax` vient de la fiche Entreprise (réglage de site, pas de l'éditeur) et s'ajoute en lecture
+     * à la configuration restituée ; objets et ordre des clés conservés (décodage en objets) ; rien d'enregistré.
+     */
+    private function withSiteCommerce(string $json): string
+    {
+        $entreprise = $this->emProvider?->getEntityManager()->getRepository(\App\Entity\Entreprise::class)->findOneBy([]);
+        if ($entreprise === null || $json === 'null') {
+            return $json;
+        }
+        $decoded = json_decode($json, false);
+        if (!is_object($decoded)) {
+            return $json;
+        }
+        $decoded->commerce ??= new \stdClass();
+        if (!is_object($decoded->commerce)) {
+            return $json;
+        }
+        $decoded->commerce->pricesIncludeTax = $entreprise->isPricesIncludeTax();
+
+        return json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION) ?: $json;
     }
 
     #[Route('', name: 'api_boutique_settings_update', methods: ['PUT'])]

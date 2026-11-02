@@ -38,7 +38,7 @@ class TaxCalculationService
         foreach ($taxes as $tax) {
             $tax['amount'] = $sign * (int) $tax['amount'];
             $totalTax += $tax['amount'];
-            $orderTax = (new OrderTax())->setOrderTax($order)->setAmount((float) $tax['amount']);
+            $orderTax = (new OrderTax())->setOrderTax($order)->setAmount((float) $tax['amount'])->setBase(isset($tax['base']) ? $sign * (int) $tax['base'] : null); // assiette HT (F18 partie 2a)
             if (isset($tax['taxId'])) {
                 $orderTax->setTax($em->getRepository(Tax::class)->find($tax['taxId']));
             }

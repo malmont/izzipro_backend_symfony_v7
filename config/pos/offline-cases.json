@@ -1,6 +1,6 @@
 {
-  "rule": "pos-offline-v1",
-  "description": "Jeu de cas partagé backend / POS : le total hors ligne calculé par la tablette doit être identique, au cent, au résultat attendu. Montants en cents ; rate = taux décimal ; step = pas d'arrondi des espèces (1 = aucun). Lignes facultatives (F7) : custom {label, unitPrice, taxable} = article libre (unitPrice de la ligne ignoré), priceOverride {unitPrice} = prix manuel ; taxes sur taxableSubtotal. chainVectors : vecteurs de test du chaînage (clé à part, F14).",
+  "rule": "pos-offline-v2",
+  "description": "Jeu de cas partagé backend / POS : le total hors ligne calculé par la tablette doit être identique, au cent, au résultat attendu. Montants en cents ; rate = taux décimal ; step = pas d'arrondi des espèces (1 = aucun). Lignes facultatives (F7) : custom {label, unitPrice, taxable} = article libre (unitPrice de la ligne ignoré), priceOverride {unitPrice} = prix manuel ; taxes sur taxableSubtotal. Règle v2 (F18 partie 2a, 01/11/2026) : une ligne peut porter taxCategory (standard, intermediate, reduced, super_reduced, exempt ; vide = standard ; custom.taxCategory pour un article libre, custom.taxable=false ≡ exempt) et une taxe category (vide = tous les produits non exonérés) ; base_i = Σ nets des lignes frappées par la taxe i, amount_i = round(base_i × rate_i), total = subtotal + Σ amount_i ; expected.taxes donne label, rate, category, base, amount, total. Les cas v1 donnent le même résultat sous v2. chainVectors : vecteurs de test du chaînage (clé à part, F14).",
   "cases": [
     {
       "id": "simple-une-ligne-qc",
@@ -916,6 +916,431 @@
         "total": 5174,
         "cashTotal": 5174,
         "cashRounding": 0,
+        "change": null
+      }
+    },
+    {
+      "id": "qc-14-99-somme-des-arrondis",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1499,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 2000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1499,
+            "discountAmount": 0,
+            "net": 1499
+          }
+        ],
+        "subtotal": 1499,
+        "discountTotal": 0,
+        "taxableSubtotal": 1499,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 75
+          },
+          {
+            "label": "TVQ",
+            "amount": 150
+          }
+        ],
+        "total": 1724,
+        "cashTotal": 1725,
+        "cashRounding": 1,
+        "change": 275
+      }
+    },
+    {
+      "id": "us-taxable-et-exonere-8875",
+      "step": 1,
+      "taxes": [
+        {
+          "label": "Sales tax NY",
+          "rate": 0.08875
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1000,
+          "quantity": 1
+        },
+        {
+          "unitPrice": 500,
+          "quantity": 1,
+          "taxCategory": "exempt"
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 2000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1000,
+            "discountAmount": 0,
+            "net": 1000
+          },
+          {
+            "gross": 500,
+            "discountAmount": 0,
+            "net": 500,
+            "taxCategory": "exempt"
+          }
+        ],
+        "subtotal": 1500,
+        "discountTotal": 0,
+        "taxableSubtotal": 1500,
+        "taxes": [
+          {
+            "label": "Sales tax NY",
+            "amount": 89
+          }
+        ],
+        "total": 1589,
+        "cashTotal": 1589,
+        "cashRounding": 0,
+        "change": 411
+      }
+    },
+    {
+      "id": "us-egalite-88-75-vers-89",
+      "step": 1,
+      "taxes": [
+        {
+          "label": "Sales tax NY",
+          "rate": 0.08875
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1000,
+          "quantity": 1
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": null,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1000,
+            "discountAmount": 0,
+            "net": 1000
+          }
+        ],
+        "subtotal": 1000,
+        "discountTotal": 0,
+        "taxableSubtotal": 1000,
+        "taxes": [
+          {
+            "label": "Sales tax NY",
+            "amount": 89
+          }
+        ],
+        "total": 1089,
+        "cashTotal": 1089,
+        "cashRounding": 0,
+        "change": null
+      }
+    },
+    {
+      "id": "fr-ht-deux-taux-standard-et-reduit",
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "category": "standard"
+        },
+        {
+          "label": "TVA 10 %",
+          "rate": 0.1,
+          "category": "intermediate"
+        },
+        {
+          "label": "TVA 5,5 %",
+          "rate": 0.055,
+          "category": "reduced"
+        },
+        {
+          "label": "TVA 2,1 %",
+          "rate": 0.021,
+          "category": "super_reduced"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1000,
+          "quantity": 1
+        },
+        {
+          "unitPrice": 521,
+          "quantity": 1,
+          "taxCategory": "reduced"
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": null,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1000,
+            "discountAmount": 0,
+            "net": 1000
+          },
+          {
+            "gross": 521,
+            "discountAmount": 0,
+            "net": 521,
+            "taxCategory": "reduced"
+          }
+        ],
+        "subtotal": 1521,
+        "discountTotal": 0,
+        "taxableSubtotal": 1521,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "amount": 200
+          },
+          {
+            "label": "TVA 10 %",
+            "amount": 0
+          },
+          {
+            "label": "TVA 5,5 %",
+            "amount": 29
+          },
+          {
+            "label": "TVA 2,1 %",
+            "amount": 0
+          }
+        ],
+        "total": 1750,
+        "cashTotal": 1750,
+        "cashRounding": 0,
+        "change": null
+      }
+    },
+    {
+      "id": "fr-ht-remise-ticket-10-pourcent-deux-taux",
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "category": "standard"
+        },
+        {
+          "label": "TVA 10 %",
+          "rate": 0.1,
+          "category": "intermediate"
+        },
+        {
+          "label": "TVA 5,5 %",
+          "rate": 0.055,
+          "category": "reduced"
+        },
+        {
+          "label": "TVA 2,1 %",
+          "rate": 0.021,
+          "category": "super_reduced"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 1000,
+          "quantity": 1
+        },
+        {
+          "unitPrice": 521,
+          "quantity": 1,
+          "taxCategory": "reduced"
+        }
+      ],
+      "ticketDiscount": {
+        "type": "percent",
+        "value": 10
+      },
+      "cashReceived": null,
+      "expected": {
+        "lines": [
+          {
+            "gross": 1000,
+            "discountAmount": 100,
+            "net": 900
+          },
+          {
+            "gross": 521,
+            "discountAmount": 52,
+            "net": 469,
+            "taxCategory": "reduced"
+          }
+        ],
+        "subtotal": 1369,
+        "discountTotal": 152,
+        "taxableSubtotal": 1369,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "amount": 180
+          },
+          {
+            "label": "TVA 10 %",
+            "amount": 0
+          },
+          {
+            "label": "TVA 5,5 %",
+            "amount": 26
+          },
+          {
+            "label": "TVA 2,1 %",
+            "amount": 0
+          }
+        ],
+        "total": 1575,
+        "cashTotal": 1575,
+        "cashRounding": 0,
+        "change": null
+      }
+    },
+    {
+      "id": "fr-ht-article-libre-intermediaire",
+      "step": 1,
+      "taxes": [
+        {
+          "label": "TVA 20 %",
+          "rate": 0.2,
+          "category": "standard"
+        },
+        {
+          "label": "TVA 10 %",
+          "rate": 0.1,
+          "category": "intermediate"
+        },
+        {
+          "label": "TVA 5,5 %",
+          "rate": 0.055,
+          "category": "reduced"
+        },
+        {
+          "label": "TVA 2,1 %",
+          "rate": 0.021,
+          "category": "super_reduced"
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 0,
+          "quantity": 2,
+          "custom": {
+            "label": "Plat du jour",
+            "unitPrice": 1250,
+            "taxable": true,
+            "taxCategory": "intermediate"
+          }
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": 3000,
+      "expected": {
+        "lines": [
+          {
+            "gross": 2500,
+            "discountAmount": 0,
+            "net": 2500,
+            "taxCategory": "intermediate"
+          }
+        ],
+        "subtotal": 2500,
+        "discountTotal": 0,
+        "taxableSubtotal": 2500,
+        "taxes": [
+          {
+            "label": "TVA 20 %",
+            "amount": 0
+          },
+          {
+            "label": "TVA 10 %",
+            "amount": 250
+          },
+          {
+            "label": "TVA 5,5 %",
+            "amount": 0
+          },
+          {
+            "label": "TVA 2,1 %",
+            "amount": 0
+          }
+        ],
+        "total": 2750,
+        "cashTotal": 2750,
+        "cashRounding": 0,
+        "change": 250
+      }
+    },
+    {
+      "id": "qc-categorie-ignoree-taxes-sans-categorie",
+      "step": 5,
+      "taxes": [
+        {
+          "label": "TPS",
+          "rate": 0.05
+        },
+        {
+          "label": "TVQ",
+          "rate": 0.09975
+        }
+      ],
+      "lines": [
+        {
+          "unitPrice": 2900,
+          "quantity": 1,
+          "taxCategory": "reduced"
+        }
+      ],
+      "ticketDiscount": null,
+      "cashReceived": null,
+      "expected": {
+        "lines": [
+          {
+            "gross": 2900,
+            "discountAmount": 0,
+            "net": 2900,
+            "taxCategory": "reduced"
+          }
+        ],
+        "subtotal": 2900,
+        "discountTotal": 0,
+        "taxableSubtotal": 2900,
+        "taxes": [
+          {
+            "label": "TPS",
+            "amount": 145
+          },
+          {
+            "label": "TVQ",
+            "amount": 289
+          }
+        ],
+        "total": 3334,
+        "cashTotal": 3335,
+        "cashRounding": 1,
         "change": null
       }
     }

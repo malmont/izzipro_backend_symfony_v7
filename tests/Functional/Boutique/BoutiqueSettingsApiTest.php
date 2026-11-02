@@ -40,10 +40,14 @@ class BoutiqueSettingsApiTest extends WebTestCase
 
         $get = $this->request('GET');
         $this->assertSame(200, $get->getStatusCode());
-        // Même document JSON : ordre des clés, 1.0, pages système, charte et commerce conservés tels quels
+        // Même document JSON : ordre des clés, 1.0, pages système, charte et commerce conservés tels quels ; seule clé ajoutée en lecture :
+        // commerce.pricesIncludeTax, venue de la fiche Entreprise (F18 partie 2a), jamais enregistrée dans les réglages
+        $returned = json_decode($get->getContent(), false);
+        $this->assertFalse($returned->commerce->pricesIncludeTax, 'site hors taxes : faux');
+        unset($returned->commerce->pricesIncludeTax);
         $this->assertSame(
             json_encode(json_decode($body, false)->configuration, JSON_PRESERVE_ZERO_FRACTION),
-            json_encode(json_decode($get->getContent(), false), JSON_PRESERVE_ZERO_FRACTION)
+            json_encode($returned, JSON_PRESERVE_ZERO_FRACTION)
         );
         $this->assertSame($landingBefore, $this->request('GET', null, '/api/landingpage-settings')->getContent(), 'réglages de la landing page intacts');
 

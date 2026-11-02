@@ -147,8 +147,15 @@ class PosLineService
 
             return null;
         }
+        // Catégorie fiscale facultative (F18 partie 2a) : vide = standard ; taxable: false ≡ exempt
+        $category = $custom['taxCategory'] ?? null;
+        if ($category !== null && !\App\Services\OrderService\TaxCategory::isValid($category)) {
+            $errors[] = ['path' => "$path.custom.taxCategory", 'message' => 'valeur attendue : ' . implode(', ', \App\Services\OrderService\TaxCategory::ALL)];
 
-        return ['name' => $label, 'unitPrice' => (int) $price, 'custom' => ['label' => $label, 'taxable' => $taxable]];
+            return null;
+        }
+
+        return ['name' => $label, 'unitPrice' => (int) $price, 'custom' => ['label' => $label, 'taxable' => $taxable, 'taxCategory' => $taxable ? ($category ?? \App\Services\OrderService\TaxCategory::STANDARD) : \App\Services\OrderService\TaxCategory::EXEMPT]];
     }
 
     /**

@@ -153,6 +153,10 @@ class Product implements TranslatableInterface, DemoContentInterface
     #[Groups(['product:list'])]
     private ?bool $isPos = null;
 
+    /** Catégorie fiscale (F18 partie 2a) : null = standard ; figée sur chaque ligne de commande (TaxCategory) */
+    #[ORM\Column(length: 16, nullable: true)]
+    private ?string $taxCategory = null;
+
     #[ORM\OneToOne(mappedBy: 'product', cascade: ['persist', 'remove'])]
     private ?ProductShipping $productShipping = null;
 
@@ -1111,4 +1115,7 @@ class Product implements TranslatableInterface, DemoContentInterface
 
         return $this;
     }
+
+    public function getTaxCategory(): ?string { return $this->taxCategory; }
+    public function setTaxCategory(?string $taxCategory): static { $this->taxCategory = \App\Services\OrderService\TaxCategory::isValid($taxCategory) ? $taxCategory : null; return $this; }
 }

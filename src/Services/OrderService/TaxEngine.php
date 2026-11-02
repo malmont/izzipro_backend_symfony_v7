@@ -26,7 +26,14 @@ use Symfony\Contracts\Cache\ItemInterface;
  *   la table, signalé par `status`.
  *
  * Sans adresse : aucune taxe et `status: address_required` (le frontend affiche « taxes calculées au paiement »).
- * Résultat : taxes [{ label, rate, amount, jurisdiction? }], total (cents), status, calculationId (Stripe), provider.
+ * Résultat : taxes [{ label, rate, base, amount, total, category?, jurisdiction? }], total (cents), status, calculationId (Stripe), provider.
+ *
+ * Catégories fiscales (F18 partie 2a, 01/11/2026, fournisseur « table ») : chaque ligne porte `taxCategory` (TaxCategory, vide =
+ * standard ; `taxable: false` ≡ exempt) et chaque taxe une catégorie facultative. Assiette de la taxe i = Σ nets des lignes auxquelles
+ * elle s'applique (+ la livraison pour une taxe sans catégorie ou standard) ; amount_i = round(base_i × taux_i). Sans aucune
+ * catégorie (tous les sites d'avant), toutes les taxes ont la même assiette qu'avant et le total garde la formule d'avant,
+ * round(Σ montants non arrondis) ; dès qu'une catégorie entre en jeu, total = Σ montants arrondis (Σ taxes[].amount = total).
+ * Stripe Tax ignore les catégories (codes fiscaux bien / service / livraison inchangés).
  */
 final class TaxEngine
 {
@@ -52,6 +59,19 @@ final class TaxEngine
         'YUKON' => 'YT', 'TERRITOIRES DU NORD-OUEST' => 'NT', 'NORTHWEST TERRITORIES' => 'NT', 'NUNAVUT' => 'NU',
     ];
 
+    /** États américains en toutes lettres → code (F18 partie 2a) ; un code à deux lettres passe tel quel */
+    private const US_STATES = [
+        'ALABAMA' => 'AL', 'ALASKA' => 'AK', 'ARIZONA' => 'AZ', 'ARKANSAS' => 'AR', 'CALIFORNIA' => 'CA', 'CALIFORNIE' => 'CA', 'COLORADO' => 'CO', 'CONNECTICUT' => 'CT',
+        'DELAWARE' => 'DE', 'DISTRICT OF COLUMBIA' => 'DC', 'FLORIDA' => 'FL', 'FLORIDE' => 'FL', 'GEORGIA' => 'GA', 'GÉORGIE' => 'GA', 'HAWAII' => 'HI', 'IDAHO' => 'ID',
+        'ILLINOIS' => 'IL', 'INDIANA' => 'IN', 'IOWA' => 'IA', 'KANSAS' => 'KS', 'KENTUCKY' => 'KY', 'LOUISIANA' => 'LA', 'LOUISIANE' => 'LA', 'MAINE' => 'ME',
+        'MARYLAND' => 'MD', 'MASSACHUSETTS' => 'MA', 'MICHIGAN' => 'MI', 'MINNESOTA' => 'MN', 'MISSISSIPPI' => 'MS', 'MISSOURI' => 'MO', 'MONTANA' => 'MT',
+        'NEBRASKA' => 'NE', 'NEVADA' => 'NV', 'NEW HAMPSHIRE' => 'NH', 'NEW JERSEY' => 'NJ', 'NEW MEXICO' => 'NM', 'NOUVEAU-MEXIQUE' => 'NM', 'NEW YORK' => 'NY',
+        'NORTH CAROLINA' => 'NC', 'CAROLINE DU NORD' => 'NC', 'NORTH DAKOTA' => 'ND', 'DAKOTA DU NORD' => 'ND', 'OHIO' => 'OH', 'OKLAHOMA' => 'OK', 'OREGON' => 'OR',
+        'PENNSYLVANIA' => 'PA', 'PENNSYLVANIE' => 'PA', 'RHODE ISLAND' => 'RI', 'SOUTH CAROLINA' => 'SC', 'CAROLINE DU SUD' => 'SC', 'SOUTH DAKOTA' => 'SD', 'DAKOTA DU SUD' => 'SD',
+        'TENNESSEE' => 'TN', 'TEXAS' => 'TX', 'UTAH' => 'UT', 'VERMONT' => 'VT', 'VIRGINIA' => 'VA', 'VIRGINIE' => 'VA', 'WASHINGTON' => 'WA',
+        'WEST VIRGINIA' => 'WV', 'VIRGINIE-OCCIDENTALE' => 'WV', 'WISCONSIN' => 'WI', 'WYOMING' => 'WY', 'PUERTO RICO' => 'PR',
+    ];
+
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly BoutiqueSettingsService $settings,
@@ -64,8 +84,8 @@ final class TaxEngine
 
     /**
      * @param array{country?: ?string, province?: ?string, city?: ?string, postalCode?: ?string}|null $address adresse normalisée (normalizeAddress)
-     * @param list<array{amount: int, quantity: int, kind: string, reference: string, taxable?: bool}> $lines lignes (montant unitaire en cents ; taxable false = exclue de l'assiette, F7)
-     * @return array{taxes: list<array{label: string, rate: float, amount: int, jurisdiction?: string}>, total: int, status: string, provider: string, calculationId: ?string}
+     * @param list<array{amount: int, quantity: int, kind: string, reference: string, taxable?: bool, taxCategory?: ?string}> $lines lignes (montant unitaire en cents ; taxable false = exclue de l'assiette, F7 ; taxCategory : catégorie fiscale, vide = standard)
+     * @return array{taxes: list<array{label: string, rate: float, base: int, amount: int, total: int, category?: ?string, jurisdiction?: string}>, total: int, status: string, provider: string, calculationId: ?string}
      */
     public function compute(?array $address, array $lines, int $shipping, string $currency): array
     {
@@ -107,7 +127,7 @@ final class TaxEngine
         $country = mb_strtoupper(trim((string) ($raw['country'] ?? '')));
         $country = match ($country) { 'CANADA' => 'CA', 'FRANCE' => 'FR', 'ÉTATS-UNIS', 'ETATS-UNIS', 'USA', 'UNITED STATES' => 'US', default => $country };
         $province = mb_strtoupper(trim((string) ($raw['province'] ?? $raw['state'] ?? '')));
-        $province = self::PROVINCES[$province] ?? ($province !== '' ? $province : null);
+        $province = self::PROVINCES[$province] ?? ($country === 'US' ? (self::US_STATES[$province] ?? null) : null) ?? ($province !== '' ? $province : null);
         $postalCode = isset($raw['postalCode']) || isset($raw['zip']) || isset($raw['codepostal']) ? (string) ($raw['postalCode'] ?? $raw['zip'] ?? $raw['codepostal']) : null;
         // Pays absent (09/10/2026 : commandes invité sans pays, donc sans taxe) : une province canadienne (code ou nom)
         // ou un code postal canadien (A1A 1A1) suffit à reconnaître le Canada
@@ -130,41 +150,57 @@ final class TaxEngine
     {
         $applicable = [];
         foreach ($this->emProvider->getEntityManager()->getRepository(Tax::class)->findBy([], ['id' => 'ASC']) as $tax) {
-            $country = strtoupper(trim((string) $tax->getCountry()));
-            if ($country !== '' && $country !== $address['country']) {
-                continue;
+            if (self::matchesAddress($tax->getCountry(), $tax->getProvince(), $address)) {
+                $applicable[] = $tax;
             }
-            $province = trim((string) $tax->getProvince());
-            if ($province !== '' && !in_array(mb_strtoupper($province), ['TOUTES', 'TOUS', 'ALL', '*'], true)) {
-                $codes = array_map(fn ($p) => self::PROVINCES[mb_strtoupper(trim($p))] ?? strtoupper(trim($p)), explode(',', $province));
-                if (!in_array($address['province'] ?? '', $codes, true)) {
-                    continue;
-                }
-            }
-            $applicable[] = $tax;
         }
 
         return $applicable;
     }
 
-    private function table(array $address, array $lines, int $shipping): array
+    /** Une ligne de la table (pays vide = tous ; région « Toutes » ou codes séparés par des virgules) s'applique-t-elle à l'adresse normalisée ? */
+    public static function matchesAddress(?string $taxCountry, ?string $taxProvince, array $address): bool
     {
-        $taxable = $shipping;
-        foreach ($lines as $line) {
-            if (($line['taxable'] ?? true) === false) {
-                continue; // article libre exonéré / détaxé (F7)
-            }
-            $taxable += $line['amount'] * $line['quantity'];
+        $country = strtoupper(trim((string) $taxCountry));
+        if ($country !== '' && $country !== ($address['country'] ?? null)) {
+            return false;
         }
-        $taxes = [];
-        $total = 0.0;
-        foreach ($this->applicableTaxes($address) as $tax) {
-            $amount = $taxable * (float) $tax->getRate();
-            $total += $amount;
-            $taxes[] = ['label' => (string) $tax->getName(), 'rate' => (float) $tax->getRate(), 'amount' => (int) round($amount), 'taxId' => (int) $tax->getId()];
+        $province = trim((string) $taxProvince);
+        if ($province !== '' && !in_array(mb_strtoupper($province), ['TOUTES', 'TOUS', 'ALL', '*'], true)) {
+            $codes = array_map(fn ($p) => self::PROVINCES[mb_strtoupper(trim($p))] ?? strtoupper(trim($p)), explode(',', $province));
+            if (!in_array($address['province'] ?? '', $codes, true)) {
+                return false;
+            }
         }
 
-        return ['taxes' => $taxes, 'total' => (int) round($total), 'status' => $taxes ? self::STATUS_CALCULATED : self::STATUS_NO_TAX, 'provider' => self::PROVIDER_TABLE, 'calculationId' => null];
+        return true;
+    }
+
+    private function table(array $address, array $lines, int $shipping): array
+    {
+        $applicable = $this->applicableTaxes($address);
+        // Catégorie de chaque ligne (taxable: false ≡ exempt) ; « legacy » = aucune catégorie nulle part : formule d'avant à l'identique
+        $categories = array_map(fn ($line) => ($line['taxable'] ?? true) === false ? TaxCategory::EXEMPT : TaxCategory::of($line['taxCategory'] ?? null), $lines);
+        $legacy = !array_filter($categories, fn ($c) => $c !== TaxCategory::STANDARD && $c !== TaxCategory::EXEMPT) && !array_filter($applicable, fn (Tax $t) => $t->getCategory() !== null)
+            && !array_filter($lines, fn ($line) => ($line['taxCategory'] ?? null) === TaxCategory::EXEMPT && ($line['taxable'] ?? true) !== false); // produit exonéré par catégorie (l'article libre non taxable de F7 reste la formule d'avant)
+        $taxes = [];
+        $floatTotal = 0.0;
+        $intTotal = 0;
+        foreach ($applicable as $tax) {
+            $base = TaxCategory::applies($tax->getCategory(), TaxCategory::STANDARD) ? $shipping : 0; // livraison : taxes sans catégorie ou standard
+            foreach ($lines as $i => $line) {
+                if (TaxCategory::applies($tax->getCategory(), $categories[$i])) {
+                    $base += $line['amount'] * $line['quantity'];
+                }
+            }
+            $raw = $base * (float) $tax->getRate();
+            $amount = (int) round($raw);
+            $floatTotal += $raw;
+            $intTotal += $amount;
+            $taxes[] = ['label' => (string) $tax->getName(), 'rate' => (float) $tax->getRate(), 'base' => $base, 'amount' => $amount, 'total' => $base + $amount, 'category' => $tax->getCategory(), 'taxId' => (int) $tax->getId()];
+        }
+
+        return ['taxes' => $taxes, 'total' => $legacy ? (int) round($floatTotal) : $intTotal, 'status' => $taxes ? self::STATUS_CALCULATED : self::STATUS_NO_TAX, 'provider' => self::PROVIDER_TABLE, 'calculationId' => null];
     }
 
     private function stripe(array $address, array $lines, int $shipping, string $currency): array
@@ -197,7 +233,9 @@ final class TaxEngine
                 $taxes[] = [
                     'label' => self::stripeLabel($details->display_name ?? null, $details->tax_type ?? null),
                     'rate' => isset($details->percentage_decimal) ? (float) $details->percentage_decimal / 100 : 0.0,
+                    'base' => (int) ($breakdown->taxable_amount ?? 0), // assiette de la juridiction (F18 partie 2a)
                     'amount' => (int) $breakdown->amount,
+                    'total' => (int) ($breakdown->taxable_amount ?? 0) + (int) $breakdown->amount,
                     'jurisdiction' => trim(($details->country ?? '') . ' ' . ($details->state ?? '')),
                 ];
             }
