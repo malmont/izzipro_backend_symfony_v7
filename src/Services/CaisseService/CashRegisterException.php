@@ -22,6 +22,6 @@ class CashRegisterException extends \RuntimeException
     /** @return array<string, mixed> corps de la réponse */
     public function toBody(): array
     {
-        return array_filter(['error' => $this->errorCode, 'message' => $this->getMessage(), 'errors' => $this->errors]) + $this->context;
+        return array_filter(['error' => $this->errorCode, 'code' => $this->errorCode, 'message' => $this->getMessage(), 'errors' => $this->errors]) + $this->context; // code = error (02/11/2026 : clé unique lue par la caisse)
     }
 }

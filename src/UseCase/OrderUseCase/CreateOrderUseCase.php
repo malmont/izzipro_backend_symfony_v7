@@ -179,9 +179,9 @@ class CreateOrderUseCase
             try {
                 $subtotal = $this->processOrderItemsUseCase->execute($order, $orderDTO->getItems(), $this->updateStockAndInventoryUseCase, $typeOrderId, $orderDTO->getPriceShipping(), $orderDTO->getCarrierId(), $ticketDiscount);
             } catch (BadRequestHttpException $e) {
-                throw new \Exception($e->getMessage());
+                throw new \Exception($e->getMessage(), 0, $e); // l'exception du devis reste en cause : code et détail champ par champ dans la réponse (02/11/2026)
             } catch (\Exception $e) {
-                throw new \Exception('Insufficient stock for product variant');
+                throw new \Exception('Insufficient stock for product variant', 0, $e);
             }
             $this->handleBookingUseCase->execute($order, $orderDTO->getItems());
 
@@ -375,7 +375,8 @@ class CreateOrderUseCase
             if ($em->getConnection()->isTransactionActive()) {
                 $em->getConnection()->rollBack();
             }
-            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_BAD_REQUEST);
+            // Statut et texte inchangés ; code stable (VARIANT_NOT_FOUND, CARRIER_NOT_FOUND, QUOTE_INVALID, sinon BAD_REQUEST), message et errors[] du devis ajoutés (02/11/2026)
+            return new JsonResponse(['error' => $e->getMessage(), 'code' => \App\EventSubscriber\ApiExceptionSubscriber::code($e, 400), 'message' => $e->getMessage()] + \App\EventSubscriber\ApiExceptionSubscriber::quoteErrors($e), Response::HTTP_BAD_REQUEST);
         }
     }
 }

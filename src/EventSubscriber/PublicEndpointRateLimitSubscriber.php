@@ -112,8 +112,9 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
             $limit = $factory->create($key)->consume($tokens);
             if (!$limit->isAccepted() || ($tokens === 0 && $limit->getRemainingTokens() === 0)) {
                 $retryAfter = max(1, $limit->getRetryAfter()->getTimestamp() - time());
+                $text = sprintf('Trop de tentatives. Réessayez dans %d minute(s).', (int) ceil($retryAfter / 60));
                 $event->setResponse(new JsonResponse(
-                    ['error' => sprintf('Trop de tentatives. Réessayez dans %d minute(s).', (int) ceil($retryAfter / 60))],
+                    ['error' => $text, 'code' => 'RATE_LIMITED', 'message' => $text, 'retryAfterSeconds' => $retryAfter], // code, message, retryAfterSeconds : ajouts du 02/11/2026
                     JsonResponse::HTTP_TOO_MANY_REQUESTS,
                     ['Retry-After' => (string) $retryAfter]
                 ));

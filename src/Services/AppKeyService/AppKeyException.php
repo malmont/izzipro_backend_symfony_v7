@@ -17,6 +17,6 @@ class AppKeyException extends \RuntimeException
 
     public function toBody(): array
     {
-        return array_filter(['error' => $this->errorCode, 'message' => $this->getMessage(), 'errors' => $this->errors]);
+        return array_filter(['error' => $this->errorCode, 'code' => $this->errorCode, 'message' => $this->getMessage(), 'errors' => $this->errors]); // code = error (02/11/2026)
     }
 }

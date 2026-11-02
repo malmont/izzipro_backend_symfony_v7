@@ -99,25 +99,25 @@ class SecurityController extends AbstractController
         }
 
         if (!$refreshToken) {
-            return $this->json(['error' => 'Refresh token not found'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'Refresh token not found', 'code' => 'REFRESH_TOKEN_MISSING', 'message' => 'Refresh token not found'], Response::HTTP_UNAUTHORIZED);
         }
 
         $validRefreshToken = $refreshTokenManager->get($refreshToken);
         if (!$validRefreshToken || !$validRefreshToken->isValid()) {
-            return $this->json(['error' => 'Invalid refresh token'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'Invalid refresh token', 'code' => 'REFRESH_TOKEN_INVALID', 'message' => 'Invalid refresh token'], Response::HTTP_UNAUTHORIZED);
         }
 
         // Fix: RefreshToken entity has getUsername(), not getUser()
         $username = $validRefreshToken->getUsername();
         if (!$username) {
-            return $this->json(['error' => 'User identity not found in token'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'User identity not found in token', 'code' => 'REFRESH_TOKEN_INVALID', 'message' => 'User identity not found in token'], Response::HTTP_UNAUTHORIZED);
         }
 
         $em = $this->tenantEmProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['email' => $username]); // Assuming username is email in this app logic
 
         if (!$user instanceof UserInterface) {
-            return $this->json(['error' => 'User not found'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'User not found', 'code' => 'USER_NOT_FOUND', 'message' => 'User not found'], Response::HTTP_UNAUTHORIZED);
         }
         // Dernière activité du compte (16/10/2026) : un rafraîchissement vaut une connexion
         try {
@@ -210,6 +210,7 @@ class SecurityController extends AbstractController
         }
         return $this->json([
             'status' => 'error',
+            'code' => 'JWT_INVALID', // ajout du 02/11/2026
             'message' => 'Token is invalid or expired',
         ], 401);
     }

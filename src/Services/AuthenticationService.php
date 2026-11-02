@@ -53,15 +53,15 @@ class AuthenticationService
     {
         if (in_array($platform, ['web', 'mobile'], true)) {
             if (!in_array('ROLE_USER_INTERNET', $user->getRoles(), true)) {
-                return new JsonResponse(['error' => 'This account is not allowed to access the web/mobile platform.'], Response::HTTP_FORBIDDEN);
+                return new JsonResponse(['error' => 'This account is not allowed to access the web/mobile platform.', 'code' => 'PLATFORM_NOT_ALLOWED', 'message' => 'This account is not allowed to access the web/mobile platform.'], Response::HTTP_FORBIDDEN);
             }
         } elseif ($platform === 'pos') {
             if (!array_intersect(['ROLE_USER_POS', 'ROLE_POS_MANAGER'], $user->getRoles())) {
-                return new JsonResponse(['error' => 'This account is not allowed to access the POS platform.'], Response::HTTP_FORBIDDEN);
+                return new JsonResponse(['error' => 'This account is not allowed to access the POS platform.', 'code' => 'PLATFORM_NOT_ALLOWED', 'message' => 'This account is not allowed to access the POS platform.'], Response::HTTP_FORBIDDEN);
             }
         } elseif ($platform === 'admin') {
             if (!in_array('ROLE_ADMIN', $user->getRoles(), true)) {
-                return new JsonResponse(['error' => 'This account is not allowed to access the admin platform.'], Response::HTTP_FORBIDDEN);
+                return new JsonResponse(['error' => 'This account is not allowed to access the admin platform.', 'code' => 'PLATFORM_NOT_ALLOWED', 'message' => 'This account is not allowed to access the admin platform.'], Response::HTTP_FORBIDDEN);
             }
         }
 

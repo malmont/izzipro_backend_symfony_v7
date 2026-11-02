@@ -94,12 +94,12 @@ class OrderController extends AbstractController
         /** @var \App\Entity\User $user */
         $user = $this->getUser();
         if (!$user) {
-            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'User not authenticated', 'code' => 'UNAUTHENTICATED', 'message' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
         $data = json_decode($request->getContent(), true);
         if (!is_array($data)) {
-            return $this->json(['error' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Corps JSON invalide', 'code' => 'INVALID_BODY', 'message' => 'Corps JSON invalide'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
         // Paiement en ligne (client, ou personnel avec un paiement Stripe) : commande unique par paiement, idempotente,
@@ -110,7 +110,7 @@ class OrderController extends AbstractController
         }
 
         if (!isset($data['addressId'], $data['items'])) {
-            return $this->json(['error' => 'Missing required fields (addressId, items)'], JsonResponse::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Missing required fields (addressId, items)', 'code' => 'FIELDS_REQUIRED', 'message' => 'Missing required fields (addressId, items)'], JsonResponse::HTTP_BAD_REQUEST);
         }
         // orderSource, typeOrder et paymentMethod sont facultatifs depuis le 08/10/2026 : vente en ligne payée par Stripe
         $data['orderSource'] ??= self::ORDER_SOURCE_ECOMMERCE;
@@ -126,7 +126,7 @@ class OrderController extends AbstractController
         $em = $this->emProvider->getEntityManager();
         $address = $em->getRepository(Adress::class)->find($data['addressId']);
         if (!$address || $address->getUserAdress() !== $user) {
-            return $this->json(['error' => 'Unauthorized: Invalid address'], JsonResponse::HTTP_FORBIDDEN);
+            return $this->json(['error' => 'Unauthorized: Invalid address', 'code' => 'ADDRESS_FORBIDDEN', 'message' => 'Unauthorized: Invalid address'], JsonResponse::HTTP_FORBIDDEN);
         }
 
         $carrierId = $data['carrierId'] ?? null;
@@ -135,7 +135,7 @@ class OrderController extends AbstractController
         if ($carrierId) {
             $carrier = $em->getRepository(Carrier::class)->find($carrierId);
             if (!$carrier) {
-                return $this->json(['error' => 'Carrier not found'], JsonResponse::HTTP_NOT_FOUND);
+                return $this->json(['error' => 'Carrier not found', 'code' => 'CARRIER_NOT_FOUND', 'message' => 'Carrier not found'], JsonResponse::HTTP_NOT_FOUND);
             }
         }
 
@@ -147,7 +147,7 @@ class OrderController extends AbstractController
         $isStaff = $this->isGranted('ROLE_USER_POS') || $this->isGranted('ROLE_ADMIN');
         if (!$isStaff) {
             if (!$paymentIntentId) {
-                return $this->json(['error' => 'Un paiement en ligne est requis pour cette commande.'], JsonResponse::HTTP_PAYMENT_REQUIRED);
+                return $this->json(['error' => 'Un paiement en ligne est requis pour cette commande.', 'code' => 'PAYMENT_REQUIRED', 'message' => 'Un paiement en ligne est requis pour cette commande.'], JsonResponse::HTTP_PAYMENT_REQUIRED);
             }
             $data['typeOrder'] = self::TYPE_ORDER_SALE;
             $data['paymentMethod'] = self::PAYMENT_METHOD_ONLINE;
@@ -161,10 +161,10 @@ class OrderController extends AbstractController
         if ($paymentIntentId && (!$isStaff || ($data['paymentMethod'] ?? 2) == 2)) {
             $paymentIntent = $this->stripeService->verifyPaymentIntent($paymentIntentId);
             if (!$paymentIntent) {
-                return $this->json(['error' => 'Payment verification failed or payment not completed'], JsonResponse::HTTP_PAYMENT_REQUIRED);
+                return $this->json(['error' => 'Payment verification failed or payment not completed', 'code' => 'PAYMENT_NOT_VERIFIED', 'message' => 'Payment verification failed or payment not completed'], JsonResponse::HTTP_PAYMENT_REQUIRED);
             }
             if ($this->isPaymentIntentAlreadyUsed($paymentIntent->id)) {
-                return $this->json(['error' => 'Ce paiement est déjà associé à une commande.'], JsonResponse::HTTP_CONFLICT);
+                return $this->json(['error' => 'Ce paiement est déjà associé à une commande.', 'code' => 'PAYMENT_ALREADY_USED', 'message' => 'Ce paiement est déjà associé à une commande.'], JsonResponse::HTTP_CONFLICT);
             }
 
             // On écrase les données du front par les données certifiées de Stripe
@@ -180,7 +180,7 @@ class OrderController extends AbstractController
         }
 
         if (isset($data['priceShipping']) && (float) $data['priceShipping'] < 0) {
-            return $this->json(['error' => 'Frais de livraison invalides'], JsonResponse::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Frais de livraison invalides', 'code' => 'SHIPPING_PRICE_INVALID', 'message' => 'Frais de livraison invalides'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
         $dto = new CreateOrderDTO(
@@ -294,11 +294,11 @@ class OrderController extends AbstractController
 
         // Réglage de la boutique réglable (commerce.guestCheckout) : la règle tient même sans le frontend
         if (!$this->boutiqueSettings->isGuestCheckoutAllowed()) {
-            return $this->json(['error' => 'La commande sans compte est désactivée sur ce site.'], JsonResponse::HTTP_FORBIDDEN);
+            return $this->json(['error' => 'La commande sans compte est désactivée sur ce site.', 'code' => 'GUEST_CHECKOUT_DISABLED', 'message' => 'La commande sans compte est désactivée sur ce site.'], JsonResponse::HTTP_FORBIDDEN);
         }
 
         if (!is_array($data) || !isset($data['guestInfo'], $data['items'], $data['shippingAddress'], $data['paymentIntentId'])) {
-            return $this->json(['error' => 'Missing required guest fields'], JsonResponse::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Missing required guest fields', 'code' => 'GUEST_FIELDS_REQUIRED', 'message' => 'Missing required guest fields'], JsonResponse::HTTP_BAD_REQUEST);
         }
 
         // Commande unique par paiement, idempotente (même paiement et même e-mail : commande et jeton renvoyés), partagée
@@ -345,7 +345,7 @@ class OrderController extends AbstractController
         /** @var \App\Entity\User $user */
         $user = $this->getUser();
         if (!$user) {
-            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'User not authenticated', 'code' => 'UNAUTHENTICATED', 'message' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
         $data = json_decode($request->getContent(), true);
         if (!is_array($data)) {
@@ -386,7 +386,7 @@ class OrderController extends AbstractController
             return $this->json(['error' => 'PAYMENT_METHODS_REQUIRED', 'message' => 'Au moins un moyen de paiement est requis'], JsonResponse::HTTP_BAD_REQUEST);
         }
         if (isset($data['priceShipping']) && (float) $data['priceShipping'] < 0) {
-            return $this->json(['error' => 'Frais de livraison invalides'], JsonResponse::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Frais de livraison invalides', 'code' => 'SHIPPING_PRICE_INVALID', 'message' => 'Frais de livraison invalides'], JsonResponse::HTTP_BAD_REQUEST);
         }
         $typeOrder = (int) ($data['typeOrder'] ?? self::TYPE_ORDER_SALE);
         $em = $this->emProvider->getEntityManager();
@@ -405,10 +405,10 @@ class OrderController extends AbstractController
         if (!empty($paymentData['stripePaymentId'])) {
             $paymentIntent = $this->stripeService->verifyPaymentIntent((string) $paymentData['stripePaymentId']);
             if (!$paymentIntent) {
-                return $this->json(['error' => 'Payment verification failed or payment not completed'], JsonResponse::HTTP_PAYMENT_REQUIRED);
+                return $this->json(['error' => 'Payment verification failed or payment not completed', 'code' => 'PAYMENT_NOT_VERIFIED', 'message' => 'Payment verification failed or payment not completed'], JsonResponse::HTTP_PAYMENT_REQUIRED);
             }
             if ($this->isPaymentIntentAlreadyUsed($paymentIntent->id)) {
-                return $this->json(['error' => 'Ce paiement est déjà associé à une commande.'], JsonResponse::HTTP_CONFLICT);
+                return $this->json(['error' => 'Ce paiement est déjà associé à une commande.', 'code' => 'PAYMENT_ALREADY_USED', 'message' => 'Ce paiement est déjà associé à une commande.'], JsonResponse::HTTP_CONFLICT);
             }
             $charge = $paymentIntent->charges->data[0] ?? null;
             $paymentData = [
@@ -541,20 +541,20 @@ class OrderController extends AbstractController
     {
         $user = $this->getUser();
         if (!$user) {
-            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'User not authenticated', 'code' => 'UNAUTHENTICATED', 'message' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
         $em = $this->emProvider->getEntityManager();
         $order = $em->getRepository(Order::class)->find($id);
         if (!$order) {
-            return $this->json(['error' => 'Order not found'], JsonResponse::HTTP_NOT_FOUND);
+            return $this->json(['error' => 'Order not found', 'code' => 'ORDER_NOT_FOUND', 'message' => 'Order not found'], JsonResponse::HTTP_NOT_FOUND);
         }
         // Une vente POS peut être remboursée par un responsable de caisse ou un administrateur (16/10/2026) ; une
         // commande web, par son auteur seulement, comme avant
         $posSale = $order->getOrderSource()?->getId() === self::ORDER_SOURCE_POS;
         $manager = $this->isGranted('ROLE_POS_MANAGER') || $this->isGranted('ROLE_ADMIN');
         if ($order->getUserId() !== $user && !($posSale && $manager)) {
-            return $this->json(['error' => 'Unauthorized: You can only cancel your own orders'], JsonResponse::HTTP_FORBIDDEN);
+            return $this->json(['error' => 'Unauthorized: You can only cancel your own orders', 'code' => 'FORBIDDEN', 'message' => 'Unauthorized: You can only cancel your own orders'], JsonResponse::HTTP_FORBIDDEN);
         }
 
         $data = json_decode($request->getContent(), true);
@@ -578,7 +578,7 @@ class OrderController extends AbstractController
             throw $this->createAccessDeniedException();
         }
         if (!$orderSourceId) {
-            return $this->json(['error' => 'orderSource parameter is required'], JsonResponse::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'orderSource parameter is required', 'code' => 'ORDER_SOURCE_REQUIRED', 'message' => 'orderSource parameter is required'], JsonResponse::HTTP_BAD_REQUEST);
         }
         $days = $request->query->get('days');
         $host = $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost());
@@ -602,7 +602,7 @@ class OrderController extends AbstractController
         /** @var User $user */ // Type hint pour clarté
         $user = $security->getUser();
         if (!$user) {
-            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'User not authenticated', 'code' => 'UNAUTHENTICATED', 'message' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
         $host = $this->mediaUrlResolver->getPublicHost($request->getSchemeAndHttpHost());

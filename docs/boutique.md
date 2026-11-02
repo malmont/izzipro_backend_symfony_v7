@@ -343,6 +343,9 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
   n'est plus comprise dans `sub_total`, dans les deux modes ; `totalAmount = subTotal + priceShipping (+ priceTax en HT)`), `priceTax` inclus,
   `taxes[]`. Fronts : afficher « TTC » et « dont TVA » quand `pricesIncludeTax` est vrai ;
   rien ne change pour les sites hors taxes. Détail, formule et cas : `docs/caisse.md`, « Prix taxes comprises ».
+- **Codes d'erreur (02/11/2026)** : toute réponse JSON 4xx de l'API porte une clé `code` (chaîne stable) en plus de `error`/`message`
+  inchangés ; `GET /api/orders`, `/api/payments`, l'annulation, la connexion (plateforme refusée), `/api/token/refresh` et le 429 gagnent
+  `code` + `message` ; les 401 de Lexik gardent `code: 401` et reçoivent `error` (chaîne). Table complète : `docs/caisse.md`, « Codes d'erreur ».
 - **`stripe`** : Stripe Tax (`Tax Calculations`) sur le compte connecté du site, une ligne par article (code fiscal
   « bien physique » `txcd_99999999`, « service » `txcd_20030000` pour une location, livraison `txcd_92010001`),
   montants par juridiction (`taxes[].jurisdiction`), calcul gardé 10 min pour un même panier et une même adresse. À la

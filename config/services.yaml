@@ -131,6 +131,14 @@ services:
         tags:
             - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_decoded, method: onJWTDecoded }
 
+    # Codes stables des 401 de Lexik (02/11/2026) : clé error (chaîne) ajoutée, code entier conservé
+    App\EventListener\JwtFailureCodeListener:
+        tags:
+            - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_not_found, method: onJwtNotFound }
+            - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_expired, method: onJwtExpired }
+            - { name: kernel.event_listener, event: lexik_jwt_authentication.on_jwt_invalid, method: onJwtInvalid }
+            - { name: kernel.event_listener, event: lexik_jwt_authentication.on_authentication_failure, method: onAuthenticationFailure }
+
     App\EventListener\TenantSessionIsolationListener:
         tags:
             - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest, priority: 50 }

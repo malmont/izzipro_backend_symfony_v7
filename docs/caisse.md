@@ -2079,6 +2079,218 @@ les applications (caisse, e-commerce) qui savent l'afficher sont publiées. Tous
    recomposait `total = subTotal + priceTax` en supposant la livraison dans `subTotal`, lire `totalAmount` tel quel. 5. Rien d'autre pour les
    sites hors taxes.
 
+## Codes d'erreur de la caisse (02/11/2026)
+
+Toute réponse JSON 4xx porte une clé **`code`** stable (MAJUSCULES_SOULIGNÉES). En production (`APP_DEBUG=0`), les erreurs génériques des
+routes `/api/*` sont rendues par `ApiExceptionListener` : `{error: texte anglais du statut (« Forbidden », « Not Found », « Bad Request »…),
+code, message}` ; en debug (tests), par `ApiExceptionSubscriber` : `{error: texte français, code, message, title, status, detail}`. Le `code`
+est le même dans les deux cas. Règle pour les applications : **lire `code` s'il est une chaîne au
+format MAJUSCULES_SOULIGNÉES, sinon `error`** (les 401 de Lexik gardent `code: 401` en entier et portent le code dans `error`). Pour les exceptions
+déjà codées (`CashRegisterException`, `AppKeyException`), `code` = `error` ; pour les autres, `error` et `message` gardent leur texte d'avant et
+`code` s'ajoute. Les validations champ par champ gardent `VALIDATION_FAILED` + `errors[{path, message}]`. La vente `create-multi-payment` refusée
+par le devis garde son 400 et son texte, et gagne `code` (`VARIANT_NOT_FOUND`, `CARRIER_NOT_FOUND`, `QUOTE_INVALID`) et `errors[]`. Le 429 gagne
+`code: RATE_LIMITED`, `message` et `retryAfterSeconds`. La caisse traduit à partir de cette table ; les messages français ne changent pas.
+
+### Codes génériques, connexion, jetons, vente, commandes
+
+| Code | Statut | Message (français ou historique) |
+|---|---|---|
+| `BAD_REQUEST` | 400 | `Bad Request` en production / « Requête invalide. » en debug — toute 4xx générique sans code propre |
+| `UNAUTHENTICATED` | 401 | Utilisateur non connecté / `User not authenticated` |
+| `PAYMENT_REQUIRED` | 402 | Un paiement en ligne est requis pour cette commande. |
+| `FORBIDDEN` | 403 | `Forbidden` en production / « Accès refusé. » en debug (rôle insuffisant : caissier sur une route du responsable ou de l'administrateur) / `Unauthorized: You can only cancel your own orders` |
+| `NOT_FOUND` | 404 | `Not Found` en production / « Ressource introuvable. » en debug (route inconnue, entité absente : `Payment method not found`…) |
+| `METHOD_NOT_ALLOWED` | 405 | Méthode non autorisée |
+| `CONFLICT` | 409 | Conflit (texte selon le cas) |
+| `VALIDATION_FAILED` | 422 | Validation refusée ; `errors[{path, message}]` donne le champ et le motif (forme inchangée) |
+| `RATE_LIMITED` | 429 | Trop de tentatives. Réessayez dans N minute(s). — `retryAfterSeconds` et en-tête `Retry-After` |
+| `VARIANT_NOT_FOUND` | 400 | items[i].productVariantId : variante introuvable (vente `create-multi-payment` ; le devis `/api/pos/quote` répond 404 avec le même texte) ; `errors[]` |
+| `CARRIER_NOT_FOUND` | 400 / 404 | carrierId : transporteur introuvable / Transporteur introuvable |
+| `QUOTE_INVALID` | 400 | (vente `create-multi-payment`) message du devis : stock insuffisant, produit non vendable, remise invalide… ; `errors[{path, message}]` |
+| `INVALID_BODY` | 400 | Corps JSON invalide |
+| `ITEMS_REQUIRED` | 400 | La vente doit contenir au moins un article |
+| `PAYMENT_METHODS_INVALID` | 400 | Chaque moyen de paiement doit avoir un type et un montant positif / terminalPaymentId ne s'applique qu'à une part carte (type 1) / code : code de la carte-cadeau ou de l'avoir attendu (ou requis pour les types 4 et 5) / coupon : {manufacturer} ou {barcode} requis (type 6) |
+| `PAYMENT_METHODS_REQUIRED` | 400 | Au moins un moyen de paiement est requis |
+| `ADDRESS_NOT_FOUND` | 404 | Adresse introuvable |
+| `SHIPPING_PRICE_INVALID` | 400 | Frais de livraison invalides |
+| `PAYMENT_NOT_VERIFIED` | 402 | Payment verification failed or payment not completed (paiement Stripe web) |
+| `PAYMENT_ALREADY_USED` | 409 | Ce paiement est déjà associé à une commande. |
+| `ORDER_NOT_FOUND` | 404 | Order not found (annulation) |
+| `ORDER_SOURCE_REQUIRED` | 400 | orderSource parameter is required (`GET /api/orders`, `GET /api/payments`) |
+| `LOGIN_INVALID` | 401 | Identifiants invalides (`POST /api/login`, clé `code` déjà présente) |
+| `ACCOUNT_NOT_VERIFIED` | 401 | Votre compte n'est pas vérifié. Veuillez consulter vos e-mails. (`POST /api/login`) |
+| `PLATFORM_INVALID` | 400 | Plateforme de connexion inconnue |
+| `PLATFORM_NOT_ALLOWED` | 403 | This account is not allowed to access the POS platform. (ou web/mobile, admin) |
+| `REFRESH_TOKEN_MISSING` | 401 | Refresh token not found (`POST /api/token/refresh`) |
+| `REFRESH_TOKEN_INVALID` | 401 | Invalid refresh token / User identity not found in token |
+| `USER_NOT_FOUND` | 401 | User not found (`POST /api/token/refresh`) |
+| `JWT_NOT_FOUND` | 401 | JWT Token not found — Lexik : `code: 401` (entier) conservé, le code est dans `error` |
+| `JWT_EXPIRED` | 401 | Expired JWT Token — idem |
+| `JWT_INVALID` | 401 | Invalid JWT Token — idem ; `GET /api/token/verify` : `code: "JWT_INVALID"` avec « Token is invalid or expired » |
+| `AUTHENTICATION_FAILED` | 401 | Autre échec d'authentification Lexik — idem |
+| `APP_KEY_MISSING / APP_KEY_INVALID / APP_KEY_NOT_FOUND / APP_KEY_REVOKED / APP_KEY_WRONG_APP` | 400 / 401 / 403 | Activation d'une application (`POST /api/app/activate`) : message selon le cas |
+
+### Codes de la caisse (`CashRegisterException`) : code → message
+
+Le statut est celui de l'exception (400, 401, 403, 404, 409, 422 ; `PIN_INVALID` 401 ou 403 selon le contexte). Plusieurs messages pour un
+même code sont séparés par « / ». Les codes à message variable sont décrits entre parenthèses.
+
+| Code | Message |
+|---|---|
+| `ALREADY_REFUNDED` | Paiement déjà entièrement remboursé |
+| `AMOUNT_MISMATCH` | La part carte ne correspond pas au devis du serveur |
+| `AMOUNT_TOO_SMALL` | Montant carte inférieur au minimum accepté (0,50) |
+| `APPROVAL_INVALID` | Validation invalide :  / Validation invalide : jeton déjà utilisé ou expiré |
+| `APPROVAL_RATE_LIMITED` | Trop d'essais de validation sur ce terminal : réessayez plus tard |
+| `APPROVAL_REQUIRED` | Validation d'un responsable requise |
+| `APPROVER_NOT_ALLOWED` | Le validateur doit être responsable de caisse ou administrateur |
+| `ARCHIVE_FAILED` | Impossible de créer l'archive |
+| `BARCODE_INVALID` | Code-barres inconnu : IZ-T-<poste>-<numéro> attendu / Code-barres inconnu : IZ-T-<poste>-<numéro> ou IZ-A-<poste>-<numéro> attendu |
+| `CAISSE_ALREADY_OPEN` | Une session est déjà ouverte sur le poste « %s » / Une session est déjà ouverte sur le poste « %s ». Fermez-la avant d'en ouvrir une autre. |
+| `CASH_REFUND_FORBIDDEN` | Remboursement en espèces d'une vente payée par carte refusé sur ce site / Remboursement en espèces de la part réglée par carte-cadeau ou avoir refusé sur ce site (recrédit sur la carte) |
+| `CASH_REGISTER_CLOSED` | Aucune session ouverte sur le poste « %s » |
+| `CASH_REGISTER_FORBIDDEN` | Ce terminal est rattaché à un autre poste de caisse |
+| `CASH_REGISTER_NOT_FOUND` | Poste de caisse introuvable / Poste de caisse introuvable ou inactif |
+| `CASH_REGISTER_OPEN` | Fermez la session de ce poste avant de le désactiver |
+| `CONNECTION_TOKEN_RATE_LIMITED` | Trop de jetons de connexion demandés par ce terminal : réessayez plus tard |
+| `CONSENT_REQUIRED` | Le client doit consentir à réunir ses achats en magasin et en ligne (consentement account_link) |
+| `COUNT_MISMATCH` | Le détail des coupures fait %d cents, countedCash en annonce %d |
+| `COUPONS_NOT_AVAILABLE_TTC` | Les coupons de fabricant ne sont pas acceptés sur un site à prix taxes comprises |
+| `COUPON_ALREADY_USED` | Ce coupon (fabricant, offre, numéro de série) a déjà été accepté sur ce site |
+| `COUPON_AMOUNT_INVALID` | Montant du coupon : entier positif en cents attendu (saisi par le caissier quand le code-barres ne le donne pas) |
+| `COUPON_DISABLED` | Les coupons de fabricant ne sont pas acceptés sur ce site |
+| `COUPON_EXCEEDS_DUE` | Le total des coupons dépasse le montant dû |
+| `COUPON_EXCEEDS_ITEM` | Le coupon dépasse le montant des articles de la vente / Le coupon dépasse le prix de l'article concerné |
+| `COUPON_EXPIRED` | Coupon expiré le %s : à retirer de la vente |
+| `COUPON_ITEM_NOT_IN_SALE` | L'article du coupon n'est pas dans la vente |
+| `COUPON_PAYMENT_INVALID` | Un coupon de fabricant ne règle qu'une vente au comptoir |
+| `CUSTOMERS_DISABLED` | La fiche client est désactivée sur ce site |
+| `CUSTOMER_ERASED` | Fiche client effacée |
+| `CUSTOMER_EXISTS` | Une fiche active porte déjà ce  |
+| `CUSTOMER_LINK_DISABLED` | Le rattachement d'un compte web est désactivé sur ce site |
+| `CUSTOMER_MERGED` | Fiche fusionnée dans une autre |
+| `CUSTOMER_NOT_ALLOWED` | Le rattachement d'un client de caisse ne s'applique qu'aux ventes au comptoir |
+| `CUSTOMER_NOT_FOUND` | Fiche client introuvable |
+| `CUSTOMER_SEARCH_RATE_LIMITED` | Trop de recherches de clients : réessayez dans une minute |
+| `CUSTOM_ITEM_NOT_ALLOWED` | L'article libre est désactivé sur ce site / L'article libre et le prix manuel ne s'appliquent qu'aux ventes au comptoir |
+| `DECLARED_CARD_BLOCKED` | Carte déclarée refusée : ce poste a un terminal de paiement, utilisez-le |
+| `DISCOUNT_EXCEEDS_LIMIT` | Remise au-delà du plafond autorisé (responsable) : seul un administrateur peut l'accorder |
+| `DISCOUNT_NOT_ALLOWED` | La remise sur le ticket est désactivée sur ce site / Les remises ne s'appliquent qu'aux ventes au comptoir / Les remises sont désactivées sur ce site |
+| `DISCOUNT_REASON_INVALID` | Motif de remise inconnu : voir settings.discounts.reasons |
+| `DISCOUNT_REASON_REQUIRED` | Un motif est requis pour chaque remise (reasonCode ou reasonText) |
+| `DISCREPANCY_REASON_REQUIRED` | Écart de %d cents entre espèces comptées et attendues : motif requis |
+| `EMAIL_INVALID` | Adresse courriel invalide |
+| `EMAIL_NOT_CONFIGURED` | Ce site n'a pas de configuration d'envoi de courriels : reçu par courriel indisponible |
+| `EMAIL_SEND_FAILED` | Envoi du reçu impossible pour l'instant, réessayez |
+| `EXPORT_TOO_LARGE` | QuickBooks Online n'importe pas plus de %d lignes par fichier : %d écritures sur la période. Réduisez la période (%s). |
+| `FORBIDDEN` | Archive réservée au responsable de caisse / Export comptable réservé au responsable de caisse / Réclamation des coupons réservée au responsable de caisse / Réservé au responsable de caisse / Révocation du lien réservée au responsable de caisse / Épinglage des favoris réservé au responsable de caisse |
+| `GIFT_CARD_CASH_OUT_FORBIDDEN` | Remboursement en espèces refusé au-delà du seuil du site |
+| `GIFT_CARD_CODE_INVALID` | Code de carte invalide : format GC-XXXX-XXXX-XXXX attendu (alphabet sans 0, 1, I, O) / Code de carte-cadeau ou d'avoir invalide (format GC-XXXX-XXXX-XXXX ou AV-XXXX-XXXX-XXXX) |
+| `GIFT_CARD_CODE_TAKEN` | Ce code de carte est déjà utilisé |
+| `GIFT_CARD_DISABLED` | Les cartes-cadeaux ou les avoirs sont désactivés sur ce site / Les cartes-cadeaux sont désactivées sur ce site |
+| `GIFT_CARD_DUPLICATE` | La même carte est présentée deux fois |
+| `GIFT_CARD_EXPIRED` | Carte-cadeau ou avoir expiré |
+| `GIFT_CARD_INACTIVE` | Carte annulée ou déjà remplacée / Carte annulée ou remplacée / Carte déjà annulée, remplacée ou épuisée / Carte-cadeau ou avoir inutilisable (annulé, remplacé ou épuisé) |
+| `GIFT_CARD_INSUFFICIENT` | Le solde ne peut pas devenir négatif / Solde insuffisant sur la carte-cadeau ou l'avoir |
+| `GIFT_CARD_LOOKUP_LIMIT` | Trop de codes refusés : réessayez dans quelques minutes / Trop de consultations : réessayez plus tard |
+| `GIFT_CARD_NOT_CANCELABLE` | Seule une carte-cadeau vendue peut être annulée (un avoir se rembourse par son solde) / Vente d'émission introuvable |
+| `GIFT_CARD_NOT_FOUND` | Aucune carte ne correspond à cette vente et à ces 4 caractères / Carte-cadeau ou avoir inconnu ou inutilisable |
+| `GIFT_CARD_ORDER` | Vente d'une carte-cadeau : utilisez l'annulation de la carte (POST /api/pos/gift-cards/{code}/cancel) |
+| `GIFT_CARD_PAYMENT_INVALID` | Part carte-cadeau : montant positif attendu / Une carte-cadeau ou un avoir ne peut pas payer une carte-cadeau / Une carte-cadeau ou un avoir ne règle qu'une vente au comptoir |
+| `GIFT_CARD_USED` | Cette carte a déjà servi : annulation impossible (remboursement du solde en espèces selon le réglage) |
+| `INSUFFICIENT_FUNDS` | Fonds insuffisants dans la caisse |
+| `INVALID_AMOUNT` | %s : montant en cents, entier positif ou nul, attendu / Montant invalide / cashFund : montant en cents, positif ou nul, attendu / keptFund : entre 0 et countedCash / keptFund exige un comptage (countedCash ou cashDetails) |
+| `INVALID_BODY` | Corps JSON invalide |
+| `INVALID_CASH_DETAILS` | cashDetails : coupure inconnue ou nombre invalide (GET /api/caisse/denominations) / cashDetails : liste [{typeCash, nombreItems}] attendue / cashDetails[%d] : coupure %d inconnue / cashDetails[%d] : typeCash et nombreItems (entier positif) attendus |
+| `INVALID_TYPE` | type : %s inconnu (%s) |
+| `LOYALTY_CONSENT_REQUIRED` | Le client n'a pas consenti au programme de fidélité |
+| `LOYALTY_CUSTOMER_REQUIRED` | Le rachat de points exige un client rattaché à une vente |
+| `LOYALTY_DISABLED` | Le programme de fidélité est désactivé sur ce site |
+| `LOYALTY_INSUFFICIENT` | Le solde de points ne peut pas devenir négatif / Solde de points insuffisant |
+| `LOYALTY_POINTS_INVALID` | Rachat : au moins %d points, par pas de %d |
+| `LOYALTY_TICKET_DISCOUNT_CONFLICT` | Un rachat de points et une remise de ticket ne se cumulent pas |
+| `MULTI_PAYMENT_DISABLED` | Le paiement en plusieurs parts est désactivé sur ce site |
+| `NOTHING_TO_CLAIM` | Aucun coupon à réclamer pour cette période |
+| `OFFLINE_SALE_INVALID` | La somme des paiements en espèces doit égaler totals.cashTotal / Remise au-delà du plafond du vendeur (aucune validation possible hors ligne) / Vente hors ligne incomplète :  |
+| `ORDER_CANCELED` | Cette vente a été annulée et remboursée en entier |
+| `ORDER_NOT_FOUND` | Vente introuvable |
+| `ORDER_NOT_REFUNDABLE` | Cette commande est déjà annulée / Cette vente est déjà annulée et remboursée / Un avoir (commande de retour) ne s'annule pas et ne se rembourse pas : le client a déjà été remboursé par ce retour |
+| `ORDER_NOT_RETURNABLE` | Seule une vente en caisse peut faire l'objet d'un retour |
+| `PACK_UNKNOWN` | Version de pack inconnue : la vente ne peut pas être recalculée aux conditions de la tablette |
+| `PASSWORD_INVALID` | Mot de passe incorrect |
+| `PAYMENT_ALREADY_CAPTURED` | Paiement déjà débité : passez par un remboursement |
+| `PAYMENT_METHODS_INVALID` | Chaque moyen de paiement doit avoir un type et un montant positif / code : code de la carte-cadeau ou de l'avoir requis pour les types 4 et 5 |
+| `PAYMENT_METHODS_REQUIRED` | Au moins un moyen de paiement est requis |
+| `PAYMENT_METHOD_DISABLED` | Ce moyen de paiement est désactivé sur ce site |
+| `PAYMENT_NOT_CAPTURED` | Ce paiement n'a pas été débité : rien à rembourser / Le paiement par terminal de cette vente n'a pas été débité |
+| `PAYMENT_TOTAL_MISMATCH` | Le montant payé (%.2f) ne correspond pas au total de la commande (%.2f). / Les paiements doivent couvrir exactement le montant de la carte |
+| `PIN_INVALID` | PIN incorrect / Utilisateur ou PIN incorrect |
+| `PIN_LOCKED` | PIN bloqué après %d essais : réessayez dans %d minute(s) |
+| `PIN_LOGIN_NOT_ALLOWED` | Connexion par PIN non autorisée pour ce compte (administrateur, code e-mail ou compte non caisse) |
+| `PIN_NOT_SET` | Aucun PIN de caisse défini pour cet utilisateur |
+| `PRICE_OVERRIDE_NOT_ALLOWED` | Le prix manuel est désactivé sur ce site |
+| `PRICE_OVERRIDE_REASON_INVALID` | Motif de prix manuel inconnu : voir settings.priceOverride.reasons |
+| `PRICE_OVERRIDE_REASON_REQUIRED` | Un motif est requis pour chaque prix manuel (reasonCode ou reasonText) |
+| `READER_BUSY` | Un paiement est déjà en cours sur ce terminal |
+| `READER_NOT_FOUND` | Le lecteur du poste n'existe plus chez Stripe : à réappairer |
+| `READER_OFFLINE` | Le terminal est hors ligne : vérifiez son alimentation et sa connexion |
+| `REASON_REQUIRED` | reason : motif de l'ouverture du tiroir requis |
+| `RECEIPT_AMBIGUOUS` | Plusieurs postes ont ce numéro : précisez cashRegisterId ou scannez le code-barres |
+| `RECEIPT_EMAIL_DISABLED` | Le reçu par courriel est désactivé sur ce site |
+| `RECEIPT_NOT_FOUND` | Aucun ticket pour ce code-barres / Aucune vente pour ce numéro de ticket / Ticket introuvable |
+| `REFUND_ALREADY_CONFIRMED` | Un autre remboursement a déjà été confirmé pour ce paiement |
+| `REFUND_AMOUNT_INVALID` | Montant carte remboursable insuffisant / Montant de remboursement invalide |
+| `REFUND_AMOUNT_MISMATCH` | Le montant remboursé sur le lecteur diffère du montant demandé |
+| `REFUND_CHANNEL_INVALID` | Ce paiement a été pris sur un lecteur piloté par le serveur : le remboursement se suit par GET |
+| `REFUND_METHOD_INVALID` | Montant carte remboursable insuffisant sur cette vente / refund.method : original, cash, card, declared_card ou store_credit attendu |
+| `REFUND_MISMATCH` | Ce remboursement ne porte pas sur ce paiement |
+| `REFUND_NOT_FOUND` | Remboursement Stripe introuvable |
+| `REFUND_NOT_PENDING` | Aucun remboursement en attente sur ce paiement : demandez-le d'abord (POST …/refund) |
+| `REPORT_NOT_FOUND` | Rapport Z introuvable |
+| `RETURN_DEADLINE_EXCEEDED` | Délai de retour dépassé (%d jours) |
+| `RETURN_EMPTY` | Aucun article à retourner / Aucun montant à porter sur un avoir |
+| `RETURN_LINE_UNKNOWN` | Ligne inconnue sur cette vente |
+| `RETURN_QUANTITY_EXCEEDED` | Quantité retournée supérieure à la quantité vendue moins le déjà retourné |
+| `RETURN_REASON_INVALID` | Motif inconnu : voir settings.returns.reasons |
+| `RETURN_REASON_REQUIRED` | Un motif de retour est requis (reasonCode ou reasonText) |
+| `RETURN_WITHOUT_RECEIPT_FORBIDDEN` | Retour sans ticket refusé sur ce site : passez par le retour sur la vente d'origine (POST /api/pos/returns) / Retour sans ticket refusé sur ce site : retrouvez la vente d'origine |
+| `SELLER_INVALID` | Vendeur inconnu ou sans droit de caisse |
+| `SIMULATION_FORBIDDEN` | Le lecteur de ce poste n'est pas un lecteur simulé / Présentation de carte simulée impossible avec une clé Stripe de production / Un lecteur simulé exige une clé Stripe de test |
+| `STORE_ADDRESS_REQUIRED` | Adresse complète de l'entreprise requise (rue, ville, code postal, pays) pour créer l'emplacement Terminal |
+| `STORE_CREDIT_DISABLED` | Les avoirs sont désactivés sur ce site |
+| `STRIPE_ACCOUNT_NOT_LIVE` | Le compte Stripe relu avec la clé réelle n'est pas en mode réel : vérifiez STRIPE_LIVE_SECRET_KEY et le compte réel du magasin |
+| `STRIPE_ACCOUNT_NOT_READY` | Aucun compte Stripe réel : lancez l'inscription Stripe du magasin / Le compte Stripe réel du magasin ne peut pas encore encaisser ou recevoir les virements : terminez l'inscription |
+| `STRIPE_ERROR` | Stripe :  |
+| `STRIPE_INTERNAL_SITE` | Site interne : il encaisse sur le compte de la plateforme, sans inscription Connect |
+| `STRIPE_KEYS_MISSING` | Clés Stripe réelles de la caisse non configurées sur le serveur (STRIPE_LIVE_SECRET_KEY) |
+| `TERMINAL_CAPTURE_FAILED` | Capture du paiement carte refusée par Stripe :  / Capture non confirmée par Stripe |
+| `TERMINAL_MODE_INVALID` | Le poste « %s » n'est pas en mode Tap to Pay ni lecteur Bluetooth (mode : %s) |
+| `TERMINAL_PAYMENTS_PENDING` | Paiements par terminal en cours (ou remboursement Interac en attente) : terminez-les avant de changer de mode |
+| `TERMINAL_PAYMENT_ALREADY_USED` | Ce paiement est déjà rattaché à une vente |
+| `TERMINAL_PAYMENT_AMOUNT_MISMATCH` | Le montant du paiement par terminal diffère de la part carte de la vente |
+| `TERMINAL_PAYMENT_NOT_FOUND` | Paiement par terminal introuvable |
+| `TERMINAL_PAYMENT_NOT_SUCCEEDED` | Le paiement par terminal n'a pas réussi |
+| `TERMINAL_PAYMENT_OTHER_MODE` | Paiement par terminal enregistré en mode %s, la caisse du site est en mode %s : aucune opération Stripe possible (remboursez autrement) |
+| `TERMINAL_PAYMENT_PURPOSE_MISMATCH` | Pas de rachat de points sur la vente d'une carte-cadeau |
+| `TERMINAL_PAYMENT_WRONG_REGISTER` | Paiement pris sur un autre poste |
+| `TERMINAL_REFUND_ALREADY_USED` | Ce remboursement sur le terminal est déjà rattaché à un retour |
+| `TERMINAL_REFUND_FAILED` | Remboursement Stripe refusé :  |
+| `TERMINAL_REFUND_REQUIRED` | Paiement Interac : le remboursement doit être présenté sur le terminal (POST /api/pos/terminal/payments/{id}/refund) avant d'annuler la vente / Paiement Interac : présentez d'abord le remboursement de ce montant sur le terminal (POST /api/pos/terminal/payments/{id}/refund {amount}), puis rejouez le retour avec terminalRefundId |
+| `TERMINAL_REQUIRED` | Ce site exige un terminal de caisse identifié (X-Pos-Terminal) : activez l'application avec une clé / En-tête X-Pos-Terminal (clé d'activation du POS) requis pour le kit Stripe Terminal / La synchronisation hors ligne exige un terminal identifié (X-Pos-Terminal) / Terminal de caisse non identifié (en-tête X-Pos-Terminal) |
+| `TERMINAL_REVOKED` | Ce terminal a été révoqué : réactivez l'application avec une nouvelle clé |
+| `TERMINAL_UNAVAILABLE` | Aucun terminal de paiement sur le poste « %s » |
+| `UNAUTHENTICATED` | User not authenticated / Utilisateur non connecté |
+| `USER_ALREADY_LINKED` | Ce compte est déjà rattaché à une autre fiche de caisse |
+| `USER_NOT_FOUND` | Compte client de la boutique introuvable |
+| `VALIDATION_FAILED` | Au plus %d produits épinglés / Corps JSON invalide / Corps invalide / Période invalide (to avant from) / Un poste porte déjà ce nom / action :  / amount : entier signé non nul (cents) attendu / amount : montant en cents (entier positif) attendu / barcode : chaîne attendue / barcode, orderId ou number (+ cashRegisterId) requis / consents : {loyalty\|receipts\|marketing\|account_link: bool} / context.%s requis pour l'action %s / email : adresse invalide / firstName ou lastName requis / intoId : fiche différente attendue / items : au moins un article {productVariantId, quantity} pour un retour sans ticket / last4 : les 4 derniers caractères du code sont requis / lines : au moins une ligne {orderItemId, quantity} / newPin : %d à %d chiffres attendus (chaîne) / orderId, barcode (ticket de la carte) ou returnId requis / orderId, barcode ou receipt requis / phone : numéro invalide (national du pays du site, ou international avec +) / phone ou email requis / pins : liste [{productId, variantId?}] attendue / points : entier signé non nul attendu / q : 3 caractères au moins pour une recherche par nom / reason : motif requis / reason : motif requis pour un ajustement de solde / sale.items : au moins un article / sales : de 1 à 200 ventes par lot / status : to_claim, claimed, returned_after_claim, voided ou all / to : antérieur à from / type : card_present ou interac_present attendu / year : année sur quatre chiffres attendue / Épinglage refusé |
+| `CASH_REGISTER_REQUIRED` | (Poste de caisse requis (message selon le contexte : plusieurs postes actifs, poste inconnu)) |
+| `COUPON_BARCODE_INVALID` | (Code-barres de coupon illisible (message : détail du format)) |
+| `DISCOUNT_INVALID` | (Remise invalide (message : détail du devis, ex. « items[0].discounts[0].value : pourcentage entre 0,01 et 100 »)) |
+| `GIFT_CARD_KIND_MISMATCH` | (Carte-cadeau ou avoir présenté avec le mauvais type de part (message selon le type)) |
+| `INVALID_DATE` | (Date invalide (message : paramètre concerné)) |
+| `QUOTE_INVALID` | (Devis refusé (message : détail du devis, ex. « items[0].quantity : stock insuffisant (3 disponible(s)) »)) |
+| `TERMINAL_MODE_NOT_ALLOWED` | (Mode de terminal non autorisé sur ce site (message selon le réglage)) |
+
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la

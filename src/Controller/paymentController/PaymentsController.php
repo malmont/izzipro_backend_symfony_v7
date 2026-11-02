@@ -63,11 +63,11 @@ class PaymentsController extends AbstractController
     {
         $user = $this->getUser();
         if (!$user) {
-            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'User not authenticated', 'code' => 'UNAUTHENTICATED', 'message' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
         $orderSourceId = $request->query->get('orderSource');
         if (!$orderSourceId) {
-            return $this->json(['error' => 'orderSource parameter is required'], JsonResponse::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'orderSource parameter is required', 'code' => 'ORDER_SOURCE_REQUIRED', 'message' => 'orderSource parameter is required'], JsonResponse::HTTP_BAD_REQUEST);
         }
         if (!$this->isGranted('ROLE_ADMIN') && !(($this->isGranted('ROLE_USER_POS') || $this->isGranted('ROLE_POS_MANAGER')) && (int) $orderSourceId === self::ORDER_SOURCE_POS)) {
             return $this->json(['error' => 'FORBIDDEN', 'message' => 'Accès réservé aux administrateurs et, pour la caisse, aux caissiers'], JsonResponse::HTTP_FORBIDDEN);
@@ -92,12 +92,12 @@ class PaymentsController extends AbstractController
     {
         $user = $this->getUser();
         if (!$user) {
-            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'User not authenticated', 'code' => 'UNAUTHENTICATED', 'message' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
         $data = json_decode($request->getContent(), true);
         $paymentIntentId = $data['paymentIntentId'] ?? null;
         if (!$paymentIntentId) {
-            return $this->json(['success' => false, 'error' => 'Invalid data: paymentIntentId is missing.'], JsonResponse::HTTP_BAD_REQUEST);
+            return $this->json(['success' => false, 'error' => 'Invalid data: paymentIntentId is missing.', 'code' => 'PAYMENT_INTENT_REQUIRED', 'message' => 'Invalid data: paymentIntentId is missing.'], JsonResponse::HTTP_BAD_REQUEST);
         }
         // S7 (31/10/2026) : paiement de l'utilisateur (session de paiement ou commande), invité avec son jeton, ou administrateur ;
         // sinon 404 sans révéler si l'identifiant existe (avant : tout utilisateur connecté, tout paiement du site)
@@ -124,7 +124,7 @@ class PaymentsController extends AbstractController
         // à venir, gardé pour que le webhook la crée si le navigateur ne le fait pas (09/10/2026, PrepareCheckoutUseCase)
         $data = json_decode($request->getContent(), true);
         if (!is_array($data)) {
-            return $this->json(['error' => 'Corps JSON invalide'], 400);
+            return $this->json(['error' => 'Corps JSON invalide', 'code' => 'INVALID_BODY', 'message' => 'Corps JSON invalide'], 400);
         }
         // Route hors du pare-feu JWT (un jeton expiré ne doit pas bloquer un invité) : client reconnu s'il a un jeton valide
         $user = $this->customers->resolve($request);
@@ -152,7 +152,7 @@ class PaymentsController extends AbstractController
 
         $tenantCode = $this->connectionManager->getCurrentTenantCode();
         if (!$tenantCode) {
-            return $this->json(['error' => 'Tenant non identifiable.'], 400);
+            return $this->json(['error' => 'Tenant non identifiable.', 'code' => 'TENANT_UNKNOWN', 'message' => 'Tenant non identifiable.'], 400);
         }
 
         $isInternal = $this->connectionManager->isTenantInternal($tenantCode);
@@ -170,7 +170,7 @@ class PaymentsController extends AbstractController
         $stripeConfig = $em->getRepository(StripeConfig::class)->findOneBy(['isActive' => true]);
 
         if (!$stripeConfig) {
-            return $this->json(['error' => 'Aucun compte Stripe actif n\'est connecté pour ce site.'], 404);
+            return $this->json(['error' => 'Aucun compte Stripe actif n\'est connecté pour ce site.', 'code' => 'STRIPE_ACCOUNT_MISSING', 'message' => 'Aucun compte Stripe actif n\'est connecté pour ce site.'], 404);
         }
 
         return $this->json([
@@ -188,7 +188,7 @@ class PaymentsController extends AbstractController
     {
         $user = $this->getUser();
         if (!$user) {
-            return $this->json(['error' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'User not authenticated', 'code' => 'UNAUTHENTICATED', 'message' => 'User not authenticated'], JsonResponse::HTTP_UNAUTHORIZED);
         }
 
         $cacheKey = 'square_config';
