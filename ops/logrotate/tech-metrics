@@ -1,0 +1,10 @@
+# Journal du tableau de bord technique (collecte toutes les 5 minutes) : rotation quotidienne, 14 jours conservés, compressés
+/var/log/tech-metrics.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 root adm
+}

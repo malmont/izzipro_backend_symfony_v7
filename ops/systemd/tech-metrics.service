@@ -1,0 +1,13 @@
+[Unit]
+Description=Tableau de bord technique : relevé des mesures de l'hôte et collecte dans le conteneur app_v2
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=arkanoa
+Group=arkanoa
+ExecStart=/home/arkanoa/app_v2/ops/tech-metrics-host.sh
+TimeoutStartSec=240
+StandardOutput=append:/var/log/tech-metrics.log
+StandardError=append:/var/log/tech-metrics.log

@@ -436,6 +436,65 @@ chaque requête.
 
 Commandes à lancer dans le conteneur : `docker exec -w /var/www symfony_app_v2 php bin/console …`.
 
+### Tableau de bord technique : collecte des mesures (T1, 03/11/2026)
+
+But : savoir quel site consomme le plus de ressources et surveiller la plateforme, dans EasyAdmin seulement (page `/admin/technique`
+réservée à `ROLE_SUPER_ADMIN`, lot T2 ; aucune route d'API, rien pour les applications). T1 pose la collecte.
+
+**Stockage** : base maître, tables `tech_metric_sample` (une ligne par mesure × site × sujet × période × début de période : `value` +
+`detail` JSON ; `site` vide = plateforme ; `period` = `hour` compteurs horaires, `point` relevé daté toutes les 5 min, `day` agrégat
+journalier) et `tech_threshold` (seuils bon / moyen / mauvais par mesure, modifiables en T2). SQL idempotent :
+`scripts/sql/tech_metrics_master.sql`, appliqué par `scripts/migrate_master_v2_tech_metrics.sh` et relu par `tests/bootstrap.php`.
+Conservation : 90 jours pour `hour` et `point`, 13 mois pour `day`. Accès : `App\Repository\TechMetricRepository` (PDO maître, comme
+`tenants`).
+
+**Compteurs par site, dans Redis (instance du cache, sans éviction)** — `App\Services\TechMetricsService\TechCounters` :
+- `tech:req:<site>:<AAAAMMJJHH>` : requêtes web (nombre, durée cumulée, pic mémoire max, erreurs 4xx / 5xx), incrémenté par
+  `TechRequestCounterSubscriber` **après l'envoi de la réponse** (événement de terminaison, comme le journal des pics) : quelques commandes
+  Redis groupées, de l'ordre de 0,1 à 0,5 ms, jamais attendues par l'utilisateur ; Redis injoignable → mesure perdue, requête intacte ;
+- `tech:job:<site>:<AAAAMMJJHH>` : tâches Messenger traitées par file (`TechWorkerCounterSubscriber`, événement « message traité » du worker ;
+  la file `email` compte les courriels envoyés). Aucun gestionnaire modifié ; les workers doivent être relancés pour charger l'abonné.
+Expiration 48 h ; le collecteur vide les heures révolues en table puis les supprime de Redis.
+
+**Collecteur** `app:tech-metrics:collect` (`TechMetricsCollector`, verrou fichier `var/tech-metrics.lock`), toutes les 5 minutes par le
+timer de l'hôte `tech-metrics.timer` (`ops/systemd/`, décalé de 2 min du timer de réconciliation) qui lance `ops/tech-metrics-host.sh` :
+le script relève les mesures de l'hôte (disque, Docker, timers systemd, journal de la sauvegarde) en JSON et le transmet à la commande
+(`--host-json=-`). Mesures écrites :
+
+| Mesure | Site / sujet | Période | Source |
+|---|---|---|---|
+| `requests`, `request_ms`, `request_peak_mb`, `errors_4xx`, `errors_5xx` | site | hour | compteurs Redis |
+| `jobs` (sujet : file), `emails` | site | hour | compteurs Redis |
+| `ai_calls`, `ai_tokens_in`, `ai_tokens_out` (sujet : `anthropic`, `openai`, `autre` d'après le modèle) | site | hour | table `ai_usage` de chaque base, 48 h relues à chaque passage |
+| `ai_mv_calls` (sujet : type) | site | hour | table `mv_ai_usage` |
+| `db_size_bytes` | site | point | `pg_database_size` ; deux codes qui partagent une base sont une seule ligne (`detail.codes`) |
+| `files_bytes` | site | point, 1 fois par jour (3 h UTC) | somme des colonnes `file_size` (médias partagés, photos Mémoires Vivantes, documents et rapports ESG) : les fichiers ne sont pas rangés par site sur le disque |
+| `storage_bytes` | plateforme | point, quotidien | parcours de `var/storage` |
+| `route_peak_count`, `route_peak_mb_max`, `route_ms_max` (sujet : route) | plateforme | hour | journal `request-peaks` relu en entier (mois courant et précédent), agrégation idempotente |
+| `fpm_active`, `fpm_idle`, `fpm_total`, `fpm_queue`, `fpm_max_children_reached`, `fpm_slow_requests`, `fpm_active_pct` | plateforme | point | page `/fpm-status` du pool lue en FastCGI direct (`FpmStatusClient`, port 9000 du conteneur, aucune route nginx) |
+| `disk_used_pct` (sujet : montage), `docker_reclaimable_bytes` | plateforme | point | script hôte |
+| `timer_last_age_s` (sujet : unité) | plateforme | point | `systemctl show` sur l'hôte |
+| `backup_age_s`, `backup_bytes`, `backup_db_count` | plateforme | point | journal et dernier jeu de `/home/arkanoa/backups` |
+
+Puis agrégats `day` des trois derniers jours (somme des compteurs, maximum des autres) et purge. Seuils par défaut (`tech_threshold`) :
+pic mémoire d'une route 256 / 512 Mo (limite 1024 Mo), durée 2 / 10 s, PHP-FPM occupé 50 / 80 %, file d'attente 0 / 2, sauvegarde
+26 / 50 h, timer de réconciliation 10 / 15 min, disque 70 / 85 %. Restic et Healthchecks s'ajouteront en T3 (comptes du propriétaire).
+
+Installation du timer (changement d'infrastructure, avec l'accord du propriétaire) :
+
+```bash
+scripts/migrate_master_v2_tech_metrics.sh
+sudo install -m 0644 ops/systemd/tech-metrics.service ops/systemd/tech-metrics.timer /etc/systemd/system/
+sudo install -m 0644 ops/logrotate/tech-metrics /etc/logrotate.d/tech-metrics
+sudo touch /var/log/tech-metrics.log && sudo chown arkanoa:adm /var/log/tech-metrics.log && sudo chmod 0640 /var/log/tech-metrics.log
+sudo systemctl daemon-reload && sudo systemctl enable --now tech-metrics.timer
+docker exec -w /var/www symfony_app_v2 php bin/console messenger:stop-workers   # charge l'abonné des tâches (aucune génération en cours)
+```
+
+Contrôle : `systemctl list-timers tech-metrics.timer`, `tail /var/log/tech-metrics.log`, `SELECT metric, site, subject, period_start,
+value FROM tech_metric_sample ORDER BY measured_at DESC LIMIT 20` dans `app_v2_db`. Retour arrière : `systemctl disable --now
+tech-metrics.timer`, puis `DROP TABLE tech_metric_sample, tech_threshold`. Tests : `tests/Functional/Tech/`.
+
 ## Tests
 
 ```

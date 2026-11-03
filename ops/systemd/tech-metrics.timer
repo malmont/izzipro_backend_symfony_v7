@@ -1,0 +1,10 @@
+[Unit]
+Description=Tableau de bord technique : collecte toutes les 5 minutes (décalée de 2 min du timer de réconciliation)
+
+[Timer]
+OnCalendar=*:2/5
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
