@@ -467,6 +467,34 @@ envoyé au client après la création) : ajouter alors `order.locale` (nullable,
 création (client, invité, webhook) depuis `checkout_session.locale`, langue du site pour les anciennes commandes ; vérifier à ce
 moment-là les transporteurs français couverts par EasyPost (Colissimo, Chronopost, Mondial Relay).
 
+### Compte client : inscription, vérification, mot de passe, code de connexion, profil (04/11/2026, site Next.js)
+
+Même contrat : `code` (majuscules) et `message` ajoutés au premier niveau, `params` quand le texte cite une valeur ; `error`, les champs
+existants et les statuts ne changent pas. Les messages marqués **(en)** sont en anglais dans `error` : le site les traduit par leur code.
+Les codes du changement de courriel et de la suppression du compte (`PASSWORD_REQUIRED`, `PASSWORD_INVALID`, `OTP_REQUIRED`, `OTP_INVALID`,
+`TOO_MANY_ATTEMPTS`, `RESERVATION_UPCOMING`…) existent déjà dans `error` et sont inchangés.
+
+| Code | Statut | Route | `error` | `params` |
+|---|---|---|---|---|
+| `FIELDS_REQUIRED` | 400 | `POST /api/register` | Invalid data **(en)** | `{fields: [email, password, firstName, lastName]}` |
+| `PASSWORD_TOO_SHORT` | 400 | `POST /api/register`, `POST /api/password-reset/confirm` | `PASSWORD_TOO_SHORT` (inscription, `message` en français) ; Le mot de passe doit comporter au moins 8 caractères. | `{min: 8}` |
+| `EMAIL_INVALID` | 400 | `POST /api/register`, `PATCH /api/profile` | Invalid email format **(en)** ; Invalid email **(en)** | — |
+| `EMAIL_DOMAIN_INVALID` | 400 | `POST /api/register` | Email domain appears invalid **(en)** | — |
+| `EMAIL_ALREADY_USED` | 409 | `POST /api/register`, `PATCH /api/profile` | User already exists **(en)** ; Email already in use **(en)** | — |
+| `EMAIL_REQUIRED` | 400 | `POST /api/resend-verification`, `POST /api/password-reset/request` | Email manquant ; Email is required. **(en)** | — |
+| `USER_NOT_FOUND` | 404 | `POST /api/resend-verification` | Utilisateur introuvable | — |
+| `ACCOUNT_ALREADY_VERIFIED` | 400 | `POST /api/resend-verification` | Ce compte est déjà vérifié. (`message` ; `error` ajouté) | — |
+| `EMAIL_SEND_FAILED` | 500 | `POST /api/resend-verification` | Erreur lors de l'envoi de l'email. (corps remplacé par nginx en production) | — |
+| `FIELDS_REQUIRED` | 400 | `POST /api/password-reset/confirm` | token et password attendus. | `{fields: [token, password]}` |
+| `RESET_LINK_INVALID` | 400 | `POST /api/password-reset/confirm` | Lien invalide ou expiré : demandez un nouveau lien. | — |
+| `UNAUTHORIZED` | 401 | `POST /api/otp-verify` | Unauthorized **(en)** (compte inconnu) | — |
+| `OTP_INVALID` | 401 | `POST /api/otp-verify` | Code OTP invalide ou expiré | — |
+| `UNAUTHENTICATED` | 401 | `GET`/`PATCH /api/profile` | Not authenticated **(en)** (en pratique le pare-feu répond avant : `JWT_NOT_FOUND`) | — |
+| `INVALID_BODY` | 400 | `PATCH /api/profile` | Invalid JSON **(en)** | — |
+| `LICENSE_DATE_INVALID` | 400 | `PATCH /api/profile` | Invalid date format for licenseExpirationDate. Use YYYY-MM-DD. **(en)** | `{format: YYYY-MM-DD}` |
+
+Hors API (formulaire web du backend `POST /password-reset/confirm`) : inchangé. Tests : `AccountErrorCodesApiTest` (un cas par code).
+
 ## Taxes par région (09/10/2026, `TaxEngine`)
 
 Le devis, `create-intent` et la commande calculent les taxes de la même façon, selon l'adresse de livraison

@@ -111,7 +111,8 @@ class RegistrationController extends AbstractController
 
         // 1. Validation des données d'entrée
         if (!isset($decoded['email'], $decoded['password'], $decoded['firstName'], $decoded['lastName'])) {
-            return $this->json(['error' => 'Invalid data'], Response::HTTP_BAD_REQUEST);
+            // Codes stables (04/11/2026, site Next.js) : `code`, `message` et `params` ajoutés, `error` et statuts inchangés
+            return $this->json(['error' => 'Invalid data', 'code' => 'FIELDS_REQUIRED', 'message' => 'Invalid data', 'params' => ['fields' => ['email', 'password', 'firstName', 'lastName']]], Response::HTTP_BAD_REQUEST);
         }
 
         $email = $decoded['email'];
@@ -122,7 +123,7 @@ class RegistrationController extends AbstractController
 
         // Règle de mot de passe (01/11/2026) : 8 caractères au moins, comme la réinitialisation (avant, une chaîne vide passait)
         if (!is_string($password) || strlen($password) < 8 || strlen($password) > 4096) {
-            return $this->json(['error' => 'PASSWORD_TOO_SHORT', 'message' => 'Le mot de passe doit comporter au moins 8 caractères.'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'PASSWORD_TOO_SHORT', 'code' => 'PASSWORD_TOO_SHORT', 'message' => 'Le mot de passe doit comporter au moins 8 caractères.', 'params' => ['min' => 8]], Response::HTTP_BAD_REQUEST);
         }
         // Faille fermée le 01/11/2026 : cette route publique créait un compte de caisse (ROLE_USER_POS) pour « platform: pos ».
         // Les comptes de caisse se créent dans EasyAdmin ; la caisse n'appelle jamais cette route (vérifié avec posflutter).
@@ -133,19 +134,19 @@ class RegistrationController extends AbstractController
 
         // Validation Email
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return $this->json(['error' => 'Invalid email format'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Invalid email format', 'code' => 'EMAIL_INVALID', 'message' => 'Invalid email format'], Response::HTTP_BAD_REQUEST);
         }
 
         // Vérification DNS simple
         [$local, $domain] = explode('@', $email, 2);
         if (!checkdnsrr($domain, 'MX') && !checkdnsrr($domain, 'A')) {
-            return $this->json(['error' => 'Email domain appears invalid'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Email domain appears invalid', 'code' => 'EMAIL_DOMAIN_INVALID', 'message' => 'Email domain appears invalid'], Response::HTTP_BAD_REQUEST);
         }
 
         // Vérification doublon
         $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if ($existingUser) {
-            return $this->json(['error' => 'User already exists'], Response::HTTP_CONFLICT);
+            return $this->json(['error' => 'User already exists', 'code' => 'EMAIL_ALREADY_USED', 'message' => 'User already exists'], Response::HTTP_CONFLICT);
         }
 
         // 2. Détermination du "Tenant Host" (Domaine du client)
@@ -325,7 +326,7 @@ class RegistrationController extends AbstractController
         $locale = $request->query->get('locale'); // fr ou en, sinon la langue du site
 
         if (!$email) {
-            return $this->json(['error' => 'Email manquant'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Email manquant', 'code' => 'EMAIL_REQUIRED', 'message' => 'Email manquant'], Response::HTTP_BAD_REQUEST);
         }
 
         // 1. Recherche de l'utilisateur
@@ -334,11 +335,11 @@ class RegistrationController extends AbstractController
 
         if (!$user) {
 
-            return $this->json(['error' => 'Utilisateur introuvable'], Response::HTTP_NOT_FOUND);
+            return $this->json(['error' => 'Utilisateur introuvable', 'code' => 'USER_NOT_FOUND', 'message' => 'Utilisateur introuvable'], Response::HTTP_NOT_FOUND);
         }
 
         if ($user->isVerified()) {
-            return $this->json(['message' => 'Ce compte est déjà vérifié.'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['message' => 'Ce compte est déjà vérifié.', 'code' => 'ACCOUNT_ALREADY_VERIFIED', 'error' => 'Ce compte est déjà vérifié.'], Response::HTTP_BAD_REQUEST); // code et error ajoutés (04/11/2026)
         }
 
         $verificationToken = bin2hex(random_bytes(32));
@@ -386,7 +387,7 @@ class RegistrationController extends AbstractController
             return $this->json(['message' => 'Email de vérification renvoyé avec succès.'], Response::HTTP_OK);
         } catch (\Throwable $e) {
             $this->logger->critical("[Resend Verif] Erreur envoi : " . $e->getMessage());
-            return $this->json(['error' => 'Erreur lors de l\'envoi de l\'email.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return $this->json(['error' => 'Erreur lors de l\'envoi de l\'email.', 'code' => 'EMAIL_SEND_FAILED', 'message' => 'Erreur lors de l\'envoi de l\'email.'], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }

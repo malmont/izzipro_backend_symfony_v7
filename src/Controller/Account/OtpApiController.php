@@ -49,7 +49,7 @@ class OtpApiController extends AbstractController
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if (!$user instanceof UserInterface) {
             return $this->json([
-                'error' => 'Unauthorized'
+                'error' => 'Unauthorized', 'code' => 'UNAUTHORIZED', 'message' => 'Unauthorized', // codes stables (04/11/2026)
             ], Response::HTTP_UNAUTHORIZED);
         }
 
@@ -63,7 +63,7 @@ class OtpApiController extends AbstractController
         if (!$otpCode || $otpCode->getExpiration() < new DateTime()) {
             $this->authenticationService->auditPos($platform, null, (string) $email, 'invalid_otp');
             return $this->json([
-                'error' => 'Code OTP invalide ou expiré'
+                'error' => 'Code OTP invalide ou expiré', 'code' => 'OTP_INVALID', 'message' => 'Code OTP invalide ou expiré',
             ], Response::HTTP_UNAUTHORIZED);
         }
 

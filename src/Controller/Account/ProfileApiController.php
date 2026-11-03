@@ -23,7 +23,7 @@ class ProfileApiController extends BaseTenantApiController
         /** @var User $user */
         $user = $this->getUser();
         if (!$user) {
-            return $this->json(['error' => 'Not authenticated'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'Not authenticated', 'code' => 'UNAUTHENTICATED', 'message' => 'Not authenticated'], Response::HTTP_UNAUTHORIZED);
         }
 
         return $this->json([
@@ -49,12 +49,12 @@ class ProfileApiController extends BaseTenantApiController
         /** @var User $user */
         $user = $this->getUser();
         if (!$user) {
-            return $this->json(['error' => 'Not authenticated'], Response::HTTP_UNAUTHORIZED);
+            return $this->json(['error' => 'Not authenticated', 'code' => 'UNAUTHENTICATED', 'message' => 'Not authenticated'], Response::HTTP_UNAUTHORIZED);
         }
 
         $data = json_decode($request->getContent(), true);
         if (!$data) {
-            return $this->json(['error' => 'Invalid JSON'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Invalid JSON', 'code' => 'INVALID_BODY', 'message' => 'Invalid JSON'], Response::HTTP_BAD_REQUEST); // codes stables (04/11/2026)
         }
 
         $em = $this->emProvider->getEntityManager();
@@ -66,12 +66,12 @@ class ProfileApiController extends BaseTenantApiController
         // identique à la casse ou aux espaces près n'est PAS réécrite (avant, elle l'était telle quelle : connexion ensuite impossible) ;
         // une adresse réellement nouvelle est validée puis enregistrée telle que saisie, sans espaces
         if (array_key_exists('email', $data) && $data['email'] !== null && !is_string($data['email'])) {
-            return $this->json(['error' => 'Invalid email'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Invalid email', 'code' => 'EMAIL_INVALID', 'message' => 'Invalid email'], Response::HTTP_BAD_REQUEST);
         }
         $requestedEmail = is_string($data['email'] ?? null) ? trim($data['email']) : null;
         $emailChanges = $requestedEmail !== null && \App\Services\AccountService\EmailChangeGuard::isChange($oldEmail, $requestedEmail);
         if ($emailChanges && !filter_var($requestedEmail, FILTER_VALIDATE_EMAIL)) {
-            return $this->json(['error' => 'Invalid email'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Invalid email', 'code' => 'EMAIL_INVALID', 'message' => 'Invalid email'], Response::HTTP_BAD_REQUEST);
         }
         $method = \App\Services\AccountService\EmailChangeGuard::method($user);
         if ($emailChanges && ($refused = $this->emailChanges->authorize($user, $data, $request)) !== null) {
@@ -87,7 +87,7 @@ class ProfileApiController extends BaseTenantApiController
         if ($emailChanges) {
             $existingUser = $em->getRepository(User::class)->findOneBy(['email' => $requestedEmail]);
             if ($existingUser && $existingUser->getId() !== $user->getId()) {
-                return $this->json(['error' => 'Email already in use'], Response::HTTP_CONFLICT);
+                return $this->json(['error' => 'Email already in use', 'code' => 'EMAIL_ALREADY_USED', 'message' => 'Email already in use'], Response::HTTP_CONFLICT);
             }
             // Nom d'utilisateur égal à l'ancienne adresse : il suit la nouvelle (suite de S7, 27/10/2026), unicité vérifiée. Avant, la
             // comparaison se faisait après le changement d'adresse et ne réussissait jamais : le nom gardait l'ancienne adresse.
@@ -95,7 +95,7 @@ class ProfileApiController extends BaseTenantApiController
             if ($followsEmail) {
                 $taken = $em->getRepository(User::class)->findOneBy(['username' => $requestedEmail]);
                 if ($taken && $taken->getId() !== $user->getId()) {
-                    return $this->json(['error' => 'Email already in use'], Response::HTTP_CONFLICT);
+                    return $this->json(['error' => 'Email already in use', 'code' => 'EMAIL_ALREADY_USED', 'message' => 'Email already in use'], Response::HTTP_CONFLICT);
                 }
             }
             $user->setEmail($requestedEmail);
@@ -110,7 +110,7 @@ class ProfileApiController extends BaseTenantApiController
             try {
                 $user->setLicenseExpirationDate(new \DateTime($data['licenseExpirationDate']));
             } catch (\Exception $e) {
-                return $this->json(['error' => 'Invalid date format for licenseExpirationDate. Use YYYY-MM-DD.'], Response::HTTP_BAD_REQUEST);
+                return $this->json(['error' => 'Invalid date format for licenseExpirationDate. Use YYYY-MM-DD.', 'code' => 'LICENSE_DATE_INVALID', 'message' => 'Invalid date format for licenseExpirationDate. Use YYYY-MM-DD.', 'params' => ['format' => 'YYYY-MM-DD']], Response::HTTP_BAD_REQUEST);
             }
         }
         

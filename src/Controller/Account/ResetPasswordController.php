@@ -42,7 +42,7 @@ class ResetPasswordController extends AbstractController
         $emailInput = $data['email'] ?? null;
 
         if (!$emailInput) {
-            return $this->json(['error' => 'Email is required.'], Response::HTTP_BAD_REQUEST);
+            return $this->json(['error' => 'Email is required.', 'code' => 'EMAIL_REQUIRED', 'message' => 'Email is required.'], Response::HTTP_BAD_REQUEST); // codes stables (04/11/2026)
         }
 
         // 1. Détection du Host Client (Frontend)
@@ -130,15 +130,15 @@ class ResetPasswordController extends AbstractController
         $token = is_array($content) ? ($content['token'] ?? null) : null;
         $newPassword = is_array($content) ? ($content['password'] ?? $content['newPassword'] ?? null) : null;
         if (!is_string($token) || $token === '' || !is_string($newPassword)) {
-            return $this->json(['error' => 'token et password attendus.'], 400);
+            return $this->json(['error' => 'token et password attendus.', 'code' => 'FIELDS_REQUIRED', 'message' => 'token et password attendus.', 'params' => ['fields' => ['token', 'password']]], 400);
         }
         if (strlen($newPassword) < 8 || strlen($newPassword) > 4096) {
-            return $this->json(['error' => 'Le mot de passe doit comporter au moins 8 caractères.'], 400);
+            return $this->json(['error' => 'Le mot de passe doit comporter au moins 8 caractères.', 'code' => 'PASSWORD_TOO_SHORT', 'message' => 'Le mot de passe doit comporter au moins 8 caractères.', 'params' => ['min' => 8]], 400);
         }
         $em = $this->tenantEmProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['resetToken' => $token]);
         if (!$user || $user->getResetTokenExpiresAt() < new \DateTime()) {
-            return $this->json(['error' => 'Lien invalide ou expiré : demandez un nouveau lien.'], 400);
+            return $this->json(['error' => 'Lien invalide ou expiré : demandez un nouveau lien.', 'code' => 'RESET_LINK_INVALID', 'message' => 'Lien invalide ou expiré : demandez un nouveau lien.'], 400);
         }
         $user->setPassword($passwordHasher->hashPassword($user, $newPassword))->setPasswordSet(true); // mot de passe choisi par le client
         $user->setResetToken(null);
