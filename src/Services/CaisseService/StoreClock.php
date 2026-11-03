@@ -8,8 +8,8 @@ use App\Services\TenantEntityManagerProvider;
 
 /**
  * Fuseau horaire du magasin (F14, 29/10/2026) : réglage du site, sinon déduit du pays et de la province de l'adresse de
- * l'entreprise. Sert aux journées des statistiques par caissier et des exports comptables. Les réservations gardent leur
- * propre fuseau (America/Toronto), inchangé.
+ * l'entreprise. Sert aux journées des statistiques par caissier et des exports comptables. Les réservations de la boutique
+ * s'y appuient aussi (BookingClock, 04/11/2026), avec America/Toronto en repli quand rien n'est connu (source « default »).
  */
 class StoreClock
 {

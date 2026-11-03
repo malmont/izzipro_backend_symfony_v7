@@ -11,7 +11,7 @@ class GetOrdersBySourceUseCase
 {
     private $orderService;
 
-    public function __construct(OrderService $orderService, private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null)
+    public function __construct(OrderService $orderService, private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null, private readonly ?\App\Services\Booking\BookingClock $clock = null)
     {
         $this->orderService = $orderService;
     }
@@ -28,7 +28,7 @@ class GetOrdersBySourceUseCase
         foreach ($orders as $order) {
             $orderItemDTOs = [];
             foreach ($order->getOrderItems() as $orderItem) {
-                $orderItemDTOs[] = new OrderItemDTO($orderItem, $host);
+                $orderItemDTOs[] = new OrderItemDTO($orderItem, $host, $this->clock?->timezone()); // fuseau de la boutique (04/11/2026)
             }
             $shippingAdressDTO = $order->getShippingAdress() 
             ? new AdressOutputDTO($order->getShippingAdress()) 

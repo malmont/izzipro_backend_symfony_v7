@@ -28,7 +28,8 @@ class OrderMailerService
         LoggerInterface $logger,
         TenantEntityManagerProvider $emProvider,
         private readonly ?TenantCurrencyProvider $currency = null,
-        private readonly ?EmailLocale $emailLocale = null
+        private readonly ?EmailLocale $emailLocale = null,
+        private readonly ?\App\Services\Booking\BookingClock $clock = null // fuseau de la boutique (04/11/2026)
     ) {
         $this->emailSenderService = $emailSenderService;
         $this->logger = $logger;
@@ -141,7 +142,7 @@ class OrderMailerService
             if (method_exists($item, 'getBooking')) {
                 $booking = $item->getBooking();
                 if ($booking) {
-                    $tz = new \DateTimeZone('America/Toronto');
+                    $tz = $this->clock?->timezone() ?? new \DateTimeZone(\App\Services\Booking\BookingClock::DEFAULT); // fuseau de la boutique (04/11/2026)
                     $startAt = $booking->getStartAt() ? (clone $booking->getStartAt())->setTimezone($tz) : null;
                     $endAt = $booking->getEndAt() ? (clone $booking->getEndAt())->setTimezone($tz) : null;
                     $bookingData = [

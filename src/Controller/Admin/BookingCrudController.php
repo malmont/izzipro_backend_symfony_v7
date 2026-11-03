@@ -18,9 +18,15 @@ use EasyCorp\Bundle\EasyAdminBundle\Filter\EntityFilter;
 
 class BookingCrudController extends BaseTenantCrudController
 {
-    public function __construct(TenantEntityManagerProvider $emProvider)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\Booking\BookingClock $clock = null)
     {
         parent::__construct($emProvider);
+    }
+
+    /** Fuseau de la boutique (04/11/2026 ; America/Toronto en dur auparavant) */
+    private function timezone(): string
+    {
+        return $this->clock?->name() ?? \App\Services\Booking\BookingClock::DEFAULT;
     }
 
     public static function getEntityFqcn(): string
@@ -34,14 +40,14 @@ class BookingCrudController extends BaseTenantCrudController
             ->add(DateTimeFilter::new('startAt', 'Date de début')
                 ->setFormTypeOption('value_type_options', [
                     'widget' => 'single_text',
-                    'view_timezone' => 'America/Toronto',
+                    'view_timezone' => $this->timezone(),
                     'model_timezone' => 'UTC',
                 ])
             )
             ->add(DateTimeFilter::new('endAt', 'Date de fin')
                 ->setFormTypeOption('value_type_options', [
                     'widget' => 'single_text',
-                    'view_timezone' => 'America/Toronto',
+                    'view_timezone' => $this->timezone(),
                     'model_timezone' => 'UTC',
                 ])
             );
@@ -62,15 +68,15 @@ class BookingCrudController extends BaseTenantCrudController
             ]);
         
         yield DateTimeField::new('startAt', 'Début')
-            ->setTimezone('America/Toronto')
+            ->setTimezone($this->timezone())
             ->setFormTypeOptions([
-                'view_timezone' => 'America/Toronto',
+                'view_timezone' => $this->timezone(),
                 'model_timezone' => 'UTC',
             ]);
         yield DateTimeField::new('endAt', 'Fin')
-            ->setTimezone('America/Toronto')
+            ->setTimezone($this->timezone())
             ->setFormTypeOptions([
-                'view_timezone' => 'America/Toronto',
+                'view_timezone' => $this->timezone(),
                 'model_timezone' => 'UTC',
             ]);
         

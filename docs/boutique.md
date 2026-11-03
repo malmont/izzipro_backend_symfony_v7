@@ -241,6 +241,24 @@ d'article**.
   `remaining_stock` quand la quantité n'est pas disponible (200 auparavant).
 - Tests : `tests/Functional/Boutique/CartQuoteApiTest.php`.
 
+### Fuseau horaire de la boutique et dates des réservations (04/11/2026, application e-commerce mobile, lot L7b)
+
+- **Un seul fuseau**, `Services/Booking/BookingClock` : réglage du site (fiche Entreprise « Fuseau horaire du magasin », sinon
+  province ou pays de l'adresse, comme la caisse : `StoreClock`), **`America/Toronto` à défaut** (valeur qui était écrite en dur
+  dans le calendrier des réservations, le courriel de commande et l'administration des réservations). Exposé en lecture seule :
+  `commerce.timezone` (identifiant IANA) dans `GET /api/boutique-settings` ; ignoré dans un `PUT`.
+- **Dates reçues** (`booking.start` / `booking.end` du devis, de `create-intent`, de `order/create` et `create-guest`,
+  `start` / `end` de `GET /api/booking/check`) : une date **sans fuseau** (« 2027-06-07T16:00:00 », « 2027-06-07 16:00 ») est une
+  heure de la boutique ; une date **avec fuseau ou en UTC** (« 2027-06-07T20:00:00.000Z », « …-04:00 ») est convertie dans le fuseau
+  de la boutique, même instant. Tous les contrôles (heures d'ouverture, `eveningSlot`, `allowedDates`, durées, jours) et
+  l'enregistrement du `Booking` se font après cette conversion. Avant, le devis comparait dans le fuseau de la chaîne reçue
+  (UTC par défaut) : 16 h-18 h de Montréal envoyé en UTC était refusé, 8 h-10 h accepté.
+- **Dates rendues** : `booking.start` / `booking.end` du devis (`lines[].booking`), de la commande et du détail de commande
+  (`items[].booking`) en ATOM **dans le fuseau de la boutique, avec son décalage** (« 2027-06-07T16:00:00-04:00 » ; « -05:00 » en
+  hiver). Avant : UTC. `GET /api/booking/calendar` **inchangé** : créneaux en heures de la boutique, `Y-m-d H:i:s` sans décalage.
+- Tests : `tests/Functional/Boutique/BookingTimezoneApiTest.php` (devis en UTC, avec décalage et sans fuseau, spectacle aux dates
+  proposées, changements d'heure de mars et de novembre, `check`, calendrier, commande d'invité, réglage du site).
+
 ## Paiement d'un panier (09/10/2026, commande unique par paiement)
 
 Pratique standard : le serveur garde une **trace de chaque paiement en cours** (table `checkout_session`, une ligne par

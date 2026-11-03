@@ -28,7 +28,8 @@ class OrderItemDTO
 
     public array $options = [];
 
-    public function __construct(OrderItems $orderItem, string $host)
+    /** @param \DateTimeZone|null $timezone fuseau de la boutique pour booking.start / booking.end (04/11/2026) ; null : fuseau de l'entité (UTC) */
+    public function __construct(OrderItems $orderItem, string $host, ?\DateTimeZone $timezone = null)
     {
         $this->id = $orderItem->getId();
         $this->quantity = $orderItem->getQuantity();
@@ -80,9 +81,10 @@ class OrderItemDTO
         $bookingEntity = $orderItem->getBooking(); 
 
         if ($bookingEntity) {
+            $inZone = fn (\DateTimeInterface $at) => ($timezone !== null ? \DateTimeImmutable::createFromInterface($at)->setTimezone($timezone) : $at)->format(DateTimeInterface::ATOM);
             $this->booking = [
-                'start' => $bookingEntity->getStartAt()->format(DateTimeInterface::ATOM),
-                'end'   => $bookingEntity->getEndAt()->format(DateTimeInterface::ATOM),
+                'start' => $inZone($bookingEntity->getStartAt()),
+                'end'   => $inZone($bookingEntity->getEndAt()),
                 // On peut ajouter le status si besoin
                 'status'=> $bookingEntity->getStatus(), 
                 'rateId' => $bookingEntity->getRentalPackId(),

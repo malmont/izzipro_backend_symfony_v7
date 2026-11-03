@@ -43,7 +43,8 @@ final class CartQuoteCalculator
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly BookingAvailabilityService $availability,
         private readonly TenantCurrencyProvider $currency,
-        private readonly TaxEngine $taxes
+        private readonly TaxEngine $taxes,
+        private readonly ?\App\Services\Booking\BookingClock $clock = null // fuseau de la boutique (04/11/2026)
     ) {
     }
 
@@ -185,8 +186,9 @@ final class CartQuoteCalculator
     {
         $config = $product->getBookingConfiguration();
         try {
-            $start = new \DateTimeImmutable((string) ($booking['start'] ?? ''));
-            $end = new \DateTimeImmutable((string) ($booking['end'] ?? ''));
+            // Fuseau de la boutique (04/11/2026) : sans fuseau = heure de la boutique, avec fuseau = converti avant tout contrôle
+            $start = $this->parseDate((string) ($booking['start'] ?? ''));
+            $end = $this->parseDate((string) ($booking['end'] ?? ''));
         } catch (\Exception) {
             $errors[] = CartQuoteException::error("$path.booking", 'BOOKING_DATES_INVALID', 'dates start et end attendues (ISO 8601)');
 
@@ -214,7 +216,7 @@ final class CartQuoteCalculator
         if ($config !== null) {
             $this->checkConfiguration($config, $hourly, $measure, $days, $start, $end, $path, $errors);
         }
-        $remaining = $this->availability->getRemainingStock($product, $start, $end);
+        $remaining = $this->availability->getRemainingStock($product, \App\Services\Booking\BookingClock::utc($start), \App\Services\Booking\BookingClock::utc($end)); // requête en UTC, comme la base
         if ($remaining < $quantity) {
             $errors[] = CartQuoteException::error("$path.quantity", 'DATES_UNAVAILABLE', sprintf('indisponible sur ces dates : il reste %d place(s)', max(0, $remaining)), ['remaining' => max(0, $remaining)]) + ['remaining' => max(0, $remaining)];
         }
@@ -244,11 +246,17 @@ final class CartQuoteCalculator
         return [
             'unitPrice' => $rate * $units + $passengerFee,
             'booking' => [
-                'start' => $start->format(\DateTimeInterface::ATOM), 'end' => $end->format(\DateTimeInterface::ATOM),
+                'start' => $start->format(\DateTimeInterface::ATOM), 'end' => $end->format(\DateTimeInterface::ATOM), // ATOM dans le fuseau de la boutique
                 'rateId' => $pack?->getId(), 'rateName' => $pack?->getName(), 'durationType' => $type, 'units' => $units, 'rate' => $rate,
                 'passengers' => $passengers, 'passengerFee' => $passengerFee, 'deposit' => (int) ($config?->getDeposit() ?? 0),
             ],
         ];
+    }
+
+    /** @throws \Exception chaîne illisible */
+    private function parseDate(string $value): \DateTimeImmutable
+    {
+        return $this->clock?->parse($value) ?? new \DateTimeImmutable($value);
     }
 
     /** @param list<array{path: string, message: string, code: string, params?: array<string, mixed>}> $errors */

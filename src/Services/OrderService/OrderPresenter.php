@@ -14,15 +14,16 @@ use App\Services\BoutiqueSettingsService\TenantCurrencyProvider;
  */
 final class OrderPresenter
 {
-    public function __construct(private readonly TenantCurrencyProvider $currency, private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null)
+    public function __construct(private readonly TenantCurrencyProvider $currency, private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null, private readonly ?\App\Services\Booking\BookingClock $clock = null)
     {
     }
 
     public function toDto(Order $order, string $host, string $locale): OrderDTO
     {
         $items = [];
+        $timezone = $this->clock?->timezone(); // réservations rendues dans le fuseau de la boutique (04/11/2026)
         foreach ($order->getOrderItems() as $orderItem) {
-            $items[] = new OrderItemDTO($orderItem, $host);
+            $items[] = new OrderItemDTO($orderItem, $host, $timezone);
         }
         $status = $order->getStatus();
         $statusName = $status?->getTranslation($locale)?->getName() ?? $status?->getName();

@@ -3,6 +3,7 @@
 namespace App\Controller\BookingController;
 
 use App\Dto\AvailabilityCheckDto;
+use App\Services\Booking\BookingClock;
 use App\UseCase\Booking\CheckAvailabilityUseCase;
 use App\UseCase\Booking\GetCalendarAvailabilityUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -19,7 +20,8 @@ class BookingController extends AbstractController
         int $productId,
         Request $request,
         ValidatorInterface $validator,
-        CheckAvailabilityUseCase $useCase
+        CheckAvailabilityUseCase $useCase,
+        BookingClock $clock
     ): JsonResponse {
         $dto = new AvailabilityCheckDto();
         
@@ -28,8 +30,9 @@ class BookingController extends AbstractController
         $dto->quantity = (int) $request->query->get('quantity', 1);
 
         try {
-            $dto->startAt = new \DateTimeImmutable($request->query->get('start'));
-            $dto->endAt = new \DateTimeImmutable($request->query->get('end'));
+            // Fuseau de la boutique (04/11/2026) : sans fuseau = heure de la boutique, avec fuseau = converti
+            $dto->startAt = BookingClock::utc($clock->parse((string) $request->query->get('start'))); // instant en UTC pour la requête de disponibilité
+            $dto->endAt = BookingClock::utc($clock->parse((string) $request->query->get('end')));
         } catch (\Exception $e) {
             return $this->json(['error' => 'Format de date invalide (attendu: YYYY-MM-DD HH:MM)'], 400);
         }
@@ -62,7 +65,8 @@ class BookingController extends AbstractController
     public function calendar(
         int $productId,
         Request $request,
-        GetCalendarAvailabilityUseCase $useCase
+        GetCalendarAvailabilityUseCase $useCase,
+        BookingClock $clock
     ): JsonResponse {
         $startStr = $request->query->get('start');
         $endStr = $request->query->get('end');
@@ -72,7 +76,7 @@ class BookingController extends AbstractController
         }
 
         try {
-            $timezone = new \DateTimeZone('America/Toronto');
+            $timezone = $clock->timezone(); // fuseau de la boutique (04/11/2026 ; America/Toronto en dur auparavant) ; créneaux rendus en heures de la boutique, sans décalage
             $start = (new \DateTimeImmutable($startStr, $timezone))->setTime(0, 0, 0);
             $end = (new \DateTimeImmutable($endStr, $timezone))->setTime(23, 59, 59);
             

@@ -16,7 +16,8 @@ class HandleBookingUseCase
 {
     public function __construct(
         private BookingAvailabilityService $bookingAvailabilityService,
-        private TenantEntityManagerProvider $emProvider
+        private TenantEntityManagerProvider $emProvider,
+        private readonly ?\App\Services\Booking\BookingClock $clock = null // fuseau de la boutique (04/11/2026)
     ) {}
 
     /**
@@ -70,8 +71,10 @@ class HandleBookingUseCase
                 }
 
                 try {
-                    $start = new \DateTimeImmutable($bookingData['start']);
-                    $end = new \DateTimeImmutable($bookingData['end']);
+                    // Même lecture que le devis (04/11/2026) : sans fuseau = heure de la boutique, avec fuseau = converti
+                    // … puis instant en UTC pour la base (Doctrine écrit l'heure murale de l'objet)
+                    $start = \App\Services\Booking\BookingClock::utc($this->clock?->parse((string) $bookingData['start']) ?? new \DateTimeImmutable($bookingData['start']));
+                    $end = \App\Services\Booking\BookingClock::utc($this->clock?->parse((string) $bookingData['end']) ?? new \DateTimeImmutable($bookingData['end']));
                 } catch (\Exception $e) {
                     throw new BadRequestHttpException("Format de date invalide pour la réservation.");
                 }
