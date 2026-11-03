@@ -192,7 +192,7 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
                 $refund = $c->refunds->create(['payment_intent' => $paymentIntent, 'metadata' => ['subscription' => $subscriptionId, 'invoice' => (string) $invoice->id]], $o);
             } catch (\Stripe\Exception\InvalidRequestException $e) {
                 if ($e->getStripeCode() === 'charge_already_refunded') {
-                    throw new SubscriptionException(409, 'Le dernier paiement de cet abonnement est déjà remboursé.');
+                    throw new SubscriptionException(409, 'Le dernier paiement de cet abonnement est déjà remboursé.', [], [], 'ALREADY_REFUNDED');
                 }
                 throw $e;
             }
@@ -282,7 +282,7 @@ final class SubscriptionStripeGateway implements SubscriptionStripeGatewayInterf
 
             return $action(new StripeClient((string) $this->stripeSecretKey), $account ? ['stripe_account' => $account] : []);
         } catch (\Stripe\Exception\ApiErrorException $e) {
-            throw new SubscriptionException(502, 'Stripe : ' . $e->getMessage());
+            throw new SubscriptionException(502, 'Stripe : ' . $e->getMessage(), [], [], 'STRIPE_ERROR');
         }
     }
 }

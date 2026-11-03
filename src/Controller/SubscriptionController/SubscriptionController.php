@@ -132,7 +132,8 @@ class SubscriptionController extends AbstractController
         try {
             return $action();
         } catch (SubscriptionException $e) {
-            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]) + $e->details, $e->getStatusCode());
+            // code stable + message (04/11/2026, ajouts) à côté d'error, errors[] codées et des détails (reason, subscriptionId, status)
+            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]) + ['code' => $e->code(), 'message' => $e->getMessage()] + $e->details, $e->getStatusCode());
         }
     }
 }

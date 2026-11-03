@@ -27,11 +27,11 @@ class ManageSubscriptionUseCase
     {
         $planId = $body['planId'] ?? null;
         if (!is_numeric($planId)) {
-            throw new SubscriptionException(422, 'planId : identifiant de formule attendu', [['path' => 'planId', 'message' => 'identifiant attendu']]);
+            throw new SubscriptionException(422, 'planId : identifiant de formule attendu', [SubscriptionException::error('planId', 'PLAN_ID_REQUIRED', 'identifiant attendu')], [], 'PLAN_ID_REQUIRED');
         }
         $quantity = $body['quantity'] ?? 1;
         if (!is_numeric($quantity) || (int) $quantity != $quantity) {
-            throw new SubscriptionException(422, 'quantity : entier attendu', [['path' => 'quantity', 'message' => 'entier attendu']]);
+            throw new SubscriptionException(422, 'quantity : entier attendu', [SubscriptionException::error('quantity', 'QUANTITY_INVALID', 'entier attendu', ['min' => 1, 'max' => 100])], [], 'QUANTITY_INVALID');
         }
         $result = $this->service->subscribe($user, (int) $planId, (int) $quantity, self::id($body['addressId'] ?? null), self::id($body['carrierId'] ?? null));
 
@@ -79,7 +79,7 @@ class ManageSubscriptionUseCase
     public function changePlan(int $id, User $user, mixed $planId, string $locale): SubscriptionOutputDto
     {
         if (!is_numeric($planId)) {
-            throw new SubscriptionException(422, 'planId : identifiant de formule attendu', [['path' => 'planId', 'message' => 'identifiant attendu']]);
+            throw new SubscriptionException(422, 'planId : identifiant de formule attendu', [SubscriptionException::error('planId', 'PLAN_ID_REQUIRED', 'identifiant attendu')], [], 'PLAN_ID_REQUIRED');
         }
 
         return $this->service->toDto($this->service->changePlan($this->service->ownedBy($id, $user), (int) $planId), $locale);

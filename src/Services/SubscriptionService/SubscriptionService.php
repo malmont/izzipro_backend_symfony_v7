@@ -56,33 +56,33 @@ final class SubscriptionService
     public function subscribe(User $user, int $planId, int $quantity, ?int $addressId, ?int $carrierId): array
     {
         if ($this->settings->commerceSetting('subscriptionsEnabled') === false) {
-            throw new SubscriptionException(403, 'Les abonnements sont désactivés sur ce site.');
+            throw new SubscriptionException(403, 'Les abonnements sont désactivés sur ce site.', [], [], 'SUBSCRIPTIONS_DISABLED');
         }
         $plan = $this->plans()->find($planId);
         if ($plan === null || !$plan->isActive()) {
-            throw new SubscriptionException(404, 'Formule introuvable.');
+            throw new SubscriptionException(404, 'Formule introuvable.', [], [], 'PLAN_NOT_FOUND');
         }
         if (!$plan->getProduct()?->isSubscriptionEnabled()) {
-            throw new SubscriptionException(422, 'Ce produit ne se vend pas par abonnement.', [['path' => 'planId', 'message' => 'produit sans abonnement']]);
+            throw new SubscriptionException(422, 'Ce produit ne se vend pas par abonnement.', [SubscriptionException::error('planId', 'PLAN_NOT_SUBSCRIBABLE', 'produit sans abonnement')], [], 'PLAN_NOT_SUBSCRIBABLE');
         }
         if ($quantity < 1 || $quantity > 100) {
-            throw new SubscriptionException(422, 'quantity : entier de 1 à 100 attendu', [['path' => 'quantity', 'message' => 'entier de 1 à 100 attendu']]);
+            throw new SubscriptionException(422, 'quantity : entier de 1 à 100 attendu', [SubscriptionException::error('quantity', 'QUANTITY_INVALID', 'entier de 1 à 100 attendu', ['min' => 1, 'max' => 100])], [], 'QUANTITY_INVALID');
         }
         $em = $this->emProvider->getEntityManager();
         $address = null;
         if ($addressId !== null) {
             $address = $em->getRepository(Adress::class)->find($addressId);
             if ($address === null || $address->getUserAdress()?->getId() !== $user->getId()) {
-                throw new SubscriptionException(422, 'addressId : adresse introuvable', [['path' => 'addressId', 'message' => 'adresse introuvable pour ce client']]);
+                throw new SubscriptionException(422, 'addressId : adresse introuvable', [SubscriptionException::error('addressId', 'ADDRESS_NOT_FOUND', 'adresse introuvable pour ce client')], [], 'ADDRESS_NOT_FOUND');
             }
         }
         $carrier = $carrierId !== null ? $em->getRepository(Carrier::class)->find($carrierId) : null;
         if ($carrierId !== null && $carrier === null) {
-            throw new SubscriptionException(422, 'carrierId : transporteur introuvable', [['path' => 'carrierId', 'message' => 'transporteur introuvable']]);
+            throw new SubscriptionException(422, 'carrierId : transporteur introuvable', [SubscriptionException::error('carrierId', 'CARRIER_NOT_FOUND', 'transporteur introuvable')], [], 'CARRIER_NOT_FOUND');
         }
         if ($carrier?->getCarrierAccountId()) {
             // Le tarif d'un transporteur EasyPost dépend des colis et de l'adresse : impossible à facturer d'avance à chaque échéance
-            throw new SubscriptionException(422, 'carrierId : un abonnement exige un transporteur à prix fixe ou gratuit', [['path' => 'carrierId', 'message' => 'transporteur à tarif variable (EasyPost) : choisissez un transporteur à prix fixe ou gratuit']]);
+            throw new SubscriptionException(422, 'carrierId : un abonnement exige un transporteur à prix fixe ou gratuit', [SubscriptionException::error('carrierId', 'CARRIER_RATES_NOT_ALLOWED', 'transporteur à tarif variable (EasyPost) : choisissez un transporteur à prix fixe ou gratuit')], [], 'CARRIER_RATES_NOT_ALLOWED');
         }
         $shippingAmount = $carrier !== null && !$carrier->isFree() ? (int) round((float) $carrier->getPrice()) : 0;
 
@@ -123,8 +123,8 @@ final class SubscriptionService
             }
             if ($open->getStatus() !== Subscription::STATUS_INCOMPLETE) {
                 throw new SubscriptionException(409, 'Vous êtes déjà abonné à ce produit : changez de formule ou résiliez depuis votre compte.',
-                    [['path' => 'planId', 'message' => sprintf('abonnement n° %d déjà en cours', $open->getId())]],
-                    ['reason' => 'already_subscribed', 'subscriptionId' => $open->getId(), 'status' => $open->getStatus()]);
+                    [SubscriptionException::error('planId', 'ALREADY_SUBSCRIBED', sprintf('abonnement n° %d déjà en cours', $open->getId()), ['subscriptionId' => $open->getId(), 'status' => $open->getStatus()])],
+                    ['reason' => 'already_subscribed', 'subscriptionId' => $open->getId(), 'status' => $open->getStatus()], 'ALREADY_SUBSCRIBED');
             }
             $state = $open->getStripeSubscriptionId() ? $this->stripe->retrieve($open->getStripeSubscriptionId()) : null;
             if ($state !== null && $state['status'] === 'incomplete' && $open->getPlan()?->getId() === $plan->getId() && $open->getQuantity() === $quantity && $state['clientSecret']) {
@@ -169,7 +169,7 @@ final class SubscriptionService
     {
         $subscription = $this->subscriptions()->find($id);
         if ($subscription === null || $subscription->getUser()?->getId() !== $user->getId()) {
-            throw new SubscriptionException(404, 'Abonnement introuvable.');
+            throw new SubscriptionException(404, 'Abonnement introuvable.', [], [], 'SUBSCRIPTION_NOT_FOUND');
         }
 
         return $subscription;
@@ -191,7 +191,7 @@ final class SubscriptionService
     {
         $this->requireStripe($subscription);
         if ($subscription->getStatus() === Subscription::STATUS_CANCELED) {
-            throw new SubscriptionException(409, 'Abonnement déjà résilié : souscrivez de nouveau.');
+            throw new SubscriptionException(409, 'Abonnement déjà résilié : souscrivez de nouveau.', [], [], 'SUBSCRIPTION_CANCELED');
         }
         $this->applyStripeState($subscription, $this->stripe->resume($subscription->getStripeSubscriptionId()));
         $subscription->setPausedAt(null);
@@ -204,7 +204,7 @@ final class SubscriptionService
     {
         $this->requireStripe($subscription);
         if (!in_array($subscription->getStatus(), [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING], true)) {
-            throw new SubscriptionException(409, 'Seul un abonnement actif peut être mis en pause.');
+            throw new SubscriptionException(409, 'Seul un abonnement actif peut être mis en pause.', [], [], 'SUBSCRIPTION_NOT_ACTIVE');
         }
         $this->applyStripeState($subscription, $this->stripe->pause($subscription->getStripeSubscriptionId()));
         $subscription->setStatus(Subscription::STATUS_PAUSED)->setPausedAt(new \DateTimeImmutable());
@@ -218,14 +218,14 @@ final class SubscriptionService
     {
         $this->requireStripe($subscription);
         if ($subscription->getStatus() === Subscription::STATUS_CANCELED) {
-            throw new SubscriptionException(409, 'Abonnement résilié : souscrivez de nouveau.');
+            throw new SubscriptionException(409, 'Abonnement résilié : souscrivez de nouveau.', [], [], 'SUBSCRIPTION_CANCELED');
         }
         $plan = $this->plans()->find($planId);
         if ($plan === null || !$plan->isActive()) {
-            throw new SubscriptionException(404, 'Formule introuvable.');
+            throw new SubscriptionException(404, 'Formule introuvable.', [], [], 'PLAN_NOT_FOUND');
         }
         if ($plan->getProduct()?->getId() !== $subscription->getPlan()?->getProduct()?->getId()) {
-            throw new SubscriptionException(422, 'planId : la nouvelle formule doit concerner le même produit', [['path' => 'planId', 'message' => 'formule d\'un autre produit']]);
+            throw new SubscriptionException(422, 'planId : la nouvelle formule doit concerner le même produit', [SubscriptionException::error('planId', 'PLAN_OTHER_PRODUCT', 'formule d\'un autre produit')], [], 'PLAN_OTHER_PRODUCT');
         }
         [, $priceId] = $this->stripe->ensurePrice($plan);
         $state = $this->stripe->retrieve($subscription->getStripeSubscriptionId());
@@ -258,7 +258,7 @@ final class SubscriptionService
         $this->requireStripe($subscription);
 
         return $this->stripe->refundLatestPayment($subscription->getStripeSubscriptionId())
-            ?? throw new SubscriptionException(409, 'Aucun paiement encaissé à rembourser pour cet abonnement.');
+            ?? throw new SubscriptionException(409, 'Aucun paiement encaissé à rembourser pour cet abonnement.', [], [], 'NOTHING_TO_REFUND');
     }
 
     public function portalUrl(User $user, string $returnUrl): string
@@ -336,7 +336,7 @@ final class SubscriptionService
     private function requireStripe(Subscription $subscription): void
     {
         if (!$subscription->getStripeSubscriptionId()) {
-            throw new SubscriptionException(409, 'Abonnement sans abonnement Stripe : souscription non terminée.');
+            throw new SubscriptionException(409, 'Abonnement sans abonnement Stripe : souscription non terminée.', [], [], 'SUBSCRIPTION_NOT_STARTED');
         }
     }
 }

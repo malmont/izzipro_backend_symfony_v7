@@ -763,6 +763,35 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
   mode test, 13/10/2026).
 - Tests : `tests/Functional/Boutique/SubscriptionApiTest.php` (Stripe simulé : souscription, gestion, webhooks, refus). ; actions EasyAdmin : `testAdministratorManagesASubscriptionFromEasyAdmin`.
 
+### Codes des refus des abonnements (04/11/2026, application e-commerce mobile)
+
+Même contrat que les codes du devis : chaque refus (`SubscriptionException`) porte un `code` de premier niveau et un `message`
+(ajouts à côté d'`error`, `errors[]`, `reason`, `subscriptionId`, `status`, inchangés) ; chaque élément d'`errors[]` porte le
+même `code` et, si le détail varie, des `params`. Les applications traduisent, le serveur ne traduit rien. Statuts inchangés.
+
+| Code | Statut | Route(s) | `error` (message français) | `errors[]` / `params` |
+|---|---|---|---|---|
+| `SUBSCRIPTIONS_DISABLED` | 403 | souscription | Les abonnements sont désactivés sur ce site. | — |
+| `PLAN_NOT_FOUND` | 404 | souscription, change-plan | Formule introuvable. | — |
+| `PLAN_NOT_SUBSCRIBABLE` | 422 | souscription | Ce produit ne se vend pas par abonnement. | `planId` |
+| `PLAN_ID_REQUIRED` | 422 | souscription, change-plan | planId : identifiant de formule attendu | `planId` |
+| `QUANTITY_INVALID` | 422 | souscription | quantity : entier attendu ; quantity : entier de 1 à 100 attendu | `quantity`, `{min: 1, max: 100}` |
+| `ADDRESS_NOT_FOUND` | 422 | souscription | addressId : adresse introuvable | `addressId` |
+| `CARRIER_NOT_FOUND` | 422 | souscription | carrierId : transporteur introuvable | `carrierId` (même code que le devis) |
+| `CARRIER_RATES_NOT_ALLOWED` | 422 | souscription | carrierId : un abonnement exige un transporteur à prix fixe ou gratuit | `carrierId` |
+| `ALREADY_SUBSCRIBED` | 409 | souscription | Vous êtes déjà abonné à ce produit : changez de formule ou résiliez depuis votre compte. | `planId`, `{subscriptionId, status}` ; `reason: already_subscribed`, `subscriptionId`, `status` conservés au premier niveau |
+| `SUBSCRIPTION_NOT_FOUND` | 404 | détail, cancel, resume, pause, change-plan | Abonnement introuvable. | — |
+| `SUBSCRIPTION_CANCELED` | 409 | resume, change-plan | Abonnement déjà résilié : souscrivez de nouveau. ; Abonnement résilié : souscrivez de nouveau. | — |
+| `SUBSCRIPTION_NOT_ACTIVE` | 409 | pause | Seul un abonnement actif peut être mis en pause. | — |
+| `PLAN_OTHER_PRODUCT` | 422 | change-plan | planId : la nouvelle formule doit concerner le même produit | `planId` |
+| `SUBSCRIPTION_NOT_STARTED` | 409 | cancel, resume, pause, change-plan | Abonnement sans abonnement Stripe : souscription non terminée. | — |
+| `NOTHING_TO_REFUND` | 409 | administration (remboursement) | Aucun paiement encaissé à rembourser pour cet abonnement. | — |
+| `ALREADY_REFUNDED` | 409 | administration (remboursement) | Le dernier paiement de cet abonnement est déjà remboursé. | — |
+| `STRIPE_ERROR` | 502 | toute route qui appelle Stripe (souscription, gestion, portail) | Stripe : <message de l'API> | — ; en production, nginx remplace le corps des réponses 5xx par un message neutre |
+
+Sans code explicite, `SubscriptionException::code()` rend le code par statut d'`ApiExceptionSubscriber` (`CONFLICT`, `NOT_FOUND`…).
+Tests : `SubscriptionErrorCodesApiTest` (un test par code ; corps complet vérifié pour le 403, le 409 `already_subscribed` et un 422).
+
 ## Avis clients (09/10/2026)
 
 Pratique des grandes boutiques, ramenée à l'essentiel : **avis vérifiés** (par défaut, seul un client dont une commande
