@@ -106,7 +106,7 @@ class RegistrationController extends AbstractController
         UrlGeneratorInterface $urlGenerator
     ): Response {
         $em = $this->tenantEmProvider->getEntityManager();
-        $locale = $request->query->get('locale', 'fr');
+        $locale = $request->query->get('locale'); // fr ou en, sinon la langue du site (EmailSenderService::sendCustomerEmail, 03/11/2026)
         $decoded = json_decode($request->getContent(), true);
 
         // 1. Validation des données d'entrée
@@ -209,9 +209,10 @@ class RegistrationController extends AbstractController
             // Pour les assets (logos), on utilise le domaine actuel de l'API pour éviter les problèmes SSL/CORS
             $baseUrl = $request->getSchemeAndHttpHost();
 
-            $this->emailSenderService->sendTemplatedEmail(
+            $this->emailSenderService->sendCustomerEmail(
                 $user->getEmail(),
-                'Veuillez valider votre adresse email',
+                'verification.subject',
+                [],
                 'verification/validation_email.html.twig',
                 [
                     'user'            => $user,
@@ -321,7 +322,7 @@ class RegistrationController extends AbstractController
         $em = $this->tenantEmProvider->getEntityManager();
         $decoded = json_decode($request->getContent(), true);
         $email = $decoded['email'] ?? null;
-        $locale = $request->query->get('locale', 'fr');
+        $locale = $request->query->get('locale'); // fr ou en, sinon la langue du site
 
         if (!$email) {
             return $this->json(['error' => 'Email manquant'], Response::HTTP_BAD_REQUEST);
@@ -369,9 +370,10 @@ class RegistrationController extends AbstractController
             // URL Logo Absolue
             $baseUrl = $request->getSchemeAndHttpHost();
 
-            $this->emailSenderService->sendTemplatedEmail(
+            $this->emailSenderService->sendCustomerEmail(
                 $user->getEmail(),
-                'Nouveau lien de validation de compte',
+                'verification.subject_resend',
+                [],
                 'verification/validation_email.html.twig',
                 [
                     'user'            => $user,

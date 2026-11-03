@@ -14,7 +14,8 @@ class GetAddressDetailsUseCase
         private ValidatorInterface         $validator
     ) {}
 
-    public function execute(AddressDetailsInputDto $dto): AddressDetailsResultDto
+    /** @param string|null $language langue des noms de pays et de ville (fr, en), celle de la requête */
+    public function execute(AddressDetailsInputDto $dto, ?string $language = null): AddressDetailsResultDto
     {
         $errors = $this->validator->validate($dto);
         if (count($errors) > 0) {
@@ -25,7 +26,7 @@ class GetAddressDetailsUseCase
             throw new BadRequestHttpException(implode('; ', $msg));
         }
 
-        $raw = $this->autocompleteService->getDetails($dto->placeId);
+        $raw = $this->autocompleteService->getDetails($dto->placeId, $language);
         return new AddressDetailsResultDto($raw);
     }
 }

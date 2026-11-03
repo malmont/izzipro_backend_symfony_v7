@@ -1,6 +1,7 @@
 {% extends 'base.email.html.twig' %}
 
-{% block title %}Vérification de votre compte{% endblock %}
+{# Langue du client (03/11/2026) : `locale` (fr|en) et textes du domaine `emails` ; le français reste identique à avant #}
+{% block title %}{{ 'otp.title'|trans({}, 'emails', locale)|raw }}{% endblock %}
 
 {% block body %}
   <div style="text-align: center; margin-bottom: 20px;">
@@ -13,18 +14,18 @@
     {% endif %}
   </div>
   <p>
-    Bonjour,<br>
-    Votre code de vérification est : <strong>{{ code }}</strong>.<br>
-    Ce code expirera dans {{ (lifetime / 60)|round }} minutes.
+    {{ 'otp.greeting'|trans({}, 'emails', locale)|raw }}<br>
+    {{ 'otp.code_is'|trans({}, 'emails', locale)|raw }} <strong>{{ code }}</strong>.<br>
+    {{ 'otp.expires'|trans({'%minutes%': (lifetime / 60)|round}, 'emails', locale)|raw }}
   </p>
   
   {% if signature %}
     <p>{{ signature|raw }}</p>
   {% elseif entreprise %}
     <p>
-      Pour toute question, contactez-nous :<br>
-      Email : {{ entreprise.email }}<br>
-      Téléphone : {{ entreprise.tel }}
+      {{ 'otp.contact'|trans({}, 'emails', locale)|raw }}<br>
+      {{ 'otp.email_label'|trans({}, 'emails', locale)|raw }} {{ entreprise.email }}<br>
+      {{ 'otp.phone_label'|trans({}, 'emails', locale)|raw }} {{ entreprise.tel }}
     </p>
   {% endif %}
 {% endblock %}

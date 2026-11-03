@@ -31,10 +31,8 @@ class DeleteAccountUseCase
         $context = ['firstname' => $user->getFirstname(), 'email' => $email, 'deletedAt' => new \DateTimeImmutable()];
         $notified = false;
         try {
-            $notified = $this->mailer->sendTemplatedEmail($email, 'Votre compte a été supprimé', 'emails/account_deleted_notice.html.twig', $context, $request->getLocale(), $request->getSchemeAndHttpHost());
-            if (!$notified) {
-                $notified = $this->mailer->sendPlatformEmail($email, 'Votre compte a été supprimé', 'emails/account_deleted_notice.html.twig', $context);
-            }
+            // Langue du client (03/11/2026) : `?locale=` fr ou en, sinon celle du site ; repli par le serveur de la plateforme
+            $notified = $this->mailer->sendCustomerEmail($email, 'account_deleted.subject', [], 'emails/account_deleted_notice.html.twig', $context, $request->query->get('locale'), $request->getSchemeAndHttpHost(), 'account_deleted.subject');
         } catch (\Throwable $e) {
             $this->securityLogger->error('account.delete.notice_failed', ['userId' => $userId, 'error' => $e->getMessage()]);
         }

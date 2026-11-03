@@ -35,19 +35,21 @@ class AddressAutocompleteService
      * Récupère les suggestions d’adresse (description + place_id).
      *
      * @param string $input
+     * @param string|null $language langue des suggestions (fr, en ; 03/11/2026) : paramètre `language` de Google Places, omis si null
      * @return array<int, array{description:string,place_id:string}>
      * @throws TransportExceptionInterface|\RuntimeException
      */
-    public function suggest(string $input): array
+    public function suggest(string $input, ?string $language = null): array
     {
         $key = $this->configuredKey();
 
         $response = $this->client->request('GET', 'https://maps.googleapis.com/maps/api/place/autocomplete/json', [
-            'query' => [
+            'query' => array_filter([
                 'input' => $input,
                 'types' => 'address',
+                'language' => $language,
                 'key'   => $key,
-            ],
+            ], fn ($v) => $v !== null),
         ]);
 
         if ($response->getStatusCode() !== 200) {
@@ -90,6 +92,7 @@ class AddressAutocompleteService
      * Récupère les détails d’une adresse à partir d’un place_id.
      *
      * @param string $placeId
+     * @param string|null $language langue des noms (pays, ville ; 03/11/2026), omise si null
      * @return array{
      * street1:string,
      * street2:?string,
@@ -100,16 +103,17 @@ class AddressAutocompleteService
      * }
      * @throws TransportExceptionInterface|\RuntimeException
      */
-    public function getDetails(string $placeId): array
+    public function getDetails(string $placeId, ?string $language = null): array
     {
         $key = $this->configuredKey();
 
         $response = $this->client->request('GET', 'https://maps.googleapis.com/maps/api/place/details/json', [
-            'query' => [
+            'query' => array_filter([
                 'place_id' => $placeId,
                 'fields'   => 'address_components',
+                'language' => $language,
                 'key'      => $key,
-            ],
+            ], fn ($v) => $v !== null),
         ]);
 
         if ($response->getStatusCode() !== 200) {

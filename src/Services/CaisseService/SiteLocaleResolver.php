@@ -29,14 +29,29 @@ class SiteLocaleResolver
 
     public function siteLocale(): string
     {
-        // SQL direct : adresse réelle du site, sans le cache d'identité Doctrine (changée dans la même requête par un test ou un import)
-        $row = $this->emProvider?->getEntityManager()->getConnection()->fetchAssociative('SELECT a.country, a.state FROM address_entreprise a JOIN entreprise e ON e.id = a.entreprise_id ORDER BY e.id LIMIT 1');
-        $address = TaxEngine::normalizeAddress($row ? ['country' => $row['country'], 'province' => $row['state']] : $this->storeAddress->forStore());
+        $address = $this->siteAddress();
 
         return match ($address['country'] ?? null) {
             'CA' => ($address['province'] ?? null) === 'QC' || ($address['province'] ?? null) === null ? 'fr' : 'en',
             'US' => 'en',
             default => 'fr',
         };
+    }
+
+    /** Pays du site (code ISO à 2 lettres : CA, FR, US, MQ…), null sans adresse ; sert à la locale des montants et des dates des courriels (EmailLocale, 03/11/2026) */
+    public function siteCountry(): ?string
+    {
+        $country = $this->siteAddress()['country'] ?? null;
+
+        return is_string($country) && preg_match('/^[A-Z]{2}$/', $country) ? $country : null;
+    }
+
+    /** @return array{country: ?string, province: ?string}|null adresse normalisée du site */
+    private function siteAddress(): ?array
+    {
+        // SQL direct : adresse réelle du site, sans le cache d'identité Doctrine (changée dans la même requête par un test ou un import)
+        $row = $this->emProvider?->getEntityManager()->getConnection()->fetchAssociative('SELECT a.country, a.state FROM address_entreprise a JOIN entreprise e ON e.id = a.entreprise_id ORDER BY e.id LIMIT 1');
+
+        return TaxEngine::normalizeAddress($row ? ['country' => $row['country'], 'province' => $row['state']] : $this->storeAddress->forStore());
     }
 }

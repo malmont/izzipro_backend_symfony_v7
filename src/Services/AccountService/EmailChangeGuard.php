@@ -114,10 +114,8 @@ final class EmailChangeGuard
         $context = ['oldEmail' => $oldEmail, 'newEmail' => self::mask($newEmail), 'firstname' => $user->getFirstname(), 'changedAt' => new \DateTimeImmutable(), 'method' => $method];
         $sent = false;
         try {
-            $sent = $this->mailer->sendTemplatedEmail($oldEmail, 'Votre adresse courriel a été modifiée', 'emails/email_changed_notice.html.twig', $context, $request->getLocale(), $request->getSchemeAndHttpHost());
-            if (!$sent) {
-                $sent = $this->mailer->sendPlatformEmail($oldEmail, 'Votre adresse courriel a été modifiée', 'emails/email_changed_notice.html.twig', $context);
-            }
+            // Langue du client (03/11/2026) : `?locale=` fr ou en, sinon celle du site ; repli par le serveur de la plateforme
+            $sent = $this->mailer->sendCustomerEmail($oldEmail, 'email_changed.subject', [], 'emails/email_changed_notice.html.twig', $context, $request->query->get('locale'), $request->getSchemeAndHttpHost(), 'email_changed.subject');
         } catch (\Throwable $e) {
             $this->securityLogger->error('profile.email_change.notice_failed', ['userId' => $user->getId(), 'error' => $e->getMessage()]);
         }

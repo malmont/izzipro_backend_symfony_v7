@@ -401,6 +401,49 @@ Tests : `tests/Functional/Boutique/CartQuoteApiTest.php` (`quoteErrorCases`, un 
 `CheckoutApiTest::testRefusalsOfTheIntentAndOfTheOrderCarryTheirCodes`. `docs/endpoints.md` est généré sans détail des réponses : la table
 de référence est ici.
 
+## Courriels du client en français et en anglais (03/11/2026, application e-commerce mobile, lot L6b)
+
+Les courriels **destinés au client** partent dans sa langue, `fr` ou `en`. Ceux **destinés au marchand** (avis d'expédition
+`emails/shipping_notification.html.twig`, notifications d'administration) restent en français.
+
+- **Langue** (`Services/EmailConfigurationService/EmailLocale`) : `?locale=fr` ou `?locale=en` sur la requête qui déclenche l'envoi
+  (`fr-CA`, `EN`… acceptés) ; pour une commande, la locale enregistrée avec la session de paiement (`checkout_session.locale`, donc
+  celle de `create-intent`, lue aussi par le webhook). Absente ou autre valeur : **langue du site**, même règle que les tickets de
+  caisse (`Services/CaisseService/SiteLocaleResolver`, adresse de la fiche Entreprise : Québec, France et DROM → fr ; autres
+  provinces du Canada et États-Unis → en ; sans adresse → fr). Aucun écouteur ne fixe `$request->getLocale()` (toujours `en`,
+  défaut du framework) : chaque point d'envoi résout la langue lui-même, aucune autre réponse de l'API ne change.
+- **Textes** : traducteur de Symfony, domaine `emails` (`translations/emails.fr.yaml`, `emails.en.yaml`), sujet dans le service
+  (`EmailSenderService::sendCustomerEmail`), corps par `|trans` dans les gabarits avec la locale passée explicitement. Le fichier
+  français reprend **mot pour mot** les textes qui étaient écrits dans le PHP et les gabarits : le texte rendu en français ne
+  change pas (y compris le sujet « Password Reset » du mot de passe oublié, hérité).
+- **Montants et dates** : devise du site (`TenantCurrencyProvider` : fiche Entreprise, CAD à défaut ; la commande n'enregistre
+  pas de devise ; avant, `CAD` était écrit en dur dans les gabarits) au format de la langue **et** du pays du site (`intlLocale` :
+  `fr_CA` → 12,00 $, `fr_FR` → 12,50 €, `en_CA` → $12.00, `en_US` → $12.50 ; avant, tout était rendu en `en` : CA$12.00). Les dates
+  françaises gardent leurs formats (`d/m/Y à H:i`, réservation `Y-m-d H:i`) ; en anglais, format Intl moyen de la locale.
+
+| Courriel | Déclencheur | Langue lue | Gabarit |
+|---|---|---|---|
+| Code de vérification (site, puis repli plateforme) | `POST /api/login` (otpEnabled), confirmation d'un changement d'adresse ou d'une suppression de compte, formulaire de connexion web | `?locale=` de la requête | `security/2fa_email.html.twig` |
+| Validation de l'inscription, nouveau lien | `POST /api/register`, `POST /api/resend-verification` | `?locale=` | `verification/validation_email.html.twig` |
+| Mot de passe oublié | `POST /api/password-reset/request` | `?locale=` (le lien vers le site garde `locale=` comme avant) | `reset_password/reset.html.twig` |
+| Adresse courriel modifiée (à l'ancienne adresse) | `PATCH /api/profile` | `?locale=` | `emails/email_changed_notice.html.twig` |
+| Compte supprimé | `DELETE /api/account` | `?locale=` | `emails/account_deleted_notice.html.twig` |
+| Confirmation de commande | `POST /api/order/create`, `create-guest`, webhook Stripe | locale de la session de paiement (`create-intent?locale=`, sinon `order.locale`, sinon langue du site) | `emails/order_confirmation.html.twig` |
+
+Hors lot : le formulaire web de réinitialisation du backend (`reset_password/form.html.twig`, `success.html.twig`, atteint seulement
+sans page de réinitialisation sur le site) et le courriel du formulaire `/register` du backend (`registration/confirmation_email.html.twig`,
+anglais, VerifyEmailBundle) ne suivent pas `?locale=` : inchangés. **Suggestions d'adresse** (`GET /api/adresses/autocomplete`,
+`/details`) : `language` (fr ou en, même règle) transmis à Google Places, suggestions et noms de pays dans la langue du client.
+
+Tests : `tests/Functional/Email/CustomerEmailLanguageTest` (chaque courriel en en et en fr, repli sur la langue du site Ontario → en et
+France → fr, devise EUR d'un site en France, `language` envoyé à Google Places avec un client HTTP simulé).
+
+À venir (décision du propriétaire, 02/11/2026, après la clé EasyPost de production du lot M2) : courriel **« commande expédiée »** au
+client, avec le numéro de suivi EasyPost, dans sa langue. La commande n'enregistre pas de langue aujourd'hui (aucun courriel n'est
+envoyé au client après la création) : ajouter alors `order.locale` (nullable, migration additive + script `migrate_all_v2`), remplie à la
+création (client, invité, webhook) depuis `checkout_session.locale`, langue du site pour les anciennes commandes ; vérifier à ce
+moment-là les transporteurs français couverts par EasyPost (Colissimo, Chronopost, Mondial Relay).
+
 ## Taxes par région (09/10/2026, `TaxEngine`)
 
 Le devis, `create-intent` et la commande calculent les taxes de la même façon, selon l'adresse de livraison

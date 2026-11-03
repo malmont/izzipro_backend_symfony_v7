@@ -40,7 +40,6 @@ class OtpService
     public function generateAndSendOtp(User $user, Request $request, string $purpose = OtpCode::PURPOSE_LOGIN): void
     {
         $em = $this->tenantEmProvider->getEntityManager();
-        $locale = $request->getLocale(); // On récupère la locale
 
         // Cas 1 : utilisateur existant (a déjà un ID)
         if ($user->getId() !== null) {
@@ -86,10 +85,8 @@ class OtpService
             'domain'     => '',
         ];
         // Serveur d'envoi du site ; à défaut (site sans configuration d'envoi, ou envoi en échec), serveur de la
-        // plateforme : sans code, l'administrateur ne pourrait plus se connecter
-        $sent = $this->emailSenderService->sendTemplatedEmail($userManaged->getEmail(), 'Votre code OTP', 'security/2fa_email.html.twig', $context, $locale, $baseUrl);
-        if (!$sent) {
-            $this->emailSenderService->sendPlatformEmail($userManaged->getEmail(), 'Votre code de connexion', 'security/2fa_email.html.twig', $context);
-        }
+        // plateforme : sans code, l'administrateur ne pourrait plus se connecter. Langue du client (03/11/2026) : `?locale=`
+        // (fr, en), sinon celle du site ; avant, $request->getLocale() valait toujours `en` (aucun écouteur ne le fixe)
+        $this->emailSenderService->sendCustomerEmail($userManaged->getEmail(), 'otp.subject', [], 'security/2fa_email.html.twig', $context, $request->query->get('locale'), $baseUrl, 'otp.subject_platform');
     }
 }

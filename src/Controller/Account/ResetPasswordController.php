@@ -102,15 +102,17 @@ class ResetPasswordController extends AbstractController
         // CORRECTION ASSETS : Toujours utiliser le domaine du Backend (API)
         $baseUrl = $request->getSchemeAndHttpHost();
 
-        $this->emailSenderService->sendTemplatedEmail(
+        // Langue du courriel (03/11/2026) : `?locale=` fr ou en, sinon celle du site ; sujet français inchangé (« Password Reset »)
+        $this->emailSenderService->sendCustomerEmail(
             $user->getEmail(),
-            'Password Reset',
+            'reset.subject',
+            [],
             'reset_password/reset.html.twig',
             [
                 'resetUrl'  => $resetUrl,
                 'user'      => $user,
             ],
-            $locale,
+            $request->query->get('locale'),
             $baseUrl
         );
 

@@ -5,6 +5,7 @@ namespace App\Services\EmailConfigurationService;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Environment;
 
 class EmailSenderService
@@ -26,7 +27,9 @@ class EmailSenderService
         LoggerInterface $logger,
         TenantMailerFactory $tenantMailerFactory,
         #[\Symfony\Component\DependencyInjection\Attribute\Autowire('%env(default::MAILER_DSN)%')]
-        private readonly ?string $platformDsn = null
+        private readonly ?string $platformDsn = null,
+        private readonly ?EmailLocale $emailLocale = null,
+        private readonly ?TranslatorInterface $translator = null
     ) {
         $this->tenantMailerFactory = $tenantMailerFactory;
         $this->mailer = $mailer;
@@ -95,7 +98,10 @@ class EmailSenderService
             $logoUrl = $logoPath !== null ? 'cid:' . self::LOGO_CID : $this->emailLogoHelper->getLogoUrl($emailConfig, $domain);
             $signature = $emailConfigTranslation ? $emailConfigTranslation->getSignature() : '';
 
-            // Injecte les variables globales dans le contexte pour Twig
+            // Injecte les variables globales dans le contexte pour Twig ; `locale` et `intlLocale` (03/11/2026) pour les gabarits
+            // traduits appelés directement avec sendTemplatedEmail (sendCustomerEmail les fournit déjà)
+            $language = $this->emailLocale?->language($locale) ?? (in_array($locale, [EmailLocale::FRENCH, EmailLocale::ENGLISH], true) ? $locale : EmailLocale::FRENCH);
+            $context += $this->emailLocale?->context($language) ?? ['locale' => $language, 'intlLocale' => $language];
             $context['fromName'] = $fromName;
             $context['signature'] = $signature;
             $context['logoUrl'] = $logoUrl;
@@ -135,6 +141,30 @@ class EmailSenderService
 
             return false;
         }
+    }
+
+    /**
+     * Courriel destiné au client, dans sa langue (03/11/2026) : `fr` ou `en` d'après $locale (`?locale=` de la requête, locale de la
+     * session de paiement…), sinon la langue du site (EmailLocale). Sujet traduit (domaine `emails`, $subjectKey + $subjectParams) ;
+     * `locale` et `intlLocale` ajoutés au contexte du gabarit (`|trans`, `format_currency`, `format_datetime`). Serveur d'envoi du site ;
+     * avec $platformSubjectKey, repli sur le serveur de la plateforme si le site ne peut pas envoyer (code de connexion, avis de compte).
+     */
+    public function sendCustomerEmail(string $to, string $subjectKey, array $subjectParams, string $template, array $context, mixed $locale, string $domain, ?string $platformSubjectKey = null): bool
+    {
+        $language = $this->emailLocale?->language($locale) ?? EmailLocale::FRENCH;
+        $context += $this->emailLocale?->context($language) ?? ['locale' => $language, 'intlLocale' => $language];
+        $sent = $this->sendTemplatedEmail($to, $this->subject($subjectKey, $subjectParams, $language), $template, $context, $language, $domain);
+        if (!$sent && $platformSubjectKey !== null) {
+            $sent = $this->sendPlatformEmail($to, $this->subject($platformSubjectKey, $subjectParams, $language), $template, $context);
+        }
+
+        return $sent;
+    }
+
+    /** Sujet traduit (domaine `emails`) ; la clé elle-même si aucun traducteur */
+    public function subject(string $key, array $params, string $language): string
+    {
+        return $this->translator?->trans($key, $params, 'emails', $language) ?? $key;
     }
 
     /**

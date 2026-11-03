@@ -16,9 +16,10 @@ class SuggestAddressUseCase
     ) {}
 
     /**
+     * @param string|null $language langue des suggestions (fr, en), celle de la requête
      * @return AddressSuggestionResultDto[]
      */
-    public function execute(AddressSuggestionInputDto $dto): array
+    public function execute(AddressSuggestionInputDto $dto, ?string $language = null): array
     {
         $errors = $this->validator->validate($dto);
         if (count($errors) > 0) {
@@ -29,7 +30,7 @@ class SuggestAddressUseCase
             throw new BadRequestHttpException(implode('; ', $msg));
         }
 
-        $raw = $this->autocompleteService->suggest($dto->query);
+        $raw = $this->autocompleteService->suggest($dto->query, $language);
 
         return array_map(fn(array $r) =>
             new AddressSuggestionResultDto($r['description'], $r['place_id']),

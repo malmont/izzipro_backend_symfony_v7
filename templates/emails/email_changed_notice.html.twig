@@ -1,6 +1,7 @@
 {% extends 'base.email.html.twig' %}
 
-{% block title %}Votre adresse courriel a été modifiée{% endblock %}
+{# Langue du client (03/11/2026) : `locale` (fr|en), domaine `emails` ; date au format de la langue (fr : inchangé) #}
+{% block title %}{{ 'email_changed.subject'|trans({}, 'emails', locale)|raw }}{% endblock %}
 
 {% block body %}
 <table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
@@ -9,15 +10,16 @@
             <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
                 <tr>
                     <td align="center" style="background: #1e293b; padding: 28px 20px;">
-                        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700;">Votre adresse courriel a été modifiée</h1>
+                        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700;">{{ 'email_changed.subject'|trans({}, 'emails', locale)|raw }}</h1>
                     </td>
                 </tr>
                 <tr>
                     <td style="padding: 30px; font-size: 15px; color: #1e293b;">
-                        <p style="margin-top: 0;">Bonjour {{ firstname|default('') }},</p>
-                        <p>L'adresse courriel de votre compte a été remplacée le {{ changedAt|date('d/m/Y à H:i') }} : l'ancienne adresse <strong>{{ oldEmail }}</strong> ne recevra plus les messages de votre compte, qui iront désormais à <strong>{{ newEmail }}</strong>.</p>
-                        <p>Si vous êtes à l'origine de ce changement, vous n'avez rien à faire.</p>
-                        <p>Si vous n'avez pas demandé ce changement, répondez à ce message ou contactez-nous sans attendre : nous pourrons rétablir votre adresse.</p>
+                        {% set changedAtText = locale == 'fr' ? changedAt|date('d/m/Y à H:i') : changedAt|format_datetime('medium', 'short', locale=intlLocale) %}
+                        <p style="margin-top: 0;">{{ 'email_changed.greeting'|trans({'%name%': firstname|default('')|e}, 'emails', locale)|raw }}</p>
+                        <p>{{ 'email_changed.body'|trans({'%date%': changedAtText, '%old%': oldEmail|e, '%new%': newEmail|e}, 'emails', locale)|raw }}</p>
+                        <p>{{ 'email_changed.nothing_to_do'|trans({}, 'emails', locale)|raw }}</p>
+                        <p>{{ 'email_changed.not_you'|trans({}, 'emails', locale)|raw }}</p>
                     </td>
                 </tr>
             </table>

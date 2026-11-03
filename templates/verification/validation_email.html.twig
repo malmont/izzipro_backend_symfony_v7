@@ -1,7 +1,8 @@
 {# templates/emails/validation_email.html.twig #}
 {% extends 'base.email.html.twig' %}
 
-{% block title %}Veuillez valider votre adresse email{% endblock %}
+{# Langue du client (03/11/2026) : `locale` (fr|en), domaine `emails` #}
+{% block title %}{{ 'verification.title'|trans({}, 'emails', locale)|raw }}{% endblock %}
 
 {% block body %}
 <div class="container mt-5">
@@ -18,11 +19,11 @@
     {% endif %}
 
     <div class="alert alert-info" role="alert">
-        <h4 class="alert-heading">Bonjour, {{ user.firstname }} !</h4>
-        <p>Merci de vous être inscrit. Pour activer votre compte, veuillez cliquer sur le lien ci-dessous :</p>
-        <p class="mb-0"><a href="{{ verificationUrl }}">Valider mon compte</a></p>
+        <h4 class="alert-heading">{{ 'verification.greeting'|trans({'%name%': user.firstname|e}, 'emails', locale)|raw }}</h4>
+        <p>{{ 'verification.intro'|trans({}, 'emails', locale)|raw }}</p>
+        <p class="mb-0"><a href="{{ verificationUrl }}">{{ 'verification.link'|trans({}, 'emails', locale)|raw }}</a></p>
         <hr>
-        <p class="mb-0">Si vous n'avez pas demandé cette inscription, veuillez ignorer cet email.</p>
+        <p class="mb-0">{{ 'verification.ignore'|trans({}, 'emails', locale)|raw }}</p>
     </div>
 </div>
 {% endblock %}

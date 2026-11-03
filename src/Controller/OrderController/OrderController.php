@@ -73,7 +73,8 @@ class OrderController extends AbstractController
         private readonly \App\UseCase\CheckoutUseCase\FinalizeCheckoutOrderUseCase $finalizeCheckout,
         private readonly CaisseService $caisseService,
         private readonly \App\Services\PosAuditService\PosReceiptService $posReceipts,
-        private readonly \App\Services\PosAuditService\PosWriteResponseBuilder $posResponses
+        private readonly \App\Services\PosAuditService\PosWriteResponseBuilder $posResponses,
+        private readonly ?\App\Services\CaisseService\SiteLocaleResolver $siteLocale = null // langue du site quand ?locale= manque (03/11/2026)
     ) {
         $this->createOrderUseCase = $createOrderUseCase;
         $this->cancelOrderUseCase = $cancelOrderUseCase;
@@ -322,11 +323,12 @@ class OrderController extends AbstractController
         }
     }
 
+    /** `?locale=` (deux lettres), sinon la langue du site (fr au Québec et en France, en aux États-Unis et dans les autres provinces ; fr à défaut). Avant le 03/11/2026 : fr. */
     private function locale(Request $request): string
     {
-        $locale = (string) $request->query->get('locale', 'fr');
+        $locale = (string) $request->query->get('locale', '');
 
-        return preg_match('/^[a-z]{2}$/', $locale) ? $locale : 'fr';
+        return preg_match('/^[a-z]{2}$/', $locale) ? $locale : ($this->siteLocale?->siteLocale() ?? 'fr');
     }
 
     /**

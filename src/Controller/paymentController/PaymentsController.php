@@ -43,6 +43,7 @@ class PaymentsController extends AbstractController
         private readonly \App\Security\OptionalCustomerResolver $customers,
         private readonly \App\Services\PaymentService\PaymentOwnershipService $ownership,
         private readonly \Psr\Log\LoggerInterface $securityLogger,
+        private readonly ?\App\Services\CaisseService\SiteLocaleResolver $siteLocale = null, // langue du site quand ?locale= manque (03/11/2026)
     ) {
         $this->getPaymentsByOrderSourceUseCase = $getPaymentsByOrderSourceUseCase;
         $this->createPaymentUseCase = $createPaymentUseCase;
@@ -128,10 +129,11 @@ class PaymentsController extends AbstractController
         }
         // Route hors du pare-feu JWT (un jeton expiré ne doit pas bloquer un invité) : client reconnu s'il a un jeton valide
         $user = $this->customers->resolve($request);
-        $locale = (string) $request->query->get('locale', $data['order']['locale'] ?? 'fr');
+        // Locale de la session de paiement (courriels de la commande) : ?locale=, sinon order.locale, sinon la langue du site (03/11/2026 ; avant : fr)
+        $locale = (string) $request->query->get('locale', $data['order']['locale'] ?? '');
         try {
             return $this->json($this->prepareCheckout->execute($data, $user instanceof \App\Entity\User ? $user : null,
-                preg_match('/^[a-z]{2}$/', $locale) ? $locale : 'fr', $request->getSchemeAndHttpHost()));
+                preg_match('/^[a-z]{2}$/', $locale) ? $locale : ($this->siteLocale?->siteLocale() ?? 'fr'), $request->getSchemeAndHttpHost()));
         } catch (\App\Services\CheckoutService\CheckoutException $e) {
             return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]) + ['code' => $e->code(), 'message' => $e->getMessage()], $e->getStatusCode()); // code + errors[] codées (02/11/2026)
         }

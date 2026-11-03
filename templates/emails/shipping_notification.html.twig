@@ -1,5 +1,6 @@
 {% extends 'base.email.html.twig' %}
 
+{# Courriel du marchand : français ; montants dans la devise du site (`currency`, CAD à défaut) au format de la langue et du pays du site (03/11/2026) #}
 {% block title %}Nouvelle commande à expédier - n°{{ order.reference }}
 {% endblock %}
 
@@ -66,21 +67,21 @@
 								{% if order.subTotal is not null %}
 									<p style="margin: 5px 0;">
 										<strong>{{ order.pricesIncludeTax ? 'Sous-total TTC :' : 'Sous-total :' }}</strong>
-										{{ (order.subTotal / 100) | format_currency('CAD') }}</p>
+										{{ (order.subTotal / 100) | format_currency(currency|default('CAD'), {}, intlLocale|default('fr')) }}</p>
 								{% endif %}
 								{% if order.shippingCost is not null %}
 									<p style="margin: 5px 0;">
 										<strong>Livraison :</strong>
-										{{ (order.shippingCost / 100) | format_currency('CAD') }}</p>
+										{{ (order.shippingCost / 100) | format_currency(currency|default('CAD'), {}, intlLocale|default('fr')) }}</p>
 								{% endif %}
 								{% if order.totalTax is not null %}
 									<p style="margin: 5px 0;">
 										<strong>{{ order.pricesIncludeTax ? 'dont taxes :' : 'Taxes :' }}</strong>
-										{{ (order.totalTax / 100) | format_currency('CAD') }}</p>
+										{{ (order.totalTax / 100) | format_currency(currency|default('CAD'), {}, intlLocale|default('fr')) }}</p>
 								{% endif %}
 								<p style="margin: 5px 0; font-size: 1.1em; color: #d9534f;">
 									<strong>Total :
-										{{ (order.totalAmount / 100) | format_currency('CAD') }}</strong>
+										{{ (order.totalAmount / 100) | format_currency(currency|default('CAD'), {}, intlLocale|default('fr')) }}</strong>
 								</p>
 							</div>
 

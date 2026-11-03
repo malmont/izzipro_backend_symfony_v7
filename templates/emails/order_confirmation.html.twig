@@ -1,6 +1,7 @@
 {% extends 'base.email.html.twig' %}
 
-{% block title %}Confirmation de votre commande n°{{ order.reference }}
+{# Langue du client (03/11/2026) : `locale` (fr|en), domaine `emails` ; montants dans la devise du site (`currency`, CAD à défaut) au format de la langue et du pays du site (`intlLocale`) #}
+{% block title %}{{ 'order.title'|trans({'%reference%': order.reference}, 'emails', locale)|raw }}
 {% endblock %}
 
 {% block body %}
@@ -23,13 +24,10 @@
 
 					<tr>
 						<td style="padding: 30px;">
-							<h2 style="color: #333;">Merci pour votre commande,
-								{{ order.userId.firstname }}
-								!</h2>
-							<p>Votre commande n°<strong>{{ order.reference }}</strong>
-								a bien été enregistrée.</p>
+							<h2 style="color: #333;">{{ 'order.thanks'|trans({'%name%': order.userId.firstname|e}, 'emails', locale)|raw }}</h2>
+							<p>{{ 'order.recorded'|trans({'%reference%': order.reference|e}, 'emails', locale)|raw }}</p>
 
-							<h3 style="margin-top: 30px; border-bottom: 2px solid #eee; padding-bottom: 5px;">Détails de la commande</h3>
+							<h3 style="margin-top: 30px; border-bottom: 2px solid #eee; padding-bottom: 5px;">{{ 'order.details'|trans({}, 'emails', locale)|raw }}</h3>
 
 							{# BOUCLE ITEMS #}
 							{% for itemData in itemsData %}
@@ -45,10 +43,7 @@
 											{# OPTION 1 : BOOKING #}
 											{% if itemData.booking %}
 												<div style="margin-top: 5px; color: #0066cc; font-size: 13px;">
-													📅 Réservation :
-													{{ itemData.booking.start }}
-													au
-													{{ itemData.booking.end }}
+													{{ 'order.booking'|trans({'%start%': itemData.booking.start|e, '%end%': itemData.booking.end|e}, 'emails', locale)|raw }}
 												</div>
 											{% endif %}
 
@@ -72,7 +67,7 @@
 										</td>
 
 										<td align="right" style="font-size: 15px;">
-											{{ (item.totalPrice / 100) | format_currency('CAD') }}
+											{{ (item.totalPrice / 100) | format_currency(currency|default('CAD'), {}, intlLocale|default(locale|default('fr'))) }}
 										</td>
 									</tr>
 								</table>
@@ -87,9 +82,9 @@
 								{# Sous-total #}
 								{% if order.subTotal is not null %}
 									<tr>
-										<td style="font-size: 14px; color: #666;">{{ order.pricesIncludeTax ? 'Sous-total TTC :' : 'Sous-total :' }}</td>
+										<td style="font-size: 14px; color: #666;">{{ (order.pricesIncludeTax ? 'order.subtotal_incl' : 'order.subtotal')|trans({}, 'emails', locale)|raw }}</td>
 										<td align="right" style="font-size: 14px;">
-											{{ (order.subTotal / 100) | format_currency('CAD') }}
+											{{ (order.subTotal / 100) | format_currency(currency|default('CAD'), {}, intlLocale|default(locale|default('fr'))) }}
 										</td>
 									</tr>
 								{% endif %}
@@ -98,9 +93,9 @@
 								{# Livraison #}
 								{% if order.shippingCost is not null %}
 									<tr>
-										<td style="font-size: 14px; color: #666;">Livraison :</td>
+										<td style="font-size: 14px; color: #666;">{{ 'order.shipping'|trans({}, 'emails', locale)|raw }}</td>
 										<td align="right" style="font-size: 14px;">
-											{{ (order.shippingCost / 100) | format_currency('CAD') }}
+											{{ (order.shippingCost / 100) | format_currency(currency|default('CAD'), {}, intlLocale|default(locale|default('fr'))) }}
 										</td>
 									</tr>
 								{% endif %}
@@ -109,26 +104,25 @@
 								{# Taxes #}
 								{% if order.totalTax is not null %}
 									<tr>
-										<td style="font-size: 14px; color: #666;">{{ order.pricesIncludeTax ? 'dont taxes :' : 'Taxes :' }}</td>
+										<td style="font-size: 14px; color: #666;">{{ (order.pricesIncludeTax ? 'order.tax_included' : 'order.taxes')|trans({}, 'emails', locale)|raw }}</td>
 										<td align="right" style="font-size: 14px;">
-											{{ (order.totalTax / 100) | format_currency('CAD') }}
+											{{ (order.totalTax / 100) | format_currency(currency|default('CAD'), {}, intlLocale|default(locale|default('fr'))) }}
 										</td>
 									</tr>
 								{% endif %}
 
 								{# Total Final #}
 								<tr>
-									<td style="font-size: 18px; font-weight: bold; border-top: 1px solid #ddd; padding-top: 10px;">Total :</td>
+									<td style="font-size: 18px; font-weight: bold; border-top: 1px solid #ddd; padding-top: 10px;">{{ 'order.total'|trans({}, 'emails', locale)|raw }}</td>
 									<td align="right" style="font-size: 18px; font-weight: bold; color: #007bff; border-top: 1px solid #ddd; padding-top: 10px;">
-										{{ (order.totalAmount / 100) | format_currency('CAD') }}
+										{{ (order.totalAmount / 100) | format_currency(currency|default('CAD'), {}, intlLocale|default(locale|default('fr'))) }}
 									</td>
 								</tr>
 							</table>
 
 							{# --- AJOUT DU BLOC ADRESSE ICI --- #}
 							<h3 style="margin-top: 30px; border-bottom: 2px solid #eee; padding-bottom: 5px;">
-								{% if order.carrier %}Adresse de livraison{% else %}Adresse de facturation
-								{% endif %}
+								{{ (order.carrier ? 'order.shipping_address' : 'order.billing_address')|trans({}, 'emails', locale)|raw }}
 							</h3>
 
 							{% set adr = order.shippingAdress %}
@@ -149,12 +143,12 @@
 									{{ adr.city }}<br>
 									{{ adr.country }}<br>
 
-									{% if adr.phone %}<br>Tél :
+									{% if adr.phone %}<br>{{ 'order.phone'|trans({}, 'emails', locale)|raw }}
 										{{ adr.phone }}
 									{% endif %}
 								</address>
 							{% else %}
-								<p style="color: #666;">Adresse non disponible.</p>
+								<p style="color: #666;">{{ 'order.no_address'|trans({}, 'emails', locale)|raw }}</p>
 							{% endif %}
 							{# --------------------------------- #}
 

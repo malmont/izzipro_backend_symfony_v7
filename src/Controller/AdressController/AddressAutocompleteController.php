@@ -19,7 +19,8 @@ class AddressAutocompleteController extends AbstractController
 {
     public function __construct(
         private SuggestAddressUseCase     $suggestUseCase,
-        private GetAddressDetailsUseCase  $detailsUseCase
+        private GetAddressDetailsUseCase  $detailsUseCase,
+        private readonly ?\App\Services\EmailConfigurationService\EmailLocale $locale = null // langue du client (03/11/2026) : ?locale= fr|en, sinon celle du site
     ) {}
 
     #[Route('/autocomplete', methods: ['GET'])]
@@ -27,7 +28,7 @@ class AddressAutocompleteController extends AbstractController
     {
         try {
             $dto = new AddressSuggestionInputDto($request->query->all());
-            $results = $this->suggestUseCase->execute($dto);
+            $results = $this->suggestUseCase->execute($dto, $this->locale?->fromRequest($request));
             return $this->json($results);
         } catch (\Throwable $e) {
             return $this->json([]);
@@ -43,7 +44,7 @@ class AddressAutocompleteController extends AbstractController
     {
         $dto = new AddressDetailsInputDto($request->query->all());
         try {
-            return $this->json($this->detailsUseCase->execute($dto));
+            return $this->json($this->detailsUseCase->execute($dto, $this->locale?->fromRequest($request)));
         } catch (BadRequestHttpException $e) {
             return $this->json(['error' => 'PLACE_ID_REQUIRED', 'message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         } catch (PlaceNotFoundException $e) {

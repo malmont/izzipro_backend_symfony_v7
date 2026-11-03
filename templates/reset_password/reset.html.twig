@@ -1,7 +1,8 @@
 {# templates/reset_password/reset.html.twig #}
 {% extends 'base.email.html.twig' %}
 
-{% block title %}Réinitialisation du mot de passe{% endblock %}
+{# Langue du client (03/11/2026) : `locale` (fr|en), domaine `emails` #}
+{% block title %}{{ 'reset.title'|trans({}, 'emails', locale)|raw }}{% endblock %}
 
 {% block body %}
 <div class="container mt-5">
@@ -20,17 +21,17 @@
     {% endif %}
 
     <div class="alert alert-info" role="alert">
-        <h4 class="alert-heading">Bonjour, {{ user.firstname }} !</h4>
-        <p>Vous avez demandé la réinitialisation de votre mot de passe.</p>
+        <h4 class="alert-heading">{{ 'reset.greeting'|trans({'%name%': user.firstname|e}, 'emails', locale)|raw }}</h4>
+        <p>{{ 'reset.requested'|trans({}, 'emails', locale)|raw }}</p>
         <hr>
-        <p class="mb-0">Cliquez sur le lien ci-dessous pour créer un nouveau mot de passe :</p>
+        <p class="mb-0">{{ 'reset.click'|trans({}, 'emails', locale)|raw }}</p>
         
         {# Le resetUrl est déjà absolu et contient le tenant_host #}
         <p class="mb-0" style="margin: 20px 0;">
-            <a href="{{ resetUrl }}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Réinitialiser mon mot de passe</a>
+            <a href="{{ resetUrl }}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">{{ 'reset.button'|trans({}, 'emails', locale)|raw }}</a>
         </p>
         
-        <p class="mt-3">Ce lien expirera dans 1 heure.</p>
+        <p class="mt-3">{{ 'reset.expires'|trans({}, 'emails', locale)|raw }}</p>
         
         {% if signature %}
             <hr>
