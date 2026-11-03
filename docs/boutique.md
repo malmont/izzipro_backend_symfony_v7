@@ -415,7 +415,8 @@ Les courriels **destinés au client** partent dans sa langue, `fr` ou `en`. Ceux
 - **Textes** : traducteur de Symfony, domaine `emails` (`translations/emails.fr.yaml`, `emails.en.yaml`), sujet dans le service
   (`EmailSenderService::sendCustomerEmail`), corps par `|trans` dans les gabarits avec la locale passée explicitement. Le fichier
   français reprend **mot pour mot** les textes qui étaient écrits dans le PHP et les gabarits : le texte rendu en français ne
-  change pas (y compris le sujet « Password Reset » du mot de passe oublié, hérité).
+  change pas. Seule exception, voulue par le propriétaire : le sujet du mot de passe oublié, « Password Reset » hérité, devient
+  « Réinitialisation du mot de passe ».
 - **Montants et dates** : devise du site (`TenantCurrencyProvider` : fiche Entreprise, CAD à défaut ; la commande n'enregistre
   pas de devise ; avant, `CAD` était écrit en dur dans les gabarits) au format de la langue **et** du pays du site (`intlLocale` :
   `fr_CA` → 12,00 $, `fr_FR` → 12,50 €, `en_CA` → $12.00, `en_US` → $12.50 ; avant, tout était rendu en `en` : CA$12.00). Les dates

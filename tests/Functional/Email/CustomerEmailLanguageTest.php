@@ -102,7 +102,7 @@ class CustomerEmailLanguageTest extends WebTestCase
         [$french] = $this->user();
         $this->assertSame(200, $this->request('POST', '/api/password-reset/request?locale=fr', json_encode(['email' => $french]))->getStatusCode());
         $message = $this->lastMessageTo($french);
-        $this->assertSame('Password Reset', $message->getSubject(), 'sujet français d\'avant, inchangé');
+        $this->assertSame('Réinitialisation du mot de passe', $message->getSubject(), 'sujet français (« Password Reset » hérité remplacé le 03/11/2026, accord du propriétaire)');
         $this->assertStringContainsString('Vous avez demandé la réinitialisation de votre mot de passe.', (string) $message->getHtmlBody());
         $this->assertStringContainsString('>Réinitialiser mon mot de passe</a>', (string) $message->getHtmlBody());
         $this->assertStringContainsString('Ce lien expirera dans 1 heure.', (string) $message->getHtmlBody());
@@ -120,7 +120,7 @@ class CustomerEmailLanguageTest extends WebTestCase
             // Site en France : français, et montants en euros vérifiés dans testTheOrderEmailsUseTheCurrencyOfTheSite
             $this->db->executeStatement("UPDATE address_entreprise SET state = '', country = 'FR'");
             $this->assertSame(200, $this->request('POST', '/api/password-reset/request', json_encode(['email' => $email]))->getStatusCode());
-            $this->assertSame('Password Reset', $this->lastMessageTo($email)->getSubject(), 'sans locale : France → fr');
+            $this->assertSame('Réinitialisation du mot de passe', $this->lastMessageTo($email)->getSubject(), 'sans locale : France → fr');
         } finally {
             $this->db->executeStatement("UPDATE address_entreprise SET state = 'QC', country = 'Canada'");
         }

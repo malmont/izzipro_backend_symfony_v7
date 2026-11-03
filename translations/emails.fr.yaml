@@ -20,7 +20,7 @@ verification:
     link: 'Valider mon compte'
     ignore: 'Si vous n''avez pas demandé cette inscription, veuillez ignorer cet email.'
 reset:
-    subject: 'Password Reset'
+    subject: 'Réinitialisation du mot de passe'
     title: 'Réinitialisation du mot de passe'
     greeting: 'Bonjour, %name% !'
     requested: 'Vous avez demandé la réinitialisation de votre mot de passe.'
