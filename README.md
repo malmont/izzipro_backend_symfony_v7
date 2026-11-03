@@ -8,7 +8,7 @@ The application is designed to handle complex business logic including:
 -   **Multi-tenancy**: Dynamic database switching per tenant.
 -   **E-commerce**: Product management, carts, orders, and shipping.
 -   **Point of Sale (POS)**: Cash register management (`Caisse`), transactions.
--   **Internationalization**: Built-in translation system for dynamic content (using DeepL/Google Translate integrations).
+-   **Internationalization**: Built-in translation system for dynamic content (Google Translate integration).
 -   **Integrations**: Payment gateways (Stripe, Square), Shipping (EasyPost), and external sync (Gemsuite).
 
 ## 🏗 Architecture
@@ -41,7 +41,7 @@ The application uses a dynamic client connection listener strategy:
 
 ### 🌍 Internationalization (i18n)
 -   Entities like `Product`, `Banniere`, `BaniereStatique` have associated `*Translation` entities.
--   **Translation Services**: `DeepLTranslateService` and `GoogleTranslateService` allow for automated content translation.
+-   **Translation Services**: `GoogleTranslateService` allows for automated content translation (DeepL removed on 2026-11-02, unused).
 
 ### 🚚 Logistics
 -   **Shipping**: Integration with **EasyPost** (`EasyPostConfiguration`) for label generation and tracking.

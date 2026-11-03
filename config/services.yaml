@@ -211,9 +211,6 @@ services:
         bind:
             $projectDir: '%kernel.project_dir%'
 
-    App\Services\DeepLTranslateService\DeepLTranslateService:
-        arguments:
-            $deepLApiKey: '%env(DEEPL_API_KEY)%'
 
     # Lectures agrégées pour la console d'administration de Mémoires Vivantes (16/10/2026) : classe de dépôt sans
     # entité, dans un dossier exclu de l'autoconfiguration (dépôts Doctrine) : enregistrée explicitement
