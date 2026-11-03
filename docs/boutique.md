@@ -897,9 +897,38 @@ enregistrement `Vehicle` lié au produit (stock nul sinon) et se fiaient à l'an
 produit vendu **et** loué était toujours traitée comme une location. Règle commune désormais :
 `RentalLineResolver::isRental` (location activée et dates sur la ligne, ou produit qui ne se vend pas).
 
-## Reste du module (fiche à compléter)
+## Livraison, transporteurs et commandes du client (fiche complétée le 03/11/2026)
 
-Produits et variantes, réservation (`/api/booking`), panier et devis, Stripe (`/api/stripe/create-intent`,
-`/api/order/create`, `/api/order/create-guest`), livraison (`/api/Carrier`, `/api/shipping/*`), compte client
-(`/api/ordersuser`, `/api/adresses`, `/api/profile`), abonnement (à construire) : chaque chantier ajoute sa section ici
-et dans `docs/endpoints.md`.
+Les autres chantiers de la boutique ont leur section plus haut (réglages, produits, réservation et fuseau, panier et devis, paiement,
+adresses, codes d'erreur, courriels, taxes, annulation, compte, abonnements, avis, démonstration). Ce qui suit couvre le reste du
+module tel qu'il existe ; aucune de ces routes n'est en production avec de vrais envois (compte EasyPost de test).
+
+### Livraison (`ShippingController`, `Services/ShippingService/`)
+
+| Route | Rôle | Rôle exigé | Entrée (JSON) |
+|---|---|---|---|
+| `POST /api/shipping/parcels` | colis calculés pour un panier (`PackagingService` : types d'emballage et classes d'expédition des produits) | public | `cartItems` |
+| `POST /api/shipping/rates` | tarifs EasyPost pour ces colis, agrégés par transporteur et service | public | `cartItems`, `to`, `from`, `carriers` |
+| `POST /api/shipping/summary` | résumé des colis et des tarifs en une réponse (écran de livraison du site et de l'application) | public | `cartItems`, `to`, `from`, `carriers` |
+| `POST /api/shipping/buy` | achat des étiquettes d'une commande du client connecté (`ShippingLabel`, `Parcel`, `ShippingOrder`) | connecté | `orderId`, `cartItems`, `to`, `from`, `carrierAccountId`, `service` |
+
+- `/api/shipping/buy` vérifie que la commande appartient à l'utilisateur connecté (`ORDER_NOT_FOUND` 404, `FORBIDDEN` 403) ; chaque
+  achat d'étiquette sur une clé de production EasyPost est facturé réellement. Les clés EasyPost du site (`EasyPostConfiguration`,
+  sandbox et production chiffrée) ne se modifient plus que par le super administrateur dans EasyAdmin (lot 2b, 03/11/2026) ; les
+  adresses d'expédition sont normalisées par `ShipmentAddressBuilder`.
+- Référentiels EasyAdmin de la livraison : classes d'expédition, types d'emballage, expéditions de produits, commandes d'expédition,
+  colis, étiquettes (menu « Livraison »).
+
+### Transporteurs
+
+- `GET /api/Carrier` (public, `CarrierControleur`) : transporteurs du site avec leurs traductions, pour le choix de livraison.
+- `GET /api/carrier/statistics` (administrateur) : statistiques par transporteur du tableau de bord.
+
+### Commandes du client
+
+- `GET /api/ordersuser` (connecté) : commandes de l'utilisateur connecté, jamais servies par le cache (lot 4 de l'invalidation ciblée,
+  28/10/2026) ; `GET /api/orders/{id}` (public) : détail d'une commande pour son client connecté ou pour un invité muni de son jeton
+  (vérifiés par le contrôleur, voir « Paiement d'un panier ») ; `GET /api/order-statuses` : liste des statuts.
+- Réservations d'une commande : dates rendues en ATOM dans le fuseau de la boutique (voir « Fuseau horaire de la boutique »).
+
+Toute nouvelle route de ce module s'ajoute ici et dans `docs/endpoints.md` (régénéré).
