@@ -55,6 +55,9 @@ class PosStripeAdminController extends AbstractController
                             break;
                         case 'mode_live':
                         case 'mode_test':
+                            if (!$this->isGranted('ROLE_SUPER_ADMIN')) {
+                                throw $this->createAccessDeniedException('Passage entre mode test et mode réel réservé au super administrateur.');
+                            }
                             $result = $this->modes->switchMode($request->request->get('action') === 'mode_live' ? 'live' : 'test', $user);
                             $done = $result['changed'] ? sprintf('Paiements de caisse en mode %s%s.', $result['mode'] === 'live' ? 'RÉEL' : 'test',
                                 $result['detachedReaders'] !== [] ? sprintf(' ; %d lecteur(s) détaché(s), à appairer de nouveau (fiche du poste)', count($result['detachedReaders'])) : '') : 'Mode inchangé.';

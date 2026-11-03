@@ -40,9 +40,20 @@ class EntrepriseCrudController extends BaseTenantCrudController
         $this->adminUrlGenerator = $adminUrlGenerator;
     }
 
+    public function persistEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        if ($entityInstance instanceof Entreprise) {
+            $this->enforceSuperAdminFields($entityInstance);
+        }
+        parent::persistEntity($entityManager, $entityInstance);
+    }
+
     /** Mise à jour habituelle, puis clés d'activation des applications mobiles selon les interrupteurs changés (15/10/2026) */
     public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
     {
+        if ($entityInstance instanceof Entreprise) {
+            $this->enforceSuperAdminFields($entityInstance);
+        }
         $tenantEm = $this->emProvider->getEntityManager();
         $tenantEm->getUnitOfWork()->computeChangeSets();
         $changeSet = $tenantEm->getUnitOfWork()->getEntityChangeSet($entityInstance);
@@ -181,22 +192,18 @@ class EntrepriseCrudController extends BaseTenantCrudController
 
             FormField::addTab('Applications', 'fa fa-th-large'),
             FormField::addPanel('Activation des Applications (Multi-Module)')->collapsible(),
-            BooleanField::new('isBoutiqueActive', 'Boutique / e-Commerce')
-                ->setHelp('Activer la boutique et le catalogue e-commerce pour ce tenant'),
-            BooleanField::new('isLandingPageActive', 'Landing Page')
-                ->setHelp('Activer le site vitrine / landing page'),
-            BooleanField::new('isBoussoleEsgActive', 'Boussole ESG')
-                ->setHelp('Activer le module de diagnostic et bilans ESG'),
-            BooleanField::new('isMemoireVivanteActive', 'Mémoire Vivante')
-                ->setHelp('Activer l\'application Mémoire Vivante'),
+            $this->superAdminBooleanField('isBoutiqueActive', 'Boutique / e-Commerce', 'Activer la boutique et le catalogue e-commerce pour ce tenant.'),
+            $this->superAdminBooleanField('isLandingPageActive', 'Landing Page', 'Activer le site vitrine / landing page.'),
+            $this->superAdminBooleanField('isBoussoleEsgActive', 'Boussole ESG', 'Activer le module de diagnostic et bilans ESG.'),
+            $this->superAdminBooleanField('isMemoireVivanteActive', 'Mémoire Vivante', 'Activer l\'application Mémoire Vivante.'),
 
             FormField::addPanel('Code court de la boutique')->collapsible()->setHelp($this->shortCodeHelp()),
             FormField::addPanel('Applications mobiles')->collapsible()
                 ->setHelp('Activer génère une clé d\'activation et l\'envoie (clé + code QR) à l\'e-mail de l\'entreprise ; désactiver révoque les clés de l\'application. Détail : menu Caisse → Clés des applications.'),
-            BooleanField::new('isPosActive', 'Caisse (POS)'),
-            BooleanField::new('isMobileShopActive', 'E-commerce mobile'),
-            BooleanField::new('isManagementAppActive', 'Application de gestion'),
-            BooleanField::new('isLivingMemoryActive', 'LivingMemory (Mémoires Vivantes)'),
+            $this->superAdminBooleanField('isPosActive', 'Caisse (POS)'),
+            $this->superAdminBooleanField('isMobileShopActive', 'E-commerce mobile'),
+            $this->superAdminBooleanField('isManagementAppActive', 'Application de gestion'),
+            $this->superAdminBooleanField('isLivingMemoryActive', 'LivingMemory (Mémoires Vivantes)'),
 
             FormField::addTab('Caisse', 'fa fa-cash-register'),
             FormField::addPanel('Réglages généraux de la caisse')->collapsible()
@@ -341,8 +348,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
             // Terminal de paiement Stripe (C4, 23/10/2026) : valeurs par défaut = comportement livré (1 %, Interac selon le pays, 120 s, 30 min, 5 min)
             FormField::addPanel('Terminal de paiement Stripe (caisse)')->collapsible()->renderCollapsed()
                 ->setHelp('Lecteur par poste : menu Postes de caisse. Commissions de la plateforme en centièmes de pour cent (100 = 1 %). Les paiements en ligne gardent leur commission actuelle.'),
-            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalFeeCardBp', 'Commission en magasin, carte de crédit (centièmes de %)')->hideOnIndex(),
-            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalFeeInteracBp', 'Commission en magasin, Interac (centièmes de %)')->hideOnIndex(),
+            $this->superAdminIntegerField('posTerminalFeeCardBp', 'Commission en magasin, carte de crédit (centièmes de %)'),
+            $this->superAdminIntegerField('posTerminalFeeInteracBp', 'Commission en magasin, Interac (centièmes de %)'),
             \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('posTerminalInterac', 'Interac accepté sur le terminal')
                 ->setChoices(['Oui' => true, 'Non' => false])->setFormTypeOption('placeholder', 'Selon le pays du site (oui au Canada)')->setRequired(false)->hideOnIndex(),
             \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('posTerminalCardWaitSeconds', 'Attente de la carte sur le terminal (secondes)')
@@ -419,5 +426,93 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->onlyOnForms(),
 
         ];
+    }
+
+    private function superAdminBooleanField(string $property, string $label, ?string $help = null, bool $hideOnIndex = false): BooleanField
+    {
+        $isSuperAdmin = $this->isGranted('ROLE_SUPER_ADMIN');
+        $field = BooleanField::new($property, $label);
+        if ($hideOnIndex) {
+            $field->hideOnIndex();
+        }
+        $helpText = trim(($help !== null ? $help . ' ' : '') . (!$isSuperAdmin ? 'Modifiable uniquement par le super administrateur.' : ''));
+        if ($helpText !== '') {
+            $field->setHelp($helpText);
+        }
+        if (!$isSuperAdmin) {
+            $field->renderAsSwitch(false)->setFormTypeOption('attr', ['disabled' => 'disabled']);
+        }
+
+        return $field;
+    }
+
+    private function superAdminIntegerField(string $property, string $label, int $default = 100): \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField
+    {
+        $isSuperAdmin = $this->isGranted('ROLE_SUPER_ADMIN');
+        $field = \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new($property, $label)->hideOnIndex();
+        if (!$isSuperAdmin) {
+            $field
+                ->setHelp('Modifiable uniquement par le super administrateur.')
+                ->setRequired(false)
+                ->setFormTypeOption('empty_data', (string) $default)
+                ->setFormTypeOption('attr', ['disabled' => 'disabled', 'readonly' => 'readonly']);
+        }
+
+        return $field;
+    }
+
+    /** Réimpose les valeurs en base des champs réservés au super administrateur (commissions de la plateforme, activations des modules et des applications ; Tap to Pay et lecteur Bluetooth restent à l'administrateur du site : réglages de sa caisse, 03/11/2026) */
+    private function enforceSuperAdminFields(Entreprise $entity): void
+    {
+        if ($this->isGranted('ROLE_SUPER_ADMIN')) {
+            return;
+        }
+
+        $id = (int) $entity->getId();
+        if ($id <= 0) {
+            // Création par un administrateur de site : les valeurs par défaut de l'entité, aucun chiffre en dur ici
+            $defaults = new Entreprise();
+            $entity
+                ->setPosTerminalFeeCardBp($defaults->getPosTerminalFeeCardBp())
+                ->setPosTerminalFeeInteracBp($defaults->getPosTerminalFeeInteracBp())
+                ->setIsBoutiqueActive((bool) $defaults->isBoutiqueActive())
+                ->setIsLandingPageActive((bool) $defaults->isLandingPageActive())
+                ->setIsBoussoleEsgActive((bool) $defaults->isBoussoleEsgActive())
+                ->setIsMemoireVivanteActive((bool) $defaults->isMemoireVivanteActive())
+                ->setIsPosActive($defaults->isPosActive())
+                ->setIsMobileShopActive($defaults->isMobileShopActive())
+                ->setIsManagementAppActive($defaults->isManagementAppActive())
+                ->setIsLivingMemoryActive($defaults->isLivingMemoryActive());
+
+            return;
+        }
+
+        try {
+            $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
+                'SELECT pos_terminal_fee_card_bp, pos_terminal_fee_interac_bp,
+                        is_boutique_active, is_landing_page_active, is_boussole_esg_active, is_memoire_vivante_active,
+                        is_pos_active, is_mobile_shop_active, is_management_app_active, is_living_memory_active
+                 FROM entreprise WHERE id = ?',
+                [$id]
+            );
+        } catch (\Throwable) {
+            throw $this->createAccessDeniedException('Réglages réservés au super administrateur.');
+        }
+        if (!is_array($row)) {
+            throw $this->createAccessDeniedException('Réglages réservés au super administrateur.');
+        }
+
+        $entity
+            ->setPosTerminalFeeCardBp((int) $row['pos_terminal_fee_card_bp'])
+            ->setPosTerminalFeeInteracBp((int) $row['pos_terminal_fee_interac_bp'])
+            ->setIsBoutiqueActive((bool) $row['is_boutique_active'])
+            ->setIsLandingPageActive((bool) $row['is_landing_page_active'])
+            ->setIsBoussoleEsgActive((bool) $row['is_boussole_esg_active'])
+            ->setIsMemoireVivanteActive((bool) $row['is_memoire_vivante_active'])
+            ->setIsPosActive((bool) $row['is_pos_active'])
+            ->setIsMobileShopActive((bool) $row['is_mobile_shop_active'])
+            ->setIsManagementAppActive((bool) $row['is_management_app_active'])
+            ->setIsLivingMemoryActive((bool) $row['is_living_memory_active'])
+;
     }
 }

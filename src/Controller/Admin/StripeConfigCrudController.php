@@ -49,15 +49,77 @@ class StripeConfigCrudController extends BaseTenantCrudController
 
     public function configureFields(string $pageName): iterable
     {
+        $isSuperAdmin = $this->isGranted('ROLE_SUPER_ADMIN');
+        $accountIdField = TextField::new('accountId', 'Identifiant Stripe Connect (Account ID)')
+            ->setHelp('Identifiant du compte Express connecté sur votre plateforme Stripe.' . (!$isSuperAdmin ? ' Modifiable uniquement par le super administrateur.' : ''));
+        $onlineFeeField = \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('onlineFeeBp', 'Commission plateforme en ligne (centièmes de %)')
+            ->setHelp('100 = 1 %, valeur par défaut : aucun changement tant qu\'elle n\'est pas modifiée. Les paiements en magasin ont leurs propres taux (fiche entreprise).' . (!$isSuperAdmin ? ' Modifiable uniquement par le super administrateur.' : ''))
+            ->hideOnIndex();
+
+        if (!$isSuperAdmin) {
+            $accountIdField
+                ->setRequired(false)
+                ->setFormTypeOption('attr', ['disabled' => 'disabled', 'readonly' => 'readonly']);
+            $onlineFeeField
+                ->setRequired(false)
+                ->setFormTypeOption('empty_data', '100')
+                ->setFormTypeOption('attr', ['disabled' => 'disabled', 'readonly' => 'readonly']);
+        }
+
         return [
             IdField::new('id', 'ID')->hideOnForm(),
-            TextField::new('accountId', 'Identifiant Stripe Connect (Account ID)')
-                ->setHelp('Identifiant du compte Express connecté sur votre plateforme Stripe.'),
+            $accountIdField,
             BooleanField::new('isActive', 'Paiements Actifs')
                 ->renderAsSwitch(false)
                 ->setHelp('Indique si les paiements par carte bancaire sont autorisés et fonctionnels.'),
-            \EasyCorp\Bundle\EasyAdminBundle\Field\IntegerField::new('onlineFeeBp', 'Commission plateforme en ligne (centièmes de %)')
-                ->setHelp('100 = 1 %, valeur par défaut : aucun changement tant qu\'elle n\'est pas modifiée. Les paiements en magasin ont leurs propres taux (fiche entreprise).')->hideOnIndex(),
+            $onlineFeeField,
         ];
+    }
+
+    public function persistEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        if ($entityInstance instanceof StripeConfig) {
+            $this->enforceSuperAdminFields($entityInstance);
+        }
+        parent::persistEntity($entityManager, $entityInstance);
+    }
+
+    public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        if ($entityInstance instanceof StripeConfig) {
+            $this->enforceSuperAdminFields($entityInstance);
+        }
+        parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    /** Réimpose account_id et online_fee_bp lus en base pour un administrateur de site */
+    private function enforceSuperAdminFields(StripeConfig $entity): void
+    {
+        if ($this->isGranted('ROLE_SUPER_ADMIN')) {
+            return;
+        }
+
+        $id = (int) $entity->getId();
+        if ($id <= 0) {
+            $entity->setAccountId(null)->setOnlineFeeBp(100);
+
+            return;
+        }
+
+        try {
+            $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
+                'SELECT account_id, online_fee_bp FROM stripe_config WHERE id = ?',
+                [$id]
+            );
+        } catch (\Throwable) {
+            throw $this->createAccessDeniedException('Réglages réservés au super administrateur.');
+        }
+        if (!is_array($row)) {
+            throw $this->createAccessDeniedException('Réglages réservés au super administrateur.');
+        }
+
+        $entity
+            ->setAccountId($row['account_id'] !== null ? (string) $row['account_id'] : null)
+            ->setOnlineFeeBp((int) $row['online_fee_bp']);
     }
 }

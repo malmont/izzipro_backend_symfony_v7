@@ -49,10 +49,12 @@
         {% if not overview.internal %}<button type="submit" name="action" value="onboarding" class="btn btn-primary" {{ overview.keys.live ? '' : 'disabled' }}>Inscription Stripe du compte réel</button>
         <button type="submit" name="action" value="refresh" class="btn btn-secondary" {{ overview.keys.live ? '' : 'disabled' }}>Relire l'état du compte réel</button>{% endif %}
         <button type="submit" name="action" value="location" class="btn btn-secondary">Créer l'emplacement Terminal (mode en cours)</button>
-        {% if live %}
-            <button type="submit" name="action" value="mode_test" class="btn btn-outline-secondary" onclick="return confirm('Repasser les paiements de caisse en mode TEST ? Les lecteurs appairés seront détachés.')">Repasser en test</button>
-        {% else %}
-            <button type="submit" name="action" value="mode_live" class="btn btn-danger" {{ overview.keys.live ? '' : 'disabled' }} onclick="return confirm('Passer les paiements de caisse en mode RÉEL ? Les cartes seront débitées pour de vrai ; les lecteurs appairés seront détachés.')">Passer en réel</button>
+        {% if is_granted('ROLE_SUPER_ADMIN') %}
+            {% if live %}
+                <button type="submit" name="action" value="mode_test" class="btn btn-outline-secondary" onclick="return confirm('Repasser les paiements de caisse en mode TEST ? Les lecteurs appairés seront détachés.')">Repasser en test</button>
+            {% else %}
+                <button type="submit" name="action" value="mode_live" class="btn btn-danger" {{ overview.keys.live ? '' : 'disabled' }} onclick="return confirm('Passer les paiements de caisse en mode RÉEL ? Les cartes seront débitées pour de vrai ; les lecteurs appairés seront détachés.')">Passer en réel</button>
+            {% endif %}
         {% endif %}
     </form>
     {% if not overview.keys.live %}<p class="text-muted">Clés Stripe réelles de la caisse non configurées sur le serveur (variables STRIPE_LIVE_SECRET_KEY et STRIPE_LIVE_PUBLIC_KEY) : inscription réelle et passage en réel indisponibles.</p>{% endif %}

@@ -21,7 +21,7 @@ Cocher dans l'ordre, sur le site du magasin (jamais sur demo, qui reste en test)
    - clés réelles de la caisse configurées sur le serveur (section 3) ;
    - « Inscription Stripe du compte réel », le commerçant complète le parcours Stripe (identité, compte bancaire) ;
    - au retour, le tableau doit montrer **encaissement : oui** et **virements : oui**, aucune pièce demandée ;
-   - « Passer en réel » ; le bandeau affiche **Paiements de caisse : RÉEL** ; journal `STRIPE_MODE_CHANGED`.
+   - « Passer en réel » (réservé au super administrateur) ; le bandeau affiche **Paiements de caisse : RÉEL** ; journal `STRIPE_MODE_CHANGED`.
 6. **Appairage du lecteur** (WisePOS E, S700) : lecteur branché et en ligne, code à trois mots affiché dans ses réglages ;
    fiche du poste, « code d'appairage », enregistrer ; « Terminal activé » coché. L'emplacement Terminal est créé à l'adresse
    du magasin au premier appairage (ou par le bouton de la page Stripe). Tap to Pay et lecteur Bluetooth : réglages du site

@@ -21,8 +21,6 @@ use Symfony\Component\DomCrawler\Crawler;
  */
 class UserCrudSuperAdminGuardTest extends WebTestCase
 {
-    /** Préfixe des courriels créés par ce test : sert à filtrer la liste EasyAdmin (paginée dans la suite complète) */
-    private const EMAIL_PREFIX = 'guard-sa-';
     private KernelBrowser $client;
 
     protected function setUp(): void
@@ -37,28 +35,27 @@ class UserCrudSuperAdminGuardTest extends WebTestCase
         $owner = $this->createUser([RoleAssignmentPolicy::SUPER_ADMIN, 'ROLE_ADMIN', 'ROLE_USER_POS', 'ROLE_USER_INTERNET']);
         $ordinary = $this->createUser(['ROLE_USER_POS', 'ROLE_USER_INTERNET']);
 
-        // Liste filtrée sur les comptes de ce test : dans la suite complète, la liste triée par identifiant est paginée
-        $crawler = $this->admin('index', null, ['query' => self::EMAIL_PREFIX]);
+        $crawler = $this->admin('index');
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
 
         // Suppression en lot désactivée
         $this->assertCount(0, $crawler->filter('[data-action-name="batchDelete"], .form-batch-checkbox-all'));
 
         // Ligne du super admin : ni Modifier, ni Supprimer, ni Réinitialiser le PIN
-        $ownerRow = $crawler->filter(sprintf('tr[data-id="%d"]', $owner->getId()));
+        $ownerRow = $this->indexRow($owner->getId());
         $this->assertCount(1, $ownerRow, 'ligne du super admin présente dans la liste');
         $this->assertCount(0, $ownerRow->filter('a.action-edit, [data-action-name="edit"]'), 'pas de bouton Modifier sur le super admin');
         $this->assertCount(0, $ownerRow->filter('a.action-delete, [data-action-name="delete"]'), 'pas de bouton Supprimer sur le super admin');
         $this->assertCount(0, $ownerRow->filter('a.action-resetPosPin, [data-action-name="resetPosPin"]'), 'pas de bouton Réinitialiser le PIN sur le super admin');
 
         // Propre ligne de l'administrateur connecté : Modifier présent, Supprimer absent
-        $selfRow = $crawler->filter(sprintf('tr[data-id="%d"]', $admin->getId()));
+        $selfRow = $this->indexRow($admin->getId());
         $this->assertCount(1, $selfRow);
         $this->assertGreaterThan(0, $selfRow->filter('a.action-edit, [data-action-name="edit"]')->count());
         $this->assertCount(0, $selfRow->filter('a.action-delete, [data-action-name="delete"]'), 'pas d\'auto-suppression dans la liste');
 
         // Ligne d'un utilisateur ordinaire : Modifier, Supprimer et Réinitialiser le PIN présents
-        $ordinaryRow = $crawler->filter(sprintf('tr[data-id="%d"]', $ordinary->getId()));
+        $ordinaryRow = $this->indexRow($ordinary->getId());
         $this->assertCount(1, $ordinaryRow);
         $this->assertGreaterThan(0, $ordinaryRow->filter('a.action-edit, [data-action-name="edit"]')->count());
         $this->assertGreaterThan(0, $ordinaryRow->filter('a.action-delete, [data-action-name="delete"]')->count());
@@ -221,5 +218,17 @@ class UserCrudSuperAdminGuardTest extends WebTestCase
     {
         return $this->em()->getConnection();
     }
-}
 
+    /**
+     * Ligne d'un utilisateur dans la liste EasyAdmin : la liste est triée par identifiant croissant et paginée (20 par page), et la suite
+     * complète crée des centaines de comptes avant ce test ; la page est calculée d'après la position du compte en base.
+     */
+    private function indexRow(int $id): Crawler
+    {
+        $position = (int) $this->db()->fetchOne('SELECT COUNT(*) FROM "user" WHERE id <= ?', [$id]);
+        $crawler = $this->admin('index', null, ['page' => intdiv($position - 1, 20) + 1]);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+
+        return $crawler->filter(sprintf('tr[data-id="%d"]', $id));
+    }
+}

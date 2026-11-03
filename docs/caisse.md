@@ -1733,12 +1733,12 @@ entrées portent fabricant, préfixe, offre, série et montant, jamais de donné
   Compte Connect **réel distinct** (`stripe_config.live_account_id`, `live_is_active`, `live_terminal_location_id`) ; le compte actuel
   reste celui du mode test. Choix de la clé et du compte : `StripeAccountResolver` (réutilisable par la boutique le jour où elle passera
   en réel ; aujourd'hui la boutique, ses webhooks et les abonnements n'en dépendent pas).
-- **Passage en réel** (page EasyAdmin seulement, jamais par le formulaire de l'entreprise) : clés réelles configurées, compte réel du
+- **Passage en réel** (page EasyAdmin seulement, jamais par le formulaire de l'entreprise, **réservé à `ROLE_SUPER_ADMIN`** depuis le 03/11/2026 ; le reste de la page — inscription, état du compte, emplacement Terminal, surveillance — reste à l'administrateur du site) : clés réelles configurées, compte réel du
   magasin qui **peut encaisser ET recevoir les virements** (`charges_enabled`, `payouts_enabled`, relus chez Stripe à l'instant), **aucun
   paiement par terminal en cours** ni remboursement Interac en attente. Refus 409 `STRIPE_KEYS_MISSING`, `STRIPE_ACCOUNT_NOT_READY`
   (`{chargesEnabled, payoutsEnabled, currentlyDue, disabledReason}`), `TERMINAL_PAYMENTS_PENDING`. Les lecteurs appairés sont **détachés**
   (un lecteur appartient à un compte et à un mode) et s'appairent de nouveau depuis la fiche du poste. Journal **`STRIPE_MODE_CHANGED
-  {from, to, detachedReaders, account}`** avec l'administrateur. Retour en test : mêmes contrôles de paiements en cours, journalisé.
+  {from, to, detachedReaders, account}`** avec le super administrateur. Retour en test : mêmes contrôles de paiements en cours (réservé à `ROLE_SUPER_ADMIN`), journalisé.
 - **En réel** : `simulationAllowed` toujours `false`, lecteur simulé refusé (403 `SIMULATION_FORBIDDEN`), carte simulée impossible.
 - Chaque paiement par terminal garde son mode (`pos_terminal_payment.stripe_mode`). Toute opération Stripe sur un paiement de l'autre
   mode → **409 `TERMINAL_PAYMENT_OTHER_MODE {paymentId, paymentMode, siteMode}`**, rien n'est écrit : capture par la vente, annulation
