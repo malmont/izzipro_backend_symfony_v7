@@ -6,5 +6,5 @@
     delaycompress
     missingok
     notifempty
-    create 0640 root adm
+    create 0640 arkanoa adm
 }

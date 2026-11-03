@@ -444,7 +444,7 @@ réservée à `ROLE_SUPER_ADMIN`, lot T2 ; aucune route d'API, rien pour les app
 **Stockage** : base maître, tables `tech_metric_sample` (une ligne par mesure × site × sujet × période × début de période : `value` +
 `detail` JSON ; `site` vide = plateforme ; `period` = `hour` compteurs horaires, `point` relevé daté toutes les 5 min, `day` agrégat
 journalier) et `tech_threshold` (seuils bon / moyen / mauvais par mesure, modifiables en T2). SQL idempotent :
-`scripts/sql/tech_metrics_master.sql`, appliqué par `scripts/migrate_master_v2_tech_metrics.sh` et relu par `tests/bootstrap.php`.
+`ops/sql/tech_metrics_master.sql`, appliqué par `scripts/migrate_master_v2_tech_metrics.sh` et relu par `tests/bootstrap.php`.
 Conservation : 90 jours pour `hour` et `point`, 13 mois pour `day`. Accès : `App\Repository\TechMetricRepository` (PDO maître, comme
 `tenants`).
 

@@ -46,3 +46,6 @@ interieur_lulu.pdf
 /docs/audit-multitenant.md
 /docs/strategie-multitenant-mobile.md
 /docs/prompt-backend-corrections.md
+
+# Tableau de bord technique : SQL des tables maître, suivi (relu par tests/bootstrap.php)
+!/ops/sql/*.sql
