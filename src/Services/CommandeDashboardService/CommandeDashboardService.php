@@ -70,7 +70,8 @@ class CommandeDashboardService
             ],
             'TauxMarge' => [
                 'tauxMarge' => ($stockValue > 0) ? (($stockValue - $usedBudget) / $stockValue) * 100 : 0,
-                'tauxMarque' => (($stockValue - $usedBudget) / $usedBudget) * 100,
+                // Commande sans produit (budget utilisé nul) : taux à 0 plutôt qu'une division par zéro (erreur 500 constatée le 03/11/2026)
+                'tauxMarque' => ($usedBudget > 0) ? (($stockValue - $usedBudget) / $usedBudget) * 100 : 0,
             ],
             'Transporteur' => $transporteur,
         ];
