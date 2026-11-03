@@ -34,7 +34,8 @@ class BoutiqueSettingsController extends AbstractController
         private readonly TenantCacheService $cache,
         private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null, // devise et TTC du site (F18 partie 2a)
         private readonly ?\App\Services\OrderService\OrderTaxAddressResolver $storeAddress = null, // pays du site (F18 partie 2a, complément)
-        private readonly ?\App\Services\Booking\BookingClock $clock = null // fuseau de la boutique (04/11/2026)
+        private readonly ?\App\Services\Booking\BookingClock $clock = null, // fuseau de la boutique (04/11/2026)
+        private readonly ?\App\Services\CaisseService\SiteLocaleResolver $siteLocale = null // langue du site (04/11/2026)
     ) {
     }
 
@@ -73,6 +74,7 @@ class BoutiqueSettingsController extends AbstractController
         $decoded->commerce->pricesIncludeTax = $entreprise->isPricesIncludeTax();
         $decoded->commerce->siteCountry = \App\Services\OrderService\TaxEngine::normalizeAddress($this->storeAddress?->forStore())['country'] ?? null;
         $decoded->commerce->timezone = $this->clock?->name() ?? \App\Services\Booking\BookingClock::DEFAULT; // identifiant IANA, lecture seule (04/11/2026)
+        $decoded->commerce->locale = $this->siteLocale?->siteLocale() ?? 'fr'; // langue du site, fr ou en, lecture seule (04/11/2026)
 
         return json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION) ?: $json;
     }

@@ -14,7 +14,7 @@ class EntrepriseService
     private EntrepriseRepository $repository;
     private TenantEntityManagerProvider $emProvider;
 
-    public function __construct(TenantEntityManagerProvider $emProvider)
+    public function __construct(TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\CaisseService\SiteLocaleResolver $siteLocale = null)
     {
         $this->emProvider = $emProvider;
         $em = $emProvider->getEntityManager();
@@ -28,7 +28,10 @@ class EntrepriseService
         if (!$entreprise) {
             return null;
         }
-        return EntrepriseDto::fromEntity($entreprise, $host, $locale);
+        $dto = EntrepriseDto::fromEntity($entreprise, $host, $locale);
+        $dto->locale = $this->siteLocale?->siteLocale(); // langue du site (04/11/2026), pas celle du visiteur
+
+        return $dto;
     }
 
     public function createEntreprise(EntrepriseDto $dto): EntrepriseDto

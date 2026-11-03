@@ -262,6 +262,8 @@ d'un envoi (journal `[Email]` et file `failed`). Exception : `app:test-tenant-sm
 **Langue du client** (03/11/2026) : les courriels destinés au client partent en fr ou en (`?locale=`, sinon langue du site) par
 `EmailSenderService::sendCustomerEmail` et le domaine de traduction `emails` (`translations/`) ; fiche `docs/boutique.md`,
 « Courriels du client en français et en anglais ». Les courriels destinés au marchand restent en français.
+La langue du site elle-même est publique : `locale` (fr | en) sur `GET /api/entreprise/{id}` et `commerce.locale` des réglages de la
+boutique (04/11/2026, `SiteLocaleResolver`), pour que le site Next.js n'ait pas à recopier la règle.
 Destinataires d'un domaine réservé (`example.com`, `*.invalid`, `*.test`… : comptes de démonstration et d'essai) :
 retirés, envoi abandonné s'il n'en reste aucun (hors tests). Refus définitif du serveur (5xx) : pas de relance, file
 `failed` aussitôt. Logo intégré aux courriels : copie allégée générée à 400 px de large

@@ -123,7 +123,11 @@ Toutes les routes qui renvoient un produit (`/api/products/by-slug/{slug}`, `/ap
 
 Devise (§ 7) : une seule par site, `entreprise.currency` (ISO 4217, défaut `CAD`), exposée par `GET /api/entreprise/{id}`
 (`currency`), modifiable par `PUT /api/entreprise/{id}` (3 lettres, journalisée) et renvoyée par `GET /api/stripe-config`
-(`currency`). `TenantCurrencyProvider` la lit pour `pricing.currency`. Tous les prix sont stockés **en cents**
+(`currency`). `TenantCurrencyProvider` la lit pour `pricing.currency`. **Langue du site** (04/11/2026, demande du site Next.js) :
+`locale` (`fr` | `en`) sur `GET /api/entreprise/{id}`, règle de `Services/CaisseService/SiteLocaleResolver` d'après l'adresse du site
+(Québec ou Canada sans province → `fr`, autre province → `en`, États-Unis → `en`, autre pays ou sans adresse → `fr`) ; indépendante de
+`?locale=` de la requête (langue du site, pas du visiteur) ; lecture seule (ignorée par `PUT`). Aussi `commerce.locale` dans
+`GET /api/boutique-settings`. Test : `SiteLocaleApiTest`. Tous les prix sont stockés **en cents**
 (colonnes décimales : `product.price`, `special_price`, forfaits `rental_pack`, `carrier.price` ; EasyAdmin
 `MoneyField::setStoredAsCents`) ; `ProductCommerceDto::cents` ne fait qu'arrondir. Jusqu'au 08/10/2026, le prix d'un
 véhicule se saisissait en dollars (`NumberField`) alors que `create-intent` le lit en cents : corrigé (aucun véhicule
@@ -246,7 +250,7 @@ d'article**.
 - **Un seul fuseau**, `Services/Booking/BookingClock` : réglage du site (fiche Entreprise « Fuseau horaire du magasin », sinon
   province ou pays de l'adresse, comme la caisse : `StoreClock`), **`America/Toronto` à défaut** (valeur qui était écrite en dur
   dans le calendrier des réservations, le courriel de commande et l'administration des réservations). Exposé en lecture seule :
-  `commerce.timezone` (identifiant IANA) dans `GET /api/boutique-settings` ; ignoré dans un `PUT`.
+  `commerce.timezone` (identifiant IANA) dans `GET /api/boutique-settings` ; ignoré dans un `PUT` (comme `commerce.locale`, langue du site).
 - **Dates reçues** (`booking.start` / `booking.end` du devis, de `create-intent`, de `order/create` et `create-guest`,
   `start` / `end` de `GET /api/booking/check`) : une date **sans fuseau** (« 2027-06-07T16:00:00 », « 2027-06-07 16:00 ») est une
   heure de la boutique ; une date **avec fuseau ou en UTC** (« 2027-06-07T20:00:00.000Z », « …-04:00 ») est convertie dans le fuseau

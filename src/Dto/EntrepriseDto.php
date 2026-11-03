@@ -42,6 +42,9 @@ class EntrepriseDto
     public ?string $googleSiteVerification = null;
     /** Devise du site (ISO 4217) : tous les montants de la boutique sont dans cette devise (08/10/2026) */
     public string $currency = 'CAD';
+    /** Langue du site, `fr` ou `en` (04/11/2026, demande du site Next.js) : règle de SiteLocaleResolver (adresse du site : Québec ou sans province → fr,
+     *  autre province du Canada ou États-Unis → en, sinon fr) ; ne dépend pas de `?locale=` ; lecture seule (ignorée à l'enregistrement) */
+    public ?string $locale = null;
     /** @var SocialNetworkDto[] */
     public array $socialNetworks = [];
 

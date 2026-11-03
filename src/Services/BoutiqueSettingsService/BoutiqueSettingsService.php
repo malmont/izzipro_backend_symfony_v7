@@ -20,7 +20,7 @@ class BoutiqueSettingsService
      * pricesIncludeTax (entreprise.prices_include_tax), siteCountry (pays de l'adresse du site). Un PUT les ignore : jamais enregistrées,
      * donc jamais remises à faux parce que le front ne les renvoie pas.
      */
-    public const READ_ONLY_COMMERCE = ['pricesIncludeTax', 'siteCountry', 'timezone']; // timezone : fuseau de la boutique (BookingClock, 04/11/2026)
+    public const READ_ONLY_COMMERCE = ['pricesIncludeTax', 'siteCountry', 'timezone', 'locale']; // timezone : fuseau de la boutique (BookingClock) ; locale : langue du site (SiteLocaleResolver) (04/11/2026)
 
     public function __construct(private readonly TenantEntityManagerProvider $emProvider)
     {
