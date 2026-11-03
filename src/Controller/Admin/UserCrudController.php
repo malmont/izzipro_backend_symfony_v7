@@ -81,6 +81,16 @@ class UserCrudController extends BaseTenantCrudController
         ];
     }
 
+    public function edit(\EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext $context)
+    {
+        $user = $context->getEntity()->getInstance();
+        if ($user instanceof User) {
+            $this->protectOwner($user);
+        }
+
+        return parent::edit($context);
+    }
+
     public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         $this->hashPassword($entityInstance);
@@ -90,9 +100,13 @@ class UserCrudController extends BaseTenantCrudController
 
     public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
+        $originalRoles = [];
+        if ($entityInstance instanceof User) {
+            $originalRoles = $this->protectOwner($entityInstance);
+        }
         $this->hashPassword($entityInstance);
         $original = $this->emProvider->getEntityManager()->getUnitOfWork()->getOriginalEntityData($entityInstance);
-        $this->applyRolePolicy($entityInstance, (array) ($original['roles'] ?? []));
+        $this->applyRolePolicy($entityInstance, $originalRoles);
         // Nom d'utilisateur égal à l'ancienne adresse et laissé tel quel dans le formulaire : il suit la nouvelle adresse (suite de S7)
         if ($entityInstance instanceof User && isset($original['email'], $original['username']) && $original['email'] !== $entityInstance->getEmail()
             && $original['username'] === $original['email'] && $entityInstance->getUsername() === $original['username']) {
@@ -106,6 +120,67 @@ class UserCrudController extends BaseTenantCrudController
         if ($entityInstance instanceof User && isset($original['email']) && $original['email'] !== $entityInstance->getEmail()) {
             $this->sessions?->transferRefreshTokens((string) $original['email'], (string) $entityInstance->getEmail());
         }
+    }
+
+    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        if ($entityInstance instanceof User) {
+            $this->protectOwner($entityInstance);
+            if ($this->isSelf($entityInstance)) {
+                throw $this->createAccessDeniedException('Vous ne pouvez pas supprimer votre propre compte.');
+            }
+        }
+        parent::deleteEntity($entityManager, $entityInstance);
+    }
+
+    /**
+     * Compte du propriétaire de la plateforme (ROLE_SUPER_ADMIN) : modifiable ou supprimable par un super admin seulement.
+     * @return list<string> rôles actuels lus en base
+     */
+    private function protectOwner(User $targetUser): array
+    {
+        $roles = $this->rolesInDb($targetUser);
+        if (in_array(RoleAssignmentPolicy::SUPER_ADMIN, $roles, true) && !$this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)) {
+            throw $this->createAccessDeniedException('Compte du propriétaire de la plateforme : modification réservée.');
+        }
+
+        return $roles;
+    }
+
+    /** @return list<string> */
+    private function rolesInDb(User $targetUser): array
+    {
+        $id = (int) $targetUser->getId();
+        if ($id <= 0) {
+            throw $this->createAccessDeniedException('Compte du propriétaire de la plateforme : modification réservée.');
+        }
+        try {
+            $raw = $this->emProvider->getEntityManager()->getConnection()->fetchOne(
+                'SELECT roles FROM "user" WHERE id = ?',
+                [$id]
+            );
+        } catch (\Throwable) {
+            throw $this->createAccessDeniedException('Compte du propriétaire de la plateforme : modification réservée.');
+        }
+        if ($raw === false || !is_string($raw)) {
+            throw $this->createAccessDeniedException('Compte du propriétaire de la plateforme : modification réservée.');
+        }
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            throw $this->createAccessDeniedException('Compte du propriétaire de la plateforme : modification réservée.');
+        }
+
+        return array_values(array_filter($decoded, 'is_string'));
+    }
+
+    private function isSelf(User $targetUser): bool
+    {
+        $current = $this->getUser();
+        if (!$current instanceof User) {
+            return false;
+        }
+
+        return $current->getId() !== null && (int) $current->getId() === (int) $targetUser->getId();
     }
 
     /** Règle appliquée côté serveur, même si le formulaire est forgé */
@@ -135,19 +210,40 @@ class UserCrudController extends BaseTenantCrudController
     /** Action « Réinitialiser le PIN de caisse » (C3) : efface le PIN et lève le blocage ; le caissier en recrée un avec son mot de passe */
     public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
     {
+        $canEdit = fn ($user) => !$user instanceof User
+            || $this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)
+            || !in_array(RoleAssignmentPolicy::SUPER_ADMIN, $user->getRoles(), true);
+        $canDelete = fn ($user) => $user instanceof User
+            && !$this->isSelf($user)
+            && ($this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN) || !in_array(RoleAssignmentPolicy::SUPER_ADMIN, $user->getRoles(), true));
+
         $reset = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('resetPosPin', 'Réinitialiser le PIN de caisse', 'fas fa-key')
             ->linkToUrl(fn (User $user) => $this->csrfActionUrl('resetPosPin', (string) $user->getId()))
-            ->displayIf(fn ($user) => $user instanceof User && array_intersect(['ROLE_USER_POS', 'ROLE_POS_MANAGER', 'ROLE_ADMIN'], $user->getRoles()) !== [])
+            ->displayIf(fn ($user) => $user instanceof User && $canEdit($user) && array_intersect(['ROLE_USER_POS', 'ROLE_POS_MANAGER', 'ROLE_ADMIN'], $user->getRoles()) !== [])
             ->setHtmlAttributes(['onclick' => 'return confirm(' . json_encode('Effacer le PIN de caisse de cet utilisateur ? Il devra en recréer un.', JSON_UNESCAPED_UNICODE) . ');']);
 
-        return parent::configureActions($actions)
+        $actions = parent::configureActions($actions)
+            ->disable(\EasyCorp\Bundle\EasyAdminBundle\Config\Action::BATCH_DELETE)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $reset)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $reset);
+
+        foreach ([\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, \EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL] as $page) {
+            $actions->update($page, \EasyCorp\Bundle\EasyAdminBundle\Config\Action::EDIT, fn (\EasyCorp\Bundle\EasyAdminBundle\Config\Action $a) => $a->displayIf($canEdit));
+        }
+        foreach ([\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, \EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL] as $page) {
+            // la page d'édition n'a pas d'action Supprimer : seules les pages liste et détail en portent une
+            $actions->update($page, \EasyCorp\Bundle\EasyAdminBundle\Config\Action::DELETE, fn (\EasyCorp\Bundle\EasyAdminBundle\Config\Action $a) => $a->displayIf($canDelete));
+        }
+
+        return $actions;
     }
 
     public function resetPosPin(\EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext $context): \Symfony\Component\HttpFoundation\Response
     {
         $user = $context->getEntity()->getInstance();
+        if ($user instanceof User) {
+            $this->protectOwner($user);
+        }
         if (!$user instanceof User || !$this->isCsrfActionValid($context, 'resetPosPin') || !$this->posPins) {
             $this->addFlash('danger', 'Lien invalide ou expiré : action annulée.');
         } else {

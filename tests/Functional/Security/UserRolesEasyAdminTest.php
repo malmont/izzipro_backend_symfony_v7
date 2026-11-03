@@ -51,18 +51,28 @@ class UserRolesEasyAdminTest extends WebTestCase
 
     public function testSiteAdminCannotRemoveSuperAdminFromAnotherUser(): void
     {
-        $this->loginAs(['ROLE_ADMIN']);
+        $admin = $this->loginAs(['ROLE_ADMIN']);
         $owner = $this->createUser([RoleAssignmentPolicy::SUPER_ADMIN, 'ROLE_ADMIN', 'ROLE_USER_INTERNET']);
-        $crawler = $this->admin('edit', $owner->getId());
+
+        $this->admin('edit', $owner->getId());
+        $this->assertSame(403, $this->client->getResponse()->getStatusCode(), 'formulaire d\'édition du super admin refusé');
+
+        $crawler = $this->admin('edit', $admin->getId());
         $form = $crawler->filter('form[name="edit-User-form"], form[name="User"]')->form();
         $values = $form->getPhpValues();
         $values['User']['roles'] = ['ROLE_USER_INTERNET'];
+        $forgedUrl = 'https://' . MV_TEST_TENANT_HOST . '/admin?' . http_build_query([
+            'crudAction' => 'edit',
+            'crudControllerFqcn' => UserCrudController::class,
+            'entityId' => $owner->getId(),
+        ]);
 
-        $this->client->request('POST', $form->getUri(), $values);
+        $this->client->request('POST', $forgedUrl, $values, [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
 
+        $this->assertSame(403, $this->client->getResponse()->getStatusCode());
         $roles = $this->rolesOf($owner->getId());
         $this->assertContains(RoleAssignmentPolicy::SUPER_ADMIN, $roles, 'rôle conservé');
-        $this->assertNotContains('ROLE_ADMIN', $roles, 'les autres rôles suivent le formulaire');
+        $this->assertContains('ROLE_ADMIN', $roles, 'les autres rôles sont intégralement conservés');
     }
 
     public function testSuperAdminCanGrantTheRole(): void

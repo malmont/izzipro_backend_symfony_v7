@@ -70,7 +70,7 @@ class LandingAiEasyAdminTest extends WebTestCase
 
     public function testMonthlyCreditsCanBeSetOnceAndUpdated(): void
     {
-        $this->loginAs(['ROLE_ADMIN']);
+        $this->loginAs(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
 
         $crawler = $this->admin(AiCreditSettingCrudController::class);
         $this->assertCount(1, $crawler->filter('a.action-new'), 'création proposée tant qu\'aucun réglage n\'existe');
@@ -93,7 +93,7 @@ class LandingAiEasyAdminTest extends WebTestCase
 
     public function testNegativeCreditsAreRefused(): void
     {
-        $this->loginAs(['ROLE_ADMIN']);
+        $this->loginAs(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
 
         $crawler = $this->admin(AiCreditSettingCrudController::class, 'new');
         $this->client->submit($crawler->filter('form[name="AiCreditSetting"]')->form(), ['AiCreditSetting[monthlyCredits]' => '-5']);

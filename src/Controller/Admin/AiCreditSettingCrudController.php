@@ -43,10 +43,20 @@ class AiCreditSettingCrudController extends BaseTenantCrudController
 
     public function configureFields(string $pageName): iterable
     {
+        $isSuperAdmin = $this->isGranted('ROLE_SUPER_ADMIN');
+        $creditsField = IntegerField::new('monthlyCredits', 'Crédits par mois')
+            ->setHelp($isSuperAdmin
+                ? 'Entre 0 (assistant désactivé) et 100 000.'
+                : 'Modifiable uniquement par le super administrateur.')
+            ->setFormTypeOption('attr', ['min' => 0, 'max' => 100000, ...(!$isSuperAdmin ? ['disabled' => 'disabled', 'readonly' => 'readonly'] : [])]);
+        if (!$isSuperAdmin) {
+            $creditsField
+                ->setRequired(false)
+                ->setFormTypeOption('empty_data', (string) AiCreditSetting::DEFAULT_MONTHLY_CREDITS);
+        }
+
         return [
-            IntegerField::new('monthlyCredits', 'Crédits par mois')
-                ->setHelp('Entre 0 (assistant désactivé) et 100 000.')
-                ->setFormTypeOption('attr', ['min' => 0, 'max' => 100000]),
+            $creditsField,
             TextareaField::new('assistantInstructions', 'Consignes de l\'assistant')
                 ->setHelp(sprintf('Consignes permanentes redonnées à l\'assistant à chaque demande (ex. « garder nos couleurs, pas d\'animations, ton chaleureux »). Texte brut, %d caractères au plus. La demande du moment prime en cas de contradiction.', LandingAiInstructionsService::MAX_LENGTH))
                 ->setFormTypeOption('attr', ['maxlength' => LandingAiInstructionsService::MAX_LENGTH, 'rows' => 6])
@@ -57,9 +67,12 @@ class AiCreditSettingCrudController extends BaseTenantCrudController
     /** Une seule ligne par site : une création en trop met à jour la ligne existante */
     public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
+        $isSuperAdmin = $this->isGranted('ROLE_SUPER_ADMIN');
         $existing = $this->emProvider->getEntityManager()->getRepository(AiCreditSetting::class)->findOneBy([], ['id' => 'ASC']);
         if ($existing !== null) {
-            $existing->setMonthlyCredits($entityInstance->getMonthlyCredits());
+            $existing->setMonthlyCredits($isSuperAdmin
+                ? $entityInstance->getMonthlyCredits()
+                : $this->currentCredits((int) $existing->getId()));
             if ($existing->getAssistantInstructions() !== $entityInstance->getAssistantInstructions()) {
                 $existing->setAssistantInstructions($entityInstance->getAssistantInstructions());
             }
@@ -67,7 +80,28 @@ class AiCreditSettingCrudController extends BaseTenantCrudController
 
             return;
         }
+        if (!$isSuperAdmin && $entityInstance instanceof AiCreditSetting) {
+            $entityInstance->setMonthlyCredits(AiCreditSetting::DEFAULT_MONTHLY_CREDITS);
+        }
         parent::persistEntity($entityManager, $entityInstance);
+    }
+
+    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        if (!$this->isGranted('ROLE_SUPER_ADMIN') && $entityInstance instanceof AiCreditSetting) {
+            $entityInstance->setMonthlyCredits($this->currentCredits((int) $entityInstance->getId()));
+        }
+        parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    private function currentCredits(int $id): int
+    {
+        $value = $this->emProvider->getEntityManager()->getConnection()->fetchOne(
+            'SELECT monthly_credits FROM ai_credit_setting WHERE id = ?',
+            [$id]
+        );
+
+        return $value !== false ? (int) $value : AiCreditSetting::DEFAULT_MONTHLY_CREDITS;
     }
 
     private function hasSetting(): bool

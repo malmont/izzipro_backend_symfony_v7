@@ -312,7 +312,7 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 | Assistant : cas d'usage, HTTP | `UseCase/LandingAiUseCase/` (`ComposeLandingSection`, `RunLandingAiJob`, `GetLandingAiJob`, `GetLandingAiUsage`, `ExportLandingDesignMd`), `Controller/LandingAiController/`, DTO `LandingAiComposeInputDto` / `OutputDto` |
 | Worker | `Message/LandingAiJobMessage.php`, `MessageHandler/LandingAiJobHandler.php` (transport `landing_ai`) |
 | Synchronisation | `Services/LandingConfigService/` (`LandingConfigStore` : versions dans `var/landingpage-config/`, `FrontendConfigFetcher`, `LandingConfigCompatibilityChecker`), `UseCase/LandingConfigUseCase/`, `Controller/LandingConfigController/`, `Repository/LandingConfigSyncRepository.php` |
-| Administration | `Controller/Admin/AiUsageCrudController.php` (historique), `AiCreditSettingCrudController.php` (crédits) |
+| Administration | `Controller/Admin/AiUsageCrudController.php` (historique), `AiCreditSettingCrudController.php` (crédits mensuels réservés à `ROLE_SUPER_ADMIN`, consignes modifiables par `ROLE_ADMIN`) |
 | Évaluation | `Command/LandingAiEvalCommand.php`, `Services/LandingAiService/Eval/` (cas R, C, P, B, S, Y ; vérifications V7 contraste, V8 alignement, V9 mise en page, V10 goût (`LandingAiTasteCheck`) ; images dans `Eval/fixtures/`) |
 
 ## Tables
@@ -321,7 +321,7 @@ par lui : l'éditeur les fait valider puis appelle les routes ci-dessous (détai
 |---|---|---|
 | `landing_page_setting` | tenant | configuration JSON du site |
 | `ai_usage` | tenant | réservations et historique des crédits (90 jours ; jamais de composition ; résumé de la réponse et issue quand la demande porte une clé de mémoire, depuis le 19/10/2026) ; jetons par demande, d'où le coût estimé montré au super administrateur (`LandingAiPricing`) |
-| `ai_credit_setting` | tenant | crédits mensuels (100 par défaut) et consignes permanentes de l'assistant (19/10/2026) |
+| `ai_credit_setting` | tenant | crédits mensuels (100 par défaut, modifiables uniquement par `ROLE_SUPER_ADMIN`) et consignes permanentes de l'assistant (19/10/2026, modifiables par `ROLE_ADMIN`) |
 | `ai_job` | tenant | tâches de fond (résultat 1 h, requête effacée au traitement) |
 | `landing_config_sync` | maître (`app_v2_db`) | historique des synchronisations |
 
