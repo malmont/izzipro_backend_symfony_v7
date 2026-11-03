@@ -306,6 +306,14 @@ class LandingConfigSyncTest extends WebTestCase
             'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
         ], json_encode(['username' => $email, 'password' => self::PASSWORD, 'platform' => 'web']));
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $this->client->getResponse()->getContent());
+        if (json_decode((string) $this->client->getResponse()->getContent(), true)['otp_required'] ?? false) {
+            // Super administrateur : code par courriel toujours exigé (03/11/2026) ; le code est relu en base puis validé
+            $code = $provider->getEntityManager()->getConnection()->fetchOne('SELECT code FROM otp_code WHERE user_otp_id = ? ORDER BY id DESC LIMIT 1', [$user->getId()]);
+            $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/api/otp-verify', [], [], [
+                'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
+            ], json_encode(['username' => $email, 'otp' => $code, 'platform' => 'web']));
+            $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $this->client->getResponse()->getContent());
+        }
         $session = [];
         foreach ($this->client->getResponse()->headers->getCookies() as $cookie) {
             $session[$cookie->getName()] = $cookie->getValue();

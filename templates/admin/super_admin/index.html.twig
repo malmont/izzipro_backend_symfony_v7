@@ -1,0 +1,100 @@
+{# Écran « Compte super administrateur » (SuperAdminAccountController). Habillage EasyAdmin depuis le menu (/admin?routeName=admin_super_admin) ; ea() dit s'il y a un contexte. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Compte super administrateur{% endblock %}
+{% block content_title %}Compte super administrateur{% endblock %}
+
+{% block main %}{{ block('super_admin_panel') }}{% endblock %}
+{% block body %}
+    <div class="container-fluid py-3">
+        <h1 class="h3 mb-3">Compte super administrateur</h1>
+        {{ block('super_admin_panel') }}
+    </div>
+{% endblock %}
+
+{% block super_admin_panel %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="alert alert-{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <p class="text-muted">Le propriétaire de la plateforme existe une fois par base de site ; le modèle des nouveaux sites (<code>gmasuite</code>) le transmet
+        aux sites créés ensuite. Ce formulaire crée ou met à jour le compte sur <strong>toutes</strong> les bases listées ci-dessous : même courriel, même mot de passe,
+        rôles administrateur et super administrateur, compte vérifié, code à usage unique par courriel activé (de toute façon imposé aux super administrateurs à la connexion).</p>
+
+    {% if results is not empty %}
+        <h2 class="h5 mt-3">Résultat de la dernière application</h2>
+        <table class="table table-sm datagrid super-admin-resultats">
+            <thead><tr><th>Base</th><th>Sites</th><th>Action</th></tr></thead>
+            <tbody>
+                {% for r in results %}
+                    <tr>
+                        <td><code>{{ r.dbname }}</code></td>
+                        <td>{{ r.codes|join(', ') }}</td>
+                        <td>
+                            {% if r.action == 'created' %}<span class="badge bg-success">créé</span>
+                            {% elseif r.action == 'updated' %}<span class="badge bg-primary">mis à jour</span>
+                            {% else %}<span class="badge bg-danger">échec</span> <span class="text-muted small">{{ r.message }}</span>{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+    <h2 class="h5 mt-3">État par base</h2>
+    <table class="table table-sm datagrid super-admin-etat">
+        <thead><tr><th>Base</th><th>Sites</th><th>Comptes super administrateur</th></tr></thead>
+        <tbody>
+            {% for row in status %}
+                <tr data-dbname="{{ row.dbname }}">
+                    <td><code>{{ row.dbname }}</code></td>
+                    <td>{{ row.codes|join(', ') }}</td>
+                    <td>
+                        {% if row.error %}<span class="badge bg-danger">{{ row.error }}</span>
+                        {% elseif row.accounts is empty %}<span class="badge bg-warning text-dark">aucun</span>
+                        {% else %}
+                            {% for a in row.accounts %}
+                                <div><span class="super-admin-email">{{ a.email }}</span>
+                                    {% if a.otp %}<span class="badge bg-success">OTP</span>{% else %}<span class="badge bg-secondary" title="le code est imposé à la connexion même si la case n'est pas cochée">OTP non coché</span>{% endif %}
+                                    {% if not a.verified %}<span class="badge bg-warning text-dark">non vérifié</span>{% endif %}
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2 class="h5 mt-4">Créer ou mettre à jour sur toutes les bases</h2>
+    <form method="post" action="{{ path('admin_super_admin_apply') }}" class="super-admin-form" autocomplete="off">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <div class="row g-2">
+            <div class="col-md-6">
+                <label class="form-label" for="sa-email">Courriel du compte</label>
+                <input class="form-control" type="email" id="sa-email" name="email" required autocomplete="off">
+                <div class="form-text">S'il existe déjà sur une base, il est mis à jour ; sinon il est créé.</div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="sa-firstname">Prénom</label>
+                <input class="form-control" type="text" id="sa-firstname" name="firstname" maxlength="100" autocomplete="off">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="sa-lastname">Nom</label>
+                <input class="form-control" type="text" id="sa-lastname" name="lastname" maxlength="100" autocomplete="off">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="sa-password">Mot de passe (au moins {{ min_password_length }} caractères)</label>
+                <input class="form-control" type="password" id="sa-password" name="password" minlength="{{ min_password_length }}" required autocomplete="new-password">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="sa-confirmation">Confirmation</label>
+                <input class="form-control" type="password" id="sa-confirmation" name="confirmation" minlength="{{ min_password_length }}" required autocomplete="new-password">
+            </div>
+        </div>
+        <p class="form-text mt-2">Le mot de passe est haché une fois puis écrit sur chaque base ; il n'est ni journalisé ni réaffiché. Gardez-le dans votre gestionnaire de mots de passe.</p>
+        <button type="submit" class="btn btn-primary" onclick="return confirm('Appliquer ce compte sur toutes les bases ?')">Appliquer sur toutes les bases</button>
+    </form>
+{% endblock %}

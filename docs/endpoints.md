@@ -552,7 +552,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (31)
+## Administration (EasyAdmin) (33)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -575,11 +575,13 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/admin/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::printBarcode` |
 | ANY | `/admin/product-variant/{id}/edit-custom` | ROLE_ADMIN | `Controller\Admin\CustomProductVariantController::edit` |
 | ANY | `/admin/product/{id}/specifications` | ROLE_ADMIN | `Controller\Admin\ProductSpecificationController::edit` |
-| GET, POST | `/admin/redis/flush` | ROLE_ADMIN | `Controller\Admin\RedisAdminController::flushRedis` |
+| GET, POST | `/admin/redis/flush` | ROLE_SUPER_ADMIN | `Controller\Admin\RedisAdminController::flushRedis` |
 | GET, POST | `/admin/short-code` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\ShortCodeAdminController::index` |
 | GET, POST | `/admin/stripe/connect` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::connect` |
 | GET, POST | `/admin/stripe/disconnect` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::disconnect` |
 | GET | `/admin/stripe/success` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AdminStripeController::success` |
+| POST | `/admin/super-admin/appliquer` | ROLE_SUPER_ADMIN | `Controller\Admin\SuperAdminAccountController::apply` |
+| GET | `/admin/super-admin` | ROLE_SUPER_ADMIN | `Controller\Admin\SuperAdminAccountController::index` |
 | POST | `/admin/technique/seuils` | ROLE_SUPER_ADMIN | `Controller\Admin\TechDashboardAdminController::thresholds` |
 | GET | `/admin/technique` | ROLE_SUPER_ADMIN | `Controller\Admin\TechDashboardAdminController::index` |
 | POST | `/admin/workers/chapters/{id}/fail` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::failChapter` |

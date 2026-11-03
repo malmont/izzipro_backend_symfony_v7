@@ -235,5 +235,6 @@ class TechDashboardAdminTest extends WebTestCase
         $provider->getEntityManager()->flush();
         $this->client->getCookieJar()->clear();
         $this->client->loginUser($user, 'main');
+        \App\Tests\Functional\Support\OtpTestHelper::validateIfRequired($this->client, $user); // super admin : code OTP toujours exigé (03/11/2026)
     }
 }

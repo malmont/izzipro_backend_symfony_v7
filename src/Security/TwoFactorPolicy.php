@@ -6,8 +6,8 @@ use App\Entity\User;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
- * Code à usage unique envoyé par e-mail à la connexion (OtpService) : demandé si le compte l'a activé (otpEnabled,
- * EasyAdmin), et pour tout administrateur quand ADMIN_OTP_REQUIRED=1 dans .env. Un administrateur peut modifier tout
+ * Code à usage unique envoyé par e-mail à la connexion (OtpService) : toujours demandé à un super administrateur (ROLE_SUPER_ADMIN,
+ * 03/11/2026), sinon si le compte l'a activé (otpEnabled, EasyAdmin), et pour tout administrateur quand ADMIN_OTP_REQUIRED=1 dans .env. Un administrateur peut modifier tout
  * le contenu public d'un site depuis l'éditeur des landing pages.
  *
  * Avant d'activer ADMIN_OTP_REQUIRED : l'adresse e-mail de chaque compte administrateur doit recevoir le courrier
@@ -26,6 +26,11 @@ final class TwoFactorPolicy
 
     public function required(User $user): bool
     {
+        // Propriétaire de la plateforme : code imposé, toujours (décision du 03/11/2026), quelle que soit la case du compte ou ADMIN_OTP_REQUIRED
+        if (in_array(RoleAssignmentPolicy::SUPER_ADMIN, $user->getRoles(), true)) {
+            return true;
+        }
+
         return (bool) $user->isOtpEnabled()
             || ($this->adminOtpRequired && array_intersect(self::ADMIN_ROLES, $user->getRoles()) !== []);
     }

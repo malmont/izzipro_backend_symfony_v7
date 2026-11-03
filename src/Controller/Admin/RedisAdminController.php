@@ -20,7 +20,8 @@ class RedisAdminController extends AbstractController
     #[Route('/admin/redis/flush', name: 'admin_redis_flush', methods: ['GET', 'POST'])]
     public function flushRedis(Request $request, LoggerInterface $logger, ?CacheInterface $cache = null): Response
     {
-        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+        // Le cache est partagé par tous les sites : propriétaire de la plateforme seulement (03/11/2026)
+        $this->denyAccessUnlessGranted('ROLE_SUPER_ADMIN');
 
         // Un simple lien (GET, ex. le menu) ne vide plus Redis : uniquement le bouton du tableau de bord (POST + confirmation + CSRF)
         if (!$request->isMethod('POST')) {
@@ -57,7 +58,8 @@ class RedisAdminController extends AbstractController
                     $protectedTrafficKeysCount = 0;
 
                     foreach ($allKeys as $key) {
-                        if (str_starts_with($key, 'tenant:traffic:')) {
+                        // Compteurs du tableau de bord technique (tech:req, tech:job) : préservés comme les métriques de trafic
+                        if (str_starts_with($key, 'tenant:traffic:') || str_starts_with($key, 'tech:')) {
                             $protectedTrafficKeysCount++;
                         } elseif (str_starts_with($key, self::SESSION_PREFIX)) {
                             continue;

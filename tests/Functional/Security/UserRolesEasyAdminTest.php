@@ -100,6 +100,7 @@ class UserRolesEasyAdminTest extends WebTestCase
     {
         $user = $this->createUser($roles);
         $this->client->loginUser($user, 'main');
+        \App\Tests\Functional\Support\OtpTestHelper::validateIfRequired($this->client, $user); // super admin : code OTP toujours exigé (03/11/2026)
 
         return $user;
     }

@@ -487,12 +487,17 @@ class DashboardController extends AbstractDashboardController
         yield MenuItem::linkToDashboard('Dashboard', 'fa fa-home');
         
         yield MenuItem::section('Maintenance');
-        yield MenuItem::linkToRoute('Vider cache Redis', 'fas fa-trash-alt', 'admin_redis_flush');
+        // Cache Redis partagé par tous les sites : propriétaire de la plateforme seulement (03/11/2026)
+        yield MenuItem::linkToRoute('Vider cache Redis', 'fas fa-trash-alt', 'admin_redis_flush')
+            ->setPermission('ROLE_SUPER_ADMIN');
         // Workers communs à tous les sites : propriétaire de la plateforme seulement
         yield MenuItem::linkToRoute('Workers (tâches de fond)', 'fas fa-heartbeat', 'admin_workers')
             ->setPermission('ROLE_SUPER_ADMIN');
         // Mesures techniques de tous les sites (ressources consommées, PHP-FPM, sauvegardes) : propriétaire de la plateforme seulement
         yield MenuItem::linkToRoute('Tableau de bord technique', 'fas fa-chart-line', 'admin_technique')
+            ->setPermission('ROLE_SUPER_ADMIN');
+        // Compte du propriétaire de la plateforme sur toutes les bases (03/11/2026)
+        yield MenuItem::linkToRoute('Compte super administrateur', 'fas fa-user-shield', 'admin_super_admin')
             ->setPermission('ROLE_SUPER_ADMIN');
         
         yield MenuItem::section('UI');

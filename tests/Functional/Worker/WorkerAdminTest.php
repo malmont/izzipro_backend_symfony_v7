@@ -129,6 +129,7 @@ class WorkerAdminTest extends WebTestCase
         $em->persist($user);
         $em->flush();
         $this->client->loginUser($user, 'main');
+        \App\Tests\Functional\Support\OtpTestHelper::validateIfRequired($this->client, $user); // super admin : code OTP toujours exigé (03/11/2026)
     }
 
     private function em()

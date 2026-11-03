@@ -20,12 +20,14 @@
                     <p class="card-text text-muted small mb-4" style="line-height: 1.5;">
                         Permet d'effacer instantanément toutes les clés stockées dans la base Redis de l'application (équivalent à <code>docker compose exec redis redis-cli flushall</code>).
                     </p>
+{% if is_granted('ROLE_SUPER_ADMIN') %}
                     <form action="{{ path('admin_redis_flush') }}" method="POST" onsubmit="return confirm('Voulez-vous vraiment vider le cache Redis (flushall) ?');">
                         <input type="hidden" name="_token" value="{{ csrf_token('admin_redis_flush') }}">
                         <button type="submit" class="btn btn-danger w-100 fw-bold py-2 shadow-sm" style="border-radius: 8px;">
                             <i class="fas fa-trash-alt me-2"></i> Flush Redis (redis-cli flushall)
                         </button>
                     </form>
+{% endif %}
                 </div>
             </div>
         </div>

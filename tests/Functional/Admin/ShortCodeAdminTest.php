@@ -37,6 +37,7 @@ class ShortCodeAdminTest extends WebTestCase
         $provider->getEntityManager()->persist($user);
         $provider->getEntityManager()->flush();
         $this->client->loginUser($user, 'main');
+        \App\Tests\Functional\Support\OtpTestHelper::validateIfRequired($this->client, $user); // super admin : code OTP toujours exigé (03/11/2026)
     }
 
     public function testTheMerchantSeesTheCodeReadOnlyAndOnlyTheOwnerRegeneratesIt(): void
