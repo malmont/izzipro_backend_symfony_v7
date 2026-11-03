@@ -374,6 +374,12 @@ mobile fait son propre livre, avec des quotas et, à venir, des chapitres payant
   génération perdue détectée comme pour les chapitres (file vide après 60 s, ou sans progression 10 à 15 min) et passée en `failed` ;
   aucune relance automatique, l'utilisateur relance depuis `failed`. Les aperçus `pdf/preview-*` et la commande d'impression restent
   synchrones. Le défaut basculera en asynchrone quand le site et l'application LivingMemory suivront `pdf/status`.
+- **Réutilisation des PDF à l'impression (lot 3 bis, 03/11/2026)** : chaque génération (worker, `pdf/generate` synchrone, impression)
+  note sur le livre l'empreinte du contenu rendu (`mv_book.pdf_source_hash`, `Services/BookPdfFingerprint` : titres, personnes, format,
+  police, auteur résolu, style et couleur de couverture, photo de couverture, chapitres imprimables avec texte et photos ;
+  `Version20261112100000`, `scripts/migrate_all_v2_mv_book_pdf_hash.sh`). `CreateBookPrintOrderUseCase` réutilise les fichiers existants
+  seulement si l'état est `done`, les fichiers présents et l'empreinte identique pour les options demandées ; sinon il régénère comme
+  avant. Un PDF périmé n'est donc jamais envoyé à Lulu, et une commande qui suit une génération récente ne refait pas le rendu.
 
 - Texte des chapitres : `Services/ChapterTextFormatter.php` le découpe en sous-titres (`===Titre===`, `## Titre`,
   `**Titre**` seul sur sa ligne) et paragraphes, retire le balisage Markdown et les emojis (absents des polices), sans

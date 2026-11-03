@@ -56,7 +56,11 @@ class BookPdfAsyncTest extends WebTestCase
         $this->assertGreaterThanOrEqual(24, $response['body']['page_count']);
         $this->assertFileExists($this->bookDir() . '/interior.pdf');
         $this->assertFileExists($this->bookDir() . '/cover.pdf');
-        $this->assertNull($this->db()->fetchOne('SELECT pdf_status FROM mv_book WHERE id = ?', [$this->bookId]), 'le rendu synchrone ne touche pas au suivi');
+        // La réponse est inchangée ; en base, l'état et l'empreinte du contenu sont notés pour que l'impression réutilise ces fichiers
+        $row = $this->db()->fetchAssociative('SELECT pdf_status, pdf_page_count, pdf_source_hash FROM mv_book WHERE id = ?', [$this->bookId]);
+        $this->assertSame('done', $row['pdf_status']);
+        $this->assertSame($response['body']['page_count'], (int) $row['pdf_page_count']);
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', (string) $row['pdf_source_hash']);
         $this->assertCount(0, $this->transport()->getSent(), 'rien dans la file');
     }
 
@@ -142,6 +146,43 @@ class BookPdfAsyncTest extends WebTestCase
         $handler(new GenerateBookPdfMessage('00000000-0000-4000-8000-000000000000', MV_TEST_TENANT_CODE));
         $handler(new GenerateBookPdfMessage($this->bookId, 'site-inexistant'));
         $this->assertSame('pending', $this->db()->fetchOne('SELECT pdf_status FROM mv_book WHERE id = ?', [$this->bookId]), 'livre inchangé');
+    }
+
+    public function testThePrintOrderReusesFreshPdfsAndRegeneratesWhenTheBookChanged(): void
+    {
+        // PDF produits par le worker, puis commande d'impression avec les mêmes options : les fichiers sont réutilisés tels quels
+        $message = new GenerateBookPdfMessage($this->bookId, MV_TEST_TENANT_CODE, 'biographic_split', null, null, null);
+        static::getContainer()->get(GenerateBookPdfHandler::class)($message);
+        $hash = (string) $this->db()->fetchOne('SELECT pdf_source_hash FROM mv_book WHERE id = ?', [$this->bookId]);
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $hash);
+        clearstatcache();
+        $before = filemtime($this->bookDir() . '/interior.pdf');
+        sleep(1);
+
+        $recipient = ['name' => 'Jeanne Dupont', 'street1' => '12 rue des Flamboyants', 'city' => 'Fort-de-France', 'postal_code' => '97200', 'country_code' => 'FR', 'phone_number' => '+596696000000'];
+        $order = $this->call('POST', "/books/{$this->bookId}/print/order", $this->ownerJwt, ['quantity' => 1, 'recipient' => $recipient, 'cover_style' => 'biographic_split'] + $recipient);
+        $this->assertLessThan(300, $order['status'], json_encode($order['body']));
+        clearstatcache();
+        $this->assertSame($before, filemtime($this->bookDir() . '/interior.pdf'), 'contenu et options inchangés : PDF réutilisés, aucun nouveau rendu');
+        $this->assertSame($hash, $this->db()->fetchOne('SELECT pdf_source_hash FROM mv_book WHERE id = ?', [$this->bookId]));
+
+        // Le livre change (texte d'un chapitre) : l'impression régénère et note la nouvelle empreinte
+        $this->db()->executeStatement("UPDATE mv_chapter SET content_final = content_final || ' Et un paragraphe ajouté après coup.' WHERE book_id = ?", [$this->bookId]);
+        sleep(1);
+        $order = $this->call('POST', "/books/{$this->bookId}/print/order", $this->ownerJwt, ['quantity' => 1, 'recipient' => $recipient, 'cover_style' => 'biographic_split'] + $recipient);
+        $this->assertLessThan(300, $order['status'], json_encode($order['body']));
+        clearstatcache();
+        $this->assertGreaterThan($before, filemtime($this->bookDir() . '/interior.pdf'), 'livre modifié : PDF régénérés, jamais un PDF périmé');
+        $this->assertNotSame($hash, $this->db()->fetchOne('SELECT pdf_source_hash FROM mv_book WHERE id = ?', [$this->bookId]));
+
+        // Mêmes contenus mais autre style de couverture : régénération aussi
+        clearstatcache();
+        $afterChange = filemtime($this->bookDir() . '/cover.pdf');
+        sleep(1);
+        $order = $this->call('POST', "/books/{$this->bookId}/print/order", $this->ownerJwt, ['quantity' => 1, 'recipient' => $recipient, 'cover_style' => 'classic'] + $recipient);
+        $this->assertLessThan(300, $order['status'], json_encode($order['body']));
+        clearstatcache();
+        $this->assertGreaterThan($afterChange, filemtime($this->bookDir() . '/cover.pdf'), 'autre style de couverture : nouveau rendu');
     }
 
     public function testRightsAreUnchangedOnBothRoutes(): void

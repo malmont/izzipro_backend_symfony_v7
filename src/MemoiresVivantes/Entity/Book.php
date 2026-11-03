@@ -168,6 +168,10 @@ class Book
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $pdfError = null;
+
+    /** Empreinte du contenu imprimé à la dernière génération (BookPdfFingerprint) : réutilisation des PDF à l'impression si inchangée */
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $pdfSourceHash = null;
  
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['book:read', 'chapter:read'])]
@@ -590,4 +594,6 @@ class Book
     public function setPdfPageCount(?int $pages): static { $this->pdfPageCount = $pages; return $this; }
     public function getPdfError(): ?string { return $this->pdfError; }
     public function setPdfError(?string $error): static { $this->pdfError = $error; return $this; }
+    public function getPdfSourceHash(): ?string { return $this->pdfSourceHash; }
+    public function setPdfSourceHash(?string $hash): static { $this->pdfSourceHash = $hash; return $this; }
 }

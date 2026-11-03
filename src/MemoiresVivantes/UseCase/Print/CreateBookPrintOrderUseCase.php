@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Entity\BookPrintOrder;
 use App\MemoiresVivantes\Services\BookPdfGeneratorService;
+use App\MemoiresVivantes\Services\BookPdfGenerationService;
 use App\MemoiresVivantes\Services\LuluPrintService;
 use App\Services\TenantEntityManagerProvider;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
@@ -15,6 +16,7 @@ class CreateBookPrintOrderUseCase
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly BookPdfGeneratorService $pdfGeneratorService,
+        private readonly BookPdfGenerationService $generation,
         private readonly LuluPrintService $luluPrintService,
         private readonly string $projectDir,
         private readonly string $storagePublicUrl = ''
@@ -68,7 +70,12 @@ class CreateBookPrintOrderUseCase
         } else {
             // Auteur imprimé sur la couverture : celui du livre (ou celui fourni), jamais le destinataire du colis
             $authorName = BookPdfGeneratorService::normalizeAuthorName($shippingData['author_name'] ?? null);
-            $pdfResult = $this->pdfGeneratorService->generateAndSaveBookPdfs($book, $coverStyle, $authorName, $bgColor);
+            // Fichiers déjà générés (worker, route pdf/generate) réutilisés si le contenu et les options n'ont pas changé depuis ; sinon rendu complet
+            $pdfResult = $this->generation->reusable($book, $coverStyle, $authorName, $bgColor, null);
+            if ($pdfResult === null) {
+                $pdfResult = $this->pdfGeneratorService->generateAndSaveBookPdfs($book, $coverStyle, $authorName, $bgColor);
+                $this->generation->recordGenerated($book, $pdfResult, $coverStyle, $authorName, $bgColor, null);
+            }
             $interiorPublicUrl = $customInteriorPdfUrl ?: (rtrim($publicBaseUrl, '/') . '/' . ltrim($pdfResult['interior_path'], '/'));
             $coverPublicUrl = $customCoverPdfUrl ?: (rtrim($publicBaseUrl, '/') . '/' . ltrim($pdfResult['cover_path'], '/'));
             $pageCount = $pdfResult['page_count'];

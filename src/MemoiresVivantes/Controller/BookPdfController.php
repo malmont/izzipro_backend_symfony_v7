@@ -128,6 +128,8 @@ class BookPdfController extends AbstractController
         }
 
         $result = $this->pdfService->generateAndSaveBookPdfs($book, $style, $author, $color ?: null, $font);
+        // Réponse inchangée ; l'état et l'empreinte sont notés pour que l'impression réutilise ces fichiers tant que le livre ne change pas
+        $this->generation->recordGenerated($book, $result, $style, $author, $color ?: null, $font);
 
         return $this->json([
             'success' => true,

@@ -4,6 +4,7 @@ namespace App\MemoiresVivantes\Message;
 
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Services\BookPdfGeneratorService;
+use App\MemoiresVivantes\Services\BookPdfGenerationService;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
 use Psr\Log\LoggerInterface;
@@ -23,6 +24,7 @@ final class GenerateBookPdfHandler
         private readonly TenantConnectionManager $tenantManager,
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly BookPdfGeneratorService $pdfService,
+        private readonly BookPdfGenerationService $generation,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -52,11 +54,7 @@ final class GenerateBookPdfHandler
         $em->flush();
         try {
             $result = $this->pdfService->generateAndSaveBookPdfs($book, $message->coverStyle, $message->getAuthorName(), $message->bgColor, $message->font);
-            $book->setPdfStatus(Book::PDF_STATUS_DONE)
-                ->setPdfPageCount((int) $result['page_count'])
-                ->setPdfGeneratedAt(new \DateTimeImmutable())
-                ->setPdfError(null);
-            $em->flush();
+            $this->generation->recordGenerated($book, $result, $message->coverStyle, $message->getAuthorName(), $message->bgColor, $message->font);
             $this->logger->info(sprintf('GenerateBookPdfHandler : livre %s (site %s) mis en page, %d pages', $message->bookId, $message->tenantCode, (int) $result['page_count']));
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('GenerateBookPdfHandler : livre %s (site %s) : %s', $message->bookId, $message->tenantCode, $e->getMessage()));

@@ -33,6 +33,7 @@ class BookPdfGenerationService
         private readonly MessageBusInterface $messageBus,
         private readonly WorkerMonitor $workerMonitor,
         private readonly BookPdfGeneratorService $pdfService,
+        private readonly BookPdfFingerprint $fingerprint,
         private readonly LoggerInterface $logger,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
     ) {
@@ -102,6 +103,43 @@ class BookPdfGenerationService
     {
         $book->setPdfStatus(Book::PDF_STATUS_FAILED)->setPdfError(mb_substr($reason, 0, 1000));
         $this->emProvider->getEntityManager()->flush();
+    }
+
+    /**
+     * Note une génération réussie (worker, route synchrone ou impression) : état done, pages, date, et empreinte du contenu rendu.
+     * @param array{page_count: int} $result retour de BookPdfGeneratorService::generateAndSaveBookPdfs
+     */
+    public function recordGenerated(Book $book, array $result, string $coverStyle, ?string $authorName, ?string $bgColor, ?string $font): void
+    {
+        $book->setPdfStatus(Book::PDF_STATUS_DONE)
+            ->setPdfPageCount((int) $result['page_count'])
+            ->setPdfGeneratedAt(new \DateTimeImmutable())
+            ->setPdfError(null)
+            ->setPdfSourceHash($this->fingerprint->compute($book, $coverStyle, $authorName, $bgColor, $font));
+        $this->emProvider->getEntityManager()->flush();
+    }
+
+    /**
+     * Fichiers déjà générés réutilisables pour ces options : état done, fichiers présents, nombre de pages connu et empreinte du
+     * contenu identique à celle de la génération ; sinon null (il faut régénérer : jamais un PDF périmé à l'impression).
+     * @return array{interior_path: string, cover_path: string, page_count: int, cover_geometry: array}|null
+     */
+    public function reusable(Book $book, string $coverStyle, ?string $authorName, ?string $bgColor, ?string $font): ?array
+    {
+        if ($book->getPdfStatus() !== Book::PDF_STATUS_DONE || $book->getPdfPageCount() === null || $book->getPdfSourceHash() === null || !$this->filesReady($book)) {
+            return null;
+        }
+        if (!hash_equals($book->getPdfSourceHash(), $this->fingerprint->compute($book, $coverStyle, $authorName, $bgColor, $font))) {
+            return null;
+        }
+        $id = $book->getId()->toRfc4122();
+
+        return [
+            'interior_path' => 'uploads/memoires/books/' . $id . '/interior.pdf',
+            'cover_path' => 'uploads/memoires/books/' . $id . '/cover.pdf',
+            'page_count' => $book->getPdfPageCount(),
+            'cover_geometry' => $this->pdfService->coverGeometry($book->getPdfPageCount()),
+        ];
     }
 
     /** Les deux fichiers du livre existent sur le disque */
