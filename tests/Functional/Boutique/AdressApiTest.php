@@ -175,6 +175,58 @@ class AdressApiTest extends WebTestCase
     }
 
     /**
+     * Codes stables par champ (02/11/2026) : `error {champ: message}` inchangé, plus `code` et errors[{path, code, message, params?}] :
+     * FIELD_REQUIRED, PHONE_INVALID, POSTAL_CODE_INVALID {country} ; ADDRESS_UNDELIVERABLE quand EasyPost refuse l'adresse.
+     */
+    public function testRefusedFieldsCarryTheirCodes(): void
+    {
+        $this->loginAs();
+        $rows = $this->withoutEasyPost();
+        try {
+            $response = $this->request('POST', '/api/adresses', $this->payload(['firstname' => '', 'contactNumber' => 'abc', 'zipCode' => '75008', 'country' => 'CA']));
+            $this->assertSame(400, $response->getStatusCode(), $response->getContent());
+            $body = json_decode($response->getContent(), true);
+            $this->assertEqualsCanonicalizing(['firstname', 'zipCode', 'contactNumber'], array_keys($body['error']), 'error {champ: message} inchangé');
+            $this->assertSame('Le prénom est obligatoire.', $body['error']['firstname']);
+            $this->assertSame('VALIDATION_FAILED', $body['code']);
+            $byCode = array_column($body['errors'], null, 'code');
+            $this->assertSame(['path' => 'firstname', 'code' => 'FIELD_REQUIRED', 'message' => 'Le prénom est obligatoire.'], $byCode['FIELD_REQUIRED']);
+            $this->assertSame(['path' => 'contactNumber', 'code' => 'PHONE_INVALID', 'message' => $body['error']['contactNumber']], $byCode['PHONE_INVALID']);
+            $this->assertSame(['path' => 'zipCode', 'code' => 'POSTAL_CODE_INVALID', 'message' => 'Le code postal doit être au format canadien A1A 1A1.', 'params' => ['country' => 'CA']], $byCode['POSTAL_CODE_INVALID']);
+
+            // Modification : même forme
+            $created = json_decode($this->request('POST', '/api/adresses', $this->payload())->getContent(), true);
+            $edited = json_decode($this->request('PUT', '/api/adresses/' . $created['address']['id'], $this->payload(['zipCode' => '1', 'country' => 'FR']))->getContent(), true);
+            $this->assertSame('VALIDATION_FAILED', $edited['code']);
+            $this->assertSame([['path' => 'zipCode', 'code' => 'POSTAL_CODE_INVALID', 'message' => 'Le code postal doit compter de 3 à 10 lettres ou chiffres.', 'params' => ['country' => 'FR']]], $edited['errors']);
+            $this->assertSame(['zipCode' => 'Le code postal doit compter de 3 à 10 lettres ou chiffres.'], $edited['error']);
+        } finally {
+            $this->restoreEasyPost($rows);
+        }
+
+        // Refus d'EasyPost (adresse non livrable) : vérification simulée, sans appel réseau (noyau neuf : le service n'est pas encore instancié)
+        static::ensureKernelShutdown();
+        $this->client = static::createClient();
+        $this->client->disableReboot();
+        static::getContainer()->set(\App\Services\AdressService\AddressVerificationService::class, new class extends \App\Services\AdressService\AddressVerificationService {
+            public function __construct()
+            {
+            }
+
+            public function verifyOrKeep(array $address): array
+            {
+                throw new \RuntimeException('Adresse invalide : Address not found');
+            }
+        });
+        $response = $this->request('POST', '/api/adresses', $this->payload());
+        $this->assertSame(400, $response->getStatusCode(), $response->getContent());
+        $body = json_decode($response->getContent(), true);
+        $this->assertSame(['address' => 'Adresse invalide : Address not found'], $body['error'], 'error.address inchangé');
+        $this->assertSame('ADDRESS_UNDELIVERABLE', $body['code']);
+        $this->assertSame([['path' => 'address', 'code' => 'ADDRESS_UNDELIVERABLE', 'message' => 'Adresse invalide : Address not found']], $body['errors']);
+    }
+
+    /**
      * Retire la configuration EasyPost du site de test (le modèle en porte une) le temps du test, et la remet.
      *
      * @return list<array<string, mixed>> lignes retirées, à rendre à restoreEasyPost()

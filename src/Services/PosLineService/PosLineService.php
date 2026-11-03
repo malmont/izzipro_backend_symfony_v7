@@ -131,26 +131,26 @@ class PosLineService
     {
         $label = isset($custom['label']) && is_string($custom['label']) ? trim($custom['label']) : '';
         if ($label === '' || mb_strlen($label) > 120) {
-            $errors[] = ['path' => "$path.custom.label", 'message' => 'libellé requis (120 caractères au plus)'];
+            $errors[] = \App\Services\OrderService\CartQuoteException::error("$path.custom.label", 'CUSTOM_LABEL_INVALID', 'libellé requis (120 caractères au plus)');
 
             return null;
         }
         $price = $custom['unitPrice'] ?? null;
         if (!is_numeric($price) || (int) $price < 0 || (int) $price != $price) {
-            $errors[] = ['path' => "$path.custom.unitPrice", 'message' => 'prix unitaire en cents (entier positif ou nul) attendu'];
+            $errors[] = \App\Services\OrderService\CartQuoteException::error("$path.custom.unitPrice", 'CUSTOM_PRICE_INVALID', 'prix unitaire en cents (entier positif ou nul) attendu');
 
             return null;
         }
         $taxable = $custom['taxable'] ?? true;
         if (!is_bool($taxable)) {
-            $errors[] = ['path' => "$path.custom.taxable", 'message' => 'booléen attendu'];
+            $errors[] = \App\Services\OrderService\CartQuoteException::error("$path.custom.taxable", 'CUSTOM_TAXABLE_INVALID', 'booléen attendu');
 
             return null;
         }
         // Catégorie fiscale facultative (F18 partie 2a) : vide = standard ; taxable: false ≡ exempt
         $category = $custom['taxCategory'] ?? null;
         if ($category !== null && !\App\Services\OrderService\TaxCategory::isValid($category)) {
-            $errors[] = ['path' => "$path.custom.taxCategory", 'message' => 'valeur attendue : ' . implode(', ', \App\Services\OrderService\TaxCategory::ALL)];
+            $errors[] = \App\Services\OrderService\CartQuoteException::error("$path.custom.taxCategory", 'CUSTOM_TAX_CATEGORY_INVALID', 'valeur attendue : ' . implode(', ', \App\Services\OrderService\TaxCategory::ALL), ['allowed' => \App\Services\OrderService\TaxCategory::ALL]);
 
             return null;
         }
@@ -166,7 +166,7 @@ class PosLineService
     {
         $price = $override['unitPrice'] ?? null;
         if (!is_numeric($price) || (int) $price < 0 || (int) $price != $price) {
-            $errors[] = ['path' => "$path.priceOverride.unitPrice", 'message' => 'prix unitaire en cents (entier positif ou nul) attendu'];
+            $errors[] = \App\Services\OrderService\CartQuoteException::error("$path.priceOverride.unitPrice", 'PRICE_OVERRIDE_INVALID', 'prix unitaire en cents (entier positif ou nul) attendu');
 
             return null;
         }

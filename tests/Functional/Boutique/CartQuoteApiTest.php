@@ -82,7 +82,7 @@ class CartQuoteApiTest extends WebTestCase
 
         $tooLong = $this->quote(['items' => [['productVariantId' => $kayak, 'quantity' => 1, 'booking' => ['start' => "{$day}T09:00:00", 'end' => "{$day}T18:00:00"]]]]);
         $this->assertSame(422, $tooLong['status']);
-        $this->assertContains(['path' => 'items[0].booking.end', 'message' => 'durée maximale : 8 heure(s)'], $tooLong['body']['errors']);
+        $this->assertContains(['path' => 'items[0].booking.end', 'message' => 'durée maximale : 8 heure(s)'], array_map(fn ($e) => array_intersect_key($e, ['path' => 1, 'message' => 1]), $tooLong['body']['errors']));
 
         $closed = $this->quote(['items' => [['productVariantId' => $kayak, 'quantity' => 1, 'booking' => ['start' => "{$day}T19:00:00", 'end' => "{$day}T20:00:00"]]]]);
         $this->assertSame(422, $closed['status']);
@@ -117,7 +117,7 @@ class CartQuoteApiTest extends WebTestCase
         $show = $this->variant('DEMO-SPECTACLE');
         $refused = $this->quote(['items' => [['productVariantId' => $show, 'quantity' => 1, 'booking' => ['start' => $start->format(DATE_ATOM), 'end' => $start->modify('+1 day')->format(DATE_ATOM)]]]]);
         $this->assertSame(422, $refused['status']);
-        $this->assertContains(['path' => 'items[0].booking.start', 'message' => 'date non proposée (voir rental.allowedDates)'], $refused['body']['errors']);
+        $this->assertContains(['path' => 'items[0].booking.start', 'message' => 'date non proposée (voir rental.allowedDates)'], array_map(fn ($e) => array_intersect_key($e, ['path' => 1, 'message' => 1]), $refused['body']['errors']));
 
         // Vendu ET loué : sans dates c'est un achat, avec dates une location
         $paddle = $this->variant('DEMO-PADDLE');
@@ -170,6 +170,7 @@ class CartQuoteApiTest extends WebTestCase
         $this->assertStringContainsString('stock insuffisant', $out['body']['errors'][0]['message']);
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/api/cart/quote', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json'], '{');
         $this->assertSame(400, $this->client->getResponse()->getStatusCode());
+        $this->assertSame('INVALID_BODY', json_decode($this->client->getResponse()->getContent(), true)['code'], 'corps illisible : code de premier niveau (02/11/2026)');
     }
 
     public function testCustomizationCombinationIsCheckedAndKeptOnTheOrderLine(): void
@@ -246,6 +247,101 @@ class CartQuoteApiTest extends WebTestCase
     }
 
     /** @return array{status: int, body: array} */
+    /**
+     * Codes stables par article (02/11/2026) : chaque entrée de errors[] porte code (+ params) ; message, chemin et statut inchangés ;
+     * code de premier niveau le même que la caisse (VARIANT_NOT_FOUND, CARRIER_NOT_FOUND, sinon QUOTE_INVALID).
+     *
+     * @dataProvider quoteErrorCases
+     */
+    public function testEveryQuoteErrorCarriesAStableCodeAndItsParams(int $status, string $path, string $code, ?array $params, \Closure $body, string $topCode = 'QUOTE_INVALID'): void
+    {
+        $out = $this->quote($body($this));
+        $this->assertSame($status, $out['status'], json_encode($out['body'], JSON_UNESCAPED_UNICODE));
+        $this->assertSame($topCode, $out['body']['code'], 'code de premier niveau');
+        $this->assertSame($out['body']['error'], $out['body']['message'], 'message = error (premier niveau)');
+        $matching = array_values(array_filter($out['body']['errors'], fn ($e) => $e['code'] === $code));
+        $this->assertCount(1, $matching, "une erreur $code attendue : " . json_encode($out['body']['errors'], JSON_UNESCAPED_UNICODE));
+        $this->assertSame($path, $matching[0]['path']);
+        $this->assertNotSame('', $matching[0]['message'], 'message français conservé');
+        if ($params === null) {
+            $this->assertArrayNotHasKey('params', $matching[0]);
+        } else {
+            $this->assertSame($params, $matching[0]['params']);
+        }
+        if ($status === 422) {
+            $this->assertStringStartsWith($matching[0]['path'] . ' : ' . $matching[0]['message'], $out['body']['error'], 'message de premier niveau inchangé (première erreur)');
+        }
+    }
+
+    /** @return iterable<string, array{0: int, 1: string, 2: string, 3: ?array, 4: \Closure, 5?: string}> */
+    public static function quoteErrorCases(): iterable
+    {
+        $day = (new \DateTimeImmutable('+5 days'))->format('Y-m-d');
+        $kayak = fn (array $booking, int $quantity = 1) => fn (self $t) => ['items' => [['productVariantId' => $t->variant('DEMO-KAYAK'), 'quantity' => $quantity, 'booking' => $booking + ['start' => "{$day}T10:00:00", 'end' => "{$day}T12:00:00"]]]];
+        yield 'ITEMS_REQUIRED' => [400, 'items', 'ITEMS_REQUIRED', null, fn (self $t) => ['items' => []]];
+        yield 'ITEM_INVALID' => [400, 'items[0]', 'ITEM_INVALID', null, fn (self $t) => ['items' => ['pas un objet']]];
+        yield 'SHIPPING_PRICE_INVALID' => [400, 'shippingPrice', 'SHIPPING_PRICE_INVALID', null, fn (self $t) => ['items' => [['productVariantId' => $t->variant('DEMO-CASQUETTE'), 'quantity' => 1]], 'shippingPrice' => -1]];
+        yield 'VARIANT_NOT_FOUND' => [404, 'items[0].productVariantId', 'VARIANT_NOT_FOUND', null, fn (self $t) => ['items' => [['productVariantId' => 999999, 'quantity' => 1]]], 'VARIANT_NOT_FOUND'];
+        yield 'CARRIER_NOT_FOUND' => [404, 'carrierId', 'CARRIER_NOT_FOUND', null, fn (self $t) => ['items' => [['productVariantId' => $t->variant('DEMO-CASQUETTE'), 'quantity' => 1]], 'carrierId' => 999], 'CARRIER_NOT_FOUND'];
+        yield 'QUANTITY_INVALID' => [422, 'items[0].quantity', 'QUANTITY_INVALID', null, fn (self $t) => ['items' => [['productVariantId' => $t->variant('DEMO-CASQUETTE'), 'quantity' => 0]]]];
+        yield 'STOCK_INSUFFICIENT' => [422, 'items[0].quantity', 'STOCK_INSUFFICIENT', ['available' => 0], fn (self $t) => ['items' => [['productVariantId' => $t->variant('DEMO-VESTE'), 'quantity' => 1]]]];
+        yield 'CUSTOMIZATION_NOT_FOUND' => [422, 'items[0].customizationId', 'CUSTOMIZATION_NOT_FOUND', null, fn (self $t) => ['items' => [['productVariantId' => $t->variant('DEMO-GOURDE'), 'quantity' => 1, 'customizationId' => 999999]]]];
+        yield 'BOOKING_REQUIRED' => [422, 'items[0].booking', 'BOOKING_REQUIRED', null, fn (self $t) => ['items' => [['productVariantId' => $t->variant('DEMO-KAYAK'), 'quantity' => 1]]]];
+        yield 'NOT_RENTABLE' => [422, 'items[0].booking', 'NOT_RENTABLE', null, fn (self $t) => ['items' => [['productVariantId' => $t->variant('DEMO-CASQUETTE'), 'quantity' => 1, 'booking' => ['start' => "{$day}T10:00:00", 'end' => "{$day}T12:00:00"]]]]];
+        yield 'BOOKING_DATES_INVALID' => [422, 'items[0].booking', 'BOOKING_DATES_INVALID', null, $kayak(['start' => 'pas-une-date'])];
+        yield 'BOOKING_END_BEFORE_START' => [422, 'items[0].booking.end', 'BOOKING_END_BEFORE_START', null, $kayak(['start' => "{$day}T12:00:00", 'end' => "{$day}T10:00:00"])];
+        yield 'DURATION_TYPE_INVALID' => [422, 'items[0].booking.durationType', 'DURATION_TYPE_INVALID', ['allowed' => ['hour', 'halfDay', 'day', 'week', 'month']], $kayak(['durationType' => 'fortnight'])];
+        yield 'DURATION_TOO_SHORT' => [422, 'items[0].booking.end', 'DURATION_TOO_SHORT', ['value' => 1, 'unit' => 'hour'], $kayak(['end' => "{$day}T10:30:00"])];
+        yield 'DURATION_TOO_LONG' => [422, 'items[0].booking.end', 'DURATION_TOO_LONG', ['value' => 8, 'unit' => 'hour'], $kayak(['start' => "{$day}T09:00:00", 'end' => "{$day}T18:00:00"])];
+        yield 'OUTSIDE_OPENING_HOURS' => [422, 'items[0].booking.start', 'OUTSIDE_OPENING_HOURS', ['start' => '09:00', 'end' => '18:00'], $kayak(['start' => "{$day}T19:00:00", 'end' => "{$day}T20:00:00"])];
+        yield 'DATES_UNAVAILABLE' => [422, 'items[0].quantity', 'DATES_UNAVAILABLE', ['remaining' => 6], $kayak([], 7)];
+        yield 'RATE_UNKNOWN' => [422, 'items[0].booking.rateId', 'RATE_UNKNOWN', ['rateId' => 999999], $kayak(['rateId' => 999999])];
+        yield 'DAYS_MINIMUM' => [422, 'items[0].booking.end', 'DAYS_MINIMUM', ['value' => 2], fn (self $t) => ['items' => [['productVariantId' => $t->variant('DEMO-PONTON'), 'quantity' => 1, 'booking' => ['start' => "{$day}T09:00:00", 'end' => "{$day}T18:00:00"]]]]];
+        yield 'DATE_NOT_OFFERED' => [422, 'items[0].booking.start', 'DATE_NOT_OFFERED', null, fn (self $t) => ['items' => [['productVariantId' => $t->variant('DEMO-SPECTACLE'), 'quantity' => 1, 'booking' => ['start' => $t->showDate(false) . 'T10:00:00', 'end' => $t->showDate(false) . 'T23:00:00']]]]];
+        yield 'RATE_NOT_FOUND' => [422, 'items[0].booking.durationType', 'RATE_NOT_FOUND', ['durationType' => 'hour'], fn (self $t) => ['items' => [['productVariantId' => $t->variant('DEMO-SPECTACLE'), 'quantity' => 1, 'booking' => ['start' => $t->showDate(true) . 'T10:00:00', 'end' => $t->showDate(true) . 'T23:00:00', 'durationType' => 'hour']]]]];
+    }
+
+    /** NOT_SELLABLE (produit ni vendu ni loué) et NO_RENTAL_RATE (aucun forfait pour le produit) : données modifiées le temps du test */
+    public function testUnsellableProductAndProductWithoutRateCarryTheirCodes(): void
+    {
+        $this->db->executeStatement("UPDATE product SET sale_enabled = false WHERE code = 'DEMO-CASQUETTE'");
+        $packId = (int) $this->db->fetchOne("SELECT id FROM rental_pack WHERE name = 'Tarif spectacle'");
+        $links = $this->db->fetchAllAssociative('SELECT * FROM rental_pack_categories WHERE rental_pack_id = ?', [$packId]);
+        $this->db->executeStatement('DELETE FROM rental_pack_categories WHERE rental_pack_id = ?', [$packId]);
+        static::getContainer()->get(TenantEntityManagerProvider::class)->getEntityManager()->clear(); // entités chargées par le jeu d'essai : relues après les UPDATE
+        try {
+            $unsellable = $this->quote(['items' => [['productVariantId' => $this->variant('DEMO-CASQUETTE'), 'quantity' => 1]]]);
+            $this->assertSame(422, $unsellable['status'], json_encode($unsellable['body'], JSON_UNESCAPED_UNICODE));
+            $this->assertSame(['path' => 'items[0]', 'message' => 'ce produit ne se vend pas', 'code' => 'NOT_SELLABLE'], $unsellable['body']['errors'][0]);
+
+            $date = $this->showDate(true);
+            $noRate = $this->quote(['items' => [['productVariantId' => $this->variant('DEMO-SPECTACLE'), 'quantity' => 1, 'booking' => ['start' => "{$date}T10:00:00", 'end' => "{$date}T23:00:00"]]]]);
+            $this->assertSame(422, $noRate['status']);
+            $this->assertSame(['path' => 'items[0].booking.rateId', 'message' => 'aucun tarif de location pour ce produit', 'code' => 'NO_RENTAL_RATE'], $noRate['body']['errors'][0]);
+        } finally {
+            $this->db->executeStatement("UPDATE product SET sale_enabled = true WHERE code = 'DEMO-CASQUETTE'");
+            foreach ($links as $link) {
+                $this->db->insert('rental_pack_categories', $link);
+            }
+        }
+    }
+
+    /** Une date proposée (allowedDates du spectacle de démonstration), ou une date qui ne l'est pas */
+    private function showDate(bool $offered): string
+    {
+        $dates = json_decode((string) $this->db->fetchOne("SELECT bc.allowed_dates FROM booking_configuration bc JOIN product p ON p.id = bc.product_id WHERE p.code = 'DEMO-SPECTACLE'"), true);
+        $this->assertNotEmpty($dates, 'le spectacle de démonstration a des dates proposées');
+        if ($offered) {
+            return $dates[0];
+        }
+        $candidate = new \DateTimeImmutable('+3 days');
+        while (in_array($candidate->format('Y-m-d'), $dates, true)) {
+            $candidate = $candidate->modify('+1 day');
+        }
+
+        return $candidate->format('Y-m-d');
+    }
+
     private function quote(array $body): array
     {
         $response = $this->request('POST', '/api/cart/quote', json_encode($body));

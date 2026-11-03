@@ -21,12 +21,12 @@ final class CheckoutCustomerService
     public function customer(User $user, array $data): array
     {
         if (!isset($data['addressId'], $data['items'])) {
-            throw new CheckoutException(400, 'Missing required fields (addressId, items)');
+            throw new CheckoutException(400, 'Missing required fields (addressId, items)', [], 'FIELDS_REQUIRED');
         }
         $em = $this->emProvider->getEntityManager();
         $address = $em->getRepository(Adress::class)->find($data['addressId']);
         if (!$address || $address->getUserAdress()?->getId() !== $user->getId()) {
-            throw new CheckoutException(403, 'Unauthorized: Invalid address');
+            throw new CheckoutException(403, 'Unauthorized: Invalid address', [], 'ADDRESS_FORBIDDEN');
         }
         $this->checkCarrier($data);
 
@@ -40,17 +40,17 @@ final class CheckoutCustomerService
     public function guest(array $data): array
     {
         if (!isset($data['guestInfo'], $data['items'], $data['shippingAddress'])) {
-            throw new CheckoutException(400, 'Missing required guest fields');
+            throw new CheckoutException(400, 'Missing required guest fields', [], 'GUEST_FIELDS_REQUIRED');
         }
         $guestInfo = $data['guestInfo'];
         $email = is_string($guestInfo['email'] ?? null) ? trim($guestInfo['email']) : '';
         if ($email === '') {
-            throw new CheckoutException(400, 'Email is required');
+            throw new CheckoutException(400, 'Email is required', [], 'EMAIL_REQUIRED');
         }
         // Permis exigé seulement pour une location (un article avec réservation)
         foreach (is_array($data['items']) ? $data['items'] : [] as $item) {
             if ((isset($item['booking']) || isset($item['rental'])) && (empty($guestInfo['licenseNumber']) || empty($guestInfo['licenseExpirationDate']))) {
-                throw new CheckoutException(400, 'License number and expiration date are required for rental orders.');
+                throw new CheckoutException(400, 'License number and expiration date are required for rental orders.', [], 'LICENSE_REQUIRED');
             }
         }
         $this->checkCarrier($data);
@@ -117,10 +117,10 @@ final class CheckoutCustomerService
     private function checkCarrier(array $data): void
     {
         if (!empty($data['carrierId']) && $this->emProvider->getEntityManager()->getRepository(Carrier::class)->find($data['carrierId']) === null) {
-            throw new CheckoutException(404, 'Carrier not found');
+            throw new CheckoutException(404, 'Carrier not found', [], 'CARRIER_NOT_FOUND');
         }
         if (isset($data['priceShipping']) && (float) $data['priceShipping'] < 0) {
-            throw new CheckoutException(400, 'Frais de livraison invalides');
+            throw new CheckoutException(400, 'Frais de livraison invalides', [], 'SHIPPING_PRICE_INVALID');
         }
     }
 

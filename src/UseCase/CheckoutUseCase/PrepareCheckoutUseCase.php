@@ -43,11 +43,11 @@ final class PrepareCheckoutUseCase
         try {
             $quote = $this->quotes->quote(CartQuoteInputDto::fromArray($payload));
         } catch (CartQuoteException $e) {
-            throw new CheckoutException($e->getStatusCode(), $e->getMessage(), $e->errors);
+            throw new CheckoutException($e->getStatusCode(), $e->getMessage(), $e->errors, $e->code()); // code et errors[] codées du devis (02/11/2026)
         }
         $amount = (int) $quote['total'];
         if ($amount <= 0) {
-            throw new CheckoutException(400, 'Montant invalide calculé');
+            throw new CheckoutException(400, 'Montant invalide calculé', [], 'AMOUNT_INVALID');
         }
         $cart = array_intersect_key($payload, array_flip(['items', 'carrierId', 'priceShipping', 'shippingPrice', 'service', 'shippingAddress', 'booking']));
         $opened = $this->sessions->open($cart, $amount, (string) $quote['currency'], $user, $order, $locale, $host, $reuse);

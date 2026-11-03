@@ -76,11 +76,7 @@ class AdressApiController extends AbstractController
         // Validation DTO
         $violations = $validator->validate($dto);
         if (count($violations) > 0) {
-            $errors = [];
-            foreach ($violations as $v) {
-                $errors[$v->getPropertyPath()] = $v->getMessage();
-            }
-            return $this->json(['error' => $errors], Response::HTTP_BAD_REQUEST);
+            return $this->json(self::validationBody($dto, $violations), Response::HTTP_BAD_REQUEST);
         }
 
         // Vérification & normalisation via EasyPost ; sans EasyPost sur le site, adresse gardée telle quelle (31/10/2026)
@@ -94,10 +90,7 @@ class AdressApiController extends AbstractController
                 'country'     => $dto->country,
             ]);
         } catch (\RuntimeException $e) {
-            return $this->json(
-                ['error' => ['address' => $e->getMessage()]],
-                Response::HTTP_BAD_REQUEST
-            );
+            return $this->json(self::undeliverableBody($e->getMessage()), Response::HTTP_BAD_REQUEST);
         }
 
         // Injecter la version normalisée
@@ -135,11 +128,7 @@ class AdressApiController extends AbstractController
         // Validation DTO
         $violations = $validator->validate($dto);
         if (count($violations) > 0) {
-            $errors = [];
-            foreach ($violations as $v) {
-                $errors[$v->getPropertyPath()] = $v->getMessage();
-            }
-            return $this->json(['error' => $errors], Response::HTTP_BAD_REQUEST);
+            return $this->json(self::validationBody($dto, $violations), Response::HTTP_BAD_REQUEST);
         }
 
         // Vérification & normalisation via EasyPost ; sans EasyPost sur le site, adresse gardée telle quelle (31/10/2026)
@@ -153,10 +142,7 @@ class AdressApiController extends AbstractController
                 'country'     => $dto->country,
             ]);
         } catch (\RuntimeException $e) {
-            return $this->json(
-                ['error' => ['address' => $e->getMessage()]],
-                Response::HTTP_BAD_REQUEST
-            );
+            return $this->json(self::undeliverableBody($e->getMessage()), Response::HTTP_BAD_REQUEST);
         }
 
         // Injecter la version normalisée
@@ -176,6 +162,35 @@ class AdressApiController extends AbstractController
 
         $em->flush();
         return $this->json(['success' => 'Adresse mise à jour avec succès', 'address' => new AdressOutputDTO($adress)], Response::HTTP_OK);
+    }
+
+    /**
+     * Refus champ par champ : `error {champ: message}` inchangé (site web), plus `code` VALIDATION_FAILED et
+     * `errors[{path, code, message, params?}]` (02/11/2026, application mobile : FIELD_REQUIRED, PHONE_INVALID, POSTAL_CODE_INVALID {country}).
+     *
+     * @return array<string, mixed>
+     */
+    private static function validationBody(AdressInputDTO $dto, iterable $violations): array
+    {
+        $error = [];
+        $errors = [];
+        foreach ($violations as $v) {
+            $error[$v->getPropertyPath()] = $v->getMessage();
+            $errors[] = $dto->errorOf($v);
+        }
+
+        return ['error' => $error, 'code' => 'VALIDATION_FAILED', 'message' => 'Adresse invalide', 'errors' => $errors];
+    }
+
+    /**
+     * Refus d'EasyPost (adresse non livrable) : `error.address` inchangé, plus `code` ADDRESS_UNDELIVERABLE et `errors[]`.
+     *
+     * @return array<string, mixed>
+     */
+    private static function undeliverableBody(string $message): array
+    {
+        return ['error' => ['address' => $message], 'code' => 'ADDRESS_UNDELIVERABLE', 'message' => $message,
+            'errors' => [['path' => 'address', 'code' => 'ADDRESS_UNDELIVERABLE', 'message' => $message]]];
     }
 
     /**

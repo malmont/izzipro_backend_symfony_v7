@@ -317,7 +317,8 @@ class OrderController extends AbstractController
             // 400 et 402 : authorizationCanceled (01/11/2026) dit si l'autorisation Stripe est annulée ; les autres statuts sont inchangés
             $extra = in_array($e->getStatusCode(), [400, 402], true) ? ['authorizationCanceled' => (bool) $e->authorizationCanceled] : [];
 
-            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]) + $extra, $e->getStatusCode());
+            // code de premier niveau et errors[{path, code, message, params?}] (02/11/2026) : ajouts, message et statut inchangés
+            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]) + ['code' => $e->code(), 'message' => $e->getMessage()] + $extra, $e->getStatusCode());
         }
     }
 

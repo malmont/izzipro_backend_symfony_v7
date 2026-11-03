@@ -25,6 +25,10 @@ use App\Services\TenantEntityManagerProvider;
  * jours minimum à la journée, dates autorisées, heures d'ouverture (ou créneau du soir), disponibilité ; frais par
  * passager ajoutés à la ligne ; caution rapportée à part, hors total.
  *
+ * Erreurs (02/11/2026) : chaque entrée de errors[] porte un code stable (CartQuoteException::error : QUANTITY_INVALID,
+ * STOCK_INSUFFICIENT {available}, DURATION_TOO_LONG {value, unit}…) que les applications traduisent elles-mêmes ; les messages
+ * français et le message de premier niveau ne changent pas. Table : docs/boutique.md, « Codes du devis, de l'adresse et de la commande ».
+ *
  * Livraison : 0 sans transporteur ; prix fixe du transporteur ; pour un transporteur EasyPost (carrierAccountId),
  * le tarif choisi envoyé par le navigateur (shippingPrice, cents). Taxes : TaxEngine selon l'adresse de livraison
  * (table du site par région, ou Stripe Tax) ; sans adresse, aucune taxe et taxStatus address_required.
@@ -57,7 +61,7 @@ final class CartQuoteCalculator
             $path = "items[$i]";
             $quantity = $item['quantity'] ?? null;
             if (!is_numeric($quantity) || (int) $quantity < 1 || (int) $quantity != $quantity) {
-                $errors[] = ['path' => "$path.quantity", 'message' => 'entier positif attendu'];
+                $errors[] = CartQuoteException::error("$path.quantity", 'QUANTITY_INVALID', 'entier positif attendu');
                 continue;
             }
             $quantity = (int) $quantity;
@@ -75,20 +79,20 @@ final class CartQuoteCalculator
             $variant = is_numeric($item['productVariantId'] ?? null) ? $em->getRepository(ProductVariant::class)->find((int) $item['productVariantId']) : null;
             $product = $variant?->getProduct();
             if ($variant === null || $product === null) {
-                throw new CartQuoteException(404, "$path.productVariantId : variante introuvable", [['path' => "$path.productVariantId", 'message' => 'variante introuvable']]);
+                throw new CartQuoteException(404, "$path.productVariantId : variante introuvable", [CartQuoteException::error("$path.productVariantId", 'VARIANT_NOT_FOUND', 'variante introuvable')]);
             }
             $booking = $item['booking'] ?? $item['rental'] ?? null;
             $isRental = RentalLineResolver::isRental($product, $item);
             if ($isRental && !is_array($booking)) {
-                $errors[] = ['path' => "$path.booking", 'message' => 'ce produit se loue seulement : dates de réservation attendues (start, end)'];
+                $errors[] = CartQuoteException::error("$path.booking", 'BOOKING_REQUIRED', 'ce produit se loue seulement : dates de réservation attendues (start, end)');
                 continue;
             }
             if (!$isRental && is_array($booking) && $booking !== [] && !$product->isRentalEnabled()) {
-                $errors[] = ['path' => "$path.booking", 'message' => 'ce produit ne se loue pas'];
+                $errors[] = CartQuoteException::error("$path.booking", 'NOT_RENTABLE', 'ce produit ne se loue pas');
                 continue;
             }
             if (!$isRental && !$product->isSaleEnabled()) {
-                $errors[] = ['path' => $path, 'message' => 'ce produit ne se vend pas'];
+                $errors[] = CartQuoteException::error($path, 'NOT_SELLABLE', 'ce produit ne se vend pas');
                 continue;
             }
 
@@ -106,14 +110,14 @@ final class CartQuoteCalculator
                 $deposit += $priced['booking']['deposit'] * $quantity;
             } else {
                 if ($variant->getStockQuantity() < $quantity) {
-                    $errors[] = ['path' => "$path.quantity", 'message' => sprintf('stock insuffisant (%d disponible(s))', $variant->getStockQuantity())];
+                    $errors[] = CartQuoteException::error("$path.quantity", 'STOCK_INSUFFICIENT', sprintf('stock insuffisant (%d disponible(s))', $variant->getStockQuantity()), ['available' => (int) $variant->getStockQuantity()]);
                     continue;
                 }
                 $line['unitPrice'] = (int) round($variant->getPrice() ?? $product->getEffectivePrice());
                 $customizationId = is_numeric($item['customizationId'] ?? null) ? (int) $item['customizationId'] : null;
                 $combination = $customizationId !== null ? $variant->getProductCustomizationImages()->filter(fn ($c) => $c->getId() === $customizationId)->first() : null;
                 if ($customizationId !== null && !$combination) {
-                    $errors[] = ['path' => "$path.customizationId", 'message' => 'combinaison de personnalisation inconnue pour cette variante'];
+                    $errors[] = CartQuoteException::error("$path.customizationId", 'CUSTOMIZATION_NOT_FOUND', 'combinaison de personnalisation inconnue pour cette variante');
                     continue;
                 }
                 // Personnalisation : supplément des options de la combinaison ajouté au prix unitaire (devis, intent, ligne)
@@ -174,7 +178,7 @@ final class CartQuoteCalculator
      * (erreurs ajoutées à $errors).
      *
      * @param array<string, mixed> $booking
-     * @param list<array{path: string, message: string}> $errors
+     * @param list<array{path: string, message: string, code: string, params?: array<string, mixed>}> $errors
      * @return array{unitPrice: int, booking: array<string, mixed>}|null
      */
     private function rental(Product $product, array $booking, int $quantity, string $path, array &$errors): ?array
@@ -184,12 +188,12 @@ final class CartQuoteCalculator
             $start = new \DateTimeImmutable((string) ($booking['start'] ?? ''));
             $end = new \DateTimeImmutable((string) ($booking['end'] ?? ''));
         } catch (\Exception) {
-            $errors[] = ['path' => "$path.booking", 'message' => 'dates start et end attendues (ISO 8601)'];
+            $errors[] = CartQuoteException::error("$path.booking", 'BOOKING_DATES_INVALID', 'dates start et end attendues (ISO 8601)');
 
             return null;
         }
         if ($end <= $start) {
-            $errors[] = ['path' => "$path.booking.end", 'message' => 'la fin doit suivre le début'];
+            $errors[] = CartQuoteException::error("$path.booking.end", 'BOOKING_END_BEFORE_START', 'la fin doit suivre le début');
 
             return null;
         }
@@ -202,7 +206,7 @@ final class CartQuoteCalculator
         $type = $booking['durationType'] ?? $booking['duration_type'] ?? ($hourly ? 'hour' : 'day');
         $type = match ($type) { 'half_day' => 'halfDay', default => $type };
         if (!isset(self::UNITS[$type])) {
-            $errors[] = ['path' => "$path.booking.durationType", 'message' => 'valeur attendue : hour, halfDay, day, week, month'];
+            $errors[] = CartQuoteException::error("$path.booking.durationType", 'DURATION_TYPE_INVALID', 'valeur attendue : hour, halfDay, day, week, month', ['allowed' => array_keys(self::UNITS)]);
 
             return null;
         }
@@ -212,12 +216,16 @@ final class CartQuoteCalculator
         }
         $remaining = $this->availability->getRemainingStock($product, $start, $end);
         if ($remaining < $quantity) {
-            $errors[] = ['path' => "$path.quantity", 'message' => sprintf('indisponible sur ces dates : il reste %d place(s)', max(0, $remaining)), 'remaining' => max(0, $remaining)];
+            $errors[] = CartQuoteException::error("$path.quantity", 'DATES_UNAVAILABLE', sprintf('indisponible sur ces dates : il reste %d place(s)', max(0, $remaining)), ['remaining' => max(0, $remaining)]) + ['remaining' => max(0, $remaining)];
         }
 
-        [$pack, $packError] = $this->pack($product, $booking['rateId'] ?? $booking['rentalPackId'] ?? null);
+        $rateId = $booking['rateId'] ?? $booking['rentalPackId'] ?? null;
+        [$pack, $packError] = $this->pack($product, $rateId);
         if ($packError !== null) {
-            $errors[] = ['path' => "$path.booking.rateId", 'message' => $packError];
+            // RATE_UNKNOWN : rateId envoyé mais étranger au produit ; NO_RENTAL_RATE : le produit n'a aucun forfait
+            $errors[] = $rateId !== null && $rateId !== ''
+                ? CartQuoteException::error("$path.booking.rateId", 'RATE_UNKNOWN', $packError, ['rateId' => is_numeric($rateId) ? (int) $rateId : (string) $rateId])
+                : CartQuoteException::error("$path.booking.rateId", 'NO_RENTAL_RATE', $packError);
         }
         if (count($errors) > $before) {
             return null;
@@ -226,7 +234,7 @@ final class CartQuoteCalculator
         $units = max(1, (int) ceil(($in === 'h' ? $hours : $days) / $length));
         $rate = (int) round($this->rate($pack, $type));
         if ($rate <= 0) {
-            $errors[] = ['path' => "$path.booking.durationType", 'message' => sprintf('aucun tarif « %s » pour ce produit', $type)];
+            $errors[] = CartQuoteException::error("$path.booking.durationType", 'RATE_NOT_FOUND', sprintf('aucun tarif « %s » pour ce produit', $type), ['durationType' => $type]);
 
             return null;
         }
@@ -243,22 +251,23 @@ final class CartQuoteCalculator
         ];
     }
 
-    /** @param list<array{path: string, message: string}> $errors */
+    /** @param list<array{path: string, message: string, code: string, params?: array<string, mixed>}> $errors */
     private function checkConfiguration(BookingConfiguration $config, bool $hourly, float $measure, int $days, \DateTimeImmutable $start, \DateTimeImmutable $end, string $path, array &$errors): void
     {
         $unit = $hourly ? 'heure(s)' : 'jour(s)';
+        $unitCode = $hourly ? 'hour' : 'day'; // params.unit : unité de la grille, dans le vocabulaire de durationType
         if ($config->getMinDuration() !== null && $measure < $config->getMinDuration()) {
-            $errors[] = ['path' => "$path.booking.end", 'message' => sprintf('durée minimale : %d %s', $config->getMinDuration(), $unit)];
+            $errors[] = CartQuoteException::error("$path.booking.end", 'DURATION_TOO_SHORT', sprintf('durée minimale : %d %s', $config->getMinDuration(), $unit), ['value' => (int) $config->getMinDuration(), 'unit' => $unitCode]);
         }
         if ($config->getMaxDuration() !== null && $measure > $config->getMaxDuration()) {
-            $errors[] = ['path' => "$path.booking.end", 'message' => sprintf('durée maximale : %d %s', $config->getMaxDuration(), $unit)];
+            $errors[] = CartQuoteException::error("$path.booking.end", 'DURATION_TOO_LONG', sprintf('durée maximale : %d %s', $config->getMaxDuration(), $unit), ['value' => (int) $config->getMaxDuration(), 'unit' => $unitCode]);
         }
         if (!$hourly && $config->getMinDaysStandard() !== null && $days < $config->getMinDaysStandard()) {
-            $errors[] = ['path' => "$path.booking.end", 'message' => sprintf('%d jour(s) minimum à la journée', $config->getMinDaysStandard())];
+            $errors[] = CartQuoteException::error("$path.booking.end", 'DAYS_MINIMUM', sprintf('%d jour(s) minimum à la journée', $config->getMinDaysStandard()), ['value' => (int) $config->getMinDaysStandard()]);
         }
         $allowed = $config->getAllowedDates() ?: null;
         if ($allowed !== null && !in_array($start->format('Y-m-d'), $allowed, true)) {
-            $errors[] = ['path' => "$path.booking.start", 'message' => 'date non proposée (voir rental.allowedDates)'];
+            $errors[] = CartQuoteException::error("$path.booking.start", 'DATE_NOT_OFFERED', 'date non proposée (voir rental.allowedDates)');
         }
         if ($hourly && $config->getOpeningStart() !== null && $config->getOpeningEnd() !== null) {
             $from = $start->format('H:i');
@@ -266,8 +275,10 @@ final class CartQuoteCalculator
             $inside = fn (string $open, string $close) => $from >= $open && ($to <= $close || $to === '00:00') && $start->format('Y-m-d') === $end->modify('-1 second')->format('Y-m-d');
             $evening = $config->getEveningSlot();
             if (!$inside($config->getOpeningStart(), $config->getOpeningEnd()) && !(is_array($evening) && isset($evening['start'], $evening['end']) && $inside((string) $evening['start'], (string) $evening['end']))) {
-                $errors[] = ['path' => "$path.booking.start", 'message' => sprintf('créneau hors des heures d\'ouverture (%s à %s%s)', $config->getOpeningStart(), $config->getOpeningEnd(),
-                    is_array($evening) && isset($evening['start'], $evening['end']) ? sprintf(', ou %s à %s', $evening['start'], $evening['end']) : '')];
+                $hasEvening = is_array($evening) && isset($evening['start'], $evening['end']);
+                $errors[] = CartQuoteException::error("$path.booking.start", 'OUTSIDE_OPENING_HOURS', sprintf('créneau hors des heures d\'ouverture (%s à %s%s)', $config->getOpeningStart(), $config->getOpeningEnd(),
+                    $hasEvening ? sprintf(', ou %s à %s', $evening['start'], $evening['end']) : ''),
+                    ['start' => $config->getOpeningStart(), 'end' => $config->getOpeningEnd()] + ($hasEvening ? ['eveningStart' => (string) $evening['start'], 'eveningEnd' => (string) $evening['end']] : []));
             }
         }
     }
@@ -309,7 +320,7 @@ final class CartQuoteCalculator
         }
         $carrier = $this->emProvider->getEntityManager()->getRepository(Carrier::class)->find($input->carrierId);
         if ($carrier === null) {
-            throw new CartQuoteException(404, 'carrierId : transporteur introuvable', [['path' => 'carrierId', 'message' => 'transporteur introuvable']]);
+            throw new CartQuoteException(404, 'carrierId : transporteur introuvable', [CartQuoteException::error('carrierId', 'CARRIER_NOT_FOUND', 'transporteur introuvable')]);
         }
         // Transporteur EasyPost : le tarif dépend des colis et de l'adresse (shipping/summary) ; sinon prix fixe du transporteur
         $price = $carrier->getCarrierAccountId() ? ($input->shippingPrice ?? (int) round((float) $carrier->getPrice())) : (int) round((float) $carrier->getPrice());

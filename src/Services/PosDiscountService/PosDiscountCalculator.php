@@ -91,7 +91,7 @@ final class PosDiscountCalculator
             return [];
         }
         if (!is_array($raw) || array_keys($raw) !== range(0, count($raw) - 1)) {
-            throw new CartQuoteException(422, "$path : liste de remises attendue", [['path' => $path, 'message' => 'liste attendue']]);
+            throw new CartQuoteException(422, "$path : liste de remises attendue", [CartQuoteException::error($path, 'DISCOUNTS_LIST_INVALID', 'liste attendue')]);
         }
 
         return array_map(fn ($d, $k) => self::one($d, "$path[$k]"), $raw, array_keys($raw));
@@ -101,14 +101,14 @@ final class PosDiscountCalculator
     public static function one(mixed $raw, string $path): array
     {
         if (!is_array($raw) || !in_array($raw['type'] ?? null, [self::PERCENT, self::AMOUNT], true) || !is_numeric($raw['value'] ?? null) || (float) $raw['value'] <= 0) {
-            throw new CartQuoteException(422, "$path : {type: percent | amount, value > 0} attendu", [['path' => $path, 'message' => '{type: percent | amount, value > 0}']]);
+            throw new CartQuoteException(422, "$path : {type: percent | amount, value > 0} attendu", [CartQuoteException::error($path, 'DISCOUNT_INVALID', '{type: percent | amount, value > 0}')]);
         }
         $value = (float) $raw['value'];
         if ($raw['type'] === self::PERCENT && ($value > 100 || round($value, 2) !== $value)) {
-            throw new CartQuoteException(422, "$path.value : pourcentage entre 0,01 et 100 (deux décimales au plus)", [['path' => "$path.value", 'message' => 'pourcentage invalide']]);
+            throw new CartQuoteException(422, "$path.value : pourcentage entre 0,01 et 100 (deux décimales au plus)", [CartQuoteException::error("$path.value", 'DISCOUNT_PERCENT_INVALID', 'pourcentage invalide')]);
         }
         if ($raw['type'] === self::AMOUNT && (float) (int) $value !== $value) {
-            throw new CartQuoteException(422, "$path.value : montant entier en cents attendu", [['path' => "$path.value", 'message' => 'cents attendus']]);
+            throw new CartQuoteException(422, "$path.value : montant entier en cents attendu", [CartQuoteException::error("$path.value", 'DISCOUNT_AMOUNT_INVALID', 'cents attendus')]);
         }
 
         return ['type' => $raw['type'], 'value' => $raw['type'] === self::PERCENT ? $value : (int) $value,

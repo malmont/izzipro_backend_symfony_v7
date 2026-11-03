@@ -120,7 +120,7 @@ final class FinalizeCheckoutOrderUseCase
     {
         $intent = $this->payments->retrieve($paymentIntentId);
         if ($intent === null || !in_array($intent['status'], self::PAID, true)) {
-            throw new CheckoutException(402, 'Payment verification failed or payment not completed');
+            throw new CheckoutException(402, 'Payment verification failed or payment not completed', [], 'PAYMENT_NOT_VERIFIED');
         }
 
         $session = $this->sessions->find($paymentIntentId);
@@ -131,9 +131,9 @@ final class FinalizeCheckoutOrderUseCase
                 return $this->existing($order, $mode, $data, $user);
             }
             if ($session->getStatus() === CheckoutSession::STATUS_PROCESSING) {
-                throw new CheckoutException(409, 'La commande de ce paiement est en cours de création : réessayez dans un instant.');
+                throw new CheckoutException(409, 'La commande de ce paiement est en cours de création : réessayez dans un instant.', [], 'ORDER_IN_PROGRESS');
             }
-            throw new CheckoutException(400, (string) ($session->getLastError() ?? 'Commande refusée.'));
+            throw new CheckoutException(400, (string) ($session->getLastError() ?? 'Commande refusée.'), [], 'ORDER_REFUSED');
         }
 
         try {
@@ -161,8 +161,10 @@ final class FinalizeCheckoutOrderUseCase
             if (!$result instanceof Order) {
                 // Commande refusée après le paiement (stock, montant…) : l'autorisation est libérée, le client n'est pas débité
                 $canceled = $this->payments->cancel($paymentIntentId);
-                $message = $result instanceof JsonResponse ? (json_decode((string) $result->getContent(), true)['error'] ?? 'Commande refusée.') : 'Commande refusée.';
-                $refused = new CheckoutException(400, $message);
+                // Message, code (VARIANT_NOT_FOUND, QUOTE_INVALID, BAD_REQUEST…) et errors[] codées du devis repris du refus (02/11/2026)
+                $body = $result instanceof JsonResponse ? (array) json_decode((string) $result->getContent(), true) : [];
+                $message = is_string($body['error'] ?? null) ? $body['error'] : 'Commande refusée.';
+                $refused = new CheckoutException(400, $message, is_array($body['errors'] ?? null) ? array_values($body['errors']) : [], is_string($body['code'] ?? null) ? $body['code'] : 'ORDER_REFUSED');
                 $refused->authorizationCanceled = $canceled;
                 throw $refused;
             }
@@ -204,7 +206,7 @@ final class FinalizeCheckoutOrderUseCase
             ? $user !== null && $owner?->getId() === $user->getId()
             : $owner !== null && mb_strtolower(trim((string) ($data['guestInfo']['email'] ?? ''))) === mb_strtolower((string) $owner->getEmail());
         if (!$allowed) {
-            throw new CheckoutException(409, 'Ce paiement est déjà associé à une commande.');
+            throw new CheckoutException(409, 'Ce paiement est déjà associé à une commande.', [], 'PAYMENT_ALREADY_USED');
         }
 
         return ['created' => false, 'order' => $order, 'body' => $this->body($order, $mode, false)];
@@ -254,7 +256,7 @@ final class FinalizeCheckoutOrderUseCase
     {
         $id = $data['paymentIntentId'] ?? $data['payment']['stripePaymentId'] ?? null;
         if (!is_string($id) || $id === '') {
-            throw new CheckoutException(402, 'Un paiement en ligne est requis pour cette commande.');
+            throw new CheckoutException(402, 'Un paiement en ligne est requis pour cette commande.', [], 'PAYMENT_REQUIRED');
         }
 
         return $id;

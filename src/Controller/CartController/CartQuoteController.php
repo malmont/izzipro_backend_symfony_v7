@@ -27,16 +27,17 @@ class CartQuoteController extends AbstractController
     public function quote(Request $request): JsonResponse
     {
         if (strlen($request->getContent()) > self::MAX_BODY_BYTES) {
-            return $this->json(['error' => 'Corps trop volumineux'], 413);
+            return $this->json(['error' => 'Corps trop volumineux', 'code' => 'PAYLOAD_TOO_LARGE', 'message' => 'Corps trop volumineux'], 413);
         }
         $body = json_decode($request->getContent(), true);
         if (!is_array($body)) {
-            return $this->json(['error' => 'Corps JSON invalide', 'errors' => [['path' => '', 'message' => 'objet JSON attendu']]], 400);
+            return $this->json(['error' => 'Corps JSON invalide', 'code' => 'INVALID_BODY', 'message' => 'Corps JSON invalide', 'errors' => [CartQuoteException::error('', 'INVALID_BODY', 'objet JSON attendu')]], 400);
         }
         try {
             return $this->json($this->useCase->execute($body));
         } catch (CartQuoteException $e) {
-            return $this->json(['error' => $e->getMessage(), 'errors' => $e->errors], $e->getStatusCode());
+            // code de premier niveau (02/11/2026, le même que la caisse : VARIANT_NOT_FOUND, CARRIER_NOT_FOUND, QUOTE_INVALID) ; chaque erreur porte son code et ses params
+            return $this->json(['error' => $e->getMessage(), 'code' => $e->code(), 'message' => $e->getMessage(), 'errors' => $e->errors], $e->getStatusCode());
         }
     }
 }

@@ -133,7 +133,7 @@ class PaymentsController extends AbstractController
             return $this->json($this->prepareCheckout->execute($data, $user instanceof \App\Entity\User ? $user : null,
                 preg_match('/^[a-z]{2}$/', $locale) ? $locale : 'fr', $request->getSchemeAndHttpHost()));
         } catch (\App\Services\CheckoutService\CheckoutException $e) {
-            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]), $e->getStatusCode());
+            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors]) + ['code' => $e->code(), 'message' => $e->getMessage()], $e->getStatusCode()); // code + errors[] codées (02/11/2026)
         }
     }
 

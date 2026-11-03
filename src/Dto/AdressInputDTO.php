@@ -5,6 +5,7 @@ namespace App\Dto;
 
 use App\Services\AdressService\PostalCodeRules;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\ConstraintViolationInterface;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 class AdressInputDTO
@@ -54,8 +55,31 @@ class AdressInputDTO
         }
         $message = PostalCodeRules::violation($this->zipCode, $this->country);
         if ($message !== null) {
-            $context->buildViolation($message)->atPath('zipCode')->addViolation();
+            $context->buildViolation($message)->atPath('zipCode')->setCode(self::POSTAL_CODE_INVALID)->addViolation();
         }
+    }
+
+    public const FIELD_REQUIRED = 'FIELD_REQUIRED';
+    public const PHONE_INVALID = 'PHONE_INVALID';
+    public const POSTAL_CODE_INVALID = 'POSTAL_CODE_INVALID';
+
+    /**
+     * Refus d'un champ avec son code stable (02/11/2026) : {path, code, message, params?}. FIELD_REQUIRED (champ vide),
+     * PHONE_INVALID (contactNumber), POSTAL_CODE_INVALID {country} (zipCode selon le pays) ; les messages ne changent pas.
+     *
+     * @return array{path: string, code: string, message: string, params?: array<string, mixed>}
+     */
+    public function errorOf(ConstraintViolationInterface $violation): array
+    {
+        $path = (string) $violation->getPropertyPath();
+        [$code, $params] = match (true) {
+            $violation->getCode() === self::POSTAL_CODE_INVALID => [self::POSTAL_CODE_INVALID, ['country' => $this->country]],
+            $violation->getCode() === Assert\NotBlank::IS_BLANK_ERROR => [self::FIELD_REQUIRED, []],
+            $path === 'contactNumber' => [self::PHONE_INVALID, []],
+            default => ['FIELD_INVALID', []],
+        };
+
+        return ['path' => $path, 'code' => $code, 'message' => (string) $violation->getMessage()] + ($params !== [] ? ['params' => $params] : []);
     }
 
     public function __construct(array $data)

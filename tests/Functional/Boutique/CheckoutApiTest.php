@@ -184,6 +184,63 @@ class CheckoutApiTest extends WebTestCase
         }
     }
 
+    /**
+     * Codes stables des refus (02/11/2026) : create-intent et order/create portent `code` de premier niveau et, pour un devis refusé,
+     * errors[{path, code, message, params?}] ; messages, statuts et authorizationCanceled inchangés.
+     */
+    public function testRefusalsOfTheIntentAndOfTheOrderCarryTheirCodes(): void
+    {
+        $this->loginAs(['ROLE_USER_INTERNET']);
+        $soldOut = $this->variant('DEMO-VESTE');
+        $variant = $this->variant('DEMO-CASQUETTE');
+
+        // create-intent : devis refusé (422) et article inconnu (404)
+        $refused = $this->request('POST', '/api/stripe/create-intent', json_encode(['items' => [['productVariantId' => $soldOut, 'quantity' => 1]]]));
+        $this->assertSame(422, $refused->getStatusCode(), $refused->getContent());
+        $body = json_decode($refused->getContent(), true);
+        $this->assertSame(['QUOTE_INVALID', $body['error']], [$body['code'], $body['message']]);
+        $this->assertSame(['path' => 'items[0].quantity', 'message' => 'stock insuffisant (0 disponible(s))', 'code' => 'STOCK_INSUFFICIENT', 'params' => ['available' => 0]], $body['errors'][0]);
+        $unknown = json_decode($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => [['productVariantId' => 999999, 'quantity' => 1]]]))->getContent(), true);
+        $this->assertSame(['VARIANT_NOT_FOUND', 'VARIANT_NOT_FOUND'], [$unknown['code'], $unknown['errors'][0]['code']]);
+
+        // order/create : données manquantes (400 FIELDS_REQUIRED), transporteur inconnu (404 CARRIER_NOT_FOUND), autorisation conservée
+        $items = [['productVariantId' => $variant, 'quantity' => 1]];
+        $pi = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items])))['paymentIntentId'];
+        FakeCheckoutPaymentGateway::confirm($pi);
+        $missing = json_decode($this->request('POST', '/api/order/create', json_encode(['items' => $items, 'paymentIntentId' => $pi]))->getContent(), true);
+        $this->assertSame(['FIELDS_REQUIRED', 'Missing required fields (addressId, items)', false], [$missing['code'], $missing['error'], $missing['authorizationCanceled']]);
+        $carrier = $this->request('POST', '/api/order/create', json_encode(['addressId' => $this->address(), 'carrierId' => 999999, 'items' => $items, 'paymentIntentId' => $pi]));
+        $this->assertSame(404, $carrier->getStatusCode(), $carrier->getContent());
+        $this->assertSame('CARRIER_NOT_FOUND', json_decode($carrier->getContent(), true)['code']);
+
+        // Commande refusée après le paiement : code et errors[] codées du devis, autorisation annulée ; second appel 402 PAYMENT_NOT_VERIFIED
+        $stock = (int) $this->db->fetchOne('SELECT stock_quantity FROM product_variant WHERE id = ?', [$variant]);
+        $this->db->executeStatement('UPDATE product_variant SET stock_quantity = 0 WHERE id = ?', [$variant]);
+        try {
+            $order = ['addressId' => $this->address(), 'items' => $items, 'paymentIntentId' => $pi];
+            $refused = json_decode($this->request('POST', '/api/order/create', json_encode($order))->getContent(), true);
+            $this->assertSame(['QUOTE_INVALID', true], [$refused['code'], $refused['authorizationCanceled']], json_encode($refused));
+            $this->assertSame(['path' => 'items[0].quantity', 'message' => 'stock insuffisant (0 disponible(s))', 'code' => 'STOCK_INSUFFICIENT', 'params' => ['available' => 0]], $refused['errors'][0]);
+            $again = $this->request('POST', '/api/order/create', json_encode($order));
+            $this->assertSame(402, $again->getStatusCode());
+            $this->assertSame('PAYMENT_NOT_VERIFIED', json_decode($again->getContent(), true)['code']);
+        } finally {
+            $this->db->executeStatement('UPDATE product_variant SET stock_quantity = ? WHERE id = ?', [$stock, $variant]);
+        }
+
+        // Invité : courriel absent (400 EMAIL_REQUIRED), permis absent pour une location (400 LICENSE_REQUIRED)
+        $pi2 = $this->json($this->request('POST', '/api/stripe/create-intent', json_encode(['items' => $items])))['paymentIntentId'];
+        FakeCheckoutPaymentGateway::confirm($pi2);
+        $guest = $this->guestBody($variant, 'invite-codes@example.invalid');
+        $guest['guestInfo']['email'] = '';
+        $noEmail = json_decode($this->request('POST', '/api/order/create-guest', json_encode($guest + ['paymentIntentId' => $pi2]))->getContent(), true);
+        $this->assertSame(['EMAIL_REQUIRED', 'Email is required'], [$noEmail['code'], $noEmail['error']]);
+        $rental = $this->guestBody($variant, 'invite-codes@example.invalid');
+        $rental['items'][0]['booking'] = ['start' => '2030-01-01T10:00:00', 'end' => '2030-01-01T12:00:00'];
+        $noLicense = json_decode($this->request('POST', '/api/order/create-guest', json_encode($rental + ['paymentIntentId' => $pi2]))->getContent(), true);
+        $this->assertSame('LICENSE_REQUIRED', $noLicense['code']);
+    }
+
     public function testDuplicateSubscriptionsAreReusedOrRefused(): void
     {
         $this->loginAs(['ROLE_USER_INTERNET']);

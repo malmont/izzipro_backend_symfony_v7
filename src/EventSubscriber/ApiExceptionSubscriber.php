@@ -65,10 +65,7 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
     {
         $quote = self::quoteException($exception);
         if ($quote !== null) {
-            return match ($quote->getStatusCode()) {
-                404 => str_contains($quote->getMessage(), 'carrierId') ? 'CARRIER_NOT_FOUND' : 'VARIANT_NOT_FOUND',
-                default => 'QUOTE_INVALID',
-            };
+            return $quote->code(); // VARIANT_NOT_FOUND, CARRIER_NOT_FOUND, sinon QUOTE_INVALID (inchangé ; règle portée par l'exception depuis le 02/11/2026)
         }
 
         return match ($status) {
@@ -78,7 +75,7 @@ class ApiExceptionSubscriber implements EventSubscriberInterface
         };
     }
 
-    /** @return array{errors?: list<array{path: string, message: string}>} détail champ par champ d'un devis refusé (ajout) */
+    /** @return array{errors?: list<array{path: string, message: string, code: string, params?: array<string, mixed>}>} détail champ par champ d'un devis refusé (ajout ; code et params par erreur depuis le 02/11/2026) */
     public static function quoteErrors(\Throwable $exception): array
     {
         return self::details($exception);

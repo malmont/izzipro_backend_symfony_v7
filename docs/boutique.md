@@ -232,7 +232,9 @@ d'article**.
   `scripts/migrate_all_v2_carrier_estimated_days.sh`). `shipping/summary[].totalPrice` est en cents.
 - Taxes : selon l'adresse de livraison (`shippingAddress`), voir « Taxes par région » ci-dessous ; sans adresse,
   `taxes: []` et `taxStatus: address_required`.
-- Statuts : 400 corps illisible, 404 variante ou transporteur inconnu, 422 règle non respectée ; rien n'est réservé.
+- Statuts : 400 corps illisible, 404 variante ou transporteur inconnu, 422 règle non respectée ; rien n'est réservé. Depuis le
+  02/11/2026, la réponse porte `code` de premier niveau (`INVALID_BODY`, `VARIANT_NOT_FOUND`, `CARRIER_NOT_FOUND`, sinon `QUOTE_INVALID`,
+  comme la caisse) et chaque entrée de `errors[]` porte `code` (+ `params`) : voir « Codes du devis, de l'adresse et de la commande ».
 - `order/create` : `orderSource`, `typeOrder` et `paymentMethod` facultatifs (vente en ligne par défaut) ;
   `carrierId` nullable. `order/create-guest` : 403 si `commerce.guestCheckout` est `false` dans les réglages de la
   boutique (`BoutiqueSettingsService::isGuestCheckoutAllowed`). `GET /api/booking/check/{id}` : **409** avec
@@ -305,10 +307,99 @@ ajouts pour l'application e-commerce mobile :
 | `GET /api/adresses/autocomplete?q=` | suggestions `{ description, placeId }` ; `[]` sans clé Google Places sur le site ou en cas d'erreur (inchangé) |
 | `GET /api/adresses/details?place_id=` | `{ street1, street2, city, province, postalCode, country }` ; **jamais 500** : 400 `PLACE_ID_REQUIRED`, 404 `PLACE_NOT_FOUND` (identifiant inconnu ou mal formé : statuts Google `NOT_FOUND`, `INVALID_REQUEST`, `ZERO_RESULTS`) ou 404 `AUTOCOMPLETE_NOT_CONFIGURED` (aucune clé `google_places_config` sur le site ; en 4xx car nginx remplace le corps de toute réponse 5xx), 503 `AUTOCOMPLETE_UNAVAILABLE` (API injoignable, corps neutre de nginx) |
 | `DELETE /api/adresses/{id}` | 204 ; répondait 500 depuis l'origine (entité détachée par un `clear()` avant la suppression), corrigé le 31/10/2026 |
+| Codes par champ (02/11/2026) | tout refus de POST et PUT garde `error` (`{champ: message}`, ou `{address: message}` pour EasyPost) et gagne `code` (`VALIDATION_FAILED` ou `ADDRESS_UNDELIVERABLE`), `message` et `errors[{path, code, message, params?}]` : `FIELD_REQUIRED`, `PHONE_INVALID`, `POSTAL_CODE_INVALID {country}`, `ADDRESS_UNDELIVERABLE` (table ci-dessous) |
 | Clé Google Places | table `google_places_config` du site (EasyAdmin « Google Places ») : `google_api_key_test` hors production, clé chiffrée en production ; aucune clé sur `demo` au 31/10/2026 |
 
 Tests : `tests/Functional/Boutique/AdressApiTest.php` (Google Places simulé par `tests/Fake/FakeGooglePlacesHttpClient.php`, un seul
 `place_id` connu ; le modèle de base de test porte une clé EasyPost sandbox, retirée le temps des scénarios « sans EasyPost »).
+
+## Codes du devis, de l'adresse et de la commande (02/11/2026)
+
+Contrat retenu avec les applications (caisse, e-commerce mobile) : **codes stables, chaque application traduit elle-même**. Le serveur ne
+traduit rien ; les messages français, les chemins, les statuts HTTP et les champs existants ne changent pas, seuls `code`, `message` et
+`params` s'ajoutent. Règle de lecture : `code` de premier niveau pour le motif global, puis `errors[].code` pour chaque article ou champ ;
+`params` (objet, absent quand le motif n'a pas de détail variable) donne les valeurs que le texte traduit doit citer.
+
+### Devis : `POST /api/cart/quote`, `POST /api/stripe/create-intent`, commande refusée par le devis
+
+Premier niveau : `{error, code, message, errors[{path, message, code, params?}]}`. `code` est celui de la caisse : `VARIANT_NOT_FOUND` et
+`CARRIER_NOT_FOUND` (404), `INVALID_BODY` (corps illisible, 400), `PAYLOAD_TOO_LARGE` (413), sinon **`QUOTE_INVALID`** (400 ou 422) ;
+`error` reste « première erreur (et N autre(s) erreur(s)) ». Source : `CartQuoteException::error()` dans `CartQuoteCalculator`,
+`CartQuoteInputDto`, `PosLineService`, `PosDiscountCalculator`.
+
+| `errors[].code` | Statut | `path` | Message français | `params` |
+|---|---|---|---|---|
+| `ITEMS_REQUIRED` | 400 | `items` | au moins un article attendu | — |
+| `ITEM_INVALID` | 400 | `items[i]` | objet attendu | — |
+| `SHIPPING_PRICE_INVALID` | 400 | `shippingPrice` | montant en cents, positif ou nul, attendu | — |
+| `INVALID_BODY` | 400 | `` (vide) | objet JSON attendu | — |
+| `VARIANT_NOT_FOUND` | 404 | `items[i].productVariantId` | variante introuvable | — |
+| `CARRIER_NOT_FOUND` | 404 | `carrierId` | transporteur introuvable | — |
+| `QUANTITY_INVALID` | 422 | `items[i].quantity` | entier positif attendu | — |
+| `BOOKING_REQUIRED` | 422 | `items[i].booking` | ce produit se loue seulement : dates de réservation attendues (start, end) | — |
+| `NOT_RENTABLE` | 422 | `items[i].booking` | ce produit ne se loue pas | — |
+| `NOT_SELLABLE` | 422 | `items[i]` | ce produit ne se vend pas | — |
+| `STOCK_INSUFFICIENT` | 422 | `items[i].quantity` | stock insuffisant (%d disponible(s)) | `{available}` |
+| `CUSTOMIZATION_NOT_FOUND` | 422 | `items[i].customizationId` | combinaison de personnalisation inconnue pour cette variante | — |
+| `BOOKING_DATES_INVALID` | 422 | `items[i].booking` | dates start et end attendues (ISO 8601) | — |
+| `BOOKING_END_BEFORE_START` | 422 | `items[i].booking.end` | la fin doit suivre le début | — |
+| `DURATION_TYPE_INVALID` | 422 | `items[i].booking.durationType` | valeur attendue : hour, halfDay, day, week, month | `{allowed: [hour, halfDay, day, week, month]}` |
+| `DURATION_TOO_SHORT` | 422 | `items[i].booking.end` | durée minimale : %d heure(s) / jour(s) | `{value, unit: hour | day}` |
+| `DURATION_TOO_LONG` | 422 | `items[i].booking.end` | durée maximale : %d heure(s) / jour(s) | `{value, unit: hour | day}` |
+| `DAYS_MINIMUM` | 422 | `items[i].booking.end` | %d jour(s) minimum à la journée | `{value}` |
+| `DATE_NOT_OFFERED` | 422 | `items[i].booking.start` | date non proposée (voir rental.allowedDates) | — |
+| `OUTSIDE_OPENING_HOURS` | 422 | `items[i].booking.start` | créneau hors des heures d'ouverture (%s à %s, ou %s à %s) | `{start, end, eveningStart?, eveningEnd?}` (`HH:MM`) |
+| `DATES_UNAVAILABLE` | 422 | `items[i].quantity` | indisponible sur ces dates : il reste %d place(s) | `{remaining}` (le champ `remaining` de l'erreur reste) |
+| `RATE_UNKNOWN` | 422 | `items[i].booking.rateId` | tarif inconnu pour ce produit (voir rental.rates) | `{rateId}` |
+| `NO_RENTAL_RATE` | 422 | `items[i].booking.rateId` | aucun tarif de location pour ce produit | — |
+| `RATE_NOT_FOUND` | 422 | `items[i].booking.durationType` | aucun tarif « %s » pour ce produit | `{durationType}` |
+| `CUSTOM_LABEL_INVALID` | 422 | `items[i].custom.label` | (caisse, article libre) libellé requis (120 caractères au plus) | — |
+| `CUSTOM_PRICE_INVALID` | 422 | `items[i].custom.unitPrice` | (caisse) prix unitaire en cents (entier positif ou nul) attendu | — |
+| `CUSTOM_TAXABLE_INVALID` | 422 | `items[i].custom.taxable` | (caisse) booléen attendu | — |
+| `CUSTOM_TAX_CATEGORY_INVALID` | 422 | `items[i].custom.taxCategory` | (caisse) valeur attendue : standard, reduced… | `{allowed}` |
+| `PRICE_OVERRIDE_INVALID` | 422 | `items[i].priceOverride.unitPrice` | (caisse, prix manuel) prix unitaire en cents (entier positif ou nul) attendu | — |
+| `DISCOUNTS_LIST_INVALID` / `DISCOUNT_INVALID` / `DISCOUNT_PERCENT_INVALID` / `DISCOUNT_AMOUNT_INVALID` | 422 | `items[i].discounts…`, `ticketDiscount` | (caisse, remises F1) liste attendue / {type: percent \| amount, value > 0} / pourcentage invalide / cents attendus | — |
+
+### Adresses du compte : `POST /api/adresses`, `PUT /api/adresses/{id}` (400)
+
+Forme retenue, la moins risquée pour le site Next.js : `error` **inchangé** (`{champ: message}` pour la validation, `{address: message}` pour
+EasyPost) et, à côté, `code` (`VALIDATION_FAILED` ou `ADDRESS_UNDELIVERABLE`), `message` (« Adresse invalide », ou le message d'EasyPost) et `errors[{path, code, message, params?}]` (même
+forme que le devis et la commande). `PROVINCE_INVALID` et `COUNTRY_INVALID` n'existent pas : ces champs ne sont validés que comme
+obligatoires (ajouter une validation refuserait des adresses acceptées aujourd'hui). Source : `AdressInputDTO::errorOf`.
+
+| `errors[].code` | `path` | Message français | `params` |
+|---|---|---|---|
+| `FIELD_REQUIRED` | `firstname`, `lastname`, `addressLineOne`, `city`, `province`, `zipCode`, `country`, `contactNumber` | Le prénom est obligatoire. / Le nom de famille… / La première ligne d'adresse… / La ville… / La province / région… / Le code postal… / Le pays… / Le numéro de contact est obligatoire. | — |
+| `PHONE_INVALID` | `contactNumber` | Le numéro de contact doit contenir entre 7 et 20 chiffres et peut comporter +, espaces ou tirets. | — |
+| `POSTAL_CODE_INVALID` | `zipCode` | Le code postal doit être au format canadien A1A 1A1. / … américain 12345 ou 12345-6789. / … compter de 3 à 10 lettres ou chiffres. | `{country}` (tel qu'envoyé) |
+| `ADDRESS_UNDELIVERABLE` | `address` | Adresse invalide : <motifs EasyPost> | — |
+
+### Commande : `POST /api/order/create`, `POST /api/order/create-guest` (`CheckoutException`)
+
+`code` de premier niveau (source : `CheckoutException::code()`, `CheckoutCustomerService`, `FinalizeCheckoutOrderUseCase`) ; `error`,
+`errors[]` (quand le devis a refusé : mêmes codes par article que ci-dessus) et `authorizationCanceled` (400 et 402) inchangés.
+
+| `code` | Statut | Message |
+|---|---|---|
+| `FIELDS_REQUIRED` | 400 | Missing required fields (addressId, items) |
+| `ADDRESS_FORBIDDEN` | 403 | Unauthorized: Invalid address |
+| `GUEST_FIELDS_REQUIRED` | 400 | Missing required guest fields |
+| `EMAIL_REQUIRED` | 400 | Email is required |
+| `LICENSE_REQUIRED` | 400 | License number and expiration date are required for rental orders. |
+| `CARRIER_NOT_FOUND` | 404 | Carrier not found |
+| `SHIPPING_PRICE_INVALID` | 400 | Frais de livraison invalides |
+| `AMOUNT_INVALID` | 400 | Montant invalide calculé (`create-intent`) |
+| `PAYMENT_NOT_VERIFIED` | 402 | Payment verification failed or payment not completed |
+| `PAYMENT_REQUIRED` | 402 | Un paiement en ligne est requis pour cette commande. |
+| `PAYMENT_ALREADY_USED` | 409 | Ce paiement est déjà associé à une commande. |
+| `ORDER_IN_PROGRESS` | 409 | La commande de ce paiement est en cours de création : réessayez dans un instant. |
+| `QUOTE_INVALID`, `VARIANT_NOT_FOUND`, `CARRIER_NOT_FOUND`, `BAD_REQUEST` | 400 | commande refusée après le paiement (autorisation annulée) : code, message et `errors[]` du devis repris tels quels |
+| `ORDER_REFUSED` | 400 | Commande refusée. / dernier message d'échec gardé sur la trace du paiement (`checkout_session.last_error`) |
+| codes par statut (`BAD_REQUEST`, `FORBIDDEN`…) | — | tout autre refus sans code propre |
+
+Tests : `tests/Functional/Boutique/CartQuoteApiTest.php` (`quoteErrorCases`, un cas par code), `AdressApiTest::testRefusedFieldsCarryTheirCodes`,
+`CheckoutApiTest::testRefusalsOfTheIntentAndOfTheOrderCarryTheirCodes`. `docs/endpoints.md` est généré sans détail des réponses : la table
+de référence est ici.
 
 ## Taxes par région (09/10/2026, `TaxEngine`)
 
@@ -345,7 +436,8 @@ commande ensuite). Réglage `commerce.taxProvider` des réglages de la boutique 
   rien ne change pour les sites hors taxes. Détail, formule et cas : `docs/caisse.md`, « Prix taxes comprises ».
 - **Codes d'erreur (02/11/2026)** : toute réponse JSON 4xx de l'API porte une clé `code` (chaîne stable) en plus de `error`/`message`
   inchangés ; `GET /api/orders`, `/api/payments`, l'annulation, la connexion (plateforme refusée), `/api/token/refresh` et le 429 gagnent
-  `code` + `message` ; les 401 de Lexik gardent `code: 401` et reçoivent `error` (chaîne). Table complète : `docs/caisse.md`, « Codes d'erreur ».
+  `code` + `message` ; les 401 de Lexik gardent `code: 401` et reçoivent `error` (chaîne). Table complète : `docs/caisse.md`, « Codes d'erreur » ;
+  codes par article du devis, par champ de l'adresse et par motif de la commande : « Codes du devis, de l'adresse et de la commande » ci-dessus.
 - **`stripe`** : Stripe Tax (`Tax Calculations`) sur le compte connecté du site, une ligne par article (code fiscal
   « bien physique » `txcd_99999999`, « service » `txcd_20030000` pour une location, livraison `txcd_92010001`),
   montants par juridiction (`taxes[].jurisdiction`), calcul gardé 10 min pour un même panier et une même adresse. À la

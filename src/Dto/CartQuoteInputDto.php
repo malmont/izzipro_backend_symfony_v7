@@ -37,13 +37,13 @@ final class CartQuoteInputDto
     {
         $items = $data['items'] ?? null;
         if (!is_array($items) || $items === []) {
-            throw new CartQuoteException(400, 'items : au moins un article attendu', [['path' => 'items', 'message' => 'au moins un article attendu']]);
+            throw new CartQuoteException(400, 'items : au moins un article attendu', [CartQuoteException::error('items', 'ITEMS_REQUIRED', 'au moins un article attendu')]);
         }
         $globalBooking = $data['booking'] ?? $data['rental'] ?? null; // ancien envoi du tunnel : une réservation pour tout le panier
         $lines = [];
         foreach (array_values($items) as $i => $item) {
             if (!is_array($item)) {
-                throw new CartQuoteException(400, "items[$i] : objet attendu", [['path' => "items[$i]", 'message' => 'objet attendu']]);
+                throw new CartQuoteException(400, "items[$i] : objet attendu", [CartQuoteException::error("items[$i]", 'ITEM_INVALID', 'objet attendu')]);
             }
             if (!isset($item['booking']) && !isset($item['rental']) && is_array($globalBooking) && $globalBooking !== []) {
                 $item['booking'] = $globalBooking;
@@ -56,7 +56,7 @@ final class CartQuoteInputDto
         $carrierId = $data['carrierId'] ?? null;
         $shipping = $data['shippingPrice'] ?? $data['priceShipping'] ?? null;
         if ($shipping !== null && (!is_numeric($shipping) || (float) $shipping < 0)) {
-            throw new CartQuoteException(400, 'Frais de livraison invalides', [['path' => 'shippingPrice', 'message' => 'montant en cents, positif ou nul, attendu']]);
+            throw new CartQuoteException(400, 'Frais de livraison invalides', [CartQuoteException::error('shippingPrice', 'SHIPPING_PRICE_INVALID', 'montant en cents, positif ou nul, attendu')]);
         }
 
         $address = is_array($data['shippingAddress'] ?? null) ? TaxEngine::normalizeAddress($data['shippingAddress']) : null;
