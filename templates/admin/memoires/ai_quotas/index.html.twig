@@ -16,11 +16,13 @@
         {% for message in messages %}<div class="alert alert-{{ type }}">{{ message }}</div>{% endfor %}
     {% endfor %}
 
+    {% set can_edit_quotas = is_granted('ROLE_SUPER_ADMIN') %}
     <p class="text-muted">
         Chaque transcription (Whisper) et chaque amélioration de réponse (IA) coûte. Ces quotas limitent, par utilisateur
         et par jour (de minuit à minuit dans le fuseau choisi), les livres créés depuis l'application mobile Living Memory ;
         les livres du web ne sont limités que si vous cochez l'option. Les administrateurs ne sont jamais limités, et les
         proches invités gardent leur règle (une amélioration par question). 0 = illimité.
+        {% if not can_edit_quotas %}<strong>Plafonds modifiables uniquement par le super administrateur ; seul le fuseau horaire peut être ajusté ici.</strong>{% endif %}
         {% if settings.isDefault %}<strong>Valeurs par défaut : rien n'a encore été enregistré pour ce site.</strong>{% endif %}
     </p>
 
@@ -28,19 +30,19 @@
         <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
         <div class="col-md-2">
             <label class="form-label">Transcriptions / jour</label>
-            <input type="number" name="transcriptionsPerDay" class="form-control" min="0" max="100000" value="{{ settings.transcriptionsPerDay }}" required>
+            <input type="number" name="transcriptionsPerDay" class="form-control" min="0" max="100000" value="{{ settings.transcriptionsPerDay }}" {{ can_edit_quotas ? 'required' : 'disabled' }}>
         </div>
         <div class="col-md-2">
             <label class="form-label">Améliorations / jour</label>
-            <input type="number" name="improvementsPerDay" class="form-control" min="0" max="100000" value="{{ settings.improvementsPerDay }}" required>
+            <input type="number" name="improvementsPerDay" class="form-control" min="0" max="100000" value="{{ settings.improvementsPerDay }}" {{ can_edit_quotas ? 'required' : 'disabled' }}>
         </div>
         <div class="col-md-2">
             <label class="form-label">Reprises / chapitre / jour</label>
-            <input type="number" name="regenerationsPerDay" class="form-control" min="0" max="100000" value="{{ settings.regenerationsPerDay }}" required>
+            <input type="number" name="regenerationsPerDay" class="form-control" min="0" max="100000" value="{{ settings.regenerationsPerDay }}" {{ can_edit_quotas ? 'required' : 'disabled' }}>
         </div>
         <div class="col-md-2">
             <label class="form-label">Enregistrement max (s)</label>
-            <input type="number" name="maxAudioSeconds" class="form-control" min="30" max="1800" value="{{ settings.maxAudioSeconds }}" required>
+            <input type="number" name="maxAudioSeconds" class="form-control" min="30" max="1800" value="{{ settings.maxAudioSeconds }}" {{ can_edit_quotas ? 'required' : 'disabled' }}>
         </div>
         <div class="col-md-3">
             <label class="form-label">Fuseau horaire du site</label>
@@ -49,7 +51,7 @@
             </select>
         </div>
         <div class="col-md-2 form-check mb-2 ms-3">
-            <input type="checkbox" name="applyToWebBooks" value="1" class="form-check-input" id="applyToWebBooks" {{ settings.applyToWebBooks ? 'checked' : '' }}>
+            <input type="checkbox" name="applyToWebBooks" value="1" class="form-check-input" id="applyToWebBooks" {{ settings.applyToWebBooks ? 'checked' : '' }} {{ can_edit_quotas ? '' : 'disabled' }}>
             <label class="form-check-label" for="applyToWebBooks">Appliquer aussi aux livres du web</label>
         </div>
         <div class="col-md-12">

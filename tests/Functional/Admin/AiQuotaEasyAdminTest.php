@@ -19,7 +19,7 @@ class AiQuotaEasyAdminTest extends WebTestCase
 
     public function testAnAdminReadsAndSavesTheQuotasAndANonAdminIsRefused(): void
     {
-        $this->loginAs(['ROLE_ADMIN']);
+        $this->loginAs(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
         $crawler = $this->page();
         $this->assertSame(200, $this->client->getResponse()->getStatusCode(), implode(' | ', array_unique(preg_match_all('#[\w@/._-]+\.twig#', (string) $this->client->getResponse()->getContent(), $m) ? $m[0] : [])));
         $this->assertStringContainsString('Quotas IA Mémoires Vivantes', $this->client->getResponse()->getContent());
@@ -63,6 +63,7 @@ class AiQuotaEasyAdminTest extends WebTestCase
         $em->persist($user);
         $em->flush();
         $this->client->loginUser($user, 'main');
+        \App\Tests\Functional\Support\OtpTestHelper::validateIfRequired($this->client, $user);
     }
 
     private function em()

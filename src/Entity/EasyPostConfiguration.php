@@ -64,6 +64,17 @@ class EasyPostConfiguration
     /**
      * Chiffre et stocke la clé Prod EasyPost
      */
+    /**
+     * Valeur chiffrée telle qu'en base (03/11/2026) : sert à l'écran EasyAdmin pour conserver la clé existante quand le champ est
+     * laissé vide, sans la déchiffrer. N'encode rien : passer une valeur déjà chiffrée par setEasypostApiKeyProd(), ou null.
+     */
+    public function setEasypostApiKeyProdEncrypted(?string $encrypted): static
+    {
+        $this->easypostApiKeyProdEncrypted = $encrypted;
+
+        return $this;
+    }
+
     public function setEasypostApiKeyProd(string $plainKey): static
     {
         $encrypted = sodium_crypto_secretbox(

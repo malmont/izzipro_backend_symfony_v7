@@ -142,7 +142,9 @@ Depuis le 16/10/2026, chaque site a des quotas, réglables par l'administrateur 
   `{"transcription": {"limit", "used", "remaining", "resetsAt"}, "improvement": {…}, "maxAudioSeconds"}`
   (`limit` null = illimité). Le web peut l'appeler aussi.
 - **Réglage par l'administrateur** : écran EasyAdmin « Quotas IA Mémoires Vivantes »
-  (`Controller/Admin/Memoires/AiQuotaPageController`, réglages + consommation d'un jour par utilisateur) ; API
+  (`Controller/Admin/Memoires/AiQuotaPageController`, réglages + consommation d'un jour par utilisateur : la modification
+  des plafonds est réservée à `ROLE_SUPER_ADMIN`, l'administrateur de site consulte la consommation et modifie le seul
+  fuseau horaire `timezone`) ; API
   `ROLE_ADMIN` (`Controller/Admin/AiQuotaAdminController`) : `GET`/`PUT /api/memoires/admin/ai-quotas`
   (`{transcriptionsPerDay, improvementsPerDay, maxAudioSeconds, applyToWebBooks, timezone}`, champs facultatifs au
   `PUT`, 422 `VALIDATION_FAILED` avec `errors[{path, message}]`), `GET /api/memoires/admin/ai-quotas/usage?date=AAAA-MM-JJ`

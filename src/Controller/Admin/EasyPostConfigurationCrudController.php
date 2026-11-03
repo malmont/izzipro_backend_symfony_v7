@@ -3,9 +3,13 @@
 namespace App\Controller\Admin;
 
 use App\Entity\EasyPostConfiguration;
-use App\Controller\Admin\BaseTenantCrudController;
+use Doctrine\ORM\EntityManagerInterface;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use Symfony\Component\Form\Extension\Core\Type\PasswordType;
 
 class EasyPostConfigurationCrudController extends BaseTenantCrudController
 {
@@ -14,20 +18,73 @@ class EasyPostConfigurationCrudController extends BaseTenantCrudController
         return EasyPostConfiguration::class;
     }
 
+    public function configureActions(Actions $actions): Actions
+    {
+        return parent::configureActions($actions)
+            ->disable(Action::BATCH_DELETE)
+            ->add(Crud::PAGE_INDEX, Action::DETAIL)
+            ->setPermission(Action::NEW, 'ROLE_SUPER_ADMIN')
+            ->setPermission(Action::EDIT, 'ROLE_SUPER_ADMIN')
+            ->setPermission(Action::DELETE, 'ROLE_SUPER_ADMIN');
+    }
+
     public function configureFields(string $pageName): iterable
     {
+
         return [
-            // Affiche l’ID dans la liste, mais pas dans le formulaire
             IdField::new('id')->hideOnForm(),
-
-            // Clé sandbox visible partout
             TextField::new('easypostApiKeySandbox', 'Sandbox API Key')
-                ->setHelp('Clé utilisée pour l\'environnement de test'),
-
-            // Clé production masquée hors formulaire
+                ->setFormType(PasswordType::class)
+                ->setRequired(false)
+                ->setFormTypeOption('empty_data', '')
+                ->setTemplatePath('admin/field/masked_secret.html.twig') // index et détail : jamais la valeur, même dans title
+                ->setHelp('Clé utilisée pour l\'environnement de test. Laissez vide lors d\'une modification pour conserver la clé actuelle.'),
             TextField::new('easypostApiKeyProd', 'Production API Key')
-                ->onlyOnForms()
-                ->setHelp('Clé chiffrée, masquée sur l’index et la vue détail'),
+                ->setFormType(PasswordType::class)
+                ->setRequired(false)
+                ->setFormTypeOption('empty_data', '')
+                ->setTemplatePath('admin/field/masked_secret.html.twig') // index et détail : jamais la valeur, même dans title
+                ->setHelp('Clé chiffrée, masquée sur l’index et la vue détail. Laissez vide lors d\'une modification pour conserver la clé actuelle.'),
         ];
+    }
+
+    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyAccessUnlessGranted('ROLE_SUPER_ADMIN', null, 'Configuration EasyPost réservée au super administrateur.');
+        if ($entityInstance instanceof EasyPostConfiguration && trim((string) $entityInstance->getEasypostApiKeyProd()) === '') {
+            $entityInstance->setEasypostApiKeyProdEncrypted(null);
+        }
+        parent::persistEntity($entityManager, $entityInstance);
+    }
+
+    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyAccessUnlessGranted('ROLE_SUPER_ADMIN', null, 'Configuration EasyPost réservée au super administrateur.');
+        if ($entityInstance instanceof EasyPostConfiguration) {
+            $id = (int) $entityInstance->getId();
+            if ($id <= 0) {
+                throw $this->createAccessDeniedException('Configuration EasyPost introuvable.');
+            }
+            $row = $this->emProvider->getEntityManager()->getConnection()->fetchAssociative(
+                'SELECT easypost_api_key_sandbox, easypost_api_key_prod FROM easy_post_configuration WHERE id = ?',
+                [$id]
+            );
+            if (!is_array($row)) {
+                throw $this->createAccessDeniedException('Configuration EasyPost introuvable.');
+            }
+            if (trim((string) $entityInstance->getEasypostApiKeySandbox()) === '' && $row['easypost_api_key_sandbox'] !== null) {
+                $entityInstance->setEasypostApiKeySandbox((string) $row['easypost_api_key_sandbox']);
+            }
+            if (trim((string) $entityInstance->getEasypostApiKeyProd()) === '') {
+                $entityInstance->setEasypostApiKeyProdEncrypted($row['easypost_api_key_prod'] !== null ? (string) $row['easypost_api_key_prod'] : null);
+            }
+        }
+        parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyAccessUnlessGranted('ROLE_SUPER_ADMIN', null, 'Configuration EasyPost réservée au super administrateur.');
+        parent::deleteEntity($entityManager, $entityInstance);
     }
 }
