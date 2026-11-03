@@ -31,7 +31,7 @@ final class ReviewService
     {
         $product = $this->emProvider->getEntityManager()->getRepository(Product::class)->find($id);
         if ($product === null) {
-            throw new ReviewException(404, 'Produit introuvable.');
+            throw new ReviewException(404, 'Produit introuvable.', [], null, 'PRODUCT_NOT_FOUND');
         }
 
         return $product;
@@ -90,7 +90,7 @@ final class ReviewService
     {
         $review = $this->emProvider->getEntityManager()->getRepository(ReviewsProduct::class)->find($id);
         if ($review === null || $review->getUserReview()?->getId() !== $user->getId()) {
-            throw new ReviewException(404, 'Avis introuvable.');
+            throw new ReviewException(404, 'Avis introuvable.', [], null, 'REVIEW_NOT_FOUND');
         }
 
         return $review;
@@ -159,7 +159,7 @@ final class ReviewService
     {
         $min = $this->settings->get()->getMinLength();
         if (mb_strlen((string) $input->body) < $min) {
-            throw new ReviewException(422, sprintf('body : %d caractères au moins', $min), [['path' => 'body', 'message' => sprintf('%d caractères au moins', $min)]]);
+            throw new ReviewException(422, sprintf('body : %d caractères au moins', $min), [ReviewException::error('body', 'BODY_TOO_SHORT', sprintf('%d caractères au moins', $min), ['min' => $min])], null, 'BODY_TOO_SHORT');
         }
     }
 }

@@ -879,7 +879,30 @@ publique du commerçant**, nom affiché « Marie D. ». Moyenne et nombre tenus 
 - Démo : 13 avis publiés (dont des notes basses, certaines avec réponse) d'auteurs fictifs `@example.invalid`, plus un
   avis vérifié du client de démonstration sur les produits qu'il a commandés ; politique affichée
   (`BoutiqueDemoCatalog::REVIEWS`, `REVIEW_POLICY`).
-- Tests : `tests/Functional/Boutique/ReviewApiTest.php`.
+- **Codes des refus (B15, 04/11/2026, application mobile)** : chaque refus porte `code` et `message` au premier niveau, à côté
+  d'`error`, `errors[{path, message, code, params?}]` et `reason` (minuscules, inchangé) ; les statuts ne changent pas. Dans
+  `GET …/reviews/eligibility` (200), `reason` garde `disabled` | `already_reviewed` | `not_purchased`, et ces raisons en majuscules sont
+  les codes des refus correspondants.
+
+  | Code | Statut | Route(s) | `error` (message français) | `params` |
+  |---|---|---|---|---|
+  | `UNAUTHENTICATED` | 401 | éligibilité, dépôt, mes avis, modification, suppression | Connexion requise. En pratique le pare-feu JWT répond avant, forme inchangée : `{ code: 401, error: JWT_NOT_FOUND, message }` | — |
+  | `PRODUCT_NOT_FOUND` | 404 | liste, éligibilité, dépôt | Produit introuvable. | — |
+  | `REVIEW_NOT_FOUND` | 404 | modification, suppression (avis absent ou d'un autre client) | Avis introuvable. | — |
+  | `DISABLED` | 403 | dépôt, modification | Les avis sont désactivés sur ce site. | `reason: disabled` |
+  | `NOT_PURCHASED` | 403 | dépôt | Seuls les clients qui ont acheté ce produit peuvent donner leur avis. | `reason: not_purchased` |
+  | `ALREADY_REVIEWED` | 409 | dépôt | Vous avez déjà donné votre avis sur ce produit : modifiez-le. | `reason: already_reviewed` |
+  | `RATING_INVALID` | 422 | dépôt, modification | rating : entier de 1 à 5 attendu | `{min: 1, max: 5}` |
+  | `TITLE_INVALID` | 422 | dépôt, modification | title : texte attendu | — |
+  | `TITLE_TOO_LONG` | 422 | dépôt, modification | title : 120 caractères au plus | `{max: 120}` |
+  | `BODY_INVALID` | 422 | dépôt, modification | body : texte attendu | — |
+  | `BODY_TOO_LONG` | 422 | dépôt, modification | body : 2000 caractères au plus | `{max: 2000}` |
+  | `BODY_TOO_SHORT` | 422 | dépôt, modification | body : %d caractères au moins (`minLength` du site) | `{min}` |
+  | `TOO_MANY_REVIEWS` | 429 | dépôt (`review_submit`, 5 par heure et par compte, refus compris) | Trop d'avis envoyés : réessayez plus tard. | `retryAfter` (secondes, premier niveau) |
+
+  Plusieurs champs fautifs : `errors[]` les porte tous, le `code` de premier niveau est celui du premier. Routes et rôles
+  (`ROLE_USER_INTERNET` pour le client) : `docs/endpoints.md`, inchangés.
+- Tests : `tests/Functional/Boutique/ReviewApiTest.php`, `ReviewErrorCodesApiTest.php` (un cas par code).
 - À venir (seconde version) : photos, votes « utile », signalement, courriel d'invitation après livraison.
 
 ## Boutique de démonstration (site `demo`, 08/10/2026)

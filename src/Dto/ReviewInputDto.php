@@ -29,7 +29,7 @@ final class ReviewInputDto
         if (array_key_exists('rating', $data) || !$partial) {
             $value = $data['rating'] ?? null;
             if (!is_int($value) && !(is_string($value) && ctype_digit($value)) || (int) $value < 1 || (int) $value > 5) {
-                $errors[] = ['path' => 'rating', 'message' => 'entier de 1 à 5 attendu'];
+                $errors[] = ReviewException::error('rating', 'RATING_INVALID', 'entier de 1 à 5 attendu', ['min' => 1, 'max' => 5]);
             } else {
                 $rating = (int) $value;
             }
@@ -38,11 +38,11 @@ final class ReviewInputDto
         $hasTitle = array_key_exists('title', $data);
         if ($hasTitle && $data['title'] !== null) {
             if (!is_string($data['title'])) {
-                $errors[] = ['path' => 'title', 'message' => 'texte attendu'];
+                $errors[] = ReviewException::error('title', 'TITLE_INVALID', 'texte attendu');
             } else {
                 $title = self::clean($data['title'], false);
                 if (mb_strlen($title) > self::TITLE_MAX) {
-                    $errors[] = ['path' => 'title', 'message' => sprintf('%d caractères au plus', self::TITLE_MAX)];
+                    $errors[] = ReviewException::error('title', 'TITLE_TOO_LONG', sprintf('%d caractères au plus', self::TITLE_MAX), ['max' => self::TITLE_MAX]);
                 }
                 $title = $title === '' ? null : $title;
             }
@@ -50,16 +50,16 @@ final class ReviewInputDto
         $body = null;
         if (array_key_exists('body', $data) || !$partial) {
             if (!is_string($data['body'] ?? null)) {
-                $errors[] = ['path' => 'body', 'message' => 'texte attendu'];
+                $errors[] = ReviewException::error('body', 'BODY_INVALID', 'texte attendu');
             } else {
                 $body = self::clean($data['body'], true);
                 if (mb_strlen($body) > self::BODY_MAX) {
-                    $errors[] = ['path' => 'body', 'message' => sprintf('%d caractères au plus', self::BODY_MAX)];
+                    $errors[] = ReviewException::error('body', 'BODY_TOO_LONG', sprintf('%d caractères au plus', self::BODY_MAX), ['max' => self::BODY_MAX]);
                 }
             }
         }
         if ($errors) {
-            throw new ReviewException(422, $errors[0]['path'] . ' : ' . $errors[0]['message'], $errors);
+            throw new ReviewException(422, $errors[0]['path'] . ' : ' . $errors[0]['message'], $errors, null, $errors[0]['code']); // code de premier niveau : celui de la première erreur (04/11/2026)
         }
 
         return new self($rating, $title, $body, $hasTitle || !$partial);

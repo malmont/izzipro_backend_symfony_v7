@@ -47,9 +47,11 @@ class ReviewController extends AbstractController
     public function submit(int $id, Request $request): JsonResponse
     {
         $user = $this->customer();
-        $limiter = $this->reviewSubmitLimiter->create('user:' . $user->getId());
-        if (!$limiter->consume(1)->isAccepted()) {
-            return $this->json(['error' => 'Trop d\'avis envoyés : réessayez plus tard.'], 429);
+        $limit = $this->reviewSubmitLimiter->create('user:' . $user->getId())->consume(1);
+        if (!$limit->isAccepted()) {
+            // code, message et retryAfter (secondes) ajoutés (B15, 04/11/2026)
+            return $this->json(['error' => 'Trop d\'avis envoyés : réessayez plus tard.', 'code' => 'TOO_MANY_REVIEWS', 'message' => 'Trop d\'avis envoyés : réessayez plus tard.',
+                'retryAfter' => max(1, $limit->getRetryAfter()->getTimestamp() - time())], 429);
         }
 
         return $this->handle(fn () => $this->json($this->submit->execute($user, $id, $this->body($request), $this->locale($request)), 201));
@@ -81,7 +83,7 @@ class ReviewController extends AbstractController
     {
         $user = $this->getUser();
         if (!$user instanceof User) {
-            throw new ReviewException(401, 'Connexion requise.');
+            throw new ReviewException(401, 'Connexion requise.', [], null, 'UNAUTHENTICATED');
         }
 
         return $user;
@@ -110,7 +112,8 @@ class ReviewController extends AbstractController
         try {
             return $action();
         } catch (ReviewException $e) {
-            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors, 'reason' => $e->reason]), $e->getStatusCode());
+            // code et message ajoutés (B15, 04/11/2026) ; error, errors[] (codées) et reason inchangés
+            return $this->json(array_filter(['error' => $e->getMessage(), 'errors' => $e->errors, 'reason' => $e->reason]) + ['code' => $e->code(), 'message' => $e->getMessage()], $e->getStatusCode());
         }
     }
 }
