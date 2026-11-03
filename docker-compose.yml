@@ -110,6 +110,12 @@ services:
     # Médiathèque (vidéos préparées pour les scènes au défilement) : un encodage peut durer plusieurs minutes
     command: ["sh", "docker/worker/consume.sh", "media", "--limit=20", "--time-limit=900", "--memory-limit=256M"]
 
+  messenger_worker_pdf:
+    <<: *messenger_worker
+    container_name: symfony_messenger_worker_pdf_v2
+    # Mémoires Vivantes (mise en page PDF complète des livres, Dompdf : pic observé ~200 Mo par livre, lot 3 du 03/11/2026)
+    command: ["sh", "docker/worker/consume.sh", "pdf", "--limit=25", "--time-limit=900", "--memory-limit=384M"]
+
   messenger_worker_email:
     <<: *messenger_worker
     container_name: symfony_messenger_worker_email_v2

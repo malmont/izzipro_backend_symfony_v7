@@ -106,7 +106,7 @@ class WorkerHeartbeatSubscriber implements EventSubscriberInterface
     {
         $name = substr(strrchr('\\' . $message::class, '\\'), 1);
         $details = [];
-        foreach (['chapterId' => 'chapitre', 'part' => 'partie', 'tenantHost' => 'site', 'tenantCode' => 'site', 'jobId' => 'tâche', 'reportId' => 'rapport'] as $property => $label) {
+        foreach (['chapterId' => 'chapitre', 'bookId' => 'livre', 'part' => 'partie', 'tenantHost' => 'site', 'tenantCode' => 'site', 'jobId' => 'tâche', 'reportId' => 'rapport'] as $property => $label) {
             // Propriétés publiques seulement (les autres messages gardent les leurs privées)
             if (property_exists($message, $property) && (new \ReflectionProperty($message, $property))->isPublic() && is_scalar($message->$property ?? null)) {
                 $details[] = $label . ' ' . $message->$property;

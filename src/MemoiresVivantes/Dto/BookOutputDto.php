@@ -58,6 +58,15 @@ class BookOutputDto
     public ?string $paid_at = null;
     public ?float $paymentAmount = null;
     public ?float $payment_amount = null;
+    /** Mise en page PDF en tâche de fond (lot 3) : pending | generating | done | failed | null (jamais demandée) */
+    public ?string $pdfStatus = null;
+    public ?string $pdf_status = null;
+    public ?string $pdfGeneratedAt = null;
+    public ?string $pdf_generated_at = null;
+    public ?int $pdfPageCount = null;
+    public ?int $pdf_page_count = null;
+    public ?string $pdfError = null;
+    public ?string $pdf_error = null;
     public ?string $paymentCurrency = 'eur';
     public ?string $payment_currency = 'eur';
     public ?array $author = null;
@@ -108,6 +117,10 @@ class BookOutputDto
         $this->status = $book->getStatus();
         $this->paymentStatus = $book->getPaymentStatus();
         $this->payment_status = $book->getPaymentStatus();
+        $this->pdfStatus = $this->pdf_status = $book->getPdfStatus();
+        $this->pdfGeneratedAt = $this->pdf_generated_at = $book->getPdfGeneratedAt()?->format(\DateTimeInterface::ATOM);
+        $this->pdfPageCount = $this->pdf_page_count = $book->getPdfPageCount();
+        $this->pdfError = $this->pdf_error = $book->getPdfStatus() === Book::PDF_STATUS_FAILED ? $book->getPdfError() : null;
         $this->paymentLinkUrl = $withPrivateDetails ? $book->getPaymentLinkUrl() : null;
         $this->payment_link_url = $this->paymentLinkUrl;
         $this->font = BookFontCatalog::resolve($book->getFont());

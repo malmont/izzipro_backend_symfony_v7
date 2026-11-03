@@ -10,7 +10,7 @@ Code : `src/MemoiresVivantes/` (module autonome). Côté frontend : `src/compone
 Tous sous `/api/memoires/` : liste complète et accès dans `docs/endpoints.md`, section « Mémoires Vivantes ».
 
 - `access_control` laisse `/api/memoires/` **public**, pour que les liens de partage fonctionnent sans connexion, sauf :
-  `/api/memoires/admin/` (`ROLE_ADMIN`) ; impression (`…/print/…`), `pdf/generate`, `payment-link`,
+  `/api/memoires/admin/` (`ROLE_ADMIN`) ; impression (`…/print/…`), `pdf/generate`, `pdf/status`, `payment-link`,
   `send-payment-link` et `/api/memoires/mobile/` (connexion obligatoire, `IS_AUTHENTICATED_FULLY`).
 - **Le contrôle est dans chaque action** :
   - livre : `Security/BookAccessGuard.php`, avec `canView` (lien de chapitre signé, clé `APP_SECRET`, ou voter
@@ -360,6 +360,20 @@ mobile fait son propre livre, avec des quotas et, à venir, des chapitres payant
 ## Mise en page du livre (PDF)
 
 `Services/BookPdfGeneratorService.php`, gabarits `templates/pdf/memoires/` (Dompdf).
+
+- **Mise en page en tâche de fond (lot 3, 03/11/2026)** : `POST /books/{id}/pdf/generate` garde son comportement historique (rendu
+  dans la requête, 200, fichiers prêts dans la réponse) ; avec `async=1` (corps JSON ou paramètre de requête), la génération part dans la
+  file Messenger `pdf` (`Message/GenerateBookPdfMessage`, `GenerateBookPdfHandler`, worker `symfony_messenger_worker_pdf_v2`) et la
+  route répond **202** avec l'état (`status` pending | generating | done | failed | idle, `alreadyInProgress`, `requested_at`,
+  `generated_at`, `error`) sans URL de fichier tant qu'ils ne sont pas prêts. Suivi par `GET /books/{id}/pdf/status` (droit de lecture
+  du livre) : `ready`, `interior_url`, `cover_url`, `page_count` et `cover_geometry` seulement quand l'état est `done` et que les deux
+  fichiers existent (jamais de valeur inventée) ; un livre généré avant ce lot est `done`. État porté par `mv_book.pdf_status`,
+  `pdf_requested_at`, `pdf_generated_at`, `pdf_page_count`, `pdf_error` (colonnes additives, `Version20261111100000`,
+  `scripts/migrate_all_v2_mv_book_pdf_status.sh`) et repris dans la fiche du livre (`pdfStatus`, `pdfGeneratedAt`, `pdfPageCount`,
+  `pdfError`). `Services/BookPdfGenerationService` : une seule génération en cours par livre (nouvelle demande → `alreadyInProgress`),
+  génération perdue détectée comme pour les chapitres (file vide après 60 s, ou sans progression 10 à 15 min) et passée en `failed` ;
+  aucune relance automatique, l'utilisateur relance depuis `failed`. Les aperçus `pdf/preview-*` et la commande d'impression restent
+  synchrones. Le défaut basculera en asynchrone quand le site et l'application LivingMemory suivront `pdf/status`.
 
 - Texte des chapitres : `Services/ChapterTextFormatter.php` le découpe en sous-titres (`===Titre===`, `## Titre`,
   `**Titre**` seul sur sa ligne) et paragraphes, retire le balisage Markdown et les emojis (absents des polices), sans

@@ -59,6 +59,14 @@ framework:
                     delay: 30000
                     multiplier: 4
                     max_delay: 0
+            # Mémoires Vivantes (mise en page PDF complète d'un livre, Dompdf, lot 3 du 03/11/2026) : jamais relancé automatiquement,
+            # le gestionnaire note lui-même l'échec dans mv_book.pdf_status / pdf_error et l'utilisateur relance depuis l'application
+            pdf:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%_pdf'
+                options:
+                    dbindex: 1
+                retry_strategy:
+                    max_retries: 0
             failed:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%_failed'
                 options:
@@ -70,6 +78,7 @@ framework:
             'App\Message\LandingAiJobMessage': landing_ai
             'App\Message\PrepareScrollVideoMessage': media
             'App\Message\SendTenantEmailMessage': email
+            'App\MemoiresVivantes\Message\GenerateBookPdfMessage': pdf
 
 # Tests : Messenger en mémoire (tests/bootstrap.php) ; les courriels partent tout de suite (vers null://) pour que les
 # tests lisent les messages envoyés

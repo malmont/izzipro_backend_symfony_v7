@@ -147,6 +147,27 @@ class Book
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['book:read', 'chapter:read'])]
     private ?string $stripeSessionId = null;
+
+    // Mise en page PDF en tâche de fond (lot 3, 03/11/2026) : suivi de la dernière génération complète (worker `pdf`) ; null = jamais demandée
+    public const PDF_STATUS_PENDING = 'pending';
+    public const PDF_STATUS_GENERATING = 'generating';
+    public const PDF_STATUS_DONE = 'done';
+    public const PDF_STATUS_FAILED = 'failed';
+
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $pdfStatus = null;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $pdfRequestedAt = null;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $pdfGeneratedAt = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $pdfPageCount = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $pdfError = null;
  
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['book:read', 'chapter:read'])]
@@ -557,4 +578,16 @@ class Book
         $this->stripeSessionId = $stripeSessionId;
         return $this;
     }
+
+    // Mise en page PDF en tâche de fond (lot 3)
+    public function getPdfStatus(): ?string { return $this->pdfStatus; }
+    public function setPdfStatus(?string $pdfStatus): static { $this->pdfStatus = $pdfStatus; return $this; }
+    public function getPdfRequestedAt(): ?\DateTimeImmutable { return $this->pdfRequestedAt; }
+    public function setPdfRequestedAt(?\DateTimeImmutable $at): static { $this->pdfRequestedAt = $at; return $this; }
+    public function getPdfGeneratedAt(): ?\DateTimeImmutable { return $this->pdfGeneratedAt; }
+    public function setPdfGeneratedAt(?\DateTimeImmutable $at): static { $this->pdfGeneratedAt = $at; return $this; }
+    public function getPdfPageCount(): ?int { return $this->pdfPageCount; }
+    public function setPdfPageCount(?int $pages): static { $this->pdfPageCount = $pages; return $this; }
+    public function getPdfError(): ?string { return $this->pdfError; }
+    public function setPdfError(?string $error): static { $this->pdfError = $error; return $this; }
 }

@@ -4,6 +4,7 @@ namespace App\MemoiresVivantes\Controller;
 
 use App\MemoiresVivantes\Entity\Book;
 use App\MemoiresVivantes\Services\BookPdfGeneratorService;
+use App\MemoiresVivantes\Services\BookPdfGenerationService;
 use App\Services\TenantEntityManagerProvider;
 use App\MemoiresVivantes\Security\BookAccessGuard;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -20,7 +21,8 @@ class BookPdfController extends AbstractController
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly BookPdfGeneratorService $pdfService,
-        private readonly BookAccessGuard $accessGuard
+        private readonly BookAccessGuard $accessGuard,
+        private readonly BookPdfGenerationService $generation,
     ) {}
 
     #[Route('/{id}/pdf/preview-interior', name: 'api_memoires_book_preview_interior', methods: ['GET'])]
@@ -112,7 +114,20 @@ class BookPdfController extends AbstractController
             $color = '#' . $color;
         }
 
-        $result = $this->pdfService->generateAndSaveBookPdfs($book, $style, $author, $color ?: null, self::fontParam($data['font'] ?? $request->query->all()['font'] ?? null));
+        $font = self::fontParam($data['font'] ?? $request->query->all()['font'] ?? null);
+
+        // Lot 3 (03/11/2026) : avec async=1, la mise en page part dans la file `pdf` et la réponse est 202 ; sans ce paramètre,
+        // comportement historique inchangé (rendu dans la requête, 200). Le défaut basculera quand les applications suivront pdf/status.
+        if (self::wantsAsync($data, $request)) {
+            $started = $this->generation->start($book, $style, $author, $color ?: null, $font);
+            if (!$started['queued'] && !$started['alreadyInProgress']) {
+                return $this->json(['error' => 'La file de traitement est momentanément indisponible. Réessayez dans un instant.', 'code' => 'PDF_QUEUE_UNAVAILABLE', 'message' => 'La file de traitement est momentanément indisponible. Réessayez dans un instant.'], 503);
+            }
+
+            return $this->json(['success' => true, 'async' => true] + $this->generation->status($book, $started['alreadyInProgress']), 202);
+        }
+
+        $result = $this->pdfService->generateAndSaveBookPdfs($book, $style, $author, $color ?: null, $font);
 
         return $this->json([
             'success' => true,
@@ -122,6 +137,34 @@ class BookPdfController extends AbstractController
             'page_count' => $result['page_count'],
             'cover_geometry' => $result['cover_geometry'],
         ]);
+    }
+
+    /** État de la mise en page PDF en tâche de fond (lot 3) : pending | generating | done | failed | idle ; URL des fichiers seulement quand ils sont prêts */
+    #[Route('/{id}/pdf/status', name: 'api_memoires_book_pdf_status', methods: ['GET'])]
+    #[Route('/{bookId}/pdf/status', methods: ['GET'])]
+    public function pdfStatus(?string $id = null, ?string $bookId = null, Request $request = null): JsonResponse
+    {
+        $targetId = $id ?: $bookId;
+        $book = $this->emProvider->getEntityManager()->getRepository(Book::class)->find(Uuid::fromString($targetId));
+        if (!$book) {
+            return $this->json(['error' => 'Livre introuvable'], 404);
+        }
+        if ($denied = $this->accessGuard->canView($book, $request)) {
+            return $this->json(['error' => $denied[1]], $denied[0]);
+        }
+
+        return $this->json($this->generation->status($book));
+    }
+
+    /** `async=1` dans le corps JSON ou la requête : valeurs acceptées 1, true, yes, on ; tout le reste = synchrone (défaut historique) */
+    private static function wantsAsync(array $data, Request $request): bool
+    {
+        $value = $data['async'] ?? $request->query->get('async');
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        return is_scalar($value) && in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'on'], true);
     }
 
     private static function fontParam(mixed $value): ?string

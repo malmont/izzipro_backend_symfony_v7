@@ -243,6 +243,7 @@ Une file et un worker par projet, dans la base Redis 1 (`config/packages/messeng
 | `landing_ai` (`messages_landing_ai`, sans relance) | `symfony_messenger_worker_landing_v2` | tâches de l'assistant IA |
 | `media` (`messages_media`, sans relance) | `symfony_messenger_worker_media_v2` | vidéos de la médiathèque préparées pour le défilement |
 | `email` (`messages_email`, relances 30 s / 2 min / 8 min) | `symfony_messenger_worker_email_v2` | courriels de tous les sites (09/10/2026) |
+| `pdf` (`messages_pdf`, sans relance) | `symfony_messenger_worker_pdf_v2` | mise en page PDF complète des livres de Mémoires Vivantes demandée avec `async=1` (lot 3, 03/11/2026) : image de l'application, `--memory-limit=384M` (pic observé ~200 Mo), état dans `mv_book.pdf_status` |
 | `failed` (`messages_failed`) | — | messages en échec (inspection) |
 
 Le worker `media` a sa propre image (`docker/worker-media/Dockerfile` : l'image de l'application plus **ffmpeg**) : c'est

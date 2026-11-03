@@ -22,6 +22,7 @@ class WorkerMonitor
         'landing_ai' => ['label' => 'Assistant IA des landing pages', 'suffix' => '_landing_ai'],
         'media' => ['label' => 'Médiathèque — vidéos pour le défilement', 'suffix' => '_media'],
         'email' => ['label' => 'Courriels — tous les sites', 'suffix' => '_email'],
+        'pdf' => ['label' => 'Mémoires Vivantes — mise en page PDF', 'suffix' => '_pdf'],
     ];
 
     /** Secondes entre deux battements d'un worker au repos */

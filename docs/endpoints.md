@@ -106,7 +106,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/videos` | PUBLIC_ACCESS | `Controller\VideoApiController\VideoApiController::list` |
 | POST | `/api/videos` | ROLE_ADMIN | `Controller\VideoApiController\VideoApiController::create` |
 
-## Mémoires Vivantes (93)
+## Mémoires Vivantes (95)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -151,6 +151,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/memoires/books/{bookId}/pdf/generate` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPdfController::generatePdfs` |
 | GET | `/api/memoires/books/{bookId}/pdf/preview-cover` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookPdfController::previewCover` |
 | GET | `/api/memoires/books/{bookId}/pdf/preview-interior` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookPdfController::previewInterior` |
+| GET | `/api/memoires/books/{bookId}/pdf/status` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPdfController::pdfStatus` |
 | GET | `/api/memoires/books/{id}/chapters` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterController::listByBook` |
 | POST | `/api/memoires/books/{id}/chapters` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ChapterController::create` |
 | POST | `/api/memoires/books/{id}/contributors` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\ContributorController::create` |
@@ -161,6 +162,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/memoires/books/{id}/pdf/generate` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPdfController::generatePdfs` |
 | GET | `/api/memoires/books/{id}/pdf/preview-cover` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookPdfController::previewCover` |
 | GET | `/api/memoires/books/{id}/pdf/preview-interior` | PUBLIC_ACCESS | `MemoiresVivantes\Controller\BookPdfController::previewInterior` |
+| GET | `/api/memoires/books/{id}/pdf/status` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPdfController::pdfStatus` |
 | GET | `/api/memoires/books/{id}/print/estimate` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::billingEstimate` |
 | POST | `/api/memoires/books/{id}/print/estimate` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::estimate` |
 | POST | `/api/memoires/books/{id}/print/order` | IS_AUTHENTICATED_FULLY | `MemoiresVivantes\Controller\BookPrintApiController::createOrder` |
