@@ -483,6 +483,17 @@ Puis agrégats `day` des trois derniers jours (somme des compteurs, maximum des 
 pic mémoire d'une route 256 / 512 Mo (limite 1024 Mo), durée 2 / 10 s, PHP-FPM occupé 50 / 80 %, file d'attente 0 / 2, sauvegarde
 26 / 50 h, timer de réconciliation 10 / 15 min, disque 70 / 85 %. Restic et Healthchecks s'ajouteront en T3 (comptes du propriétaire).
 
+**Écran (T2, 03/11/2026)** : `/admin/technique` (`TechDashboardAdminController`, menu « Maintenance », `ROLE_SUPER_ADMIN` par le pare-feu
+et dans le contrôleur ; un administrateur de site ne voit ni la page ni l'entrée de menu). Lecture seule dans `tech_metric_sample`
+(`TechDashboardService`, `GetTechDashboardUseCase`) : classement des sites par ressource sur 24 h, 7 jours ou 30 jours (requêtes, temps
+PHP, pic mémoire, erreurs 5xx, tâches, courriels, appels et jetons d'IA, taille de base et de fichiers ; les codes qui partagent une base
+sont fusionnés), détail d'un site avec ses courbes horaires, indicateurs de la plateforme (PHP-FPM, disque, sauvegarde, timers, Docker,
+stockage) avec l'état bon / moyen / mauvais d'après `tech_threshold`, routes les plus lourdes, fraîcheur de la collecte. Seuils modifiables
+par `POST /admin/technique/seuils` (`UpdateTechThresholdsUseCase`, jeton CSRF, bon ≤ moyen). Courbes : Chart.js 4.4.1 servi en local
+(`public/assets/js/vendor/chart.umd.4.4.1.js`, MIT, aucun CDN) piloté par `public/assets/js/admin-technique.js` (script externe, données
+dans un bloc JSON : compatible avec une CSP stricte), palette fixe sûre pour les daltonismes, vue tableau sous chaque courbe. Test :
+`tests/Functional/Tech/TechDashboardAdminTest.php`.
+
 Installation du timer (changement d'infrastructure, avec l'accord du propriétaire) :
 
 ```bash

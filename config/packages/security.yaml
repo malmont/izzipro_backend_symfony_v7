@@ -88,6 +88,8 @@ security:
         # 🔹 Écran des workers (communs à tous les sites) : propriétaire de la plateforme. Ouvert depuis le menu, il passe
         #    par /admin?routeName=… : le contrôleur (WorkerAdminController) exige aussi ce rôle.
         - { path: ^/admin/workers, roles: ROLE_SUPER_ADMIN }
+        # Tableau de bord technique (03/11/2026) : mesures de tous les sites, propriétaire de la plateforme seulement
+        - { path: ^/admin/technique, roles: ROLE_SUPER_ADMIN }
         - { path: ^/admin, roles: ROLE_ADMIN }
         - { path: ^/(account|adress|checkout), roles: [ROLE_USER_INTERNET, ROLE_USER_POS,ROLE_ADMIN] }
         - { path: ^/api/boussole/auth/(register|login), roles: PUBLIC_ACCESS }

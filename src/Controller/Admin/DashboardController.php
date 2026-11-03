@@ -491,6 +491,9 @@ class DashboardController extends AbstractDashboardController
         // Workers communs à tous les sites : propriétaire de la plateforme seulement
         yield MenuItem::linkToRoute('Workers (tâches de fond)', 'fas fa-heartbeat', 'admin_workers')
             ->setPermission('ROLE_SUPER_ADMIN');
+        // Mesures techniques de tous les sites (ressources consommées, PHP-FPM, sauvegardes) : propriétaire de la plateforme seulement
+        yield MenuItem::linkToRoute('Tableau de bord technique', 'fas fa-chart-line', 'admin_technique')
+            ->setPermission('ROLE_SUPER_ADMIN');
         
         yield MenuItem::section('UI');
         yield MenuItem::linkToCrud('Home Slider', 'fas fa-images', HomeSlider::class);

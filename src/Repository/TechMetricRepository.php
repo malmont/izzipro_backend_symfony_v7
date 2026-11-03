@@ -129,4 +129,70 @@ class TechMetricRepository
         $stmt = $this->pdo()->prepare('UPDATE tech_threshold SET good = :good, warn = :warn, updated_at = :now WHERE metric = :metric');
         $stmt->execute(['good' => number_format($good, 3, '.', ''), 'warn' => number_format($warn, 3, '.', ''), 'now' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'), 'metric' => $metric]);
     }
+
+    /**
+     * Série d'une mesure agrégée sur plusieurs codes de site (codes qui partagent une base), par début de période et par sujet :
+     * somme des compteurs, maximum des autres mesures. Sites vides = plateforme ; null = tous les sites confondus.
+     * @return list<array{period_start: string, subject: string, value: float}>
+     */
+    public function seriesGrouped(string $metric, ?array $sites, string $period, \DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        $fn = in_array($metric, self::SUM_METRICS, true) ? 'SUM' : 'MAX';
+        $params = ['metric' => $metric, 'period' => $period, 'from' => $from->format('Y-m-d H:i:s'), 'to' => $to->format('Y-m-d H:i:s')];
+        $where = '';
+        if ($sites !== null) {
+            $sites = array_values($sites) ?: [''];
+            $where = ' AND site IN (' . implode(', ', array_map(fn ($i) => ":s$i", array_keys($sites))) . ')';
+            foreach ($sites as $i => $site) {
+                $params["s$i"] = $site;
+            }
+        }
+        $stmt = $this->pdo()->prepare("SELECT period_start, subject, $fn(value) AS value FROM tech_metric_sample WHERE metric = :metric AND period = :period AND period_start >= :from AND period_start < :to$where GROUP BY period_start, subject ORDER BY period_start, subject");
+        $stmt->execute($params);
+
+        return array_map(fn (array $r) => ['period_start' => $r['period_start'], 'subject' => $r['subject'], 'value' => (float) $r['value']], $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: []);
+    }
+
+    /** Dernier relevé ponctuel de chaque sujet d'une mesure (un montage, une unité systemd…) */
+    public function latestBySubject(string $metric, string $site = ''): array
+    {
+        $stmt = $this->pdo()->prepare("SELECT DISTINCT ON (subject) subject, period_start, value, detail, measured_at FROM tech_metric_sample WHERE metric = :metric AND site = :site AND period = 'point' ORDER BY subject, period_start DESC");
+        $stmt->execute(['metric' => $metric, 'site' => $site]);
+
+        return array_map(fn (array $r) => ['subject' => $r['subject'], 'period_start' => $r['period_start'], 'value' => (float) $r['value'], 'detail' => $r['detail'] === null ? null : json_decode($r['detail'], true), 'measured_at' => $r['measured_at']], $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: []);
+    }
+
+    /** Dernier relevé ponctuel d'une mesure pour chaque site */
+    public function latestPerSite(string $metric): array
+    {
+        $stmt = $this->pdo()->prepare("SELECT DISTINCT ON (site) site, period_start, value, detail FROM tech_metric_sample WHERE metric = :metric AND period = 'point' ORDER BY site, period_start DESC");
+        $stmt->execute(['metric' => $metric]);
+
+        return array_map(fn (array $r) => ['site' => $r['site'], 'period_start' => $r['period_start'], 'value' => (float) $r['value'], 'detail' => $r['detail'] === null ? null : json_decode($r['detail'], true)], $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: []);
+    }
+
+    /** Routes les plus lourdes sur une fenêtre : nombre de dépassements, pic mémoire max, durée max */
+    public function routeRanking(\DateTimeInterface $from, \DateTimeInterface $to, int $limit = 15): array
+    {
+        $stmt = $this->pdo()->prepare("SELECT subject AS route,
+                COALESCE(SUM(CASE WHEN metric = 'route_peak_count' THEN value END), 0) AS n,
+                COALESCE(MAX(CASE WHEN metric = 'route_peak_mb_max' THEN value END), 0) AS mb,
+                COALESCE(MAX(CASE WHEN metric = 'route_ms_max' THEN value END), 0) AS ms
+            FROM tech_metric_sample WHERE metric IN ('route_peak_count', 'route_peak_mb_max', 'route_ms_max') AND period = 'hour' AND period_start >= :from AND period_start < :to
+            GROUP BY subject ORDER BY mb DESC, ms DESC LIMIT :limit");
+        $stmt->bindValue('from', $from->format('Y-m-d H:i:s'));
+        $stmt->bindValue('to', $to->format('Y-m-d H:i:s'));
+        $stmt->bindValue('limit', $limit, \PDO::PARAM_INT);
+        $stmt->execute();
+
+        return array_map(fn (array $r) => ['route' => $r['route'], 'n' => (int) $r['n'], 'mb' => (float) $r['mb'], 'ms' => (float) $r['ms']], $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: []);
+    }
+
+    /** Horodatage du dernier relevé, toutes mesures confondues (null si la table est vide) */
+    public function lastMeasuredAt(): ?\DateTimeImmutable
+    {
+        $value = $this->pdo()->query('SELECT MAX(measured_at) FROM tech_metric_sample')->fetchColumn();
+
+        return $value ? new \DateTimeImmutable($value, new \DateTimeZone('UTC')) : null;
+    }
 }

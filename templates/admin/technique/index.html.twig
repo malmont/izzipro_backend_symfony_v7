@@ -1,0 +1,169 @@
+{# Écran « Tableau de bord technique » (TechDashboardAdminController, T2). Habillage EasyAdmin quand la page est ouverte depuis le menu (/admin?routeName=admin_technique) ; la variable globale ea est le fournisseur de contexte, toujours défini : seul ea() dit s'il y a un contexte. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Tableau de bord technique{% endblock %}
+{% block content_title %}Tableau de bord technique{% endblock %}
+
+{% block main %}{{ block('technique_panel') }}{% endblock %}
+{% block body %}
+    <div class="container-fluid py-3">
+        <h1 class="h3 mb-3">Tableau de bord technique</h1>
+        {{ block('technique_panel') }}
+    </div>
+{% endblock %}
+
+{% macro statut(status) %}
+    {%- if status == 'good' -%}<span class="badge bg-success tech-statut" title="Bon">● Bon</span>
+    {%- elseif status == 'warn' -%}<span class="badge bg-warning text-dark tech-statut" title="Moyen">▲ Moyen</span>
+    {%- elseif status == 'bad' -%}<span class="badge bg-danger tech-statut" title="Mauvais">✖ Mauvais</span>
+    {%- endif -%}
+{% endmacro %}
+{% import _self as ui %}
+
+{% block technique_panel %}
+    <link rel="stylesheet" href="{{ asset('assets/css/admin-technique.css') }}">
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}
+            <div class="alert alert-{{ label }}">{{ message }}</div>
+        {% endfor %}
+    {% endfor %}
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3 tech-barre">
+        <span class="text-muted">Fenêtre :</span>
+        {% for key, w in windows %}
+            <a class="btn btn-sm {{ key == window ? 'btn-primary' : 'btn-outline-secondary' }}" href="{{ path('admin_technique', {fenetre: key, site: detail ? detail.site : null, tri: sort}) }}">{{ w.label }}</a>
+        {% endfor %}
+        <span class="ms-auto">{{ ui.statut(freshness.status) }} <span class="text-muted small" data-fraicheur>{{ freshness.label }}</span></span>
+    </div>
+
+    <h2 class="h5 mt-2">Classement des sites par ressource <span class="text-muted small">(du {{ from|date('d/m H:i') }} au {{ to|date('d/m H:i') }} UTC, tri : {{ resources[sort].label }})</span></h2>
+    {% if ranking is empty %}
+        <p class="text-muted">Aucune mesure pour l'instant : la collecte tourne toutes les 5 minutes.</p>
+    {% else %}
+    <div class="table-responsive">
+        <table class="table table-sm datagrid tech-classement" data-tri="{{ sort }}">
+            <thead>
+                <tr>
+                    <th>Site</th>
+                    {% for key, r in resources %}
+                        <th class="text-end {{ key == sort ? 'tech-tri-actif' : '' }}"><a href="{{ path('admin_technique', {fenetre: window, site: detail ? detail.site : null, tri: key}) }}" title="Trier par {{ r.label|lower }}">{{ r.label }}</a>{% if r.kind == 'latest' %} <span class="text-muted small" title="dernier relevé">●</span>{% endif %}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in ranking %}
+                    <tr class="{{ detail and row.site == detail.site ? 'table-active' : '' }}" data-site="{{ row.site }}">
+                        <td>
+                            <a href="{{ path('admin_technique', {fenetre: window, site: row.site, tri: sort}) }}"><strong>{{ row.site }}</strong></a>
+                            <div class="text-muted small">{{ row.names|join(', ') }}{% if row.codes|length > 1 %} <span title="codes partageant la même base">({{ row.codes|join(' + ') }})</span>{% endif %}{% if not row.known %} <span class="badge bg-secondary">site inconnu de la table tenants</span>{% endif %}</div>
+                        </td>
+                        {% for key, r in resources %}
+                            <td class="text-end tech-cellule">
+                                <span class="tech-valeur">{{ row.display[key] }}</span>
+                                <span class="tech-barre-fond" aria-hidden="true"><span class="tech-barre-valeur" style="width: {{ row.share[key] }}%"></span></span>
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="text-muted small">Somme sur la fenêtre pour les compteurs (requêtes, temps PHP, erreurs, tâches, courriels, IA), maximum pour le pic mémoire, dernier relevé (●) pour les tailles. Deux codes qui partagent une base sont fusionnés.</p>
+    {% endif %}
+
+    {% if detail %}
+    <h2 class="h5 mt-4" id="site">Détail du site <strong>{{ detail.site }}</strong> <span class="text-muted small">{{ detail.names|join(', ') }}</span></h2>
+    {% if detail.charts is empty %}
+        <p class="text-muted">Aucune mesure pour ce site sur la fenêtre choisie.</p>
+    {% else %}
+    <div class="row tech-courbes" data-section="site">
+        {% for chart in detail.charts %}
+            <div class="col-lg-6 mb-3">
+                <div class="card h-100"><div class="card-body">
+                    <h3 class="h6 card-title">{{ chart.title }}{% if chart.unit %} <span class="text-muted">({{ chart.unit }})</span>{% endif %}</h3>
+                    <canvas id="tech-chart-{{ chart.id }}" height="140" role="img" aria-label="{{ chart.title }}"></canvas>
+                    <details class="tech-table-vue"><summary class="small text-muted">Voir les valeurs</summary><div data-table-for="{{ chart.id }}"></div></details>
+                </div></div>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <h2 class="h5 mt-4" id="plateforme">Plateforme</h2>
+    {% if platform.indicators is empty %}
+        <p class="text-muted">Aucun relevé de la plateforme pour l'instant (PHP-FPM, disque, sauvegarde, timers arrivent avec le timer de collecte).</p>
+    {% else %}
+    <div class="row tech-indicateurs">
+        {% for ind in platform.indicators %}
+            <div class="col-md-6 col-xl-4 mb-3">
+                <div class="card h-100 tech-indicateur tech-indicateur-{{ ind.status ?? 'none' }}"><div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <span class="text-muted small">{{ ind.label }}</span>
+                        {{ ui.statut(ind.status) }}
+                    </div>
+                    <div class="tech-indicateur-valeur">{{ ind.display }}</div>
+                    <div class="text-muted small">{{ ind.hint }}{% if ind.at %} · relevé {{ ind.at|date('d/m H:i') }}{% endif %}</div>
+                </div></div>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% if platform.charts is not empty %}
+    <div class="row tech-courbes" data-section="plateforme">
+        {% for chart in platform.charts %}
+            <div class="col-lg-6 mb-3">
+                <div class="card h-100"><div class="card-body">
+                    <h3 class="h6 card-title">{{ chart.title }}{% if chart.unit %} <span class="text-muted">({{ chart.unit }})</span>{% endif %}</h3>
+                    <canvas id="tech-chart-{{ chart.id }}" height="140" role="img" aria-label="{{ chart.title }}"></canvas>
+                    <details class="tech-table-vue"><summary class="small text-muted">Voir les valeurs</summary><div data-table-for="{{ chart.id }}"></div></details>
+                </div></div>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <h2 class="h5 mt-4" id="routes">Routes les plus lourdes <span class="text-muted small">(dépassements de 64 Mo ou 5 s sur la fenêtre)</span></h2>
+    {% if routes is empty %}
+        <p class="text-muted">Aucune route n'a dépassé 64 Mo ou 5 s sur la fenêtre.</p>
+    {% else %}
+    <table class="table table-sm datagrid tech-routes">
+        <thead><tr><th>Route</th><th class="text-end">Dépassements</th><th class="text-end">Pic mémoire max</th><th class="text-end">Durée max</th></tr></thead>
+        <tbody>
+            {% for r in routes %}
+                <tr>
+                    <td><code>{{ r.route }}</code></td>
+                    <td class="text-end">{{ r.n }}</td>
+                    <td class="text-end">{{ r.mb|number_format(0, ',', ' ') }} Mo {{ ui.statut(r.mb_status) }}</td>
+                    <td class="text-end">{{ r.ms_display }} {{ ui.statut(r.ms_status) }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <h2 class="h5 mt-4" id="seuils">Seuils <span class="text-muted small">(bon jusqu'au premier seuil, moyen jusqu'au second, mauvais au-delà)</span></h2>
+    <form method="post" action="{{ path('admin_technique_seuils') }}" class="tech-seuils">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <input type="hidden" name="fenetre" value="{{ window }}">
+        {% if detail %}<input type="hidden" name="site" value="{{ detail.site }}">{% endif %}
+        <table class="table table-sm datagrid">
+            <thead><tr><th>Mesure</th><th>Unité</th><th>Bon jusqu'à</th><th>Moyen jusqu'à</th></tr></thead>
+            <tbody>
+                {% for t in thresholds %}
+                    <tr>
+                        <td>{{ t.label }} <span class="text-muted small"><code>{{ t.metric }}</code></span></td>
+                        <td>{{ t.unit }}</td>
+                        <td><input class="form-control form-control-sm" type="number" step="any" min="0" name="seuils[{{ t.metric }}][good]" value="{{ t.good|number_format(3, '.', '')|trim('0')|trim('.') }}" aria-label="{{ t.label }} : bon jusqu'à"></td>
+                        <td><input class="form-control form-control-sm" type="number" step="any" min="0" name="seuils[{{ t.metric }}][warn]" value="{{ t.warn|number_format(3, '.', '')|trim('0')|trim('.') }}" aria-label="{{ t.label }} : moyen jusqu'à"></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <button type="submit" class="btn btn-primary btn-sm">Enregistrer les seuils</button>
+    </form>
+
+    <script type="application/json" id="tech-data">{{ {site: detail ? detail.charts : [], plateforme: platform.charts}|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT'))|raw }}</script>
+    <script src="{{ asset('assets/js/vendor/chart.umd.4.4.1.js') }}"></script>
+    <script src="{{ asset('assets/js/admin-technique.js') }}"></script>
+{% endblock %}
