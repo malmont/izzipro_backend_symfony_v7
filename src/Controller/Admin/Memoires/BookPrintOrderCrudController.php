@@ -7,6 +7,7 @@ use App\Controller\Admin\CsrfProtectedActionTrait;
 use App\MemoiresVivantes\Entity\BookPrintOrder;
 use App\MemoiresVivantes\Services\LuluPrintService;
 use App\Services\TenantEntityManagerProvider;
+use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -55,16 +56,20 @@ class BookPrintOrderCrudController extends BaseTenantCrudController
             ->linkToUrl(fn (BookPrintOrder $order) => $this->csrfActionUrl('syncWithLulu', (string) $order->getId()))
             ->setCssClass('btn btn-sm btn-outline-info');
 
-        return $actions
+        return parent::configureActions($actions)
+            ->disable(Action::BATCH_DELETE)
             ->add(Crud::PAGE_INDEX, Action::DETAIL)
             ->add(Crud::PAGE_INDEX, $syncLuluAction)
-            ->add(Crud::PAGE_DETAIL, $syncLuluAction);
+            ->add(Crud::PAGE_DETAIL, $syncLuluAction)
+            ->setPermission(Action::NEW, 'ROLE_SUPER_ADMIN')
+            ->setPermission(Action::EDIT, 'ROLE_SUPER_ADMIN')
+            ->setPermission(Action::DELETE, 'ROLE_SUPER_ADMIN');
     }
 
     public function configureFields(string $pageName): iterable
     {
         yield IdField::new('id', 'ID')->hideOnForm()->formatValue(fn($val) => substr((string)$val, 0, 8) . '...');
-        yield AssociationField::new('book', 'Livre');
+        yield AssociationField::new('book', 'Livre')->setFormTypeOption('choice_label', 'title');
         yield AssociationField::new('user', 'Demandeur');
 
         yield ChoiceField::new('status', 'Statut')
@@ -165,5 +170,23 @@ class BookPrintOrderCrudController extends BaseTenantCrudController
             ->generateUrl();
 
         return $this->redirect($url);
+    }
+
+    public function persistEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyAccessUnlessGranted('ROLE_SUPER_ADMIN', null, 'Commandes d\'impression réservées au super administrateur.');
+        parent::persistEntity($entityManager, $entityInstance);
+    }
+
+    public function updateEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyAccessUnlessGranted('ROLE_SUPER_ADMIN', null, 'Commandes d\'impression réservées au super administrateur.');
+        parent::updateEntity($entityManager, $entityInstance);
+    }
+
+    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        $this->denyAccessUnlessGranted('ROLE_SUPER_ADMIN', null, 'Commandes d\'impression réservées au super administrateur.');
+        parent::deleteEntity($entityManager, $entityInstance);
     }
 }

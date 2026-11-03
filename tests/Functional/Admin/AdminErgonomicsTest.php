@@ -74,7 +74,7 @@ class AdminErgonomicsTest extends WebTestCase
     /** Formulaires à champ JSON (JsonTextType) : ils plantaient tous (champ déclaré avec Field::new, transformateur absent) */
     public function testJsonFormsOpen(): void
     {
-        $this->login();
+        $this->login(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']);
         foreach (['BoutiqueSettingCrudController', 'LandingPageSettingCrudController', 'SubscriptionPlanCrudController', 'ReviewSettingCrudController', 'BookingConfigurationCrudController'] as $controller) {
             $html = $this->admin(['crudAction' => 'new', 'crudControllerFqcn' => 'App\Controller\Admin\\' . $controller]);
             $this->assertStringContainsString('<textarea', $html, $controller);

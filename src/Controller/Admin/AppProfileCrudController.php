@@ -96,7 +96,9 @@ class AppProfileCrudController extends BaseTenantCrudController
 
     public function configureActions(Actions $actions): Actions
     {
-        return $actions->add(Crud::PAGE_INDEX, Action::DETAIL);
+        return parent::configureActions($actions)
+            ->add(Crud::PAGE_INDEX, Action::DETAIL)
+            ->disable(Action::DELETE, Action::BATCH_DELETE);
     }
 
     public function configureFields(string $pageName): iterable
@@ -164,5 +166,10 @@ class AppProfileCrudController extends BaseTenantCrudController
             return;
         }
         parent::persistEntity($entityManager, $entityInstance);
+    }
+
+    public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
+    {
+        throw $this->createAccessDeniedException('La suppression d\'un profil d\'application est désactivée.');
     }
 }
