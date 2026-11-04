@@ -1,0 +1,181 @@
+{# Onglet « Plateforme » de la console de pilotage (PlatformConsoleAdminController, lot 4, 04/11/2026). Habillage EasyAdmin depuis le menu ; ea() dit s'il y a un contexte. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Plateforme : pilotage des fonctionnalités{% endblock %}
+{% block content_title %}Plateforme : pilotage des fonctionnalités{% endblock %}
+
+{% block main %}{{ block('plateforme_panel') }}{% endblock %}
+{% block body %}
+    <div class="container-fluid py-3">
+        <h1 class="h3 mb-3">Plateforme : pilotage des fonctionnalités</h1>
+        {{ block('plateforme_panel') }}
+    </div>
+{% endblock %}
+
+{% macro badge(e) %}
+    {% if e.enabled %}
+        {% set cls = e.status == 'grace' ? 'bg-warning text-dark' : (e.source == 'trial' ? 'bg-info text-dark' : 'bg-success') %}
+        <span class="badge {{ cls }}" title="droit n° {{ e.id }}">{{ e.source }}{% if e.status == 'grace' %} (grâce){% endif %}</span>
+        {% if e.endsAt %}<div class="small text-muted">→ {{ e.endsAt|slice(0, 10) }}</div>{% endif %}
+    {% else %}
+        <span class="badge bg-light text-muted border">non</span>
+    {% endif %}
+{% endmacro %}
+{% import _self as m %}
+
+{% block plateforme_panel %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}
+    {% endfor %}
+
+    <div class="card mb-3 plateforme-mode">
+        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+            <div>
+                <strong>Mode de la plateforme :</strong>
+                {% if mode.mode == 'live' %}<span class="badge bg-danger">live</span> <span class="text-muted small">les garde-fous des modules et des droits d'usage s'appliquent</span>
+                {% else %}<span class="badge bg-secondary">demo</span> <span class="text-muted small">aucune restriction : tout est visible et réglable, rien n'est bloqué</span>{% endif %}
+                {% if mode.updatedAt %}<div class="small text-muted">changé le {{ mode.updatedAt|slice(0, 16) }} par {{ mode.updatedBy ?? 'inconnu' }}</div>{% endif %}
+            </div>
+            <form method="post" action="{{ path('admin_plateforme_mode') }}" class="ms-auto">
+                <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                <input type="hidden" name="mode" value="{{ mode.mode == 'live' ? 'demo' : 'live' }}">
+                <button type="submit" class="btn btn-sm {{ mode.mode == 'live' ? 'btn-outline-secondary' : 'btn-outline-danger' }}" onclick="return confirm('Passer la plateforme en mode {{ mode.mode == 'live' ? 'demo' : 'live' }} ?')">Passer en {{ mode.mode == 'live' ? 'demo' : 'live' }}</button>
+            </form>
+        </div>
+    </div>
+
+    <h2 class="h5 mt-3">Sites et fonctionnalités</h2>
+    <p class="text-muted small">Source du droit : manual (accordé à la main), trial (essai, avec sa fin), free (gratuit sans fin), subscription (abonnement de la boutique de la plateforme). Cliquer un site pour son détail et son journal.</p>
+    <div class="table-responsive">
+    <table class="table table-sm datagrid plateforme-grille">
+        <thead><tr><th>Site</th>{% for f in features %}<th class="text-center small">{{ labels[f] }}</th>{% endfor %}<th>Demandes</th></tr></thead>
+        <tbody>
+        {% for s in sites %}
+            <tr data-site="{{ s.code }}" class="{{ s.code == selected ? 'table-active' : '' }}">
+                <td><a href="{{ path('admin_plateforme', {site: s.code}) }}"><strong>{{ s.code }}</strong></a><div class="small text-muted">{{ s.name }}</div></td>
+                {% for f in features %}<td class="text-center">{{ m.badge(s.features[f]) }}</td>{% endfor %}
+                <td>{% for r in s.pendingRequests %}<span class="badge bg-warning text-dark">{{ labels[r] ?? r }}</span> {% endfor %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+
+    <h2 class="h5 mt-4">Accorder un droit</h2>
+    <form method="post" action="{{ path('admin_plateforme_grant') }}" class="row g-2 align-items-end plateforme-accorder">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+        <div class="col-md-3"><label class="form-label" for="g-site">Site</label>
+            <select class="form-select" id="g-site" name="tenant" required>{% for s in sites %}<option value="{{ s.code }}" {{ s.code == selected ? 'selected' : '' }}>{{ s.code }} — {{ s.name }}</option>{% endfor %}</select></div>
+        <div class="col-md-3"><label class="form-label" for="g-feature">Fonctionnalité</label>
+            <select class="form-select" id="g-feature" name="feature" required>{% for f in features %}<option value="{{ f }}">{{ labels[f] }}</option>{% endfor %}</select></div>
+        <div class="col-md-2"><label class="form-label" for="g-source">Source</label>
+            <select class="form-select" id="g-source" name="source"><option value="manual">manual (sans fin)</option><option value="trial">trial (essai)</option><option value="free">free (gratuit)</option></select></div>
+        <div class="col-md-1"><label class="form-label" for="g-days">Jours</label><input class="form-control" id="g-days" name="days" type="number" min="1" max="730" placeholder="essai"></div>
+        <div class="col-md-2"><label class="form-label" for="g-note">Note</label><input class="form-control" id="g-note" name="note" maxlength="500"></div>
+        <div class="col-md-1"><button type="submit" class="btn btn-primary w-100">Accorder</button></div>
+        <input type="hidden" name="site" value="{{ selected }}">
+    </form>
+
+    {% if selected %}
+        {% set site = null %}{% for s in sites %}{% if s.code == selected %}{% set site = s %}{% endif %}{% endfor %}
+        {% if site %}
+        <h2 class="h5 mt-4">Droits de {{ site.code }}</h2>
+        <table class="table table-sm datagrid plateforme-droits">
+            <thead><tr><th>Fonctionnalité</th><th>Droit</th><th>Statut</th><th>Fin</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for f in features %}{% set e = site.features[f] %}
+                <tr>
+                    <td>{{ labels[f] }}</td>
+                    <td>{% if e.enabled %}n° {{ e.id }} · {{ e.source }}{% if e.offerCode %} · offre {{ e.offerCode }}{% endif %}{% else %}<span class="text-muted">aucun</span>{% endif %}</td>
+                    <td>{{ e.enabled ? e.status : '—' }}</td>
+                    <td>{{ e.endsAt ? e.endsAt|slice(0, 10) : (e.enabled ? 'sans fin' : '—') }}</td>
+                    <td>
+                        {% if e.enabled %}
+                            <form method="post" action="{{ path('admin_plateforme_act', {id: e.id, action: 'suspend'}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="site" value="{{ site.code }}"><button class="btn btn-sm btn-outline-warning">Suspendre</button></form>
+                            <form method="post" action="{{ path('admin_plateforme_act', {id: e.id, action: 'cancel'}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="site" value="{{ site.code }}"><button class="btn btn-sm btn-outline-danger" onclick="return confirm('Retirer ce droit ?')">Retirer</button></form>
+                            <form method="post" action="{{ path('admin_plateforme_act', {id: e.id, action: 'extend'}) }}" class="d-inline-flex gap-1"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="site" value="{{ site.code }}"><input type="date" name="endsAt" class="form-control form-control-sm" style="width:10em" title="vide = sans fin"><button class="btn btn-sm btn-outline-primary">Prolonger</button></form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    {% endif %}
+
+    <h2 class="h5 mt-4">Demandes des sites{% if requests is not empty %} <span class="badge bg-warning text-dark">{{ requests|length }}</span>{% endif %}</h2>
+    {% if requests is empty %}<p class="text-muted">Aucune demande en attente.</p>{% else %}
+    <table class="table table-sm datagrid plateforme-demandes">
+        <thead><tr><th>Site</th><th>Fonctionnalité</th><th>Par</th><th>Message</th><th>Le</th><th>Décision</th></tr></thead>
+        <tbody>
+        {% for r in requests %}
+            <tr>
+                <td>{{ r.tenant_code }}</td><td>{{ labels[r.feature_key] ?? r.feature_key }}</td><td>{{ r.requested_by }}</td><td>{{ r.message }}</td><td>{{ r.created_at|slice(0, 16) }}</td>
+                <td>
+                    <form method="post" action="{{ path('admin_plateforme_request', {id: r.id, decision: 'grant'}) }}" class="d-inline-flex gap-1"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                        <select name="source" class="form-select form-select-sm" style="width:9em"><option value="trial">essai</option><option value="manual">manuel</option><option value="free">gratuit</option></select>
+                        <input type="number" name="days" class="form-control form-control-sm" style="width:5em" min="1" max="730" placeholder="jours">
+                        <button class="btn btn-sm btn-success">Accorder</button></form>
+                    <form method="post" action="{{ path('admin_plateforme_request', {id: r.id, decision: 'refuse'}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-secondary">Refuser</button></form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <h2 class="h5 mt-4">Politiques par fonctionnalité</h2>
+    <table class="table table-sm datagrid plateforme-politiques">
+        <thead><tr><th>Fonctionnalité</th><th>Essai autorisé</th><th>Jours d'essai</th><th>Gratuité autorisée</th><th>Grâce (jours)</th><th></th></tr></thead>
+        <tbody>
+        {% for f in features %}{% set p = policies[f] %}
+            <tr>
+                <form method="post" action="{{ path('admin_plateforme_policy', {feature: f}) }}">
+                <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                <td>{{ labels[f] }}</td>
+                <td><input type="checkbox" name="trialAllowed" value="1" {{ p.trial_allowed ? 'checked' : '' }}></td>
+                <td><input type="number" name="trialDays" class="form-control form-control-sm" style="width:6em" min="1" max="730" value="{{ p.trial_days }}"></td>
+                <td><input type="checkbox" name="freeAllowed" value="1" {{ p.free_allowed ? 'checked' : '' }}></td>
+                <td><input type="number" name="graceDays" class="form-control form-control-sm" style="width:6em" min="0" max="90" value="{{ p.grace_days }}"></td>
+                <td><button class="btn btn-sm btn-outline-primary">Enregistrer</button></td>
+                </form>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2 class="h5 mt-4">Offres et prix</h2>
+    <p class="text-muted small">Prix mensuels par défaut provisoires (04/11/2026). Une offre réunit une ou plusieurs fonctionnalités ; la boutique de la plateforme vendra ces offres comme formules d'abonnement branchées (code de l'offre dans la formule).</p>
+    <table class="table table-sm datagrid plateforme-offres">
+        <thead><tr><th>Code</th><th>Offre</th><th>Fonctionnalités</th><th>Mensuel</th><th>Annuel</th><th>Essai (j)</th><th>Active</th><th></th></tr></thead>
+        <tbody>
+        {% for o in offers %}
+            <tr>
+                <form method="post" action="{{ path('admin_plateforme_offer', {code: o.code}) }}">
+                <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                <td><code>{{ o.code }}</code></td>
+                <td>{{ o.labelFr }}<div class="small text-muted">{{ o.labelEn }}</div></td>
+                <td class="small">{% for f in o.features %}{{ labels[f] ?? f }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+                <td><div class="input-group input-group-sm" style="width:9em"><input type="text" name="monthlyPrice" class="form-control" value="{{ (o.monthlyPriceCents / 100)|number_format(2, '.', '') }}"><span class="input-group-text">{{ o.currency }}</span></div></td>
+                <td><input type="text" name="yearlyPrice" class="form-control form-control-sm" style="width:7em" value="{{ o.yearlyPriceCents is not null ? (o.yearlyPriceCents / 100)|number_format(2, '.', '') : '' }}" placeholder="—"></td>
+                <td><input type="number" name="trialDays" class="form-control form-control-sm" style="width:5em" min="0" max="365" value="{{ o.trialDays }}"></td>
+                <td><input type="checkbox" name="isActive" value="1" {{ o.isActive ? 'checked' : '' }}></td>
+                <td><button class="btn btn-sm btn-outline-primary">Enregistrer</button></td>
+                </form>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2 class="h5 mt-4">Journal{% if selected %} de {{ selected }}{% endif %}</h2>
+    <table class="table table-sm datagrid plateforme-journal">
+        <thead><tr><th>Le</th><th>Site</th><th>Fonctionnalité</th><th>Événement</th><th>Détail</th></tr></thead>
+        <tbody>
+        {% for e in events %}
+            <tr><td>{{ e.created_at|slice(0, 16) }}</td><td>{{ e.tenant_code }}</td><td>{{ labels[e.feature_key] ?? e.feature_key }}</td><td><span class="badge bg-light text-dark border">{{ e.event }}</span></td><td class="small text-muted">{{ e.payload }}</td></tr>
+        {% else %}
+            <tr><td colspan="5" class="text-muted">Aucun événement.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

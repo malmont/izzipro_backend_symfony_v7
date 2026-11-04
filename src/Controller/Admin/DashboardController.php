@@ -499,6 +499,9 @@ class DashboardController extends AbstractDashboardController
         // Compte du propriétaire de la plateforme sur toutes les bases (03/11/2026)
         yield MenuItem::linkToRoute('Compte super administrateur', 'fas fa-user-shield', 'admin_super_admin')
             ->setPermission('ROLE_SUPER_ADMIN');
+        // Console de pilotage de la plateforme : mode, droits d'usage de tous les sites, politiques, offres, demandes (lot 4, 04/11/2026)
+        yield MenuItem::linkToRoute('Plateforme : pilotage', 'fas fa-sliders-h', 'admin_plateforme')
+            ->setPermission('ROLE_SUPER_ADMIN');
         
         yield MenuItem::section('UI');
         yield MenuItem::linkToCrud('Home Slider', 'fas fa-images', HomeSlider::class);

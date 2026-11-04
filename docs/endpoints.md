@@ -247,7 +247,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (272)
+## Boutique et commun (281)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -366,10 +366,19 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/payments/statistics/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\PaymentsController::getPaymentStatistics` |
 | GET | `/api/payments` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::getPayments` |
 | POST | `/api/platform/billing-events` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformBillingEventsController::receive` |
+| PATCH | `/api/platform/entitlements/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::act` |
+| GET | `/api/platform/entitlements` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::list` |
+| POST | `/api/platform/entitlements` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::grant` |
+| GET | `/api/platform/events` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::events` |
 | PUT | `/api/platform/offers/{code}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformOffersController::put` |
 | GET | `/api/platform/offers` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformOffersController::list` |
+| PUT | `/api/platform/policies/{feature}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::policy` |
+| GET | `/api/platform/policies` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::policies` |
+| PATCH | `/api/platform/requests/{id}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::decide` |
+| GET | `/api/platform/requests` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::requests` |
 | GET | `/api/platform/settings` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSettingsController::show` |
 | PUT | `/api/platform/settings` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSettingsController::update` |
+| GET | `/api/platform/sites` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformEntitlementsController::sites` |
 | POST | `/api/pos/approvals` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::approve` |
 | GET | `/api/pos/archive/{year}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosArchiveController::download` |
 | GET | `/api/pos/audit/verify` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosAuditController::verify` |
@@ -563,7 +572,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (33)
+## Administration (EasyAdmin) (40)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -578,6 +587,13 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/memoires/ai-quotas` | ROLE_ADMIN | `Controller\Admin\Memoires\AiQuotaPageController::save` |
 | GET | `/admin/mobile-theme` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AppThemeShortcutController::open` |
 | ANY | `/admin/pdf/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::pdfPrintBarcode` |
+| POST | `/admin/plateforme/accorder` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::grant` |
+| POST | `/admin/plateforme/demande/{id}/{decision}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::request` |
+| POST | `/admin/plateforme/droit/{id}/{action}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::act` |
+| POST | `/admin/plateforme/mode` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::switchMode` |
+| POST | `/admin/plateforme/offre/{code}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::offer` |
+| POST | `/admin/plateforme/politique/{feature}` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::policy` |
+| GET | `/admin/plateforme` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::index` |
 | GET, POST | `/admin/pos/archive` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosArchiveAdminController::index` |
 | GET, POST | `/admin/pos/coupons` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosCouponAdminController::index` |
 | GET, POST | `/admin/pos/exports` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\PosAccountingExportController::index` |
