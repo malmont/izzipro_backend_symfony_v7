@@ -41,13 +41,12 @@ class AccountErrorCodesApiTest extends WebTestCase
         yield 'register EMAIL_DOMAIN_INVALID' => [400, 'EMAIL_DOMAIN_INVALID', 'Email domain appears invalid', null, '/api/register', $register(['email' => 'marie@domaine-inexistant.invalid'])];
         yield 'register EMAIL_ALREADY_USED' => [409, 'EMAIL_ALREADY_USED', 'User already exists', null, '/api/register', fn (self $t) => $t->registered()];
         yield 'resend EMAIL_REQUIRED' => [400, 'EMAIL_REQUIRED', 'Email manquant', null, '/api/resend-verification', fn (self $t) => []];
-        yield 'resend USER_NOT_FOUND' => [404, 'USER_NOT_FOUND', 'Utilisateur introuvable', null, '/api/resend-verification', fn (self $t) => ['email' => 'personne-' . bin2hex(random_bytes(3)) . '@example.invalid']];
-        yield 'resend ACCOUNT_ALREADY_VERIFIED' => [400, 'ACCOUNT_ALREADY_VERIFIED', 'Ce compte est déjà vérifié.', null, '/api/resend-verification', fn (self $t) => ['email' => $t->user()[0]]];
+        // USER_NOT_FOUND et ACCOUNT_ALREADY_VERIFIED du renvoi du lien : supprimés par B16 (réponse neutre, voir AccountEnumerationTest)
         yield 'reset request EMAIL_REQUIRED' => [400, 'EMAIL_REQUIRED', 'Email is required.', null, '/api/password-reset/request', fn (self $t) => []];
         yield 'reset confirm FIELDS_REQUIRED' => [400, 'FIELDS_REQUIRED', 'token et password attendus.', ['fields' => ['token', 'password']], '/api/password-reset/confirm', fn (self $t) => []];
         yield 'reset confirm PASSWORD_TOO_SHORT' => [400, 'PASSWORD_TOO_SHORT', 'Le mot de passe doit comporter au moins 8 caractères.', ['min' => 8], '/api/password-reset/confirm', fn (self $t) => ['token' => 'x', 'password' => 'court']];
         yield 'reset confirm RESET_LINK_INVALID' => [400, 'RESET_LINK_INVALID', 'Lien invalide ou expiré : demandez un nouveau lien.', null, '/api/password-reset/confirm', fn (self $t) => ['token' => 'inconnu-' . bin2hex(random_bytes(3)), 'password' => self::PASSWORD]];
-        yield 'otp-verify UNAUTHORIZED' => [401, 'UNAUTHORIZED', 'Unauthorized', null, '/api/otp-verify', fn (self $t) => ['username' => 'personne-' . bin2hex(random_bytes(3)) . '@example.invalid', 'otp' => '000000', 'platform' => 'mobile']];
+        // UNAUTHORIZED (courriel inconnu) : supprimé par B16, même réponse OTP_INVALID (voir AccountEnumerationTest)
         yield 'otp-verify OTP_INVALID' => [401, 'OTP_INVALID', 'Code OTP invalide ou expiré', null, '/api/otp-verify', fn (self $t) => ['username' => $t->user()[0], 'otp' => '000000', 'platform' => 'mobile']];
     }
 

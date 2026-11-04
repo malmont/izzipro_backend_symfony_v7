@@ -482,18 +482,23 @@ Les codes du changement de courriel et de la suppression du compte (`PASSWORD_RE
 | `EMAIL_DOMAIN_INVALID` | 400 | `POST /api/register` | Email domain appears invalid **(en)** | — |
 | `EMAIL_ALREADY_USED` | 409 | `POST /api/register`, `PATCH /api/profile` | User already exists **(en)** ; Email already in use **(en)** | — |
 | `EMAIL_REQUIRED` | 400 | `POST /api/resend-verification`, `POST /api/password-reset/request` | Email manquant ; Email is required. **(en)** | — |
-| `USER_NOT_FOUND` | 404 | `POST /api/resend-verification` | Utilisateur introuvable | — |
-| `ACCOUNT_ALREADY_VERIFIED` | 400 | `POST /api/resend-verification` | Ce compte est déjà vérifié. (`message` ; `error` ajouté) | — |
+| `RATE_LIMITED` | 429 | `POST /api/resend-verification` (B16 : 3 par heure par site et courriel, 20 par site et IP, plafond global par IP) | Trop de tentatives. Réessayez dans %d minute(s). | `retryAfterSeconds` |
 | `EMAIL_SEND_FAILED` | 500 | `POST /api/resend-verification` | Erreur lors de l'envoi de l'email. (corps remplacé par nginx en production) | — |
 | `FIELDS_REQUIRED` | 400 | `POST /api/password-reset/confirm` | token et password attendus. | `{fields: [token, password]}` |
 | `RESET_LINK_INVALID` | 400 | `POST /api/password-reset/confirm` | Lien invalide ou expiré : demandez un nouveau lien. | — |
-| `UNAUTHORIZED` | 401 | `POST /api/otp-verify` | Unauthorized **(en)** (compte inconnu) | — |
-| `OTP_INVALID` | 401 | `POST /api/otp-verify` | Code OTP invalide ou expiré | — |
+| `OTP_INVALID` | 401 | `POST /api/otp-verify` | Code OTP invalide ou expiré (code faux, expiré **ou courriel inconnu** : même réponse depuis B16, 04/11/2026 ; `UNAUTHORIZED` ne sort plus) | — |
 | `UNAUTHENTICATED` | 401 | `GET`/`PATCH /api/profile` | Not authenticated **(en)** (en pratique le pare-feu répond avant : `JWT_NOT_FOUND`) | — |
 | `INVALID_BODY` | 400 | `PATCH /api/profile` | Invalid JSON **(en)** | — |
 | `LICENSE_DATE_INVALID` | 400 | `PATCH /api/profile` | Invalid date format for licenseExpirationDate. Use YYYY-MM-DD. **(en)** | `{format: YYYY-MM-DD}` |
 
-Hors API (formulaire web du backend `POST /password-reset/confirm`) : inchangé. Tests : `AccountErrorCodesApiTest` (un cas par code).
+**Ne pas révéler si un compte existe (B16, 04/11/2026)** : `POST /api/resend-verification` répond toujours 200
+`{ message: "Si un compte à activer existe pour ce courriel, un nouveau lien vient d'être envoyé." }`, que le compte soit à activer
+(courriel envoyé), inconnu ou déjà activé (rien n'est envoyé) ; avant : 404 `USER_NOT_FOUND`, 400 `ACCOUNT_ALREADY_VERIFIED`, 200
+« Email de vérification renvoyé avec succès. ». `POST /api/otp-verify` répond 401 `OTP_INVALID` pour un courriel inconnu comme pour
+un code faux (audit `invalid_otp`, limite `otp_verify_account` inchangée).
+
+Hors API (formulaire web du backend `POST /password-reset/confirm`) : inchangé. Tests : `AccountErrorCodesApiTest` (un cas par code),
+`AccountEnumerationTest` (réponses identiques du renvoi, limiteur, otp-verify).
 
 ## Taxes par région (09/10/2026, `TaxEngine`)
 

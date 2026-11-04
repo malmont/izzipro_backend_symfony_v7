@@ -28,7 +28,6 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
         '/api/candidatures',
         '/api/financement/submit',
         '/api/register',
-        '/api/resend-verification',
         '/api/boussole/auth/register',
         '/api/memoires/auth/activate',
         '/api/reservations',
@@ -43,6 +42,8 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
         #[Autowire(service: 'limiter.password_reset_account')] private readonly RateLimiterFactory $resetAccount,
         #[Autowire(service: 'limiter.password_reset_ip')] private readonly RateLimiterFactory $resetIp,
         #[Autowire(service: 'limiter.password_reset_global_ip')] private readonly RateLimiterFactory $resetGlobalIp,
+        #[Autowire(service: 'limiter.resend_verification_account')] private readonly RateLimiterFactory $resendAccount,
+        #[Autowire(service: 'limiter.resend_verification_ip')] private readonly RateLimiterFactory $resendIp,
         #[Autowire(service: 'limiter.public_form_ip')] private readonly RateLimiterFactory $publicFormIp,
         #[Autowire(service: 'limiter.public_form_attempts_ip')] private readonly RateLimiterFactory $publicFormAttemptsIp,
         #[Autowire(service: 'limiter.public_form_global_ip')] private readonly RateLimiterFactory $publicFormGlobalIp,
@@ -91,6 +92,13 @@ class PublicEndpointRateLimitSubscriber implements EventSubscriberInterface
             $path === '/api/password-reset/request', $path === '/api/password-reset/confirm' => [
                 [$this->resetAccount, $this->accountKey($request, ['email'])],
                 [$this->resetIp, $this->siteIpKey($request)],
+                [$this->resetGlobalIp, $ip],
+            ],
+            // Renvoi du lien de vérification (B16, 04/11/2026) : par site et courriel, par site et IP, plafond global par IP
+            // (celui du mot de passe oublié) ; avant, simple formulaire public par IP
+            $path === '/api/resend-verification' => [
+                [$this->resendAccount, $this->accountKey($request, ['email'])],
+                [$this->resendIp, $this->siteIpKey($request)],
                 [$this->resetGlobalIp, $ip],
             ],
             // envois acceptés : vérifiés ici sans être comptés (comptés à la réponse 2xx), par site puis plafond global par IP ;

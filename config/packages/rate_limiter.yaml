@@ -60,6 +60,17 @@ framework:
             limit: 60
             interval: '1 hour'
             lock_factory: null
+        # Renvoi du lien de vérification (B16, 04/11/2026) : même schéma que le mot de passe oublié ; plafond global partagé
+        resend_verification_account:
+            policy: sliding_window
+            limit: 3
+            interval: '1 hour'
+            lock_factory: null
+        resend_verification_ip:
+            policy: sliding_window
+            limit: 20
+            interval: '1 hour'
+            lock_factory: null
         # Formulaires publics (contact, newsletter, candidature, inscription, réservation...) : anti-spam, par site + IP (01/11/2026 :
         # code du site résolu, et non plus l'hôte du backend, commun à toutes les boutiques).
         # public_form_ip compte les envois ACCEPTÉS (réponse 2xx) : un refus 422 corrigé par le visiteur ne compte pas.

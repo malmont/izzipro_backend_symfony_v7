@@ -48,8 +48,12 @@ class OtpApiController extends AbstractController
         $em = $this->emProvider->getEntityManager();
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if (!$user instanceof UserInterface) {
+            // Courriel inconnu : même réponse que pour un code faux (B16, 04/11/2026), pour ne pas révéler si un compte existe
+            // (avant : 401 UNAUTHORIZED) ; audité comme un code faux
+            $this->authenticationService->auditPos($platform, null, (string) $email, 'invalid_otp');
+
             return $this->json([
-                'error' => 'Unauthorized', 'code' => 'UNAUTHORIZED', 'message' => 'Unauthorized', // codes stables (04/11/2026)
+                'error' => 'Code OTP invalide ou expiré', 'code' => 'OTP_INVALID', 'message' => 'Code OTP invalide ou expiré',
             ], Response::HTTP_UNAUTHORIZED);
         }
 

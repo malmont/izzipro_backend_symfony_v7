@@ -30,6 +30,9 @@ use App\Services\AuthenticationService;
 
 class RegistrationController extends AbstractController
 {
+    /** Réponse unique du renvoi du lien de vérification (B16) : compte à activer, courriel inconnu ou compte déjà activé */
+    public const RESEND_NEUTRAL_MESSAGE = 'Si un compte à activer existe pour ce courriel, un nouveau lien vient d\'être envoyé.';
+
     private LoggerInterface $logger;
     private EmailVerifier $emailVerifier;
     private TenantEntityManagerProvider $tenantEmProvider;
@@ -329,17 +332,14 @@ class RegistrationController extends AbstractController
             return $this->json(['error' => 'Email manquant', 'code' => 'EMAIL_REQUIRED', 'message' => 'Email manquant'], Response::HTTP_BAD_REQUEST);
         }
 
-        // 1. Recherche de l'utilisateur
+        // 1. Recherche de l'utilisateur. Réponse neutre (B16, 04/11/2026) : courriel inconnu ou compte déjà activé reçoivent
+        // exactement la même réponse 200 qu'un envoi, sans courriel, pour ne pas révéler si un compte existe (avant : 404
+        // USER_NOT_FOUND et 400 ACCOUNT_ALREADY_VERIFIED). Limites par site et courriel, et par site et IP : rate_limiter.yaml.
         /** @var User|null $user */
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
 
-        if (!$user) {
-
-            return $this->json(['error' => 'Utilisateur introuvable', 'code' => 'USER_NOT_FOUND', 'message' => 'Utilisateur introuvable'], Response::HTTP_NOT_FOUND);
-        }
-
-        if ($user->isVerified()) {
-            return $this->json(['message' => 'Ce compte est déjà vérifié.', 'code' => 'ACCOUNT_ALREADY_VERIFIED', 'error' => 'Ce compte est déjà vérifié.'], Response::HTTP_BAD_REQUEST); // code et error ajoutés (04/11/2026)
+        if (!$user || $user->isVerified()) {
+            return $this->json(['message' => self::RESEND_NEUTRAL_MESSAGE], Response::HTTP_OK);
         }
 
         $verificationToken = bin2hex(random_bytes(32));
@@ -384,7 +384,7 @@ class RegistrationController extends AbstractController
                 $baseUrl
             );
 
-            return $this->json(['message' => 'Email de vérification renvoyé avec succès.'], Response::HTTP_OK);
+            return $this->json(['message' => self::RESEND_NEUTRAL_MESSAGE], Response::HTTP_OK);
         } catch (\Throwable $e) {
             $this->logger->critical("[Resend Verif] Erreur envoi : " . $e->getMessage());
             return $this->json(['error' => 'Erreur lors de l\'envoi de l\'email.', 'code' => 'EMAIL_SEND_FAILED', 'message' => 'Erreur lors de l\'envoi de l\'email.'], Response::HTTP_INTERNAL_SERVER_ERROR);
