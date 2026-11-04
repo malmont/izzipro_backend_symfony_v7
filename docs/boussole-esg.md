@@ -111,6 +111,13 @@ les comptes.
 | Documents | `var/storage/esg/documents/<id entreprise>/<code>_<horodatage>_<aléa>.<ext>` (PDF, JPEG, PNG, Excel, Word ; 10 Mo ; type vérifié sur le contenu) | `documents/download/{id}` ou `?path=` : `ROLE_COMPANY`, entreprise propriétaire ; ancien dossier de repli `var/uploads/esg/` |
 | Rapports PDF | `var/storage/esg/reports/<uuid de session>.pdf` | `…/report/download` : voter `VIEW` ; repli sur l'ancien chemin sous `public/` |
 
+## Module désactivé (console de pilotage, lot 1 bis, 04/11/2026)
+
+En mode `live` de la plateforme, toutes les routes `/api/boussole/*` d'un site dont le module Boussole ESG est désactivé
+(`entreprise.is_boussole_esg_active`) répondent **403 `MODULE_INACTIVE`** (`module: boussole`, `message`), connecté ou non.
+Mode `demo` (défaut) : rien n'est gardé. C'est le premier réglage de module de la Boussole ; l'état du module est lu dans
+`GET /api/site/features` (`module.boussole`). Détail : `docs/architecture.md`, « Modules et mode de la plateforme ».
+
 ## Tester
 
 - **Aucun test fonctionnel ESG** ; seul `tests/Functional/Security/AnonymousWriteAccessTest.php` mentionne le module

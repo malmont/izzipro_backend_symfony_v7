@@ -87,6 +87,8 @@ $master->exec('CREATE TABLE landing_config_sync (id SERIAL PRIMARY KEY, created_
 $master->exec('CREATE TABLE tenant_app_keys (id SERIAL PRIMARY KEY, tenant_code VARCHAR(50) NOT NULL, app VARCHAR(20) NOT NULL, key_hash VARCHAR(64) NOT NULL UNIQUE, key_hint VARCHAR(30) NOT NULL, label VARCHAR(100) NOT NULL, created_by VARCHAR(255) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT NOW(), expires_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, revoked_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, last_used_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, last_device VARCHAR(100) DEFAULT NULL, use_count INT NOT NULL DEFAULT 0, cash_register_id INT DEFAULT NULL, cash_register_name VARCHAR(100) DEFAULT NULL)');
 // Tableau de bord technique (03/11/2026) : mesures et seuils (ops/sql/tech_metrics_master.sql, même SQL que la base maître réelle)
 $master->exec(file_get_contents(__DIR__ . '/../ops/sql/tech_metrics_master.sql'));
+// Console de pilotage (04/11/2026) : réglages de la plateforme (mode demo par défaut), droits d'usage, offres (ops/sql/platform_master.sql)
+$master->exec(file_get_contents(__DIR__ . '/../ops/sql/platform_master.sql'));
 // Codes courts fixes des sites de test (31/10/2026) : MVT001 et MVT002 (alphabet Crockford)
 $insertTenant = $master->prepare('INSERT INTO tenants (code, name, dbname, custom_domain, short_code) VALUES (?, ?, ?, ?, ?)');
 $insertTenant->execute([MV_TEST_TENANT_CODE, 'Tenant de test', MV_TEST_TENANT_DB, MV_TEST_TENANT_HOST, 'MVT001']);

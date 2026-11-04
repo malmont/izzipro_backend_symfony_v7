@@ -414,6 +414,13 @@ mobile fait son propre livre, avec des quotas et, à venir, des chapitres payant
   pas fourni ; un paramètre fourni garde la priorité (essai sans enregistrer).
 - Vérifier un rendu : générer le PDF et le regarder (les tests ne contrôlent que le HTML produit).
 
+## Module désactivé (console de pilotage, lot 1 bis, 04/11/2026)
+
+En mode `live` de la plateforme, toutes les routes `/api/memoires/*` (web, mobile, administration) d'un site dont le module
+Mémoires Vivantes est désactivé (`entreprise.is_memoire_vivante_active`) répondent **403 `MODULE_INACTIVE`** (`module:
+memoires`, `message`), connecté ou non ; code stable à traduire par les applications. Mode `demo` (défaut) : rien n'est gardé.
+Détail : `docs/architecture.md`, « Modules et mode de la plateforme » ; `docs/console-pilotage.md`.
+
 ## Tester
 
 - `tests/Functional/MemoiresVivantes/` (`BookTypeApiTestCase` imite le frontend : `?locale=fr`, `X-XSRF-TOKEN`, JWT) :

@@ -111,6 +111,10 @@ security:
         - { path: ^/api/media(/|$), roles: ROLE_ADMIN }
         # 🔹 Contenu d'exemple du site (copie depuis le site de référence, liste, suppression) : administrateurs.
         - { path: ^/api/site-content(/|$), roles: ROLE_ADMIN }
+        # 🔹 Registre des fonctionnalités du site (console de pilotage, lot 2, 04/11/2026) : lecture et écriture par l'administrateur du site
+        - { path: ^/api/site/features(/|$), roles: ROLE_ADMIN }
+        # 🔹 Plateforme (console de pilotage, 04/11/2026) : mode demo | live, droits d'usage, offres : super administrateur seulement
+        - { path: ^/api/platform(/|$), roles: ROLE_SUPER_ADMIN }
         # 🔹 Synchronisation de la configuration des landing pages : ROLE_SUPER_ADMIN ou jeton de déploiement
         #    (X-Deploy-Token), vérifiés par LandingConfigController. Avant la règle publique « landingpage ».
         - { path: ^/api/landingpage-config(/|$), roles: PUBLIC_ACCESS }

@@ -341,6 +341,12 @@ la version active vient de la synchronisation (`var/landingpage-config/`) ; ceux
   comparaison de deux passages pour le banc du frontend : `app:landingpage-ai:compare` (voir `config/landingpage/README.md`).
 - Compositions de tous les sites : `app:landingpage:check-reglable`.
 
+## Module désactivé (console de pilotage, lot 1 bis, 04/11/2026)
+
+En mode `live` de la plateforme, les routes de l'assistant `/api/landingpage-ai/*` d'un site dont le module Landing Page est
+désactivé (`entreprise.is_landing_page_active`) répondent **403 `MODULE_INACTIVE`** (`module: landing`) ; les contenus et
+réglages des pages restent servis. Mode `demo` (défaut) : rien n'est gardé. Détail : `docs/architecture.md`.
+
 ## Pièges connus
 
 - Règle `access_control` de `/api/landingpage-ai` et `/api/landingpage-config` **avant** la règle publique qui contient `landingpage`.
