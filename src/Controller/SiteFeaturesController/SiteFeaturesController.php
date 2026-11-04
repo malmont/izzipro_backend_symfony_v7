@@ -8,10 +8,9 @@ use App\Services\EntrepriseService\EntrepriseValidationException;
 use App\Services\FeatureAccess\FeatureCatalog;
 use App\Services\FeatureAccess\SiteFeatureStateService;
 use App\Services\FeatureAccess\SiteFeaturesValidationException;
-use App\Services\Platform\EntitlementService;
-use App\Services\Platform\FeatureRequestRepository;
 use App\Services\Platform\PlatformModeService;
-use App\Services\TenantConnectionManager;
+use App\UseCase\SiteFeaturesUseCase\RequestSiteFeatureUseCase;
+use App\UseCase\SiteFeaturesUseCase\SiteFeatureRequestException;
 use App\UseCase\SiteFeaturesUseCase\UpdateSiteFeaturesUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -29,12 +28,10 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ADMIN')]
 class SiteFeaturesController extends AbstractController
 {
-    /** clé de la cible → clé du registre, pour rendre les erreurs des cas d'usage sous-jacents dans le vocabulaire du registre */
-    private const STORAGE_TO_KEY = ['siteLocale' => 'site.locale', 'posTimezone' => 'site.timezone', 'currency' => 'site.currency', 'pricesIncludeTax' => 'site.prices_include_tax',
-        'isLandingPageActive' => 'module.landing', 'isBoutiqueActive' => 'module.boutique', 'isPosActive' => 'module.pos', 'isMemoireVivanteActive' => 'module.memoires', 'isBoussoleEsgActive' => 'module.boussole',
-        'commerce.salesModes' => 'commerce.sales_modes', 'commerce.guestCheckout' => 'commerce.guest_checkout', 'commerce.subscriptionsEnabled' => 'commerce.subscriptions', 'commerce.taxProvider' => 'commerce.tax_provider'];
+    // correspondance chemin de la cible → clé du registre : FeatureCatalog::keyForStorage (activations : PLATFORM_TO_KEY)
+    private const PLATFORM_TO_KEY = ['isLandingPageActive' => 'module.landing', 'isBoutiqueActive' => 'module.boutique', 'isPosActive' => 'module.pos', 'isMemoireVivanteActive' => 'module.memoires', 'isBoussoleEsgActive' => 'module.boussole'];
 
-    public function __construct(private readonly SiteFeatureStateService $state, private readonly UpdateSiteFeaturesUseCase $update, private readonly PlatformModeService $platform, private readonly EntitlementService $entitlements, private readonly FeatureRequestRepository $requests, private readonly TenantConnectionManager $tenants)
+    public function __construct(private readonly SiteFeatureStateService $state, private readonly UpdateSiteFeaturesUseCase $update, private readonly PlatformModeService $platform, private readonly RequestSiteFeatureUseCase $requestFeature)
     {
     }
 
@@ -58,7 +55,7 @@ class SiteFeaturesController extends AbstractController
         } catch (SiteFeaturesValidationException $e) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => $e->errors], 422);
         } catch (EntrepriseForbiddenException $e) {
-            $fields = array_map(fn ($f) => self::STORAGE_TO_KEY[$f] ?? $f, $e->fields);
+            $fields = array_map(fn ($f) => self::PLATFORM_TO_KEY[$f] ?? FeatureCatalog::keyForStorage($f), $e->fields);
 
             return $this->json(['error' => $e::CODE, 'code' => $e::CODE, 'message' => 'Modification réservée au super administrateur : ' . implode(', ', $fields), 'fields' => $fields], 403);
         } catch (EntrepriseValidationException $e) {
@@ -77,19 +74,15 @@ class SiteFeaturesController extends AbstractController
     #[Route('/{key}/request', name: 'api_site_features_request', methods: ['POST'], requirements: ['key' => '[a-z_]+\.[a-z_]+'])]
     public function request(string $key, Request $request): JsonResponse
     {
-        if (!isset(FeatureCatalog::GOVERNED[$key])) {
-            return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => 'clé inconnue ou non accordée par la plateforme', 'errors' => [['path' => $key, 'message' => 'clé inconnue ou non accordée par la plateforme']]], 422);
-        }
-        $code = (string) $this->tenants->getCurrentTenantCode();
-        if ($this->entitlements->isEnabled($code, $key)) {
-            return $this->json(['error' => 'ALREADY_ENABLED', 'code' => 'ALREADY_ENABLED', 'message' => 'Fonctionnalité déjà active sur ce site.'], 409);
-        }
-        if (isset($this->requests->pendingFor($code)[$key])) {
-            return $this->json(['error' => 'REQUEST_PENDING', 'code' => 'REQUEST_PENDING', 'message' => 'Une demande est déjà en attente pour cette fonctionnalité.'], 409);
-        }
         $data = json_decode($request->getContent(), true);
-        $message = is_array($data) && isset($data['message']) && is_string($data['message']) ? trim($data['message']) : null;
-        $row = $this->requests->insert($code, $key, $this->getUser()?->getUserIdentifier(), $message !== '' ? $message : null);
+        $message = is_array($data) && isset($data['message']) && is_string($data['message']) ? $data['message'] : null;
+        try {
+            $row = $this->requestFeature->execute($key, $message, $this->getUser()?->getUserIdentifier());
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => [['path' => $key, 'message' => $e->getMessage()]]], 422);
+        } catch (SiteFeatureRequestException $e) {
+            return $this->json(['error' => $e->code409, 'code' => $e->code409, 'message' => $e->getMessage()], 409);
+        }
 
         return $this->json(['request' => $row], 201);
     }
@@ -97,6 +90,6 @@ class SiteFeaturesController extends AbstractController
     /** @param list<array{path: string, message: string}> $errors */
     private function mapErrors(array $errors): array
     {
-        return array_map(fn (array $err) => ['path' => self::STORAGE_TO_KEY[$err['path']] ?? $err['path'], 'message' => $err['message']], $errors);
+        return array_map(fn (array $err) => ['path' => self::PLATFORM_TO_KEY[$err['path']] ?? FeatureCatalog::keyForStorage($err['path']), 'message' => $err['message']], $errors);
     }
 }

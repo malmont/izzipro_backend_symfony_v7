@@ -13,6 +13,8 @@ use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use App\Services\FeatureAccess\FeatureCatalog;
 
 
 class TenantSetupType extends AbstractType
@@ -79,6 +81,36 @@ class TenantSetupType extends AbstractType
             ->add('country', TextType::class, [
                 'label' => 'Pays (ex: FR, CA, US)',
                 'required' => true,
+            ])
+            // Étape « Votre activité » (console de pilotage, lot 5, 04/11/2026)
+            ->add('siteLocale', ChoiceType::class, [
+                'label' => 'Langue du site',
+                'required' => false,
+                'placeholder' => 'Déduite de l\'adresse (Québec → français, autre province ou États-Unis → anglais)',
+                'choices' => ['Français' => 'fr', 'Anglais' => 'en'],
+            ])
+            ->add('timezone', TextType::class, [
+                'label' => 'Fuseau horaire (IANA, ex. America/Toronto)',
+                'required' => false,
+                'attr' => ['placeholder' => 'Déduit du pays et de la province'],
+            ])
+            ->add('currency', ChoiceType::class, [
+                'label' => 'Devise du site',
+                'choices' => ['Dollar canadien (CAD)' => 'CAD', 'Euro (EUR)' => 'EUR', 'Dollar américain (USD)' => 'USD'],
+            ])
+            ->add('features', ChoiceType::class, [
+                'label' => 'Fonctionnalités souhaitées (essai gratuit selon la politique de la plateforme, sinon demande)',
+                'required' => false,
+                'multiple' => true,
+                'expanded' => true,
+                'choices' => array_combine(array_map(fn ($k) => FeatureCatalog::label($k), array_keys(FeatureCatalog::GOVERNED)), array_keys(FeatureCatalog::GOVERNED)),
+            ])
+            ->add('salesModes', ChoiceType::class, [
+                'label' => 'Modes de vente de la boutique',
+                'required' => false,
+                'multiple' => true,
+                'expanded' => true,
+                'choices' => ['Vente' => 'sale', 'Location' => 'rental', 'Abonnement' => 'subscription'],
             ])
             ->add('save', SubmitType::class, ['label' => 'Créer et Activer le Site']);
     }

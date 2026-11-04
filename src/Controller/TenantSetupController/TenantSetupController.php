@@ -17,7 +17,8 @@ class TenantSetupController extends AbstractController
 {
     public function __construct(
         private string $frontendBaseDomain,
-        private string $tenantCreationSecretKey = ''
+        private string $tenantCreationSecretKey = '',
+        private readonly ?\App\Services\Platform\TenantSetupFeaturesService $features = null // étape « Votre activité » (console de pilotage, lot 5, 04/11/2026)
     ) {}
 
     #[Route('/setup/new-store', name: 'app_tenant_setup')]
@@ -163,6 +164,19 @@ class TenantSetupController extends AbstractController
                 $tenantEm->flush();
 
                 $this->addFlash('success', 'Votre boutique a été configurée avec succès !');
+                // Étape « Votre activité » (console de pilotage, lot 5, 04/11/2026) : langue, fuseau, devise, modes de vente, essais ou demandes de fonctionnalités, projection
+                if ($this->features !== null) {
+                    $outcome = $this->features->apply($dto->code, $entreprise, $dto->siteLocale ?: null, $dto->timezone ?: null, $dto->currency, $dto->features, $dto->salesModes, $dto->companyEmail);
+                    if ($outcome['trials'] !== []) {
+                        $this->addFlash('success', sprintf('Essai gratuit ouvert : %s.', implode(', ', array_map(fn ($k) => \App\Services\FeatureAccess\FeatureCatalog::label($k), $outcome['trials']))));
+                    }
+                    if ($outcome['requested'] !== []) {
+                        $this->addFlash('info', sprintf('Demandé à la plateforme : %s.', implode(', ', array_map(fn ($k) => \App\Services\FeatureAccess\FeatureCatalog::label($k), $outcome['requested']))));
+                    }
+                    foreach ($outcome['errors'] as $error) {
+                        $this->addFlash('warning', $error);
+                    }
+                }
 
             } catch (\Throwable $e) {
                 $this->addFlash('warning', 'Boutique créée mais échec de la configuration initiale de l\'entreprise : ' . $e->getMessage());

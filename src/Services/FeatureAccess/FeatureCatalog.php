@@ -114,6 +114,22 @@ final class FeatureCatalog
         return $f['scope'] === self::SCOPE_SITE || ($superAdmin && in_array($key, self::PLATFORM_WRITABLE, true));
     }
 
+    /** Chemin d'erreur d'une cible (`posTimezone`, `commerce.salesModes`…) → clé du registre, ou le chemin tel quel */
+    public static function keyForStorage(string $path): string
+    {
+        foreach (self::FEATURES as $key => $def) {
+            $storage = $def['storage'] ?? null;
+            if ($storage === null) {
+                continue;
+            }
+            if ($storage === $path || $storage === 'entreprise.' . $path) {
+                return $key;
+            }
+        }
+
+        return $path;
+    }
+
     /** `entreprise.<clé>` ou `commerce.<clé>` → [cible, clé] */
     public static function storage(string $key): ?array
     {

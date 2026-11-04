@@ -1,0 +1,113 @@
+{# Onglet « Mon site » de la console de pilotage (SiteConsoleAdminController, lot 5, 04/11/2026). Habillage EasyAdmin depuis le menu ; ea() dit s'il y a un contexte. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+
+{% block title %}Mon site : pilotage{% endblock %}
+{% block content_title %}Mon site : pilotage{% endblock %}
+
+{% block main %}{{ block('mon_site_panel') }}{% endblock %}
+{% block body %}
+    <div class="container-fluid py-3">
+        <h1 class="h3 mb-3">Mon site : pilotage</h1>
+        {{ block('mon_site_panel') }}
+    </div>
+{% endblock %}
+
+{% macro status(e) %}
+    {% if e.status == 'ready' %}<span class="badge bg-success">prêt</span>
+    {% elseif e.status == 'incomplete' %}<span class="badge bg-warning text-dark">incomplet</span>
+    {% elseif e.status == 'off' %}<span class="badge bg-light text-muted border">désactivé</span>
+    {% else %}<span class="badge bg-secondary">info</span>{% endif %}
+{% endmacro %}
+{% macro prereqs(e) %}
+    {% if e.prerequisites is not empty %}
+        <ul class="list-unstyled small mb-0">
+        {% for p in e.prerequisites %}<li>{% if p.ok %}<span class="text-success">✔</span>{% else %}<span class="text-danger">✘</span>{% endif %} {{ p.label }}</li>{% endfor %}
+        </ul>
+    {% endif %}
+{% endmacro %}
+{% import _self as m %}
+
+{% block mon_site_panel %}
+    {% for label, messages in app.flashes %}
+        {% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}
+    {% endfor %}
+
+    <p class="text-muted">Tout ce qui s'active ou se règle sur ce site, au même endroit. Les réglages du site se changent ici (ou depuis l'éditeur, panneau « Commerce ») ; les modules et applications sont accordés par la plateforme : demandez-les d'un clic.
+        {% if platformMode == 'demo' %}<span class="badge bg-secondary">plateforme en mode demo : rien n'est restreint</span>{% endif %}</p>
+
+    {% set loc = {} %}{% for e in groups.localisation %}{% set loc = loc|merge({(e.key): e}) %}{% endfor %}
+    <h2 class="h5 mt-3">Localisation</h2>
+    <form method="post" action="{{ path('admin_mon_site_regler') }}" class="row g-2 align-items-end mon-site-localisation">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="section" value="localisation">
+        <div class="col-md-2"><label class="form-label" for="ms-locale">Langue du site</label>
+            <select class="form-select" id="ms-locale" name="site_locale"><option value="" {{ loc['site.locale'].value is null ? 'selected' : '' }}>Déduite ({{ loc['site.locale'].effective }})</option>{% for o in loc['site.locale'].options %}<option value="{{ o }}" {{ loc['site.locale'].value == o ? 'selected' : '' }}>{{ o }}</option>{% endfor %}</select></div>
+        <div class="col-md-3"><label class="form-label" for="ms-tz">Fuseau horaire</label>
+            <input class="form-control" id="ms-tz" name="site_timezone" list="ms-tz-list" value="{{ loc['site.timezone'].value ?? '' }}" placeholder="Déduit : {{ loc['site.timezone'].effective }}"><datalist id="ms-tz-list">{% for tz in timezones %}<option value="{{ tz }}">{% endfor %}</datalist></div>
+        <div class="col-md-2"><label class="form-label" for="ms-currency">Devise</label><input class="form-control" id="ms-currency" name="site_currency" maxlength="3" value="{{ loc['site.currency'].value }}"></div>
+        <div class="col-md-2"><label class="form-label">Pays (adresse)</label><div class="form-control-plaintext">{{ loc['site.country'].value ?? '—' }} {{ m.status(loc['site.country']) }}</div></div>
+        <div class="col-md-2"><div class="form-check mt-4"><input class="form-check-input" type="checkbox" id="ms-ttc" name="site_prices_include_tax" value="1" {{ loc['site.prices_include_tax'].value ? 'checked' : '' }}><label class="form-check-label" for="ms-ttc">Prix taxes comprises</label></div></div>
+        <div class="col-md-1"><button type="submit" class="btn btn-primary w-100">Enregistrer</button></div>
+    </form>
+
+    <h2 class="h5 mt-4">Modules et applications</h2>
+    <table class="table table-sm datagrid mon-site-modules">
+        <thead><tr><th>Fonctionnalité</th><th>État</th><th>Droit d'usage</th><th>Prérequis</th><th></th></tr></thead>
+        <tbody>
+        {% for e in groups.modules|merge(groups.apps) %}
+            <tr data-key="{{ e.key }}">
+                <td>{{ e.label }}</td>
+                <td>{{ m.status(e) }}</td>
+                <td class="small">{% if e.entitlement %}{{ e.entitlement.source }}{% if e.entitlement.status == 'grace' %} (paiement en attente){% endif %}{% if e.entitlement.endsAt %} → {{ e.entitlement.endsAt|slice(0, 10) }}{% else %}, sans fin{% endif %}{% elseif e.value %}<span class="text-muted">activé</span>{% else %}<span class="text-muted">non accordé</span>{% endif %}</td>
+                <td>{{ m.prereqs(e) }}</td>
+                <td>
+                    {% if e.request == 'pending' %}<span class="badge bg-warning text-dark">demande en attente</span>
+                    {% elseif not e.value %}
+                        <form method="post" action="{{ path('admin_mon_site_demander', {key: e.key}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-primary">Demander</button></form>
+                    {% elseif e.screenUrl %}<a class="btn btn-sm btn-outline-secondary" href="{{ e.screenUrl }}">Ouvrir</a>{% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% set com = {} %}{% for e in groups.commerce %}{% set com = com|merge({(e.key): e}) %}{% endfor %}
+    <h2 class="h5 mt-4">Commerce</h2>
+    <form method="post" action="{{ path('admin_mon_site_regler') }}" class="mon-site-commerce">
+        <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><input type="hidden" name="section" value="commerce">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Modes de vente acceptés {{ m.status(com['commerce.sales_modes']) }}</label>
+                {% for mode in com['commerce.sales_modes'].options %}
+                    <div class="form-check"><input class="form-check-input" type="checkbox" id="ms-mode-{{ mode }}" name="commerce_sales_modes[]" value="{{ mode }}" {{ mode in com['commerce.sales_modes'].value ? 'checked' : '' }}><label class="form-check-label" for="ms-mode-{{ mode }}">{{ {sale: 'Vente', rental: 'Location', subscription: 'Abonnement'}[mode] }}</label></div>
+                {% endfor %}
+            </div>
+            <div class="col-md-4">
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="ms-guest" name="commerce_guest_checkout" value="1" {{ com['commerce.guest_checkout'].value ? 'checked' : '' }}><label class="form-check-label" for="ms-guest">Paiement sans compte (invité) {{ m.status(com['commerce.guest_checkout']) }}</label></div>
+                <div class="form-check"><input class="form-check-input" type="checkbox" id="ms-subs" name="commerce_subscriptions" value="1" {{ com['commerce.subscriptions'].value ? 'checked' : '' }}><label class="form-check-label" for="ms-subs">Abonnements (paiement récurrent) {{ m.status(com['commerce.subscriptions']) }}</label></div>
+                {{ m.prereqs(com['commerce.subscriptions']) }}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="ms-tax">Calcul des taxes {{ m.status(com['commerce.tax_provider']) }}</label>
+                <select class="form-select" id="ms-tax" name="commerce_tax_provider"><option value="table" {{ com['commerce.tax_provider'].value == 'table' ? 'selected' : '' }}>Table des taxes du site</option><option value="stripe" {{ com['commerce.tax_provider'].value == 'stripe' ? 'selected' : '' }}>Stripe Tax</option></select>
+                {{ m.prereqs(com['commerce.tax_provider']) }}
+            </div>
+            <div class="col-md-1 d-flex align-items-end"><button type="submit" class="btn btn-primary w-100">Enregistrer</button></div>
+        </div>
+    </form>
+
+    <h2 class="h5 mt-4">Services et quotas</h2>
+    <table class="table table-sm datagrid mon-site-services">
+        <thead><tr><th>Service</th><th>État</th><th>Valeur</th><th>Prérequis</th><th></th></tr></thead>
+        <tbody>
+        {% for e in groups.services %}
+            <tr data-key="{{ e.key }}">
+                <td>{{ e.label }}</td>
+                <td>{{ m.status(e) }}</td>
+                <td class="small">{% if e.value is iterable %}{% for k, v in e.value %}{{ k }} : {{ v is same as(true) ? 'oui' : (v is same as(false) ? 'non' : v) }}{% if not loop.last %}, {% endif %}{% endfor %}{% elseif e.value is same as(true) %}configuré{% elseif e.value is same as(false) %}non configuré{% else %}{{ e.value }}{% endif %}</td>
+                <td>{{ m.prereqs(e) }}</td>
+                <td>{% if e.screenUrl %}<a class="btn btn-sm btn-outline-secondary" href="{{ e.screenUrl }}">Ouvrir</a>{% endif %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

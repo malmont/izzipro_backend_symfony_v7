@@ -51,7 +51,9 @@ CRUD EasyAdmin : étendre `BaseTenantCrudController`.
 le proxy.
 
 **La voie normale : le formulaire** `https://<backend>/setup/new-store?subdomain=<code>` (`TenantSetupController`,
-protégé par `APP_SETUP_TOKEN`), qui applique la convention et remplit la table correctement :
+protégé par `APP_SETUP_TOKEN`), qui applique la convention et remplit la table correctement ; depuis le 04/11/2026 son étape
+« Votre activité » (langue, fuseau, devise, fonctionnalités souhaitées, modes de vente) ouvre les essais ou dépose les demandes
+selon les politiques de la plateforme (`Services/Platform/TenantSetupFeaturesService`, `docs/console-pilotage.md`) :
 
 | Colonne | Convention |
 |---|---|

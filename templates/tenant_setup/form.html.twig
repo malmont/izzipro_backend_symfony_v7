@@ -98,6 +98,23 @@
                 </div>
             </div>
 
+            <div class="form-section">
+                <h2>Votre activité</h2>
+                <div class="form-row">
+                    {{ form_row(form.siteLocale) }}
+                    {{ form_row(form.timezone) }}
+                </div>
+                <div class="form-row">
+                    {{ form_row(form.currency) }}
+                </div>
+                <div class="form-row">
+                    {{ form_row(form.features) }}
+                </div>
+                <div class="form-row">
+                    {{ form_row(form.salesModes) }}
+                </div>
+            </div>
+
             <div class="form-row">
                  {{ form_widget(form.save, {'attr': {'class': 'btn-submit'}}) }}
             </div>

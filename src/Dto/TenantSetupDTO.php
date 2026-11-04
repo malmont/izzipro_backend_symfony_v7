@@ -60,4 +60,21 @@ class TenantSetupDTO
     #[Assert\NotBlank(message: "Le pays est obligatoire.")]
     #[Assert\Length(max: 50, maxMessage: "Le pays ne doit pas dépasser 50 caractères.")]
     public ?string $country = 'FR';
+
+    // Étape « Votre activité » (console de pilotage, lot 5, 04/11/2026) : appliquée par TenantSetupFeaturesService après la fiche
+    /** Langue du site (fr | en), null = déduite de l'adresse */
+    #[Assert\Choice(choices: ['fr', 'en', null, ''], message: 'Langue inconnue.')]
+    public ?string $siteLocale = null;
+
+    /** Fuseau horaire IANA, null = déduit du pays et de la province */
+    public ?string $timezone = null;
+
+    #[Assert\Choice(choices: ['CAD', 'EUR', 'USD'], message: 'Devise inconnue.')]
+    public ?string $currency = 'CAD';
+
+    /** @var list<string> fonctionnalités demandées (clés de FeatureCatalog::GOVERNED) : essai gratuit selon la politique, sinon demande */
+    public array $features = ['module.landing', 'module.boutique'];
+
+    /** @var list<string> modes de vente acceptés : sale, rental, subscription (tous par défaut) */
+    public array $salesModes = ['sale', 'rental', 'subscription'];
 }
