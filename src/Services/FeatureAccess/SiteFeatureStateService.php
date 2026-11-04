@@ -14,6 +14,8 @@ use App\Services\BoutiqueSettingsService\BoutiqueConfigurationValidator;
 use App\Services\BoutiqueSettingsService\BoutiqueSettingsService;
 use App\Services\CaisseService\SiteLocaleResolver;
 use App\Services\CaisseService\StoreClock;
+use App\Services\Platform\EntitlementService;
+use App\Services\Platform\FeatureRequestRepository;
 use App\Services\StripeService\StripeAccountResolver;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantEntityManagerProvider;
@@ -37,6 +39,8 @@ class SiteFeatureStateService
         private readonly BoutiqueSettingsService $boutique,
         private readonly StripeAccountResolver $stripe,
         private readonly AiQuotaService $mvQuotas,
+        private readonly EntitlementService $entitlements,
+        private readonly FeatureRequestRepository $requests,
     ) {
     }
 
@@ -48,9 +52,16 @@ class SiteFeatureStateService
         $flags = $this->modules->flags() ?? array_fill_keys(array_keys(ModuleAccessService::COLUMNS), true);
         $activeKeys = $this->activeKeysPerApp();
         $commerce = $this->commerce();
+        [$entitlements, $pending] = $this->platformState();
         $out = [];
         foreach (FeatureCatalog::FEATURES as $key => $def) {
-            $out[] = $this->entry($key, $def, $e, $flags, $activeKeys, $commerce);
+            $entry = $this->entry($key, $def, $e, $flags, $activeKeys, $commerce);
+            if ($def['scope'] === FeatureCatalog::SCOPE_PLATFORM) {
+                $ent = $entitlements[$key] ?? null;
+                $entry['entitlement'] = $ent && $ent['enabled'] ? ['id' => $ent['id'], 'source' => $ent['source'], 'status' => $ent['status'], 'endsAt' => $ent['endsAt'], 'graceUntil' => $ent['graceUntil'], 'offerCode' => $ent['offerCode']] : null;
+                $entry['request'] = $pending[$key] ?? null;
+            }
+            $out[] = $entry;
         }
 
         return $out;
@@ -204,6 +215,20 @@ class SiteFeatureStateService
         }
 
         return $base + ['value' => $value, 'effective' => $effective, 'details' => $details, 'status' => $status, 'prerequisites' => $prerequisites];
+    }
+
+    /** @return array{0: array<string, array<string, mixed>>, 1: array<string, string>} droits d'usage effectifs et demandes en attente du site (vides sans code de site) */
+    private function platformState(): array
+    {
+        $code = $this->tenants->getCurrentTenantCode();
+        if ($code === null || $code === '') {
+            return [[], []];
+        }
+        try {
+            return [$this->entitlements->effective($code), $this->requests->pendingFor($code)];
+        } catch (\Throwable) {
+            return [[], []];
+        }
     }
 
     /** @return array<string, mixed> clés `commerce` des réglages de la boutique */

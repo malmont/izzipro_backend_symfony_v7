@@ -1,0 +1,10 @@
+[Unit]
+Description=Arkanoa : balayage quotidien des droits d'usage
+
+[Timer]
+OnCalendar=*-*-* 06:10:00 UTC
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

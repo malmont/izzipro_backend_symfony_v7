@@ -8,7 +8,10 @@ use App\Services\EntrepriseService\EntrepriseValidationException;
 use App\Services\FeatureAccess\FeatureCatalog;
 use App\Services\FeatureAccess\SiteFeatureStateService;
 use App\Services\FeatureAccess\SiteFeaturesValidationException;
+use App\Services\Platform\EntitlementService;
+use App\Services\Platform\FeatureRequestRepository;
 use App\Services\Platform\PlatformModeService;
+use App\Services\TenantConnectionManager;
 use App\UseCase\SiteFeaturesUseCase\UpdateSiteFeaturesUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -31,7 +34,7 @@ class SiteFeaturesController extends AbstractController
         'isLandingPageActive' => 'module.landing', 'isBoutiqueActive' => 'module.boutique', 'isPosActive' => 'module.pos', 'isMemoireVivanteActive' => 'module.memoires', 'isBoussoleEsgActive' => 'module.boussole',
         'commerce.salesModes' => 'commerce.sales_modes', 'commerce.guestCheckout' => 'commerce.guest_checkout', 'commerce.subscriptionsEnabled' => 'commerce.subscriptions', 'commerce.taxProvider' => 'commerce.tax_provider'];
 
-    public function __construct(private readonly SiteFeatureStateService $state, private readonly UpdateSiteFeaturesUseCase $update, private readonly PlatformModeService $platform)
+    public function __construct(private readonly SiteFeatureStateService $state, private readonly UpdateSiteFeaturesUseCase $update, private readonly PlatformModeService $platform, private readonly EntitlementService $entitlements, private readonly FeatureRequestRepository $requests, private readonly TenantConnectionManager $tenants)
     {
     }
 
@@ -65,6 +68,30 @@ class SiteFeaturesController extends AbstractController
         }
 
         return $this->show();
+    }
+
+    /**
+     * Demande d'une fonctionnalité de la plateforme (console, lot 3, 04/11/2026) : file de la console super administrateur (plus tard,
+     * redirection vers la boutique de la plateforme). 201 { request } ; 409 ALREADY_ENABLED | REQUEST_PENDING ; 422 clé inconnue ou non plateforme.
+     */
+    #[Route('/{key}/request', name: 'api_site_features_request', methods: ['POST'], requirements: ['key' => '[a-z_]+\.[a-z_]+'])]
+    public function request(string $key, Request $request): JsonResponse
+    {
+        if (!isset(FeatureCatalog::GOVERNED[$key])) {
+            return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => 'clé inconnue ou non accordée par la plateforme', 'errors' => [['path' => $key, 'message' => 'clé inconnue ou non accordée par la plateforme']]], 422);
+        }
+        $code = (string) $this->tenants->getCurrentTenantCode();
+        if ($this->entitlements->isEnabled($code, $key)) {
+            return $this->json(['error' => 'ALREADY_ENABLED', 'code' => 'ALREADY_ENABLED', 'message' => 'Fonctionnalité déjà active sur ce site.'], 409);
+        }
+        if (isset($this->requests->pendingFor($code)[$key])) {
+            return $this->json(['error' => 'REQUEST_PENDING', 'code' => 'REQUEST_PENDING', 'message' => 'Une demande est déjà en attente pour cette fonctionnalité.'], 409);
+        }
+        $data = json_decode($request->getContent(), true);
+        $message = is_array($data) && isset($data['message']) && is_string($data['message']) ? trim($data['message']) : null;
+        $row = $this->requests->insert($code, $key, $this->getUser()?->getUserIdentifier(), $message !== '' ? $message : null);
+
+        return $this->json(['request' => $row], 201);
     }
 
     /** @param list<array{path: string, message: string}> $errors */

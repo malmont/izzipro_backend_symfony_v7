@@ -69,6 +69,17 @@ site créé à la volée) et suspend ou retire ces droits à l'impayé ou à l'a
 de l'intérieur ; la route HTTP reste pour un vendeur externe. Un site client qui vend ses propres abonnements (`none`) n'est
 pas concerné.
 
+**Tel que construit (lot 3, 04/11/2026).** Fonctionnalités gouvernées : `FeatureCatalog::GOVERNED` (cinq modules et trois
+applications, chacune projetée sur sa colonne `is_*_active`). Un seul droit vivant par fonctionnalité : accorder remplace le précédent
+(`cancelled`, note « remplacé par le droit n° … »). Un droit échu est expiré à la lecture (`effective()`), le balayage quotidien ne sert
+qu'aux courriels et aux sites qu'on ne lit pas. Écrire une activation sur la fiche Entreprise (EasyAdmin ou API, super administrateur)
+crée ou annule le droit correspondant (`EntitlementFlagSync`), sans courriel. Amorçage sur les sites existants :
+`app:entitlements:bootstrap` (un droit `manual` sans fin par indicateur vrai ou clé d'activation valide ; relevé du 04/11/2026 :
+`memoiresvivantes` et `demo` reçoivent `app.living_memory` par leurs clés, l'indicateur passe à vrai). Événements journalisés
+(`tenant_entitlement_events`) : granted, trial_started, expiring_7, expiring_1, expired, grace, suspended, resumed, cancelled,
+extended ; courriels pour tous sauf cancelled et extended. Politiques par défaut : essai autorisé 30 jours, gratuité autorisée,
+grâce 7 jours (`FeaturePolicyRepository::DEFAULTS`).
+
 **Registre `FeatureCatalog`** : chaque fonctionnalité avec clé stable, libellé, niveau (plateforme, site, produit), qui
 peut la changer, où elle est stockée, ses prérequis et une vérification d'état (prêt, incomplet, désactivé). Il alimente
 les deux onglets EasyAdmin, l'API du site et le formulaire de création.
@@ -108,7 +119,7 @@ s'applique au provisionnement. Essais et gratuité par site seulement (pas par u
 | 1 | Verrous API : activations de `PUT /api/entreprise/{id}` et plafonds de `PUT /api/memoires/admin/ai-quotas` réservés au super administrateur (403 `SUPER_ADMIN_REQUIRED`, `fields`, valeur inchangée ignorée) | fait le 04/11/2026 ; tests `EntrepriseApiSuperAdminGuardTest`, `AiQuotaTest` |
 | 1 bis | Relevé des indicateurs réels par site (cohérents pour les modules ; `is_living_memory_active` faux sur `memoiresvivantes` qui utilise l'application : indicateurs d'applications non appliqués) ; garde-fou `ModuleAccessSubscriber` (403 `MODULE_INACTIVE` sur Mémoires, Boussole, assistant Landing, commerce de la Boutique ; caisse exclue) ; mode de la plateforme `demo` / `live` (`platform_settings`, `GET`/`PUT /api/platform/settings`) | fait le 04/11/2026 ; tests `ModuleAccessGateTest`, `PlatformSettingsApiTest` |
 | 2 | `FeatureCatalog` (26 entrées), `SiteFeatureStateService` (valeurs, effectif, prérequis, états), `GET`/`PUT /api/site/features` ; `entreprise.locale` explicite (`siteLocale`), `commerce.salesModes` ; lectures des réglages de la boutique rendues déterministes (première ligne par id) | fait le 04/11/2026 ; test `SiteFeaturesApiTest` ; message au front à envoyer (panneau Commerce) |
-| 3 | `tenant_entitlements`, `EntitlementService`, politiques, événements, projection vers `is_*_active`, courriels ; droit `manual` sans fin pour chaque module déjà actif (aucun changement visible) | à faire |
+| 3 | Tables maîtres `tenant_entitlements`, `tenant_entitlement_events`, `platform_feature_policies`, `tenant_feature_requests` (`ops/sql/platform_master.sql`) ; `Services/Platform/EntitlementService` (accorder, essai, gratuit, suspendre, rétablir, annuler, prolonger, grâce, balayage), `EntitlementProjector` (projection SQL sur `is_*_active` + cache du site vidé), `EntitlementFlagSync` (fiche Entreprise → droits, EasyAdmin et API), `EntitlementChangedMessage` + `EntitlementChangedHandler` (courriels fr/en au contact du site, repli expéditeur puis premier administrateur), `app:entitlements:bootstrap` (amorçage idempotent depuis indicateurs et clés valides), `app:entitlements:sweep` (échéances, rappels J-7 / J-1 ; `ops/systemd/entitlements-sweep.{service,timer}` **à installer**) ; registre : `entitlement` et `request` sur les clés plateforme, `POST /api/site/features/{clé}/request` | fait le 04/11/2026 ; test `tests/Functional/Platform/EntitlementsTest.php` |
 | 3 bis | `platform_offers` : offres seules et lots, prix mensuels par défaut modifiables, `GET`/`PUT /api/platform/offers`, lien offre → droits d'usage ; `fulfillmentType` / `fulfillmentRef` sur `SubscriptionPlan`, événements génériques du cycle de vie des abonnements, abonné `platform_offer` | à faire |
 | 4 | Routes plateforme dont `billing-events` (jeton de service) ; onglet « Plateforme » | à faire |
 | 5 | Onglet « Mon site » ; formulaire de création branché sur le registre | à faire |

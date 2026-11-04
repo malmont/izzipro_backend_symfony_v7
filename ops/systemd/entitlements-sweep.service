@@ -1,0 +1,10 @@
+# Droits d'usage de la plateforme (console de pilotage, lot 3, 04/11/2026) : balayage quotidien des échéances et rappels.
+# Installation : sudo cp ops/systemd/entitlements-sweep.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now entitlements-sweep.timer
+[Unit]
+Description=Arkanoa : balayage des droits d'usage (échéances, rappels)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec -w /var/www symfony_app_v2 php bin/console app:entitlements:sweep --no-interaction

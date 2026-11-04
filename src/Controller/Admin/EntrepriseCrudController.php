@@ -34,7 +34,8 @@ class EntrepriseCrudController extends BaseTenantCrudController
         private readonly \Symfony\Component\HttpFoundation\RequestStack $requestStack,
         private readonly \App\Services\TenantConnectionManager $tenantManager,
         private readonly ?\App\Services\BoutiqueSettingsService\SiteCurrencyService $siteCurrency = null, // devise du site (F18 partie 1, 01/11/2026)
-        private readonly ?\App\Services\OrderService\TaxInclusiveGuard $taxInclusive = null // prix taxes comprises (F18 partie 2b)
+        private readonly ?\App\Services\OrderService\TaxInclusiveGuard $taxInclusive = null, // prix taxes comprises (F18 partie 2b)
+        private readonly ?\App\Services\Platform\EntitlementFlagSync $flagSync = null // droits d'usage alignés sur les activations (console, lot 3, 04/11/2026)
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
@@ -94,6 +95,9 @@ class EntrepriseCrudController extends BaseTenantCrudController
         $request = $this->requestStack->getCurrentRequest();
         foreach ($this->appActivation->applyChanges($changeSet, $this->tenant->getTenantCode() ?? '', $this->getUser()?->getUserIdentifier() ?? 'admin', $request?->getSchemeAndHttpHost() ?? '') as $app => $message) {
             $this->addFlash(str_contains($message, 'non créée') ? 'danger' : 'success', sprintf('%s : %s', \App\Services\AppKeyService\AppKeyService::LABELS[$app] ?? $app, $message));
+        }
+        if ($entityInstance instanceof Entreprise) {
+            $this->flagSync?->afterWrite($entityInstance); // droits d'usage : vrai sans droit → droit manuel, faux avec droit → annulé
         }
     }
 

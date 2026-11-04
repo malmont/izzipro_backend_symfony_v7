@@ -247,7 +247,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (267)
+## Boutique et commun (268)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -364,8 +364,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/payment` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::processPayment` |
 | GET | `/api/payments/statistics/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\PaymentsController::getPaymentStatistics` |
 | GET | `/api/payments` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::getPayments` |
-| GET | `/api/platform/settings` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSettingsController::show` |
-| PUT | `/api/platform/settings` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSettingsController::update` |
+| GET | `/api/platform/settings` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSettingsController::show` |
+| PUT | `/api/platform/settings` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSettingsController::update` |
 | POST | `/api/pos/approvals` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::approve` |
 | GET | `/api/pos/archive/{year}` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosArchiveController::download` |
 | GET | `/api/pos/audit/verify` | ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosAuditController::verify` |
@@ -455,8 +455,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::deleteDemo` |
 | GET | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::demo` |
 | POST | `/api/site-content/seed` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::seed` |
-| GET | `/api/site/features` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::show` |
-| PUT | `/api/site/features` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::update` |
+| POST | `/api/site/features/{key}/request` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::request` |
+| GET | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::show` |
+| PUT | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::update` |
 | GET | `/api/sizes` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SizesController\SizeController::getSizes` |
 | POST | `/api/sizes` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\LandingContentController\BoutiqueCatalogController::createSize` |
 | GET | `/api/social-networks` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\SocialNetworkController\SocialNetworkController::list` |

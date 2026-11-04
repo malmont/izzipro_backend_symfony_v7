@@ -79,6 +79,7 @@ framework:
             'App\Message\PrepareScrollVideoMessage': media
             'App\Message\SendTenantEmailMessage': email
             'App\MemoiresVivantes\Message\GenerateBookPdfMessage': pdf
+            'App\Message\EntitlementChangedMessage': email # courriels des droits d'usage (console de pilotage, lot 3, 04/11/2026)
 
 # Tests : Messenger en mémoire (tests/bootstrap.php) ; les courriels partent tout de suite (vers null://) pour que les
 # tests lisent les messages envoyés

@@ -121,6 +121,20 @@ class TenantCacheService
     }
 
     /**
+     * Invalide tout le cache d'un **autre** site (code et base) : la plateforme écrit en SQL direct dans la base d'un site
+     * (projection des droits d'usage, console de pilotage lot 3, 04/11/2026) sans en être le site courant.
+     */
+    public function invalidateSite(string $tenantCode, ?string $dbname): bool
+    {
+        $tags = [self::tenantTag($tenantCode)];
+        if ($dbname !== null && $dbname !== '') {
+            $tags[] = self::databaseTag($dbname);
+        }
+
+        return $this->cache->invalidateTags($tags);
+    }
+
+    /**
      * Invalide tout le cache du tenant actuel et de sa base (chaque entrée porte ces deux étiquettes) : après une
      * écriture en masse ou en SQL direct
      */

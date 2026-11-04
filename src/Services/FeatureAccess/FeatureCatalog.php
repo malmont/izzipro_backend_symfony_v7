@@ -52,6 +52,43 @@ final class FeatureCatalog
         'reviews.enabled' => ['label' => 'Avis clients', 'group' => 'services', 'scope' => self::SCOPE_SERVICE, 'type' => 'info', 'href' => 'review_settings'],
     ];
 
+    /**
+     * Fonctionnalités gouvernées par les droits d'usage (lot 3, 04/11/2026) : clé du registre => colonne de la fiche Entreprise sur
+     * laquelle le droit effectif est projeté (EntitlementProjector). Toute clé `platform` en fait partie.
+     */
+    public const GOVERNED = [
+        'module.landing' => 'is_landing_page_active',
+        'module.boutique' => 'is_boutique_active',
+        'module.pos' => 'is_pos_active',
+        'module.memoires' => 'is_memoire_vivante_active',
+        'module.boussole' => 'is_boussole_esg_active',
+        'app.mobile_shop' => 'is_mobile_shop_active',
+        'app.management' => 'is_management_app_active',
+        'app.living_memory' => 'is_living_memory_active',
+    ];
+
+    /** Accesseur de la fiche Entreprise pour chaque fonctionnalité gouvernée */
+    public const GOVERNED_GETTERS = [
+        'module.landing' => 'isLandingPageActive', 'module.boutique' => 'isBoutiqueActive', 'module.pos' => 'isPosActive',
+        'module.memoires' => 'isMemoireVivanteActive', 'module.boussole' => 'isBoussoleEsgActive', 'app.mobile_shop' => 'isMobileShopActive',
+        'app.management' => 'isManagementAppActive', 'app.living_memory' => 'isLivingMemoryActive',
+    ];
+
+    /** Application (clés d'activation) portée par une fonctionnalité gouvernée */
+    public const GOVERNED_APP = ['module.pos' => 'pos', 'app.mobile_shop' => 'mobile', 'app.management' => 'admin', 'app.living_memory' => 'livingmemory'];
+
+    /** Libellés anglais des fonctionnalités gouvernées (courriels en anglais) */
+    public const LABELS_EN = [
+        'module.landing' => 'Landing Page', 'module.boutique' => 'Online shop', 'module.pos' => 'Point of sale (app and counter sales)',
+        'module.memoires' => 'Living Memories', 'module.boussole' => 'ESG Compass', 'app.mobile_shop' => 'Mobile shop app',
+        'app.management' => 'Management app', 'app.living_memory' => 'Living Memory app',
+    ];
+
+    public static function label(string $key, string $language = 'fr'): string
+    {
+        return $language === 'en' ? (self::LABELS_EN[$key] ?? self::FEATURES[$key]['label'] ?? $key) : (self::FEATURES[$key]['label'] ?? $key);
+    }
+
     /** Clés `platform` écrites par le super administrateur ; la caisse et les applications s'activent sur la fiche Entreprise (génération et révocation des clés) */
     public const PLATFORM_WRITABLE = ['module.landing', 'module.boutique', 'module.memoires', 'module.boussole'];
 

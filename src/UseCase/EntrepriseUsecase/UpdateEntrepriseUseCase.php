@@ -20,7 +20,7 @@ class UpdateEntrepriseUseCase
 
     private EntrepriseService $entrepriseService;
 
-    public function __construct(EntrepriseService $entrepriseService, private readonly ContentAuditRecorder $audit, private readonly Security $security)
+    public function __construct(EntrepriseService $entrepriseService, private readonly ContentAuditRecorder $audit, private readonly Security $security, private readonly ?\App\Services\Platform\EntitlementFlagSync $flagSync = null)
     {
         $this->entrepriseService = $entrepriseService;
     }
@@ -35,6 +35,9 @@ class UpdateEntrepriseUseCase
         // journal des écritures : valeurs avant / après des seules clés envoyées
         $before = $this->entrepriseService->snapshot($id, array_keys($data), $locale);
         $dto = $this->entrepriseService->updateEntreprise($id, $data, $host, $locale);
+        if ($dto !== null && array_intersect(self::SUPER_ADMIN_FIELDS, array_keys($data)) !== []) {
+            $this->flagSync?->afterEntrepriseId($id); // droits d'usage alignés sur les activations (console, lot 3, 04/11/2026)
+        }
         if ($dto !== null && $before !== null) {
             $after = $this->entrepriseService->snapshot($id, array_keys($before), $locale);
             $changed = array_keys(array_filter($after, fn ($value, $key) => $value !== $before[$key], ARRAY_FILTER_USE_BOTH));

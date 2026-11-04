@@ -259,7 +259,7 @@ d'envoi). **Aucun identifiant SMTP dans la file** : le worker (`SendTenantEmailH
 configuration dans la base du site, puis envoie ; une erreur SMTP relance le message, puis le range dans `failed`. File
 injoignable : envoi immédiat. Une réponse HTTP n'attend donc plus le serveur SMTP, et un appelant ne voit plus l'échec
 d'un envoi (journal `[Email]` et file `failed`). Exception : `app:test-tenant-smtp` envoie sans file
-(`createDirectMailer`). En test, le transport `email` est synchrone (`when@test`).
+(`createDirectMailer`). En test, le transport `email` est synchrone (`when@test`). La file `email` porte aussi `Message\EntitlementChangedMessage` (console de pilotage, lot 3, 04/11/2026 : courriel au contact du site quand un droit d'usage change, `MessageHandler\EntitlementChangedHandler`, gabarit `emails/entitlement_notice.html.twig`, clés `entitlement.*` du domaine `emails`).
 **Langue du client** (03/11/2026) : les courriels destinés au client partent en fr ou en (`?locale=`, sinon langue du site) par
 `EmailSenderService::sendCustomerEmail` et le domaine de traduction `emails` (`translations/`) ; fiche `docs/boutique.md`,
 « Courriels du client en français et en anglais ». Les courriels destinés au marchand restent en français.
