@@ -15,7 +15,7 @@ class MobileUserAdminTest extends BookTypeApiTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 40, 'improvementsPerDay' => 60, 'maxAudioSeconds' => 300, 'applyToWebBooks' => false, 'timezone' => 'America/Martinique']);
+        $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 40, 'improvementsPerDay' => 60, 'maxAudioSeconds' => 300, 'applyToWebBooks' => false, 'timezone' => 'America/Martinique'], 'super');
     }
 
     public function testSignupChannelAndLastLoginAreRecorded(): void

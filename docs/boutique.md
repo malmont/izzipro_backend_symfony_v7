@@ -122,7 +122,7 @@ Toutes les routes qui renvoient un produit (`/api/products/by-slug/{slug}`, `/ap
 | `vehicleDetails` | `{ year, brand, model, vin, transmission, gasType, enginePower, hoursOrMileage, condition, color }` ou null |
 
 Devise (§ 7) : une seule par site, `entreprise.currency` (ISO 4217, défaut `CAD`), exposée par `GET /api/entreprise/{id}`
-(`currency`), modifiable par `PUT /api/entreprise/{id}` (3 lettres, journalisée) et renvoyée par `GET /api/stripe-config`
+(`currency`), modifiable par `PUT /api/entreprise/{id}` (3 lettres, journalisée ; la même route refuse **403 `SUPER_ADMIN_REQUIRED`** à un administrateur de site toute activation de module `isBoutiqueActive`, `isLandingPageActive`, `isBoussoleEsgActive`, `isMemoireVivanteActive` différente de l'actuelle, voir `docs/console-pilotage.md`) et renvoyée par `GET /api/stripe-config`
 (`currency`). `TenantCurrencyProvider` la lit pour `pricing.currency`. **Langue du site** (04/11/2026, demande du site Next.js) :
 `locale` (`fr` | `en`) sur `GET /api/entreprise/{id}`, règle de `Services/CaisseService/SiteLocaleResolver` d'après l'adresse du site
 (Québec ou Canada sans province → `fr`, autre province → `en`, États-Unis → `en`, autre pays ou sans adresse → `fr`) ; indépendante de

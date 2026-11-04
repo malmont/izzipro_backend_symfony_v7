@@ -48,7 +48,7 @@ renvoie. L'ordre est gardé dans `presentation_group.presentation_order` (liste 
 Depuis le 07/10/2026 (`ContentAuditRecorder`, table `content_audit_log` par tenant, script
 `migrate_all_v2_content_audit.sh`, 180 jours) : chaque écriture de l'éditeur est inscrite avec l'utilisateur, le
 site, la ressource, l'action, la langue, les champs modifiés et l'état avant / après (JSON) : `PATCH` des contenus,
-groupes de présentations (ajout, retrait, ordre), `PUT /api/entreprise` (clés envoyées qui ont changé),
+groupes de présentations (ajout, retrait, ordre), `PUT /api/entreprise` (clés envoyées qui ont changé ; depuis le 04/11/2026 les activations de modules y sont réservées au super administrateur : 403 `SUPER_ADMIN_REQUIRED`, `docs/console-pilotage.md`),
 `PUT /api/landingpage-settings` (configuration complète), modèles de site (création, modification, suppression),
 médiathèque (téléversement, renommage, suppression), et depuis le 08/10/2026 les réglages et modèles de la boutique
 réglable (`boutique-settings`, `boutique-site-models` : `docs/boutique.md`). Lecture : `GET /api/landingpage-audit?resource=&resourceId=&page=&limit=`

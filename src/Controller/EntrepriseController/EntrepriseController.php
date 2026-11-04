@@ -77,6 +77,9 @@ class EntrepriseController extends AbstractController
             $entrepriseDto = $this->updateEntrepriseUseCase->execute($id, $data, $host, $locale);
         } catch (\App\Services\EntrepriseService\EntrepriseValidationException $e) {
             return $this->json(['error' => $e->getMessage(), 'errors' => array_slice($e->errors, 0, 50)], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\App\Services\EntrepriseService\EntrepriseForbiddenException $e) {
+            // activations des modules : réservées au super administrateur (04/11/2026), rien n'est écrit
+            return $this->json(['error' => $e::CODE, 'code' => $e::CODE, 'message' => $e->getMessage(), 'fields' => $e->fields], JsonResponse::HTTP_FORBIDDEN);
         }
         if (!$entrepriseDto) {
             return $this->json(['error' => 'Entreprise not found'], JsonResponse::HTTP_NOT_FOUND);

@@ -29,7 +29,7 @@ class PaidChapterTest extends BookTypeApiTestCase
         FakeCheckoutPaymentGateway::reset();
         FakeAnthropicService::reset();
         self::db()->exec('DELETE FROM mv_ai_usage');
-        [$status] = $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 40, 'improvementsPerDay' => 60, 'regenerationsPerDay' => 3, 'maxAudioSeconds' => 300, 'applyToWebBooks' => false, 'timezone' => 'America/Martinique']);
+        [$status] = $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 40, 'improvementsPerDay' => 60, 'regenerationsPerDay' => 3, 'maxAudioSeconds' => 300, 'applyToWebBooks' => false, 'timezone' => 'America/Martinique'], 'super');
         $this->assertSame(200, $status);
         [$status] = $this->api('PUT', '/admin/pricing', ['print' => ['eur' => ['firstCopy' => 200, 'nextCopies' => 100], 'cad' => ['firstCopy' => 300, 'nextCopies' => 150]]]);
         $this->assertSame(200, $status);
@@ -129,9 +129,9 @@ class PaidChapterTest extends BookTypeApiTestCase
 
     public function testRegenerationsAreCappedPerChapterAndPerDayExceptForAdmins(): void
     {
-        [$status, $quotas] = $this->api('PUT', '/admin/ai-quotas', ['regenerationsPerDay' => 1]);
+        [$status, $quotas] = $this->api('PUT', '/admin/ai-quotas', ['regenerationsPerDay' => 1], 'super');
         $this->assertSame([200, 1], [$status, $quotas['regenerationsPerDay']]);
-        [$status, $r] = $this->api('PUT', '/admin/ai-quotas', ['regenerationsPerDay' => -2]);
+        [$status, $r] = $this->api('PUT', '/admin/ai-quotas', ['regenerationsPerDay' => -2], 'super');
         $this->assertSame([422, 'regenerationsPerDay'], [$status, $r['errors'][0]['path']]);
         $this->assertSame('entier entre 0 (illimité) et 100 000 attendu', $r['errors'][0]['message']);
 
@@ -157,7 +157,7 @@ class PaidChapterTest extends BookTypeApiTestCase
         $this->assertNotEmpty($body['quota']['resetsAt']);
         $this->assertGreaterThan(0, (int) $response->headers->get('Retry-After'));
         $this->assertSame(200, $this->api('POST', "/chapters/{$chapter['id']}/generate", [])[0], 'administrateur : ni 402 ni quota de reprises');
-        $this->api('PUT', '/admin/ai-quotas', ['regenerationsPerDay' => 0]);
+        $this->api('PUT', '/admin/ai-quotas', ['regenerationsPerDay' => 0], 'super');
         $this->assertSame(200, $this->as('POST', "/api/memoires/chapters/{$chapter['id']}/generate", [], $owner['token'])[0], '0 = illimité');
     }
 

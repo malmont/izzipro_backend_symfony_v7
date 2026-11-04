@@ -146,8 +146,11 @@ Depuis le 16/10/2026, chaque site a des quotas, réglables par l'administrateur 
   des plafonds est réservée à `ROLE_SUPER_ADMIN`, l'administrateur de site consulte la consommation et modifie le seul
   fuseau horaire `timezone`) ; API
   `ROLE_ADMIN` (`Controller/Admin/AiQuotaAdminController`) : `GET`/`PUT /api/memoires/admin/ai-quotas`
-  (`{transcriptionsPerDay, improvementsPerDay, maxAudioSeconds, applyToWebBooks, timezone}`, champs facultatifs au
-  `PUT`, 422 `VALIDATION_FAILED` avec `errors[{path, message}]`), `GET /api/memoires/admin/ai-quotas/usage?date=AAAA-MM-JJ`
+  (`{transcriptionsPerDay, improvementsPerDay, regenerationsPerDay, maxAudioSeconds, applyToWebBooks, timezone}`, champs facultatifs au
+  `PUT`, 422 `VALIDATION_FAILED` avec `errors[{path, message}]` ; **même règle que l'écran depuis le 04/11/2026** : les plafonds
+  (`AiQuotaSettingsInputDto::CEILING_FIELDS`) ne sont écrits que par `ROLE_SUPER_ADMIN`, un administrateur de site qui en change un reçoit
+  **403 `SUPER_ADMIN_REQUIRED`** avec `fields`, un plafond renvoyé inchangé est ignoré, le fuseau est toujours écrit ; `UseCase/Quota/UpdateAiQuotaSettingsUseCase`,
+  `QuotaCeilingForbiddenException`), `GET /api/memoires/admin/ai-quotas/usage?date=AAAA-MM-JJ`
   → `{date, timezone, from, to, users: [{userId, email, name, transcriptions, improvements}], limits}`.
 - Schéma : `migrations/Version20261016120000.php`, `scripts/migrate_all_v2_mv_ai_quotas.sh`. Tests : `AiQuotaTest`
   (Whisper simulé : `tests/Fake/FakeOpenAiService.php`).

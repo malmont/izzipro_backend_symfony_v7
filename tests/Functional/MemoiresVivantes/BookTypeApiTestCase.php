@@ -17,6 +17,8 @@ abstract class BookTypeApiTestCase extends WebTestCase
 {
     protected const ADMIN_EMAIL = 'admin@arkanoa-media.com';
     protected const CLIENT_EMAIL = 'client-non-admin@example.invalid';
+    /** Super administrateur (jeton émis directement : le code OTP ne s'applique qu'à /api/login) ; créé à la demande dans la copie de base */
+    protected const SUPER_EMAIL = 'super-admin-mvtest@example.invalid';
 
     protected KernelBrowser $client;
     private static ?\PDO $pdo = null;
@@ -150,16 +152,16 @@ abstract class BookTypeApiTestCase extends WebTestCase
         $container->get(TenantEntityManagerProvider::class)->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         $em = $container->get(TenantEntityManagerProvider::class)->getEntityManager();
 
-        $email = $who === 'admin' ? self::ADMIN_EMAIL : self::CLIENT_EMAIL;
+        $email = match ($who) { 'admin' => self::ADMIN_EMAIL, 'super' => self::SUPER_EMAIL, default => self::CLIENT_EMAIL };
         $user = $em->getRepository(User::class)->findOneBy(['email' => $email]);
         if (!$user) {
-            $this->assertSame('client', $who, 'L\'admin de test doit exister dans la copie de base');
+            $this->assertContains($who, ['client', 'super'], 'L\'admin de test doit exister dans la copie de base');
             $user = (new User())
                 ->setEmail($email)
                 ->setUsername($email)
-                ->setFirstname('Client')
+                ->setFirstname($who === 'super' ? 'Super' : 'Client')
                 ->setLastname('Test')
-                ->setRoles(['ROLE_USER_INTERNET'])
+                ->setRoles($who === 'super' ? ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] : ['ROLE_USER_INTERNET'])
                 ->setPassword('inutilisable')
                 ->setIsVerified(true);
             $em->persist($user);

@@ -10,6 +10,7 @@ use App\MemoiresVivantes\UseCase\Quota\UpdateAiQuotaSettingsUseCase;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use App\MemoiresVivantes\UseCase\Quota\QuotaCeilingForbiddenException;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -47,6 +48,8 @@ class AiQuotaAdminController extends AbstractController
             $settings = $this->update->execute($dto);
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => $dto->errors], 422);
+        } catch (QuotaCeilingForbiddenException $e) {
+            return $this->json(['error' => QuotaCeilingForbiddenException::CODE, 'code' => QuotaCeilingForbiddenException::CODE, 'message' => $e->getMessage(), 'fields' => $e->fields], 403);
         }
 
         return $this->json(AiQuotaSettingsOutputDto::toArray($settings));

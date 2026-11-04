@@ -22,13 +22,13 @@ class AiQuotaTest extends BookTypeApiTestCase
         parent::setUp();
         FakeOpenAiService::reset();
         self::db()->exec('DELETE FROM mv_ai_usage');
-        [$status, $settings] = $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 40, 'improvementsPerDay' => 60, 'maxAudioSeconds' => 300, 'applyToWebBooks' => false, 'timezone' => self::TZ]);
+        [$status, $settings] = $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 40, 'improvementsPerDay' => 60, 'maxAudioSeconds' => 300, 'applyToWebBooks' => false, 'timezone' => self::TZ], 'super');
         $this->assertSame(200, $status, json_encode($settings));
     }
 
     public function testAMobileBookOwnerIsLimitedAndOnlySuccessfulCallsCount(): void
     {
-        [$status, $settings] = $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 2, 'improvementsPerDay' => 1]);
+        [$status, $settings] = $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 2, 'improvementsPerDay' => 1], 'super');
         $this->assertSame(200, $status);
         $this->assertSame([2, 1, 300, false, self::TZ, false], [$settings['transcriptionsPerDay'], $settings['improvementsPerDay'], $settings['maxAudioSeconds'], $settings['applyToWebBooks'], $settings['timezone'], $settings['isDefault']]);
         $chapter = $this->chapterOf('/mobile/books');
@@ -93,7 +93,7 @@ class AiQuotaTest extends BookTypeApiTestCase
         $byId = array_column($this->api('GET', '/books?scope=my', null, 'client')[1], null, 'id');
         $this->assertSame([true, false], [$byId[$mobile['id']]['aiQuotaLimited'], $byId[$web['id']]['aiQuotaLimited']], 'dans la liste');
         $this->assertFalse($this->api('GET', "/books/{$mobile['id']}", null, 'admin')[1]['aiQuotaLimited'], 'administrateur : jamais limité');
-        $this->api('PUT', '/admin/ai-quotas', ['applyToWebBooks' => true]);
+        $this->api('PUT', '/admin/ai-quotas', ['applyToWebBooks' => true], 'super');
         $this->assertTrue($this->api('GET', "/books/{$web['id']}", null, 'client')[1]['aiQuotaLimited'], 'option activée : livre web limité');
         [, $updated] = $this->api('PUT', "/books/{$web['id']}", ['title' => 'Livre web renommé'], 'client');
         $this->assertTrue($updated['aiQuotaLimited']);
@@ -101,22 +101,22 @@ class AiQuotaTest extends BookTypeApiTestCase
 
     public function testWebBooksAreFreeUnlessEnabledZeroIsUnlimitedAndAdminsAreNeverLimited(): void
     {
-        $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 1]);
+        $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 1], 'super');
         $web = $this->chapterOf('/books');
         $this->assertSame(200, $this->upload($web, 2)->getStatusCode());
         $this->assertSame(200, $this->upload($web, 2)->getStatusCode(), 'livre web : pas de quota par défaut');
         $this->assertSame(0, (int) self::db()->query('SELECT COUNT(*) FROM mv_ai_usage')->fetchColumn(), 'rien n\'est compté quand le quota ne s\'applique pas');
 
-        $this->api('PUT', '/admin/ai-quotas', ['applyToWebBooks' => true]);
+        $this->api('PUT', '/admin/ai-quotas', ['applyToWebBooks' => true], 'super');
         $this->assertSame(200, $this->upload($web, 2)->getStatusCode());
         $this->assertSame(429, $this->upload($web, 2)->getStatusCode(), 'option activée : le livre web est limité');
 
-        $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 0]);
+        $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 0], 'super');
         $this->assertSame(200, $this->upload($web, 2)->getStatusCode(), '0 = illimité');
         [, $quotas] = $this->api('GET', '/mobile/quotas', null, 'client');
         $this->assertSame(['limit' => null, 'remaining' => null], array_intersect_key($quotas['transcription'], ['limit' => 1, 'remaining' => 1]));
 
-        $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 1, 'improvementsPerDay' => 1]);
+        $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 1, 'improvementsPerDay' => 1], 'super');
         $mobile = $this->chapterOf('/mobile/books');
         $this->assertSame(200, $this->upload($mobile, 2, 'admin')->getStatusCode());
         $this->assertSame(200, $this->upload($mobile, 2, 'admin')->getStatusCode(), 'administrateur sur le livre d\'un autre : jamais limité');
@@ -126,7 +126,7 @@ class AiQuotaTest extends BookTypeApiTestCase
 
     public function testARecordingLongerThanTheLimitIsRefusedBeforeWhisper(): void
     {
-        $this->api('PUT', '/admin/ai-quotas', ['maxAudioSeconds' => 30]);
+        $this->api('PUT', '/admin/ai-quotas', ['maxAudioSeconds' => 30], 'super');
         $chapter = $this->chapterOf('/mobile/books');
 
         $r = $this->upload($chapter, 2, 'client', ['durationSeconds' => '400']);
@@ -148,18 +148,25 @@ class AiQuotaTest extends BookTypeApiTestCase
         $this->assertSame(403, $this->api('GET', '/admin/ai-quotas/usage', null, 'client')[0]);
         $this->assertSame(401, $this->api('GET', '/mobile/quotas', null, null)[0]);
 
-        [$status, $r] = $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => -1, 'improvementsPerDay' => 'dix', 'maxAudioSeconds' => 10, 'timezone' => 'Mars/Olympus', 'applyToWebBooks' => 'peut-être']);
+        [$status, $r] = $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => -1, 'improvementsPerDay' => 'dix', 'maxAudioSeconds' => 10, 'timezone' => 'Mars/Olympus', 'applyToWebBooks' => 'peut-être'], 'super');
         $this->assertSame(422, $status);
         $this->assertSame('VALIDATION_FAILED', $r['error']);
         $this->assertSame(['transcriptionsPerDay', 'improvementsPerDay', 'maxAudioSeconds', 'applyToWebBooks', 'timezone'], array_column($r['errors'], 'path'));
-        [$status, $r] = $this->api('PUT', '/admin/ai-quotas', ['maxAudioSeconds' => 1801]);
+        [$status, $r] = $this->api('PUT', '/admin/ai-quotas', ['maxAudioSeconds' => 1801], 'super');
         $this->assertSame(422, $status);
         [$status, $r] = $this->api('GET', '/admin/ai-quotas/usage?date=2026-13-45');
         $this->assertSame(422, $status);
+        // plafonds réservés au super administrateur (04/11/2026) : un administrateur de site ne change que le fuseau horaire
+        [$status, $r] = $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 41, 'improvementsPerDay' => 60, 'timezone' => self::TZ], 'admin');
+        $this->assertSame(403, $status, 'plafond modifié par un administrateur de site');
+        $this->assertSame(['SUPER_ADMIN_REQUIRED', 'SUPER_ADMIN_REQUIRED', ['transcriptionsPerDay']], [$r['error'], $r['code'], $r['fields']], 'seul le plafond réellement modifié est cité');
+        [$status, $r] = $this->api('PUT', '/admin/ai-quotas', ['transcriptionsPerDay' => 40, 'applyToWebBooks' => false, 'timezone' => self::TZ], 'admin');
+        $this->assertSame(200, $status, 'plafonds renvoyés inchangés : ignorés, le fuseau est écrit');
+        $this->assertSame([40, self::TZ], [$r['transcriptionsPerDay'], $r['timezone']]);
         [$status, $r] = $this->api('GET', '/admin/ai-quotas');
         $this->assertSame(200, $status);
         $this->assertSame([40, 60, 300, false, self::TZ], [$r['transcriptionsPerDay'], $r['improvementsPerDay'], $r['maxAudioSeconds'], $r['applyToWebBooks'], $r['timezone']], 'réglages inchangés après des envois refusés');
-        [$status, $r] = $this->api('PUT', '/admin/ai-quotas', ['maxAudioSeconds' => 1800, 'timezone' => 'Europe/Paris']);
+        [$status, $r] = $this->api('PUT', '/admin/ai-quotas', ['maxAudioSeconds' => 1800, 'timezone' => 'Europe/Paris'], 'super');
         $this->assertSame([200, 1800, 'Europe/Paris', 40], [$status, $r['maxAudioSeconds'], $r['timezone'], $r['transcriptionsPerDay']], 'champs absents : inchangés');
     }
 

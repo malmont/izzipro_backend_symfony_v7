@@ -10,6 +10,15 @@ use App\MemoiresVivantes\Entity\AiQuotaSetting;
  */
 class AiQuotaSettingsInputDto
 {
+    /** Plafonds réservés au super administrateur (champ => accesseur de l'entité) ; le fuseau horaire reste à l'administrateur du site */
+    public const CEILING_FIELDS = [
+        'transcriptionsPerDay' => 'getTranscriptionsPerDay',
+        'improvementsPerDay' => 'getImprovementsPerDay',
+        'regenerationsPerDay' => 'getRegenerationsPerDay',
+        'maxAudioSeconds' => 'getMaxAudioSeconds',
+        'applyToWebBooks' => 'isApplyToWebBooks',
+    ];
+
     public ?int $transcriptionsPerDay = null;
     public ?int $improvementsPerDay = null;
     public ?int $regenerationsPerDay = null;
