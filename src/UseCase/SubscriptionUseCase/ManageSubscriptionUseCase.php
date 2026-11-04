@@ -33,7 +33,8 @@ class ManageSubscriptionUseCase
         if (!is_numeric($quantity) || (int) $quantity != $quantity) {
             throw new SubscriptionException(422, 'quantity : entier attendu', [SubscriptionException::error('quantity', 'QUANTITY_INVALID', 'entier attendu', ['min' => 1, 'max' => 100])], [], 'QUANTITY_INVALID');
         }
-        $result = $this->service->subscribe($user, (int) $planId, (int) $quantity, self::id($body['addressId'] ?? null), self::id($body['carrierId'] ?? null));
+        $target = $body['fulfillmentTarget'] ?? null; // site cible d'une formule branchée sur une offre de la plateforme (lot 3 bis, 04/11/2026)
+        $result = $this->service->subscribe($user, (int) $planId, (int) $quantity, self::id($body['addressId'] ?? null), self::id($body['carrierId'] ?? null), is_string($target) ? trim($target) : null);
 
         return [
             'subscriptionId' => (int) $result['subscription']->getId(), 'clientSecret' => $result['clientSecret'],

@@ -247,7 +247,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (268)
+## Boutique et commun (272)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -353,6 +353,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/api/mobile/app-theme` | PUBLIC_ACCESS | `Controller\AppProfileController\AppThemeController::show` |
 | DELETE | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::deleteNoteDeFrais` |
 | PUT | `/api/notes-de-frais/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\NoteDeFraisController\NoteDeFraisController::updateNoteDeFrais` |
+| GET | `/api/offers` | PUBLIC_ACCESS | `Controller\PlatformController\PublicOffersController::list` |
 | GET | `/api/order-statuses` | PUBLIC_ACCESS | `Controller\OrderController\OrderController::getOrderStatuses` |
 | POST | `/api/order/cancel/{id}` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\OrderController\OrderController::cancelOrder` |
 | POST | `/api/order/create-guest` | PUBLIC_ACCESS | `Controller\OrderController\OrderController::createGuestOrder` |
@@ -364,6 +365,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/api/payment` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::processPayment` |
 | GET | `/api/payments/statistics/{source}` | ROLE_ADMIN | `Controller\StatistiqueDashboard\PaymentsController::getPaymentStatistics` |
 | GET | `/api/payments` | ROLE_USER_INTERNET ou ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\paymentController\PaymentsController::getPayments` |
+| POST | `/api/platform/billing-events` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformBillingEventsController::receive` |
+| PUT | `/api/platform/offers/{code}` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformOffersController::put` |
+| GET | `/api/platform/offers` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformOffersController::list` |
 | GET | `/api/platform/settings` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSettingsController::show` |
 | PUT | `/api/platform/settings` | ROLE_SUPER_ADMIN + `#[IsGranted(ROLE_SUPER_ADMIN)]` | `Controller\PlatformController\PlatformSettingsController::update` |
 | POST | `/api/pos/approvals` | ROLE_USER_POS ou ROLE_POS_MANAGER ou ROLE_ADMIN | `Controller\PosController\PosPinController::approve` |

@@ -737,7 +737,19 @@ Stripe Billing sur le compte connecté du site. Code : `Controller/SubscriptionC
 `subscription_plan`, `subscription`, colonnes `order.subscription_id`, `order.stripe_invoice_id`,
 `user.stripe_customer_id` (migration `Version20261009130000`, script `scripts/migrate_all_v2_subscriptions.sh`) ;
 `subscription.shipping_amount` et `order_items.customization_id` (migration `Version20261009150000`, script
-`scripts/migrate_all_v2_subscription_shipping_customization.sh`).
+`scripts/migrate_all_v2_subscription_shipping_customization.sh`) ; `subscription_plan.fulfillment_type` / `fulfillment_ref` et
+`subscription.fulfillment_target` (console de pilotage, lot 3 bis du 04/11/2026 : migration `Version20261114100000`, script
+`scripts/migrate_all_v2_subscription_fulfillment.sh`).
+
+**Branchement d'une formule sur un service (lot 3 bis, 04/11/2026, `docs/console-pilotage.md`).** La boutique reste générique : une
+formule porte `fulfillmentType` (`none` par défaut ; `platform_offer` : la formule vend une offre de la plateforme dont `fulfillmentRef`
+est le code ; `webhook` : réservé) ; `GET /api/subscription-plans` rend `fulfillmentType`. Pour une formule branchée, `POST
+/api/subscriptions` exige `fulfillmentTarget` (code du site à activer, existant) : 422 `FULFILLMENT_TARGET_REQUIRED` |
+`FULFILLMENT_TARGET_UNKNOWN`. Le cycle de vie de tout abonnement émet `Event\SubscriptionStatusChangedEvent` après le flush
+(`EventSubscriber\SubscriptionLifecycleSubscriber`, écouteur Doctrine : aucun des points d'écriture du statut n'est modifié) ; seul
+`EventSubscriber\PlatformOfferFulfillmentSubscriber` traite `platform_offer` et accorde, prolonge, met en grâce, suspend, rétablit ou
+retire les droits d'usage du site cible (`Services/Platform/OfferFulfillmentService`). Une formule `none` n'est pas concernée. Test :
+`tests/Functional/Platform/OfferFulfillmentTest.php`.
 
 | Route | Accès | Contenu |
 |---|---|---|

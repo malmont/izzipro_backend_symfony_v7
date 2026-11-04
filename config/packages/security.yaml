@@ -115,6 +115,8 @@ security:
         - { path: ^/api/site/features(/|$), roles: ROLE_ADMIN }
         # 🔹 Plateforme (console de pilotage, 04/11/2026) : mode demo | live, droits d'usage, offres : super administrateur seulement
         - { path: ^/api/platform(/|$), roles: ROLE_SUPER_ADMIN }
+        # 🔹 Catalogue public des offres de la plateforme (console de pilotage, lot 3 bis, 04/11/2026)
+        - { path: ^/api/offers$, methods: [GET, HEAD], roles: PUBLIC_ACCESS }
         # 🔹 Synchronisation de la configuration des landing pages : ROLE_SUPER_ADMIN ou jeton de déploiement
         #    (X-Deploy-Token), vérifiés par LandingConfigController. Avant la règle publique « landingpage ».
         - { path: ^/api/landingpage-config(/|$), roles: PUBLIC_ACCESS }

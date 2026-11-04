@@ -42,7 +42,8 @@ final class SubscriptionService
         private readonly TenantConnectionProvider $tenantProvider,
         private readonly SubscriptionStripeGatewayInterface $stripe,
         private readonly BoutiqueSettingsService $settings,
-        private readonly TaxEngine $taxes
+        private readonly TaxEngine $taxes,
+        private readonly ?\App\Services\TenantConnectionManager $tenants = null // site cible d'une formule branchée (lot 3 bis, 04/11/2026)
     ) {
     }
 
@@ -53,7 +54,7 @@ final class SubscriptionService
     }
 
     /** @throws SubscriptionException 403 module désactivé, 404 formule, 422 produit non abonnable ou adresse d'un autre client */
-    public function subscribe(User $user, int $planId, int $quantity, ?int $addressId, ?int $carrierId): array
+    public function subscribe(User $user, int $planId, int $quantity, ?int $addressId, ?int $carrierId, ?string $fulfillmentTarget = null): array
     {
         if ($this->settings->commerceSetting('subscriptionsEnabled') === false) {
             throw new SubscriptionException(403, 'Les abonnements sont désactivés sur ce site.', [], [], 'SUBSCRIPTIONS_DISABLED');
@@ -93,14 +94,34 @@ final class SubscriptionService
         $connection = $em->getConnection();
         $connection->executeQuery('SELECT pg_advisory_lock(hashtext(?))', [$lock]);
         try {
-            return $this->subscribeLocked($user, $plan, $quantity, $address, $carrier, $shippingAmount);
+            return $this->subscribeLocked($user, $plan, $quantity, $address, $carrier, $shippingAmount, $this->fulfillmentTarget($plan, $fulfillmentTarget));
         } finally {
             $connection->executeQuery('SELECT pg_advisory_unlock(hashtext(?))', [$lock]);
         }
     }
 
+    /**
+     * Formule branchée sur une offre de la plateforme (lot 3 bis, 04/11/2026) : le site cible est obligatoire et doit exister ;
+     * formule ordinaire : ignoré. 422 FULFILLMENT_TARGET_REQUIRED | FULFILLMENT_TARGET_UNKNOWN.
+     */
+    private function fulfillmentTarget(SubscriptionPlan $plan, ?string $target): ?string
+    {
+        if (!$plan->hasFulfillment()) {
+            return null;
+        }
+        $target = trim((string) $target);
+        if ($target === '') {
+            throw new SubscriptionException(422, 'fulfillmentTarget : code du site à activer attendu', [SubscriptionException::error('fulfillmentTarget', 'FULFILLMENT_TARGET_REQUIRED', 'code du site à activer attendu')], [], 'FULFILLMENT_TARGET_REQUIRED');
+        }
+        if (!preg_match('/^[a-z0-9-]{2,50}$/', $target) || $this->tenants === null || !is_array($this->tenants->findTenantByCode($target))) {
+            throw new SubscriptionException(422, 'fulfillmentTarget : site inconnu', [SubscriptionException::error('fulfillmentTarget', 'FULFILLMENT_TARGET_UNKNOWN', 'site inconnu')], [], 'FULFILLMENT_TARGET_UNKNOWN');
+        }
+
+        return $target;
+    }
+
     /** @return array{subscription: Subscription, clientSecret: ?string, intentType: ?string, reused: bool} */
-    private function subscribeLocked(User $user, SubscriptionPlan $plan, int $quantity, ?Adress $address, ?Carrier $carrier, int $shippingAmount): array
+    private function subscribeLocked(User $user, SubscriptionPlan $plan, int $quantity, ?Adress $address, ?Carrier $carrier, int $shippingAmount, ?string $fulfillmentTarget = null): array
     {
         $em = $this->emProvider->getEntityManager();
         // Double souscription (double clic, nouvel essai après une erreur, 09/10/2026) : un essai sans carte (même formule et
@@ -150,7 +171,7 @@ final class SubscriptionService
             $taxRateIds = $normalized ? $this->stripe->taxRateIds(array_map(fn ($t) => ['label' => (string) $t->getName(), 'rate' => (float) $t->getRate()], $this->taxes->applicableTaxes($normalized))) : [];
         }
 
-        $subscription = (new Subscription())->setUser($user)->setPlan($plan)->setQuantity($quantity)->setAddress($address)->setCarrier($carrier)->setShippingAmount($shippingAmount)->setStripeCustomerId($customerId);
+        $subscription = (new Subscription())->setUser($user)->setPlan($plan)->setQuantity($quantity)->setAddress($address)->setCarrier($carrier)->setShippingAmount($shippingAmount)->setStripeCustomerId($customerId)->setFulfillmentTarget($fulfillmentTarget);
         $em->persist($subscription);
         $em->flush();
 

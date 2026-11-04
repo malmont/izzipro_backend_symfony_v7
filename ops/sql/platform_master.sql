@@ -69,3 +69,33 @@ CREATE TABLE IF NOT EXISTS tenant_feature_requests (
     decided_by VARCHAR(255) DEFAULT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tenant_feature_requests_lookup ON tenant_feature_requests (tenant_code, feature_key, status);
+
+-- Offres de la plateforme (lot 3 bis, 04/11/2026) : une fonctionnalité seule ou un lot (features = clés gouvernées), prix mensuel en cents
+-- (valeurs par défaut provisoires, modifiables dans la console et par PUT /api/platform/offers/{code}). Retour arrière : DROP TABLE platform_offers.
+CREATE TABLE IF NOT EXISTS platform_offers (
+    code VARCHAR(64) PRIMARY KEY,
+    label_fr VARCHAR(160) NOT NULL,
+    label_en VARCHAR(160) NOT NULL,
+    features JSONB NOT NULL,
+    monthly_price_cents INT NOT NULL DEFAULT 0,
+    yearly_price_cents INT DEFAULT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CAD',
+    trial_days INT NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    position INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_by VARCHAR(255) DEFAULT NULL
+);
+INSERT INTO platform_offers (code, label_fr, label_en, features, monthly_price_cents, trial_days, position) VALUES
+    ('landing', 'Landing Page', 'Landing Page', '["module.landing"]', 2900, 30, 10),
+    ('boutique', 'Boutique en ligne', 'Online shop', '["module.boutique"]', 5900, 30, 20),
+    ('landing_boutique', 'Landing Page + Boutique', 'Landing Page + Online shop', '["module.landing", "module.boutique"]', 7900, 30, 30),
+    ('mobile_shop', 'Application e-commerce mobile', 'Mobile shop app', '["app.mobile_shop"]', 2900, 30, 40),
+    ('pos', 'Caisse', 'Point of sale', '["module.pos"]', 4900, 30, 50),
+    ('management', 'Application de gestion', 'Management app', '["app.management"]', 3900, 30, 60),
+    ('pos_management', 'Caisse + Application de gestion', 'Point of sale + Management app', '["module.pos", "app.management"]', 7900, 30, 70),
+    ('memoires', 'Mémoires Vivantes', 'Living Memories', '["module.memoires"]', 4900, 30, 80),
+    ('living_memory', 'Application Living Memory', 'Living Memory app', '["app.living_memory"]', 2900, 30, 90),
+    ('boussole', 'Boussole ESG', 'ESG Compass', '["module.boussole"]', 4900, 30, 100),
+    ('all', 'Tout compris', 'All inclusive', '["module.landing", "module.boutique", "module.pos", "module.memoires", "module.boussole", "app.mobile_shop", "app.management", "app.living_memory"]', 19900, 30, 110)
+ON CONFLICT (code) DO NOTHING;

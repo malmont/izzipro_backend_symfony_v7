@@ -148,6 +148,11 @@ services:
         tags:
             - { name: doctrine.event_subscriber }
 
+    # Cycle de vie des abonnements (console de pilotage, lot 3 bis, 04/11/2026) : changements de statut ou de période → SubscriptionStatusChangedEvent
+    App\EventSubscriber\SubscriptionLifecycleSubscriber:
+        tags:
+            - { name: doctrine.event_subscriber }
+
     # Garde de conservation des données de vente (A1, 30/10/2026) : suppression refusée, modifications observées ou refusées
     App\Services\ArchiveService\PosArchiveService:
         arguments:

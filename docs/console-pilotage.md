@@ -58,7 +58,13 @@ départ** (à affiner) : Landing Page seule, Boutique seule, Landing Page + Bout
 MAUI), Caisse + Application de gestion, Boutique mobile, Mémoires Vivantes, Living Memory, Boussole ESG, et un lot « tout
 compris ». Un droit d'usage issu d'un abonnement porte l'offre souscrite (`offer_code`) ; la boutique plateforme vendra ces
 offres comme des formules d'abonnement et enverra les événements de facturation (`billing-events`). Le catalogue public des
-offres (`GET /api/platform/offers`, lecture) servira aussi au formulaire de création et au bouton « demander » de « Mon site ».
+offres (`GET /api/offers`, public, lecture) servira aussi au formulaire de création et au bouton « demander » de « Mon site ».
+
+**Offres par défaut posées le 04/11/2026 (CAD par mois, 30 jours d'essai, à affiner dans la console)** : Landing Page 29, Boutique
+en ligne 59, Landing Page + Boutique 79, Application e-commerce mobile 29, Caisse 49, Application de gestion 39, Caisse +
+Application de gestion 79, Mémoires Vivantes 49, Application Living Memory 29, Boussole ESG 49, Tout compris 199. Un droit
+issu d'un abonnement court jusqu'à la fin de période **plus** le délai de grâce de la politique (7 jours par défaut) et porte la
+référence `subscription:<site vendeur>:<id>`.
 
 **Branchement sur le mode abonnement de la boutique (décision du 04/11/2026).** La boutique reste générique : une formule
 d'abonnement (`SubscriptionPlan`) reçoit `fulfillmentType` (`none` par défaut, `platform_offer`, plus tard `webhook` pour qu'un
@@ -120,7 +126,7 @@ s'applique au provisionnement. Essais et gratuité par site seulement (pas par u
 | 1 bis | Relevé des indicateurs réels par site (cohérents pour les modules ; `is_living_memory_active` faux sur `memoiresvivantes` qui utilise l'application : indicateurs d'applications non appliqués) ; garde-fou `ModuleAccessSubscriber` (403 `MODULE_INACTIVE` sur Mémoires, Boussole, assistant Landing, commerce de la Boutique ; caisse exclue) ; mode de la plateforme `demo` / `live` (`platform_settings`, `GET`/`PUT /api/platform/settings`) | fait le 04/11/2026 ; tests `ModuleAccessGateTest`, `PlatformSettingsApiTest` |
 | 2 | `FeatureCatalog` (26 entrées), `SiteFeatureStateService` (valeurs, effectif, prérequis, états), `GET`/`PUT /api/site/features` ; `entreprise.locale` explicite (`siteLocale`), `commerce.salesModes` ; lectures des réglages de la boutique rendues déterministes (première ligne par id) | fait le 04/11/2026 ; test `SiteFeaturesApiTest` ; message au front à envoyer (panneau Commerce) |
 | 3 | Tables maîtres `tenant_entitlements`, `tenant_entitlement_events`, `platform_feature_policies`, `tenant_feature_requests` (`ops/sql/platform_master.sql`) ; `Services/Platform/EntitlementService` (accorder, essai, gratuit, suspendre, rétablir, annuler, prolonger, grâce, balayage), `EntitlementProjector` (projection SQL sur `is_*_active` + cache du site vidé), `EntitlementFlagSync` (fiche Entreprise → droits, EasyAdmin et API), `EntitlementChangedMessage` + `EntitlementChangedHandler` (courriels fr/en au contact du site, repli expéditeur puis premier administrateur), `app:entitlements:bootstrap` (amorçage idempotent depuis indicateurs et clés valides), `app:entitlements:sweep` (échéances, rappels J-7 / J-1 ; `ops/systemd/entitlements-sweep.{service,timer}` **à installer**) ; registre : `entitlement` et `request` sur les clés plateforme, `POST /api/site/features/{clé}/request` | fait le 04/11/2026 ; test `tests/Functional/Platform/EntitlementsTest.php` |
-| 3 bis | `platform_offers` : offres seules et lots, prix mensuels par défaut modifiables, `GET`/`PUT /api/platform/offers`, lien offre → droits d'usage ; `fulfillmentType` / `fulfillmentRef` sur `SubscriptionPlan`, événements génériques du cycle de vie des abonnements, abonné `platform_offer` | à faire |
+| 3 bis | Table maître `platform_offers` (11 offres par défaut, prix provisoires), `PlatformOfferRepository`, `GET /api/offers` (public), `GET`/`PUT /api/platform/offers/{code}` (super admin), `POST /api/platform/billing-events` (super admin, vendeur externe) ; `fulfillmentType` / `fulfillmentRef` sur `SubscriptionPlan` (EasyAdmin, DTO), `fulfillmentTarget` sur `Subscription` (exigé à la souscription d'une formule branchée) ; `SubscriptionStatusChangedEvent` émis par `SubscriptionLifecycleSubscriber` (Doctrine), `OfferFulfillmentService` + `PlatformOfferFulfillmentSubscriber` (activated, renewed, unpaid → grâce, paused → suspendu, resumed, cancelled) | fait le 04/11/2026 ; test `OfferFulfillmentTest` ; migration `Version20261114100000`, script appliqué |
 | 4 | Routes plateforme dont `billing-events` (jeton de service) ; onglet « Plateforme » | à faire |
 | 5 | Onglet « Mon site » ; formulaire de création branché sur le registre | à faire |
 

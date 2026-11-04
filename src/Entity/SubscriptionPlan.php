@@ -113,6 +113,28 @@ class SubscriptionPlan
     public function setStripeProductId(?string $id): static { $this->stripeProductId = $id; return $this; }
     public function getStripePriceId(): ?string { return $this->stripePriceId; }
     public function setStripePriceId(?string $id): static { $this->stripePriceId = $id; return $this; }
+    /**
+     * Branchement de la formule sur un service (console de pilotage, lot 3 bis, 04/11/2026) : `none` (défaut, formule ordinaire d'un site),
+     * `platform_offer` (la formule vend une offre de la plateforme : `fulfillmentRef` = code de l'offre, l'abonné désigne son site cible),
+     * `webhook` (réservé : un site branchera ses propres services). Migration Version20261114100000.
+     */
+    public const FULFILLMENT_NONE = 'none';
+    public const FULFILLMENT_PLATFORM_OFFER = 'platform_offer';
+    public const FULFILLMENT_WEBHOOK = 'webhook';
+    public const FULFILLMENT_TYPES = [self::FULFILLMENT_NONE, self::FULFILLMENT_PLATFORM_OFFER, self::FULFILLMENT_WEBHOOK];
+
+    #[ORM\Column(length: 20, options: ['default' => 'none'])]
+    private string $fulfillmentType = self::FULFILLMENT_NONE;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $fulfillmentRef = null;
+
+    public function getFulfillmentType(): string { return in_array($this->fulfillmentType, self::FULFILLMENT_TYPES, true) ? $this->fulfillmentType : self::FULFILLMENT_NONE; }
+    public function setFulfillmentType(?string $type): static { $this->fulfillmentType = in_array($type, self::FULFILLMENT_TYPES, true) ? $type : self::FULFILLMENT_NONE; return $this; }
+    public function getFulfillmentRef(): ?string { return $this->fulfillmentRef; }
+    public function setFulfillmentRef(?string $ref): static { $r = $ref !== null ? trim($ref) : ''; $this->fulfillmentRef = $r !== '' ? mb_substr($r, 0, 255) : null; return $this; }
+    public function hasFulfillment(): bool { return $this->getFulfillmentType() !== self::FULFILLMENT_NONE; }
+
     public function isActive(): bool { return $this->active; }
     public function setActive(bool $active): static { $this->active = $active; return $this; }
 

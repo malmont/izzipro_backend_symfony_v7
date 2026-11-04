@@ -95,6 +95,24 @@ class EntitlementRepository
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
+    /**
+     * Droits portant une référence externe (abonnement, commande) ; $statuses : filtre (vivants par défaut), [] = tous
+     * @return list<array<string, mixed>>
+     */
+    public function byReference(string $reference, array $statuses = self::LIVE_STATUSES): array
+    {
+        $sql = 'SELECT ' . self::COLUMNS . ' FROM tenant_entitlements WHERE reference = ?';
+        $params = [$reference];
+        if ($statuses !== []) {
+            $sql .= ' AND status IN (' . implode(', ', array_fill(0, count($statuses), '?')) . ')';
+            $params = [...$params, ...$statuses];
+        }
+        $stmt = $this->pdo()->prepare($sql . ' ORDER BY id');
+        $stmt->execute($params);
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
     public function recordEvent(int $entitlementId, string $tenantCode, string $featureKey, string $event, ?array $payload = null): void
     {
         $this->pdo()->prepare('INSERT INTO tenant_entitlement_events (entitlement_id, tenant_code, feature_key, event, payload) VALUES (?, ?, ?, ?, ?)')

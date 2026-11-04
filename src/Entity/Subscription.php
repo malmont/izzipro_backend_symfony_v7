@@ -99,6 +99,13 @@ class Subscription
         $this->createdAt = $this->updatedAt = new \DateTimeImmutable();
     }
 
+    /** Site cible d'une formule branchée sur un service (code du site ; console de pilotage, lot 3 bis, 04/11/2026), null pour une formule ordinaire */
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $fulfillmentTarget = null;
+
+    public function getFulfillmentTarget(): ?string { return $this->fulfillmentTarget; }
+    public function setFulfillmentTarget(?string $target): static { $t = $target !== null ? trim($target) : ''; $this->fulfillmentTarget = $t !== '' ? mb_substr($t, 0, 50) : null; return $this; }
+
     public function getId(): ?int { return $this->id; }
     public function getUser(): ?User { return $this->user; }
     public function setUser(?User $user): static { $this->user = $user; return $this; }

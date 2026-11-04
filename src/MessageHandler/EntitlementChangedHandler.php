@@ -4,19 +4,21 @@ namespace App\MessageHandler;
 
 use App\Entity\Entreprise;
 use App\Message\EntitlementChangedMessage;
-use App\Services\CaisseService\SiteLocaleResolver;
+use App\Services\EmailConfigurationService\EmailLocale;
 use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\FeatureAccess\FeatureCatalog;
-use App\Services\TenantConnectionManager;
-use App\Services\TenantEntityManagerProvider;
+use App\Services\OrderService\TaxEngine;
+use App\Services\Platform\TenantDatabaseConnector;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * Courriel au contact du site quand un droit d'usage change (lot 3, 04/11/2026) : sujet et textes du domaine `emails`
- * (`entitlement.*`, fr et en), langue du site, gabarit `emails/entitlement_notice.html.twig`, serveur du site puis repli sur celui
- * de la plateforme. Bascule sur la base du site si elle n'est pas la base courante. Jamais relancé : un échec est journalisé.
+ * (`entitlement.*`, fr et en), langue du site, gabarit `emails/entitlement_notice.html.twig`. Le site cible est lu en SQL direct
+ * (TenantDatabaseConnector) et le courriel part par le serveur de la plateforme (repli : serveur du site courant) : la connexion du site courant n'est jamais
+ * basculée (le message peut être traité dans la requête d'un autre site, et un switchTenant y détacherait ses entités).
+ * Destinataire : contact de la fiche Entreprise, sinon expéditeur configuré du site, sinon premier administrateur. Jamais relancé.
  */
 #[AsMessageHandler]
 final class EntitlementChangedHandler
@@ -24,10 +26,8 @@ final class EntitlementChangedHandler
     private const EVENTS_WITH_EMAIL = ['granted', 'trial_started', 'expiring_7', 'expiring_1', 'expired', 'grace', 'suspended', 'resumed'];
 
     public function __construct(
-        private readonly TenantConnectionManager $tenants,
-        private readonly TenantEntityManagerProvider $emProvider,
+        private readonly TenantDatabaseConnector $connector,
         private readonly EmailSenderService $mailer,
-        private readonly SiteLocaleResolver $siteLocale,
         private readonly TranslatorInterface $translator,
         private readonly LoggerInterface $logger,
     ) {
@@ -38,59 +38,66 @@ final class EntitlementChangedHandler
         if (!in_array($message->event, self::EVENTS_WITH_EMAIL, true)) {
             return;
         }
-        $tenant = $this->tenants->findTenantByCode($message->tenantCode);
-        if (!is_array($tenant) || empty($tenant['dbname'])) {
+        $tenant = $this->connector->tenant($message->tenantCode);
+        if ($tenant === null) {
             $this->logger->warning(sprintf('[Entitlements] courriel %s : site %s introuvable', $message->event, $message->tenantCode));
 
             return;
         }
-        if ($this->tenants->getCurrentTenantCode() !== $message->tenantCode) {
-            $this->emProvider->switchTenant((string) $tenant['dbname'], $message->tenantCode);
+        try {
+            $pdo = $this->connector->pdo($tenant['dbname']);
+            $site = $pdo->query('SELECT e.email, e.name, e.locale, a.country, a.state FROM entreprise e LEFT JOIN address_entreprise a ON a.entreprise_id = e.id ORDER BY e.id LIMIT 1')->fetch(\PDO::FETCH_ASSOC) ?: [];
+            $to = $this->recipient($pdo, $site);
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('[Entitlements] courriel %s : site %s illisible : %s', $message->event, $message->tenantCode, $e->getMessage()));
+
+            return;
         }
-        $em = $this->emProvider->getEntityManager();
-        $entreprise = $em->getRepository(Entreprise::class)->findOneBy([], ['id' => 'ASC']);
-        $to = $this->recipient($entreprise);
         if ($to === null) {
             $this->logger->warning(sprintf('[Entitlements] courriel %s : aucun contact sur le site %s', $message->event, $message->tenantCode));
 
             return;
         }
-        $language = $this->siteLocale->siteLocale();
+        $language = $this->language($site);
         $feature = FeatureCatalog::label($message->featureKey, $language);
         $endsAt = isset($message->payload['endsAt']) && $message->payload['endsAt'] ? new \DateTimeImmutable((string) $message->payload['endsAt']) : null;
         $graceUntil = isset($message->payload['graceUntil']) && $message->payload['graceUntil'] ? new \DateTimeImmutable((string) $message->payload['graceUntil']) : null;
         $date = ($endsAt ?? $graceUntil)?->format($language === 'en' ? 'Y-m-d' : 'd/m/Y') ?? '';
-        $params = ['%feature%' => $feature, '%date%' => $date, '%days%' => (string) ($message->payload['days'] ?? ''), '%site%' => (string) $entreprise->getName()];
+        $params = ['%feature%' => $feature, '%date%' => $date, '%days%' => (string) ($message->payload['days'] ?? ''), '%site%' => (string) ($site['name'] ?? $tenant['name'])];
         $event = $message->event;
         $rows = [$this->translator->trans('entitlement.row_feature', [], 'emails', $language) => $feature];
         if ($date !== '') {
             $rows[$this->translator->trans($event === 'grace' ? 'entitlement.row_grace_until' : 'entitlement.row_ends_at', [], 'emails', $language)] = $date;
         }
-        $sent = $this->mailer->sendCustomerEmail($to, "entitlement.subject_$event", $params, 'emails/entitlement_notice.html.twig', [
+        $context = [
             'title' => $this->translator->trans("entitlement.title_$event", $params, 'emails', $language),
             'greeting' => $this->translator->trans('entitlement.greeting', $params, 'emails', $language),
             'message' => $this->translator->trans("entitlement.message_$event", $params, 'emails', $language),
             'nextStep' => $this->translator->trans("entitlement.next_$event", $params, 'emails', $language),
             'rows' => $rows,
             'signature' => $this->translator->trans('entitlement.signature', [], 'emails', $language),
-        ], $language, 'emails', "entitlement.subject_$event");
+            'locale' => $language, 'intlLocale' => $language === 'en' ? 'en_CA' : 'fr_CA',
+        ];
+        $subject = $this->mailer->subject("entitlement.subject_$event", $params, $language);
+        // serveur de la plateforme d'abord ; sans compte expéditeur de plateforme (tests, poste de développement), serveur du site courant
+        $sent = $this->mailer->sendPlatformEmail($to, $subject, 'emails/entitlement_notice.html.twig', $context)
+            || $this->mailer->sendTemplatedEmail($to, $subject, 'emails/entitlement_notice.html.twig', $context, $language, 'emails');
         $this->logger->info(sprintf('[Entitlements] courriel %s pour %s / %s : %s', $event, $message->tenantCode, $message->featureKey, $sent ? 'envoyé' : 'non envoyé'));
     }
 
     /** Contact du site (fiche Entreprise), sinon l'expéditeur configuré du site, sinon le premier administrateur ; null si rien */
-    private function recipient(?Entreprise $entreprise): ?string
+    private function recipient(\PDO $pdo, array $site): ?string
     {
-        $email = trim((string) $entreprise?->getEmail());
+        $email = trim((string) ($site['email'] ?? ''));
         if ($email !== '') {
             return $email;
         }
-        $conn = $this->emProvider->getEntityManager()->getConnection();
         try {
-            $from = $conn->fetchOne('SELECT from_email FROM email_configuration ORDER BY id LIMIT 1');
+            $from = $pdo->query('SELECT from_email FROM email_configuration ORDER BY id LIMIT 1')->fetchColumn();
             if (is_string($from) && trim($from) !== '') {
                 return trim($from);
             }
-            $admin = $conn->fetchOne("SELECT email FROM \"user\" WHERE roles::text LIKE '%ROLE_ADMIN%' AND roles::text NOT LIKE '%ROLE_SUPER_ADMIN%' ORDER BY id LIMIT 1");
+            $admin = $pdo->query("SELECT email FROM \"user\" WHERE roles::text LIKE '%ROLE_ADMIN%' AND roles::text NOT LIKE '%ROLE_SUPER_ADMIN%' ORDER BY id LIMIT 1")->fetchColumn();
             if (is_string($admin) && trim($admin) !== '') {
                 return trim($admin);
             }
@@ -98,5 +105,21 @@ final class EntitlementChangedHandler
         }
 
         return null;
+    }
+
+    /** Langue du site : choisie (`entreprise.locale`), sinon la règle de SiteLocaleResolver d'après l'adresse */
+    private function language(array $site): string
+    {
+        $explicit = $site['locale'] ?? null;
+        if (is_string($explicit) && in_array($explicit, Entreprise::LOCALES, true)) {
+            return $explicit;
+        }
+        $address = TaxEngine::normalizeAddress(['country' => $site['country'] ?? null, 'province' => $site['state'] ?? null]);
+
+        return match ($address['country'] ?? null) {
+            'CA' => in_array($address['province'] ?? null, ['QC', null], true) ? EmailLocale::FRENCH : EmailLocale::ENGLISH,
+            'US' => EmailLocale::ENGLISH,
+            default => EmailLocale::FRENCH,
+        };
     }
 }

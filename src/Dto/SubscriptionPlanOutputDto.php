@@ -23,7 +23,8 @@ final class SubscriptionPlanOutputDto
         public readonly ?string $description = null,
         public readonly bool $highlighted = false,
         public readonly ?string $badge = null,
-        public readonly ?string $productName = null
+        public readonly ?string $productName = null,
+        public readonly string $fulfillmentType = 'none'
     ) {
     }
 
@@ -32,6 +33,6 @@ final class SubscriptionPlanOutputDto
         return new self((int) $plan->getId(), (int) $plan->getProduct()?->getId(), $plan->getName($locale), $plan->getInterval(), $plan->getIntervalCount(),
             $plan->getPrice(), $plan->getCurrency(), $plan->getTrialDays(), $plan->getMinimumTerms(), $plan->isActive(),
             $plan->getFeatureList($locale), $plan->getDescription($locale), $plan->isHighlighted(), $plan->getBadge($locale),
-            $plan->getProduct()?->getTranslation($locale)?->getName() ?? $plan->getProduct()?->getName());
+            $plan->getProduct()?->getTranslation($locale)?->getName() ?? $plan->getProduct()?->getName(), $plan->getFulfillmentType());
     }
 }
