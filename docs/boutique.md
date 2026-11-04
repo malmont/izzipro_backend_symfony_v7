@@ -124,7 +124,7 @@ Toutes les routes qui renvoient un produit (`/api/products/by-slug/{slug}`, `/ap
 Devise (§ 7) : une seule par site, `entreprise.currency` (ISO 4217, défaut `CAD`), exposée par `GET /api/entreprise/{id}`
 (`currency`), modifiable par `PUT /api/entreprise/{id}` (3 lettres, journalisée ; la même route refuse **403 `SUPER_ADMIN_REQUIRED`** à un administrateur de site toute activation de module `isBoutiqueActive`, `isLandingPageActive`, `isBoussoleEsgActive`, `isMemoireVivanteActive` différente de l'actuelle, voir `docs/console-pilotage.md`) et renvoyée par `GET /api/stripe-config`
 (`currency`). `TenantCurrencyProvider` la lit pour `pricing.currency`. **Langue du site** (04/11/2026, demande du site Next.js) :
-`locale` (`fr` | `en`) sur `GET /api/entreprise/{id}`, règle de `Services/CaisseService/SiteLocaleResolver` d'après l'adresse du site
+`locale` (`fr` | `en`) sur `GET /api/entreprise/{id}` : langue choisie par l'administrateur si elle est renseignée (`siteLocale` du `PUT /api/entreprise/{id}`, ou `site.locale` de `PUT /api/site/features`, console de pilotage lot 2 du 04/11/2026 ; `null` = déduite), sinon règle de `Services/CaisseService/SiteLocaleResolver` d'après l'adresse du site
 (Québec ou Canada sans province → `fr`, autre province → `en`, États-Unis → `en`, autre pays ou sans adresse → `fr`) ; indépendante de
 `?locale=` de la requête (langue du site, pas du visiteur) ; lecture seule (ignorée par `PUT`). Aussi `commerce.locale` dans
 `GET /api/boutique-settings`. Test : `SiteLocaleApiTest`. Tous les prix sont stockés **en cents**
@@ -846,6 +846,32 @@ même `code` et, si le détail varie, des `params`. Les applications traduisent,
 
 Sans code explicite, `SubscriptionException::code()` rend le code par statut d'`ApiExceptionSubscriber` (`CONFLICT`, `NOT_FOUND`…).
 Tests : `SubscriptionErrorCodesApiTest` (un test par code ; corps complet vérifié pour le 403, le 409 `already_subscribed` et un 422).
+
+## Registre des fonctionnalités du site : `GET`/`PUT /api/site/features` (console de pilotage, lot 2, 04/11/2026)
+
+Une seule route pour lire et régler ce qui s'active sur le site, miroir du panneau « Commerce » de l'éditeur (fiche complète :
+`docs/console-pilotage.md`). `ROLE_ADMIN`. `GET` → `{ platformMode: demo | live, groups: [localisation, modules, apps, commerce,
+services], features: [{ key, label, group, scope, type, options, nullable, value, effective, details, status, prerequisites: [{ key,
+label, ok }], href }] }`. `scope` : `site` (réglable ici), `platform` (accordé par la plateforme, super administrateur), `service`
+(état d'un service externe ou d'un quota, réglé sur son écran). `status` : `ready`, `incomplete` (activé mais un prérequis manque),
+`off`, `info`. `effective` : valeur déduite quand la valeur réglée est vide (langue, fuseau).
+
+Clés `site` : `site.locale` (`fr` | `en` | null → `entreprise.locale`), `site.timezone` (IANA | null → `entreprise.posTimezone`,
+fuseau de la boutique et de la caisse), `site.currency`, `site.prices_include_tax`, `commerce.sales_modes` (liste parmi `sale`,
+`rental`, `subscription` → `commerce.salesModes` des réglages, absent = les trois), `commerce.guest_checkout`,
+`commerce.subscriptions` (prérequis affichés : module Boutique, mode abonnement accepté, compte Stripe prêt, une formule active, un
+transporteur à prix fixe), `commerce.tax_provider` (`table` | `stripe`). Clés `platform` : `module.landing`, `module.boutique`,
+`module.memoires`, `module.boussole` (écrites par le super administrateur seulement), `module.pos` et `app.*` (lecture : la fiche
+Entreprise génère et révoque les clés). `PUT { values: { clé: valeur } }` → même réponse après écriture ; les clés `site` sont
+écrites là où elles vivent (fiche Entreprise par `UpdateEntrepriseUseCase`, réglages de la boutique par
+`UpdateBoutiqueSettingsUseCase`), donc validées et journalisées comme par leurs routes propres ; tout ou rien par cible. Refus :
+422 `VALIDATION_FAILED` (`errors[{ path: clé du registre, message }]`, toutes les erreurs), 403 `SUPER_ADMIN_REQUIRED` (`fields`)
+pour une clé `platform` modifiée par un administrateur de site (valeur inchangée : ignorée). `commerce.salesModes` est aussi accepté
+par `PUT /api/boutique-settings` (validé). Test : `tests/Functional/Boutique/SiteFeaturesApiTest.php`.
+
+Garde-fou des modules (lot 1 bis) : en mode `live` de la plateforme, devis, commande, paiement, `stripe/create-intent` et
+abonnements répondent **403 `MODULE_INACTIVE`** (`module: boutique`) sur un site sans module Boutique ; le catalogue public reste
+servi. Mode `demo` (défaut) : rien n'est gardé. Voir `docs/architecture.md`, « Modules et mode de la plateforme ».
 
 ## Avis clients (09/10/2026)
 

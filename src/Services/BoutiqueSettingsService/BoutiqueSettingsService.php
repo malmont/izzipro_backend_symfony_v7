@@ -41,7 +41,7 @@ class BoutiqueSettingsService
     public function findOrCreateSettings(): BoutiqueSetting
     {
         $tenantEm = $this->emProvider->getEntityManager();
-        $setting = $tenantEm->getRepository(BoutiqueSetting::class)->findOneBy([]);
+        $setting = $tenantEm->getRepository(BoutiqueSetting::class)->findOneBy([], ['id' => 'ASC']);
 
         if (!$setting) {
             $setting = new BoutiqueSetting();
@@ -73,9 +73,14 @@ class BoutiqueSettingsService
     /** Une clé de « commerce » des réglages publiés (guestCheckout, currency, subscriptionsEnabled, taxProvider…), null si absente */
     public function commerceSetting(string $key): mixed
     {
-        $setting = $this->emProvider->getEntityManager()->getRepository(BoutiqueSetting::class)->findOneBy([]);
+        $setting = $this->emProvider->getEntityManager()->getRepository(BoutiqueSetting::class)->findOneBy([], ['id' => 'ASC']);
 
-        return $setting?->getConfiguration()['commerce'][$key] ?? null;
+        $commerce = $setting?->getConfiguration()['commerce'] ?? null;
+        if (is_object($commerce)) {
+            $commerce = json_decode(json_encode($commerce), true); // configuration écrite dans la même requête (objets) puis relue
+        }
+
+        return is_array($commerce) ? ($commerce[$key] ?? null) : null;
     }
 
     /**

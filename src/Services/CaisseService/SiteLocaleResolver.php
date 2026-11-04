@@ -29,6 +29,10 @@ class SiteLocaleResolver
 
     public function siteLocale(): string
     {
+        $explicit = $this->explicitLocale();
+        if ($explicit !== null) {
+            return $explicit;
+        }
         $address = $this->siteAddress();
 
         return match ($address['country'] ?? null) {
@@ -44,6 +48,18 @@ class SiteLocaleResolver
         $country = $this->siteAddress()['country'] ?? null;
 
         return is_string($country) && preg_match('/^[A-Z]{2}$/', $country) ? $country : null;
+    }
+
+    /** Langue choisie sur la fiche Entreprise (`entreprise.locale`, console de pilotage lot 2, 04/11/2026), null = déduite ; SQL direct comme l'adresse */
+    public function explicitLocale(): ?string
+    {
+        try {
+            $value = $this->emProvider?->getEntityManager()->getConnection()->fetchOne('SELECT locale FROM entreprise ORDER BY id LIMIT 1');
+        } catch (\Throwable) {
+            return null; // colonne absente (base non migrée) : langue déduite
+        }
+
+        return is_string($value) && in_array($value, \App\Entity\Entreprise::LOCALES, true) ? $value : null;
     }
 
     /** @return array{country: ?string, province: ?string}|null adresse normalisée du site */

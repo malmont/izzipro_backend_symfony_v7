@@ -10,7 +10,8 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 /**
  * Langue du site exposée au site Next.js (04/11/2026) : `locale` (fr | en) sur `GET /api/entreprise/{id}`, règle de
- * SiteLocaleResolver d'après l'adresse du site ; indépendante de `?locale=` de la requête ; lecture seule. Aussi `commerce.locale`
+ * SiteLocaleResolver d'après l'adresse du site ; indépendante de `?locale=` de la requête ; depuis la console de pilotage (lot 2,
+ * 04/11/2026) un administrateur peut la choisir explicitement (`locale` du PUT /api/entreprise, null = déduite). Aussi `commerce.locale`
  * dans `GET /api/boutique-settings`, à côté de `commerce.timezone` et `commerce.siteCountry`.
  */
 class SiteLocaleApiTest extends WebTestCase
@@ -56,7 +57,27 @@ class SiteLocaleApiTest extends WebTestCase
         $this->assertSame('en', $this->sheet('fr')['locale']);
         $this->assertContains('locale', BoutiqueSettingsService::READ_ONLY_COMMERCE, 'jamais écrit par un PUT des réglages');
 
-        // Un client qui renvoie la fiche avec locale : champ ignoré, rien d'autre ne change (mise à jour par un administrateur)
+        // Un administrateur choisit la langue explicitement (lot 2 de la console, 04/11/2026) : elle l'emporte sur la déduction ; null → déduite à nouveau
+        $this->putAsAdmin(['siteLocale' => 'fr', 'tel' => '+1 514 555 0199']);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $this->client->getResponse()->getContent());
+        $this->assertSame('fr', $this->sheet('fr')['locale'], 'langue choisie explicitement');
+        $this->assertSame('fr', $this->sheet('en')['locale'], '?locale=en ne change toujours pas la langue du site');
+        $this->putAsAdmin(['siteLocale' => 'de']);
+        $this->assertSame(422, $this->client->getResponse()->getStatusCode(), 'langue hors liste refusée');
+        $this->putAsAdmin(['siteLocale' => null]);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $this->client->getResponse()->getContent());
+        $this->assertSame('en', $this->sheet('fr')['locale'], 'langue déduite à nouveau');
+
+        $this->db()->executeStatement("INSERT INTO boutique_setting (configuration) VALUES ('{\"commerce\": {\"guestCheckout\": true}}')");
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/boutique-settings', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json']);
+        $settings = json_decode($this->client->getResponse()->getContent(), true);
+        $commerce = $settings['configuration']['commerce'] ?? $settings['commerce'];
+        $this->assertSame(['en', 'CA', 'America/Toronto'], [$commerce['locale'], $commerce['siteCountry'], $commerce['timezone']]);
+    }
+
+    /** PUT /api/entreprise connecté en administrateur (cookies + jeton XSRF frais à chaque appel) */
+    private function putAsAdmin(array $body): void
+    {
         $session = $this->loginAsAdmin();
         $jar = $this->client->getCookieJar();
         $jar->clear();
@@ -66,15 +87,7 @@ class SiteLocaleApiTest extends WebTestCase
         $this->client->request('PUT', 'https://' . MV_TEST_TENANT_HOST . "/api/entreprise/{$this->id}?locale=fr", [], [], [
             'HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json',
             'HTTP_X_XSRF_TOKEN' => $session['XSRF-TOKEN_' . MV_TEST_TENANT_CODE] ?? '',
-        ], json_encode(['locale' => 'fr', 'tel' => '+1 514 555 0199']));
-        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $this->client->getResponse()->getContent());
-        $this->assertSame('en', $this->sheet('fr')['locale'], 'toujours la langue du site');
-
-        $this->db()->executeStatement("INSERT INTO boutique_setting (configuration) VALUES ('{\"commerce\": {\"guestCheckout\": true}}')");
-        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/api/boutique-settings', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'HTTP_ACCEPT' => 'application/json']);
-        $settings = json_decode($this->client->getResponse()->getContent(), true);
-        $commerce = $settings['configuration']['commerce'] ?? $settings['commerce'];
-        $this->assertSame(['en', 'CA', 'America/Toronto'], [$commerce['locale'], $commerce['siteCountry'], $commerce['timezone']]);
+        ], json_encode($body));
     }
 
     /** @return array<string, mixed> fiche publique */

@@ -35,6 +35,8 @@ final class BoutiqueConfigurationValidator
     private const CHARTER_COLORS = ['primaryColor', 'accentColor', 'textColor', 'backgroundColor'];
     private const CHARTER_FONTS = ['headingFont', 'bodyFont'];
     private const COMMERCE_FLAGS = ['guestCheckout', 'subscriptionsEnabled'];
+    /** Modes de vente acceptés par la boutique (console de pilotage, lot 2, 04/11/2026) ; absent = les trois */
+    public const SALES_MODES = ['sale', 'rental', 'subscription'];
 
     public function __construct(
         private readonly ReglableCompositionValidator $compositions,
@@ -176,6 +178,12 @@ final class BoutiqueConfigurationValidator
         }
         if (isset($commerce->currency) && (!is_string($commerce->currency) || !preg_match(self::CURRENCY_PATTERN, $commerce->currency))) {
             $errors[] = ['path' => 'commerce.currency', 'message' => 'code de devise ISO 4217 attendu (3 lettres majuscules, ex. CAD)'];
+        }
+        if (isset($commerce->salesModes)) {
+            $modes = $commerce->salesModes;
+            if (!is_array($modes) || $modes === [] || array_diff($modes, self::SALES_MODES) !== [] || count(array_unique($modes)) !== count($modes)) {
+                $errors[] = ['path' => 'commerce.salesModes', 'message' => sprintf('liste non vide, sans doublon, parmi : %s', implode(', ', self::SALES_MODES))];
+            }
         }
         if (isset($commerce->taxProvider) && !in_array($commerce->taxProvider, ['table', 'stripe'], true)) {
             $errors[] = ['path' => 'commerce.taxProvider', 'message' => 'valeur attendue : table ou stripe'];

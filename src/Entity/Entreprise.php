@@ -490,6 +490,13 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(type: 'string', length: 3, options: ['default' => 'CAD'])]
     private string $currency = 'CAD';
 
+    /**
+     * Langue du site choisie explicitement (`fr`, `en`), null = déduite de l'adresse du site (SiteLocaleResolver). Console de
+     * pilotage, lot 2 (04/11/2026) ; colonne `locale`, clé `siteLocale` du PUT /api/entreprise (« locale » y est la langue de la requête), scripts/migrate_all_v2_site_locale.sh.
+     */
+    #[ORM\Column(type: 'string', length: 5, nullable: true)]
+    private ?string $locale = null;
+
     public function __construct()
     {
         $this->translations = new ArrayCollection();
@@ -1255,6 +1262,22 @@ class Entreprise implements TranslatableInterface
     public function setGoogleSiteVerification(?string $googleSiteVerification): static
     {
         $this->googleSiteVerification = $googleSiteVerification;
+
+        return $this;
+    }
+
+    public const LOCALES = ['fr', 'en'];
+
+    public function getLocale(): ?string
+    {
+        return $this->locale;
+    }
+
+    /** null ou code hors liste → null (langue déduite) */
+    public function setLocale(?string $locale): static
+    {
+        $l = $locale !== null ? strtolower(trim($locale)) : '';
+        $this->locale = in_array($l, self::LOCALES, true) ? $l : null;
 
         return $this;
     }

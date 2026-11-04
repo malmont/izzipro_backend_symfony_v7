@@ -2304,6 +2304,14 @@ même code sont séparés par « / ». Les codes à message variable sont décri
   `pos`, connexion par PIN) **et `SALE`** (vente `create-multi-payment`, synchronisation hors ligne). Format accepté `[0-9A-Za-z.+_-]{1,40}` ;
   en-tête absent ou mal formé : clé absente. Début du journal des événements techniques (NF525, `docs/conception-a3-nf525.md` du dépôt posflutter).
 
+## Console de pilotage (04/11/2026)
+
+Le fuseau horaire de la caisse (`entreprise.pos_timezone`, panneau « Fuseau horaire et comptabilité ») est aussi celui du site
+(réservations, courriels) : il se règle désormais aussi par `site.timezone` de `PUT /api/site/features` et par `posTimezone` du
+`PUT /api/entreprise/{id}` (null = déduit du pays et de la province). La caisse n'est **pas** soumise au garde-fou des modules
+(`MODULE_INACTIVE`) : `is_pos_active` est l'indicateur de l'application Caisse, gouverné par les clés d'activation ; le droit
+d'usage du module Caisse viendra avec les droits d'usage (lot 3 de `docs/console-pilotage.md`).
+
 ## Mécanique interne
 
 `HandleCaisseTransactionUseCase` reçoit la session visée, **verrouille sa ligne** (`SELECT … FOR UPDATE`) pendant la

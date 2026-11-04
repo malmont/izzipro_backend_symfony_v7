@@ -13,7 +13,7 @@ ligne « Rôles ».
 | Plateforme | table `tenants` (base maître), `/setup/new-store`, `/admin/super-admin`, `/admin/app-keys`, `/admin/short-code` | existence du site, domaine propre, code court, compte propriétaire, clés des applications mobiles | super admin (clés et code court : admin du site) |
 | Fiche Entreprise, onglet Applications | EasyAdmin | 8 interrupteurs : `isBoutiqueActive`, `isLandingPageActive`, `isBoussoleEsgActive`, `isMemoireVivanteActive`, `isPosActive`, `isMobileShopActive`, `isManagementAppActive`, `isLivingMemoryActive` | super admin (facturé) |
 | Fiche Entreprise, onglet Entreprise | EasyAdmin, `PUT /api/entreprise/{id}` | identité, coordonnées, devise (`currency`, CAD par défaut), prix TTC (`pricesIncludeTax`), numéros de taxes, adresse du site | admin du site |
-| Déduits de l'adresse du site | `Services/CaisseService/SiteLocaleResolver`, `StoreClock` | langue du site (`locale` : Québec → fr, autre province → en…), fuseau horaire (`posTimezone` s'il est réglé, sinon province ou pays, sinon America/Toronto), pays (`commerce.siteCountry`) | personne : déduits, lisibles en `commerce.*` de `GET /api/boutique-settings` |
+| Localisation | `Services/CaisseService/SiteLocaleResolver`, `StoreClock`, registre `site.*` | langue du site (`entreprise.locale` choisie, sinon déduite : Québec → fr, autre province → en…), fuseau horaire (`posTimezone` s'il est réglé, sinon province ou pays, sinon America/Toronto), pays (`commerce.siteCountry`, déduit de l'adresse) | admin du site par `PUT /api/site/features` (depuis le lot 2) ; lisibles en `commerce.*` de `GET /api/boutique-settings` |
 | Fiche Entreprise, onglet Caisse | EasyAdmin, 13 panneaux, lus par `GET /api/pos/settings` | une centaine de réglages POS (fuseau explicite, fidélité, cartes-cadeaux, remises, retours, hors ligne, terminal, alertes, conservation) | admin du site, sauf commissions `posTerminalFee*Bp` et mode Stripe `posStripeMode` |
 | Fiche Entreprise, onglet Site web et SEO | EasyAdmin, `PUT /api/entreprise/{id}` | suivi (pixel), formulaires reçus (courriel, conservation), textes légaux, SEO | admin du site |
 | Réglages JSON de l'éditeur | `BoutiqueSetting` (`PUT /api/boutique-settings`), `LandingPageSetting` (`PUT /api/landingpage-settings`) | `commerce.guestCheckout`, `commerce.subscriptionsEnabled`, `commerce.taxProvider`, `commerce.currency`, charte ; pages, modèles de site | admin du site par l'éditeur ; JSON brut EasyAdmin réservé au super admin |
@@ -29,13 +29,18 @@ Constats :
 - Aucune vue d'ensemble : « abonnement » dépend de la case produit, d'une formule active, de `commerce.subscriptionsEnabled`,
   de Stripe prêt et d'un transporteur à prix fixe ; personne ne voit ces conditions ensemble.
 - Langue, fuseau et pays sont déduits et invisibles ; un site bilingue ou frontalier n'a pas de prise.
-- Les activations de modules ne sont pas appliquées par le serveur : seulement lues par les frontaux. Jusqu'au 04/11/2026,
+- Les activations de modules n'étaient pas appliquées par le serveur (lot 1 bis : garde-fou en mode `live`). Jusqu'au 04/11/2026,
   `PUT /api/entreprise/{id}` les acceptait d'un administrateur de site (corrigé, lot 1) ; de même les plafonds IA par
   `PUT /api/memoires/admin/ai-quotas` (corrigé, lot 1).
 - Point ouvert : les tarifs Mémoires Vivantes (`PUT /api/memoires/admin/pricing`, grille d'impression et produit des
   stores) sont facturés par la plateforme mais réglables par l'administrateur du site ; décision à prendre.
 
 ## 2. Cible
+
+**Mode de la plateforme (décision du 04/11/2026).** Table maître `platform_settings`, clé `mode` : `demo` (défaut) ou `live`.
+En `demo`, aucun garde-fou de module ni de droit d'usage ne bloque un service : tout reste visible et réglable dans la console,
+rien n'est restreint (essais du propriétaire comme avant la console). Le passage en `live` est un geste explicite du super
+administrateur (`PUT /api/platform/settings`, onglet « Plateforme »). `Services/Platform/PlatformModeService`, cache 60 s.
 
 **Droits d'usage plutôt qu'interrupteurs.** Table de plateforme `tenant_entitlements` (base maître) : `tenant_code`,
 `feature_key`, `source` (`manual`, `trial`, `free`, `subscription`, `purchase`), `starts_at`, `ends_at` (nul = sans fin),
@@ -101,8 +106,8 @@ s'applique au provisionnement. Essais et gratuité par site seulement (pas par u
 | Lot | Contenu | État |
 |---|---|---|
 | 1 | Verrous API : activations de `PUT /api/entreprise/{id}` et plafonds de `PUT /api/memoires/admin/ai-quotas` réservés au super administrateur (403 `SUPER_ADMIN_REQUIRED`, `fields`, valeur inchangée ignorée) | fait le 04/11/2026 ; tests `EntrepriseApiSuperAdminGuardTest`, `AiQuotaTest` |
-| 1 bis | Respect côté serveur des modules non accordés (refus avec code stable) ; précédé d'un relevé des indicateurs réels de chaque site, car jamais appliqués jusqu'ici | à faire |
-| 2 | `FeatureCatalog` + `GET`/`PUT /api/site/features` ; bascule du panneau « Commerce » du front (message au front) | à faire |
+| 1 bis | Relevé des indicateurs réels par site (cohérents pour les modules ; `is_living_memory_active` faux sur `memoiresvivantes` qui utilise l'application : indicateurs d'applications non appliqués) ; garde-fou `ModuleAccessSubscriber` (403 `MODULE_INACTIVE` sur Mémoires, Boussole, assistant Landing, commerce de la Boutique ; caisse exclue) ; mode de la plateforme `demo` / `live` (`platform_settings`, `GET`/`PUT /api/platform/settings`) | fait le 04/11/2026 ; tests `ModuleAccessGateTest`, `PlatformSettingsApiTest` |
+| 2 | `FeatureCatalog` (26 entrées), `SiteFeatureStateService` (valeurs, effectif, prérequis, états), `GET`/`PUT /api/site/features` ; `entreprise.locale` explicite (`siteLocale`), `commerce.salesModes` ; lectures des réglages de la boutique rendues déterministes (première ligne par id) | fait le 04/11/2026 ; test `SiteFeaturesApiTest` ; message au front à envoyer (panneau Commerce) |
 | 3 | `tenant_entitlements`, `EntitlementService`, politiques, événements, projection vers `is_*_active`, courriels ; droit `manual` sans fin pour chaque module déjà actif (aucun changement visible) | à faire |
 | 3 bis | `platform_offers` : offres seules et lots, prix mensuels par défaut modifiables, `GET`/`PUT /api/platform/offers`, lien offre → droits d'usage ; `fulfillmentType` / `fulfillmentRef` sur `SubscriptionPlan`, événements génériques du cycle de vie des abonnements, abonné `platform_offer` | à faire |
 | 4 | Routes plateforme dont `billing-events` (jeton de service) ; onglet « Plateforme » | à faire |

@@ -77,6 +77,7 @@ class EntrepriseService
         'isBoussoleEsgActive' => 'isBoussoleEsgActive', 'isMemoireVivanteActive' => 'isMemoireVivanteActive',
         'metaTitle' => 'getMetaTitle', 'metaDescription' => 'getMetaDescription', 'seoKeywords' => 'getSeoKeywords',
         'ogImage' => 'getOgImage', 'googleSiteVerification' => 'getGoogleSiteVerification', 'currency' => 'getCurrency',
+        'siteLocale' => 'getLocale', 'posTimezone' => 'getPosTimezone', 'pricesIncludeTax' => 'isPricesIncludeTax', // console de pilotage, lot 2 (04/11/2026) ; « locale » seul = langue de la requête
     ];
     private const TRANSLATION_GETTERS = ['LegalNotice' => 'getLegalNotice', 'conditionOfUse' => 'getConditionOfUse', 'privacyPolicy' => 'getPrivacyPolicy', 'apropos' => 'getApropos'];
 
@@ -202,6 +203,28 @@ class EntrepriseService
         }
         if (array_key_exists('faviconFilename', $data)) {
             $entreprise->setFaviconFilename($data['faviconFilename']);
+        }
+        // Localisation du site (console de pilotage, lot 2, 04/11/2026) : langue explicite (null = déduite), fuseau (null = déduit), prix TTC
+        if (array_key_exists('siteLocale', $data)) {
+            $siteLocale = $data['siteLocale'];
+            if ($siteLocale !== null && $siteLocale !== '' && (!is_string($siteLocale) || !in_array(strtolower(trim($siteLocale)), Entreprise::LOCALES, true))) {
+                throw new EntrepriseValidationException([['path' => 'siteLocale', 'message' => sprintf('langue attendue : %s, ou vide (déduite de l\'adresse)', implode(', ', Entreprise::LOCALES))]]);
+            }
+            $entreprise->setLocale($siteLocale === '' ? null : $siteLocale);
+        }
+        if (array_key_exists('posTimezone', $data)) {
+            $tz = $data['posTimezone'];
+            if ($tz !== null && $tz !== '' && (!is_string($tz) || !in_array(trim($tz), \DateTimeZone::listIdentifiers(), true))) {
+                throw new EntrepriseValidationException([['path' => 'posTimezone', 'message' => 'fuseau horaire IANA attendu (ex. America/Toronto), ou vide (déduit du pays et de la province)']]);
+            }
+            $entreprise->setPosTimezone($tz === '' ? null : $tz);
+        }
+        if (array_key_exists('pricesIncludeTax', $data)) {
+            $bool = filter_var($data['pricesIncludeTax'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($bool === null) {
+                throw new EntrepriseValidationException([['path' => 'pricesIncludeTax', 'message' => 'booléen attendu']]);
+            }
+            $entreprise->setPricesIncludeTax($bool);
         }
         if (array_key_exists('isBoutiqueActive', $data)) {
             $entreprise->setIsBoutiqueActive((bool)$data['isBoutiqueActive']);
