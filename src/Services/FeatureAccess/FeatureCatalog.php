@@ -84,6 +84,30 @@ final class FeatureCatalog
         'app.management' => 'Management app', 'app.living_memory' => 'Living Memory app',
     ];
 
+    /** À quoi sert chaque fonctionnalité gouvernée, en une phrase (page Mon site, 05/11/2026) */
+    public const DESCRIPTIONS = [
+        'module.landing' => 'Le site vitrine et ses pages, modifiées dans l\'éditeur, avec l\'assistant IA.',
+        'module.boutique' => 'La vente en ligne sur le site : catalogue, panier, paiement, livraison, location, abonnements.',
+        'module.pos' => 'La caisse en magasin : l\'application Caisse sur tablette ou téléphone et la vente au comptoir.',
+        'module.memoires' => 'Les livres de souvenirs : questionnaire, rédaction assistée, mise en page et impression.',
+        'module.boussole' => 'Le diagnostic ESG des entreprises : questionnaire, score, recommandations, rapport.',
+        'app.mobile_shop' => 'L\'application mobile de la boutique pour vos clients (iOS et Android).',
+        'app.management' => 'L\'application de gestion (.NET MAUI) : achats, fournisseurs, notes de frais.',
+        'app.living_memory' => 'L\'application mobile Living Memory, pour que chacun écrive ses souvenirs depuis son téléphone.',
+    ];
+
+    /** Ce qu'il reste à faire une fois le droit accordé (prérequis pratiques) */
+    public const HOW_TO = [
+        'module.landing' => 'Rien d\'autre : ouvrez l\'éditeur du site.',
+        'module.boutique' => 'Régler le commerce ci-dessous (modes de vente, taxes, Stripe), puis créer vos produits.',
+        'module.pos' => 'Générer une clé d\'activation (écran « Clés des applications ») et la saisir dans l\'application Caisse ; créer un poste de caisse.',
+        'module.memoires' => 'Rien d\'autre : la console Mémoires Vivantes du site est prête.',
+        'module.boussole' => 'Rien d\'autre : les référentiels sont fournis.',
+        'app.mobile_shop' => 'Générer une clé d\'activation (écran « Clés des applications ») ; vos clients saisissent le code court de la boutique.',
+        'app.management' => 'Générer une clé d\'activation (écran « Clés des applications ») et la saisir dans l\'application de gestion.',
+        'app.living_memory' => 'Générer une clé d\'activation (écran « Clés des applications ») ; l\'application la porte pour votre site.',
+    ];
+
     public static function label(string $key, string $language = 'fr'): string
     {
         return $language === 'en' ? (self::LABELS_EN[$key] ?? self::FEATURES[$key]['label'] ?? $key) : (self::FEATURES[$key]['label'] ?? $key);

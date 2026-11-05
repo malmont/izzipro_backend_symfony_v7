@@ -15,13 +15,13 @@
 {% macro status(e) %}
     {% if e.status == 'ready' %}<span class="badge bg-success">prêt</span>
     {% elseif e.status == 'incomplete' %}<span class="badge bg-warning text-dark">incomplet</span>
-    {% elseif e.status == 'off' %}<span class="badge bg-light text-muted border">désactivé</span>
+    {% elseif e.status == 'off' %}<span class="badge bg-light text-muted border">non activé</span>
     {% else %}<span class="badge bg-secondary">info</span>{% endif %}
 {% endmacro %}
 {% macro prereqs(e) %}
     {% if e.prerequisites is not empty %}
         <ul class="list-unstyled small mb-0">
-        {% for p in e.prerequisites %}<li>{% if p.ok %}<span class="text-success">✔</span>{% else %}<span class="text-danger">✘</span>{% endif %} {{ p.label }}</li>{% endfor %}
+        {% for p in e.prerequisites %}<li>{% if p.ok %}<span class="text-success">✔</span>{% else %}<span class="text-danger">✘</span>{% endif %} {{ p.label }}{% if p.url is defined and p.url %} <a href="{{ p.url }}" class="small">→ régler</a>{% endif %}</li>{% endfor %}
         </ul>
     {% endif %}
 {% endmacro %}
@@ -43,28 +43,52 @@
             <select class="form-select" id="ms-locale" name="site_locale"><option value="" {{ loc['site.locale'].value is null ? 'selected' : '' }}>Déduite ({{ loc['site.locale'].effective }})</option>{% for o in loc['site.locale'].options %}<option value="{{ o }}" {{ loc['site.locale'].value == o ? 'selected' : '' }}>{{ o }}</option>{% endfor %}</select></div>
         <div class="col-md-3"><label class="form-label" for="ms-tz">Fuseau horaire</label>
             <input class="form-control" id="ms-tz" name="site_timezone" list="ms-tz-list" value="{{ loc['site.timezone'].value ?? '' }}" placeholder="Déduit : {{ loc['site.timezone'].effective }}"><datalist id="ms-tz-list">{% for tz in timezones %}<option value="{{ tz }}">{% endfor %}</datalist></div>
-        <div class="col-md-2"><label class="form-label" for="ms-currency">Devise</label><input class="form-control" id="ms-currency" name="site_currency" maxlength="3" value="{{ loc['site.currency'].value }}"></div>
+        <div class="col-md-2"><label class="form-label" for="ms-currency">Devise</label>
+            <select class="form-select" id="ms-currency" name="site_currency">{% for c in currencies %}<option value="{{ c }}" {{ loc['site.currency'].value == c ? 'selected' : '' }}>{{ {CAD: 'Dollar canadien (CAD)', EUR: 'Euro (EUR)', USD: 'Dollar américain (USD)'}[c] ?? c }}</option>{% endfor %}</select>
+            <div class="form-text" id="ms-currency-hint">Proposée d'après le fuseau horaire ; verrouillée dès la première vente enregistrée.</div></div>
         <div class="col-md-2"><label class="form-label">Pays (adresse)</label><div class="form-control-plaintext">{{ loc['site.country'].value ?? '—' }} {{ m.status(loc['site.country']) }}</div></div>
-        <div class="col-md-2"><div class="form-check mt-4"><input class="form-check-input" type="checkbox" id="ms-ttc" name="site_prices_include_tax" value="1" {{ loc['site.prices_include_tax'].value ? 'checked' : '' }}><label class="form-check-label" for="ms-ttc">Prix taxes comprises</label></div></div>
+        <div class="col-md-2"><div class="form-check mt-4"><input class="form-check-input" type="checkbox" id="ms-ttc" name="site_prices_include_tax" value="1" {{ loc['site.prices_include_tax'].value ? 'checked' : '' }}><label class="form-check-label" for="ms-ttc">Prix taxes comprises</label></div>
+            <div class="form-text">Coché : les prix saisis sur vos produits incluent déjà les taxes (affichage TTC, taxes extraites par taux, pratique en Europe). Décoché : prix hors taxes, taxes ajoutées au paiement (usage au Canada et aux États-Unis). Incompatible avec Stripe Tax ; verrouillé dès la première vente.</div></div>
         <div class="col-md-1"><button type="submit" class="btn btn-primary w-100">Enregistrer</button></div>
     </form>
+    <script>
+    (function () {
+        // Devise proposée d'après le fuseau horaire (modifiable) : Canada → CAD, États-Unis → USD, Europe et Antilles françaises → EUR
+        var tz = document.getElementById('ms-tz'), cur = document.getElementById('ms-currency'), hint = document.getElementById('ms-currency-hint');
+        if (!tz || !cur) { return; }
+        var guess = function (zone) {
+            if (/^America\/(Toronto|Montreal|Vancouver|Edmonton|Calgary|Winnipeg|Regina|Halifax|Moncton|St_Johns|Whitehorse|Yellowknife|Iqaluit)/.test(zone)) { return 'CAD'; }
+            if (/^(Europe\/|America\/(Martinique|Guadeloupe|Cayenne|Miquelon)|Indian\/(Reunion|Mayotte)|Pacific\/(Noumea|Tahiti))/.test(zone)) { return 'EUR'; }
+            if (/^(America\/|US\/|Pacific\/Honolulu)/.test(zone)) { return 'USD'; }
+            return null;
+        };
+        tz.addEventListener('change', function () {
+            var c = guess(tz.value.trim());
+            if (c && cur.value !== c) { cur.value = c; if (hint) { hint.textContent = 'Devise proposée pour ce fuseau : ' + c + ' (modifiable avant d\'enregistrer).'; } }
+        });
+    })();
+    </script>
 
     <h2 class="h5 mt-4">Modules et applications</h2>
+    <p class="text-muted small">Un module ou une application s'obtient de la plateforme : cliquez « Demander » (vous recevez un accusé par courriel, la plateforme vous répond{% if shopUrl %}), ou <a href="{{ shopUrl }}" target="_blank" rel="noopener">choisissez un forfait dans sa boutique</a>{% else %}){% endif %}. Une fois accordé, suivez la colonne « Et ensuite ». Les applications mobiles ont besoin d'une <strong>clé d'activation</strong>{% if appKeysUrl %} : <a href="{{ appKeysUrl }}">ouvrir l'écran des clés</a>{% endif %}.</p>
     <table class="table table-sm datagrid mon-site-modules">
-        <thead><tr><th>Fonctionnalité</th><th>État</th><th>Droit d'usage</th><th>Prérequis</th><th></th></tr></thead>
+        <thead><tr><th>Fonctionnalité</th><th>État</th><th>Droit d'usage</th><th>Et ensuite</th><th></th></tr></thead>
         <tbody>
         {% for e in groups.modules|merge(groups.apps) %}
             <tr data-key="{{ e.key }}">
-                <td>{{ e.label }}</td>
+                <td><strong>{{ e.label }}</strong>{% if e.description %}<div class="small text-muted">{{ e.description }}</div>{% endif %}</td>
                 <td>{{ m.status(e) }}</td>
-                <td class="small">{% if e.entitlement %}{{ e.entitlement.source }}{% if e.entitlement.status == 'grace' %} (paiement en attente){% endif %}{% if e.entitlement.endsAt %} → {{ e.entitlement.endsAt|slice(0, 10) }}{% else %}, sans fin{% endif %}{% elseif e.value %}<span class="text-muted">activé</span>{% else %}<span class="text-muted">non accordé</span>{% endif %}</td>
-                <td>{{ m.prereqs(e) }}</td>
-                <td>
-                    {% if e.request == 'pending' %}<span class="badge bg-warning text-dark">demande en attente</span>
+                <td class="small">{% if e.entitlement %}{{ {manual: 'accordé par la plateforme', trial: 'essai gratuit', free: 'gratuit', subscription: 'abonnement', purchase: 'achat'}[e.entitlement.source] ?? e.entitlement.source }}{% if e.entitlement.status == 'grace' %} (paiement en attente){% endif %}{% if e.entitlement.endsAt %}, jusqu'au {{ e.entitlement.endsAt|slice(0, 10) }}{% else %}, sans fin{% endif %}{% elseif e.value %}<span class="text-muted">activé</span>{% else %}<span class="text-muted">aucun : à demander</span>{% endif %}</td>
+                <td class="small">{% if e.value %}{{ e.howTo }}{% endif %}{{ m.prereqs(e) }}</td>
+                <td class="text-nowrap">
+                    {% if e.request == 'pending' %}<span class="badge bg-warning text-dark">demande en attente</span><div class="small text-muted">la plateforme vous répond par courriel</div>
                     {% elseif not e.value %}
-                        <form method="post" action="{{ path('admin_mon_site_demander', {key: e.key}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-primary">Demander</button></form>
+                        <form method="post" action="{{ path('admin_mon_site_demander', {key: e.key}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-primary" onclick="return confirm('Demander {{ e.label|e('js') }} à la plateforme ? Vous recevrez un accusé par courriel.')">Demander</button></form>
                         {% if shopUrl %}<a class="btn btn-sm btn-primary" href="{{ shopUrl }}" target="_blank" rel="noopener">Choisir un forfait</a>{% endif %}
-                    {% elseif e.screenUrl %}<a class="btn btn-sm btn-outline-secondary" href="{{ e.screenUrl }}">Ouvrir</a>{% endif %}
+                    {% else %}
+                        {% if e.key in ['module.pos', 'app.mobile_shop', 'app.management', 'app.living_memory'] and appKeysUrl %}<a class="btn btn-sm btn-primary" href="{{ appKeysUrl }}">Clés d'activation</a>{% endif %}
+                        {% if e.screenUrl and e.screenUrl != appKeysUrl %}<a class="btn btn-sm btn-outline-secondary" href="{{ e.screenUrl }}">Ouvrir</a>{% endif %}
+                    {% endif %}
                 </td>
             </tr>
         {% endfor %}
@@ -85,6 +109,7 @@
             <div class="col-md-4">
                 <div class="form-check"><input class="form-check-input" type="checkbox" id="ms-guest" name="commerce_guest_checkout" value="1" {{ com['commerce.guest_checkout'].value ? 'checked' : '' }}><label class="form-check-label" for="ms-guest">Paiement sans compte (invité) {{ m.status(com['commerce.guest_checkout']) }}</label></div>
                 <div class="form-check"><input class="form-check-input" type="checkbox" id="ms-subs" name="commerce_subscriptions" value="1" {{ com['commerce.subscriptions'].value ? 'checked' : '' }}><label class="form-check-label" for="ms-subs">Abonnements (paiement récurrent) {{ m.status(com['commerce.subscriptions']) }}</label></div>
+                <div class="form-text">Pour vendre par abonnement : cocher ici, puis sur le produit cocher le mode « Abonnement » et créer au moins une formule active (écran « Formules d'abonnement » : rythme, prix, essai), Stripe prêt et un transporteur à prix fixe ou gratuit. Les prérequis ci-dessous se mettent à jour.</div>
                 {{ m.prereqs(com['commerce.subscriptions']) }}
             </div>
             <div class="col-md-3">

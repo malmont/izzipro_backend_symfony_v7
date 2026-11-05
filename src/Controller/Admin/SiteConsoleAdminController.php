@@ -35,7 +35,10 @@ class SiteConsoleAdminController extends AbstractController
         'pos_stripe' => ['route' => 'admin_pos_stripe'], 'easypost' => ['crud' => EasyPostConfigurationCrudController::class], 'google_places' => ['crud' => GooglePlacesConfigCrudController::class],
         'email_configuration' => ['crud' => EmailConfigurationCrudController::class], 'ai_credits' => ['crud' => AiCreditSettingCrudController::class], 'mv_ai_quotas' => ['route' => 'admin_mv_ai_quotas'],
         'review_settings' => ['crud' => ReviewSettingCrudController::class],
+        'carriers' => ['crud' => CarrierCrudController::class],
     ];
+    /** clé d'un prérequis → écran où le satisfaire */
+    private const PREREQ_SCREENS = ['app.key' => 'app_keys', 'stripe.online' => 'stripe_config', 'subscription_plan.active' => 'subscription_plans', 'carrier.fixed_price' => 'carriers', 'tax.table' => 'taxes', 'entreprise.address' => 'entreprise', 'module.pos' => 'app_keys'];
 
     public function __construct(
         private readonly SiteFeatureStateService $state,
@@ -53,6 +56,11 @@ class SiteConsoleAdminController extends AbstractController
         $groups = ['localisation' => [], 'modules' => [], 'apps' => [], 'commerce' => [], 'services' => []];
         foreach ($this->state->all() as $entry) {
             $entry['screenUrl'] = $this->screenUrl($entry['href'] ?? null);
+            $entry['description'] = FeatureCatalog::DESCRIPTIONS[$entry['key']] ?? null;
+            $entry['howTo'] = FeatureCatalog::HOW_TO[$entry['key']] ?? null;
+            foreach ($entry['prerequisites'] as $i => $p) {
+                $entry['prerequisites'][$i]['url'] = $p['ok'] ? null : $this->screenUrl(self::PREREQ_SCREENS[$p['key']] ?? null);
+            }
             $groups[$entry['group']][] = $entry;
         }
 
@@ -62,6 +70,8 @@ class SiteConsoleAdminController extends AbstractController
             'shopUrl' => $this->platform->shopUrl(),
             'superAdmin' => $this->isGranted('ROLE_SUPER_ADMIN'),
             'timezones' => \DateTimeZone::listIdentifiers(),
+            'currencies' => \App\Services\BoutiqueSettingsService\SiteCurrencyService::SUPPORTED,
+            'appKeysUrl' => $this->screenUrl('app_keys'),
             'csrf_id' => self::CSRF_ID,
         ]);
     }
