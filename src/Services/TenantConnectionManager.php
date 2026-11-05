@@ -379,6 +379,28 @@ class TenantConnectionManager
      * Trouve un tenant par son code.
      * OPTIMISÉ AVEC CACHE REDIS.
      */
+    /** Domaine propre d'un site (base maître, console de pilotage 05/11/2026) : null pour le retirer ; l'annuaire des hôtes et la résolution hôte → site sont invalidés */
+    public function setCustomDomain(string $code, ?string $domain): void
+    {
+        $stmt = $this->pdoMaster->prepare('UPDATE tenants SET custom_domain = :domain WHERE code = :code');
+        $stmt->execute(['domain' => $domain, 'code' => $code]);
+        try {
+            $this->cache->invalidateTags(['tenants']);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Cache des sites non invalidé après changement de domaine : ' . $e->getMessage());
+        }
+    }
+
+    /** @return string|null code du site qui possède déjà ce domaine propre (avec ou sans www.), null si libre */
+    public function tenantCodeByCustomDomain(string $domain): ?string
+    {
+        $stmt = $this->pdoMaster->prepare('SELECT code FROM tenants WHERE LOWER(custom_domain) IN (:a, :b) LIMIT 1');
+        $stmt->execute(['a' => strtolower($domain), 'b' => 'www.' . strtolower($domain)]);
+        $code = $stmt->fetchColumn();
+
+        return is_string($code) ? $code : null;
+    }
+
     public function findTenantByCode(string $code): ?array
     {
         // 1. Définition de la clé cache

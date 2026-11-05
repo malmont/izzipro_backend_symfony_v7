@@ -7,6 +7,7 @@ use App\Services\FeatureAccess\FeatureCatalog;
 use App\Services\StripeService\StripeAccountResolver;
 use App\Services\TenantConnectionManager;
 use App\Services\TenantPublicHostResolver;
+use App\Services\Platform\CustomDomainService;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -29,6 +30,7 @@ class SiteReadinessService
         private readonly TenantPublicHostResolver $hosts,
         private readonly TenantAppKeyRepository $appKeys,
         private readonly StripeAccountResolver $stripe,
+        private readonly CustomDomainService $domains,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -102,6 +104,12 @@ class SiteReadinessService
         $add('site.localisation', 'site', 'Langue, fuseau et devise', 'Vérifiez la langue du site, le fuseau horaire et la devise (déduits de l\'adresse, modifiables).', $address !== null && trim((string) ($address['country'] ?? '')) !== '' && trim((string) ($e['currency'] ?? '')) !== '', 'editor', ['type' => 'registry', 'feature' => 'site.locale', 'url' => $editorUrl]);
         $add('site.email_sender', 'site', 'Adresse d\'envoi des courriels', 'L\'expéditeur de vos courriels (confirmation, reçus, codes) ; sans serveur propre, celui de la plateforme est utilisé.', $fromEmail !== '', 'backend', ['type' => 'screen', 'screen' => 'email_configuration']);
         $add('site.logo', 'site', 'Logo', 'Le logo apparaît sur le site, les courriels et les reçus.', trim((string) ($e['logo'] ?? '')) !== '', 'backend', ['type' => 'screen', 'screen' => 'entreprise']);
+        $domain = $this->domains->status($code, false);
+        if ($domain['state'] === 'none') {
+            $steps[] = ['key' => 'site.domain', 'group' => 'site', 'title' => 'Domaine propre (facultatif)', 'description' => sprintf('Votre site répond déjà sur %s ; ajoutez votre propre domaine (achat chez un registraire, enregistrements DNS, certificat automatique).', $domain['platformHost']), 'status' => 'optional', 'where' => 'backend', 'action' => ['type' => 'domain']];
+        } else {
+            $add('site.domain', 'site', 'Domaine propre : ' . $domain['domain'], $domain['state'] === 'dns_pending' ? 'Le DNS ne pointe pas encore vers le serveur : créez les enregistrements chez votre registraire, puis vérifiez.' : ($domain['state'] === 'dns_ok' ? 'DNS en place ; le certificat HTTPS s\'émet automatiquement, vérifiez dans quelques minutes.' : 'Votre domaine sert le site en HTTPS.'), $domain['state'] === 'live', 'backend', ['type' => 'domain']);
+        }
 
         // Modules et applications accordés
         if ($effective['module.landing']['enabled'] ?? false) {

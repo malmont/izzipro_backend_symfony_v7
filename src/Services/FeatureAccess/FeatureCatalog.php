@@ -26,6 +26,7 @@ final class FeatureCatalog
         'site.country' => ['label' => 'Pays du site', 'group' => 'localisation', 'scope' => self::SCOPE_SERVICE, 'type' => 'info', 'href' => 'entreprise'],
         'site.currency' => ['label' => 'Devise', 'group' => 'localisation', 'scope' => self::SCOPE_SITE, 'type' => 'currency', 'storage' => 'entreprise.currency', 'href' => 'entreprise'],
         'site.prices_include_tax' => ['label' => 'Prix taxes comprises', 'group' => 'localisation', 'scope' => self::SCOPE_SITE, 'type' => 'boolean', 'storage' => 'entreprise.pricesIncludeTax', 'href' => 'entreprise'],
+        'site.domain' => ['label' => 'Domaine propre', 'group' => 'localisation', 'scope' => self::SCOPE_SERVICE, 'type' => 'info', 'href' => 'domain'],
         // Modules (plateforme)
         'module.landing' => ['label' => 'Landing Page', 'group' => 'modules', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isLandingPageActive', 'href' => 'entreprise'],
         'module.boutique' => ['label' => 'Boutique', 'group' => 'modules', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isBoutiqueActive', 'href' => 'entreprise'],

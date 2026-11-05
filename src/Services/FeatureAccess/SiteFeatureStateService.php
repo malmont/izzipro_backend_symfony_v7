@@ -14,6 +14,7 @@ use App\Services\BoutiqueSettingsService\BoutiqueConfigurationValidator;
 use App\Services\BoutiqueSettingsService\BoutiqueSettingsService;
 use App\Services\CaisseService\SiteLocaleResolver;
 use App\Services\CaisseService\StoreClock;
+use App\Services\Platform\CustomDomainService;
 use App\Services\Platform\EntitlementService;
 use App\Services\Platform\FeatureRequestRepository;
 use App\Services\StripeService\StripeAccountResolver;
@@ -41,6 +42,7 @@ class SiteFeatureStateService
         private readonly AiQuotaService $mvQuotas,
         private readonly EntitlementService $entitlements,
         private readonly FeatureRequestRepository $requests,
+        private readonly CustomDomainService $domains,
     ) {
     }
 
@@ -111,6 +113,16 @@ class SiteFeatureStateService
                 $value = $this->locale->siteCountry();
                 $status = $value !== null ? 'ready' : 'incomplete';
                 $prerequisites[] = $this->prereq('entreprise.address', 'Adresse du site renseignée', $value !== null);
+                break;
+            case 'site.domain':
+                $code = (string) $this->tenants->getCurrentTenantCode();
+                $d = $code !== '' ? $this->domains->status($code, false) : ['domain' => null, 'state' => 'none', 'platformHost' => null];
+                $value = $d['domain'];
+                $details = ['state' => $d['state'], 'platformHost' => $d['platformHost']];
+                $status = $d['state'] === 'none' ? 'off' : ($d['state'] === 'live' ? 'ready' : 'incomplete');
+                if ($d['state'] !== 'none') {
+                    $prerequisites[] = $this->prereq('domain.dns', 'DNS pointé vers le serveur de la plateforme', $d['checks']['dns']['ok'] ?? false);
+                }
                 break;
             case 'site.currency':
                 $value = $e?->getCurrency() ?? 'CAD';

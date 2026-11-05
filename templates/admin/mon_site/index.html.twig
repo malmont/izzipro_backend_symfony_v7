@@ -139,6 +139,25 @@
     })();
     </script>
 
+    <h2 class="h5 mt-4" id="domaine">Domaine propre</h2>
+    <div class="card mb-3 mon-site-domaine"><div class="card-body">
+        <p class="small text-muted mb-2">Votre site répond déjà sur <code>{{ domain.platformHost }}</code>. Pour utiliser votre propre domaine : achetez-le chez un registraire, enregistrez-le ici (il entre aussitôt dans l'annuaire de la plateforme), créez les enregistrements DNS indiqués, puis vérifiez ; le certificat HTTPS est émis automatiquement.</p>
+        <form method="post" action="{{ path('admin_mon_site_domaine') }}" class="row g-2 align-items-end">
+            <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+            <div class="col-md-4"><label class="form-label" for="ms-domain">Domaine</label><input class="form-control" id="ms-domain" name="domain" value="{{ domain.domain ?? '' }}" placeholder="maboutique.com"></div>
+            <div class="col-md-8 d-flex gap-2">
+                <button type="submit" name="action" value="save" class="btn btn-primary">Enregistrer</button>
+                {% if domain.domain %}<button type="submit" name="action" value="check" class="btn btn-outline-primary">Vérifier</button>
+                <button type="submit" name="action" value="remove" class="btn btn-outline-danger" onclick="return confirm('Retirer le domaine propre ?')">Retirer</button>{% endif %}
+                <span class="align-self-center">{% if domain.state == 'live' %}<span class="badge bg-success">en ligne (HTTPS)</span>{% elseif domain.state == 'dns_ok' %}<span class="badge bg-info text-dark">DNS en place, certificat en cours</span>{% elseif domain.state == 'dns_pending' %}<span class="badge bg-warning text-dark">DNS à configurer</span>{% else %}<span class="badge bg-light text-muted border">aucun domaine</span>{% endif %}</span>
+            </div>
+        </form>
+        <details class="mt-2"><summary class="small">Procédure et enregistrements DNS attendus</summary>
+            <ol class="small mb-1 mt-2">{% for i in domain.instructions %}<li><strong>{{ i.step }}</strong> : {{ i.detail }}</li>{% endfor %}</ol>
+            {% if domain.domain %}<p class="small mb-0">Dernière vérification : DNS {% if domain.checks.dns.ok %}✔{% else %}✘ (trouvé : {{ domain.checks.dns.found|join(', ') ?: 'rien' }}{% if domain.checks.dns.cname %}, CNAME {{ domain.checks.dns.cname }}{% endif %}){% endif %} · attendu : {{ domain.expected.ips|join(', ') }}{% if domain.checks.https.checked %} · HTTPS {% if domain.checks.https.ok %}✔{% else %}✘{% endif %}{% endif %}</p>{% endif %}
+        </details>
+    </div></div>
+
     <h2 class="h5 mt-4">Modules et applications</h2>
     <p class="text-muted small">Un module ou une application s'obtient de la plateforme : « Essayer » ouvre un essai gratuit immédiat quand il est possible (une fois par fonctionnalité), « Demander » envoie une demande (accusé par courriel, la plateforme répond), « Mettre à jour mon forfait » mène à la boutique de forfaits. Une fois accordé, suivez la colonne « Et ensuite ». Les applications mobiles ont besoin d'une <strong>clé d'activation</strong>{% if appKeysUrl %} : <a href="{{ appKeysUrl }}">ouvrir l'écran des clés</a>{% endif %}.</p>
     <table class="table table-sm datagrid mon-site-modules">

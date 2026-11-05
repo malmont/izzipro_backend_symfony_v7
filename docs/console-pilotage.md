@@ -171,6 +171,20 @@ ouvre aussitôt un essai gratuit (`trial`, durée de la politique, courriel) ; s
 « Essayer N jours » ou « Demander », et toujours « Mettre à jour mon forfait » (`/admin/mon-site/forfait` : la boutique de forfaits
 si `shop_url` est réglée, sinon une page d'attente). Le cheminement porte l'action `trial` (`days`, `shopUrl`) sur les étapes « Obtenir ».
 
+## Domaine propre d'un site (05/11/2026)
+
+`Services/Platform/CustomDomainService` : l'administrateur enregistre son domaine (acheté chez un registraire) depuis Mon site
+(section « Domaine propre »), l'API (`GET`/`PUT`/`DELETE /api/site/domain`, `POST /api/site/domain/check`, `ROLE_ADMIN`) ou l'assistant
+(outils `get_domain_status`, `set_custom_domain` avec confirmation). Validation : nom de domaine (minuscules, `www.` retiré), jamais
+un hôte de la plateforme (`FRONTEND_BASE_DOMAIN`, `BACKEND_BASE_DOMAIN`), unique entre les sites (409 `DOMAIN_TAKEN`). Écriture dans
+`tenants.custom_domain` par `TenantConnectionManager::setCustomDomain` qui invalide l'étiquette `tenants` : l'annuaire des hôtes
+`GET /api/tenant/hosts` et la résolution hôte → site le prennent en compte aussitôt (le proxy du frontend émet le certificat à la
+demande). Vérifications : DNS (`dns_get_record` A, ou CNAME vers un hôte de la plateforme, comparé aux adresses de
+`FRONTEND_BASE_DOMAIN`) puis HTTPS (HEAD, 6 s) ; états `none`, `dns_pending`, `dns_ok`, `live`. Procédure en cinq étapes rendue
+avec les enregistrements attendus (A `@` → adresse du serveur, CNAME `www` → le domaine). Registre : `site.domain` ; cheminement :
+étape `site.domain` (facultative sans domaine, à faire tant que le DNS ou le HTTPS manquent). Test :
+`tests/Functional/Platform/CustomDomainTest.php`.
+
 ## Demandes des sites et courriels (05/11/2026)
 
 Quand un administrateur demande une fonctionnalité (bouton « Demander » de Mon site, `POST /api/site/features/{clé}/request`) :

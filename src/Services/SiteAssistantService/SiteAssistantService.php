@@ -8,6 +8,7 @@ use App\Services\LandingAiService\LandingAiClientInterface;
 use App\Services\LandingAiService\LandingAiException;
 use App\Services\LandingAiService\LandingAiQuotaService;
 use App\Services\LandingAiService\LandingAiUsageStats;
+use App\Services\Platform\CustomDomainService;
 use App\Services\Platform\PlatformModeService;
 use App\Services\Platform\SiteReadinessService;
 use Psr\Log\LoggerInterface;
@@ -41,6 +42,7 @@ class SiteAssistantService
         private readonly SiteFeatureStateService $state,
         private readonly SiteReadinessService $readiness,
         private readonly PlatformModeService $platform,
+        private readonly CustomDomainService $domains,
         private readonly CacheInterface $cache,
         private readonly LoggerInterface $logger,
     ) {
@@ -153,6 +155,16 @@ class SiteAssistantService
                 return [$this->compactRegistry($registry), null, null];
             case 'get_readiness':
                 return [$readiness, null, null];
+            case 'get_domain_status':
+                return [$this->domains->status($tenantCode), null, null];
+            case 'set_custom_domain':
+                $domain = trim((string) ($input['domain'] ?? ''));
+                if ($domain === '') {
+                    return [['error' => 'domaine attendu'], null, null];
+                }
+                $action = $this->remember($tenantCode, 'set_custom_domain', ['domain' => $domain], (string) ($input['summary'] ?? ('Enregistrer le domaine ' . $domain)));
+
+                return [['proposed' => true, 'actionId' => $action['id'], 'note' => 'Proposé à l\'administrateur ; après confirmation, lui donner la procédure DNS (get_domain_status).'], $action, null];
             case 'open_screen':
                 $screen = (string) ($input['screen'] ?? '');
                 if (!isset(SiteAssistantTools::SCREENS[$screen])) {
@@ -229,7 +241,8 @@ Ce que tu peux faire :
 - expliquer un réglage, un prérequis ou une étape du cheminement « Préparer mon site » ;
 - proposer de modifier les réglages du site (outil set_site_settings : seulement les clés de portée « site » du registre, avec la valeur exacte) ; l'administrateur confirme avant toute écriture ;
 - proposer de demander une fonctionnalité non accordée (outil request_feature) ; {$this->shopHint($shop)}
-- indiquer l'écran du back-office où agir (outil open_screen) quand l'étape se fait là-bas (produits, taxes, Stripe, transporteurs, clés d'activation, postes de caisse, formules d'abonnement, expéditeur des courriels).
+- indiquer l'écran du back-office où agir (outil open_screen) quand l'étape se fait là-bas (produits, taxes, Stripe, transporteurs, clés d'activation, postes de caisse, formules d'abonnement, expéditeur des courriels) ;
+- accompagner l'ajout d'un domaine propre : get_domain_status donne l'état, les enregistrements DNS attendus et la procédure (achat chez un registraire, enregistrement ici, DNS, propagation, certificat automatique) ; set_custom_domain propose l'enregistrement, l'administrateur confirme, puis il crée les enregistrements DNS et vérifie.
 Ce que tu ne fais jamais : paiements, forfaits, droits de la plateforme, autres sites, données personnelles des clients, et aucune clé réservée à la plateforme (modules, applications). Si on te le demande, explique où le faire.
 Avant de proposer, lis le contexte ci-dessous (registre et cheminement) ; n'invente aucune clé ni aucun écran. Propose une étape à la fois, dans l'ordre du cheminement.
 Clés du registre modifiables : site.locale (fr|en|null), site.timezone (IANA|null), site.currency (CAD|EUR|USD), site.prices_include_tax (bool), commerce.sales_modes (liste parmi sale, rental, subscription), commerce.guest_checkout (bool), commerce.subscriptions (bool), commerce.tax_provider (table|stripe).

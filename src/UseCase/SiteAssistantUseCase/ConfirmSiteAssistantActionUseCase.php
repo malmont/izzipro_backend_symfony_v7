@@ -2,6 +2,7 @@
 
 namespace App\UseCase\SiteAssistantUseCase;
 
+use App\Services\Platform\CustomDomainService;
 use App\Services\SiteAssistantService\SiteAssistantService;
 use App\Services\TenantConnectionManager;
 use App\UseCase\SiteFeaturesUseCase\RequestSiteFeatureUseCase;
@@ -13,7 +14,7 @@ use App\UseCase\SiteFeaturesUseCase\UpdateSiteFeaturesUseCase;
  */
 class ConfirmSiteAssistantActionUseCase
 {
-    public function __construct(private readonly SiteAssistantService $assistant, private readonly UpdateSiteFeaturesUseCase $update, private readonly RequestSiteFeatureUseCase $request, private readonly TenantConnectionManager $tenants)
+    public function __construct(private readonly SiteAssistantService $assistant, private readonly UpdateSiteFeaturesUseCase $update, private readonly RequestSiteFeatureUseCase $request, private readonly CustomDomainService $domains, private readonly TenantConnectionManager $tenants)
     {
     }
 
@@ -31,6 +32,7 @@ class ConfirmSiteAssistantActionUseCase
         $result = match ($action['tool']) {
             'set_site_settings' => $this->settings($action['input']['values'] ?? [], $host),
             'request_feature' => $this->request->execute((string) ($action['input']['feature'] ?? ''), $action['input']['message'] ?? null, $user),
+            'set_custom_domain' => ['domain' => $this->domains->set($tenant, (string) ($action['input']['domain'] ?? ''), $user)],
             default => throw new \OutOfBoundsException('Outil inconnu'),
         };
         $this->assistant->forgetAction($tenant, $id);

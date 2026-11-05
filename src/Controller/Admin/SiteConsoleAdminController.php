@@ -11,6 +11,8 @@ use App\Services\FeatureAccess\SiteFeatureStateService;
 use App\Services\FeatureAccess\SiteFeaturesValidationException;
 use App\Services\Platform\PlatformModeService;
 use App\Services\Platform\SiteReadinessService;
+use App\Services\Platform\CustomDomainService;
+use App\Services\TenantConnectionManager;
 use App\Services\LandingAiService\LandingAiException;
 use App\UseCase\SiteAssistantUseCase\ChatWithSiteAssistantUseCase;
 use App\UseCase\SiteAssistantUseCase\ConfirmSiteAssistantActionUseCase;
@@ -56,6 +58,8 @@ class SiteConsoleAdminController extends AbstractController
         private readonly SiteReadinessService $readiness,
         private readonly ChatWithSiteAssistantUseCase $assistantChat,
         private readonly ConfirmSiteAssistantActionUseCase $assistantConfirm,
+        private readonly CustomDomainService $domains,
+        private readonly TenantConnectionManager $tenants,
     ) {
     }
 
@@ -85,7 +89,10 @@ class SiteConsoleAdminController extends AbstractController
             $readiness['next']['url'] = $this->stepUrl($readiness['next']);
         }
 
+        $domain = $this->domains->status((string) $this->tenants->getCurrentTenantCode(), false);
+
         return $this->render('admin/mon_site/index.html.twig', [
+            'domain' => $domain,
             'readiness' => $readiness,
             'groups' => $groups,
             'platformMode' => $this->platform->mode(),
@@ -141,6 +148,44 @@ class SiteConsoleAdminController extends AbstractController
         return $this->redirect($this->pageUrl());
     }
 
+    /** Domaine propre : enregistrer, vérifier ou retirer (session EasyAdmin, CSRF) ; même service que /api/site/domain */
+    #[Route('/admin/mon-site/domaine', name: 'admin_mon_site_domaine', methods: ['POST'])]
+    public function domain(Request $request): Response
+    {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+        if (!$this->isCsrfTokenValid(self::CSRF_ID, (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'Jeton de sécurité invalide : rien n\'a été modifié.');
+
+            return $this->redirect($this->pageUrl() . '#domaine');
+        }
+        $code = (string) $this->tenants->getCurrentTenantCode();
+        $by = $this->getUser()?->getUserIdentifier();
+        try {
+            switch ((string) $request->request->get('action', 'check')) {
+                case 'save':
+                    $status = $this->domains->set($code, (string) $request->request->get('domain', ''), $by);
+                    $this->addFlash('success', sprintf('Domaine %s enregistré dans l\'annuaire de la plateforme. Créez maintenant les enregistrements DNS chez votre registraire, puis vérifiez.', $status['domain']));
+                    break;
+                case 'remove':
+                    $this->domains->remove($code, $by);
+                    $this->addFlash('success', 'Domaine propre retiré : le site répond sur son adresse de la plateforme.');
+                    break;
+                default:
+                    $status = $this->domains->status($code);
+                    $this->addFlash($status['state'] === 'live' ? 'success' : 'warning', match ($status['state']) {
+                        'live' => 'Votre domaine est en ligne en HTTPS.',
+                        'dns_ok' => 'DNS en place ; HTTPS pas encore joignable : le certificat s\'émet automatiquement, réessayez dans quelques minutes.',
+                        'dns_pending' => sprintf('Le DNS ne pointe pas encore vers le serveur (trouvé : %s ; attendu : %s). Vérifiez vos enregistrements et la propagation.', implode(', ', $status['checks']['dns']['found']) ?: 'rien', implode(', ', $status['expected']['ips'])),
+                        default => 'Aucun domaine enregistré.',
+                    });
+            }
+        } catch (\InvalidArgumentException|\DomainException $e) {
+            $this->addFlash('danger', $e->getMessage());
+        }
+
+        return $this->redirect($this->pageUrl() . '#domaine');
+    }
+
     /** Assistant IA dans la page (session EasyAdmin, jeton CSRF en en-tête X-CSRF-Token) : même cas d'usage que POST /api/site/assistant */
     #[Route('/admin/mon-site/assistant', name: 'admin_mon_site_assistant', methods: ['POST'])]
     public function assistant(Request $request): JsonResponse
@@ -177,7 +222,7 @@ class SiteConsoleAdminController extends AbstractController
             return $this->json(['error' => 'ACTION_NOT_FOUND', 'message' => $e->getMessage()], 404);
         } catch (SiteFeaturesValidationException|EntrepriseValidationException|BoutiqueSettingsException $e) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => array_map(fn (array $err) => ['path' => FeatureCatalog::keyForStorage($err['path']), 'message' => $err['message']], $e->errors ?? [])], 422);
-        } catch (EntrepriseForbiddenException|\InvalidArgumentException|SiteFeatureRequestException $e) {
+        } catch (EntrepriseForbiddenException|\InvalidArgumentException|SiteFeatureRequestException|\DomainException $e) {
             return $this->json(['error' => 'REFUSED', 'message' => $e->getMessage()], 409);
         }
 
@@ -224,6 +269,7 @@ class SiteConsoleAdminController extends AbstractController
         $action = $step['action'];
 
         return match ($action['type']) {
+            'domain' => $this->pageUrl() . '#domaine',
             'screen' => $this->screenUrl($action['screen'] ?? null),
             'editor' => $action['url'] ?? null,
             'shop' => $action['url'] ?? null,

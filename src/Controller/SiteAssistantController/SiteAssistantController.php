@@ -70,6 +70,8 @@ class SiteAssistantController extends AbstractController
             return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => [['path' => '', 'message' => $e->getMessage()]]], 422);
         } catch (SiteFeatureRequestException $e) {
             return $this->json(['error' => $e->code409, 'code' => $e->code409, 'message' => $e->getMessage()], 409);
+        } catch (\DomainException $e) {
+            return $this->json(['error' => 'DOMAIN_TAKEN', 'code' => 'DOMAIN_TAKEN', 'message' => $e->getMessage()], 409);
         }
 
         return $this->json($result + ['readiness' => $this->readiness->forCurrentSite()]);
