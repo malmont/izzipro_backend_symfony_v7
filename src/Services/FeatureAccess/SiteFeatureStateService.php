@@ -116,7 +116,7 @@ class SiteFeatureStateService
                 break;
             case 'site.domain':
                 $code = (string) $this->tenants->getCurrentTenantCode();
-                $d = $code !== '' ? $this->domains->status($code, false) : ['domain' => null, 'state' => 'none', 'platformHost' => null];
+                $d = $code !== '' ? $this->domains->status($code) : ['domain' => null, 'state' => 'none', 'platformHost' => null];
                 $value = $d['domain'];
                 $details = ['state' => $d['state'], 'platformHost' => $d['platformHost']];
                 $status = $d['state'] === 'none' ? 'off' : ($d['state'] === 'live' ? 'ready' : 'incomplete');

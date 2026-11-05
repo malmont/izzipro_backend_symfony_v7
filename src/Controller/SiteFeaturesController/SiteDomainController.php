@@ -33,7 +33,7 @@ class SiteDomainController extends AbstractController
     #[Route('/check', name: 'api_site_domain_check', methods: ['POST'])]
     public function check(): JsonResponse
     {
-        return $this->json($this->domains->status($this->code()));
+        return $this->json($this->domains->status($this->code(), true, true)); // vérification fraîche (HTTPS sinon gardé dix minutes)
     }
 
     #[Route('', name: 'api_site_domain_put', methods: ['PUT'])]

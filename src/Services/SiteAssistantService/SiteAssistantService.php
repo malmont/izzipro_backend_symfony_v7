@@ -50,7 +50,7 @@ class SiteAssistantService
 
     /**
      * @param list<array{role: string, content: string}> $messages conversation (dernier message : l'utilisateur)
-     * @return array{reply: string, actions: list<array<string, mixed>>, links: list<array{label: string, screen: string}>, usage: array<string, mixed>}
+     * @return array{reply: string, actions: list<array<string, mixed>>, links: list<array{label: string, screen: string}>, handoffs: list<array{task: string, section: string, feature: ?string}>, usage: array<string, mixed>}
      * @throws LandingAiException 402 crédits, 429 trop d'échecs, 503 IA indisponible
      */
     public function chat(array $messages, ?string $user, string $tenantCode, string $language = 'fr'): array
@@ -90,7 +90,7 @@ class SiteAssistantService
         $this->cache->delete(self::actionKey($tenantCode, $id));
     }
 
-    /** @return array{reply: string, actions: list<array<string, mixed>>, links: list<array{label: string, screen: string}>} */
+    /** @return array{reply: string, actions: list<array<string, mixed>>, links: list<array{label: string, screen: string}>, handoffs: list<array{task: string, section: string, feature: ?string}>} */
     private function converse(array $messages, LandingAiUsageStats $stats, string $tenantCode, string $language): array
     {
         $registry = $this->state->all();
@@ -101,6 +101,7 @@ class SiteAssistantService
         }
         $actions = [];
         $links = [];
+        $handoffs = [];
         $reply = '';
         for ($round = 0; $round < self::MAX_ROUNDS; $round++) {
             $stats->attempts++;
@@ -133,6 +134,9 @@ class SiteAssistantService
                 if ($link !== null) {
                     $links[] = $link;
                 }
+                if (($use->name ?? null) === 'delegate_to_editor' && ($result['handoff'] ?? null) !== null) {
+                    $handoffs[] = $result['handoff'];
+                }
                 $results[] = ['type' => 'tool_result', 'tool_use_id' => (string) ($use->id ?? ''), 'content' => json_encode($result, JSON_UNESCAPED_UNICODE)];
             }
             $payloadMessages[] = ['role' => 'user', 'content' => $results];
@@ -141,7 +145,7 @@ class SiteAssistantService
             $reply = $actions !== [] ? 'Je vous propose les actions ci-dessous : confirmez-les pour que je les applique.' : 'Je n\'ai pas compris la demande ; pouvez-vous la reformuler ?';
         }
 
-        return ['reply' => $reply, 'actions' => $actions, 'links' => $links];
+        return ['reply' => $reply, 'actions' => $actions, 'links' => $links, 'handoffs' => $handoffs];
     }
 
     /**
@@ -157,6 +161,15 @@ class SiteAssistantService
                 return [$readiness, null, null];
             case 'get_domain_status':
                 return [$this->domains->status($tenantCode), null, null];
+            case 'delegate_to_editor':
+                $task = trim((string) ($input['task'] ?? ''));
+                $section = (string) ($input['section'] ?? 'pages');
+                if ($task === '' || !in_array($section, ['pages', 'commerce', 'site', 'landing', 'boutique'], true)) {
+                    return [['error' => 'task et section (pages | commerce | site | landing | boutique) attendus'], null, null];
+                }
+                $handoff = ['task' => mb_substr($task, 0, 500), 'section' => $section, 'feature' => isset($input['feature']) && is_string($input['feature']) ? $input['feature'] : null];
+
+                return [['delegated' => true, 'handoff' => $handoff, 'note' => 'Transmis à l\'assistant de l\'éditeur ; dis à l\'administrateur que l\'éditeur prend le relais.'], null, null];
             case 'set_custom_domain':
                 $domain = trim((string) ($input['domain'] ?? ''));
                 if ($domain === '') {
@@ -242,6 +255,7 @@ Ce que tu peux faire :
 - proposer de modifier les réglages du site (outil set_site_settings : seulement les clés de portée « site » du registre, avec la valeur exacte) ; l'administrateur confirme avant toute écriture ;
 - proposer de demander une fonctionnalité non accordée (outil request_feature) ; {$this->shopHint($shop)}
 - indiquer l'écran du back-office où agir (outil open_screen) quand l'étape se fait là-bas (produits, taxes, Stripe, transporteurs, clés d'activation, postes de caisse, formules d'abonnement, expéditeur des courriels) ;
+- confier à l'assistant de l'éditeur du site (front) ce qui se fait là-bas (outil delegate_to_editor) : composer ou modifier les pages, choisir un modèle de site, régler depuis le panneau de l'éditeur ; tu ne composes jamais une page toi-même ;
 - accompagner l'ajout d'un domaine propre : get_domain_status donne l'état, les enregistrements DNS attendus et la procédure (achat chez un registraire, enregistrement ici, DNS, propagation, certificat automatique) ; set_custom_domain propose l'enregistrement, l'administrateur confirme, puis il crée les enregistrements DNS et vérifie.
 Ce que tu ne fais jamais : paiements, forfaits, droits de la plateforme, autres sites, données personnelles des clients, et aucune clé réservée à la plateforme (modules, applications). Si on te le demande, explique où le faire.
 Avant de proposer, lis le contexte ci-dessous (registre et cheminement) ; n'invente aucune clé ni aucun écran. Propose une étape à la fois, dans l'ordre du cheminement.

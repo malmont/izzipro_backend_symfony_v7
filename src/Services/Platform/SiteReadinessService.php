@@ -104,7 +104,7 @@ class SiteReadinessService
         $add('site.localisation', 'site', 'Langue, fuseau et devise', 'Vérifiez la langue du site, le fuseau horaire et la devise (déduits de l\'adresse, modifiables).', $address !== null && trim((string) ($address['country'] ?? '')) !== '' && trim((string) ($e['currency'] ?? '')) !== '', 'editor', ['type' => 'registry', 'feature' => 'site.locale', 'url' => $editorUrl]);
         $add('site.email_sender', 'site', 'Adresse d\'envoi des courriels', 'L\'expéditeur de vos courriels (confirmation, reçus, codes) ; sans serveur propre, celui de la plateforme est utilisé.', $fromEmail !== '', 'backend', ['type' => 'screen', 'screen' => 'email_configuration']);
         $add('site.logo', 'site', 'Logo', 'Le logo apparaît sur le site, les courriels et les reçus.', trim((string) ($e['logo'] ?? '')) !== '', 'backend', ['type' => 'screen', 'screen' => 'entreprise']);
-        $domain = $this->domains->status($code, false);
+        $domain = $this->domains->status($code); // HTTPS gardé dix minutes : pas d'appel à chaque affichage
         if ($domain['state'] === 'none') {
             $steps[] = ['key' => 'site.domain', 'group' => 'site', 'title' => 'Domaine propre (facultatif)', 'description' => sprintf('Votre site répond déjà sur %s ; ajoutez votre propre domaine (achat chez un registraire, enregistrements DNS, certificat automatique).', $domain['platformHost']), 'status' => 'optional', 'where' => 'backend', 'action' => ['type' => 'domain']];
         } else {

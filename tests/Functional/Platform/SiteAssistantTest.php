@@ -64,6 +64,7 @@ class SiteAssistantTest extends WebTestCase
             (object) ['type' => 'tool_use', 'id' => 'tu_2', 'name' => 'set_site_settings', 'input' => (object) ['values' => (object) ['site.locale' => 'en', 'commerce.sales_modes' => ['sale', 'rental']], 'summary' => 'Passer le site en anglais et retirer les abonnements']],
             (object) ['type' => 'tool_use', 'id' => 'tu_3', 'name' => 'open_screen', 'input' => (object) ['screen' => 'taxes']],
             (object) ['type' => 'tool_use', 'id' => 'tu_4', 'name' => 'set_site_settings', 'input' => (object) ['values' => (object) ['module.boutique' => true], 'summary' => 'interdit']],
+            (object) ['type' => 'tool_use', 'id' => 'tu_5', 'name' => 'delegate_to_editor', 'input' => (object) ['task' => 'Composer la fiche produit de location', 'section' => 'pages', 'feature' => 'commerce.sales_modes']],
         ], 'usage' => (object) ['input_tokens' => 1200, 'output_tokens' => 80]];
         FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'text', 'text' => 'Je vous propose de passer le site en anglais et de retirer le mode abonnement ; confirmez pour appliquer. Les taxes se règlent dans l\'écran Taxes.']], 'usage' => (object) ['input_tokens' => 1500, 'output_tokens' => 60]];
         $r = $this->api('POST', '/api/site/assistant', ['messages' => [['role' => 'user', 'content' => 'Je veux vendre en anglais, sans abonnement']]], 'admin');
@@ -73,12 +74,13 @@ class SiteAssistantTest extends WebTestCase
         $this->assertSame(1, count($body['actions']), 'une seule proposition retenue : la clé plateforme est refusée');
         $this->assertSame(['set_site_settings', 'Passer le site en anglais et retirer les abonnements'], [$body['actions'][0]['tool'], $body['actions'][0]['summary']]);
         $this->assertSame([['label' => 'Taxes', 'screen' => 'taxes']], $body['links']);
+        $this->assertSame([['task' => 'Composer la fiche produit de location', 'section' => 'pages', 'feature' => 'commerce.sales_modes']], $body['handoffs'], 'relais vers l\'assistant de l\'éditeur, rien côté serveur');
         $this->assertArrayHasKey('readiness', $body);
         $this->assertSame(1, $body['credits']['used'], 'un crédit consommé');
         $this->assertSame($this->before['locale'], $this->db->fetchOne('SELECT locale FROM entreprise ORDER BY id LIMIT 1'), 'rien n\'est écrit avant confirmation');
         $payload = FakeLandingAiClient::$requests[0];
         $this->assertSame('claude-sonnet-5-5', $payload['model']);
-        $this->assertSame(['get_settings', 'get_readiness', 'open_screen', 'set_site_settings', 'get_domain_status', 'set_custom_domain', 'request_feature'], array_column($payload['tools'], 'name'));
+        $this->assertSame(['get_settings', 'get_readiness', 'open_screen', 'set_site_settings', 'get_domain_status', 'set_custom_domain', 'delegate_to_editor', 'request_feature'], array_column($payload['tools'], 'name'));
         $this->assertStringContainsString('CHEMINEMENT', $payload['system']);
         $second = FakeLandingAiClient::$requests[1];
         $this->assertSame('tool_result', $second['messages'][2]['content'][0]['type'], 'résultats d\'outils renvoyés à l\'IA');

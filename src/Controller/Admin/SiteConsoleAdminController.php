@@ -89,7 +89,7 @@ class SiteConsoleAdminController extends AbstractController
             $readiness['next']['url'] = $this->stepUrl($readiness['next']);
         }
 
-        $domain = $this->domains->status((string) $this->tenants->getCurrentTenantCode(), false);
+        $domain = $this->domains->status((string) $this->tenants->getCurrentTenantCode());
 
         return $this->render('admin/mon_site/index.html.twig', [
             'domain' => $domain,
@@ -171,7 +171,7 @@ class SiteConsoleAdminController extends AbstractController
                     $this->addFlash('success', 'Domaine propre retiré : le site répond sur son adresse de la plateforme.');
                     break;
                 default:
-                    $status = $this->domains->status($code);
+                    $status = $this->domains->status($code, true, true); // vérification fraîche
                     $this->addFlash($status['state'] === 'live' ? 'success' : 'warning', match ($status['state']) {
                         'live' => 'Votre domaine est en ligne en HTTPS.',
                         'dns_ok' => 'DNS en place ; HTTPS pas encore joignable : le certificat s\'émet automatiquement, réessayez dans quelques minutes.',

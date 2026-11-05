@@ -158,7 +158,9 @@ Dans EasyAdmin, la page Mon site embarque le panneau « Assistant de configurati
 `…/assistant/actions/{id}/confirm`, session + en-tête `X-CSRF-Token`, mêmes cas d'usage) avec les liens vers les écrans et les boutons
 « Confirmer ».
 Routes (`ROLE_ADMIN`) : `POST /api/site/assistant { messages: [{ role: user | assistant, content }], locale? }` → `{ reply, actions:
-[{ id, tool, input, summary }], links: [{ label, screen }], readiness, credits, usage }` ; 422 `VALIDATION_FAILED`, 402
+[{ id, tool, input, summary }], links: [{ label, screen }], handoffs: [{ task, section, feature }], readiness, credits, usage }` (`handoffs` :
+consignes confiées à l'assistant de l'éditeur par l'outil `delegate_to_editor`, sans effet serveur : le front les exécute avec ses propres
+outils ; dans l'autre sens, l'assistant de l'éditeur appelle cette route ou `PUT /api/site/features` pour tout réglage du backend) ; 422 `VALIDATION_FAILED`, 402
 `AI_CREDITS_EXHAUSTED`, 429 `AI_TOO_MANY_FAILURES`, 503 `AI_UNAVAILABLE` ; `POST …/actions/{id}/confirm` → `{ tool, input, result,
 readiness }`, 404 `ACTION_NOT_FOUND` ; `GET /api/site/assistant/credits`. Le front (éditeur Next, page Mon site à venir) affiche la
 réponse, les liens (`screen` → écran du back-office, même vocabulaire que la page Mon site) et les actions avec un bouton
@@ -180,7 +182,8 @@ un hôte de la plateforme (`FRONTEND_BASE_DOMAIN`, `BACKEND_BASE_DOMAIN`), uniqu
 `tenants.custom_domain` par `TenantConnectionManager::setCustomDomain` qui invalide l'étiquette `tenants` : l'annuaire des hôtes
 `GET /api/tenant/hosts` et la résolution hôte → site le prennent en compte aussitôt (le proxy du frontend émet le certificat à la
 demande). Vérifications : DNS (`dns_get_record` A, ou CNAME vers un hôte de la plateforme, comparé aux adresses de
-`FRONTEND_BASE_DOMAIN`) puis HTTPS (HEAD, 6 s) ; états `none`, `dns_pending`, `dns_ok`, `live`. Procédure en cinq étapes rendue
+`FRONTEND_BASE_DOMAIN`) puis HTTPS (HEAD, 6 s, résultat gardé dix minutes par domaine pour l'affichage ; `POST /check` et le bouton « Vérifier » forcent une
+vérification fraîche) ; états `none`, `dns_pending`, `dns_ok`, `live`. Procédure en cinq étapes rendue
 avec les enregistrements attendus (A `@` → adresse du serveur, CNAME `www` → le domaine). Registre : `site.domain` ; cheminement :
 étape `site.domain` (facultative sans domaine, à faire tant que le DNS ou le HTTPS manquent). Test :
 `tests/Functional/Platform/CustomDomainTest.php`.

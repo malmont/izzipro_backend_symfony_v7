@@ -5,6 +5,8 @@ namespace App\Services\Platform;
 use App\Services\TenantConnectionManager;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Domaine propre d'un site (console de pilotage, 05/11/2026) : enregistrement dans la base maître (`tenants.custom_domain`, donc
@@ -22,12 +24,16 @@ class CustomDomainService
         private readonly TenantConnectionManager $tenants,
         #[Autowire('%env(resolve:FRONTEND_BASE_DOMAIN)%')] private readonly string $frontendBaseDomain,
         #[Autowire('%env(resolve:BACKEND_BASE_DOMAIN)%')] private readonly string $backendBaseDomain,
+        private readonly CacheInterface $cache,
         private readonly LoggerInterface $logger,
     ) {
     }
 
-    /** @return array<string, mixed> état complet du domaine du site */
-    public function status(string $code, bool $checkHttps = true): array
+    /** Le résultat HTTPS est gardé dix minutes par domaine : l'affichage des pages ne refait pas l'appel ; « Vérifier » passe $fresh = true */
+    private const HTTPS_CACHE_TTL = 600;
+
+    /** @return array<string, mixed> état complet du domaine du site ; $fresh : ignorer le résultat HTTPS gardé en cache (bouton « Vérifier ») */
+    public function status(string $code, bool $checkHttps = true, bool $fresh = false): array
     {
         $domain = null;
         try {
@@ -40,7 +46,7 @@ class CustomDomainService
         }
         $expected = $this->expected($code);
         $dns = $domain !== null ? $this->checkDns($domain, $expected['ips']) : ['ok' => false, 'found' => [], 'cname' => null];
-        $https = $domain !== null && $dns['ok'] && $checkHttps ? $this->checkHttps($domain) : ['ok' => false, 'status' => null, 'checked' => false];
+        $https = $domain !== null && $dns['ok'] && $checkHttps ? $this->checkHttpsCached($domain, $fresh) : ['ok' => false, 'status' => null, 'checked' => false];
         $state = $domain === null ? 'none' : (!$dns['ok'] ? 'dns_pending' : ($https['ok'] ? 'live' : 'dns_ok'));
 
         return [
@@ -132,6 +138,25 @@ class CustomDomainService
         }
 
         return ['ok' => $ok, 'found' => array_values(array_unique($found)), 'cname' => $cname];
+    }
+
+    /** @return array{ok: bool, status: ?int, checked: bool} */
+    private function checkHttpsCached(string $domain, bool $fresh): array
+    {
+        $key = 'custom_domain.https.' . preg_replace('/[^a-z0-9.-]/', '_', $domain);
+        try {
+            if ($fresh) {
+                $this->cache->delete($key);
+            }
+
+            return $this->cache->get($key, function (ItemInterface $item) use ($domain): array {
+                $item->expiresAfter(self::HTTPS_CACHE_TTL);
+
+                return $this->checkHttps($domain);
+            });
+        } catch (\Throwable) {
+            return $this->checkHttps($domain);
+        }
     }
 
     /** @return array{ok: bool, status: ?int, checked: bool} */
