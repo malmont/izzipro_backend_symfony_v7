@@ -38,6 +38,7 @@ class OfferFulfillmentTest extends WebTestCase
         $this->master = static::getContainer()->get(TenantConnectionManager::class)->getPdoMaster();
         $this->target = static::getContainer()->get(TenantDatabaseConnector::class)->pdo(MV_TEST_TENANT2_DB);
         $this->targetFlagsBefore = $this->target->query('SELECT is_boussole_esg_active, is_landing_page_active FROM entreprise ORDER BY id LIMIT 1')->fetch(\PDO::FETCH_ASSOC);
+        static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setShopTenant(MV_TEST_TENANT_CODE, 'test'); // le site de test est la boutique de la plateforme
         static::getContainer()->get(BoutiqueDemoSeeder::class)->seed('client-offres@example.invalid', false, false);
         $this->provider->getEntityManager()->getConnection()->executeStatement('DELETE FROM boutique_setting');
         $db = $this->provider->getEntityManager()->getConnection();
@@ -57,6 +58,7 @@ class OfferFulfillmentTest extends WebTestCase
         $this->master->exec("DELETE FROM platform_offers WHERE code = 'test_offer'");
         $this->master->exec("UPDATE platform_offers SET monthly_price_cents = 5900, trial_days = 30 WHERE code = 'boutique'");
         static::getContainer()->get(TenantCacheService::class)->invalidateSite(MV_TEST_TENANT2_CODE, MV_TEST_TENANT2_DB);
+        static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setShopTenant(null, 'test');
         parent::tearDown();
     }
 
@@ -158,6 +160,20 @@ class OfferFulfillmentTest extends WebTestCase
         $ordinary->setStatus(Subscription::STATUS_ACTIVE)->setCurrentPeriodEnd((new \DateTimeImmutable())->modify('+30 days'));
         $em->flush();
         $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM tenant_entitlements WHERE tenant_code = '" . MV_TEST_TENANT2_CODE . "'")->fetchColumn(), 'formule ordinaire : aucun droit');
+
+        // un seul site gouverne les autres : une formule branchée sur un site qui n'est pas la boutique désignée ne produit rien
+        static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setShopTenant(MV_TEST_TENANT2_CODE, 'test');
+        $plan->setFulfillmentType(SubscriptionPlan::FULFILLMENT_PLATFORM_OFFER)->setFulfillmentRef('boussole');
+        $em->flush();
+        $rogue = (new Subscription())->setUser($user)->setPlan($plan)->setQuantity(1)->setFulfillmentTarget(MV_TEST_TENANT2_CODE);
+        $em->persist($rogue);
+        $em->flush();
+        $rogue->setStatus(Subscription::STATUS_ACTIVE)->setCurrentPeriodEnd((new \DateTimeImmutable())->modify('+30 days'));
+        $em->flush();
+        $this->assertSame(0, (int) $this->master->query("SELECT COUNT(*) FROM tenant_entitlements WHERE tenant_code = '" . MV_TEST_TENANT2_CODE . "'")->fetchColumn(), 'site non désigné : ignoré');
+        static::getContainer()->get(\App\Services\Platform\PlatformModeService::class)->setShopTenant(MV_TEST_TENANT_CODE, 'test');
+        $plan->setFulfillmentType(SubscriptionPlan::FULFILLMENT_NONE)->setFulfillmentRef(null);
+        $em->flush();
 
         $plan->setFulfillmentType(SubscriptionPlan::FULFILLMENT_PLATFORM_OFFER)->setFulfillmentRef('boussole');
         $em->flush();

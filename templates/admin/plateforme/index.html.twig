@@ -38,7 +38,9 @@
             </div>
             <form method="post" action="{{ path('admin_plateforme_shop') }}" class="d-flex gap-2 align-items-end plateforme-boutique">
                 <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
-                <div><label class="form-label small mb-0" for="pf-shop">Boutique de la plateforme (forfaits)</label>
+                <div><label class="form-label small mb-0" for="pf-shop-tenant">Site de la boutique de forfaits</label>
+                    <select class="form-select form-select-sm" id="pf-shop-tenant" name="shopTenant" style="width:14em" title="le seul site dont les formules branchées produisent des droits"><option value="">— aucun —</option>{% for s in sites %}<option value="{{ s.code }}" {{ mode.shopTenant == s.code ? 'selected' : '' }}>{{ s.code }}</option>{% endfor %}</select></div>
+                <div><label class="form-label small mb-0" for="pf-shop">Adresse de la boutique (forfaits)</label>
                     <input class="form-control form-control-sm" id="pf-shop" name="shopUrl" type="url" style="width:22em" value="{{ mode.shopUrl ?? '' }}" placeholder="https://… (vide : pas encore de boutique)"></div>
                 <button type="submit" class="btn btn-sm btn-outline-primary">Enregistrer</button>
             </form>

@@ -59,6 +59,52 @@
         </div>
     </div>
 
+    <div class="card mb-4 mon-site-assistant" id="assistant">
+        <div class="card-body">
+            <h2 class="h5 mb-1">Assistant de configuration</h2>
+            <p class="text-muted small mb-2">Posez une question ou demandez une action (« je veux vendre en location », « active les abonnements », « que me manque-t-il pour la caisse ? »). L'assistant explique, puis propose des modifications que vous confirmez avant qu'elles soient appliquées ; il ne touche ni aux paiements ni aux droits de la plateforme. Un crédit IA du site par échange.</p>
+            <div id="assistant-log" class="border rounded p-2 mb-2" style="max-height: 22em; overflow: auto; min-height: 4em;"></div>
+            <form id="assistant-form" class="d-flex gap-2" onsubmit="return false;">
+                <input class="form-control" id="assistant-input" placeholder="Votre demande…" maxlength="4000" autocomplete="off">
+                <button type="submit" class="btn btn-primary" id="assistant-send">Envoyer</button>
+            </form>
+        </div>
+    </div>
+    <script>
+    (function () {
+        var token = {{ csrf_token(csrf_id)|json_encode|raw }}, chatUrl = {{ path('admin_mon_site_assistant')|json_encode|raw }}, confirmBase = {{ path('admin_mon_site_assistant_confirm', {id: '0000000000000000'})|json_encode|raw }};
+        var log = document.getElementById('assistant-log'), input = document.getElementById('assistant-input'), form = document.getElementById('assistant-form'), send = document.getElementById('assistant-send');
+        var history = [];
+        function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
+        function line(role, html) { var d = document.createElement('div'); d.className = 'mb-2 assistant-' + role; d.innerHTML = (role === 'user' ? '<strong>Vous :</strong> ' : '<strong>Assistant :</strong> ') + html; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
+        function post(url, body) { return fetch(url, {method: 'POST', credentials: 'same-origin', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': token}, body: JSON.stringify(body || {})}).then(function (r) { return r.json().then(function (j) { j._status = r.status; return j; }); }); }
+        form.addEventListener('submit', function () {
+            var text = input.value.trim(); if (!text) { return; }
+            input.value = ''; send.disabled = true;
+            history.push({role: 'user', content: text}); line('user', esc(text));
+            var waiting = line('assistant', '<span class="text-muted">…</span>');
+            post(chatUrl, {messages: history.slice(-20)}).then(function (j) {
+                send.disabled = false;
+                if (j._status !== 200) { waiting.innerHTML = '<strong>Assistant :</strong> <span class="text-danger">' + esc(j.message || 'Erreur') + '</span>'; history.pop(); return; }
+                history.push({role: 'assistant', content: j.reply});
+                var html = esc(j.reply).replace(/\n/g, '<br>');
+                (j.links || []).forEach(function (l) { if (l.url) { html += ' <a class="btn btn-sm btn-outline-secondary ms-1" href="' + esc(l.url) + '">' + esc(l.label) + '</a>'; } });
+                (j.actions || []).forEach(function (a) { html += '<div class="mt-1 p-2 border rounded" data-action="' + esc(a.id) + '"><span>' + esc(a.summary) + '</span> <button class="btn btn-sm btn-success ms-2" data-confirm="' + esc(a.id) + '">Confirmer</button> <code class="small text-muted">' + esc(JSON.stringify(a.input)) + '</code></div>'; });
+                waiting.innerHTML = '<strong>Assistant :</strong> ' + html;
+            }).catch(function () { send.disabled = false; waiting.innerHTML = '<strong>Assistant :</strong> <span class="text-danger">Assistant injoignable.</span>'; });
+        });
+        log.addEventListener('click', function (ev) {
+            var btn = ev.target.closest('[data-confirm]'); if (!btn) { return; }
+            btn.disabled = true;
+            post(confirmBase.replace('0000000000000000', btn.getAttribute('data-confirm'))).then(function (j) {
+                var box = btn.closest('[data-action]');
+                if (j._status === 200) { box.innerHTML = '<span class="text-success">✔ Appliqué.</span> <a href="" class="small">Recharger la page</a>'; }
+                else { btn.disabled = false; box.insertAdjacentHTML('beforeend', '<div class="text-danger small">' + esc(j.message || 'Refusé') + '</div>'); }
+            });
+        });
+    })();
+    </script>
+
     {% set loc = {} %}{% for e in groups.localisation %}{% set loc = loc|merge({(e.key): e}) %}{% endfor %}
     <h2 class="h5 mt-3" id="localisation">Localisation</h2>
     <form method="post" action="{{ path('admin_mon_site_regler') }}" class="row g-2 align-items-end mon-site-localisation">

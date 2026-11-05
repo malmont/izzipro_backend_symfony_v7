@@ -576,7 +576,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (45)
+## Administration (EasyAdmin) (47)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -590,6 +590,8 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/memoires/ai-quotas` | ROLE_ADMIN | `Controller\Admin\Memoires\AiQuotaPageController::index` |
 | POST | `/admin/memoires/ai-quotas` | ROLE_ADMIN | `Controller\Admin\Memoires\AiQuotaPageController::save` |
 | GET | `/admin/mobile-theme` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AppThemeShortcutController::open` |
+| POST | `/admin/mon-site/assistant/actions/{id}/confirm` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::assistantConfirm` |
+| POST | `/admin/mon-site/assistant` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::assistant` |
 | POST | `/admin/mon-site/demander/{key}` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::ask` |
 | GET | `/admin/mon-site/forfait` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::plan` |
 | POST | `/admin/mon-site/regler` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::settle` |

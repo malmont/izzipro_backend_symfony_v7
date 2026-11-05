@@ -47,6 +47,9 @@ class PlatformSettingsApiTest extends WebTestCase
         $r = $this->call('PUT', ['shopUrl' => null], 'super');
         $this->assertNull(json_decode((string) $r->getContent(), true)['shopUrl'], 'vide : plus de boutique');
         $this->assertSame(422, $this->call('PUT', [], 'super')->getStatusCode());
+        $this->assertSame(422, $this->call('PUT', ['shopTenant' => 'nulle-part'], 'super')->getStatusCode());
+        $this->assertSame(MV_TEST_TENANT_CODE, json_decode((string) $this->call('PUT', ['shopTenant' => MV_TEST_TENANT_CODE], 'super')->getContent(), true)['shopTenant']);
+        $this->assertNull(json_decode((string) $this->call('PUT', ['shopTenant' => null], 'super')->getContent(), true)['shopTenant']);
     }
 
     private function call(string $method, ?array $body, ?string $as): \Symfony\Component\HttpFoundation\Response

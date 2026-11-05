@@ -11,6 +11,11 @@ use App\Services\FeatureAccess\SiteFeatureStateService;
 use App\Services\FeatureAccess\SiteFeaturesValidationException;
 use App\Services\Platform\PlatformModeService;
 use App\Services\Platform\SiteReadinessService;
+use App\Services\LandingAiService\LandingAiException;
+use App\UseCase\SiteAssistantUseCase\ChatWithSiteAssistantUseCase;
+use App\UseCase\SiteAssistantUseCase\ConfirmSiteAssistantActionUseCase;
+use App\UseCase\SiteAssistantUseCase\SiteAssistantValidationException;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use App\UseCase\SiteFeaturesUseCase\RequestSiteFeatureUseCase;
 use App\UseCase\SiteFeaturesUseCase\SiteFeatureRequestException;
 use App\UseCase\SiteFeaturesUseCase\UpdateSiteFeaturesUseCase;
@@ -49,6 +54,8 @@ class SiteConsoleAdminController extends AbstractController
         private readonly PlatformModeService $platform,
         private readonly AdminUrlGenerator $urls,
         private readonly SiteReadinessService $readiness,
+        private readonly ChatWithSiteAssistantUseCase $assistantChat,
+        private readonly ConfirmSiteAssistantActionUseCase $assistantConfirm,
     ) {
     }
 
@@ -132,6 +139,49 @@ class SiteConsoleAdminController extends AbstractController
         }
 
         return $this->redirect($this->pageUrl());
+    }
+
+    /** Assistant IA dans la page (session EasyAdmin, jeton CSRF en en-tête X-CSRF-Token) : même cas d'usage que POST /api/site/assistant */
+    #[Route('/admin/mon-site/assistant', name: 'admin_mon_site_assistant', methods: ['POST'])]
+    public function assistant(Request $request): JsonResponse
+    {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+        if (!$this->isCsrfTokenValid(self::CSRF_ID, (string) $request->headers->get('X-CSRF-Token'))) {
+            return $this->json(['error' => 'CSRF', 'message' => 'Jeton de sécurité invalide : rechargez la page.'], 403);
+        }
+        $body = json_decode($request->getContent(), true);
+        try {
+            $result = $this->assistantChat->execute(is_array($body) ? $body : [], $this->getUser()?->getUserIdentifier());
+        } catch (SiteAssistantValidationException $e) {
+            return $this->json(['error' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => $e->errors], 422);
+        } catch (LandingAiException $e) {
+            return $this->json(['error' => 'AI', 'message' => $e->getMessage()], $e->getStatusCode());
+        }
+        foreach ($result['links'] as $i => $link) {
+            $result['links'][$i]['url'] = $this->screenUrl($link['screen']);
+        }
+
+        return $this->json($result);
+    }
+
+    #[Route('/admin/mon-site/assistant/actions/{id}/confirm', name: 'admin_mon_site_assistant_confirm', methods: ['POST'], requirements: ['id' => '[a-f0-9]{16}'])]
+    public function assistantConfirm(string $id, Request $request): JsonResponse
+    {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+        if (!$this->isCsrfTokenValid(self::CSRF_ID, (string) $request->headers->get('X-CSRF-Token'))) {
+            return $this->json(['error' => 'CSRF', 'message' => 'Jeton de sécurité invalide : rechargez la page.'], 403);
+        }
+        try {
+            $result = $this->assistantConfirm->execute($id, $request->getSchemeAndHttpHost(), $this->getUser()?->getUserIdentifier());
+        } catch (\OutOfBoundsException $e) {
+            return $this->json(['error' => 'ACTION_NOT_FOUND', 'message' => $e->getMessage()], 404);
+        } catch (SiteFeaturesValidationException|EntrepriseValidationException|BoutiqueSettingsException $e) {
+            return $this->json(['error' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => array_map(fn (array $err) => ['path' => FeatureCatalog::keyForStorage($err['path']), 'message' => $err['message']], $e->errors ?? [])], 422);
+        } catch (EntrepriseForbiddenException|\InvalidArgumentException|SiteFeatureRequestException $e) {
+            return $this->json(['error' => 'REFUSED', 'message' => $e->getMessage()], 409);
+        }
+
+        return $this->json($result);
     }
 
     /** Page de forfait : la boutique de la plateforme si son adresse est réglée, sinon une page d'attente (le bouton existe dès maintenant, 05/11/2026) */

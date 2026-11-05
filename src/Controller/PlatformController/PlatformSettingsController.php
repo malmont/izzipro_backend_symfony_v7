@@ -11,7 +11,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Réglages de la plateforme (console de pilotage, 04/11/2026), super administrateur : GET → { mode, updatedAt, updatedBy, shopUrl } ;
- * PUT { mode?: demo | live, shopUrl?: https… | null } → même réponse ; 422 VALIDATION_FAILED. Contrat : docs/console-pilotage.md.
+ * PUT { mode?: demo | live, shopUrl?: https… | null, shopTenant?: code | null } → même réponse ; 422 VALIDATION_FAILED. shopTenant : le seul site dont
+ * les formules branchées produisent des droits (OfferFulfillmentService). Contrat : docs/console-pilotage.md.
  */
 #[Route('/api/platform/settings')]
 #[IsGranted('ROLE_SUPER_ADMIN')]
@@ -32,8 +33,15 @@ class PlatformSettingsController extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
         $data = is_array($data) ? $data : [];
-        if (!array_key_exists('mode', $data) && !array_key_exists('shopUrl', $data)) {
-            return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => 'mode ou shopUrl attendu', 'errors' => [['path' => '', 'message' => 'mode ou shopUrl attendu']]], 422);
+        if (!array_key_exists('mode', $data) && !array_key_exists('shopUrl', $data) && !array_key_exists('shopTenant', $data)) {
+            return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => 'mode, shopUrl ou shopTenant attendu', 'errors' => [['path' => '', 'message' => 'mode, shopUrl ou shopTenant attendu']]], 422);
+        }
+        if (array_key_exists('shopTenant', $data)) {
+            try {
+                $this->mode->setShopTenant(is_string($data['shopTenant']) ? $data['shopTenant'] : null, $this->getUser()?->getUserIdentifier());
+            } catch (\InvalidArgumentException $e) {
+                return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => [['path' => 'shopTenant', 'message' => 'code de site existant attendu, ou vide']]], 422);
+            }
         }
         if (array_key_exists('mode', $data)) {
             $mode = $data['mode'];

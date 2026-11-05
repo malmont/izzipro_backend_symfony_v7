@@ -91,6 +91,18 @@ class SiteConsolePageTest extends WebTestCase
         $this->assertSame(1, (int) $this->master->query("SELECT COUNT(*) FROM tenant_feature_requests WHERE tenant_code = '" . MV_TEST_TENANT_CODE . "'")->fetchColumn(), 'jeton invalide : rien');
         $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertStringContainsString('Mon site : pilotage', $this->client->getResponse()->getContent(), 'entrée du menu');
+
+        // assistant dans la page (session + CSRF), fausse IA
+        \App\Tests\Fake\FakeLandingAiClient::reset();
+        \App\Tests\Fake\FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'tool_use', 'id' => 'tu_1', 'name' => 'open_screen', 'input' => (object) ['screen' => 'taxes']]], 'usage' => (object) ['input_tokens' => 5, 'output_tokens' => 5]];
+        \App\Tests\Fake\FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'text', 'text' => 'Les taxes se règlent dans l\'écran Taxes.']], 'usage' => (object) ['input_tokens' => 5, 'output_tokens' => 5]];
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/mon-site/assistant', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_CSRF_TOKEN' => $token], json_encode(['messages' => [['role' => 'user', 'content' => 'Où régler les taxes ?']]]));
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), $this->client->getResponse()->getContent());
+        $assistant = json_decode((string) $this->client->getResponse()->getContent(), true);
+        $this->assertStringContainsString('Taxes', $assistant['reply']);
+        $this->assertStringContainsString('crudControllerFqcn', (string) $assistant['links'][0]['url'], 'lien vers l\'écran EasyAdmin');
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/mon-site/assistant', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST, 'CONTENT_TYPE' => 'application/json', 'HTTP_X_CSRF_TOKEN' => 'faux'], json_encode(['messages' => [['role' => 'user', 'content' => 'x']]]));
+        $this->assertSame(403, $this->client->getResponse()->getStatusCode(), 'jeton CSRF exigé');
     }
 
     private function loginAs(array $roles): void

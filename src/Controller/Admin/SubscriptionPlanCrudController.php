@@ -54,8 +54,8 @@ class SubscriptionPlanCrudController extends BaseTenantCrudController
         yield BooleanField::new('active', 'Active');
         // Branchement sur un service (console de pilotage, lot 3 bis, 04/11/2026) : réservé au site de la plateforme qui vend ses offres ; une formule ordinaire reste « aucun »
         yield ChoiceField::new('fulfillmentType', 'Branchement sur un service')->setChoices(['Aucun (formule ordinaire)' => SubscriptionPlan::FULFILLMENT_NONE, 'Offre de la plateforme' => SubscriptionPlan::FULFILLMENT_PLATFORM_OFFER, 'Webhook (réservé)' => SubscriptionPlan::FULFILLMENT_WEBHOOK])
-            ->hideOnIndex()->setHelp('« Offre de la plateforme » : la formule active une offre (code ci-dessous) sur le site que l\'abonné désigne à la souscription ; les impayés et résiliations suspendent ou retirent le service.');
-        yield TextField::new('fulfillmentRef', 'Code de l\'offre ou URL du webhook')->hideOnIndex()->setHelp('Codes des offres : voir la console Plateforme (ex. landing_boutique, pos_management, all).');
+            ->hideOnIndex()->setPermission('ROLE_SUPER_ADMIN')->setHelp('« Offre de la plateforme » : la formule active une offre (code ci-dessous) sur le site que l\'abonné désigne à la souscription ; les impayés et résiliations suspendent ou retirent le service. Seul le site désigné comme boutique de la plateforme produit des droits.');
+        yield TextField::new('fulfillmentRef', 'Code de l\'offre ou URL du webhook')->hideOnIndex()->setPermission('ROLE_SUPER_ADMIN')->setHelp('Codes des offres : voir la console Plateforme (ex. landing_boutique, pos_management, all).');
         yield BooleanField::new('highlighted', 'Recommandée (mise en avant)')->setHelp('Une seule par produit : cocher une formule décoche les autres du même produit.');
         yield JsonTextField::new('descriptions', 'Sous-titre par langue (JSON)')->hideOnIndex()
             ->setHelp('{"fr": "Solution discount", "en": "Budget plan"} — texte en clair, 160 caractères au plus.');

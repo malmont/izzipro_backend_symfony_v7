@@ -21,6 +21,7 @@ class OfferFulfillmentService
         private readonly EntitlementService $entitlements,
         private readonly EntitlementRepository $repository,
         private readonly FeaturePolicyRepository $policies,
+        private readonly PlatformModeService $platform,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -99,6 +100,13 @@ class OfferFulfillmentService
     public function fromSubscriptionEvent(SubscriptionStatusChangedEvent $e): ?array
     {
         if ($e->fulfillmentType !== \App\Entity\SubscriptionPlan::FULFILLMENT_PLATFORM_OFFER || $e->fulfillmentRef === null || $e->fulfillmentTarget === null) {
+            return null;
+        }
+        // un seul site gouverne les autres : celui désigné dans la base maître (platform_settings.shop_tenant) ; tout autre est ignoré
+        $shopTenant = $this->platform->shopTenant();
+        if ($shopTenant === null || $e->tenantCode !== $shopTenant) {
+            $this->logger->warning(sprintf('[Offers] abonnement %d branché sur le site %s ignoré : la boutique de la plateforme est %s', $e->subscriptionId, $e->tenantCode ?? '-', $shopTenant ?? 'non désignée'));
+
             return null;
         }
         $event = self::eventFor($e);

@@ -154,6 +154,9 @@ cheminement et la liste des écrans. Outils (`SiteAssistantTools`) : `get_settin
 effet) ; `set_site_settings` (clés `site` du registre seulement : une clé plateforme est refusée à l'IA) et `request_feature`
 **proposent** une action, gardée 15 min dans le cache et appliquée seulement par `POST /api/site/assistant/actions/{id}/confirm`,
 par les mêmes cas d'usage que Mon site (`UpdateSiteFeaturesUseCase`, `RequestSiteFeatureUseCase`), donc validation, rôles et journal.
+Dans EasyAdmin, la page Mon site embarque le panneau « Assistant de configuration » (`POST /admin/mon-site/assistant` et
+`…/assistant/actions/{id}/confirm`, session + en-tête `X-CSRF-Token`, mêmes cas d'usage) avec les liens vers les écrans et les boutons
+« Confirmer ».
 Routes (`ROLE_ADMIN`) : `POST /api/site/assistant { messages: [{ role: user | assistant, content }], locale? }` → `{ reply, actions:
 [{ id, tool, input, summary }], links: [{ label, screen }], readiness, credits, usage }` ; 422 `VALIDATION_FAILED`, 402
 `AI_CREDITS_EXHAUSTED`, 429 `AI_TOO_MANY_FAILURES`, 503 `AI_UNAVAILABLE` ; `POST …/actions/{id}/confirm` → `{ tool, input, result,
@@ -175,6 +178,11 @@ accusé de réception au contact du site, avis au **super administrateur** (son 
 lu dans la base du site demandeur) avec le site, la fonctionnalité et le message ; refus depuis la console → courriel au site.
 Accorder envoie le courriel d'activation ou d'essai habituel. Tous ces textes citent la **boutique de la plateforme** (`%shop%`)
 quand son adresse est renseignée, sinon invitent à écrire à la plateforme (clés `*_noshop`).
+
+**Un seul site gouverne les autres (05/11/2026)** : clé `shop_tenant` de `platform_settings` (page Plateforme, carte « Mode », ou
+`PUT /api/platform/settings { shopTenant }`) : le code du site qui porte la boutique de forfaits. `OfferFulfillmentService` ignore
+(et journalise) tout abonnement branché payé sur un autre site ; les champs « Branchement sur un service » des formules ne sont
+visibles que du super administrateur (`setPermission`). Tant qu'aucun site n'est désigné, aucune formule branchée ne produit de droit.
 
 **Adresse de la boutique de la plateforme** : clé `shop_url` de `platform_settings` (`PlatformModeService::shopUrl()`), réglée dans
 la page Plateforme (carte « Mode ») ou par `PUT /api/platform/settings { shopUrl }` (https, vide = aucune). Tant qu'elle est vide,

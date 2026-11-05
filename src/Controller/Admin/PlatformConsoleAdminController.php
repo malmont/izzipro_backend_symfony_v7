@@ -80,7 +80,8 @@ class PlatformConsoleAdminController extends AbstractController
     {
         return $this->action($request, function () use ($request) {
             $this->mode->setShopUrl((string) $request->request->get('shopUrl', ''), $this->getUser()?->getUserIdentifier());
-            $this->addFlash('success', 'Adresse de la boutique de la plateforme enregistrée.');
+            $this->mode->setShopTenant((string) $request->request->get('shopTenant', ''), $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', 'Boutique de la plateforme enregistrée (site et adresse).');
         });
     }
 

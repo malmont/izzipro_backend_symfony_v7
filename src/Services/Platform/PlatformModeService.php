@@ -53,7 +53,7 @@ class PlatformModeService
     {
         try {
             $rows = [];
-            foreach ($this->tenants->getPdoMaster()->query("SELECT key, value, updated_at, updated_by FROM platform_settings WHERE key IN ('mode', 'shop_url')")->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $r) {
+            foreach ($this->tenants->getPdoMaster()->query("SELECT key, value, updated_at, updated_by FROM platform_settings WHERE key IN ('mode', 'shop_url', 'shop_tenant')")->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $r) {
                 $rows[$r['key']] = $r;
             }
         } catch (\Throwable) {
@@ -61,14 +61,36 @@ class PlatformModeService
         }
         $mode = $rows['mode'] ?? null;
         $shop = $rows['shop_url']['value'] ?? null;
+        $shopTenant = $rows['shop_tenant']['value'] ?? null;
 
-        return ['mode' => $mode && in_array($mode['value'], self::MODES, true) ? $mode['value'] : self::DEMO, 'updatedAt' => $mode['updated_at'] ?? null, 'updatedBy' => $mode['updated_by'] ?? null, 'shopUrl' => is_string($shop) && $shop !== '' ? $shop : null];
+        return ['mode' => $mode && in_array($mode['value'], self::MODES, true) ? $mode['value'] : self::DEMO, 'updatedAt' => $mode['updated_at'] ?? null, 'updatedBy' => $mode['updated_by'] ?? null, 'shopUrl' => is_string($shop) && $shop !== '' ? $shop : null, 'shopTenant' => is_string($shopTenant) && $shopTenant !== '' ? $shopTenant : null];
     }
 
     /** Adresse de la boutique de la plateforme (forfaits), null tant qu'elle n'existe pas : lien « Choisir un forfait » de Mon site et des courriels de demande */
     public function shopUrl(): ?string
     {
         return $this->settings()['shopUrl'];
+    }
+
+    /** Code du **seul** site dont les formules branchées produisent des droits d'usage (la boutique de forfaits) ; null tant qu'il n'est pas désigné */
+    public function shopTenant(): ?string
+    {
+        return $this->settings()['shopTenant'];
+    }
+
+    public function setShopTenant(?string $code, ?string $by): void
+    {
+        $code = $code !== null ? trim($code) : '';
+        if ($code !== '' && !is_array($this->tenants->findTenantByCode($code))) {
+            throw new \InvalidArgumentException('shopTenant : code de site existant attendu, ou vide');
+        }
+        $pdo = $this->tenants->getPdoMaster();
+        if ($code === '') {
+            $pdo->exec("DELETE FROM platform_settings WHERE key = 'shop_tenant'");
+        } else {
+            $pdo->prepare("INSERT INTO platform_settings (key, value, updated_at, updated_by) VALUES ('shop_tenant', ?, NOW(), ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW(), updated_by = EXCLUDED.updated_by")->execute([$code, $by]);
+        }
+        $this->logger->notice(sprintf('Site de la boutique de la plateforme : %s (par %s)', $code === '' ? 'aucun' : $code, $by ?? 'inconnu'));
     }
 
     public function setShopUrl(?string $url, ?string $by): void
