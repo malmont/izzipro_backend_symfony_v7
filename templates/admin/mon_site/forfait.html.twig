@@ -1,0 +1,13 @@
+{# Page de forfait d'attente (SiteConsoleAdminController::plan) : remplacée par la boutique de forfaits de la plateforme dès que son adresse est réglée. #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+{% block title %}Mettre à jour mon forfait{% endblock %}
+{% block content_title %}Mettre à jour mon forfait{% endblock %}
+{% block main %}{{ block('forfait_panel') }}{% endblock %}
+{% block body %}<div class="container-fluid py-3"><h1 class="h3 mb-3">Mettre à jour mon forfait</h1>{{ block('forfait_panel') }}</div>{% endblock %}
+{% block forfait_panel %}
+    <div class="card"><div class="card-body">
+        <p>La boutique des forfaits de la plateforme ouvre bientôt : vous pourrez y choisir, changer ou arrêter votre forfait, et vos services suivront automatiquement.</p>
+        <p class="mb-2">En attendant, un essai gratuit de chaque fonctionnalité s'ouvre d'un clic depuis <a href="{{ monSiteUrl }}">Mon site</a>, et « Demander » prévient la plateforme, qui vous répond par courriel.</p>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ monSiteUrl }}">Retour à Mon site</a>
+    </div></div>
+{% endblock %}

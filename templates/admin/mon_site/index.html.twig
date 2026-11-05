@@ -94,7 +94,7 @@
     </script>
 
     <h2 class="h5 mt-4">Modules et applications</h2>
-    <p class="text-muted small">Un module ou une application s'obtient de la plateforme : cliquez « Demander » (vous recevez un accusé par courriel, la plateforme vous répond{% if shopUrl %}), ou <a href="{{ shopUrl }}" target="_blank" rel="noopener">choisissez un forfait dans sa boutique</a>{% else %}){% endif %}. Une fois accordé, suivez la colonne « Et ensuite ». Les applications mobiles ont besoin d'une <strong>clé d'activation</strong>{% if appKeysUrl %} : <a href="{{ appKeysUrl }}">ouvrir l'écran des clés</a>{% endif %}.</p>
+    <p class="text-muted small">Un module ou une application s'obtient de la plateforme : « Essayer » ouvre un essai gratuit immédiat quand il est possible (une fois par fonctionnalité), « Demander » envoie une demande (accusé par courriel, la plateforme répond), « Mettre à jour mon forfait » mène à la boutique de forfaits. Une fois accordé, suivez la colonne « Et ensuite ». Les applications mobiles ont besoin d'une <strong>clé d'activation</strong>{% if appKeysUrl %} : <a href="{{ appKeysUrl }}">ouvrir l'écran des clés</a>{% endif %}.</p>
     <table class="table table-sm datagrid mon-site-modules">
         <thead><tr><th>Fonctionnalité</th><th>État</th><th>Droit d'usage</th><th>Et ensuite</th><th></th></tr></thead>
         <tbody>
@@ -107,8 +107,12 @@
                 <td class="text-nowrap">
                     {% if e.request == 'pending' %}<span class="badge bg-warning text-dark">demande en attente</span><div class="small text-muted">la plateforme vous répond par courriel</div>
                     {% elseif not e.value %}
-                        <form method="post" action="{{ path('admin_mon_site_demander', {key: e.key}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-primary" onclick="return confirm('Demander {{ e.label|e('js') }} à la plateforme ? Vous recevrez un accusé par courriel.')">Demander</button></form>
-                        {% if shopUrl %}<a class="btn btn-sm btn-primary" href="{{ shopUrl }}" target="_blank" rel="noopener">Choisir un forfait</a>{% endif %}
+                        {% if e.trial is defined and e.trial.allowed %}
+                            <form method="post" action="{{ path('admin_mon_site_demander', {key: e.key}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-success" onclick="return confirm('Ouvrir un essai gratuit de {{ e.trial.days }} jours de {{ e.label|e('js') }} ? Il s\'active tout de suite.')">Essayer {{ e.trial.days }} jours</button></form>
+                        {% else %}
+                            <form method="post" action="{{ path('admin_mon_site_demander', {key: e.key}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-primary" onclick="return confirm('Demander {{ e.label|e('js') }} à la plateforme ? Vous recevrez un accusé par courriel.')">Demander</button></form>
+                        {% endif %}
+                        <a class="btn btn-sm btn-primary" href="{{ path('admin_mon_site_forfait') }}" {% if shopUrl %}target="_blank" rel="noopener"{% endif %}>Mettre à jour mon forfait</a>
                     {% else %}
                         {% if e.key in ['module.pos', 'app.mobile_shop', 'app.management', 'app.living_memory'] and appKeysUrl %}<a class="btn btn-sm btn-primary" href="{{ appKeysUrl }}">Clés d'activation</a>{% endif %}
                         {% if e.screenUrl and e.screenUrl != appKeysUrl %}<a class="btn btn-sm btn-outline-secondary" href="{{ e.screenUrl }}">Ouvrir</a>{% endif %}

@@ -58,7 +58,7 @@ class SiteReadinessTest extends WebTestCase
         $this->assertSame(trim((string) $this->db->fetchOne('SELECT email FROM entreprise ORDER BY id LIMIT 1')) !== '' ? 'done' : 'todo', $byKey['site.identity']['status'], 'fait dès que nom et courriel sont renseignés');
         $this->assertSame('editor', $byKey['site.localisation']['where']);
         $this->assertContains('obtain.module.boussole', $keys, 'fonctionnalité non accordée : à obtenir');
-        $this->assertSame(['optional', 'platform', 'request'], [$byKey['obtain.module.boussole']['status'], $byKey['obtain.module.boussole']['where'], $byKey['obtain.module.boussole']['action']['type']], 'sans boutique de la plateforme : demande');
+        $this->assertSame(['optional', 'platform', 'trial', 30], [$byKey['obtain.module.boussole']['status'], $byKey['obtain.module.boussole']['where'], $byKey['obtain.module.boussole']['action']['type'], $byKey['obtain.module.boussole']['action']['days']], 'politique par défaut : essai immédiat de 30 jours');
         $this->assertNotContains('boussole.questions', $keys);
         $this->assertSame($body['total'], count(array_filter($body['steps'], fn ($s) => in_array($s['status'], ['done', 'todo'], true))), 'les étapes à obtenir ne comptent pas');
         $this->assertSame((int) round($body['done'] * 100 / max(1, $body['total'])), $body['percent']);
@@ -71,7 +71,7 @@ class SiteReadinessTest extends WebTestCase
         $this->assertArrayHasKey('boussole.questions', $byKey);
         $this->assertArrayNotHasKey('obtain.module.boussole', $byKey);
         $this->assertSame([(int) $this->db->fetchOne('SELECT COUNT(*) FROM esg_diag_question WHERE is_active') > 0 ? 'done' : 'todo', 'esg_questions'], [$byKey['boussole.questions']['status'], $byKey['boussole.questions']['action']['screen']]);
-        $this->assertSame(['shop', 'https://forfaits.example.invalid/'], [$byKey['obtain.module.memoires']['action']['type'], $byKey['obtain.module.memoires']['action']['url']], 'avec boutique de la plateforme : forfait');
+        $this->assertSame(['trial', 'https://forfaits.example.invalid/'], [$byKey['obtain.module.memoires']['action']['type'], $byKey['obtain.module.memoires']['action']['shopUrl']], 'essai possible, boutique de forfaits connue');
 
         // grille de la plateforme : avancement par site
         $sites = array_column(json_decode((string) $this->api('super', '/api/platform/sites')->getContent(), true)['sites'], null, 'code');

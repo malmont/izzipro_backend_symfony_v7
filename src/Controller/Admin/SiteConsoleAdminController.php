@@ -64,6 +64,9 @@ class SiteConsoleAdminController extends AbstractController
             foreach ($entry['prerequisites'] as $i => $p) {
                 $entry['prerequisites'][$i]['url'] = $p['ok'] ? null : $this->screenUrl(self::PREREQ_SCREENS[$p['key']] ?? null);
             }
+            if ($entry['scope'] === FeatureCatalog::SCOPE_PLATFORM && !$entry['value'] && ($entry['request'] ?? null) !== 'pending') {
+                $entry['trial'] = $this->requestFeature->trialOffer($entry['key']);
+            }
             $groups[$entry['group']][] = $entry;
         }
 
@@ -131,6 +134,19 @@ class SiteConsoleAdminController extends AbstractController
         return $this->redirect($this->pageUrl());
     }
 
+    /** Page de forfait : la boutique de la plateforme si son adresse est réglée, sinon une page d'attente (le bouton existe dès maintenant, 05/11/2026) */
+    #[Route('/admin/mon-site/forfait', name: 'admin_mon_site_forfait', methods: ['GET'])]
+    public function plan(): Response
+    {
+        $this->denyAccessUnlessGranted('ROLE_ADMIN');
+        $shop = $this->platform->shopUrl();
+        if ($shop !== null) {
+            return $this->redirect($shop);
+        }
+
+        return $this->render('admin/mon_site/forfait.html.twig', ['monSiteUrl' => $this->pageUrl()]);
+    }
+
     #[Route('/admin/mon-site/demander/{key}', name: 'admin_mon_site_demander', methods: ['POST'], requirements: ['key' => '[a-z_]+\.[a-z_]+'])]
     public function ask(string $key, Request $request): Response
     {
@@ -141,8 +157,10 @@ class SiteConsoleAdminController extends AbstractController
             return $this->redirect($this->pageUrl());
         }
         try {
-            $this->requestFeature->execute($key, (string) $request->request->get('message', ''), $this->getUser()?->getUserIdentifier());
-            $this->addFlash('success', sprintf('Demande envoyée pour %s : la plateforme vous répondra.', FeatureCatalog::label($key)));
+            $outcome = $this->requestFeature->execute($key, (string) $request->request->get('message', ''), $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', $outcome['kind'] === 'trial'
+                ? sprintf('Essai gratuit de %s ouvert jusqu\'au %s : c\'est activé, suivez le cheminement pour le configurer.', FeatureCatalog::label($key), substr((string) ($outcome['entitlement']['ends_at'] ?? ''), 0, 10))
+                : sprintf('Demande envoyée pour %s : la plateforme vous répond par courriel.', FeatureCatalog::label($key)));
         } catch (\InvalidArgumentException|SiteFeatureRequestException $e) {
             $this->addFlash('warning', $e->getMessage());
         }

@@ -4,6 +4,7 @@ namespace App\UseCase\SiteFeaturesUseCase;
 
 use App\Services\FeatureAccess\FeatureCatalog;
 use App\Services\Platform\EntitlementService;
+use App\Services\Platform\FeaturePolicyRepository;
 use App\Services\Platform\FeatureRequestRepository;
 use App\Message\EntitlementChangedMessage;
 use App\Services\TenantConnectionManager;
@@ -17,11 +18,35 @@ use Symfony\Component\Messenger\MessageBusInterface;
  */
 class RequestSiteFeatureUseCase
 {
-    public function __construct(private readonly EntitlementService $entitlements, private readonly FeatureRequestRepository $requests, private readonly TenantConnectionManager $tenants, private readonly MessageBusInterface $bus, private readonly LoggerInterface $logger)
+    public function __construct(private readonly EntitlementService $entitlements, private readonly FeatureRequestRepository $requests, private readonly FeaturePolicyRepository $policies, private readonly TenantConnectionManager $tenants, private readonly MessageBusInterface $bus, private readonly LoggerInterface $logger)
     {
     }
 
-    /** @return array<string, mixed> la demande créée */
+    /**
+     * Essai gratuit possible (politique de la plateforme : essai autorisé, et le site n'en a jamais eu pour cette fonctionnalité)
+     * @return array{allowed: bool, days: int}
+     */
+    public function trialOffer(string $key, ?string $tenantCode = null): array
+    {
+        $policy = $this->policies->get($key);
+        if (!$policy['trial_allowed']) {
+            return ['allowed' => false, 'days' => 0];
+        }
+        $code = $tenantCode ?? (string) $this->tenants->getCurrentTenantCode();
+        foreach ($this->entitlements->listForTenant($code) as $row) {
+            if ($row['feature_key'] === $key && $row['source'] === 'trial') {
+                return ['allowed' => false, 'days' => 0]; // un seul essai par fonctionnalité et par site
+            }
+        }
+
+        return ['allowed' => true, 'days' => (int) $policy['trial_days']];
+    }
+
+    /**
+     * « Demander » (règle du 05/11/2026) : si un essai gratuit est possible, il s'ouvre aussitôt (droit `trial`, courriel) ; sinon une
+     * demande part à la plateforme.
+     * @return array{kind: 'trial'|'request', entitlement?: array<string, mixed>, request?: array<string, mixed>}
+     */
     public function execute(string $key, ?string $message, ?string $by): array
     {
         if (!isset(FeatureCatalog::GOVERNED[$key])) {
@@ -35,6 +60,12 @@ class RequestSiteFeatureUseCase
             throw new SiteFeatureRequestException('REQUEST_PENDING', 'Une demande est déjà en attente pour cette fonctionnalité.');
         }
         $message = $message !== null ? trim($message) : '';
+        $offer = $this->trialOffer($key, $code);
+        if ($offer['allowed']) {
+            $entitlement = $this->entitlements->trial($code, $key, null, $by, 'essai demandé depuis Mon site' . ($message !== '' ? ' : ' . $message : ''));
+
+            return ['kind' => 'trial', 'entitlement' => $entitlement];
+        }
         $row = $this->requests->insert($code, $key, $by, $message !== '' ? $message : null);
         // courriels (05/11/2026) : accusé au contact du site, avis au super administrateur de la plateforme
         foreach (['request_received', 'request_new'] as $event) {
@@ -45,6 +76,6 @@ class RequestSiteFeatureUseCase
             }
         }
 
-        return $row;
+        return ['kind' => 'request', 'request' => $row];
     }
 }

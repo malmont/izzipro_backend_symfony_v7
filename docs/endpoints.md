@@ -247,7 +247,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | ANY | `/booking-setup/list` | aucune règle | `Controller\BookingController\BookingSetupController::list` |
 | ANY | `/booking-setup/logout` | aucune règle | `Controller\BookingController\BookingSetupController::logout` |
 
-## Boutique et commun (282)
+## Boutique et commun (285)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -468,6 +468,9 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | DELETE | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::deleteDemo` |
 | GET | `/api/site-content/demo` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::demo` |
 | POST | `/api/site-content/seed` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteContentController\SiteContentController::seed` |
+| POST | `/api/site/assistant/actions/{id}/confirm` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteAssistantController\SiteAssistantController::confirm` |
+| GET | `/api/site/assistant/credits` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteAssistantController\SiteAssistantController::credits` |
+| POST | `/api/site/assistant` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteAssistantController\SiteAssistantController::chat` |
 | POST | `/api/site/features/{key}/request` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::request` |
 | GET | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::show` |
 | PUT | `/api/site/features` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\SiteFeaturesController\SiteFeaturesController::update` |
@@ -573,7 +576,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (44)
+## Administration (EasyAdmin) (45)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -588,6 +591,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | POST | `/admin/memoires/ai-quotas` | ROLE_ADMIN | `Controller\Admin\Memoires\AiQuotaPageController::save` |
 | GET | `/admin/mobile-theme` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\AppThemeShortcutController::open` |
 | POST | `/admin/mon-site/demander/{key}` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::ask` |
+| GET | `/admin/mon-site/forfait` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::plan` |
 | POST | `/admin/mon-site/regler` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::settle` |
 | GET | `/admin/mon-site` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::index` |
 | ANY | `/admin/pdf/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::pdfPrintBarcode` |

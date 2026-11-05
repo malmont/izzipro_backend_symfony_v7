@@ -24,6 +24,7 @@ class SiteReadinessService
         private readonly TenantDatabaseConnector $connector,
         private readonly EntitlementService $entitlements,
         private readonly FeatureRequestRepository $requests,
+        private readonly FeaturePolicyRepository $policies,
         private readonly PlatformModeService $platform,
         private readonly TenantPublicHostResolver $hosts,
         private readonly TenantAppKeyRepository $appKeys,
@@ -75,6 +76,13 @@ class SiteReadinessService
     {
         $e = $this->row($pdo, 'SELECT name, email, logo, locale, currency, pos_timezone FROM entreprise ORDER BY id LIMIT 1') ?? [];
         $address = $this->row($pdo, 'SELECT country, city FROM address_entreprise ORDER BY id LIMIT 1');
+        $trials = [];
+        foreach ($this->entitlements->listForTenant($code) as $row) {
+            if ($row['source'] === 'trial') {
+                $trials[$row['feature_key']] = true;
+            }
+        }
+        $policies = $this->policies->all(array_keys(FeatureCatalog::GOVERNED));
         $fromEmail = trim((string) $this->one($pdo, 'SELECT from_email FROM email_configuration ORDER BY id LIMIT 1'));
         $commerce = $this->commerce($pdo);
         $effective = $this->entitlements->effective($code);
@@ -139,10 +147,12 @@ class SiteReadinessService
                 continue;
             }
             $isPending = isset($pending[$feature]);
+            $trial = ($policies[$feature]['trial_allowed'] ?? false) && !isset($trials[$feature]);
             $steps[] = [
                 'key' => 'obtain.' . $feature, 'group' => $feature, 'title' => 'Obtenir : ' . FeatureCatalog::label($feature), 'description' => FeatureCatalog::DESCRIPTIONS[$feature] ?? '',
                 'status' => $isPending ? 'pending' : 'optional', 'where' => 'platform',
-                'action' => $shopUrl !== null ? ['type' => 'shop', 'feature' => $feature, 'url' => $shopUrl] : ['type' => 'request', 'feature' => $feature],
+                // `trial` : POST /api/site/features/{clé}/request ouvre un essai gratuit immédiat ; `request` : même route, demande à la plateforme ; `shop` : boutique de forfaits
+                'action' => $trial ? ['type' => 'trial', 'feature' => $feature, 'days' => (int) $policies[$feature]['trial_days'], 'shopUrl' => $shopUrl] : ($shopUrl !== null ? ['type' => 'shop', 'feature' => $feature, 'url' => $shopUrl] : ['type' => 'request', 'feature' => $feature]),
             ];
         }
 

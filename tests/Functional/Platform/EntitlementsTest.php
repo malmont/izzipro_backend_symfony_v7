@@ -134,11 +134,20 @@ class EntitlementsTest extends WebTestCase
         $this->setFlag('is_boussole_esg_active', false);
         $this->assertFalse($s->isEnabled(MV_TEST_TENANT_CODE, 'module.boussole'));
 
-        // demande d'un site (le compte super administrateur existe sur chaque base en production : créé ici par le jeton)
+        // « Demander » = essai gratuit immédiat quand la politique le permet (05/11/2026), sinon demande à la plateforme
         $this->token('super');
+        $r = $this->api('POST', '/api/site/features/module.boussole/request', [], 'admin');
+        $this->assertSame(201, $r->getStatusCode(), $r->getContent());
+        $this->assertSame(['trial', 'trial'], [json_decode((string) $r->getContent(), true)['kind'], json_decode((string) $r->getContent(), true)['entitlement']['source']], 'essai ouvert aussitôt');
+        $this->assertSame(1, $this->countEmails(), 'un courriel : essai ouvert (les courriels d\'une requête sont visibles jusqu\'à la requête suivante)');
+        $this->assertTrue($s->isEnabled(MV_TEST_TENANT_CODE, 'module.boussole'));
+        $this->assertSame(409, $this->api('POST', '/api/site/features/module.boussole/request', [], 'admin')->getStatusCode(), 'déjà active');
+        $s->cancel((int) $s->effective(MV_TEST_TENANT_CODE)['module.boussole']['id'], 'test');
+        $this->assertFalse($s->isEnabled(MV_TEST_TENANT_CODE, 'module.boussole'));
         $r = $this->api('POST', '/api/site/features/module.boussole/request', ['message' => 'Nous voulons la Boussole'], 'admin');
         $this->assertSame(201, $r->getStatusCode(), $r->getContent());
-        $this->assertEmailCount(2, null, 'accusé au site et avis au super administrateur (05/11/2026)');
+        $this->assertSame('request', json_decode((string) $r->getContent(), true)['kind'], 'un seul essai par fonctionnalité : ensuite, demande');
+        $this->assertSame(2, $this->countEmails(), 'accusé au site et avis au super administrateur');
         $subjects = array_map(fn ($m) => (string) $m->getSubject(), $this->getMailerMessages());
         $this->assertStringContainsString('enregistrée', $subjects[0]);
         $this->assertStringContainsString('Demande de fonctionnalité', $subjects[1]);
@@ -178,6 +187,11 @@ class EntitlementsTest extends WebTestCase
         $this->assertFalse($eff['module.boussole']['enabled']);
         $this->assertSame(0, $tester->execute([]));
         $this->assertStringContainsString('0 droit(s) créé(s)', $tester->getDisplay(), 'idempotent');
+    }
+
+    private function countEmails(): int
+    {
+        return count($this->getMailerMessages());
     }
 
     private function service(): EntitlementService

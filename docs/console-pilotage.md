@@ -146,6 +146,28 @@ EasyAdmin ou le forfait pour les autres), carte « Préparer mon site » en têt
 carte sur le tableau de bord EasyAdmin tant que tout n'est pas prêt, colonne « Préparation » de la grille de la page Plateforme.
 L'assistant IA de configuration (à venir) proposera d'exécuter l'étape suivante. Test : `tests/Functional/Platform/SiteReadinessTest.php`.
 
+## Assistant IA de configuration (05/11/2026)
+
+`Services/SiteAssistantService/SiteAssistantService` (modèle Sonnet 5.5, client `LandingAiClientInterface`, un crédit IA du site par
+échange, remboursé si l'IA échoue, mode `assistant` dans l'historique des crédits). Contexte donné à l'IA : le registre compacté, le
+cheminement et la liste des écrans. Outils (`SiteAssistantTools`) : `get_settings`, `get_readiness`, `open_screen` (immédiats, sans
+effet) ; `set_site_settings` (clés `site` du registre seulement : une clé plateforme est refusée à l'IA) et `request_feature`
+**proposent** une action, gardée 15 min dans le cache et appliquée seulement par `POST /api/site/assistant/actions/{id}/confirm`,
+par les mêmes cas d'usage que Mon site (`UpdateSiteFeaturesUseCase`, `RequestSiteFeatureUseCase`), donc validation, rôles et journal.
+Routes (`ROLE_ADMIN`) : `POST /api/site/assistant { messages: [{ role: user | assistant, content }], locale? }` → `{ reply, actions:
+[{ id, tool, input, summary }], links: [{ label, screen }], readiness, credits, usage }` ; 422 `VALIDATION_FAILED`, 402
+`AI_CREDITS_EXHAUSTED`, 429 `AI_TOO_MANY_FAILURES`, 503 `AI_UNAVAILABLE` ; `POST …/actions/{id}/confirm` → `{ tool, input, result,
+readiness }`, 404 `ACTION_NOT_FOUND` ; `GET /api/site/assistant/credits`. Le front (éditeur Next, page Mon site à venir) affiche la
+réponse, les liens (`screen` → écran du back-office, même vocabulaire que la page Mon site) et les actions avec un bouton
+« Confirmer ». Jamais : paiements, forfaits, droits de la plateforme, autres sites. Test : `tests/Functional/Platform/SiteAssistantTest.php`.
+
+## « Demander » une fonctionnalité : essai immédiat, puis demande (règle du 05/11/2026)
+
+`RequestSiteFeatureUseCase` : si la politique de la fonctionnalité autorise l'essai et que le site n'en a jamais eu pour elle, le clic
+ouvre aussitôt un essai gratuit (`trial`, durée de la politique, courriel) ; sinon une demande part à la plateforme. Mon site affiche
+« Essayer N jours » ou « Demander », et toujours « Mettre à jour mon forfait » (`/admin/mon-site/forfait` : la boutique de forfaits
+si `shop_url` est réglée, sinon une page d'attente). Le cheminement porte l'action `trial` (`days`, `shopUrl`) sur les étapes « Obtenir ».
+
 ## Demandes des sites et courriels (05/11/2026)
 
 Quand un administrateur demande une fonctionnalité (bouton « Demander » de Mon site, `POST /api/site/features/{clé}/request`) :

@@ -41,6 +41,7 @@ class SiteConsolePageTest extends WebTestCase
             $this->db->executeStatement('DELETE FROM boutique_setting');
         }
         $this->master->prepare('DELETE FROM tenant_feature_requests WHERE tenant_code = ?')->execute([MV_TEST_TENANT_CODE]);
+        $this->master->exec("DELETE FROM platform_feature_policies WHERE feature_key = 'module.boussole'");
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
         parent::tearDown();
     }
@@ -60,7 +61,11 @@ class SiteConsolePageTest extends WebTestCase
         foreach (['Localisation', 'Modules et applications', 'Commerce', 'Services et quotas', 'mon-site-localisation', 'mon-site-commerce', 'Boussole ESG', 'Paiements en ligne (Stripe)'] as $needle) {
             $this->assertStringContainsString($needle, $html);
         }
-        $this->assertGreaterThanOrEqual(1, $crawler->filter('tr[data-key="module.boussole"] form')->count(), 'bouton Demander sur un module non accordé');
+        $this->assertGreaterThanOrEqual(1, $crawler->filter('tr[data-key="module.boussole"] form')->count(), 'bouton Essayer ou Demander sur un module non accordé');
+        $this->assertStringContainsString('Mettre à jour mon forfait', $html);
+        $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/mon-site/forfait', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode(), 'page d\'attente tant que la boutique de forfaits n\'existe pas');
+        $crawler = $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin/mon-site', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $token = $crawler->filter('form.mon-site-localisation input[name="_token"]')->attr('value');
 
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/mon-site/regler', ['_token' => $token, 'section' => 'localisation', 'site_locale' => 'en', 'site_timezone' => 'America/Vancouver', 'site_currency' => 'USD', 'site_prices_include_tax' => '0'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
@@ -76,6 +81,8 @@ class SiteConsolePageTest extends WebTestCase
         $commerce = json_decode((string) $this->db->fetchOne('SELECT configuration::text FROM boutique_setting ORDER BY id LIMIT 1'), true)['commerce'];
         $this->assertSame([['sale', 'rental'], true, false, 'table'], [$commerce['salesModes'], $commerce['guestCheckout'], $commerce['subscriptionsEnabled'], $commerce['taxProvider']], 'cases absentes = faux');
 
+        // essai interdit par la politique → demande (sinon « Demander » ouvre un essai immédiat, règle du 05/11/2026)
+        $this->master->prepare("INSERT INTO platform_feature_policies (feature_key, trial_allowed, trial_days, free_allowed, grace_days) VALUES ('module.boussole', FALSE, 30, TRUE, 7) ON CONFLICT (feature_key) DO UPDATE SET trial_allowed = FALSE")->execute();
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/mon-site/demander/module.boussole', ['_token' => $token], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertSame(['module.boussole' => 'pending'], static::getContainer()->get(FeatureRequestRepository::class)->pendingFor(MV_TEST_TENANT_CODE));
         $crawler = $this->client->followRedirect();

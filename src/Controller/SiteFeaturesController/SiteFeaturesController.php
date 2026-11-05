@@ -68,8 +68,9 @@ class SiteFeaturesController extends AbstractController
     }
 
     /**
-     * Demande d'une fonctionnalité de la plateforme (console, lot 3, 04/11/2026) : file de la console super administrateur (plus tard,
-     * redirection vers la boutique de la plateforme). 201 { request } ; 409 ALREADY_ENABLED | REQUEST_PENDING ; 422 clé inconnue ou non plateforme.
+     * « Demander » une fonctionnalité (console, lot 3, 04/11/2026 ; règle du 05/11/2026) : essai gratuit ouvert aussitôt si la politique le permet
+     * (201 { kind: trial, entitlement }), sinon demande à la plateforme (201 { kind: request, request }) ; 409 ALREADY_ENABLED | REQUEST_PENDING ;
+     * 422 clé inconnue ou non plateforme.
      */
     #[Route('/{key}/request', name: 'api_site_features_request', methods: ['POST'], requirements: ['key' => '[a-z_]+\.[a-z_]+'])]
     public function request(string $key, Request $request): JsonResponse
@@ -77,14 +78,14 @@ class SiteFeaturesController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $message = is_array($data) && isset($data['message']) && is_string($data['message']) ? $data['message'] : null;
         try {
-            $row = $this->requestFeature->execute($key, $message, $this->getUser()?->getUserIdentifier());
+            $outcome = $this->requestFeature->execute($key, $message, $this->getUser()?->getUserIdentifier());
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => [['path' => $key, 'message' => $e->getMessage()]]], 422);
         } catch (SiteFeatureRequestException $e) {
             return $this->json(['error' => $e->code409, 'code' => $e->code409, 'message' => $e->getMessage()], 409);
         }
 
-        return $this->json(['request' => $row], 201);
+        return $this->json($outcome + ['request' => $outcome['request'] ?? null], 201);
     }
 
     /** @param list<array{path: string, message: string}> $errors */
