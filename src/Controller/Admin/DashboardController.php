@@ -149,7 +149,9 @@ class DashboardController extends AbstractDashboardController
         private TenantConnectionManager $tenantConnectionManager,
         private TenantVisitorTrackingService $visitorTrackingService,
         private RequestStack $requestStack,
-        private \App\Services\CaisseService\StoreClock $storeClock
+        private \App\Services\CaisseService\StoreClock $storeClock,
+        private readonly ?\App\Services\Platform\SiteReadinessService $readiness = null, // cheminement de préparation du site (05/11/2026)
+        private readonly ?\EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator $adminUrls = null
     ) {}
 
     #[Route('/admin', name: 'admin')]
@@ -360,7 +362,20 @@ class DashboardController extends AbstractDashboardController
         // Métriques de tous les sites : réservées au propriétaire de la plateforme (un administrateur de site ne voit que le sien)
         $trafficMetrics = $this->isGranted('ROLE_SUPER_ADMIN') ? $this->visitorTrackingService->getGlobalTrafficMetrics($tenants) : null;
 
+        $readiness = null;
+        try {
+            $readiness = $this->readiness?->forCurrentSite();
+        } catch (\Throwable) {
+        }
+        $monSiteUrl = null;
+        try {
+            $monSiteUrl = $this->adminUrls?->unsetAll()->setRoute('admin_mon_site')->generateUrl();
+        } catch (\Throwable) {
+        }
+
         return $this->render('admin/dashboard.html.twig', [
+            'readiness' => $readiness,
+            'monSiteUrl' => $monSiteUrl,
             'tenantReport' => $tenantReport,
             'storeTimezone' => $tz->getName(),
             'currentTenantCode' => $currentTenantCode,

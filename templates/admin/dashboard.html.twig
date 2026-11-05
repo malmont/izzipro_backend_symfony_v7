@@ -29,6 +29,17 @@
 
 {% block main %}
 <div class="container-fluid px-0">
+    {% if readiness is defined and readiness and readiness.total > 0 and readiness.percent < 100 %}
+    <div class="card border-0 shadow-sm rounded-lg mb-4 p-3 bg-white dashboard-cheminement" style="border-left: 4px solid #f6c23e !important;">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <div class="text-xs font-weight-bold text-uppercase">Préparer mon site</div>
+            <div class="progress flex-grow-1" style="height: 10px; min-width: 10em"><div class="progress-bar" style="width: {{ readiness.percent }}%"></div></div>
+            <strong>{{ readiness.percent }} %</strong>
+            {% if readiness.next %}<span class="small text-muted">Prochaine étape : {{ readiness.next.title }}</span>{% endif %}
+            {% if monSiteUrl %}<a class="btn btn-sm btn-primary ms-auto" href="{{ monSiteUrl }}">Voir le cheminement</a>{% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     {# ------------------ KPIS / METRICS CARDS (ROW 1) ------------------ #}
     <div class="row mb-4">

@@ -130,6 +130,22 @@ s'applique au provisionnement. Essais et gratuité par site seulement (pas par u
 | 4 | API super administrateur `/api/platform/*` : `GET sites` (grille sites × fonctionnalités, demandes), `GET`/`POST entitlements`, `PATCH entitlements/{id}` (suspend, resume, cancel, extend), `GET policies`, `PUT policies/{clé}`, `GET requests`, `PATCH requests/{id}` (grant | refuse), `GET events` ; codes 422 `VALIDATION_FAILED`, 404 `NOT_FOUND`, 409 `POLICY_FORBIDDEN` ; `UseCase/PlatformUseCase/ManagePlatformEntitlementsUseCase` partagé avec la page EasyAdmin `/admin/plateforme` (`PlatformConsoleAdminController`, menu Maintenance « Plateforme : pilotage », super admin) : mode demo / live, grille, accorder (manuel, essai, gratuit), suspendre / retirer / prolonger, demandes, politiques, offres et prix, journal | fait le 04/11/2026 ; tests `PlatformConsoleApiTest`, `PlatformConsolePageTest` |
 | 5 | Page EasyAdmin `/admin/mon-site` (`SiteConsoleAdminController`, menu Entreprise « Mon site : pilotage », administrateur du site) : Localisation et Commerce (formulaires → `UpdateSiteFeaturesUseCase`, mêmes écritures que `PUT /api/site/features`), Modules et applications (droit d'usage, prérequis, bouton « Demander » → `RequestSiteFeatureUseCase`, partagé avec `POST /api/site/features/{clé}/request`), Services et quotas (état, lien vers l'écran) ; formulaire `/setup/new-store`, étape « Votre activité » (langue, fuseau, devise, fonctionnalités souhaitées, modes de vente) appliquée par `Services/Platform/TenantSetupFeaturesService` : essai gratuit selon la politique (courriel), sinon demande en attente, puis projection (les modules non demandés sont désactivés) | fait le 04/11/2026 ; tests `SiteConsolePageTest`, `TenantSetupFeaturesTest` |
 
+## Cheminement de préparation du site (05/11/2026)
+
+`Services/Platform/SiteReadinessService` calcule en SQL direct, pour n'importe quel site, une liste ordonnée d'**étapes** : socle du
+site (identité, adresse, langue / fuseau / devise, expéditeur des courriels, logo), puis une ou plusieurs étapes par module ou
+application **accordé** (Boutique : taxes, Stripe, premier produit, livraison, abonnements si activés ; Caisse : clé d'activation,
+poste ; Mémoires : types de livre ; Boussole : questions ; applications : clé, code court), et en fin les fonctionnalités **non
+accordées** en « Obtenir » (`optional`, ou `pending` si une demande est en attente ; action `shop` vers la boutique de la plateforme
+quand `shop_url` est renseignée, sinon `request`). Chaque étape porte `status`, `where` (`backend` écran EasyAdmin, `editor`
+éditeur du site, `platform`) et `action` (`screen` + clé d'écran, `registry` + clé du registre, `editor` + url, `request` | `shop`).
+L'avancement (`percent`, `done`, `total`) ne compte que les étapes `done` et `todo`.
+
+Où il s'affiche : `GET /api/site/readiness` (ROLE_ADMIN ; l'éditeur Next exécute les étapes `editor` sur place et renvoie vers
+EasyAdmin ou le forfait pour les autres), carte « Préparer mon site » en tête de la page Mon site (bouton « Faire » par étape),
+carte sur le tableau de bord EasyAdmin tant que tout n'est pas prêt, colonne « Préparation » de la grille de la page Plateforme.
+L'assistant IA de configuration (à venir) proposera d'exécuter l'étape suivante. Test : `tests/Functional/Platform/SiteReadinessTest.php`.
+
 ## Demandes des sites et courriels (05/11/2026)
 
 Quand un administrateur demande une fonctionnalité (bouton « Demander » de Mon site, `POST /api/site/features/{clé}/request`) :

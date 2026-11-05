@@ -54,13 +54,14 @@
     <p class="text-muted small">Source du droit : manual (accordé à la main), trial (essai, avec sa fin), free (gratuit sans fin), subscription (abonnement de la boutique de la plateforme). Cliquer un site pour son détail et son journal.</p>
     <div class="table-responsive">
     <table class="table table-sm datagrid plateforme-grille">
-        <thead><tr><th>Site</th>{% for f in features %}<th class="text-center small">{{ labels[f] }}</th>{% endfor %}<th>Demandes</th></tr></thead>
+        <thead><tr><th>Site</th>{% for f in features %}<th class="text-center small">{{ labels[f] }}</th>{% endfor %}<th>Demandes</th><th>Préparation</th></tr></thead>
         <tbody>
         {% for s in sites %}
             <tr data-site="{{ s.code }}" class="{{ s.code == selected ? 'table-active' : '' }}">
                 <td><a href="{{ siteUrls[s.code] ?? path('admin_plateforme', {site: s.code}) }}"><strong>{{ s.code }}</strong></a><div class="small text-muted">{{ s.name }}</div></td>
                 {% for f in features %}<td class="text-center">{{ m.badge(s.features[f]) }}</td>{% endfor %}
                 <td>{% for r in s.pendingRequests %}<span class="badge bg-warning text-dark">{{ labels[r] ?? r }}</span> {% endfor %}</td>
+                <td class="small" style="min-width: 11em"><div class="progress" style="height: 6px" title="{{ s.readiness.done }} / {{ s.readiness.total }}"><div class="progress-bar {{ s.readiness.percent >= 100 ? 'bg-success' : '' }}" style="width: {{ s.readiness.percent }}%"></div></div>{{ s.readiness.percent }} %{% if s.readiness.next %} · <span class="text-muted">{{ s.readiness.next.title }}</span>{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>

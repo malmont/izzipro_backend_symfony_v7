@@ -8,7 +8,7 @@ use App\Services\TenantConnectionManager;
 /** Vue d'ensemble de la plateforme (console de pilotage, lot 4, 04/11/2026) : sites × fonctionnalités gouvernées, demandes en attente */
 class PlatformConsoleService
 {
-    public function __construct(private readonly TenantConnectionManager $tenants, private readonly EntitlementService $entitlements, private readonly FeatureRequestRepository $requests, private readonly FeaturePolicyRepository $policies, private readonly PlatformOfferRepository $offers)
+    public function __construct(private readonly TenantConnectionManager $tenants, private readonly EntitlementService $entitlements, private readonly FeatureRequestRepository $requests, private readonly FeaturePolicyRepository $policies, private readonly PlatformOfferRepository $offers, private readonly SiteReadinessService $readiness)
     {
     }
 
@@ -28,7 +28,9 @@ class PlatformConsoleService
             if ($code === 'gmasuite') {
                 continue;
             }
-            $rows[] = ['code' => $code, 'name' => (string) $tenant['name'], 'dbname' => (string) $tenant['dbname'], 'features' => $this->entitlements->effective($code), 'pendingRequests' => $pending[$code] ?? []];
+            $readiness = $this->readiness->forSite($code);
+            $rows[] = ['code' => $code, 'name' => (string) $tenant['name'], 'dbname' => (string) $tenant['dbname'], 'features' => $this->entitlements->effective($code), 'pendingRequests' => $pending[$code] ?? [],
+                'readiness' => ['percent' => $readiness['percent'], 'done' => $readiness['done'], 'total' => $readiness['total'], 'next' => $readiness['next'] ? ['key' => $readiness['next']['key'], 'title' => $readiness['next']['title'], 'where' => $readiness['next']['where']] : null]];
         }
 
         return $rows;

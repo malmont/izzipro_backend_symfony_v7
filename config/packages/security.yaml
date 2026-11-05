@@ -112,7 +112,7 @@ security:
         # 🔹 Contenu d'exemple du site (copie depuis le site de référence, liste, suppression) : administrateurs.
         - { path: ^/api/site-content(/|$), roles: ROLE_ADMIN }
         # 🔹 Registre des fonctionnalités du site (console de pilotage, lot 2, 04/11/2026) : lecture et écriture par l'administrateur du site
-        - { path: ^/api/site/features(/|$), roles: ROLE_ADMIN }
+        - { path: ^/api/site/(features|readiness)(/|$), roles: ROLE_ADMIN }
         # 🔹 Plateforme (console de pilotage, 04/11/2026) : mode demo | live, droits d'usage, offres : super administrateur seulement
         - { path: ^/api/platform(/|$), roles: ROLE_SUPER_ADMIN }
         # 🔹 Catalogue public des offres de la plateforme (console de pilotage, lot 3 bis, 04/11/2026)

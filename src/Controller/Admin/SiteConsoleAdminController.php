@@ -10,6 +10,7 @@ use App\Services\FeatureAccess\FeatureCatalog;
 use App\Services\FeatureAccess\SiteFeatureStateService;
 use App\Services\FeatureAccess\SiteFeaturesValidationException;
 use App\Services\Platform\PlatformModeService;
+use App\Services\Platform\SiteReadinessService;
 use App\UseCase\SiteFeaturesUseCase\RequestSiteFeatureUseCase;
 use App\UseCase\SiteFeaturesUseCase\SiteFeatureRequestException;
 use App\UseCase\SiteFeaturesUseCase\UpdateSiteFeaturesUseCase;
@@ -35,7 +36,8 @@ class SiteConsoleAdminController extends AbstractController
         'pos_stripe' => ['route' => 'admin_pos_stripe'], 'easypost' => ['crud' => EasyPostConfigurationCrudController::class], 'google_places' => ['crud' => GooglePlacesConfigCrudController::class],
         'email_configuration' => ['crud' => EmailConfigurationCrudController::class], 'ai_credits' => ['crud' => AiCreditSettingCrudController::class], 'mv_ai_quotas' => ['route' => 'admin_mv_ai_quotas'],
         'review_settings' => ['crud' => ReviewSettingCrudController::class],
-        'carriers' => ['crud' => CarrierCrudController::class],
+        'carriers' => ['crud' => CarrierCrudController::class], 'products' => ['crud' => ProductCrudController::class], 'cash_registers' => ['crud' => CashRegisterCrudController::class],
+        'esg_questions' => ['crud' => \App\Controller\Admin\ESG\DiagnosticQuestionCrudController::class], 'short_code' => ['route' => 'admin_short_code'],
     ];
     /** clé d'un prérequis → écran où le satisfaire */
     private const PREREQ_SCREENS = ['app.key' => 'app_keys', 'stripe.online' => 'stripe_config', 'subscription_plan.active' => 'subscription_plans', 'carrier.fixed_price' => 'carriers', 'tax.table' => 'taxes', 'entreprise.address' => 'entreprise', 'module.pos' => 'app_keys'];
@@ -46,6 +48,7 @@ class SiteConsoleAdminController extends AbstractController
         private readonly RequestSiteFeatureUseCase $requestFeature,
         private readonly PlatformModeService $platform,
         private readonly AdminUrlGenerator $urls,
+        private readonly SiteReadinessService $readiness,
     ) {
     }
 
@@ -64,7 +67,16 @@ class SiteConsoleAdminController extends AbstractController
             $groups[$entry['group']][] = $entry;
         }
 
+        $readiness = $this->readiness->forCurrentSite();
+        foreach ($readiness['steps'] as $i => $step) {
+            $readiness['steps'][$i]['url'] = $this->stepUrl($step);
+        }
+        if ($readiness['next'] !== null) {
+            $readiness['next']['url'] = $this->stepUrl($readiness['next']);
+        }
+
         return $this->render('admin/mon_site/index.html.twig', [
+            'readiness' => $readiness,
             'groups' => $groups,
             'platformMode' => $this->platform->mode(),
             'shopUrl' => $this->platform->shopUrl(),
@@ -136,6 +148,20 @@ class SiteConsoleAdminController extends AbstractController
         }
 
         return $this->redirect($this->pageUrl());
+    }
+
+    /** Où faire une étape du cheminement : écran EasyAdmin, éditeur du site, boutique de la plateforme ou cette page (demande, registre) */
+    private function stepUrl(array $step): ?string
+    {
+        $action = $step['action'];
+
+        return match ($action['type']) {
+            'screen' => $this->screenUrl($action['screen'] ?? null),
+            'editor' => $action['url'] ?? null,
+            'shop' => $action['url'] ?? null,
+            'registry' => $this->pageUrl() . '#localisation',
+            default => null,
+        };
     }
 
     /** URL de la page habillée par EasyAdmin : une redirection vers la route nue perdrait le menu et le thème */
