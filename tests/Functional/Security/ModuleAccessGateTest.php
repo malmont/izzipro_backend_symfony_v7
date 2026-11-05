@@ -50,6 +50,9 @@ class ModuleAccessGateTest extends WebTestCase
         $this->assertNotSame(403, $this->get('/api/entreprise/1')->getStatusCode(), 'fiche entreprise : hors module');
         $this->assertNotSame(403, $this->get('/api/products')->getStatusCode(), 'catalogue public : servi même sans boutique (site vitrine)');
         $this->assertNotSame(403, $this->post('/api/order/create-multi-payment', [])->getStatusCode(), 'vente au comptoir : caisse, pas boutique (non gardée dans ce lot)');
+        $this->assertNotSame(403, $this->post('/api/order/create', [])->getStatusCode(), 'commande : servie même module désactivé (paiement déjà autorisé finalisable)');
+        $this->assertNotSame(403, $this->post('/api/order/create-guest', [])->getStatusCode());
+        $this->assertSame(403, $this->post('/api/stripe/create-intent', [])->getStatusCode(), 'début du parcours : gardé');
 
         $this->setFlags(true, true, true);
         $r = $this->get('/api/boussole/referentials'); $this->assertSame(200, $r->getStatusCode(), 'module réactivé : servi aussitôt (cache vidé par l\'écriture) : ' . $r->getContent());
@@ -74,6 +77,9 @@ class ModuleAccessGateTest extends WebTestCase
         $this->assertNull(ModuleAccessService::moduleForPath('/api/pos/pin-login'), 'caisse : indicateur d\'application, non gardée dans ce lot');
         $this->assertNull(ModuleAccessService::moduleForPath('/api/caisse/drawer-open'));
         $this->assertNull(ModuleAccessService::moduleForPath('/api/order/create-multi-payment'));
+        $this->assertNull(ModuleAccessService::moduleForPath('/api/order/create'));
+        $this->assertNull(ModuleAccessService::moduleForPath('/api/payment'));
+        $this->assertSame('boutique', ModuleAccessService::moduleForPath('/api/stripe/create-intent'));
         $this->assertSame('boutique', ModuleAccessService::moduleForPath('/api/subscriptions/12/cancel'));
         $this->assertSame('memoires', ModuleAccessService::moduleForPath('/api/memoires/mobile/books'));
         $this->assertSame(array_keys(ModuleAccessService::LABELS), array_keys(ModuleAccessService::COLUMNS));

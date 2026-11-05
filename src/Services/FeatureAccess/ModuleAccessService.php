@@ -43,7 +43,10 @@ class ModuleAccessService
     /**
      * Chemins d'API soumis à un module (expression sur le chemin, sans la requête). Volontairement étroit : les lectures
      * publiques du catalogue restent servies (le site vitrine les affiche même sans boutique) ; sont gardées les routes qui
-     * n'ont de sens qu'avec le module. `create-multi-payment` est la vente au comptoir (caisse), pas la boutique.
+     * n'ont de sens qu'avec le module. Boutique : seul le **début** d'un parcours est gardé (devis, intention de paiement,
+     * abonnements) ; `order/create`, `order/create-guest` et `payment` restent servis pour qu'un paiement Stripe déjà autorisé
+     * puisse toujours être finalisé en commande (05/11/2026, question de l'application mobile). `create-multi-payment` est la
+     * vente au comptoir (caisse), pas la boutique.
      * La caisse n'est pas gardée ici : `is_pos_active` est l'indicateur de l'application Caisse (clés d'activation), faux sur
      * des sites qui l'utilisent ; le droit d'usage du module Caisse viendra avec les entitlements (lot 3).
      * `stripe/webhook` n'est jamais gardé (appel de Stripe).
@@ -51,7 +54,7 @@ class ModuleAccessService
     public const ROUTES = [
         '#^/api/memoires(/|$)#' => self::MEMOIRES,
         '#^/api/boussole(/|$)#' => self::BOUSSOLE,
-        '#^/api/(cart/quote|order/create|order/create-guest|payment|stripe/create-intent|subscriptions)(/|$)#' => self::BOUTIQUE,
+        '#^/api/(cart/quote|stripe/create-intent|subscriptions)(/|$)#' => self::BOUTIQUE,
         '#^/api/landingpage-ai(/|$)#' => self::LANDING,
     ];
 

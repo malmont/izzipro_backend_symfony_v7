@@ -881,9 +881,11 @@ Entreprise génère et révoque les clés). `PUT { values: { clé: valeur } }` �
 pour une clé `platform` modifiée par un administrateur de site (valeur inchangée : ignorée). `commerce.salesModes` est aussi accepté
 par `PUT /api/boutique-settings` (validé). Test : `tests/Functional/Boutique/SiteFeaturesApiTest.php`. Depuis le lot 3 (04/11/2026), chaque clé `platform` porte aussi `entitlement` (droit d'usage effectif : `source`, `status`, `endsAt`, `graceUntil`, `offerCode`, ou null) et `request` (`pending` si le site a demandé la fonctionnalité) ; `POST /api/site/features/{clé}/request { message? }` → 201 `{ request }`, 409 `ALREADY_ENABLED` | `REQUEST_PENDING`, 422 clé non plateforme (test `tests/Functional/Platform/EntitlementsTest.php`).
 
-Garde-fou des modules (lot 1 bis) : en mode `live` de la plateforme, devis, commande, paiement, `stripe/create-intent` et
-abonnements répondent **403 `MODULE_INACTIVE`** (`module: boutique`) sur un site sans module Boutique ; le catalogue public reste
-servi. Mode `demo` (défaut) : rien n'est gardé. Voir `docs/architecture.md`, « Modules et mode de la plateforme ».
+Garde-fou des modules (lot 1 bis, resserré le 05/11/2026) : en mode `live` de la plateforme, devis (`cart/quote`),
+`stripe/create-intent` et abonnements répondent **403 `MODULE_INACTIVE`** (`module: boutique`) sur un site sans module Boutique ;
+`order/create`, `order/create-guest` et `payment` restent servis pour qu'un paiement Stripe déjà autorisé soit toujours
+finalisable en commande (aucun paiement en suspens) ; le catalogue public, `boutique-settings` et `subscription-plans` restent
+servis ; l'indicateur lisible avant tout devis est `isBoutiqueActive` de `GET /api/entreprise/{id}`. Mode `demo` (défaut) : rien n'est gardé. Voir `docs/architecture.md`, « Modules et mode de la plateforme ».
 
 ## Avis clients (09/10/2026)
 
