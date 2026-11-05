@@ -221,6 +221,33 @@ et les courriels y renvoient.
 7. Facultatif : proposer les forfaits (offres) dans l'étape « Votre activité » du formulaire de création à la place des cases
    fonctionnalité par fonctionnalité ; rediriger « Demander » directement vers la boutique.
 
+## Comptes et services tiers à créer ou à finaliser avant la production (relevé du 05/11/2026)
+
+Relevé fait sans lire aucune valeur : seuls les **noms** de variables et la **présence** d'une configuration par site sont notés.
+Les clés de la plateforme vivent dans `.env` (relu **à la création du conteneur** seulement : recréer `symfony_app_v2` après
+changement) ; les clés par site vivent dans la base du site et se règlent par l'API ou EasyAdmin. Ordre de priorité : 1 = avant la
+première vente réelle, 2 = avant le lancement du module concerné, 3 = confort, 4 = à trancher.
+
+| Service | Usage | Compte détenu par | État | Reste à faire | Où se règle la clé | Données transmises | Priorité |
+|---|---|---|---|---|---|---|---|
+| Stripe (plateforme) | paiements web boutique, impression MV, forfaits de la plateforme ; Terminal de la caisse | propriétaire | clés **test** ; webhooks plateforme et Connect présents (test) | activer le compte live, clés live, deux webhooks live (plateforme + Connect), puis `pos_stripe_mode=live` site par site et mode plateforme `live` | `STRIPE_SECRET_KEY`, `STRIPE_PUBLIC_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_CONNECT_WEBHOOK_SECRET` | nom, courriel, montant, adresses de facturation/livraison ; la carte ne transite jamais par le backend | 1 |
+| Stripe Connect (par site) | compte Express de chaque site marchand | chaque client (parcours d'intégration depuis le front) | demo, karaandb, memoiresvivantes : compte test ; **aucun compte live** | chaque site marchand crée son compte live avant d'ouvrir | table `stripe_config` du site (API d'intégration) | identité du commerçant (KYC Stripe), montants | 1 |
+| Courriel sortant (SMTP de la plateforme) | tous les courriels transactionnels et de la console | propriétaire | opérationnel (essai 03/11/2026) | vérifier SPF / DKIM / DMARC du domaine expéditeur ; décider d'une adresse `no-reply` dédiée | `MAILER_DSN` | adresses des destinataires, contenu des courriels | 1 |
+| SMTP par site | expéditeur propre d'un site | chaque client | 5 sites sur 7 configurés (boussoleesg, karaandb : non) | compléter pour les sites qui envoient des courriels à leurs clients | table `email_configuration` du site (EasyAdmin / API) | idem | 2 |
+| Anthropic | assistant de pages, assistant de configuration, améliorations MV, Boussole ESG | propriétaire | en service (deux clés : générale et landing) | fixer un plafond de dépense et des alertes dans la console Anthropic ; mentionner le sous-traitant dans la politique de confidentialité | `ANTHROPIC_API_KEY`, `ANTHROPIC_API_KEY_LANDING` ; quotas IA par site côté admin | textes des pages, **texte des chapitres MV** (sensible) | 1 |
+| OpenAI (Whisper) | transcription audio des chapitres MV | propriétaire | clé présente | plafond de dépense ; mention dans la politique de confidentialité | `OPENAI_API_KEY` | **enregistrements audio** des utilisateurs (sensible) | 1 (MV) |
+| RevenueCat | achats intégrés des chapitres MV (mobile) | propriétaire | clé et secret de webhook présents | relier le projet RevenueCat à App Store Connect et Google Play (produits, droits), déclarer l'URL `POST /api/webhooks/revenuecat` avec l'en-tête Authorization, tester un achat sandbox | `REVENUECAT_SECRET_KEY`, `REVENUECAT_WEBHOOK_SECRET` | identifiant d'utilisateur de l'application, identifiants de transaction (pas de courriel) | 2 |
+| Lulu (impression) | impression et expédition des livres MV | propriétaire | **bac à sable** (`LULU_API_URL` sandbox) | compte production, clés prod, URL API et auth prod, webhook prod ; point ouvert : commande créée avant paiement | `LULU_CLIENT_KEY`, `LULU_CLIENT_SECRET`, `LULU_API_URL`, `LULU_AUTH_URL`, `LULU_CONTACT_EMAIL`, `LULU_DEFAULT_POD_PACKAGE_ID` | nom, adresse de livraison, téléphone, PDF du livre | 2 |
+| EasyPost | tarifs et étiquettes d'expédition de la boutique | plateforme et par site | clé plateforme présente ; 4 sites sur 7 ont une clé (demo : non) | compte production et clé prod par site qui expédie ; la livraison n'est pas en production | `EASYPOST_SECRET_KEY` ; table `easy_post_configuration` du site | nom, adresse, téléphone, poids du colis | 2 |
+| Google Places | avis Google et adresses | propriétaire (projet Google Cloud) | `GOOGLE_API_KEY` **vide**, aucune configuration par site | créer le projet, activer Places API, clé restreinte, facturation ; saisir par site | `GOOGLE_API_KEY`, `GOOGLE_SECRET_KEY` ; table `google_places_config` du site | identifiant de l'établissement seulement | 3 |
+| Sauvegardes et surveillance | restic vers un stockage objet, Healthchecks | propriétaire | **aucun compte** ; stockage des fichiers local (`var/storage`) | lot T3 du tableau de bord technique : compte stockage objet + Healthchecks | voir `tech-dashboard-plan` | copies chiffrées des bases et fichiers | 2 |
+| Square | lecture seule depuis le nettoyage M2 | propriétaire | clé présente, usage résiduel | décider : supprimer la clé et le code ou garder | `SQUARE_SECRET_KEY` | aucune en pratique | 4 |
+| Suivi des erreurs (Sentry ou équivalent) | — | — | aucun | facultatif ; journaux locaux et tableau de bord technique suffisent au départ | — | — | 3 |
+
+Hors backend : comptes Apple Developer et Google Play (publication des applications, lot L8 du mobile), registraire DNS des
+clients pour leurs domaines propres (procédure dans la section « Domaine propre »). Internes, sans compte tiers : `APP_SECRET`,
+clés JWT, clés d'activation des applications (`tenant_app_keys`, base maître).
+
 ## Tenir cette fiche à jour
 
 À chaque lot : l'état du tableau ci-dessus, l'inventaire s'il change, et la fiche du module touché (`docs/boutique.md`,
