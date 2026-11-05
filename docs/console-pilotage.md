@@ -123,12 +123,40 @@ s'applique au provisionnement. Essais et gratuité par site seulement (pas par u
 | Lot | Contenu | État |
 |---|---|---|
 | 1 | Verrous API : activations de `PUT /api/entreprise/{id}` et plafonds de `PUT /api/memoires/admin/ai-quotas` réservés au super administrateur (403 `SUPER_ADMIN_REQUIRED`, `fields`, valeur inchangée ignorée) | fait le 04/11/2026 ; tests `EntrepriseApiSuperAdminGuardTest`, `AiQuotaTest` |
-| 1 bis | Relevé des indicateurs réels par site (cohérents pour les modules ; `is_living_memory_active` faux sur `memoiresvivantes` qui utilise l'application : indicateurs d'applications non appliqués) ; garde-fou `ModuleAccessSubscriber` (403 `MODULE_INACTIVE` sur Mémoires, Boussole, assistant Landing, début du parcours Boutique : devis, intention de paiement, abonnements ; `order/create*` et `payment` servis pour finaliser un paiement autorisé, resserré le 05/11/2026 ; caisse exclue) ; mode de la plateforme `demo` / `live` (`platform_settings`, `GET`/`PUT /api/platform/settings`) | fait le 04/11/2026 ; tests `ModuleAccessGateTest`, `PlatformSettingsApiTest` |
+| 1 bis | Relevé des indicateurs réels par site (cohérents pour les modules ; `is_living_memory_active` faux sur `memoiresvivantes` qui utilise l'application : indicateurs d'applications non appliqués) ; garde-fou `ModuleAccessSubscriber` (403 `MODULE_INACTIVE` sur Mémoires, Boussole, assistant Landing, début du parcours Boutique : devis, intention de paiement, souscription et changement de formule, lire ou résilier un abonnement reste servi ; `order/create*` et `payment` servis pour finaliser un paiement autorisé, resserré le 05/11/2026 ; caisse exclue) ; mode de la plateforme `demo` / `live` (`platform_settings`, `GET`/`PUT /api/platform/settings`) | fait le 04/11/2026 ; tests `ModuleAccessGateTest`, `PlatformSettingsApiTest` |
 | 2 | `FeatureCatalog` (26 entrées), `SiteFeatureStateService` (valeurs, effectif, prérequis, états), `GET`/`PUT /api/site/features` ; `entreprise.locale` explicite (`siteLocale`), `commerce.salesModes` ; lectures des réglages de la boutique rendues déterministes (première ligne par id) | fait le 04/11/2026 ; test `SiteFeaturesApiTest` ; message au front à envoyer (panneau Commerce) |
 | 3 | Tables maîtres `tenant_entitlements`, `tenant_entitlement_events`, `platform_feature_policies`, `tenant_feature_requests` (`ops/sql/platform_master.sql`) ; `Services/Platform/EntitlementService` (accorder, essai, gratuit, suspendre, rétablir, annuler, prolonger, grâce, balayage), `EntitlementProjector` (projection SQL sur `is_*_active` + cache du site vidé), `EntitlementFlagSync` (fiche Entreprise → droits, EasyAdmin et API), `EntitlementChangedMessage` + `EntitlementChangedHandler` (courriels fr/en au contact du site, repli expéditeur puis premier administrateur), `app:entitlements:bootstrap` (amorçage idempotent depuis indicateurs et clés valides), `app:entitlements:sweep` (échéances, rappels J-7 / J-1 ; `ops/systemd/entitlements-sweep.{service,timer}`, installé le 05/11/2026 : chaque jour à 06 h 10 UTC) ; registre : `entitlement` et `request` sur les clés plateforme, `POST /api/site/features/{clé}/request` | fait le 04/11/2026 ; test `tests/Functional/Platform/EntitlementsTest.php` |
 | 3 bis | Table maître `platform_offers` (11 offres par défaut, prix provisoires), `PlatformOfferRepository`, `GET /api/offers` (public), `GET`/`PUT /api/platform/offers/{code}` (super admin), `POST /api/platform/billing-events` (super admin, vendeur externe) ; `fulfillmentType` / `fulfillmentRef` sur `SubscriptionPlan` (EasyAdmin, DTO), `fulfillmentTarget` sur `Subscription` (exigé à la souscription d'une formule branchée) ; `SubscriptionStatusChangedEvent` émis par `SubscriptionLifecycleSubscriber` (Doctrine), `OfferFulfillmentService` + `PlatformOfferFulfillmentSubscriber` (activated, renewed, unpaid → grâce, paused → suspendu, resumed, cancelled) | fait le 04/11/2026 ; test `OfferFulfillmentTest` ; migration `Version20261114100000`, script appliqué |
 | 4 | API super administrateur `/api/platform/*` : `GET sites` (grille sites × fonctionnalités, demandes), `GET`/`POST entitlements`, `PATCH entitlements/{id}` (suspend, resume, cancel, extend), `GET policies`, `PUT policies/{clé}`, `GET requests`, `PATCH requests/{id}` (grant | refuse), `GET events` ; codes 422 `VALIDATION_FAILED`, 404 `NOT_FOUND`, 409 `POLICY_FORBIDDEN` ; `UseCase/PlatformUseCase/ManagePlatformEntitlementsUseCase` partagé avec la page EasyAdmin `/admin/plateforme` (`PlatformConsoleAdminController`, menu Maintenance « Plateforme : pilotage », super admin) : mode demo / live, grille, accorder (manuel, essai, gratuit), suspendre / retirer / prolonger, demandes, politiques, offres et prix, journal | fait le 04/11/2026 ; tests `PlatformConsoleApiTest`, `PlatformConsolePageTest` |
 | 5 | Page EasyAdmin `/admin/mon-site` (`SiteConsoleAdminController`, menu Entreprise « Mon site : pilotage », administrateur du site) : Localisation et Commerce (formulaires → `UpdateSiteFeaturesUseCase`, mêmes écritures que `PUT /api/site/features`), Modules et applications (droit d'usage, prérequis, bouton « Demander » → `RequestSiteFeatureUseCase`, partagé avec `POST /api/site/features/{clé}/request`), Services et quotas (état, lien vers l'écran) ; formulaire `/setup/new-store`, étape « Votre activité » (langue, fuseau, devise, fonctionnalités souhaitées, modes de vente) appliquée par `Services/Platform/TenantSetupFeaturesService` : essai gratuit selon la politique (courriel), sinon demande en attente, puis projection (les modules non demandés sont désactivés) | fait le 04/11/2026 ; tests `SiteConsolePageTest`, `TenantSetupFeaturesTest` |
+
+## Demandes des sites et courriels (05/11/2026)
+
+Quand un administrateur demande une fonctionnalité (bouton « Demander » de Mon site, `POST /api/site/features/{clé}/request`) :
+accusé de réception au contact du site, avis au **super administrateur** (son compte existe sur chaque base de site : destinataire
+lu dans la base du site demandeur) avec le site, la fonctionnalité et le message ; refus depuis la console → courriel au site.
+Accorder envoie le courriel d'activation ou d'essai habituel. Tous ces textes citent la **boutique de la plateforme** (`%shop%`)
+quand son adresse est renseignée, sinon invitent à écrire à la plateforme (clés `*_noshop`).
+
+**Adresse de la boutique de la plateforme** : clé `shop_url` de `platform_settings` (`PlatformModeService::shopUrl()`), réglée dans
+la page Plateforme (carte « Mode ») ou par `PUT /api/platform/settings { shopUrl }` (https, vide = aucune). Tant qu'elle est vide,
+« Demander » ne mène qu'à la file de la console ; une fois renseignée, Mon site affiche « Choisir un forfait » à côté de « Demander »
+et les courriels y renvoient.
+
+## Quand la boutique de forfaits de la plateforme sera créée (à faire, dans l'ordre)
+
+1. Créer son site avec `/setup/new-store` (module Boutique, mode de vente abonnement, abonnements activés dans le registre).
+2. Dans EasyAdmin de ce site : un produit par forfait et une formule d'abonnement par produit, avec « Branchement sur un service »
+   = *Offre de la plateforme* et le code de l'offre (`landing_boutique`, `pos_management`, `all`…) ; prix et essai cohérents avec
+   la page Plateforme, onglet Offres (un alignement automatique du prix de la formule sur l'offre reste à écrire).
+3. Stripe : compte connecté du site, `app:boutique:stripe-setup`, webhook Connect déclaré (procédure de `docs/boutique.md`).
+4. Front Next de ce site : champ « code de votre site » (`fulfillmentTarget`) au paiement des formules dont `fulfillmentType`
+   vaut `platform_offer` (422 `FULFILLMENT_TARGET_REQUIRED` | `FULFILLMENT_TARGET_UNKNOWN` sinon), et page d'accueil des forfaits
+   lisant `GET /api/offers`.
+5. Renseigner l'adresse de cette boutique dans la page Plateforme (`shop_url`) : Mon site et les courriels y renvoient.
+6. Passer la plateforme en mode `live` (les garde-fous s'appliquent) ; vérifier que le timer de balayage tourne.
+7. Facultatif : proposer les forfaits (offres) dans l'étape « Votre activité » du formulaire de création à la place des cases
+   fonctionnalité par fonctionnalité ; rediriger « Demander » directement vers la boutique.
 
 ## Tenir cette fiche à jour
 

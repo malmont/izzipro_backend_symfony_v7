@@ -6,7 +6,9 @@ use App\Services\FeatureAccess\FeatureCatalog;
 use App\Services\Platform\EntitlementService;
 use App\Services\Platform\FeaturePolicyRepository;
 use App\Services\Platform\FeatureRequestRepository;
+use App\Message\EntitlementChangedMessage;
 use App\Services\Platform\PlatformConsoleService;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Actions du super administrateur sur les droits d'usage (console de pilotage, lot 4, 04/11/2026), partagées par l'API `/api/platform/*`
@@ -19,7 +21,7 @@ class ManagePlatformEntitlementsUseCase
     public const SOURCES = ['manual', 'trial', 'free'];
     public const ACTIONS = ['suspend', 'resume', 'cancel', 'extend'];
 
-    public function __construct(private readonly EntitlementService $entitlements, private readonly FeaturePolicyRepository $policies, private readonly FeatureRequestRepository $requests, private readonly PlatformConsoleService $console)
+    public function __construct(private readonly EntitlementService $entitlements, private readonly FeaturePolicyRepository $policies, private readonly FeatureRequestRepository $requests, private readonly PlatformConsoleService $console, private readonly MessageBusInterface $bus)
     {
     }
 
@@ -141,6 +143,12 @@ class ManagePlatformEntitlementsUseCase
             $entitlement = $this->grant(['tenant' => $request['tenant_code'], 'feature' => $request['feature_key'], 'source' => $data['source'] ?? 'manual', 'days' => $data['days'] ?? null, 'note' => $data['note'] ?? ('demande n° ' . $requestId)], $by);
         }
         $this->requests->decide($requestId, $action === 'grant' ? 'granted' : 'refused', $by);
+        if ($action === 'refuse') {
+            try {
+                $this->bus->dispatch(new EntitlementChangedMessage($request['tenant_code'], $request['feature_key'], 'request_refused', $requestId, ['by' => $by, 'note' => $data['note'] ?? null]));
+            } catch (\Throwable) {
+            }
+        }
 
         return ['request' => $this->requests->find($requestId), 'entitlement' => $entitlement];
     }

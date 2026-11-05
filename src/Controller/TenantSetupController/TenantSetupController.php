@@ -59,7 +59,8 @@ class TenantSetupController extends AbstractController
         }
 
         // Si extraction échouée ou sous-domaine réservé
-        if (!$subdomain || in_array($subdomain, ['www', 'api', 'admin', 'mail', 'backend'])) {
+        // « app » : hôte de la boutique mobile du site Next (app.arkanoa-media.com, 05/11/2026), jamais un site
+        if (!$subdomain || in_array($subdomain, ['www', 'api', 'admin', 'mail', 'backend', 'app'])) {
             $this->addFlash('danger', 'Accès invalide. Veuillez spécifier un sous-domaine valide (ex: /setup/new-store?subdomain=moncommerce ou boutique.domaine.com/setup/new-store)');
             return $this->redirectToRoute('app_home'); 
         }

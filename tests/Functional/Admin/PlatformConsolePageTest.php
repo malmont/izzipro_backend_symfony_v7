@@ -61,6 +61,7 @@ class PlatformConsolePageTest extends WebTestCase
         // accorder un essai depuis le formulaire
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme/accorder', ['_token' => $token, 'tenant' => MV_TEST_TENANT_CODE, 'feature' => 'module.boussole', 'source' => 'trial', 'days' => '10', 'note' => 'depuis la page', 'site' => MV_TEST_TENANT_CODE], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertSame(302, $this->client->getResponse()->getStatusCode());
+        $this->assertStringContainsString('routeName=admin_plateforme', (string) $this->client->getResponse()->headers->get('Location'), 'redirection vers la page habillée par EasyAdmin (05/11/2026)');
         $eff = static::getContainer()->get(EntitlementService::class)->effective(MV_TEST_TENANT_CODE)['module.boussole'];
         $this->assertSame([true, 'trial'], [$eff['enabled'], $eff['source']]);
         $crawler = $this->client->followRedirect();
@@ -77,6 +78,9 @@ class PlatformConsolePageTest extends WebTestCase
         $this->assertSame([3450, 14], array_map('intval', $this->master->query("SELECT monthly_price_cents, trial_days FROM platform_offers WHERE code = 'landing'")->fetch(\PDO::FETCH_NUM)));
         $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme/mode', ['_token' => $token, 'mode' => 'live'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertSame('live', static::getContainer()->get(PlatformModeService::class)->mode());
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/plateforme/boutique', ['_token' => $token, 'shopUrl' => 'https://forfaits.example.invalid/'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->assertSame('https://forfaits.example.invalid/', static::getContainer()->get(PlatformModeService::class)->shopUrl());
+        static::getContainer()->get(PlatformModeService::class)->setShopUrl(null, 'test');
         // menu : entrée visible pour le super administrateur
         $this->client->request('GET', 'https://' . MV_TEST_TENANT_HOST . '/admin', [], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertStringContainsString('Plateforme : pilotage', $this->client->getResponse()->getContent());

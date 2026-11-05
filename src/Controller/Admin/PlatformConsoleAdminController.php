@@ -11,6 +11,7 @@ use App\Services\Platform\PlatformModeService;
 use App\Services\Platform\PlatformOfferRepository;
 use App\UseCase\PlatformUseCase\ManagePlatformEntitlementsUseCase;
 use App\UseCase\PlatformUseCase\PlatformValidationException;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -33,6 +34,7 @@ class PlatformConsoleAdminController extends AbstractController
         private readonly PlatformOfferRepository $offers,
         private readonly FeatureRequestRepository $requests,
         private readonly EntitlementRepository $repository,
+        private readonly AdminUrlGenerator $urls,
     ) {
     }
 
@@ -40,13 +42,20 @@ class PlatformConsoleAdminController extends AbstractController
     public function index(Request $request): Response
     {
         $this->denyAccessUnlessGranted(RoleAssignmentPolicy::SUPER_ADMIN);
-        $tenant = trim((string) $request->query->get('site', ''));
+        // depuis le menu EasyAdmin, les paramètres de route arrivent dans les attributs (routeParams), sinon dans la requête
+        $tenant = trim((string) ($request->query->get('site') ?? $request->attributes->get('site') ?? ''));
+        $sites = $this->console->grid();
+        $siteUrls = [];
+        foreach ($sites as $s) {
+            $siteUrls[$s['code']] = $this->pageUrl(['site' => $s['code']]);
+        }
 
         return $this->render('admin/plateforme/index.html.twig', [
+            'siteUrls' => $siteUrls,
             'mode' => $this->mode->settings(),
             'features' => array_keys(FeatureCatalog::GOVERNED),
             'labels' => array_combine(array_keys(FeatureCatalog::GOVERNED), array_map(fn ($k) => FeatureCatalog::label($k), array_keys(FeatureCatalog::GOVERNED))),
-            'sites' => $this->console->grid(),
+            'sites' => $sites,
             'policies' => $this->console->policies(),
             'offers' => $this->offers->all(false),
             'requests' => $this->requests->listPending(),
@@ -63,6 +72,15 @@ class PlatformConsoleAdminController extends AbstractController
             $mode = (string) $request->request->get('mode', '');
             $this->mode->setMode($mode, $this->getUser()?->getUserIdentifier());
             $this->addFlash('success', $mode === PlatformModeService::LIVE ? 'Plateforme en mode live : les garde-fous des modules et des droits d\'usage s\'appliquent.' : 'Plateforme en mode demo : aucune restriction.');
+        });
+    }
+
+    #[Route('/admin/plateforme/boutique', name: 'admin_plateforme_shop', methods: ['POST'])]
+    public function shop(Request $request): Response
+    {
+        return $this->action($request, function () use ($request) {
+            $this->mode->setShopUrl((string) $request->request->get('shopUrl', ''), $this->getUser()?->getUserIdentifier());
+            $this->addFlash('success', 'Adresse de la boutique de la plateforme enregistrée.');
         });
     }
 
@@ -127,7 +145,7 @@ class PlatformConsoleAdminController extends AbstractController
         if (!$this->isCsrfTokenValid(self::CSRF_ID, (string) $request->request->get('_token'))) {
             $this->addFlash('danger', 'Jeton de sécurité invalide : rien n\'a été modifié.');
 
-            return $this->redirectToRoute('admin_plateforme');
+            return $this->redirect($this->pageUrl([]));
         }
         try {
             $do();
@@ -139,6 +157,16 @@ class PlatformConsoleAdminController extends AbstractController
             $this->addFlash('danger', $e->getMessage());
         }
 
-        return $this->redirectToRoute('admin_plateforme', array_filter(['site' => $request->request->get('site')]));
+        return $this->redirect($this->pageUrl(array_filter(['site' => $request->request->get('site')])));
+    }
+
+    /** URL de la page habillée par EasyAdmin (/admin?routeName=…) : une redirection vers la route nue perdrait le menu et le thème */
+    private function pageUrl(array $params): string
+    {
+        try {
+            return $this->urls->unsetAll()->setRoute('admin_plateforme', $params)->generateUrl();
+        } catch (\Throwable) {
+            return $this->generateUrl('admin_plateforme', $params);
+        }
     }
 }

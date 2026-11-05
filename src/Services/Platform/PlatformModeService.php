@@ -12,7 +12,8 @@ use Symfony\Contracts\Cache\ItemInterface;
  * - `demo` (défaut, et valeur retenue si la table ou la ligne manque) : aucune restriction de module ni de droit d'usage ne
  *   bloque un service ; tout reste visible et réglable dans la console (essais du propriétaire comme avant la console) ;
  * - `live` : les garde-fous s'appliquent (ModuleAccessSubscriber, puis les droits d'usage du lot 3).
- * Réglé par le super administrateur (PUT /api/platform/settings, onglet « Plateforme »). Lu à chaque requête d'API gardée :
+ * Réglé par le super administrateur (PUT /api/platform/settings, onglet « Plateforme »). Porte aussi `shop_url`, l'adresse de la boutique
+ * de la plateforme (forfaits), vide tant qu'elle n'existe pas. Lu à chaque requête d'API gardée :
  * cache partagé 60 s, vidé à l'écriture.
  */
 class PlatformModeService
@@ -47,16 +48,42 @@ class PlatformModeService
         return $this->mode() === self::DEMO;
     }
 
-    /** @return array{mode: string, updatedAt: ?string, updatedBy: ?string} */
+    /** @return array{mode: string, updatedAt: ?string, updatedBy: ?string, shopUrl: ?string} */
     public function settings(): array
     {
         try {
-            $row = $this->tenants->getPdoMaster()->query("SELECT value, updated_at, updated_by FROM platform_settings WHERE key = 'mode'")->fetch(\PDO::FETCH_ASSOC);
+            $rows = [];
+            foreach ($this->tenants->getPdoMaster()->query("SELECT key, value, updated_at, updated_by FROM platform_settings WHERE key IN ('mode', 'shop_url')")->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $r) {
+                $rows[$r['key']] = $r;
+            }
         } catch (\Throwable) {
-            $row = false;
+            $rows = [];
         }
+        $mode = $rows['mode'] ?? null;
+        $shop = $rows['shop_url']['value'] ?? null;
 
-        return ['mode' => $row && in_array($row['value'], self::MODES, true) ? $row['value'] : self::DEMO, 'updatedAt' => $row['updated_at'] ?? null, 'updatedBy' => $row['updated_by'] ?? null];
+        return ['mode' => $mode && in_array($mode['value'], self::MODES, true) ? $mode['value'] : self::DEMO, 'updatedAt' => $mode['updated_at'] ?? null, 'updatedBy' => $mode['updated_by'] ?? null, 'shopUrl' => is_string($shop) && $shop !== '' ? $shop : null];
+    }
+
+    /** Adresse de la boutique de la plateforme (forfaits), null tant qu'elle n'existe pas : lien « Choisir un forfait » de Mon site et des courriels de demande */
+    public function shopUrl(): ?string
+    {
+        return $this->settings()['shopUrl'];
+    }
+
+    public function setShopUrl(?string $url, ?string $by): void
+    {
+        $url = $url !== null ? trim($url) : '';
+        if ($url !== '' && (!filter_var($url, FILTER_VALIDATE_URL) || !str_starts_with($url, 'https://'))) {
+            throw new \InvalidArgumentException('shopUrl : adresse https attendue, ou vide');
+        }
+        $pdo = $this->tenants->getPdoMaster();
+        if ($url === '') {
+            $pdo->exec("DELETE FROM platform_settings WHERE key = 'shop_url'");
+        } else {
+            $pdo->prepare("INSERT INTO platform_settings (key, value, updated_at, updated_by) VALUES ('shop_url', ?, NOW(), ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW(), updated_by = EXCLUDED.updated_by")->execute([mb_substr($url, 0, 500), $by]);
+        }
+        $this->logger->notice(sprintf('Boutique de la plateforme : %s (par %s)', $url === '' ? 'aucune' : $url, $by ?? 'inconnu'));
     }
 
     public function setMode(string $mode, ?string $by): void

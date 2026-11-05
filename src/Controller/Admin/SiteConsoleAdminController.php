@@ -59,6 +59,7 @@ class SiteConsoleAdminController extends AbstractController
         return $this->render('admin/mon_site/index.html.twig', [
             'groups' => $groups,
             'platformMode' => $this->platform->mode(),
+            'shopUrl' => $this->platform->shopUrl(),
             'superAdmin' => $this->isGranted('ROLE_SUPER_ADMIN'),
             'timezones' => \DateTimeZone::listIdentifiers(),
             'csrf_id' => self::CSRF_ID,
@@ -73,7 +74,7 @@ class SiteConsoleAdminController extends AbstractController
         if (!$this->isCsrfTokenValid(self::CSRF_ID, (string) $request->request->get('_token'))) {
             $this->addFlash('danger', 'Jeton de sécurité invalide : rien n\'a été modifié.');
 
-            return $this->redirectToRoute('admin_mon_site');
+            return $this->redirect($this->pageUrl());
         }
         $values = [];
         $section = (string) $request->request->get('section', '');
@@ -91,7 +92,7 @@ class SiteConsoleAdminController extends AbstractController
         } else {
             $this->addFlash('danger', 'Section inconnue.');
 
-            return $this->redirectToRoute('admin_mon_site');
+            return $this->redirect($this->pageUrl());
         }
         try {
             $this->update->execute($values, $request->getSchemeAndHttpHost(), 'fr');
@@ -105,7 +106,7 @@ class SiteConsoleAdminController extends AbstractController
             $this->addFlash('danger', $e->getMessage());
         }
 
-        return $this->redirectToRoute('admin_mon_site');
+        return $this->redirect($this->pageUrl());
     }
 
     #[Route('/admin/mon-site/demander/{key}', name: 'admin_mon_site_demander', methods: ['POST'], requirements: ['key' => '[a-z_]+\.[a-z_]+'])]
@@ -115,7 +116,7 @@ class SiteConsoleAdminController extends AbstractController
         if (!$this->isCsrfTokenValid(self::CSRF_ID, (string) $request->request->get('_token'))) {
             $this->addFlash('danger', 'Jeton de sécurité invalide : rien n\'a été modifié.');
 
-            return $this->redirectToRoute('admin_mon_site');
+            return $this->redirect($this->pageUrl());
         }
         try {
             $this->requestFeature->execute($key, (string) $request->request->get('message', ''), $this->getUser()?->getUserIdentifier());
@@ -124,7 +125,17 @@ class SiteConsoleAdminController extends AbstractController
             $this->addFlash('warning', $e->getMessage());
         }
 
-        return $this->redirectToRoute('admin_mon_site');
+        return $this->redirect($this->pageUrl());
+    }
+
+    /** URL de la page habillée par EasyAdmin : une redirection vers la route nue perdrait le menu et le thème */
+    private function pageUrl(): string
+    {
+        try {
+            return $this->urls->unsetAll()->setRoute('admin_mon_site')->generateUrl();
+        } catch (\Throwable) {
+            return $this->generateUrl('admin_mon_site');
+        }
     }
 
     private function screenUrl(?string $href): ?string

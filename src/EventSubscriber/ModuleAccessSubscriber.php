@@ -39,7 +39,7 @@ class ModuleAccessSubscriber implements EventSubscriberInterface
         if (!str_starts_with($path, '/api/')) {
             return;
         }
-        $module = ModuleAccessService::moduleForPath($path);
+        $module = ModuleAccessService::moduleForPath($path, $request->getMethod());
         if ($module === null) {
             return;
         }

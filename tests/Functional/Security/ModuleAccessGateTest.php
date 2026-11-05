@@ -53,6 +53,8 @@ class ModuleAccessGateTest extends WebTestCase
         $this->assertNotSame(403, $this->post('/api/order/create', [])->getStatusCode(), 'commande : servie même module désactivé (paiement déjà autorisé finalisable)');
         $this->assertNotSame(403, $this->post('/api/order/create-guest', [])->getStatusCode());
         $this->assertSame(403, $this->post('/api/stripe/create-intent', [])->getStatusCode(), 'début du parcours : gardé');
+        $this->assertSame(403, $this->post('/api/subscriptions', ['planId' => 1])->getStatusCode(), 'souscrire : gardé');
+        $this->assertNotSame(403, $this->get('/api/subscriptions')->getStatusCode(), 'lire ses abonnements : servi (401 sans jeton)');
 
         $this->setFlags(true, true, true);
         $r = $this->get('/api/boussole/referentials'); $this->assertSame(200, $r->getStatusCode(), 'module réactivé : servi aussitôt (cache vidé par l\'écriture) : ' . $r->getContent());
@@ -80,7 +82,11 @@ class ModuleAccessGateTest extends WebTestCase
         $this->assertNull(ModuleAccessService::moduleForPath('/api/order/create'));
         $this->assertNull(ModuleAccessService::moduleForPath('/api/payment'));
         $this->assertSame('boutique', ModuleAccessService::moduleForPath('/api/stripe/create-intent'));
-        $this->assertSame('boutique', ModuleAccessService::moduleForPath('/api/subscriptions/12/cancel'));
+        $this->assertNull(ModuleAccessService::moduleForPath('/api/subscriptions/12/cancel', 'POST'), 'résilier reste possible');
+        $this->assertNull(ModuleAccessService::moduleForPath('/api/subscriptions', 'GET'), 'lire ses abonnements reste possible');
+        $this->assertNull(ModuleAccessService::moduleForPath('/api/subscriptions/portal-session', 'POST'));
+        $this->assertSame('boutique', ModuleAccessService::moduleForPath('/api/subscriptions', 'POST'), 'souscrire exige le module');
+        $this->assertSame('boutique', ModuleAccessService::moduleForPath('/api/subscriptions/12/change-plan', 'POST'));
         $this->assertSame('memoires', ModuleAccessService::moduleForPath('/api/memoires/mobile/books'));
         $this->assertSame(array_keys(ModuleAccessService::LABELS), array_keys(ModuleAccessService::COLUMNS));
     }

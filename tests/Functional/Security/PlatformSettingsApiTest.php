@@ -22,6 +22,7 @@ class PlatformSettingsApiTest extends WebTestCase
     protected function tearDown(): void
     {
         static::getContainer()->get(PlatformModeService::class)->setMode('demo', 'test');
+        static::getContainer()->get(PlatformModeService::class)->setShopUrl(null, 'test');
         parent::tearDown();
     }
 
@@ -39,6 +40,13 @@ class PlatformSettingsApiTest extends WebTestCase
         $this->assertSame('live', json_decode((string) $r->getContent(), true)['mode']);
         $this->assertSame('live', static::getContainer()->get(PlatformModeService::class)->mode(), 'cache vidé à l\'écriture');
         $this->assertSame(403, $this->call('PUT', ['mode' => 'demo'], 'admin')->getStatusCode());
+        // adresse de la boutique de la plateforme (05/11/2026)
+        $this->assertSame(422, $this->call('PUT', ['shopUrl' => 'http://pas-https.example'], 'super')->getStatusCode());
+        $r = $this->call('PUT', ['shopUrl' => 'https://forfaits.example.invalid/'], 'super');
+        $this->assertSame('https://forfaits.example.invalid/', json_decode((string) $r->getContent(), true)['shopUrl']);
+        $r = $this->call('PUT', ['shopUrl' => null], 'super');
+        $this->assertNull(json_decode((string) $r->getContent(), true)['shopUrl'], 'vide : plus de boutique');
+        $this->assertSame(422, $this->call('PUT', [], 'super')->getStatusCode());
     }
 
     private function call(string $method, ?array $body, ?string $as): \Symfony\Component\HttpFoundation\Response

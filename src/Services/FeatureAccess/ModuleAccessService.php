@@ -44,7 +44,7 @@ class ModuleAccessService
      * Chemins d'API soumis à un module (expression sur le chemin, sans la requête). Volontairement étroit : les lectures
      * publiques du catalogue restent servies (le site vitrine les affiche même sans boutique) ; sont gardées les routes qui
      * n'ont de sens qu'avec le module. Boutique : seul le **début** d'un parcours est gardé (devis, intention de paiement,
-     * abonnements) ; `order/create`, `order/create-guest` et `payment` restent servis pour qu'un paiement Stripe déjà autorisé
+     * nouvelle souscription ou changement de formule : METHOD_ROUTES) ; `order/create`, `order/create-guest` et `payment` restent servis pour qu'un paiement Stripe déjà autorisé
      * puisse toujours être finalisé en commande (05/11/2026, question de l'application mobile). `create-multi-payment` est la
      * vente au comptoir (caisse), pas la boutique.
      * La caisse n'est pas gardée ici : `is_pos_active` est l'indicateur de l'application Caisse (clés d'activation), faux sur
@@ -54,8 +54,18 @@ class ModuleAccessService
     public const ROUTES = [
         '#^/api/memoires(/|$)#' => self::MEMOIRES,
         '#^/api/boussole(/|$)#' => self::BOUSSOLE,
-        '#^/api/(cart/quote|stripe/create-intent|subscriptions)(/|$)#' => self::BOUTIQUE,
+        '#^/api/(cart/quote|stripe/create-intent)(/|$)#' => self::BOUTIQUE,
         '#^/api/landingpage-ai(/|$)#' => self::LANDING,
+    ];
+
+    /**
+     * Routes gardées pour certaines méthodes seulement (05/11/2026, question de l'application mobile) : souscrire ou changer de
+     * formule exige le module ; lire, résilier, mettre en pause ou ouvrir le portail d'un abonnement existant reste toujours servi.
+     * @var array<string, array{0: string, 1: list<string>}> expression => [module, méthodes]
+     */
+    public const METHOD_ROUTES = [
+        '#^/api/subscriptions$#' => [self::BOUTIQUE, ['POST']],
+        '#^/api/subscriptions/\d+/(change-plan|resume)$#' => [self::BOUTIQUE, ['POST']],
     ];
 
     private const CACHE_KEY = 'module_flags';
@@ -65,11 +75,16 @@ class ModuleAccessService
     {
     }
 
-    /** Module gardant ce chemin, null si le chemin n'est soumis à aucun module */
-    public static function moduleForPath(string $path): ?string
+    /** Module gardant ce chemin (et cette méthode), null si la requête n'est soumise à aucun module */
+    public static function moduleForPath(string $path, string $method = 'GET'): ?string
     {
         foreach (self::ROUTES as $pattern => $module) {
             if (preg_match($pattern, $path)) {
+                return $module;
+            }
+        }
+        foreach (self::METHOD_ROUTES as $pattern => [$module, $methods]) {
+            if (in_array(strtoupper($method), $methods, true) && preg_match($pattern, $path)) {
                 return $module;
             }
         }

@@ -36,6 +36,12 @@
                 {% else %}<span class="badge bg-secondary">demo</span> <span class="text-muted small">aucune restriction : tout est visible et réglable, rien n'est bloqué</span>{% endif %}
                 {% if mode.updatedAt %}<div class="small text-muted">changé le {{ mode.updatedAt|slice(0, 16) }} par {{ mode.updatedBy ?? 'inconnu' }}</div>{% endif %}
             </div>
+            <form method="post" action="{{ path('admin_plateforme_shop') }}" class="d-flex gap-2 align-items-end plateforme-boutique">
+                <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
+                <div><label class="form-label small mb-0" for="pf-shop">Boutique de la plateforme (forfaits)</label>
+                    <input class="form-control form-control-sm" id="pf-shop" name="shopUrl" type="url" style="width:22em" value="{{ mode.shopUrl ?? '' }}" placeholder="https://… (vide : pas encore de boutique)"></div>
+                <button type="submit" class="btn btn-sm btn-outline-primary">Enregistrer</button>
+            </form>
             <form method="post" action="{{ path('admin_plateforme_mode') }}" class="ms-auto">
                 <input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}">
                 <input type="hidden" name="mode" value="{{ mode.mode == 'live' ? 'demo' : 'live' }}">
@@ -52,7 +58,7 @@
         <tbody>
         {% for s in sites %}
             <tr data-site="{{ s.code }}" class="{{ s.code == selected ? 'table-active' : '' }}">
-                <td><a href="{{ path('admin_plateforme', {site: s.code}) }}"><strong>{{ s.code }}</strong></a><div class="small text-muted">{{ s.name }}</div></td>
+                <td><a href="{{ siteUrls[s.code] ?? path('admin_plateforme', {site: s.code}) }}"><strong>{{ s.code }}</strong></a><div class="small text-muted">{{ s.name }}</div></td>
                 {% for f in features %}<td class="text-center">{{ m.badge(s.features[f]) }}</td>{% endfor %}
                 <td>{% for r in s.pendingRequests %}<span class="badge bg-warning text-dark">{{ labels[r] ?? r }}</span> {% endfor %}</td>
             </tr>

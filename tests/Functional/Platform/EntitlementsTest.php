@@ -134,9 +134,15 @@ class EntitlementsTest extends WebTestCase
         $this->setFlag('is_boussole_esg_active', false);
         $this->assertFalse($s->isEnabled(MV_TEST_TENANT_CODE, 'module.boussole'));
 
-        // demande d'un site
+        // demande d'un site (le compte super administrateur existe sur chaque base en production : créé ici par le jeton)
+        $this->token('super');
         $r = $this->api('POST', '/api/site/features/module.boussole/request', ['message' => 'Nous voulons la Boussole'], 'admin');
         $this->assertSame(201, $r->getStatusCode(), $r->getContent());
+        $this->assertEmailCount(2, null, 'accusé au site et avis au super administrateur (05/11/2026)');
+        $subjects = array_map(fn ($m) => (string) $m->getSubject(), $this->getMailerMessages());
+        $this->assertStringContainsString('enregistrée', $subjects[0]);
+        $this->assertStringContainsString('Demande de fonctionnalité', $subjects[1]);
+        $this->assertStringContainsString('Nous voulons la Boussole', (string) $this->getMailerMessages()[1]->getHtmlBody(), 'message du site transmis');
         $this->assertSame(['pending', 'Nous voulons la Boussole'], [json_decode((string) $r->getContent(), true)['request']['status'], json_decode((string) $r->getContent(), true)['request']['message']]);
         $this->assertSame(409, $this->api('POST', '/api/site/features/module.boussole/request', [], 'admin')->getStatusCode(), 'déjà en attente');
         $this->assertSame(422, $this->api('POST', '/api/site/features/site.locale/request', [], 'admin')->getStatusCode(), 'clé non plateforme');

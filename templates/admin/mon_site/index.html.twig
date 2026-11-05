@@ -32,7 +32,7 @@
         {% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}
     {% endfor %}
 
-    <p class="text-muted">Tout ce qui s'active ou se règle sur ce site, au même endroit. Les réglages du site se changent ici (ou depuis l'éditeur, panneau « Commerce ») ; les modules et applications sont accordés par la plateforme : demandez-les d'un clic.
+    <p class="text-muted">Tout ce qui s'active ou se règle sur ce site, au même endroit. Les réglages du site se changent ici (ou depuis l'éditeur, panneau « Commerce ») ; les modules et applications sont accordés par la plateforme : demandez-les d'un clic{% if shopUrl %}, ou <a href="{{ shopUrl }}" target="_blank" rel="noopener">choisissez un forfait dans la boutique de la plateforme</a>{% endif %}.
         {% if platformMode == 'demo' %}<span class="badge bg-secondary">plateforme en mode demo : rien n'est restreint</span>{% endif %}</p>
 
     {% set loc = {} %}{% for e in groups.localisation %}{% set loc = loc|merge({(e.key): e}) %}{% endfor %}
@@ -63,6 +63,7 @@
                     {% if e.request == 'pending' %}<span class="badge bg-warning text-dark">demande en attente</span>
                     {% elseif not e.value %}
                         <form method="post" action="{{ path('admin_mon_site_demander', {key: e.key}) }}" class="d-inline"><input type="hidden" name="_token" value="{{ csrf_token(csrf_id) }}"><button class="btn btn-sm btn-outline-primary">Demander</button></form>
+                        {% if shopUrl %}<a class="btn btn-sm btn-primary" href="{{ shopUrl }}" target="_blank" rel="noopener">Choisir un forfait</a>{% endif %}
                     {% elseif e.screenUrl %}<a class="btn btn-sm btn-outline-secondary" href="{{ e.screenUrl }}">Ouvrir</a>{% endif %}
                 </td>
             </tr>

@@ -8,6 +8,7 @@ use App\Services\EmailConfigurationService\EmailLocale;
 use App\Services\EmailConfigurationService\EmailSenderService;
 use App\Services\FeatureAccess\FeatureCatalog;
 use App\Services\OrderService\TaxEngine;
+use App\Services\Platform\PlatformModeService;
 use App\Services\Platform\TenantDatabaseConnector;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
@@ -23,12 +24,15 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[AsMessageHandler]
 final class EntitlementChangedHandler
 {
-    private const EVENTS_WITH_EMAIL = ['granted', 'trial_started', 'expiring_7', 'expiring_1', 'expired', 'grace', 'suspended', 'resumed'];
+    private const EVENTS_WITH_EMAIL = ['granted', 'trial_started', 'expiring_7', 'expiring_1', 'expired', 'grace', 'suspended', 'resumed', 'request_received', 'request_refused', 'request_new'];
+    /** Événements adressés au super administrateur de la plateforme (compte présent sur chaque base) plutôt qu'au contact du site */
+    private const EVENTS_TO_PLATFORM = ['request_new'];
 
     public function __construct(
         private readonly TenantDatabaseConnector $connector,
         private readonly EmailSenderService $mailer,
         private readonly TranslatorInterface $translator,
+        private readonly PlatformModeService $platform,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -47,7 +51,7 @@ final class EntitlementChangedHandler
         try {
             $pdo = $this->connector->pdo($tenant['dbname']);
             $site = $pdo->query('SELECT e.email, e.name, e.locale, a.country, a.state FROM entreprise e LEFT JOIN address_entreprise a ON a.entreprise_id = e.id ORDER BY e.id LIMIT 1')->fetch(\PDO::FETCH_ASSOC) ?: [];
-            $to = $this->recipient($pdo, $site);
+            $to = in_array($message->event, self::EVENTS_TO_PLATFORM, true) ? $this->platformRecipient($pdo) : $this->recipient($pdo, $site);
         } catch (\Throwable $e) {
             $this->logger->error(sprintf('[Entitlements] courriel %s : site %s illisible : %s', $message->event, $message->tenantCode, $e->getMessage()));
 
@@ -58,22 +62,33 @@ final class EntitlementChangedHandler
 
             return;
         }
-        $language = $this->language($site);
+        $language = in_array($message->event, self::EVENTS_TO_PLATFORM, true) ? 'fr' : $this->language($site);
         $feature = FeatureCatalog::label($message->featureKey, $language);
         $endsAt = isset($message->payload['endsAt']) && $message->payload['endsAt'] ? new \DateTimeImmutable((string) $message->payload['endsAt']) : null;
         $graceUntil = isset($message->payload['graceUntil']) && $message->payload['graceUntil'] ? new \DateTimeImmutable((string) $message->payload['graceUntil']) : null;
         $date = ($endsAt ?? $graceUntil)?->format($language === 'en' ? 'Y-m-d' : 'd/m/Y') ?? '';
-        $params = ['%feature%' => $feature, '%date%' => $date, '%days%' => (string) ($message->payload['days'] ?? ''), '%site%' => (string) ($site['name'] ?? $tenant['name'])];
+        $shopUrl = $this->platform->shopUrl();
+        $params = ['%feature%' => $feature, '%date%' => $date, '%days%' => (string) ($message->payload['days'] ?? ''), '%site%' => (string) ($site['name'] ?? $tenant['name']), '%code%' => $tenant['code'], '%by%' => (string) ($message->payload['by'] ?? ''), '%note%' => (string) ($message->payload['message'] ?? $message->payload['note'] ?? ''), '%shop%' => (string) ($shopUrl ?? '')];
         $event = $message->event;
         $rows = [$this->translator->trans('entitlement.row_feature', [], 'emails', $language) => $feature];
         if ($date !== '') {
             $rows[$this->translator->trans($event === 'grace' ? 'entitlement.row_grace_until' : 'entitlement.row_ends_at', [], 'emails', $language)] = $date;
         }
+        if (str_starts_with($event, 'request_')) {
+            $rows[$this->translator->trans('entitlement.row_site', [], 'emails', $language)] = $params['%site%'] . ' (' . $tenant['code'] . ')';
+            if ($params['%note%'] !== '') {
+                $rows[$this->translator->trans('entitlement.row_message', [], 'emails', $language)] = $params['%note%'];
+            }
+        }
+        $nextKey = "entitlement.next_$event";
+        if ($shopUrl === null && in_array($event, ['request_received', 'request_refused', 'expired', 'expiring_7', 'expiring_1', 'trial_started', 'suspended'], true)) {
+            $nextKey = "entitlement.next_{$event}_noshop"; // sans boutique de la plateforme : pas d'invitation à souscrire
+        }
         $context = [
             'title' => $this->translator->trans("entitlement.title_$event", $params, 'emails', $language),
             'greeting' => $this->translator->trans('entitlement.greeting', $params, 'emails', $language),
             'message' => $this->translator->trans("entitlement.message_$event", $params, 'emails', $language),
-            'nextStep' => $this->translator->trans("entitlement.next_$event", $params, 'emails', $language),
+            'nextStep' => $this->translator->trans($nextKey, $params, 'emails', $language),
             'rows' => $rows,
             'signature' => $this->translator->trans('entitlement.signature', [], 'emails', $language),
             'locale' => $language, 'intlLocale' => $language === 'en' ? 'en_CA' : 'fr_CA',
@@ -105,6 +120,18 @@ final class EntitlementChangedHandler
         }
 
         return null;
+    }
+
+    /** Super administrateur de la plateforme : son compte existe sur chaque base de site (SuperAdminAccountService) */
+    private function platformRecipient(\PDO $pdo): ?string
+    {
+        try {
+            $email = $pdo->query("SELECT email FROM \"user\" WHERE roles::text LIKE '%ROLE_SUPER_ADMIN%' ORDER BY id LIMIT 1")->fetchColumn();
+
+            return is_string($email) && trim($email) !== '' ? trim($email) : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** Langue du site : choisie (`entreprise.locale`), sinon la règle de SiteLocaleResolver d'après l'adresse */
