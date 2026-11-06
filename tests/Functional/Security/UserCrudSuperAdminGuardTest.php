@@ -134,7 +134,7 @@ class UserCrudSuperAdminGuardTest extends WebTestCase
     {
         $superAdmin = $this->loginAs(['ROLE_ADMIN', RoleAssignmentPolicy::SUPER_ADMIN]);
         $otherSuperAdmin = $this->createUser([RoleAssignmentPolicy::SUPER_ADMIN, 'ROLE_ADMIN']);
-        $deletable = $this->createUser(['ROLE_USER_INTERNET']);
+        $deletable = $this->createUser(['ROLE_USER_POS']); // compte interne : un compte client ne se supprime plus, il s'efface (B19, 06/11/2026)
 
         // Action en lot absente même pour le super administrateur
         $crawler = $this->admin('index');

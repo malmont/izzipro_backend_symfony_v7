@@ -28,6 +28,15 @@ final class AccountDeletionGuard
 {
     private const BLOCKING_SUBSCRIPTION_STATUSES = [Subscription::STATUS_ACTIVE, Subscription::STATUS_TRIALING, Subscription::STATUS_PAST_DUE, Subscription::STATUS_PAUSED];
 
+    /** Rôles qui font d'un compte un compte interne du site (jamais effaçable par l'action du back-office, B19, 06/11/2026) */
+    public const INTERNAL_ROLES = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_USER_POS', 'ROLE_POS_MANAGER'];
+
+    /** Compte client du site : connecté au site web ou à l'application, sans aucun rôle interne */
+    public static function isCustomerAccount(array $roles): bool
+    {
+        return in_array('ROLE_USER_INTERNET', $roles, true) && array_intersect(self::INTERNAL_ROLES, $roles) === [];
+    }
+
     public function __construct(
         private readonly TenantEntityManagerProvider $emProvider,
         private readonly UserPasswordHasherInterface $passwords,
@@ -57,7 +66,7 @@ final class AccountDeletionGuard
 
             return ['status' => 429, 'body' => ['error' => 'TOO_MANY_ATTEMPTS', 'message' => 'Trop d\'essais : réessayez plus tard', 'retryAfterSeconds' => $retry]];
         }
-        if ($blocked = $this->blocker($user)) {
+        if ($blocked = $this->blockers($user)) {
             return $blocked;
         }
         if (EmailChangeGuard::method($user) === EmailChangeGuard::METHOD_PASSWORD) {
@@ -95,23 +104,44 @@ final class AccountDeletionGuard
         return null;
     }
 
-    /** Abonnement en cours ou réservation à venir : le client les règle d'abord (le plus sûr : rien n'est résilié à son insu) */
-    private function blocker(User $user): ?array
+    /**
+     * Abonnement en cours ou réservation à venir : le client les règle d'abord (le plus sûr : rien n'est résilié à son insu).
+     * Public depuis B19 (06/11/2026) : l'action du back-office applique les mêmes refus, sans mot de passe ni code.
+     *
+     * @return array{status: int, body: array}|null le premier refus (409), null si rien ne bloque
+     */
+    public function blockers(User $user): ?array
     {
-        $connection = $this->emProvider->getEntityManager()->getConnection();
-        $subscriptions = (int) $connection->fetchOne('SELECT COUNT(*) FROM subscription WHERE user_id = ? AND status IN (?, ?, ?, ?)', [$user->getId(), ...self::BLOCKING_SUBSCRIPTION_STATUSES]);
-        if ($subscriptions > 0) {
-            return ['status' => 409, 'body' => ['error' => 'SUBSCRIPTION_ACTIVE', 'message' => 'Un abonnement est en cours : résiliez-le avant de supprimer votre compte', 'count' => $subscriptions]];
+        $items = $this->blockingItems($user);
+        if ($items['subscriptions'] !== []) {
+            return ['status' => 409, 'body' => ['error' => 'SUBSCRIPTION_ACTIVE', 'message' => 'Un abonnement est en cours : résiliez-le avant de supprimer votre compte', 'count' => count($items['subscriptions'])]];
         }
-        try {
-            $reservations = (int) $connection->fetchOne("SELECT COUNT(*) FROM reservation WHERE LOWER(client_email) = LOWER(?) AND reservation_date >= CURRENT_DATE AND status <> 'cancelled'", [(string) $user->getEmail()]);
-        } catch (\Throwable) {
-            $reservations = 0; // site sans module de réservation
-        }
-        if ($reservations > 0) {
-            return ['status' => 409, 'body' => ['error' => 'RESERVATION_UPCOMING', 'message' => 'Une réservation à venir est enregistrée : annulez-la avant de supprimer votre compte', 'count' => $reservations]];
+        if ($items['reservations'] !== []) {
+            return ['status' => 409, 'body' => ['error' => 'RESERVATION_UPCOMING', 'message' => 'Une réservation à venir est enregistrée : annulez-la avant de supprimer votre compte', 'count' => count($items['reservations'])]];
         }
 
         return null;
+    }
+
+    /**
+     * Ce qui bloque, avec les identifiants (la page de confirmation du back-office y mène par un lien) : abonnements Stripe
+     * `active`, `trialing`, `past_due` ou `paused` ; réservations non annulées à venir au courriel du compte.
+     *
+     * @return array{subscriptions: list<array{id: int, status: string}>, reservations: list<array{id: int, date: string}>}
+     */
+    public function blockingItems(User $user): array
+    {
+        $connection = $this->emProvider->getEntityManager()->getConnection();
+        $subscriptions = $connection->fetchAllAssociative('SELECT id, status FROM subscription WHERE user_id = ? AND status IN (?, ?, ?, ?) ORDER BY id', [$user->getId(), ...self::BLOCKING_SUBSCRIPTION_STATUSES]);
+        try {
+            $reservations = $connection->fetchAllAssociative("SELECT id, reservation_date AS date FROM reservation WHERE LOWER(client_email) = LOWER(?) AND reservation_date >= CURRENT_DATE AND status <> 'cancelled' ORDER BY reservation_date, id", [(string) $user->getEmail()]);
+        } catch (\Throwable) {
+            $reservations = []; // site sans module de réservation
+        }
+
+        return [
+            'subscriptions' => array_map(static fn (array $r): array => ['id' => (int) $r['id'], 'status' => (string) $r['status']], $subscriptions),
+            'reservations' => array_map(static fn (array $r): array => ['id' => (int) $r['id'], 'date' => substr((string) $r['date'], 0, 10)], $reservations),
+        ];
     }
 }

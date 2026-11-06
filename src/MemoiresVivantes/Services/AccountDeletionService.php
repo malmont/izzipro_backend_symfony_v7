@@ -27,8 +27,19 @@ class AccountDeletionService
         private readonly PersonalDataEraser $eraser, // données personnelles du compte : service partagé avec la boutique (01/11/2026)
     ) {}
 
-    /** @return array{booksDeleted: int, printOrdersAnonymized: int} */
+    /** Réponse de l'application mobile, inchangée @return array{booksDeleted: int, printOrdersAnonymized: int} */
     public function delete(User $user): array
+    {
+        return array_intersect_key($this->erase($user), ['booksDeleted' => true, 'printOrdersAnonymized' => true]);
+    }
+
+    /**
+     * Même effacement, avec en plus le détail rendu par PersonalDataEraser (action « Effacer ce compte client » du back-office,
+     * B19, 06/11/2026 : un compte Mémoires Vivantes y perd aussi ses livres, comme depuis l'application).
+     *
+     * @return array{booksDeleted: int, printOrdersAnonymized: int, addressesAnonymized: int, reviewsAnonymized: int, reservationsAnonymized: int, newsletterRemoved: bool, stripeCustomerDeleted: bool}
+     */
+    public function erase(User $user): array
     {
         $em = $this->emProvider->getEntityManager();
         $connection = $em->getConnection();
@@ -60,9 +71,9 @@ class AccountDeletionService
 
         // Compte, adresses (anonymisées sur place et non plus seulement détachées, 01/11/2026), avis, infolettre, client Stripe,
         // jetons de rafraîchissement, codes à usage unique, demandes de réinitialisation : PersonalDataEraser
-        $this->eraser->erase($user);
+        $erased = $this->eraser->erase($user);
         $this->logger->info(sprintf('Compte %d supprimé à sa demande : %d livre(s) effacé(s), %d commande(s) d\'impression anonymisée(s)', $userId, count($books), count($orders)));
 
-        return ['booksDeleted' => count($books), 'printOrdersAnonymized' => count($orders)];
+        return ['booksDeleted' => count($books), 'printOrdersAnonymized' => count($orders)] + $erased;
     }
 }

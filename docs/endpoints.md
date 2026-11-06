@@ -580,7 +580,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (48)
+## Administration (EasyAdmin) (49)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -627,6 +627,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/super-admin` | ROLE_SUPER_ADMIN | `Controller\Admin\SuperAdminAccountController::index` |
 | POST | `/admin/technique/seuils` | ROLE_SUPER_ADMIN | `Controller\Admin\TechDashboardAdminController::thresholds` |
 | GET | `/admin/technique` | ROLE_SUPER_ADMIN | `Controller\Admin\TechDashboardAdminController::index` |
+| GET, POST | `/admin/users/{id}/effacer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\CustomerAccountEraseAdminController::confirm` |
 | POST | `/admin/workers/chapters/{id}/fail` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::failChapter` |
 | POST | `/admin/workers/chapters/{id}/relaunch` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::relaunchChapter` |
 | POST | `/admin/workers/restart` | ROLE_SUPER_ADMIN | `Controller\Admin\WorkerAdminController::restart` |

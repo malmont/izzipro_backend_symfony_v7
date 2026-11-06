@@ -1,0 +1,58 @@
+{% extends 'base_admin.html.twig' %}
+
+{% block title %}Effacer ce compte client{% endblock %}
+
+{% block body %}
+<div class="container-fluid" style="max-width: 860px">
+    <h1 class="mb-3">Effacer ce compte client</h1>
+    {% for message in app.flashes('danger') %}<div class="alert alert-danger">{{ message }}</div>{% endfor %}
+    {% if error %}<div class="alert alert-danger" data-erase-error>{{ error }}</div>{% endif %}
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h2 class="h5 mb-2">Compte n° {{ target.id }}</h2>
+            <p class="mb-1"><strong>{{ target.firstname }} {{ target.lastname }}</strong> &lt;{{ target.email }}&gt;</p>
+            <p class="text-muted mb-0">{{ preview.orders }} commande(s) enregistrée(s){% if preview.books > 0 %}, {{ preview.books }} livre(s) Mémoires Vivantes{% endif %}.</p>
+        </div>
+    </div>
+
+    {% if not preview.allowed %}
+        <div class="alert alert-warning" data-erase-blocked>
+            <p class="mb-2"><strong>Effacement impossible pour l'instant.</strong> {{ reasonMessage }}</p>
+            {% if subscriptionLinks is not empty %}
+                <p class="mb-1">Abonnement(s) en cours :</p>
+                <ul class="mb-2">
+                    {% for s in subscriptionLinks %}<li><a href="{{ s.url }}">Abonnement n° {{ s.id }}</a> ({{ s.status }}) : ouvrir la fiche pour le résilier, le client reçoit les courriels habituels.</li>{% endfor %}
+                </ul>
+            {% endif %}
+            {% if reservationLinks is not empty %}
+                <p class="mb-1">Réservation(s) à venir :</p>
+                <ul class="mb-2">
+                    {% for r in reservationLinks %}<li><a href="{{ r.url }}">Réservation n° {{ r.id }}</a> du {{ r.date }} : ouvrir la fiche pour l'annuler.</li>{% endfor %}
+                </ul>
+            {% endif %}
+            <p class="mb-0">Une fois réglé, revenez sur cette page.</p>
+        </div>
+        <a class="btn btn-secondary" href="{{ backUrl }}">Retour à la liste des utilisateurs</a>
+    {% else %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h2 class="h6">Ce qui sera effacé ou anonymisé</h2>
+                <p class="mb-2">Courriel, nom, mot de passe, rôles, jetons et sessions de l'application, adresses (anonymisées sur place), avis (publiés sous « Client anonyme »), inscription à l'infolettre, client Stripe, réservations passées, codes à usage unique{% if preview.books > 0 %}, et le contenu de ses livres Mémoires Vivantes (chapitres, enregistrements audio, photos, PDF){% endif %}.</p>
+                <h2 class="h6">Ce qui est gardé, anonymisé, pour la comptabilité</h2>
+                <p class="mb-2">Les commandes et paiements, les factures et, le cas échéant, les commandes d'impression et achats de chapitre. Le courriel actuel redevient utilisable pour un nouveau compte.</p>
+                <p class="mb-0 text-muted">Le client reçoit un courriel de confirmation dans la langue du site. L'action est inscrite au journal du site (qui, quand, quel compte), sans donnée personnelle du client.</p>
+            </div>
+        </div>
+        <form method="post" data-erase-form>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfId) }}">
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="confirm" value="1" id="erase-confirm">
+                <label class="form-check-label" for="erase-confirm">Je comprends que cette action est <strong>irréversible</strong> : aucune donnée personnelle ne pourra être récupérée.</label>
+            </div>
+            <button type="submit" class="btn btn-danger">Effacer définitivement ce compte client</button>
+            <a class="btn btn-link" href="{{ backUrl }}">Annuler</a>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

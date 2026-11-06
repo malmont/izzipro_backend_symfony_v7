@@ -635,6 +635,32 @@ terminés. Le jeton d'accès en cours cesse de fonctionner (le courriel qu'il d�
 Tests : `tests/Functional/Security/RegisterRulesApiTest.php`, `tests/Functional/Security/MobileSessionLifetimeTest.php`,
 `tests/Functional/Boutique/AccountDeletionApiTest.php`.
 
+### « Effacer ce compte client » depuis le back-office (B19, 06/11/2026)
+Google Play exige une page publique qui explique comment demander la suppression de son compte sans l'application (côté Next :
+`/suppression-compte`) ; elle propose d'écrire à la boutique. Trois voies mènent donc au **même effaceur** : `DELETE /api/account`
+(application et site web, bouton « Supprimer mon compte »), `DELETE /api/memoires/mobile/account` (Living Memory) et l'action
+**« Effacer ce compte client »** d'EasyAdmin (liste et fiche Utilisateurs, `UserCrudController`), qui ouvre la page de confirmation
+`GET`/`POST /admin/users/{id}/effacer` (`Controller/Admin/CustomerAccountEraseAdminController`, `ROLE_ADMIN`, lien habillé EasyAdmin) :
+- **Même effacement que l'API**, sans mot de passe ni code (c'est l'administrateur qui agit) : `UseCase/AccountUseCase/AdminEraseCustomerAccountUseCase`
+  → `MemoiresVivantes/Services/AccountDeletionService::erase()` (livres Mémoires Vivantes effacés comme depuis l'application, puis
+  `PersonalDataEraser`). Ordre : effacement d'abord, **courriel de confirmation ensuite** à l'adresse relevée avant, dans la langue du
+  site (jamais envoyé si l'effacement a échoué ; un échec d'envoi n'annule rien, il est journalisé et affiché à l'administrateur).
+- **Mêmes refus**, affichés en clair avec un lien vers la fiche à régler : abonnement en cours (`SUBSCRIPTION_ACTIVE`, fiche Abonnements,
+  « Résilier maintenant » ou « en fin de période ») et réservation à venir (`RESERVATION_UPCOMING`, fiche Réservations, « Annuler ») ;
+  `AccountDeletionGuard::blockers()` / `blockingItems()` sont partagés avec l'API. Tant que ça bloque, la page n'a pas de formulaire.
+- **Jamais** sur un compte interne (`AccountDeletionGuard::isCustomerAccount` : `ROLE_USER_INTERNET` sans `ROLE_ADMIN`, `ROLE_SUPER_ADMIN`,
+  `ROLE_USER_POS` ni `ROLE_POS_MANAGER` ; `NOT_CUSTOMER_ACCOUNT`), sur soi-même (`SELF_ACCOUNT`) ni sur un compte déjà effacé
+  (`ALREADY_ERASED`) : l'action n'est pas proposée et la page refuse même une requête forgée.
+- **Confirmation explicite** : formulaire CSRF et case « irréversible » (pas de simple boîte de dialogue).
+- **« Supprimer » d'EasyAdmin** n'est plus proposé pour un compte client et `deleteEntity` le refuse (403) même par une URL forgée : la
+  suppression physique perdrait les commandes ; elle reste disponible pour les comptes internes.
+- **Trace** sans donnée personnelle du client : journal sécurité `account.deleted_by_admin` et ligne `content_audit_log` (ressource `user`,
+  action `erase`, identifiant du compte, identifiant de l'administrateur, compteurs).
+
+Écart connu, non traité dans ce lot : `DELETE /api/account` envoie le courriel de confirmation **avant** d'effacer (un effacement raté
+après l'envoi annoncerait une suppression qui n'a pas eu lieu) et n'efface pas les livres Mémoires Vivantes du compte (voie
+`/api/memoires/mobile/account`). Tests : `tests/Functional/Admin/CustomerAccountEraseAdminTest.php`.
+
 ### Codes à usage unique et limites de débit (01/11/2026, suite du lot « Compte »)
 - **Usage des codes** : colonne `otp_code.purpose` (`login`, `email_change`, `account_deletion` ; `login` pour les codes existants ;
   migration `Version20261107100000`, script `scripts/migrate_all_v2_otp_purpose.sh`). `/api/otp-verify` et le formulaire OTP du

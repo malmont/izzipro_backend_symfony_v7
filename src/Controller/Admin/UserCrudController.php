@@ -125,9 +125,13 @@ class UserCrudController extends BaseTenantCrudController
     public function deleteEntity(EntityManagerInterface $entityManager, $entityInstance): void
     {
         if ($entityInstance instanceof User) {
-            $this->protectOwner($entityInstance);
+            $roles = $this->protectOwner($entityInstance);
             if ($this->isSelf($entityInstance)) {
                 throw $this->createAccessDeniedException('Vous ne pouvez pas supprimer votre propre compte.');
+            }
+            if (\App\Services\AccountService\AccountDeletionGuard::isCustomerAccount($roles)) {
+                // Règle appliquée côté serveur même si l'URL est forgée (B19) : un compte client s'efface, il ne se supprime pas
+                throw $this->createAccessDeniedException('Un compte client s\'efface par l\'action « Effacer ce compte client », qui garde ses commandes.');
             }
         }
         parent::deleteEntity($entityManager, $entityInstance);
@@ -213,19 +217,29 @@ class UserCrudController extends BaseTenantCrudController
         $canEdit = fn ($user) => !$user instanceof User
             || $this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)
             || !in_array(RoleAssignmentPolicy::SUPER_ADMIN, $user->getRoles(), true);
+        // Compte client du site (B19, 06/11/2026) : « Effacer » (anonymisation, commandes gardées) remplace « Supprimer » ; la
+        // suppression physique reste pour les seuls comptes internes (administrateur, caisse)
+        $isCustomer = fn ($user) => $user instanceof User && \App\Services\AccountService\AccountDeletionGuard::isCustomerAccount($user->getRoles());
         $canDelete = fn ($user) => $user instanceof User
             && !$this->isSelf($user)
+            && !$isCustomer($user)
             && ($this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN) || !in_array(RoleAssignmentPolicy::SUPER_ADMIN, $user->getRoles(), true));
 
         $reset = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('resetPosPin', 'Réinitialiser le PIN de caisse', 'fas fa-key')
             ->linkToUrl(fn (User $user) => $this->csrfActionUrl('resetPosPin', (string) $user->getId()))
             ->displayIf(fn ($user) => $user instanceof User && $canEdit($user) && array_intersect(['ROLE_USER_POS', 'ROLE_POS_MANAGER', 'ROLE_ADMIN'], $user->getRoles()) !== [])
             ->setHtmlAttributes(['onclick' => 'return confirm(' . json_encode('Effacer le PIN de caisse de cet utilisateur ? Il devra en recréer un.', JSON_UNESCAPED_UNICODE) . ');']);
+        $erase = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('eraseCustomer', 'Effacer ce compte client', 'fas fa-user-slash')
+            ->linkToRoute('admin_user_erase', fn (User $user) => ['id' => $user->getId()])
+            ->displayIf(fn ($user) => $isCustomer($user) && !$this->isSelf($user) && $user->getDeletedAt() === null)
+            ->setCssClass('text-danger');
 
         $actions = parent::configureActions($actions)
             ->disable(\EasyCorp\Bundle\EasyAdminBundle\Config\Action::BATCH_DELETE)
             ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $reset)
-            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $reset);
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $reset)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL, $erase)
+            ->add(\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, $erase);
 
         foreach ([\EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_INDEX, \EasyCorp\Bundle\EasyAdminBundle\Config\Crud::PAGE_DETAIL] as $page) {
             $actions->update($page, \EasyCorp\Bundle\EasyAdminBundle\Config\Action::EDIT, fn (\EasyCorp\Bundle\EasyAdminBundle\Config\Action $a) => $a->displayIf($canEdit));

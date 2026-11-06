@@ -265,7 +265,9 @@ simulation).
 
 `DELETE /api/memoires/mobile/account {password}` (connexion obligatoire, mot de passe redemandé, 17/10/2026, exigence
 App Store et Google Play ; `Controller/MobileAccountController`, `UseCase/Account/DeleteMobileAccountUseCase`,
-`Services/AccountDeletionService`). Essais limités par compte (limiteur `api_login_account` : 10 par 15 min, 429
+`Services/AccountDeletionService` ; la même méthode `erase()` sert à l'action « Effacer ce compte client » du back-office, B19 du
+06/11/2026, `docs/boutique.md` : un compte Mémoires Vivantes effacé par l'administrateur du site perd aussi ses livres ; la réponse de
+l'application mobile ne change pas). Essais limités par compte (limiteur `api_login_account` : 10 par 15 min, 429
 `TOO_MANY_ATTEMPTS` + `Retry-After`). → 200 `{deleted: true, booksDeleted, printOrdersAnonymized}` ; 401
 `PASSWORD_INVALID` (message à afficher tel quel) ; 403 `ADMIN_ACCOUNT` (un administrateur se supprime depuis la
 console, pas depuis l'application).
