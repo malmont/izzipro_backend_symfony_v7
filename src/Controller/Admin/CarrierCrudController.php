@@ -68,7 +68,7 @@ class CarrierCrudController extends BaseTenantCrudController
             TextField::new('carrierAccountId', 'Compte transporteur EasyPost (ca_…)')->setRequired(false)->hideOnIndex(),
             MoneyField::new('price', 'Prix')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true)->setHelp('Ignoré pour le retrait et pour un tarif EasyPost.'),
             TextField::new('estimatedDays', 'Délai affiché (ex. 3 à 7 jours ouvrables)')->setRequired(false),
-            ImageField::new('photo')->setBasePath('/bucket-simulator/assets/uploads/Carrier/')
+            ImageField::new('photo', 'Logo')->setBasePath('/bucket-simulator/assets/uploads/Carrier/')
                 ->setUploadDir('var/storage/public_bucket/assets/uploads/Carrier/')
                 ->setUploadedFileNamePattern('[randomhash].[extension]')
                 ->setRequired(false),

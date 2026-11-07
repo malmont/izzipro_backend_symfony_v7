@@ -28,7 +28,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  *   dans la médiathèque (store) pour servir à la création.
  * - POST /api/products/ai/translate { name, description?, moreInformations?, tags?, source? (langue du site), targets? (fr, en) } → { translations, credits }.
  * - GET /api/products/ai/bulk/plan?kind=, POST /api/products/ai/bulk, GET /api/products/ai/bulk/{jobId} : lots (fiches, traductions, images), voir ProductAiBulkService.
- * - POST /api/products/ai/create { name, description?, moreInformations?, tags?, language?, translations?, priceCents, stockQuantity?, categoryIds?,
+ * - POST /api/products/ai/create { name, description?, moreInformations?, tags?, language?, translations?, priceCents, stockQuantity?, categoryIds?, variants?: {sizes, colors} (une variante par combinaison),
  *   pictures? (URL https ou nom de fichier), channels? {web, pos, landing}, modes? {sale, rental, subscription}, barcode?, translate? (bool :
  *   traduction automatique dans l'autre langue du site, un crédit) } → 201 { productId, variantId, slug, code, languages, pictures, translated } ;
  *   422 NAME_REQUIRED | PRICE_INVALID | CATEGORY_UNKNOWN | PICTURE_INVALID.

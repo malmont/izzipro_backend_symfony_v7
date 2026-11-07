@@ -25,8 +25,8 @@ class OrderTaxCrudController extends BaseTenantCrudController
 
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setEntityLabelInSingular('Order Tax')
-                    ->setEntityLabelInPlural('Order Taxes')
+        return $crud->setEntityLabelInSingular('Taxe de commande')
+                    ->setEntityLabelInPlural('Taxes de commandes')
                     ->setSearchFields(['amount', 'orderTax.reference', 'tax.name']);
     }
 
@@ -38,7 +38,7 @@ class OrderTaxCrudController extends BaseTenantCrudController
         return [
             IdField::new('id')->hideOnForm(),
             
-            AssociationField::new('orderTax', 'Order')
+            AssociationField::new('orderTax', 'Commande')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => function (OrderRepository $repo) {

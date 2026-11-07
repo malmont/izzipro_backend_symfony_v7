@@ -25,6 +25,8 @@ final class SiteAssistantTools
 
     /** Outils d'opérations sur une commande web (lot 6) : proposés par l'assistant, appliqués après confirmation par les services des lots 1 à 3 */
     public const ORDER_TOOLS = ['refund_order', 'cancel_order', 'capture_order', 'resend_order_email', 'ship_order'];
+    /** Outils enchaînables dans une seule proposition `setup_batch` (assistant qui enchaîne, 07/11/2026). */
+    public const BATCH_TOOLS = ['set_site_settings', 'set_entreprise_fields', 'request_feature', 'set_custom_domain'];
 
     /** @return list<array<string, mixed>> outils d'un palier : help | full */
     public static function definitionsFor(string $tier): array
@@ -59,6 +61,7 @@ final class SiteAssistantTools
             ['name' => 'capture_order', 'description' => 'Propose de capturer le paiement autorisé mais non capturé d\'une commande web. L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['orderId' => ['type' => 'integer']], 'required' => ['orderId']]],
             ['name' => 'resend_order_email', 'description' => 'Propose de renvoyer au client un courriel de la commande : confirmation, reçu (receipt) ou avis d\'expédition (shipped). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['orderId' => ['type' => 'integer'], 'kind' => ['type' => 'string', 'enum' => ['confirmation', 'receipt', 'shipped']]], 'required' => ['orderId', 'kind']]],
             ['name' => 'ship_order', 'description' => 'Propose de marquer une commande web expédiée par le marchand (transporteur, numéro de suivi, courriel au client). L\'administrateur confirme.', 'input_schema' => ['type' => 'object', 'properties' => ['orderId' => ['type' => 'integer'], 'carrier' => ['type' => 'string'], 'trackingNumber' => ['type' => 'string'], 'trackingUrl' => ['type' => 'string'], 'notify' => ['type' => 'boolean']], 'required' => ['orderId', 'carrier']]],
+            ['name' => 'propose_setup_batch', 'description' => 'Enchaîne plusieurs écritures en une seule proposition que l\'administrateur confirme une fois : étapes parmi set_site_settings, set_entreprise_fields, request_feature, set_custom_domain, chacune avec le même input que l\'outil seul et un résumé. À employer quand l\'administrateur demande de « tout configurer » ou plusieurs réglages à la fois ; chaque étape est vérifiée comme si elle était proposée seule, et appliquée dans l\'ordre après confirmation.', 'input_schema' => ['type' => 'object', 'properties' => ['steps' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['tool' => ['type' => 'string', 'enum' => self::BATCH_TOOLS], 'input' => ['type' => 'object'], 'summary' => ['type' => 'string']], 'required' => ['tool', 'input', 'summary']]], 'summary' => ['type' => 'string', 'description' => 'résumé de l\'ensemble en une phrase']], 'required' => ['steps', 'summary']]],
         ];
     }
 }

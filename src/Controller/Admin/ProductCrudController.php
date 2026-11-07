@@ -43,7 +43,8 @@ class ProductCrudController extends BaseTenantCrudController
     public function __construct(
         TenantEntityManagerProvider $emProvider,
         AdminUrlGenerator $adminUrlGenerator,
-        private readonly ?\App\Services\OrderService\TaxCategoryAudit $taxAudit = null // alerte « catégorie sans taxe » (F18 partie 2a)
+        private readonly ?\App\Services\OrderService\TaxCategoryAudit $taxAudit = null, // alerte « catégorie sans taxe » (F18 partie 2a)
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // devise du site (libellés, 07/11/2026)
     ) {
         parent::__construct($emProvider);
         $this->adminUrlGenerator = $adminUrlGenerator;
@@ -61,8 +62,8 @@ class ProductCrudController extends BaseTenantCrudController
 
         yield IdField::new('id')->hideOnForm();
         yield TextField::new('name', 'Nom du produit');
-        yield SlugField::new('slug')->setTargetFieldName('name')->hideOnIndex();
-        yield TextEditorField::new('description')->setColumns('col-md-12')->setRequired(false); 
+        yield SlugField::new('slug', 'Adresse de la fiche (slug)')->setTargetFieldName('name')->hideOnIndex();
+        yield TextEditorField::new('description', 'Description')->setColumns('col-md-12')->setRequired(false); 
         yield TextEditorField::new('moreinformations', 'Informations supplémentaires')->hideOnIndex()->setColumns('col-md-12')->setRequired(false);
         yield CollectionField::new('translations', 'Traductions')
         ->setEntryType(ProductTranslationType::class)
@@ -72,11 +73,11 @@ class ProductCrudController extends BaseTenantCrudController
         ->renderExpanded()
         ->setColumns('col-12');
         yield FormField::addPanel('Informations Commerciales')->collapsible();
-        yield MoneyField::new('price', 'Prix de Vente ($)')->setCurrency('USD')->setStoredAsCents(true)->setColumns('col-md-4');
-        yield MoneyField::new('purchasePrice', "Prix d'achat ($)")->setCurrency('USD')->setStoredAsCents(true)->setColumns('col-md-4');
+        yield MoneyField::new('price', 'Prix de vente')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true)->setColumns('col-md-4');
+        yield MoneyField::new('purchasePrice', "Prix d'achat")->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true)->setColumns('col-md-4');
         yield NumberField::new('coefficientMultiplier', 'Coefficient')->setColumns('col-md-4');
         yield TextField::new('barcode', 'Code Barre')->setColumns('col-md-4');
-        yield MoneyField::new('specialPrice', 'Prix promotionnel ($)')->setCurrency('USD')->setStoredAsCents(true)->setColumns('col-md-4');
+        yield MoneyField::new('specialPrice', 'Prix promotionnel')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true)->setColumns('col-md-4');
         // Catégorie fiscale (F18 partie 2a) : vide = standard ; « exonéré » = aucune taxe ; figée sur chaque ligne de commande à la vente
         yield \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('taxCategory', 'Catégorie fiscale')->setChoices(array_flip(\App\Services\OrderService\TaxCategory::LABELS))->setRequired(false)->setColumns('col-md-4')->hideOnIndex()
             ->setHelp(($this->taxAudit?->warning() ?? 'Vide : taux normal. Au Québec, laisser vide (TPS et TVQ sans catégorie). France : la catégorie choisit la TVA (20, 10, 5,5 ou 2,1 %).') . ' À utiliser seulement quand les applications à jour sont publiées : une caisse antérieure à la règle hors ligne v2 calcule sans catégorie.');
@@ -106,7 +107,7 @@ class ProductCrudController extends BaseTenantCrudController
         yield AssociationField::new('style', 'Style')
              ->setFormTypeOptions(['em' => $tenantEm, 'query_builder' => fn($repo) => $repo->createQueryBuilder('s')->orderBy('s.name', 'ASC')])
             ->setColumns('col-md-6');
-        yield TextField::new('tags')->setColumns('col-md-6');
+        yield TextField::new('tags', 'Mots-clés')->setColumns('col-md-6');
         
         yield FormField::addPanel('Média')->collapsible();
         yield ImageField::new('image', 'Image Principale')
@@ -126,12 +127,12 @@ class ProductCrudController extends BaseTenantCrudController
         yield FormField::addTab('Visibilité & Options');
         yield FormField::addPanel('Options d\'Affichage (Flags)')->collapsible();
         
-        yield BooleanField::new('isbestseller', 'BestSeller')->setColumns('col-md-3');
+        yield BooleanField::new('isbestseller', 'Meilleure vente')->setColumns('col-md-3');
         yield BooleanField::new('isnewarrival', 'Nouveauté')->setColumns('col-md-3');
         yield BooleanField::new('isfeatured', 'En vedette')->setColumns('col-md-3');
         yield BooleanField::new('isspecialoffer', 'Offre spéciale')->setColumns('col-md-3');
         yield BooleanField::new('isAccessory', 'Accessoire')->setColumns('col-md-3');
-        yield BooleanField::new('isLandingPage', 'isLandingPage')->setColumns('col-md-3');
+        yield BooleanField::new('isLandingPage', 'Sur la landing page')->setColumns('col-md-3');
         
         yield FormField::addPanel('Statut de Publication')->collapsible();
         yield BooleanField::new('isWeb', 'Actif sur le site Web')->setColumns('col-md-3');

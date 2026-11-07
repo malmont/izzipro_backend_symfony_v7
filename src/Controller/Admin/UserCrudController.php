@@ -48,10 +48,10 @@ class UserCrudController extends BaseTenantCrudController
 
         return [
             IdField::new('id')->hideOnForm(),
-            EmailField::new('email'),
-            TextField::new('username'),
-            TextField::new('firstname'),
-            TextField::new('lastname'),
+            EmailField::new('email', 'Courriel'),
+            TextField::new('username', 'Nom d\'utilisateur'),
+            TextField::new('firstname', 'Prénom'),
+            TextField::new('lastname', 'Nom'),
             AssociationField::new('primaryAddress', 'Adresse Principale')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
@@ -73,9 +73,9 @@ class UserCrudController extends BaseTenantCrudController
                 ->setChoices($this->rolePolicy->choices($this->isGranted(RoleAssignmentPolicy::SUPER_ADMIN)))
                 ->allowMultipleChoices()
                 ->renderExpanded(),
-            BooleanField::new('isVerified', 'Verified'),
-            BooleanField::new('otpEnabled', 'OTP Enabled'),
-            TextField::new('plainPassword', 'Password')
+            BooleanField::new('isVerified', 'Courriel vérifié'),
+            BooleanField::new('otpEnabled', 'Code à usage unique (OTP) activé'),
+            TextField::new('plainPassword', 'Mot de passe')
                 ->setFormType(PasswordType::class)
                 ->onlyOnForms(),
         ];

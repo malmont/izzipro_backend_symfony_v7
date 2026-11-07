@@ -70,25 +70,25 @@ class ProductVariantListController extends BaseTenantCrudController
         $tenantEm = $this->emProvider->getEntityManager();
 
         return [
-            AssociationField::new('product', 'Product')
+            AssociationField::new('product', 'Produit')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn($repo) => $repo->createQueryBuilder('p')->orderBy('p.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
-            AssociationField::new('color', 'Color')
+            AssociationField::new('color', 'Couleur')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn($repo) => $repo->createQueryBuilder('c')->orderBy('c.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
-            AssociationField::new('size', 'Size')
+            AssociationField::new('size', 'Taille')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn($repo) => $repo->createQueryBuilder('s')->orderBy('s.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
-            IntegerField::new('stockQuantity', 'Stock Quantity'),
+            IntegerField::new('stockQuantity', 'Quantité en stock'),
              AssociationField::new('optionValues', 'Valeurs de cette variante')
                 ->setHelp('Sélectionnez la combinaison exacte de valeurs pour cette variante (ex: "Rouge" et "XL").')
                 ->setFormTypeOption('by_reference', false) 

@@ -25,8 +25,8 @@ class BaniereStatiqueCrudController extends BaseTenantCrudController
     {
         return [
             IdField::new('id')->onlyOnIndex(),
-            TextField::new('titre'),
-            TextEditorField::new('texte')->hideOnIndex(),
+            TextField::new('titre', 'Titre'),
+            TextEditorField::new('texte', 'Texte')->hideOnIndex(),
             ImageField::new('imageDeFond', 'Image de fond')
                  ->setBasePath('/bucket-simulator/assets/uploads/slider/')
                 ->setUploadDir('var/storage/public_bucket/assets/uploads/slider/')

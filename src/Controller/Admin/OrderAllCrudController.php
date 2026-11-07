@@ -44,7 +44,8 @@ class OrderAllCrudController extends BaseTenantCrudController
     public function __construct(
         TenantEntityManagerProvider $emProvider, // Requis par le parent
         CreateOrderUseCase $createOrderUseCase,
-        CancelOrderUseCase $cancelOrderUseCase
+        CancelOrderUseCase $cancelOrderUseCase,
+        private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null // devise du site (07/11/2026)
     ) {
         parent::__construct($emProvider); // On passe la dépendance au parent
         $this->createOrderUseCase = $createOrderUseCase;
@@ -73,7 +74,7 @@ class OrderAllCrudController extends BaseTenantCrudController
                     'query_builder' => fn(UserRepository $repo) => $repo->createQueryBuilder('u')->orderBy('u.email', 'ASC'),
                     'choice_label' => 'email',
                 ]),
-            AssociationField::new('orderSource', 'Order Source')
+            AssociationField::new('orderSource', 'Origine')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn(OrderSourceRepository $repo) => $repo->createQueryBuilder('os')->orderBy('os.name', 'ASC'),
@@ -87,24 +88,24 @@ class OrderAllCrudController extends BaseTenantCrudController
                     'query_builder' => fn(CarrierRepository $repo) => $repo->createQueryBuilder('c')->orderBy('c.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
-            AssociationField::new('orderType', 'Order Type')
+            AssociationField::new('orderType', 'Type de commande')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn(OrderTypeRepository $repo) => $repo->createQueryBuilder('ot')->orderBy('ot.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
-            AssociationField::new('status', 'Order Status')
+            AssociationField::new('status', 'Statut')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn(StatusCommandeRepository $repo) => $repo->createQueryBuilder('sc')->orderBy('sc.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
-            CollectionField::new('orderItems', 'Items')
+            CollectionField::new('orderItems', 'Articles')
                 ->allowAdd()->allowDelete()->setEntryType(OrderItemsType::class)->setFormTypeOptions(['by_reference' => false]),
-            MoneyField::new('totalAmount', 'Total Amount')->setCurrency('USD')->setStoredAsCents(false)->hideOnForm(),
-            CollectionField::new('payments', 'Payments')
+            MoneyField::new('totalAmount', 'Montant total')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(false)->hideOnForm(),
+            CollectionField::new('payments', 'Paiements')
                 ->setEntryType(PaymentFormType::class)->allowAdd()->allowDelete(),
-            TextField::new('reference', 'Reference')->hideOnForm(),
+            TextField::new('reference', 'Référence')->hideOnForm(),
             // Vente au comptoir (source « Pos ») créée à la main : poste de caisse obligatoire, numérotée et journalisée (C2)
             \EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField::new('posCashRegisterId', 'Poste de caisse (vente au comptoir)')
                 ->setChoices(array_column(array_map(fn ($r) => [$r->getName(), $r->getId()], $this->emProvider->getEntityManager()->getRepository(\App\Entity\CashRegister::class)->findAllOrdered(true)), 1, 0))

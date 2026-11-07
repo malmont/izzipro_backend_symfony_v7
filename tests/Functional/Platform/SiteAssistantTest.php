@@ -80,7 +80,7 @@ class SiteAssistantTest extends WebTestCase
         $this->assertSame($this->before['locale'], $this->db->fetchOne('SELECT locale FROM entreprise ORDER BY id LIMIT 1'), 'rien n\'est écrit avant confirmation');
         $payload = FakeLandingAiClient::$requests[0];
         $this->assertSame('claude-sonnet-5-5', $payload['model']);
-        $this->assertSame(['get_settings', 'get_readiness', 'open_screen', 'set_site_settings', 'get_domain_status', 'set_custom_domain', 'delegate_to_editor', 'estimate_product_dimensions', 'request_feature', 'set_entreprise_fields', 'get_orders_todo', 'get_order', 'get_help', 'get_controls', 'get_configuration_paths', 'refund_order', 'cancel_order', 'capture_order', 'resend_order_email', 'ship_order'], array_column($payload['tools'], 'name'), 'palier complet (mode démo de la plateforme)');
+        $this->assertSame(['get_settings', 'get_readiness', 'open_screen', 'set_site_settings', 'get_domain_status', 'set_custom_domain', 'delegate_to_editor', 'estimate_product_dimensions', 'request_feature', 'set_entreprise_fields', 'get_orders_todo', 'get_order', 'get_help', 'get_controls', 'get_configuration_paths', 'refund_order', 'cancel_order', 'capture_order', 'resend_order_email', 'ship_order', 'propose_setup_batch'], array_column($payload['tools'], 'name'), 'palier complet (mode démo de la plateforme)');
         $this->assertStringContainsString('CHEMINEMENT', $payload['system']);
         $second = FakeLandingAiClient::$requests[1];
         $this->assertSame('tool_result', $second['messages'][2]['content'][0]['type'], 'résultats d\'outils renvoyés à l\'IA');
@@ -167,5 +167,41 @@ class SiteAssistantTest extends WebTestCase
         }
 
         return $container->get('lexik_jwt_authentication.jwt_manager')->create($user);
+    }
+
+    /** Assistant qui enchaîne (07/11/2026) : plusieurs écritures en une seule proposition, confirmée une fois, appliquées dans l'ordre. */
+    public function testSetupBatchIsCheckedStepByStepThenAppliedInOrder(): void
+    {
+        $telBefore = $this->db->fetchOne('SELECT tel FROM entreprise ORDER BY id LIMIT 1');
+        try {
+            // 1. une étape interdite (clé plateforme) fait refuser tout l'enchaînement : aucune action proposée
+            FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'tool_use', 'id' => 'tu_1', 'name' => 'propose_setup_batch', 'input' => (object) ['summary' => 'Tout configurer', 'steps' => [
+                (object) ['tool' => 'set_site_settings', 'input' => (object) ['values' => (object) ['site.locale' => 'en']], 'summary' => 'Site en anglais'],
+                (object) ['tool' => 'set_site_settings', 'input' => (object) ['values' => (object) ['module.boutique' => true]], 'summary' => 'interdit'],
+            ]]]], 'usage' => (object) ['input_tokens' => 10, 'output_tokens' => 5]];
+            FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'text', 'text' => 'Une étape est refusée, je corrige.']], 'usage' => (object) ['input_tokens' => 10, 'output_tokens' => 5]];
+            $body = json_decode((string) $this->api('POST', '/api/site/assistant', ['messages' => [['role' => 'user', 'content' => 'Configure tout']]], 'admin')->getContent(), true);
+            $this->assertSame([], $body['actions'], 'enchaînement refusé en bloc');
+            $this->assertStringContainsString('étapes refusées', json_encode(FakeLandingAiClient::$requests[1]['messages'][2]['content'][0]['content'], JSON_UNESCAPED_UNICODE));
+            $this->assertSame($this->before['locale'], $this->db->fetchOne('SELECT locale FROM entreprise ORDER BY id LIMIT 1'), 'rien n\'est écrit');
+
+            // 2. enchaînement valide : une seule action, avec ses étapes, puis confirmation unique
+            FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'tool_use', 'id' => 'tu_2', 'name' => 'propose_setup_batch', 'input' => (object) ['summary' => 'Site en anglais et téléphone', 'steps' => [
+                (object) ['tool' => 'set_site_settings', 'input' => (object) ['values' => (object) ['site.locale' => 'en']], 'summary' => 'Site en anglais'],
+                (object) ['tool' => 'set_entreprise_fields', 'input' => (object) ['fields' => (object) ['tel' => '+1 514 555 0100']], 'summary' => 'Téléphone'],
+            ]]]], 'usage' => (object) ['input_tokens' => 10, 'output_tokens' => 5]];
+            FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'text', 'text' => 'Confirmez pour appliquer les deux étapes.']], 'usage' => (object) ['input_tokens' => 10, 'output_tokens' => 5]];
+            $body = json_decode((string) $this->api('POST', '/api/site/assistant', ['messages' => [['role' => 'user', 'content' => 'Configure tout']]], 'admin')->getContent(), true);
+            $this->assertCount(1, $body['actions'], 'une seule proposition pour les deux étapes');
+            $this->assertSame(['setup_batch', 'Site en anglais et téléphone', ['Site en anglais', 'Téléphone']], [$body['actions'][0]['tool'], $body['actions'][0]['summary'], array_column($body['actions'][0]['input']['steps'], 'summary')]);
+            $this->assertSame($this->before['locale'], $this->db->fetchOne('SELECT locale FROM entreprise ORDER BY id LIMIT 1'), 'rien n\'est écrit avant confirmation');
+            $r = $this->api('POST', '/api/site/assistant/actions/' . $body['actions'][0]['id'] . '/confirm', null, 'admin');
+            $this->assertSame(200, $r->getStatusCode(), $r->getContent());
+            $result = json_decode((string) $r->getContent(), true)['result'];
+            $this->assertSame([2, 0, [true, true]], [$result['applied'], $result['failed'], array_column($result['steps'], 'ok')]);
+            $this->assertSame(['en', '+1 514 555 0100'], array_values($this->db->fetchAssociative('SELECT locale, tel FROM entreprise ORDER BY id LIMIT 1')));
+        } finally {
+            $this->db->executeStatement('UPDATE entreprise SET tel = ? WHERE id = (SELECT id FROM entreprise ORDER BY id LIMIT 1)', [$telBefore]);
+        }
     }
 }

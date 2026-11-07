@@ -35,7 +35,7 @@ class PaymentTypeCrudController extends BaseTenantCrudController
             IdField::new('id')->hideOnForm(),
             TextField::new('name', 'Name'),
             TextField::new('description', 'Description')->hideOnIndex(),
-            CollectionField::new('payments', 'Payments')->onlyOnDetail(),
+            CollectionField::new('payments', 'Paiements')->onlyOnDetail(),
         ];
     }
 

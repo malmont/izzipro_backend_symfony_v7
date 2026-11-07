@@ -36,10 +36,10 @@ class ExploreCardCrudController extends BaseTenantCrudController
     {
         yield IdField::new('id')->onlyOnIndex();
         yield BooleanField::new('isDifferent', 'Mode Vidéo ?');
-        yield TextareaField::new('standardTitle', 'standardTitle')
+        yield TextareaField::new('standardTitle', 'Titre (mode image)')
             ->setRequired(false)
             ->onlyOnForms();
-        yield TextareaField::new('differentTitle', 'differentTitle')
+        yield TextareaField::new('differentTitle', 'Titre (mode vidéo)')
             ->setRequired(false)
             ->onlyOnForms();    
         yield TextareaField::new('description', 'Description')

@@ -22,6 +22,8 @@ class ProductAiSheetTest extends WebTestCase
     private \Doctrine\DBAL\Connection $db;
     private array $created = [];
     private ?int $categoryId = null;
+    /** @var array{size: int, color: int} plus grand id de taille et de couleur avant le test (nettoyage des lignes créées) */
+    private array $attributeMax = ['size' => 0, 'color' => 0];
 
     protected function setUp(): void
     {
@@ -31,6 +33,7 @@ class ProductAiSheetTest extends WebTestCase
         $provider->switchTenant(MV_TEST_TENANT_DB, MV_TEST_TENANT_CODE);
         $this->db = $provider->getEntityManager()->getConnection();
         $this->db->executeStatement('DELETE FROM ai_usage');
+        $this->attributeMax = ['size' => (int) $this->db->fetchOne('SELECT COALESCE(MAX(id), 0) FROM size'), 'color' => (int) $this->db->fetchOne('SELECT COALESCE(MAX(id), 0) FROM color')];
     }
 
     protected function tearDown(): void
@@ -41,6 +44,10 @@ class ProductAiSheetTest extends WebTestCase
             $this->db->executeStatement('DELETE FROM product_translation WHERE product_id = ?', [$id]);
             $this->db->executeStatement('DELETE FROM product_categories WHERE product_id = ?', [$id]);
             $this->db->executeStatement('DELETE FROM product WHERE id = ?', [$id]);
+        }
+        foreach (['size', 'color'] as $table) { // tailles et couleurs créées par le test ; celles du modèle (S, M, L, Beige…) restent
+            $this->db->executeStatement("DELETE FROM {$table}_translation WHERE {$table}_id > ?", [$this->attributeMax[$table]]);
+            $this->db->executeStatement("DELETE FROM $table WHERE id > ?", [$this->attributeMax[$table]]);
         }
         if ($this->categoryId !== null) {
             $this->db->executeStatement('DELETE FROM categories WHERE id = ?', [$this->categoryId]);
@@ -85,7 +92,7 @@ class ProductAiSheetTest extends WebTestCase
         // Création avec traduction automatique en anglais (un second crédit)
         FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'tool_use', 'id' => 'tu_2', 'name' => 'translate_product', 'input' => (object) ['en' => (object) ['name' => 'Natural linen cap', 'description' => '<p>A light, breathable linen cap.</p>', 'moreInformations' => '<p>One size.</p>', 'tags' => 'cap, linen, summer']]]], 'usage' => (object) ['input_tokens' => 200, 'output_tokens' => 100]];
         $r = $this->api('POST', '/api/products/ai/create', ['name' => $body['draft']['name'], 'description' => $body['draft']['description'], 'moreInformations' => $body['draft']['moreInformations'], 'tags' => $body['draft']['tags'], 'language' => 'fr',
-            'priceCents' => 3499, 'stockQuantity' => 3, 'categoryIds' => [$categoryId], 'pictures' => array_column($body['pictures'], 'url'), 'channels' => ['web' => true, 'pos' => true, 'landing' => false], 'modes' => ['sale' => true], 'translate' => true], [], 'admin', true);
+            'priceCents' => 3499, 'stockQuantity' => 3, 'categoryIds' => [$categoryId], 'pictures' => array_column($body['pictures'], 'url'), 'channels' => ['web' => true, 'pos' => true, 'landing' => false], 'modes' => ['sale' => true], 'translate' => true, 'variants' => ['sizes' => ['S', 'M'], 'colors' => ['beige']]], [], 'admin', true);
         $this->assertSame(201, $r->getStatusCode(), $r->getContent());
         $created = json_decode((string) $r->getContent(), true);
         $this->created[] = $created['productId'];
@@ -95,6 +102,8 @@ class ProductAiSheetTest extends WebTestCase
         $this->assertSame(['Casquette en lin naturel', 3499, true, true, false, true, false, 'standard'], [$row['name'], (int) $row['price'], (bool) $row['is_web'], (bool) $row['is_pos'], (bool) $row['is_landing_page'], (bool) $row['sale_enabled'], (bool) $row['rental_enabled'], $row['product_type']], 'le stock réel est celui de la variante');
         $this->assertSame($created['slug'], $row['slug']);
         $this->assertSame([3499, 3], array_map('intval', array_values($this->db->fetchAssociative('SELECT price, stock_quantity FROM product_variant WHERE product_id = ?', [$created['productId']]))));
+        $this->assertSame([2, ['s', 'm'], ['beige']], [$created['variants'], array_map('strtolower', $created['sizes']), array_map('strtolower', $created['colors'])], 'une variante par combinaison taille × couleur');
+        $this->assertSame([['s', 'beige'], ['m', 'beige']], $this->db->fetchAllNumeric('SELECT LOWER(s.name), LOWER(c.name) FROM product_variant v JOIN size s ON s.id = v.size_id JOIN color c ON c.id = v.color_id WHERE v.product_id = ? ORDER BY v.id', [$created['productId']]));
         $this->assertSame('Natural linen cap', $this->db->fetchOne("SELECT name FROM product_translation WHERE product_id = ? AND locale = 'en'", [$created['productId']]));
         $this->assertSame(2, (int) $this->db->fetchOne('SELECT COUNT(*) FROM product_picture WHERE product_id = ?', [$created['productId']]));
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM product_categories WHERE product_id = ? AND categories_id = ?', [$created['productId'], $categoryId]));
@@ -110,6 +119,17 @@ class ProductAiSheetTest extends WebTestCase
         $second = json_decode((string) $r->getContent(), true);
         $this->created[] = $second['productId'];
         $this->assertSame($created['slug'] . '-2', $second['slug']);
+        $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM product_variant WHERE product_id = ?', [$second['productId']]), 'sans variants : une seule variante');
+
+        // Tailles existantes réutilisées quelle que soit la casse ; trop de combinaisons refusé
+        $r = $this->api('POST', '/api/products/ai/create', ['name' => 'Casquette bis', 'priceCents' => 1000, 'variants' => ['sizes' => ['s', 'm', 'L']]], [], 'admin', true);
+        $this->assertSame(201, $r->getStatusCode(), $r->getContent());
+        $third = json_decode((string) $r->getContent(), true);
+        $this->created[] = $third['productId'];
+        $this->assertSame([3, 1, 1], [$third['variants'], (int) $this->db->fetchOne("SELECT COUNT(*) FROM size WHERE LOWER(name) = 's'"), (int) $this->db->fetchOne("SELECT COUNT(*) FROM size WHERE name = 'L'")], 'S et M réutilisées, L créée');
+        $r = $this->api('POST', '/api/products/ai/create', ['name' => 'Trop', 'priceCents' => 1000, 'variants' => ['sizes' => range(1, 11), 'colors' => range(1, 10)]], [], 'admin', true);
+        $this->assertSame(422, $r->getStatusCode());
+        $this->assertSame('VARIANTS_TOO_MANY', json_decode((string) $r->getContent(), true)['code']);
     }
 
     public function testNoCreditNoDraftAndTheBackOfficePageWorksInTwoSteps(): void
@@ -150,13 +170,14 @@ class ProductAiSheetTest extends WebTestCase
         $this->assertSame('Sac en toile', $crawler->filter('form[data-draft-form] input[name="name"]')->attr('value'));
         $this->assertSame('25.00', $crawler->filter('form[data-draft-form] input[name="price"]')->attr('value'));
         $this->assertStringContainsString('matière supposée', html_entity_decode((string) $this->client->getResponse()->getContent()));
-        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/produits/depuis-photo', ['_token' => $token, 'step' => 'create', 'name' => 'Sac en toile épaisse', 'description' => '<p>Sac en toile épaisse.</p>', 'price' => '29,90', 'stock' => '2', 'channel_web' => '1', 'mode_sale' => '1'], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
+        $this->client->request('POST', 'https://' . MV_TEST_TENANT_HOST . '/admin/produits/depuis-photo', ['_token' => $token, 'step' => 'create', 'name' => 'Sac en toile épaisse', 'description' => '<p>Sac en toile épaisse.</p>', 'price' => '29,90', 'stock' => '2', 'channel_web' => '1', 'mode_sale' => '1', 'create_variants' => '1', 'sizes' => 'Unique IA, Grand IA', 'colors' => ''], [], ['HTTP_X_TENANT_HOST' => MV_TEST_TENANT_HOST]);
         $this->assertSame(302, $this->client->getResponse()->getStatusCode(), (string) $this->client->getResponse()->getContent());
         $this->assertStringContainsString('crudAction=edit', (string) $this->client->getResponse()->headers->get('Location'), 'ouvre la fiche produit');
         $id = (int) $this->db->fetchOne("SELECT id FROM product WHERE name = 'Sac en toile épaisse' ORDER BY id DESC LIMIT 1");
         $this->assertGreaterThan(0, $id);
         $this->created[] = $id;
         $this->assertSame(2990, (int) $this->db->fetchOne('SELECT price FROM product_variant WHERE product_id = ?', [$id]));
+        $this->assertSame([['Unique IA', 'UNIQUE_IA'], ['Grand IA', 'GRAND_IA']], $this->db->fetchAllNumeric('SELECT s.name, s.code FROM product_variant v JOIN size s ON s.id = v.size_id WHERE v.product_id = ? ORDER BY v.id', [$id]), 'deux variantes depuis le formulaire, code dérivé du nom');
         $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM product_picture WHERE product_id = ?', [$id]), 'la photo déposée devient la photo du produit');
     }
 

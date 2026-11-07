@@ -20,6 +20,8 @@ class SiteDefaultsTest extends KernelTestCase
     private mixed $emailBefore = null;
     /**  list<array<string, mixed>> lignes order_tax laissées par d'autres tests : elles référencent les taxes, mises de côté puis remises */
     private array $orderTaxes = [];
+    /** plus grand id de app_profile avant le test : les profils créés par le service sont retirés (sinon doublon « boussole » dans un autre test) */
+    private int $profileMax = 0;
 
     protected function setUp(): void
     {
@@ -30,6 +32,7 @@ class SiteDefaultsTest extends KernelTestCase
         $this->taxes = $this->db->fetchAllAssociative('SELECT * FROM tax ORDER BY id');
         $this->orderTaxes = $this->db->fetchAllAssociative('SELECT * FROM order_tax ORDER BY id');
         $this->db->executeStatement('DELETE FROM order_tax');
+        $this->profileMax = (int) $this->db->fetchOne('SELECT COALESCE(MAX(id), 0) FROM app_profile');
         $this->sender = $this->db->fetchAllAssociative('SELECT id, from_email, from_name FROM email_configuration ORDER BY id');
         $this->address = $this->db->fetchAssociative('SELECT id, country, state FROM address_entreprise ORDER BY id LIMIT 1') ?: null;
         $this->ttc = (bool) $this->db->fetchOne('SELECT prices_include_tax FROM entreprise ORDER BY id LIMIT 1');
@@ -54,6 +57,7 @@ class SiteDefaultsTest extends KernelTestCase
         }
         $this->db->executeStatement('UPDATE entreprise SET prices_include_tax = ?', [$this->ttc], [\Doctrine\DBAL\ParameterType::BOOLEAN]);
         $this->db->executeStatement('UPDATE entreprise SET email = ?', [$this->emailBefore]);
+        $this->db->executeStatement('DELETE FROM app_profile WHERE id > ?', [$this->profileMax]);
         static::getContainer()->get(\App\Services\TenantCacheService::class)->invalidateTenant();
         parent::tearDown();
     }
@@ -91,7 +95,8 @@ class SiteDefaultsTest extends KernelTestCase
         $this->assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM tax WHERE country = 'CA'"), 'taxes du modèle retirées');
         $this->assertSame('reduced', $this->db->fetchOne("SELECT category FROM tax WHERE name = 'TVA 5,5 %'"));
         $this->assertNull($this->db->fetchOne("SELECT category FROM tax WHERE name = 'TVA 20 %'"), 'taux standard sans catégorie');
-        $this->assertTrue((bool) $this->db->fetchOne('SELECT prices_include_tax FROM entreprise ORDER BY id LIMIT 1'), 'France : prix TTC');
+        $hasOrders = (int) $this->db->fetchOne('SELECT COUNT(*) FROM "order"') > 0; // d'autres tests de la suite laissent des commandes : le réglage est alors figé
+        $this->assertSame(!$hasOrders, (bool) $this->db->fetchOne('SELECT prices_include_tax FROM entreprise ORDER BY id LIMIT 1'), 'France : prix TTC tant qu\'aucune vente');
         $this->assertStringContainsString('France', implode(' ', $result['applied']));
 
         // Pays non couvert : rien, et on le dit

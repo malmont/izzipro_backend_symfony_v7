@@ -182,6 +182,21 @@ légaux** adaptés au pays et à l'activité. `EntrepriseService::updateEntrepri
 palier complet. Tests : `tests/Functional/Platform/SiteReadinessCompleteTest.php`, `tests/Functional/Admin/DashboardReadinessTest.php`,
 `tests/Functional/Platform/SiteAssistantEntrepriseTest.php`.
 
+**Assistant qui enchaîne** (07/11/2026) : outil `propose_setup_batch` `{ steps: [{ tool, input, summary }], summary }` avec des étapes parmi
+`SiteAssistantTools::BATCH_TOOLS` (`set_site_settings`, `set_entreprise_fields`, `request_feature`, `set_custom_domain`). Chaque étape passe
+par le même contrôle que l'outil seul (clés du registre, champs Entreprise, fonctionnalité connue) ; une étape refusée fait refuser tout
+l'enchaînement (l'IA corrige et repropose). Sinon une seule action `setup_batch` est proposée, avec la liste des étapes (la console flottante
+les affiche sous la proposition) ; à la confirmation, `ConfirmSiteAssistantActionUseCase::batch` applique les étapes **dans l'ordre**, par le
+même chemin que si elles avaient été confirmées une à une ; une étape qui échoue n'arrête pas les suivantes, le résultat `{ steps[] { tool,
+summary, ok, result | error }, applied, failed }` dit ce qui est passé (422 si rien n'a pu être appliqué). Réservé au palier complet. La
+consigne système demande une étape à la fois, sauf quand l'administrateur demande plusieurs choses d'un coup. Test :
+`SiteAssistantTest::testSetupBatchIsCheckedStepByStepThenAppliedInOrder`.
+
+**Libellés du back-office en français** (07/11/2026) : les champs EasyAdmin qui restaient en anglais ou sans libellé (commandes, articles de
+commande, paniers, variantes, tailles, couleurs, styles, utilisateurs, diaporama, contact, présentation, bannières, catégories, cartes
+d'exploration, taxes de commandes…) ont un libellé français ; les champs monétaires des produits, commandes, articles et paniers affichent
+la **devise du site** (`TenantCurrencyProvider`, défaut CAD) au lieu d'un `USD` figé.
+
 ## Cheminement ciblé de la caisse : page « Caisse : réglages et cheminement » (07/11/2026)
 
 `GET /admin/caisse` (`PosConsoleAdminController`, `ROLE_ADMIN`, menu Caisse) : la liste de contrôle d'ouverture du magasin

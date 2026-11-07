@@ -13,6 +13,11 @@ use App\Controller\Admin\BaseTenantCrudController;
 
 class CartCrudController extends BaseTenantCrudController
 {
+    public function __construct(\App\Services\TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null) // devise du site (07/11/2026)
+    {
+        parent::__construct($emProvider);
+    }
+
     public static function getEntityFqcn(): string
     {
         return Cart::class;
@@ -28,12 +33,12 @@ class CartCrudController extends BaseTenantCrudController
         return [
             IdField::new('id')->hideOnForm(),
             TextField::new('userCart.FullName', 'Client'),
-            TextField::new('carrierName','Carrier Name'),
-            MoneyField::new('CarrierPrice', 'Shipping')->setCurrency('USD'),
-            MoneyField::new('subTotalHT', 'SubTotal HT')->setCurrency('USD'),
-            MoneyField::new('taxe', 'TVA')->setCurrency('USD'),
-            MoneyField::new('subTotalTTC', 'SubTotal TTC')->setCurrency('USD'),
-            BooleanField::new('isPaid'),
+            TextField::new('carrierName', 'Transporteur'),
+            MoneyField::new('CarrierPrice', 'Livraison')->setCurrency($this->currency?->code() ?? 'CAD'),
+            MoneyField::new('subTotalHT', 'Sous-total HT')->setCurrency($this->currency?->code() ?? 'CAD'),
+            MoneyField::new('taxe', 'TVA')->setCurrency($this->currency?->code() ?? 'CAD'),
+            MoneyField::new('subTotalTTC', 'Sous-total TTC')->setCurrency($this->currency?->code() ?? 'CAD'),
+            BooleanField::new('isPaid', 'Payé'),
         ];
     }
     

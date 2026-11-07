@@ -19,8 +19,8 @@ class ColorCrudController extends BaseTenantCrudController
     {
         return [
             IdField::new('id')->hideOnForm(),
-            TextField::new('name', 'Color Name'),
-            ColorField::new('codeHexa', 'Hexadecimal Code'),
+            TextField::new('name', 'Nom de la couleur'),
+            ColorField::new('codeHexa', 'Code hexadécimal'),
         ];
     }
 }

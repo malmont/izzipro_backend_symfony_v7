@@ -41,8 +41,8 @@ class CandidatureCrudController extends BaseTenantCrudController
                     'choice_label' => 'titre',
                 ]),
 
-            TextField::new('adresse')->hideOnIndex(),
-            TextField::new('ville')->hideOnIndex(),
+            TextField::new('adresse', 'Adresse')->hideOnIndex(),
+            TextField::new('ville', 'Ville')->hideOnIndex(),
             TextField::new('codePostal', 'Code Postal')->hideOnIndex(),
             TextField::new('anneeExperience', 'Années d\'expérience'),
             DateField::new('dateDisponibilite', 'Disponible le'),

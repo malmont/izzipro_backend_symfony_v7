@@ -51,25 +51,25 @@ class ProductVariantCrudController extends BaseTenantCrudController
 
         return [
             IdField::new('id')->hideOnForm(),
-            AssociationField::new('product', 'Product')
+            AssociationField::new('product', 'Produit')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn($repo) => $repo->createQueryBuilder('p')->orderBy('p.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
-            AssociationField::new('color', 'Color')
+            AssociationField::new('color', 'Couleur')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn($repo) => $repo->createQueryBuilder('c')->orderBy('c.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
-            AssociationField::new('size', 'Size')
+            AssociationField::new('size', 'Taille')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn($repo) => $repo->createQueryBuilder('s')->orderBy('s.name', 'ASC'),
                     'choice_label' => 'name',
                 ]),
-            IntegerField::new('stockQuantity', 'Stock Quantity'),
+            IntegerField::new('stockQuantity', 'Quantité en stock'),
             IntegerField::new('price', 'Prix de la variante (cents)')->setHelp('Vide : prix du produit. 2 499 $ = 249900.')->hideOnIndex(),
             TextField::new('barcode', 'Code-barres de la variante (EAN/UPC)')->setRequired(false)->setHelp('Facultatif (C5 hors ligne) : le POS cherche d\'abord la variante, puis le code-barres du produit.')->hideOnIndex(),
             AssociationField::new('optionValues', 'Valeurs de cette variante')

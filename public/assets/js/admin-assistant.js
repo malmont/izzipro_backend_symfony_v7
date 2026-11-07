@@ -40,7 +40,7 @@
             (j.links || []).forEach(function (l) { if (l.url) { html += ' <a class="btn btn-sm btn-outline-secondary ms-1" href="' + esc(l.url) + '">' + esc(l.label) + '</a>'; } });
             (j.actions || []).forEach(function (a) {
                 var money = /refund|cancel|capture/.test(a.tool || '');
-                html += '<div class="ark-assistant-action' + (money ? ' ark-assistant-action-money' : '') + '" data-action="' + esc(a.id) + '"><span>' + esc(a.summary) + '</span> <button type="button" class="btn btn-sm ' + (money ? 'btn-danger' : 'btn-success') + ' ms-2" data-confirm="' + esc(a.id) + '">Confirmer</button></div>';
+                html += '<div class="ark-assistant-action' + (money ? ' ark-assistant-action-money' : '') + '" data-action="' + esc(a.id) + '"><span>' + esc(a.summary) + '</span> <button type="button" class="btn btn-sm ' + (money ? 'btn-danger' : 'btn-success') + ' ms-2" data-confirm="' + esc(a.id) + '">Confirmer</button>' + (a.tool === 'setup_batch' && a.input && a.input.steps ? '<ol class="small mb-0 mt-1 ps-3">' + a.input.steps.map(function (s) { return '<li>' + esc(s.summary || s.tool) + '</li>'; }).join('') + '</ol>' : '') + '</div>';
             });
             return html;
         }

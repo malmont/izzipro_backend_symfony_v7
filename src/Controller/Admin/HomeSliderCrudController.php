@@ -26,19 +26,19 @@ class HomeSliderCrudController extends BaseTenantCrudController
     {
         return [
             IdField::new('id')->hideOnForm(),
-            TextField::new('title'),
-            TextField::new('description'),
-            TextField::new('buttonMessage'),
-            TextField::new('buttonUrl'),
+            TextField::new('title', 'Titre'),
+            TextField::new('description', 'Description'),
+            TextField::new('buttonMessage', 'Texte du bouton'),
+            TextField::new('buttonUrl', 'Lien du bouton'),
             CollectionField::new('translations', 'Traductions')
                 ->setEntryType(HomeSliderTranslationType::class)
                 ->setFormTypeOption('by_reference', false)
                 ->onlyOnForms(),
-            ImageField::new('image')->setBasePath('/bucket-simulator/assets/uploads/slider/')
+            ImageField::new('image', 'Image')->setBasePath('/bucket-simulator/assets/uploads/slider/')
                                     ->setUploadDir('var/storage/public_bucket/assets/uploads/slider/')
                                     ->setUploadedFileNamePattern('[randomhash].[extension]')
                                     ->setRequired(false),
-            BooleanField::new('isDiplayed', 'Display'),                        
+            BooleanField::new('isDiplayed', 'Affiché'),                        
         ];
     }
  

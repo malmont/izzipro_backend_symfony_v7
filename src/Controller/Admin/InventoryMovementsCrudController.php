@@ -30,7 +30,7 @@ class InventoryMovementsCrudController extends BaseTenantCrudController
         return [
             IntegerField::new('id')->hideOnForm(),
             
-            AssociationField::new('productVariant', 'Product Variant')
+            AssociationField::new('productVariant', 'Variante de produit')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => function (ProductVariantRepository $repo) {

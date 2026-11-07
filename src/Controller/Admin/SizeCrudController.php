@@ -20,7 +20,7 @@ class SizeCrudController extends BaseTenantCrudController
     {
         return [
             IdField::new('id')->hideOnForm(),
-            TextField::new('name', 'Size Name'),
+            TextField::new('name', 'Nom de la taille'),
             TextField::new('code', 'Code')
                 ->setHelp('Identifiant unique pour la logique du site (ex: "s", "m", "42", "us-10"). Ne pas traduire.'),
             CollectionField::new('translations', 'Traductions du nom')

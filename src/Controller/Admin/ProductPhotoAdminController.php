@@ -102,6 +102,10 @@ class ProductPhotoAdminController extends AbstractController
                     'modes' => ['sale' => $request->request->get('mode_sale') === '1', 'rental' => $request->request->get('mode_rental') === '1', 'subscription' => $request->request->get('mode_subscription') === '1'],
                     'barcode' => (string) $request->request->get('barcode', ''),
                 ];
+                if ($request->request->get('create_variants') === '1') { // variantes IA (07/11/2026) : tailles et couleurs relevées, corrigées par le marchand
+                    $split = fn (string $s) => array_values(array_filter(array_map('trim', explode(',', $s)), fn ($x) => $x !== ''));
+                    $input['variants'] = ['sizes' => $split((string) $request->request->get('sizes', '')), 'colors' => $split((string) $request->request->get('colors', ''))];
+                }
                 $translated = [];
                 if ($request->request->get('translate') === '1' && trim($input['name']) !== '') {
                     try {
@@ -120,7 +124,7 @@ class ProductPhotoAdminController extends AbstractController
                     return $this->redirect($this->selfUrl());
                 }
                 $session->remove(self::SESSION);
-                $this->addFlash('success', sprintf('Produit « %s » créé (code %s)%s. Vérifiez la fiche, les variantes (tailles, couleurs) et le poids d\'expédition.', $input['name'], $result['body']['code'], $translated !== [] ? ', traduit en ' . implode(', ', $translated) : ''));
+                $this->addFlash('success', sprintf('Produit « %s » créé (code %s)%s. %s. Vérifiez la fiche et le poids d\'expédition.', $input['name'], $result['body']['code'], $translated !== [] ? ', traduit en ' . implode(', ', $translated) : '', $result['body']['variants'] > 1 ? $result['body']['variants'] . ' variantes créées (' . implode(', ', array_merge($result['body']['sizes'], $result['body']['colors'])) . ')' : 'une variante créée'));
 
                 return $this->redirect($this->urls->unsetAll()->setController(ProductCrudController::class)->setAction(Action::EDIT)->setEntityId($result['body']['productId'])->generateUrl());
             }

@@ -15,6 +15,11 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 
 class OrderItemsCrudController extends BaseTenantCrudController
 {
+    public function __construct(\App\Services\TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null) // devise du site (07/11/2026)
+    {
+        parent::__construct($emProvider);
+    }
+
     use CashRecordLockTrait; // données de caisse non modifiables (C2)
 
 
@@ -30,7 +35,7 @@ class OrderItemsCrudController extends BaseTenantCrudController
         return [
             IdField::new('id')->hideOnForm(),
             
-            AssociationField::new('orderAssociated', 'Order')
+            AssociationField::new('orderAssociated', 'Commande')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => function (OrderRepository $repo) {
@@ -38,7 +43,7 @@ class OrderItemsCrudController extends BaseTenantCrudController
                     },
                     'choice_label' => 'reference',
                 ]),
-            AssociationField::new('productVariant', 'Product Variant')
+            AssociationField::new('productVariant', 'Variante de produit')
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => function (ProductVariantRepository $repo) {
@@ -47,9 +52,9 @@ class OrderItemsCrudController extends BaseTenantCrudController
                     'choice_label' => 'id', // ou une autre propriété de ProductVariant
                 ]),
 
-            IntegerField::new('quantity', 'Quantity'),
-            MoneyField::new('unitPrice', 'Unit Price')->setCurrency('CAD'),
-            MoneyField::new('totalPrice', 'Total Price')->setCurrency('CAD'),
+            IntegerField::new('quantity', 'Quantité'),
+            MoneyField::new('unitPrice', 'Prix unitaire')->setCurrency($this->currency?->code() ?? 'CAD'),
+            MoneyField::new('totalPrice', 'Prix total')->setCurrency($this->currency?->code() ?? 'CAD'),
 
         ];
     }

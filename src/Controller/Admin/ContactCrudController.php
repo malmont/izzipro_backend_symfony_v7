@@ -27,8 +27,8 @@ class ContactCrudController extends BaseTenantCrudController
     {
         return [
             IdField::new('id'),
-            TextField::new('title'),
-            TextEditorField::new('description'),
+            TextField::new('title', 'Titre'),
+            TextEditorField::new('description', 'Description'),
         ];
     }
     */

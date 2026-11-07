@@ -43,7 +43,7 @@ class TaxCrudController extends BaseTenantCrudController
                 ->setHelp('Vide : la taxe s\'applique à tous les produits non exonérés (TPS, TVQ). Une catégorie : seulement aux produits de cette catégorie (France : TVA 20 % standard, 10 % intermédiaire, 5,5 % réduit, 2,1 % super réduit). À utiliser seulement quand les applications à jour sont publiées : une caisse antérieure à la règle hors ligne v2 calcule sans catégorie.'),
             TextField::new('country', 'Pays (ISO, ex. CA ; vide = tous)')->setRequired(false),
             TextField::new('province', 'Région')->setHelp('« Toutes », ou codes séparés par des virgules : QC ; ON,NB,NL,PE,NS')->hideOnIndex(),
-            AssociationField::new('orderTaxes', 'Order Taxes')->hideOnForm()
+            AssociationField::new('orderTaxes', 'Taxes de commandes')->hideOnForm()
         ];
     }
 }

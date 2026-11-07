@@ -163,7 +163,7 @@ class SiteAssistantOperationsTest extends WebTestCase
         FakeLandingAiClient::$queue[] = (object) ['content' => [(object) ['type' => 'text', 'text' => 'Tout est possible.']], 'usage' => (object) ['input_tokens' => 1, 'output_tokens' => 1]];
         $body = json_decode((string) $this->api('POST', '/api/site/assistant', ['messages' => [['role' => 'user', 'content' => 'Bonjour']]], 'admin')->getContent(), true);
         $this->assertSame('full', $body['tier']);
-        $this->assertCount(20, FakeLandingAiClient::$requests[0]['tools']);
+        $this->assertCount(21, FakeLandingAiClient::$requests[0]['tools']);
     }
 
     private function api(string $method, string $path, ?array $body, ?string $as): Response

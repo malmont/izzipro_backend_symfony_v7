@@ -301,6 +301,35 @@ class SiteAssistantService
                 $handoff = ['task' => mb_substr($task, 0, 500), 'section' => $section, 'feature' => isset($input['feature']) && is_string($input['feature']) ? $input['feature'] : null];
 
                 return [['delegated' => true, 'handoff' => $handoff, 'note' => 'Transmis à l\'assistant de l\'éditeur ; dis à l\'administrateur que l\'éditeur prend le relais.'], null, null];
+            case 'propose_setup_batch':
+                // assistant qui enchaîne (07/11/2026) : chaque étape passe par le même contrôle que l'outil seul ; une seule action à confirmer
+                $steps = is_array($input['steps'] ?? null) ? array_values($input['steps']) : [];
+                if ($steps === [] || count($steps) > 10) {
+                    return [['error' => 'steps : liste de 1 à 10 étapes { tool, input, summary } attendue', 'tools' => SiteAssistantTools::BATCH_TOOLS], null, null];
+                }
+                $prepared = [];
+                $errors = [];
+                foreach ($steps as $i => $step) {
+                    $tool = (string) ($step['tool'] ?? '');
+                    if (!in_array($tool, SiteAssistantTools::BATCH_TOOLS, true)) {
+                        $errors[] = ['step' => $i, 'tool' => $tool, 'message' => 'outil non enchaînable'];
+                        continue;
+                    }
+                    $stepInput = is_array($step['input'] ?? null) ? $step['input'] : [];
+                    [$stepResult, $stepAction] = $this->runTool($tool, $stepInput + ['summary' => (string) ($step['summary'] ?? '')], $registry, $readiness, $tenantCode, $fullAccess, $tier);
+                    if ($stepAction === null) {
+                        $errors[] = ['step' => $i, 'tool' => $tool] + (is_array($stepResult) ? $stepResult : ['message' => 'étape refusée']);
+                        continue;
+                    }
+                    $this->forgetAction($tenantCode, $stepAction['id']);
+                    $prepared[] = ['tool' => $tool, 'input' => $stepAction['input'], 'summary' => $stepAction['summary']];
+                }
+                if ($errors !== []) {
+                    return [['error' => 'étapes refusées : corrige-les puis propose à nouveau l\'enchaînement entier', 'errors' => $errors], null, null];
+                }
+                $action = $this->remember($tenantCode, 'setup_batch', ['steps' => $prepared], trim((string) ($input['summary'] ?? '')) ?: (count($prepared) . ' étapes : ' . implode(' ; ', array_column($prepared, 'summary'))));
+
+                return [['proposed' => true, 'actionId' => $action['id'], 'steps' => array_column($prepared, 'summary'), 'note' => 'Proposé en une fois à l\'administrateur ; appliqué dans l\'ordre quand il confirme.'], $action, null];
             case 'set_custom_domain':
                 $domain = trim((string) ($input['domain'] ?? ''));
                 if ($domain === '') {
@@ -500,13 +529,14 @@ Ce que tu peux faire :
 - proposer de modifier les réglages du site (outil set_site_settings : seulement les clés de portée « site » du registre, avec la valeur exacte) ; l'administrateur confirme avant toute écriture ;
 - remplir la fiche Entreprise (outil set_entreprise_fields : nom, courriel, téléphone, site web, textes légaux, à-propos, référencement, numéros de taxe) ; pour les textes légaux (mentions légales, CGV ou conditions d'utilisation, politique de confidentialité), rédige toi-même un texte complet et adapté au pays et à l'activité de l'entreprise, en HTML simple, puis propose-le ; l'administrateur confirme ;
 - proposer de demander une fonctionnalité non accordée (outil request_feature) ; {$this->shopHint($shop)}
+- enchaîner plusieurs réglages en une seule proposition (outil propose_setup_batch : étapes set_site_settings, set_entreprise_fields, request_feature, set_custom_domain, chacune avec son input et son résumé) quand l'administrateur demande de tout configurer d'un coup ou plusieurs choses à la fois ; il confirme une seule fois et les étapes s'appliquent dans l'ordre ;
 - estimer par l'IA le poids et les dimensions des produits sans fiche (outil estimate_product_dimensions, un crédit par appel) et proposer de les enregistrer ; l'administrateur confirme ;
 - lire l'aide intégrée (outil get_help : une page par sujet, écrite pour l'administrateur) et t'en servir pour expliquer, en citant la page ;
 - indiquer l'écran du back-office où agir (outil open_screen) quand l'étape se fait là-bas (produits, taxes, Stripe, transporteurs, clés d'activation, postes de caisse, formules d'abonnement, expéditeur des courriels) ;
 - confier à l'assistant de l'éditeur du site (front) ce qui se fait là-bas (outil delegate_to_editor) : composer ou modifier les pages, choisir un modèle de site, régler depuis le panneau de l'éditeur ; tu ne composes jamais une page toi-même ;
 - accompagner l'ajout d'un domaine propre : get_domain_status donne l'état, les enregistrements DNS attendus et la procédure (achat chez un registraire, enregistrement ici, DNS, propagation, certificat automatique) ; set_custom_domain propose l'enregistrement, l'administrateur confirme, puis il crée les enregistrements DNS et vérifie.$ops
 Ce que tu ne fais jamais : forfaits et droits de la plateforme, autres sites, modification des données personnelles des clients, et aucune clé réservée à la plateforme (modules, applications). Si on te le demande, explique où le faire.
-Avant de proposer, lis le contexte ci-dessous (registre et cheminement) ; n'invente aucune clé ni aucun écran. Propose une étape à la fois, dans l'ordre du cheminement.
+Avant de proposer, lis le contexte ci-dessous (registre et cheminement) ; n'invente aucune clé ni aucun écran. Propose une étape à la fois, dans l'ordre du cheminement, sauf quand l'administrateur demande plusieurs choses à la fois : alors propose_setup_batch, en expliquant chaque étape.
 Clés du registre modifiables : site.locale (fr|en|null), site.timezone (IANA|null), site.currency (CAD|EUR|USD), site.prices_include_tax (bool), commerce.sales_modes (liste parmi sale, rental, subscription), commerce.guest_checkout (bool), commerce.subscriptions (bool), commerce.tax_provider (table|stripe), shipping.mode (none|own_key|platform : none = estimation par transporteurs à prix fixe et retrait, le marchand expédie lui-même), shipping.easypost_environment (test|live), shipping.default_weight_kg (nombre), shipping.free_above (cents, null = aucune gratuité).
 Écrans : {$this->screensHint()}.
 

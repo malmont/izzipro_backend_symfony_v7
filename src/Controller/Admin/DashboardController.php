@@ -692,7 +692,7 @@ class DashboardController extends AbstractDashboardController
 
         yield MenuItem::section('Taxe');
         yield MenuItem::linkToCrud('Taxes', 'fas fa-percent', Tax::class);
-        yield MenuItem::linkToCrud('Order Taxes', 'fas fa-receipt', OrderTax::class);
+        yield MenuItem::linkToCrud('Taxes des commandes', 'fas fa-receipt', OrderTax::class);
 
         yield MenuItem::section('Catalogue & Véhicules');
         yield MenuItem::linkToCrud('Véhicules & Bateaux (Vente)', 'fas fa-ship', VehicleProduct::class)->setController(VehicleProductCrudController::class);

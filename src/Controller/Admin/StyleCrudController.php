@@ -18,7 +18,7 @@ class StyleCrudController extends BaseTenantCrudController
     {
         return [
             IdField::new('id')->hideOnForm(),
-            TextField::new('name', 'Style Name'),
+            TextField::new('name', 'Nom du style'),
         ];
     }
 }
