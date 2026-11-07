@@ -213,6 +213,25 @@ class SiteAssistantService
             return $this->runOrderTool($name, $input, $tenantCode);
         }
         switch ($name) {
+            case 'set_entreprise_fields':
+                $fields = is_array($input['fields'] ?? null) ? $input['fields'] : [];
+                $clean = [];
+                $errors = [];
+                foreach ($fields as $key => $value) {
+                    if (!in_array((string) $key, SiteAssistantTools::ENTREPRISE_FIELDS, true)) {
+                        $errors[] = ['path' => (string) $key, 'message' => 'champ inconnu ou réservé'];
+                    } elseif (!is_string($value) && !is_null($value)) {
+                        $errors[] = ['path' => (string) $key, 'message' => 'texte attendu'];
+                    } else {
+                        $clean[(string) $key] = $value === null ? null : mb_substr($value, 0, in_array($key, ['LegalNotice', 'conditionOfUse', 'privacyPolicy', 'apropos'], true) ? 20000 : 500);
+                    }
+                }
+                if ($clean === [] || $errors !== []) {
+                    return [['error' => 'champs refusés', 'errors' => $errors ?: [['path' => 'fields', 'message' => 'objet { champ: valeur } attendu']], 'allowed' => SiteAssistantTools::ENTREPRISE_FIELDS], null, null];
+                }
+                $action = $this->remember($tenantCode, 'set_entreprise_fields', ['fields' => $clean], (string) ($input['summary'] ?? ('Mettre à jour la fiche Entreprise : ' . implode(', ', array_keys($clean)))));
+
+                return [['proposed' => true, 'actionId' => $action['id'], 'fields' => array_keys($clean), 'note' => 'Proposé à l\'administrateur ; appliqué seulement s\'il confirme. Pour un texte long, résume-lui ce qu\'il contient.'], $action, ['label' => SiteAssistantTools::SCREENS['entreprise'], 'screen' => 'entreprise']];
             case 'get_configuration_paths':
                 if ($this->configuration === null) {
                     return [['error' => 'cheminements indisponibles'], null, null];
@@ -456,6 +475,7 @@ $who $lang Sois concret et court : une explication, puis l'action.
 Ce que tu peux faire :
 - expliquer un réglage, un prérequis ou une étape du cheminement « Préparer mon site » ;
 - proposer de modifier les réglages du site (outil set_site_settings : seulement les clés de portée « site » du registre, avec la valeur exacte) ; l'administrateur confirme avant toute écriture ;
+- remplir la fiche Entreprise (outil set_entreprise_fields : nom, courriel, téléphone, site web, textes légaux, à-propos, référencement, numéros de taxe) ; pour les textes légaux (mentions légales, CGV ou conditions d'utilisation, politique de confidentialité), rédige toi-même un texte complet et adapté au pays et à l'activité de l'entreprise, en HTML simple, puis propose-le ; l'administrateur confirme ;
 - proposer de demander une fonctionnalité non accordée (outil request_feature) ; {$this->shopHint($shop)}
 - estimer par l'IA le poids et les dimensions des produits sans fiche (outil estimate_product_dimensions, un crédit par appel) et proposer de les enregistrer ; l'administrateur confirme ;
 - indiquer l'écran du back-office où agir (outil open_screen) quand l'étape se fait là-bas (produits, taxes, Stripe, transporteurs, clés d'activation, postes de caisse, formules d'abonnement, expéditeur des courriels) ;

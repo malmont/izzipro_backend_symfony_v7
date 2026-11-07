@@ -148,6 +148,40 @@ EasyAdmin ou le forfait pour les autres), carte « Préparer mon site » en têt
 carte sur le tableau de bord EasyAdmin tant que tout n'est pas prêt, colonne « Préparation » de la grille de la page Plateforme.
 L'assistant IA de configuration (à venir) proposera d'exécuter l'étape suivante. Test : `tests/Functional/Platform/SiteReadinessTest.php`.
 
+## Cheminement complet par produit (07/11/2026)
+
+Demandé par le propriétaire : chaque produit actif a toutes ses étapes, indispensables ou d'amélioration, et la page d'accueil du back-office les
+montre avec deux couleurs. `SiteReadinessService` : chaque étape porte **`blocking`** (vrai = indispensable au fonctionnement du produit, rouge ;
+faux = amélioration ou facultatif, orange) ; `forSite()` rend en plus `blockingTodo`, `improvementTodo` et `groups` (un groupe par produit : `key`,
+`label` via `groupLabel()`, `blockingTodo`, `improvementTodo`, `done`, `pending`, `total`, `ready`), aussi dans `GET /api/site/readiness`
+(contrat front). Les « Obtenir : … » restent hors groupes. Les étapes, par groupe :
+
+- **Site** : identité, téléphone (amélioration), adresse, langue/fuseau/devise, expéditeur des courriels (amélioration), logo, favicon, **textes
+  légaux** (`entreprise_translation` : mentions légales, CGV/CGU, politique de confidentialité ; bloquants dès que Boutique ou Caisse est accordée),
+  **numéros de taxe** (Canada : TPS, plus TVQ au Québec ; France : SIRET ; ailleurs : un identifiant ; bloquants pour Boutique ou Caisse), référencement,
+  réseaux sociaux, domaine propre (facultatif).
+- **Boutique** : taxes, Stripe, **produit vendable** (variante à prix > 0), photos (amélioration), catégories (amélioration), livraison, poids si
+  étiquettes, avis clients (amélioration, page Configuration) ; **location** si `commerce.salesModes` contient `rental` : produit louable
+  (`product.rental_enabled`), configuration de réservation (`booking_configuration.granularity`), tarif (pack de location lié à la catégorie du
+  produit), caution et annulation (amélioration) ; **abonnements** si activés : formule active + transporteur fixe, compte Stripe prêt.
+- **Caisse** : clé, poste, **au moins un caissier** (rôle `ROLE_USER_POS` ou `ROLE_POS_MANAGER`), en-tête et pied du ticket (amélioration),
+  terminal Stripe (bloquant seulement en mode réel sans compte connecté), courriel d'alertes, conservation (améliorations).
+- **Mémoires Vivantes** : quotas IA (amélioration), types de livre. **Boussole** : questions. **Applications** : clé, code court, profil
+  d'apparence (amélioration). **Assistant IA** : crédits du mois (amélioration).
+
+**Page d'accueil EasyAdmin** (`DashboardController`, `templates/admin/dashboard.html.twig`, carte `[data-readiness-card]`) : une colonne par
+produit avec son état (prêt, N à faire, N à améliorer, plateforme) et ses étapes colorées (`data-tone` danger | warning | success | secondary),
+chaque étape liée à l'écran ou au cheminement ciblé (Livraison, Configuration, Mon site…). Les liens viennent de
+`Services/Platform/AdminStepUrlResolver` (table `SCREENS` unique, partagée avec « Mon site » et l'assistant : ajoutés `categories`,
+`booking_configuration`, `rental_packs`, `users`, `social_networks`, `app_profiles`, `currencies`). « Mon site » affiche le même badge.
+
+**Assistant** : outil `set_entreprise_fields` (`SiteAssistantTools::ENTREPRISE_FIELDS` : nom, courriel, téléphone, site web, textes légaux,
+à-propos, référencement, `tvaIntracommunautaire`, `gstNumber`, `qstNumber`, `siret`) : proposition confirmée, appliquée par
+`UpdateEntrepriseUseCase` (journal, politique HTML des textes légaux) ; la consigne système demande à l'IA de **rédiger elle-même les textes
+légaux** adaptés au pays et à l'activité. `EntrepriseService::updateEntreprise` accepte désormais `gstNumber`, `qstNumber`, `siret`. Réservé au
+palier complet. Tests : `tests/Functional/Platform/SiteReadinessCompleteTest.php`, `tests/Functional/Admin/DashboardReadinessTest.php`,
+`tests/Functional/Platform/SiteAssistantEntrepriseTest.php`.
+
 ## Assistant IA de configuration (05/11/2026)
 
 `Services/SiteAssistantService/SiteAssistantService` (modèle Sonnet 5.5, client `LandingAiClientInterface`, un crédit IA du site par

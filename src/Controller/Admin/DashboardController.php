@@ -154,7 +154,8 @@ class DashboardController extends AbstractDashboardController
         private readonly ?\EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator $adminUrls = null,
         private readonly ?\App\Services\OrderService\OrderDeskService $orderDesk = null, // commandes à traiter (lot 4, 07/11/2026)
         private readonly ?\Symfony\Component\Security\Csrf\CsrfTokenManagerInterface $csrf = null, // console IA flottante (07/11/2026)
-        private readonly ?\App\Services\SiteAssistantService\SiteAssistantService $assistant = null
+        private readonly ?\App\Services\SiteAssistantService\SiteAssistantService $assistant = null,
+        private readonly ?\App\Services\Platform\AdminStepUrlResolver $stepUrls = null // cheminement complet sur l'accueil (07/11/2026)
     ) {}
 
     #[Route('/admin', name: 'admin')]
@@ -368,6 +369,11 @@ class DashboardController extends AbstractDashboardController
         $readiness = null;
         try {
             $readiness = $this->readiness?->forCurrentSite();
+            if ($readiness !== null) {
+                foreach ($readiness['steps'] as $i => $step) {
+                    $readiness['steps'][$i]['url'] = $this->stepUrls?->stepUrl($step);
+                }
+            }
         } catch (\Throwable) {
         }
         $monSiteUrl = null;

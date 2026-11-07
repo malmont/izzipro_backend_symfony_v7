@@ -72,6 +72,7 @@ class EntrepriseService
     private const SNAPSHOT_GETTERS = [
         'name' => 'getName', 'email' => 'getEmail', 'tel' => 'getTel', 'website' => 'getWebsite', 'ein' => 'getEin',
         'tvaIntracommunautaire' => 'getTvaIntracommunautaire', 'adress' => 'getAdress', 'facebookPixelId' => 'getFacebookPixelId',
+        'gstNumber' => 'getGstNumber', 'qstNumber' => 'getQstNumber', 'siret' => 'getSiret', // numéros de taxe (cheminement complet, 07/11/2026)
         'logo' => 'getLogo', 'faviconUrl' => 'getFaviconFilename', 'faviconFilename' => 'getFaviconFilename',
         'isBoutiqueActive' => 'isBoutiqueActive', 'isLandingPageActive' => 'isLandingPageActive',
         'isBoussoleEsgActive' => 'isBoussoleEsgActive', 'isMemoireVivanteActive' => 'isMemoireVivanteActive',
@@ -181,6 +182,11 @@ class EntrepriseService
         }
         if (array_key_exists('tvaIntracommunautaire', $data)) {
             $entreprise->setTvaIntracommunautaire($data['tvaIntracommunautaire']);
+        }
+        foreach (['gstNumber' => 'setGstNumber', 'qstNumber' => 'setQstNumber', 'siret' => 'setSiret'] as $key => $setter) { // numéros de taxe (07/11/2026)
+            if (array_key_exists($key, $data)) {
+                $entreprise->{$setter}($data[$key] !== null ? mb_substr(trim((string) $data[$key]), 0, 40) : null);
+            }
         }
         if (array_key_exists('adress', $data)) {
             $entreprise->setAdress($data['adress']);

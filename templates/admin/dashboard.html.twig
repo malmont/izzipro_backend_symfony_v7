@@ -29,14 +29,40 @@
 
 {% block main %}
 <div class="container-fluid px-0">
-    {% if readiness is defined and readiness and readiness.total > 0 and readiness.percent < 100 %}
-    <div class="card border-0 shadow-sm rounded-lg mb-4 p-3 bg-white dashboard-cheminement" style="border-left: 4px solid #f6c23e !important;">
-        <div class="d-flex flex-wrap align-items-center gap-3">
-            <div class="text-xs font-weight-bold text-uppercase">Préparer mon site</div>
-            <div class="progress flex-grow-1" style="height: 10px; min-width: 10em"><div class="progress-bar" style="width: {{ readiness.percent }}%"></div></div>
+    {% if readiness is defined and readiness and readiness.total > 0 %}
+    {# Cheminement complet (07/11/2026) : par produit actif ; rouge = indispensable à faire, orange = amélioration ou facultatif, vert = fait, gris = plateforme #}
+    <div class="card border-0 shadow-sm rounded-lg mb-4 p-3 bg-white dashboard-cheminement" style="border-left: 4px solid {{ readiness.blockingTodo > 0 ? '#e74a3b' : (readiness.improvementTodo > 0 ? '#f6c23e' : '#1cc88a') }} !important;" data-readiness-card data-blocking="{{ readiness.blockingTodo }}" data-improvement="{{ readiness.improvementTodo }}">
+        <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+            <div class="text-xs font-weight-bold text-uppercase">Préparer mes produits</div>
+            <div class="progress flex-grow-1" style="height: 10px; min-width: 10em"><div class="progress-bar {{ readiness.percent >= 100 ? 'bg-success' : '' }}" style="width: {{ readiness.percent }}%"></div></div>
             <strong>{{ readiness.percent }} %</strong>
-            {% if readiness.next %}<span class="small text-muted">Prochaine étape : {{ readiness.next.title }}</span>{% endif %}
-            {% if monSiteUrl %}<a class="btn btn-sm btn-primary ms-auto" href="{{ monSiteUrl }}">Voir le cheminement</a>{% endif %}
+            {% if readiness.blockingTodo > 0 %}<span class="badge bg-danger">{{ readiness.blockingTodo }} indispensable{{ readiness.blockingTodo > 1 ? 's' : '' }}</span>{% endif %}
+            {% if readiness.improvementTodo > 0 %}<span class="badge bg-warning text-dark">{{ readiness.improvementTodo }} amélioration{{ readiness.improvementTodo > 1 ? 's' : '' }}</span>{% endif %}
+            {% if readiness.blockingTodo == 0 and readiness.improvementTodo == 0 %}<span class="badge bg-success">Tout est prêt</span>{% endif %}
+            {% if monSiteUrl %}<a class="btn btn-sm btn-outline-primary ms-auto" href="{{ monSiteUrl }}">Mon site : pilotage</a>{% endif %}
+        </div>
+        <p class="small text-muted mb-2"><span class="badge bg-danger">rouge</span> indispensable au fonctionnement du produit · <span class="badge bg-warning text-dark">orange</span> amélioration ou facultatif · <span class="badge bg-success">vert</span> fait · <span class="badge bg-secondary">gris</span> la plateforme s'en occupe. Chaque ligne mène à l'écran ou au cheminement ciblé.</p>
+        <div class="row g-3">
+            {% for g in readiness.groups %}
+            <div class="col-md-6 col-xl-4" data-readiness-group="{{ g.key }}" data-blocking="{{ g.blockingTodo }}">
+                <div class="border rounded p-2 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong>{{ g.label }}</strong>
+                        {% if g.blockingTodo > 0 %}<span class="badge bg-danger">{{ g.blockingTodo }} à faire</span>{% elseif g.improvementTodo > 0 %}<span class="badge bg-warning text-dark">{{ g.improvementTodo }} à améliorer</span>{% elseif g.pending > 0 %}<span class="badge bg-secondary">plateforme</span>{% else %}<span class="badge bg-success">prêt</span>{% endif %}
+                    </div>
+                    <ul class="list-unstyled mb-0 small">
+                        {% for s in readiness.steps|filter(s => s.group == g.key and not (s.key starts with 'obtain.')) %}
+                            {% set tone = s.status == 'done' ? 'success' : (s.status == 'pending' ? 'secondary' : (s.status == 'todo' and s.blocking ? 'danger' : 'warning')) %}
+                            <li class="mb-1 d-flex gap-2 align-items-start" data-step="{{ s.key }}" data-tone="{{ tone }}" title="{{ s.description }}">
+                                <span class="badge bg-{{ tone }} rounded-pill" style="width: 1.1em; height: 1.1em; padding: 0; margin-top: .2em;">&nbsp;</span>
+                                <span class="{{ s.status == 'done' ? 'text-muted' : '' }}">{{ s.title }}{% if s.status == 'todo' and s.blocking %} <span class="text-danger small">(indispensable)</span>{% elseif s.status != 'done' and s.status != 'pending' %} <span class="text-warning small">(amélioration)</span>{% endif %}</span>
+                                {% if s.url and s.status != 'done' %}<a class="ms-auto text-nowrap" href="{{ s.url }}"{% if s.where == 'editor' %} target="_blank" rel="noopener"{% endif %}>→ ouvrir</a>{% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endfor %}
         </div>
     </div>
     {% endif %}
