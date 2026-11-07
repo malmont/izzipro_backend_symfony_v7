@@ -3,6 +3,7 @@
 namespace App\Services\SiteAssistantService;
 
 use App\Services\FeatureAccess\FeatureCatalog;
+use App\Services\OrderService\OrderOperationsService as OrderOperationsMessages;
 use App\Services\FeatureAccess\SiteFeatureStateService;
 use App\Services\LandingAiService\LandingAiClientInterface;
 use App\Services\LandingAiService\LandingAiException;
@@ -47,7 +48,36 @@ class SiteAssistantService
         private readonly LoggerInterface $logger,
         private readonly ?\App\Services\ShippingService\ProductDimensionsService $dimensions = null, // poids des produits (lot 1 bis, 07/11/2026)
         private readonly ?\App\Services\ShippingService\ShippingDimensionsEstimator $estimator = null,
+        // console IA, lot 6 (07/11/2026) : paliers (droits ai.help / ai.full), commandes et opérations, cheminements de configuration
+        private readonly ?\App\Services\Platform\EntitlementService $entitlements = null,
+        private readonly ?\App\Services\OrderService\OrderDeskService $orders = null,
+        private readonly ?\App\Services\OrderService\OrderOperationsService $operations = null,
+        private readonly ?\App\Services\OrderService\OrderShipmentService $shipments = null,
+        private readonly ?\App\Services\Platform\SiteConfigurationPathsService $configuration = null,
+        private readonly ?\App\Services\TenantEntityManagerProvider $emProvider = null,
     ) {
+    }
+
+    /**
+     * Palier de l'assistant pour le site (lot 6) : `full` pour le propriétaire de la plateforme et en mode démo de la plateforme ;
+     * sinon selon les droits d'usage ai.full puis ai.help ; `none` = assistant non inclus (403).
+     */
+    public function tier(string $tenantCode, bool $fullAccess): string
+    {
+        if ($fullAccess || $this->entitlements === null || $this->platform->isDemo()) {
+            return 'full';
+        }
+        try {
+            if ($this->entitlements->isEnabled($tenantCode, 'ai.full')) {
+                return 'full';
+            }
+
+            return $this->entitlements->isEnabled($tenantCode, 'ai.help') ? 'help' : 'none';
+        } catch (\Throwable $e) {
+            $this->logger->error('[SiteAssistant] palier illisible : ' . $e->getMessage());
+
+            return 'none';
+        }
     }
 
     /**
@@ -58,14 +88,18 @@ class SiteAssistantService
     public function chat(array $messages, ?string $user, string $tenantCode, string $language = 'fr', bool $fullAccess = false): array
     {
         $stats = new LandingAiUsageStats(self::MODEL);
+        $tier = $this->tier($tenantCode, $fullAccess);
+        if ($tier === 'none') {
+            throw new LandingAiException(403, 'Assistant non inclus', 'L\'assistant IA n\'est pas inclus dans votre forfait : obtenez « Aide IA » ou « IA complète » depuis « Mon site : pilotage ».');
+        }
         if ($fullAccess) {
             // Propriétaire de la plateforme (ROLE_SUPER_ADMIN, 07/11/2026) : accès complet sur tout site, aucun crédit du site décompté,
             // jamais bloqué par le quota ni par les échecs du site ; l'échange est seulement journalisé
             try {
-                $result = $this->converse($messages, $stats, $tenantCode, $language, true);
+                $result = $this->converse($messages, $stats, $tenantCode, $language, true, 'full');
                 $this->logger->info(sprintf('[SiteAssistant] échange du propriétaire de la plateforme sur le site %s (%s)', $tenantCode, $user ?? '-'));
 
-                return $result + ['usage' => $stats->toArray(), 'access' => 'full'];
+                return $result + ['usage' => $stats->toArray(), 'access' => 'full', 'tier' => 'full'];
             } catch (\Throwable $e) {
                 $this->logger->error('[SiteAssistant] échange (accès complet) échoué : ' . $e->getMessage());
                 if ($e instanceof LandingAiException) {
@@ -77,10 +111,10 @@ class SiteAssistantService
         $last = $messages[array_key_last($messages)]['content'] ?? '';
         $usage = $this->quota->reserve(self::MODE, self::COMPONENT, self::COST, $user, mb_substr($last, 0, 200));
         try {
-            $result = $this->converse($messages, $stats, $tenantCode, $language);
+            $result = $this->converse($messages, $stats, $tenantCode, $language, false, $tier);
             $this->quota->complete($usage, $stats, mb_substr($result['reply'], 0, 200));
 
-            return $result + ['usage' => $stats->toArray(), 'access' => 'site'];
+            return $result + ['usage' => $stats->toArray(), 'access' => 'site', 'tier' => $tier];
         } catch (\Throwable $e) {
             $this->quota->release($usage, $stats);
             $this->logger->error('[SiteAssistant] échange échoué : ' . $e->getMessage());
@@ -109,7 +143,7 @@ class SiteAssistantService
     }
 
     /** @return array{reply: string, actions: list<array<string, mixed>>, links: list<array{label: string, screen: string}>, handoffs: list<array{task: string, section: string, feature: ?string}>} */
-    private function converse(array $messages, LandingAiUsageStats $stats, string $tenantCode, string $language, bool $fullAccess = false): array
+    private function converse(array $messages, LandingAiUsageStats $stats, string $tenantCode, string $language, bool $fullAccess = false, string $tier = 'full'): array
     {
         $registry = $this->state->all();
         $readiness = $this->readiness->forCurrentSite();
@@ -124,7 +158,7 @@ class SiteAssistantService
         for ($round = 0; $round < self::MAX_ROUNDS; $round++) {
             $stats->attempts++;
             $response = $this->client->createMessage([
-                'model' => self::MODEL, 'max_tokens' => 1500, 'system' => $this->system($registry, $readiness, $language, $fullAccess), 'messages' => $payloadMessages, 'tools' => $this->tools(),
+                'model' => self::MODEL, 'max_tokens' => 1500, 'system' => $this->system($registry, $readiness, $language, $fullAccess, $tier), 'messages' => $payloadMessages, 'tools' => $this->tools($tier),
             ], self::TIMEOUT);
             $stats->add($response->usage ?? null);
             $content = is_array($response->content ?? null) ? $response->content : [];
@@ -145,7 +179,7 @@ class SiteAssistantService
             $results = [];
             foreach ($toolUses as $use) {
                 $input = json_decode(json_encode($use->input ?? new \stdClass()), true) ?: [];
-                [$result, $action, $link] = $this->runTool((string) ($use->name ?? ''), $input, $registry, $readiness, $tenantCode, $fullAccess);
+                [$result, $action, $link] = $this->runTool((string) ($use->name ?? ''), $input, $registry, $readiness, $tenantCode, $fullAccess, $tier);
                 if ($action !== null) {
                     $actions[] = $action;
                 }
@@ -170,9 +204,25 @@ class SiteAssistantService
      * Exécute un outil immédiat ou enregistre une proposition.
      * @return array{0: mixed, 1: ?array<string, mixed>, 2: ?array{label: string, screen: string}} [résultat pour l'IA, action en attente, lien]
      */
-    private function runTool(string $name, array $input, array $registry, array $readiness, string $tenantCode, bool $fullAccess = false): array
+    private function runTool(string $name, array $input, array $registry, array $readiness, string $tenantCode, bool $fullAccess = false, string $tier = 'full'): array
     {
+        if ($tier === 'help' && !in_array($name, SiteAssistantTools::HELP_TOOLS, true)) {
+            return [['error' => 'outil réservé au forfait « IA complète » : explique à l\'administrateur comment faire lui-même, ou où obtenir le forfait (Mon site : pilotage)'], null, null];
+        }
+        if (in_array($name, SiteAssistantTools::ORDER_TOOLS, true) || in_array($name, ['get_orders_todo', 'get_order'], true)) {
+            return $this->runOrderTool($name, $input, $tenantCode);
+        }
         switch ($name) {
+            case 'get_configuration_paths':
+                if ($this->configuration === null) {
+                    return [['error' => 'cheminements indisponibles'], null, null];
+                }
+                $paths = [];
+                foreach ($this->configuration->overview() as $key => $path) {
+                    $paths[$key] = ['title' => $path['title'], 'level' => $path['level'], 'levelLabel' => $path['levelLabel'], 'steps' => array_map(fn ($st) => ['key' => $st['key'], 'title' => $st['title'], 'status' => $st['status'], 'description' => $st['description'], 'screen' => $st['screen']], $path['steps'])];
+                }
+
+                return [$paths, null, ['label' => SiteAssistantTools::SCREENS['configuration'], 'screen' => 'configuration']];
             case 'estimate_product_dimensions':
                 if ($this->dimensions === null || $this->estimator === null) {
                     return [['error' => 'estimation indisponible'], null, null];
@@ -252,6 +302,109 @@ class SiteAssistantService
         }
     }
 
+    /**
+     * Commandes et opérations de support (lot 6) : lectures immédiates (à traiter, fiche), propositions confirmées pour les opérations
+     * (remboursement, annulation, capture, renvoi de courriel, expédition), appliquées par ConfirmSiteAssistantActionUseCase.
+     * @return array{0: mixed, 1: ?array<string, mixed>, 2: ?array{label: string, screen: string}}
+     */
+    private function runOrderTool(string $name, array $input, string $tenantCode): array
+    {
+        if ($this->orders === null || $this->operations === null || $this->shipments === null || $this->emProvider === null) {
+            return [['error' => 'commandes indisponibles'], null, null];
+        }
+        $link = ['label' => SiteAssistantTools::SCREENS['orders'], 'screen' => 'orders'];
+        if ($name === 'get_orders_todo') {
+            $todo = $this->orders->todo(10);
+            $compact = fn (array $rows) => array_map(fn ($r) => ['orderId' => $r['id'], 'reference' => $r['reference'], 'date' => $r['date'], 'status' => $r['status'], 'totalCents' => $r['totalCents'], 'customer' => $r['customer']], $rows);
+
+            return [['counts' => $todo['counts'], 'toShip' => $compact($todo['toShip']), 'toCapture' => $compact($todo['toCapture']), 'incomplete' => $compact($todo['incomplete']), 'inTransit' => $compact($todo['inTransit'])], null, $link];
+        }
+        $order = $this->findOrder($input);
+        if ($order === null) {
+            return [['error' => 'commande introuvable : donne orderId ou reference'], null, null];
+        }
+        $sheet = $this->orders->sheet($order, '', 'fr');
+        if ($name === 'get_order') {
+            $o = $sheet['order'];
+
+            return [['orderId' => $o['id'], 'reference' => $o['reference'], 'status' => $sheet['statusLabel'], 'statusId' => $sheet['statusId'], 'paymentStatus' => $o['paymentStatus'], 'orderDate' => $o['orderDate'], 'totalCents' => $o['totalAmount'], 'currency' => $sheet['currency'],
+                'money' => ['capturedCents' => $sheet['money']['capturedCents'], 'refundedCents' => $sheet['money']['refundedCents'], 'refundableCents' => $sheet['money']['refundableCents'], 'authorizedCents' => $sheet['money']['authorizedCents']],
+                'customer' => $sheet['customer'] ? ['name' => $sheet['customer']['name'], 'email' => $sheet['customer']['email'], 'ordersCount' => $sheet['customer']['ordersCount']] : null,
+                'items' => array_map(fn ($it) => ['name' => $it['productVariantName'], 'quantity' => $it['quantity'], 'totalCents' => $it['totalPrice']], $o['orderItems']),
+                'shipment' => $sheet['shipment'] + ['hasAddress' => $o['shippingAdress'] !== null, 'carrier' => $o['carrier']['name'] ?? null],
+                'timeline' => array_slice($sheet['timeline'], -8), 'actions' => $sheet['actions'],
+                'note' => 'Les actions à true sont possibles maintenant (outils refund_order, cancel_order, capture_order, ship_order, resend_order_email) ; counterSale = vente au comptoir, aucune opération ici.'], null, $link];
+        }
+        $a = $sheet['actions'];
+        $id = (int) $order->getId();
+        $ref = (string) $order->getReference();
+        switch ($name) {
+            case 'refund_order':
+                if (!$a['refund']) {
+                    return [['error' => $a['counterSale'] ? OrderOperationsMessages::MESSAGES['COUNTER_SALE'] : 'rien à rembourser sur cette commande', 'refundableCents' => $sheet['money']['refundableCents']], null, null];
+                }
+                $amount = isset($input['amountCents']) ? (int) $input['amountCents'] : (int) $sheet['money']['refundableCents'];
+                if ($amount <= 0 || $amount > (int) $sheet['money']['refundableCents']) {
+                    return [['error' => 'montant invalide ou au-delà du remboursable', 'refundableCents' => $sheet['money']['refundableCents']], null, null];
+                }
+                $reason = mb_substr(trim((string) ($input['reason'] ?? '')), 0, 200);
+                $action = $this->remember($tenantCode, 'refund_order', ['orderId' => $id, 'amountCents' => $amount, 'reason' => $reason, 'notify' => ($input['notify'] ?? true) !== false], sprintf('Rembourser %s %s sur la commande %s%s', number_format($amount / 100, 2, ',', ' '), $sheet['currency'], $ref, $reason !== '' ? ' (' . $reason . ')' : ''));
+                break;
+            case 'cancel_order':
+                if (!$a['cancel']) {
+                    return [['error' => $a['counterSale'] ? OrderOperationsMessages::MESSAGES['COUNTER_SALE'] : 'commande expédiée, livrée ou déjà annulée : remboursez-la plutôt'], null, null];
+                }
+                $reason = mb_substr(trim((string) ($input['reason'] ?? '')), 0, 200);
+                if ($reason === '') {
+                    return [['error' => 'motif obligatoire'], null, null];
+                }
+                $action = $this->remember($tenantCode, 'cancel_order', ['orderId' => $id, 'reason' => $reason, 'notify' => ($input['notify'] ?? true) !== false], sprintf('Annuler la commande %s (%s)%s', $ref, $reason, $sheet['money']['capturedCents'] > 0 ? ' et rembourser le paiement' : ''));
+                break;
+            case 'capture_order':
+                if (!$a['capture']) {
+                    return [['error' => OrderOperationsMessages::MESSAGES['NOTHING_TO_CAPTURE']], null, null];
+                }
+                $action = $this->remember($tenantCode, 'capture_order', ['orderId' => $id], sprintf('Capturer le paiement autorisé de %s %s sur la commande %s', number_format($sheet['money']['authorizedCents'] / 100, 2, ',', ' '), $sheet['currency'], $ref));
+                break;
+            case 'resend_order_email':
+                $kind = (string) ($input['kind'] ?? '');
+                if (!$a['emails'] || !in_array($kind, ['confirmation', 'receipt', 'shipped'], true)) {
+                    return [['error' => !$a['emails'] ? OrderOperationsMessages::MESSAGES['NO_EMAIL'] : 'kind : confirmation | receipt | shipped'], null, null];
+                }
+                if ($kind === 'shipped' && $sheet['shipment']['shippedAt'] === null) {
+                    return [['error' => OrderOperationsMessages::MESSAGES['NOT_SHIPPED']], null, null];
+                }
+                $action = $this->remember($tenantCode, 'resend_order_email', ['orderId' => $id, 'kind' => $kind], sprintf('Renvoyer %s de la commande %s au client', ['confirmation' => 'la confirmation', 'receipt' => 'le reçu', 'shipped' => 'l\'avis d\'expédition'][$kind], $ref));
+                break;
+            case 'ship_order':
+                if (!$a['ship']) {
+                    return [['error' => $this->shipments->shipBlocker($order) ?? 'expédition impossible'], null, null];
+                }
+                $carrier = mb_substr(trim((string) ($input['carrier'] ?? '')), 0, 100);
+                if ($carrier === '') {
+                    return [['error' => 'transporteur obligatoire'], null, null];
+                }
+                $tracking = mb_substr(trim((string) ($input['trackingNumber'] ?? '')), 0, 100);
+                $action = $this->remember($tenantCode, 'ship_order', ['orderId' => $id, 'carrier' => $carrier, 'trackingNumber' => $tracking !== '' ? $tracking : null, 'trackingUrl' => mb_substr(trim((string) ($input['trackingUrl'] ?? '')), 0, 500) ?: null, 'notify' => ($input['notify'] ?? true) !== false], sprintf('Marquer la commande %s expédiée par %s%s', $ref, $carrier, $tracking !== '' ? ' (suivi ' . $tracking . ')' : ''));
+                break;
+            default:
+                return [['error' => 'outil inconnu'], null, null];
+        }
+
+        return [['proposed' => true, 'actionId' => $action['id'], 'summary' => $action['summary'], 'note' => 'Proposé à l\'administrateur ; appliqué seulement s\'il confirme.'], $action, $link];
+    }
+
+    private function findOrder(array $input): ?\App\Entity\Order
+    {
+        $repo = $this->emProvider->getEntityManager()->getRepository(\App\Entity\Order::class);
+        if (isset($input['orderId']) && (int) $input['orderId'] > 0) {
+            return $repo->find((int) $input['orderId']);
+        }
+        $reference = trim((string) ($input['reference'] ?? ''));
+
+        return $reference !== '' ? $repo->findOneBy(['reference' => $reference]) : null;
+    }
+
     /** @return array{id: string, tool: string, input: array<string, mixed>, summary: string} */
     private function remember(string $tenantCode, string $tool, array $input, string $summary): array
     {
@@ -282,13 +435,20 @@ class SiteAssistantService
         ], fn ($v) => $v !== null), $registry);
     }
 
-    private function system(array $registry, array $readiness, string $language, bool $fullAccess = false): string
+    private function system(array $registry, array $readiness, string $language, bool $fullAccess = false, string $tier = 'full'): string
     {
         $shop = $this->platform->shopUrl();
         $lang = $language === 'en' ? 'Answer in English.' : 'Réponds en français.';
         $who = $fullAccess
             ? 'Tu parles au propriétaire de la plateforme (super administrateur), en accès complet : il agit sur ce site comme sur n\'importe quel autre, aucun crédit du site n\'est décompté, et il peut te demander toute action que tes outils permettent ; les écritures restent confirmées par lui avant d\'être appliquées. Les forfaits, droits et réglages de la plateforme se font dans sa page Plateforme du back-office : dis-le-lui quand il le faut.'
-            : 'Tu parles à l\'administrateur de ce site.';
+            : ($tier === 'help'
+                ? 'Tu parles à l\'administrateur de ce site, au forfait « Aide IA » : tu expliques, tu lis (réglages, cheminements, commandes) et tu l\'orientes vers le bon écran, mais tu ne proposes aucune modification ni opération ; si on te le demande, explique comment le faire soi-même et où obtenir le forfait « IA complète » (Mon site : pilotage).'
+                : 'Tu parles à l\'administrateur de ce site.');
+        $ops = $tier === 'help' ? '' : <<<OPS
+
+- lire les commandes à traiter (outil get_orders_todo) et une commande (get_order), puis proposer une opération de support : rembourser (refund_order, total ou partiel, motif), annuler (cancel_order, motif obligatoire, le paiement est remboursé), capturer un paiement autorisé (capture_order), marquer expédiée avec le suivi (ship_order), renvoyer un courriel (resend_order_email) ; l'administrateur confirme chaque opération ; jamais sur une vente au comptoir (la caisse s'en charge) ;
+- lire les cheminements de configuration (get_configuration_paths : paiements Stripe, taxes, courriels, avis clients) pour guider pas à pas ;
+OPS;
 
         return <<<TXT
 Tu es l'assistant de configuration d'un site de la plateforme Arkanoa (site vitrine, boutique en ligne, caisse, Mémoires Vivantes, Boussole ESG, applications mobiles).
@@ -300,8 +460,8 @@ Ce que tu peux faire :
 - estimer par l'IA le poids et les dimensions des produits sans fiche (outil estimate_product_dimensions, un crédit par appel) et proposer de les enregistrer ; l'administrateur confirme ;
 - indiquer l'écran du back-office où agir (outil open_screen) quand l'étape se fait là-bas (produits, taxes, Stripe, transporteurs, clés d'activation, postes de caisse, formules d'abonnement, expéditeur des courriels) ;
 - confier à l'assistant de l'éditeur du site (front) ce qui se fait là-bas (outil delegate_to_editor) : composer ou modifier les pages, choisir un modèle de site, régler depuis le panneau de l'éditeur ; tu ne composes jamais une page toi-même ;
-- accompagner l'ajout d'un domaine propre : get_domain_status donne l'état, les enregistrements DNS attendus et la procédure (achat chez un registraire, enregistrement ici, DNS, propagation, certificat automatique) ; set_custom_domain propose l'enregistrement, l'administrateur confirme, puis il crée les enregistrements DNS et vérifie.
-Ce que tu ne fais jamais : paiements, forfaits, droits de la plateforme, autres sites, données personnelles des clients, et aucune clé réservée à la plateforme (modules, applications). Si on te le demande, explique où le faire.
+- accompagner l'ajout d'un domaine propre : get_domain_status donne l'état, les enregistrements DNS attendus et la procédure (achat chez un registraire, enregistrement ici, DNS, propagation, certificat automatique) ; set_custom_domain propose l'enregistrement, l'administrateur confirme, puis il crée les enregistrements DNS et vérifie.$ops
+Ce que tu ne fais jamais : forfaits et droits de la plateforme, autres sites, modification des données personnelles des clients, et aucune clé réservée à la plateforme (modules, applications). Si on te le demande, explique où le faire.
 Avant de proposer, lis le contexte ci-dessous (registre et cheminement) ; n'invente aucune clé ni aucun écran. Propose une étape à la fois, dans l'ordre du cheminement.
 Clés du registre modifiables : site.locale (fr|en|null), site.timezone (IANA|null), site.currency (CAD|EUR|USD), site.prices_include_tax (bool), commerce.sales_modes (liste parmi sale, rental, subscription), commerce.guest_checkout (bool), commerce.subscriptions (bool), commerce.tax_provider (table|stripe), shipping.mode (none|own_key|platform : none = estimation par transporteurs à prix fixe et retrait, le marchand expédie lui-même), shipping.easypost_environment (test|live), shipping.default_weight_kg (nombre), shipping.free_above (cents, null = aucune gratuité).
 Écrans : {$this->screensHint()}.
@@ -325,9 +485,9 @@ TXT;
     }
 
     /** @return list<array<string, mixed>> */
-    private function tools(): array
+    private function tools(string $tier = 'full'): array
     {
-        return SiteAssistantTools::definitions();
+        return SiteAssistantTools::definitionsFor($tier);
     }
 
     private function json(mixed $data): string

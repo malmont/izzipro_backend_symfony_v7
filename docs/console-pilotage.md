@@ -77,8 +77,8 @@ site créé à la volée) et suspend ou retire ces droits à l'impayé ou à l'a
 de l'intérieur ; la route HTTP reste pour un vendeur externe. Un site client qui vend ses propres abonnements (`none`) n'est
 pas concerné.
 
-**Tel que construit (lot 3, 04/11/2026).** Fonctionnalités gouvernées : `FeatureCatalog::GOVERNED` (cinq modules et trois
-applications, chacune projetée sur sa colonne `is_*_active`). Un seul droit vivant par fonctionnalité : accorder remplace le précédent
+**Tel que construit (lot 3, 04/11/2026).** Fonctionnalités gouvernées : `FeatureCatalog::GOVERNED` (cinq modules, trois
+applications et, depuis le 07/11/2026, les deux paliers de l'assistant IA `ai.help` / `ai.full`, chacune projetée sur sa colonne `is_*_active`). Un seul droit vivant par fonctionnalité : accorder remplace le précédent
 (`cancelled`, note « remplacé par le droit n° … »). Un droit échu est expiré à la lecture (`effective()`), le balayage quotidien ne sert
 qu'aux courriels et aux sites qu'on ne lit pas. Écrire une activation sur la fiche Entreprise (EasyAdmin ou API, super administrateur)
 crée ou annule le droit correspondant (`EntitlementFlagSync`), sans courriel. Amorçage sur les sites existants :
@@ -171,6 +171,29 @@ réponse, les liens (`screen` → écran du back-office, même vocabulaire que l
 crédit du site décompté, jamais bloqué par le quota ni par les échecs du site, consigne système adaptée (il agit sur ce site comme sur tout
 autre, les écritures restent confirmées) ; les outils sont les mêmes aujourd'hui, et c'est ce drapeau qui portera, plus tard, les familles
 d'outils des forfaits « Aide IA » / « IA complète » (le super admin les a toutes, sans droit d'usage). Test : `tests/Functional/Platform/SiteAssistantTest.php`.
+
+## Console IA : paliers « Aide IA » / « IA complète » et opérations sur les commandes (lot 6, 07/11/2026)
+
+**Paliers.** Deux fonctionnalités gouvernées par les droits d'usage, comme les modules : `ai.help` (Aide IA, colonne
+`entreprise.is_ai_help_active`) et `ai.full` (IA complète, `is_ai_full_active`) ; offres `ai_help` (9 $) et `ai_full` (29 $, inclut l'aide)
+dans `platform_offers` (prix provisoires) ; champs super admin sur la fiche Entreprise (panneau « Assistant IA ») ; migration
+`Version20261117100000` + `scripts/migrate_all_v2_ai_tiers.sh` (appliqué partout le 07/11/2026, défaut faux). Palier effectif
+(`SiteAssistantService::tier`) : **`full`** pour le propriétaire de la plateforme (`ROLE_SUPER_ADMIN`) et **en mode `demo` de la
+plateforme** (rien ne change pour les sites actuels) ; en mode `live`, `full` si `ai.full`, `help` si `ai.help`, sinon **403
+`AI_NOT_INCLUDED`** avant tout appel à l'IA. La réponse de l'assistant porte `tier: full | help` à côté d'`access`.
+- **Aide IA** : outils de lecture et d'orientation seulement (`SiteAssistantTools::HELP_TOOLS` : registre, cheminement, écran, domaine,
+  relais à l'éditeur, commandes à traiter, fiche d'une commande, cheminements de configuration) ; consigne système « tu expliques, tu
+  n'agis pas » ; un outil d'écriture demandé par l'IA reçoit un refus explicite, aucune action proposée.
+- **IA complète** : tout, y compris les opérations ci-dessous, les réglages, les estimations et les demandes de fonctionnalité.
+
+**Opérations sur les commandes par l'assistant** (`SiteAssistantTools::ORDER_TOOLS`, palier complet) : `get_orders_todo` et `get_order`
+(lecture, `OrderDeskService`), puis `refund_order` (total remboursable par défaut ou `amountCents`, motif, courriel), `cancel_order`
+(motif obligatoire, paiement remboursé), `capture_order`, `resend_order_email` (`confirmation | receipt | shipped`), `ship_order`
+(transporteur, suivi, courriel). L'assistant vérifie l'état (`OrderDeskService::sheet()['actions']`) avant de proposer ; la proposition
+est confirmée par l'administrateur (`…/actions/{id}/confirm`) et appliquée par `ConfirmSiteAssistantActionUseCase` avec les services des
+lots 1 à 3 (`OrderOperationsService`, `OrderShipmentService`) : mêmes refus que les pages de la commande, rendus en 422. Jamais sur une
+vente au comptoir. `get_configuration_paths` lit la page Configuration (lot 5). Écran `orders` = « À traiter ».
+Tests : `tests/Functional/Platform/SiteAssistantOperationsTest.php` (remboursement puis annulation confirmés, refus, paliers en mode réel).
 
 ## « Demander » une fonctionnalité : essai immédiat, puis demande (règle du 05/11/2026)
 

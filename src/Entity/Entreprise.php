@@ -111,6 +111,13 @@ class Entreprise implements TranslatableInterface
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private ?bool $isManagementAppActive = false;
 
+    // Paliers de l'assistant IA (console IA, lot 6, 07/11/2026) : projetés depuis les droits d'usage ai.help / ai.full
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $isAiHelpActive = false;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $isAiFullActive = false;
+
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private ?bool $isLivingMemoryActive = false;
 
@@ -835,6 +842,11 @@ class Entreprise implements TranslatableInterface
     {
         return (bool) $this->isMobileShopActive;
     }
+
+    public function isAiHelpActive(): bool { return $this->isAiHelpActive; }
+    public function setIsAiHelpActive(bool $active): static { $this->isAiHelpActive = $active; return $this; }
+    public function isAiFullActive(): bool { return $this->isAiFullActive; }
+    public function setIsAiFullActive(bool $active): static { $this->isAiFullActive = $active; return $this; }
 
     public function setIsMobileShopActive(bool $active): static
     {

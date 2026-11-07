@@ -45,7 +45,7 @@ class SiteAssistantController extends AbstractController
         } catch (SiteAssistantValidationException $e) {
             return $this->json(['error' => 'VALIDATION_FAILED', 'code' => 'VALIDATION_FAILED', 'message' => $e->getMessage(), 'errors' => $e->errors], 422);
         } catch (LandingAiException $e) {
-            $code = match ($e->getStatusCode()) { 402 => 'AI_CREDITS_EXHAUSTED', 429 => 'AI_TOO_MANY_FAILURES', default => 'AI_UNAVAILABLE' };
+            $code = match ($e->getStatusCode()) { 402 => 'AI_CREDITS_EXHAUSTED', 403 => 'AI_NOT_INCLUDED', 429 => 'AI_TOO_MANY_FAILURES', default => 'AI_UNAVAILABLE' }; // 403 : forfait sans assistant (lot 6)
 
             return $this->json(['error' => $code, 'code' => $code, 'message' => $e->getMessage()], $e->getStatusCode(), $e->getHeaders());
         }

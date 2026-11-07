@@ -151,6 +151,11 @@ class SiteFeatureStateService
                 $status = $value ? (($activeKeys[$app] ?? 0) > 0 ? 'ready' : 'incomplete') : 'off';
                 $prerequisites[] = $this->prereq('app.key', 'Au moins une clé d\'activation valide', ($activeKeys[$app] ?? 0) > 0);
                 break;
+            case 'ai.help': case 'ai.full':
+                // paliers de l'assistant IA (lot 6, 07/11/2026) : indicateur projeté depuis le droit d'usage ; en mode démo tout est ouvert
+                $value = (bool) ($e?->{$key === 'ai.help' ? 'isAiHelpActive' : 'isAiFullActive'}() ?? false);
+                $status = $value ? 'ready' : 'off';
+                break;
             case 'commerce.sales_modes':
                 $value = array_values($commerce['salesModes'] ?? BoutiqueConfigurationValidator::SALES_MODES);
                 $prerequisites[] = $this->prereq('module.boutique', 'Module Boutique activé', $boutiqueOn);

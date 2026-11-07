@@ -44,7 +44,7 @@ class PlatformConsoleApiTest extends WebTestCase
         $r = $this->api('GET', '/api/platform/sites', null, 'super');
         $this->assertSame(200, $r->getStatusCode(), $r->getContent());
         $body = json_decode((string) $r->getContent(), true);
-        $this->assertSame(8, count($body['features']));
+        $this->assertSame(10, count($body['features']), 'cinq modules, trois applications, deux paliers IA (lot 6)');
         $sites = array_column($body['sites'], null, 'code');
         $this->assertArrayHasKey(MV_TEST_TENANT_CODE, $sites);
         $this->assertArrayNotHasKey('gmasuite', $sites, 'le modèle n\'est pas un site');
@@ -83,7 +83,7 @@ class PlatformConsoleApiTest extends WebTestCase
     public function testPoliciesAndRequestsDecisions(): void
     {
         $r = $this->api('GET', '/api/platform/policies', null, 'super');
-        $this->assertSame(8, count(json_decode((string) $r->getContent(), true)['policies']));
+        $this->assertSame(10, count(json_decode((string) $r->getContent(), true)['policies']));
         $r = $this->api('PUT', '/api/platform/policies/module.memoires', ['trialAllowed' => false, 'graceDays' => 3], 'super');
         $this->assertSame(200, $r->getStatusCode(), $r->getContent());
         $this->assertSame([false, 3, 30], [json_decode((string) $r->getContent(), true)['policy']['trial_allowed'], json_decode((string) $r->getContent(), true)['policy']['grace_days'], json_decode((string) $r->getContent(), true)['policy']['trial_days']]);

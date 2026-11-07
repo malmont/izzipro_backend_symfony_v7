@@ -99,6 +99,11 @@ INSERT INTO platform_offers (code, label_fr, label_en, features, monthly_price_c
     ('boussole', 'Boussole ESG', 'ESG Compass', '["module.boussole"]', 4900, 30, 100),
     ('all', 'Tout compris', 'All inclusive', '["module.landing", "module.boutique", "module.pos", "module.memoires", "module.boussole", "app.mobile_shop", "app.management", "app.living_memory"]', 19900, 30, 110)
 ON CONFLICT (code) DO NOTHING;
+-- Console IA, lot 6 (07/11/2026) : paliers de l'assistant IA (prix provisoires, modifiables dans la console)
+INSERT INTO platform_offers (code, label_fr, label_en, features, monthly_price_cents, trial_days, position) VALUES
+    ('ai_help', 'Aide IA', 'AI help', '["ai.help"]', 900, 30, 112),
+    ('ai_full', 'IA complète', 'Full AI', '["ai.full", "ai.help"]', 2900, 30, 114)
+ON CONFLICT (code) DO NOTHING;
 
 -- Livraison, lot 2 (07/11/2026) : étiquettes achetées par la plateforme pour le compte d'un site, payées sur un **solde prépayé** par site.
 -- platform_shipping_balances : un solde par site (cents, devise du solde) ; platform_shipping_balance_events : chaque mouvement

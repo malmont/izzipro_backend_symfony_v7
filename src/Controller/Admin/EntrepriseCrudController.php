@@ -209,6 +209,11 @@ class EntrepriseCrudController extends BaseTenantCrudController
             $this->superAdminBooleanField('isManagementAppActive', 'Application de gestion'),
             $this->superAdminBooleanField('isLivingMemoryActive', 'LivingMemory (Mémoires Vivantes)'),
 
+            FormField::addPanel('Assistant IA')->collapsible()
+                ->setHelp('Paliers de l\'assistant IA (console IA, lot 6) : Aide IA explique et guide ; IA complète propose des réglages et des opérations sur les commandes, confirmées par l\'administrateur. Projetés depuis les droits d\'usage de la Plateforme ; en mode démo de la plateforme, tout est ouvert.'),
+            $this->superAdminBooleanField('isAiHelpActive', 'Aide IA'),
+            $this->superAdminBooleanField('isAiFullActive', 'IA complète'),
+
             FormField::addTab('Caisse', 'fa fa-cash-register'),
             FormField::addPanel('Réglages généraux de la caisse')->collapsible()
                 ->setHelp('Écarts, validations, PIN, paiements acceptés, ticket. Les autres sections sont repliées : cliquer sur un titre pour l\'ouvrir.'),
@@ -486,7 +491,9 @@ class EntrepriseCrudController extends BaseTenantCrudController
                 ->setIsPosActive($defaults->isPosActive())
                 ->setIsMobileShopActive($defaults->isMobileShopActive())
                 ->setIsManagementAppActive($defaults->isManagementAppActive())
-                ->setIsLivingMemoryActive($defaults->isLivingMemoryActive());
+                ->setIsLivingMemoryActive($defaults->isLivingMemoryActive())
+                ->setIsAiHelpActive($defaults->isAiHelpActive())
+                ->setIsAiFullActive($defaults->isAiFullActive());
 
             return;
         }

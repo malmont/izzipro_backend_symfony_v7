@@ -37,6 +37,9 @@ final class FeatureCatalog
         'app.mobile_shop' => ['label' => 'Application e-commerce mobile', 'group' => 'apps', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'href' => 'app_keys'],
         'app.management' => ['label' => 'Application de gestion', 'group' => 'apps', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'href' => 'app_keys'],
         'app.living_memory' => ['label' => 'Application Living Memory', 'group' => 'apps', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'href' => 'app_keys'],
+        // Paliers de l'assistant IA (console IA, lot 6, 07/11/2026) ; le super admin a toujours l'accès complet, sans droit
+        'ai.help' => ['label' => 'Aide IA (l\'assistant explique et guide)', 'group' => 'services', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isAiHelpActive', 'href' => 'configuration'],
+        'ai.full' => ['label' => 'IA complète (réglages et opérations par l\'assistant)', 'group' => 'services', 'scope' => self::SCOPE_PLATFORM, 'type' => 'boolean', 'storage' => 'entreprise.isAiFullActive', 'href' => 'configuration'],
         // Commerce (réglages de la boutique, miroir du panneau « Commerce » de l'éditeur)
         'commerce.sales_modes' => ['label' => 'Modes de vente acceptés', 'group' => 'commerce', 'scope' => self::SCOPE_SITE, 'type' => 'list', 'options' => ['sale', 'rental', 'subscription'], 'storage' => 'commerce.salesModes', 'href' => 'boutique_settings'],
         'commerce.guest_checkout' => ['label' => 'Paiement sans compte', 'group' => 'commerce', 'scope' => self::SCOPE_SITE, 'type' => 'boolean', 'storage' => 'commerce.guestCheckout', 'href' => 'boutique_settings'],
@@ -71,6 +74,8 @@ final class FeatureCatalog
         'app.mobile_shop' => 'is_mobile_shop_active',
         'app.management' => 'is_management_app_active',
         'app.living_memory' => 'is_living_memory_active',
+        'ai.help' => 'is_ai_help_active',
+        'ai.full' => 'is_ai_full_active',
     ];
 
     /** Accesseur de la fiche Entreprise pour chaque fonctionnalité gouvernée */
@@ -78,6 +83,7 @@ final class FeatureCatalog
         'module.landing' => 'isLandingPageActive', 'module.boutique' => 'isBoutiqueActive', 'module.pos' => 'isPosActive',
         'module.memoires' => 'isMemoireVivanteActive', 'module.boussole' => 'isBoussoleEsgActive', 'app.mobile_shop' => 'isMobileShopActive',
         'app.management' => 'isManagementAppActive', 'app.living_memory' => 'isLivingMemoryActive',
+        'ai.help' => 'isAiHelpActive', 'ai.full' => 'isAiFullActive',
     ];
 
     /** Application (clés d'activation) portée par une fonctionnalité gouvernée */
@@ -88,6 +94,7 @@ final class FeatureCatalog
         'module.landing' => 'Landing Page', 'module.boutique' => 'Online shop', 'module.pos' => 'Point of sale (app and counter sales)',
         'module.memoires' => 'Living Memories', 'module.boussole' => 'ESG Compass', 'app.mobile_shop' => 'Mobile shop app',
         'app.management' => 'Management app', 'app.living_memory' => 'Living Memory app',
+        'ai.help' => 'AI help (the assistant explains and guides)', 'ai.full' => 'Full AI (settings and operations by the assistant)',
     ];
 
     /** À quoi sert chaque fonctionnalité gouvernée, en une phrase (page Mon site, 05/11/2026) */
@@ -100,6 +107,8 @@ final class FeatureCatalog
         'app.mobile_shop' => 'L\'application mobile de la boutique pour vos clients (iOS et Android).',
         'app.management' => 'L\'application de gestion (.NET MAUI) : achats, fournisseurs, notes de frais.',
         'app.living_memory' => 'L\'application mobile Living Memory, pour que chacun écrive ses souvenirs depuis son téléphone.',
+        'ai.help' => 'L\'assistant IA qui explique vos réglages, votre cheminement et vos commandes, et vous mène au bon écran ; il ne modifie rien.',
+        'ai.full' => 'L\'assistant IA qui agit : propose des réglages, estime les poids, rembourse, annule, capture, expédie ou renvoie un courriel sur une commande, toujours après votre confirmation.',
     ];
 
     /** Ce qu'il reste à faire une fois le droit accordé (prérequis pratiques) */
@@ -112,6 +121,8 @@ final class FeatureCatalog
         'app.mobile_shop' => 'Générer une clé d\'activation (écran « Clés des applications ») ; vos clients saisissent le code court de la boutique.',
         'app.management' => 'Générer une clé d\'activation (écran « Clés des applications ») et la saisir dans l\'application de gestion.',
         'app.living_memory' => 'Générer une clé d\'activation (écran « Clés des applications ») ; l\'application la porte pour votre site.',
+        'ai.help' => 'Rien d\'autre : l\'assistant répond dans « Mon site : pilotage » et dans l\'éditeur, avec vos crédits IA du mois.',
+        'ai.full' => 'Rien d\'autre : l\'assistant propose, vous confirmez ; les crédits IA du mois s\'appliquent.',
     ];
 
     public static function label(string $key, string $language = 'fr'): string
