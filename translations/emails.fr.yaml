@@ -128,4 +128,31 @@ order_shipped:
     track_button: 'Suivre mon colis'
     no_tracking: 'Ce mode de remise ne fournit pas de numéro de suivi ; nous vous prévenons si quelque chose change.'
     thanks: 'Merci de votre confiance.'
+# Opérations sur une commande (lot 3, 07/11/2026) : remboursement, annulation, reçu
+order_refunded:
+    subject: 'Remboursement sur votre commande n°%reference%'
+    title: 'Remboursement effectué'
+    greeting: 'Bonjour %name%,'
+    body: 'Nous avons remboursé <strong>%amount%</strong> sur votre commande n°<strong>%reference%</strong>.'
+    reason: 'Motif : %reason%'
+    delay: 'Le montant apparaîtra sur votre relevé sous 5 à 10 jours ouvrables, selon votre banque.'
+    thanks: 'Merci de votre confiance.'
+order_cancelled:
+    subject: 'Votre commande n°%reference% est annulée'
+    title: 'Commande annulée'
+    greeting: 'Bonjour %name%,'
+    body: 'Votre commande n°<strong>%reference%</strong> a été annulée.'
+    refund: 'Le paiement de <strong>%amount%</strong> vous est remboursé ; il apparaîtra sur votre relevé sous 5 à 10 jours ouvrables.'
+    reason: 'Motif : %reason%'
+    contact: 'Une question ? Répondez simplement à ce message.'
+order_receipt:
+    subject: 'Reçu de votre commande n°%reference%'
+    title: 'Reçu de paiement'
+    greeting: 'Bonjour %name%,'
+    body: 'Voici le récapitulatif des paiements de votre commande n°<strong>%reference%</strong> du %date%.'
+    total: 'Total de la commande : %amount%'
+    paid: 'Payé : %amount%'
+    refunded: 'Remboursé : %amount%'
+    receipt_link: 'Voir le reçu de paiement'
+    thanks: 'Merci de votre confiance.'
 

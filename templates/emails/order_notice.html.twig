@@ -1,0 +1,41 @@
+{% extends 'base.email.html.twig' %}
+
+{# Courriel d'opération sur une commande (lot 3, 07/11/2026) : remboursement, annulation ou reçu ; `kind` = order_refunded | order_cancelled | order_receipt ; langue du site (`locale`, `intlLocale`) #}
+{% block title %}{{ (kind ~ '.subject')|trans({'%reference%': reference}, 'emails', locale)|raw }}{% endblock %}
+
+{% block body %}
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <tr>
+        <td align="center">
+            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+                <tr>
+                    <td align="center" style="background: #1e293b; padding: 28px 20px;">
+                        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700;">{{ (kind ~ '.title')|trans({'%reference%': reference}, 'emails', locale)|raw }}</h1>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 30px; font-size: 15px; color: #1e293b;">
+                        <p style="margin-top: 0;">{{ (kind ~ '.greeting')|trans({'%name%': firstname|default('')|e}, 'emails', locale)|raw }}</p>
+                        {% if kind == 'order_refunded' %}
+                            <p>{{ 'order_refunded.body'|trans({'%reference%': reference|e, '%amount%': amountText|e}, 'emails', locale)|raw }}</p>
+                            {% if reason %}<p>{{ 'order_refunded.reason'|trans({'%reason%': reason|e}, 'emails', locale)|raw }}</p>{% endif %}
+                            <p>{{ 'order_refunded.delay'|trans({}, 'emails', locale)|raw }}</p>
+                            <p>{{ 'order_refunded.thanks'|trans({}, 'emails', locale)|raw }}</p>
+                        {% elseif kind == 'order_cancelled' %}
+                            <p>{{ 'order_cancelled.body'|trans({'%reference%': reference|e}, 'emails', locale)|raw }}</p>
+                            {% if amountText %}<p>{{ 'order_cancelled.refund'|trans({'%amount%': amountText|e}, 'emails', locale)|raw }}</p>{% endif %}
+                            {% if reason %}<p>{{ 'order_cancelled.reason'|trans({'%reason%': reason|e}, 'emails', locale)|raw }}</p>{% endif %}
+                            <p>{{ 'order_cancelled.contact'|trans({}, 'emails', locale)|raw }}</p>
+                        {% else %}
+                            <p>{{ 'order_receipt.body'|trans({'%reference%': reference|e, '%date%': dateText|e}, 'emails', locale)|raw }}</p>
+                            <p>{{ 'order_receipt.total'|trans({'%amount%': totalText|e}, 'emails', locale)|raw }}<br>{{ 'order_receipt.paid'|trans({'%amount%': paidText|e}, 'emails', locale)|raw }}{% if refundedText %}<br>{{ 'order_receipt.refunded'|trans({'%amount%': refundedText|e}, 'emails', locale)|raw }}{% endif %}</p>
+                            {% for url in receiptUrls %}<p style="text-align: center; margin: 18px 0;"><a href="{{ url }}" style="background: #1e293b; color: #ffffff; text-decoration: none; padding: 12px 22px; border-radius: 8px; display: inline-block;">{{ 'order_receipt.receipt_link'|trans({}, 'emails', locale)|raw }}</a></p>{% endfor %}
+                            <p>{{ 'order_receipt.thanks'|trans({}, 'emails', locale)|raw }}</p>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+{% endblock %}

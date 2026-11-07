@@ -1156,6 +1156,34 @@ Tests : `tests/Functional/Boutique/ShippingWeightsTest.php`.
 Tests : `tests/Functional/Boutique/ShippingLabelsTest.php`. Validation avec de vraies clés (bac à sable EasyPost : vraies étiquettes de
 test, rien n'est facturé) au lot des comptes tiers.
 
+### Opérations de support sur une commande web (lot 3, 07/11/2026)
+
+`Services/OrderService/OrderOperationsService` (jamais sur une vente au comptoir : la caisse a ses retours), pages du back-office
+`Controller/Admin/OrderOperationsAdminController` (actions sur la liste et la fiche Commandes ; formulaire CSRF, redirection habillée,
+résultat en message), trace `content_audit_log` (ressource `order`, actions `refund`, `capture`, `cancel`, `resend_*`), courriels au client
+dans la langue du site (`emails/order_notice.html.twig`, clés `order_refunded.*`, `order_cancelled.*`, `order_receipt.*`) :
+- **Rembourser** (`GET`/`POST /admin/orders/{id}/rembourser`) : montant total ou partiel (au plus le capturé moins le déjà remboursé), motif,
+  courriel. Remboursement réel chez Stripe (`CheckoutPaymentGatewayInterface::refund`, clé d'idempotence, commission de la plateforme rendue
+  au prorata), réparti sur les paiements capturés, **une écriture de remboursement par part** (`payments` : montant négatif, type 1,
+  `stripe_payment_id` = identifiant du remboursement, `stripe_status` `refunded`). Refus : `COUNTER_SALE`, `ORDER_CANCELLED`,
+  `NO_ONLINE_PAYMENT`, `AMOUNT_INVALID`, `REFUND_EXCEEDS` (+ `refundableCents`), `REFUND_FAILED` (rien n'est enregistré). La commande,
+  son statut et le stock ne changent pas.
+- **Annuler** (`GET`/`POST /admin/orders/{id}/annuler`) : motif, confirmation, courriel ; passe par `CancelOrderUseCase` (statut 7, montants à
+  zéro, stock réintégré, écriture de remboursement) qui **rembourse désormais réellement chez Stripe** chaque paiement capturé d'une
+  commande web (avant : seule l'écriture existait, le client restait débité) ; si Stripe refuse, toute l'annulation est rendue (400) :
+  jamais d'écriture de remboursement sans remboursement. Refus : `ALREADY_SHIPPED` (rembourser plutôt), `ORDER_CANCELLED`, `COUNTER_SALE`.
+- **Capturer le paiement** (`POST /admin/orders/{id}/capturer`, depuis la page Rembourser) : paiement Stripe autorisé non capturé
+  (`requires_capture`, webhook arrivé sans capture) → capture, écriture `succeeded` + reçu, commande « Complétée » si elle était incomplète
+  ou en cours. Refus : `NOTHING_TO_CAPTURE`, `CAPTURE_FAILED` (autorisation expirée après 7 jours).
+- **Renvoyer un courriel** (`GET`/`POST /admin/orders/{id}/courriels`, `kind` = `confirmation` | `receipt` | `shipped`) : confirmation de
+  commande (gabarit existant), reçu (total, payé, remboursé, liens des reçus Stripe), avis d'expédition avec le suivi enregistré
+  (`OrderShipmentService::notifyShipped`). Refus : `NO_EMAIL`, `NOT_SHIPPED`.
+- Écran Paiements : libellés en français, devise du site, actions « Rembourser » (mène à la page de la commande) et « Reçu Stripe ».
+- Lecture par le client et les applications : `paymentStatus` passe à `refunded` dès qu'une écriture de remboursement existe (inchangé).
+
+Tests : `tests/Functional/Boutique/OrderOperationsTest.php` (remboursement partiel puis total, dépassement refusé, annulation qui
+rembourse ou ne fait rien si Stripe refuse, capture, renvois, vente au comptoir exclue).
+
 ### Commandes du client
 
 - `GET /api/ordersuser` (connecté) : commandes de l'utilisateur connecté, jamais servies par le cache (lot 4 de l'invalidation ciblée,

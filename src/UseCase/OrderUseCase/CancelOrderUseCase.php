@@ -39,12 +39,39 @@ class CancelOrderUseCase
         private readonly \App\Services\PosTerminalService\PosTerminalPaymentService $terminalPayments,
         private readonly \App\Services\PosAuditService\PosApprovalContext $approvalContext,
         private readonly \App\Services\PosCustomerService\PosLoyaltyService $loyalty, // fidélité (F8)
-        private readonly \App\Services\PosCouponService\PosCouponService $coupons // coupons de fabricant (F17)
+        private readonly \App\Services\PosCouponService\PosCouponService $coupons, // coupons de fabricant (F17)
+        private readonly ?\App\Services\CheckoutService\CheckoutPaymentGatewayInterface $checkout = null // remboursement Stripe d'une commande web (lot 3 Opérations, 07/11/2026)
     ) {
         $this->paymentHandlerUseCase = $paymentHandlerUseCase;
         $this->updateStockAndInventoryUseCase = $updateStockAndInventoryUseCase;
         $this->handleCaisseTransactionUseCase = $handleCaisseTransactionUseCase;
         $this->emProvider = $emProvider;
+    }
+
+    /** Rembourse chez Stripe les paiements capturés de la commande et reporte le résultat sur l'écriture de remboursement la plus récente */
+    private function refundOnline(Order $order, $em): void
+    {
+        // L'écriture de remboursement vient d'être créée hors de la collection en mémoire : relue par le dépôt
+        $refundRow = null;
+        foreach ($em->getRepository(\App\Entity\Payments::class)->findBy(['orderPayment' => $order], ['id' => 'DESC']) as $p) {
+            if ((float) $p->getAmount() < 0 && $p->getPaymentType()?->getId() === 1) {
+                $refundRow = $p;
+                break;
+            }
+        }
+        $ids = [];
+        foreach ($order->getPayments() as $p) {
+            if ((float) $p->getAmount() > 0 && $p->getStripePaymentId() && $p->getStripeStatus() === 'succeeded') {
+                $result = $this->checkout->refund((string) $p->getStripePaymentId(), null, 'cancel-order-' . $order->getId() . '-' . $p->getId());
+                if ($result === null) {
+                    throw new \RuntimeException(sprintf('Remboursement Stripe du paiement %s impossible : à faire à la main dans Stripe', $p->getStripePaymentId()));
+                }
+                $ids[] = (string) $result['id'];
+            }
+        }
+        if ($ids !== [] && $refundRow !== null) {
+            $refundRow->setStripePaymentId(implode(',', $ids))->setStripeStatus('refunded');
+        }
     }
 
     /** @param ?int $cashRegisterId poste du remboursement d'une vente POS si la session d'origine est fermée (15/10/2026) */
@@ -147,6 +174,12 @@ class CancelOrderUseCase
                 $this->paymentHandlerUseCase->handlePayment($order, -$cashRefund, 2, $paymentTypeId, $statusPaymentId, new \DateTime(), null);
             } else {
                 $this->paymentHandlerUseCase->handlePayment($order, -$refundAmount, null, $paymentTypeId, $statusPaymentId, new \DateTime(), null);
+            }
+            // Commande web payée par carte (lot 3 Opérations, 07/11/2026) : remboursement réel chez Stripe de chaque paiement capturé ;
+            // avant, seule l'écriture comptable existait et le client restait débité. Un échec chez Stripe annule toute l'opération
+            // (transaction rendue, 400 avec le message) : la commande reste à annuler, jamais d'écriture de remboursement sans remboursement.
+            if ($order->getOrderSource()?->getId() !== 2 && $this->checkout !== null) {
+                $this->refundOnline($order, $em);
             }
 
             // Fidélité (F8) : reprise de tous les points gagnés par une vente de caisse annulée

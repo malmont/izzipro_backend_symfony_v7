@@ -9,10 +9,31 @@ final class FakeCheckoutPaymentGateway implements CheckoutPaymentGatewayInterfac
 {
     /** @var array<string, array> */
     public static array $intents = [];
+    /** @var list<array{id: string, intent: string, amount: ?int, key: string}> remboursements simulés (lot 3 Opérations, 07/11/2026) */
+    public static array $refunds = [];
+    public static bool $refundFails = false;
 
     public static function reset(): void
     {
         self::$intents = [];
+        self::$refunds = [];
+        self::$refundFails = false;
+    }
+
+    public function refund(string $id, ?int $amountCents, string $idempotencyKey): ?array
+    {
+        if (!isset(self::$intents[$id]) || self::$intents[$id]['status'] !== 'succeeded' || self::$refundFails) {
+            return null;
+        }
+        foreach (self::$refunds as $r) {
+            if ($r['key'] === $idempotencyKey) {
+                return ['id' => $r['id'], 'status' => 'succeeded', 'amount' => $r['amount'] ?? self::$intents[$id]['amount']];
+            }
+        }
+        $refund = ['id' => 're_test_' . bin2hex(random_bytes(4)), 'intent' => $id, 'amount' => $amountCents, 'key' => $idempotencyKey];
+        self::$refunds[] = $refund;
+
+        return ['id' => $refund['id'], 'status' => 'succeeded', 'amount' => $amountCents ?? self::$intents[$id]['amount']];
     }
 
     /** Le client a payé : autorisation obtenue, à capturer */

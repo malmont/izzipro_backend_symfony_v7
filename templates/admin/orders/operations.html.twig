@@ -1,0 +1,85 @@
+{# Opérations de support sur une commande (lot 3, 07/11/2026) : page = refund | cancel | emails ; habillage EasyAdmin depuis un lien habillé #}
+{% extends ea() is not null ? '@EasyAdmin/page/content.html.twig' : 'base_admin.html.twig' %}
+{% set titles = {refund: 'Rembourser la commande ' ~ order.reference, cancel: 'Annuler la commande ' ~ order.reference, emails: 'Renvoyer un courriel : commande ' ~ order.reference} %}
+
+{% block title %}{{ titles[page] }}{% endblock %}
+{% block content_title %}{{ titles[page] }}{% endblock %}
+{% block main %}{{ block('panel') }}{% endblock %}
+{% block body %}<div class="py-3">{{ block('panel') }}</div>{% endblock %}
+
+{% block panel %}
+{% set m = money %}
+<div class="container-fluid" style="max-width: 860px">
+    <h1 class="mb-3">{{ titles[page] }}</h1>
+    {% for label, messages in app.flashes %}{% for message in messages %}<div class="alert alert-{{ label }}">{{ message }}</div>{% endfor %}{% endfor %}
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <p class="mb-1"><strong>Client :</strong> {{ order.userId ? (order.userId.firstname ~ ' ' ~ order.userId.lastname ~ ' <' ~ order.userId.email ~ '>') : 'invité' }} · <strong>Statut :</strong> {{ order.status ? order.status.name : '-' }}</p>
+            <p class="mb-0 small text-muted" data-ops-money>Total {{ (order.totalAmount / 100)|number_format(2, ',', ' ') }} {{ currency }} · payé par carte {{ (m.capturedCents / 100)|number_format(2, ',', ' ') }} · déjà remboursé {{ (m.refundedCents / 100)|number_format(2, ',', ' ') }} · <strong>remboursable {{ (m.refundableCents / 100)|number_format(2, ',', ' ') }} {{ currency }}</strong>{% if m.authorizedCents > 0 %} · autorisé non capturé {{ (m.authorizedCents / 100)|number_format(2, ',', ' ') }}{% endif %}</p>
+        </div>
+    </div>
+
+    {% if page == 'refund' and m.authorizedCents > 0 %}
+        <form method="post" action="{{ path('admin_order_capture', {id: order.id}) }}" class="alert alert-info d-flex justify-content-between align-items-center" data-ops-capture>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}">
+            <span>Un paiement de {{ (m.authorizedCents / 100)|number_format(2, ',', ' ') }} {{ currency }} est autorisé mais pas encore capturé (le client n'est pas débité tant que la capture n'est pas faite ; l'autorisation expire au bout de 7 jours).</span>
+            <button type="submit" class="btn btn-primary btn-sm ms-3">Capturer le paiement</button>
+        </form>
+    {% endif %}
+    {% if blocker %}
+        <div class="alert alert-warning" data-ops-blocked>{{ blocker }}</div>
+        <a class="btn btn-secondary" href="{{ backUrl }}">Retour à la commande</a>
+    {% elseif page == 'refund' %}
+        <form method="post" action="{{ path('admin_order_refund', {id: order.id}) }}" data-ops-form>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}">
+            <div class="mb-3">
+                <label class="form-label" for="ops-amount">Montant à rembourser ({{ currency }})</label>
+                <input class="form-control" id="ops-amount" name="amount" value="{{ (m.refundableCents / 100)|number_format(2, '.', '') }}" inputmode="decimal" required>
+                <div class="form-text">Au plus {{ (m.refundableCents / 100)|number_format(2, ',', ' ') }} {{ currency }} : le remboursement part chez Stripe sur la carte du client, l'écriture de remboursement est ajoutée à la commande. La commande n'est pas annulée et le stock n'est pas modifié (pour une annulation complète, utilisez « Annuler »).</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="ops-reason">Motif (envoyé au client s'il est prévenu)</label>
+                <input class="form-control" id="ops-reason" name="reason" maxlength="500" placeholder="Article manquant, geste commercial, retour accepté…">
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="notify" value="1" id="ops-notify" checked>
+                <label class="form-check-label" for="ops-notify">Prévenir le client par courriel (dans la langue du site)</label>
+            </div>
+            <button type="submit" class="btn btn-danger">Rembourser</button>
+            <a class="btn btn-link" href="{{ backUrl }}">Annuler</a>
+        </form>
+    {% elseif page == 'cancel' %}
+        <div class="card mb-3"><div class="card-body">
+            <h2 class="h6">Ce que fait l'annulation</h2>
+            <p class="mb-0">La commande passe « Annulation », ses montants sont remis à zéro, le stock est réintégré{% if m.refundableCents > 0 %}, et <strong>{{ (m.refundableCents / 100)|number_format(2, ',', ' ') }} {{ currency }}</strong> sont remboursés chez Stripe sur la carte du client (si Stripe refuse, rien n'est annulé){% endif %}. Irréversible.</p>
+        </div></div>
+        <form method="post" action="{{ path('admin_order_cancel', {id: order.id}) }}" data-ops-form>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}">
+            <div class="mb-3">
+                <label class="form-label" for="ops-reason">Motif (envoyé au client s'il est prévenu)</label>
+                <input class="form-control" id="ops-reason" name="reason" maxlength="500" placeholder="À la demande du client, rupture de stock…">
+            </div>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="notify" value="1" id="ops-notify" checked>
+                <label class="form-check-label" for="ops-notify">Prévenir le client par courriel</label>
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="confirm" value="1" id="ops-confirm">
+                <label class="form-check-label" for="ops-confirm">Je confirme l'annulation, <strong>irréversible</strong>.</label>
+            </div>
+            <button type="submit" class="btn btn-danger">Annuler la commande</button>
+            <a class="btn btn-link" href="{{ backUrl }}">Retour</a>
+        </form>
+    {% else %}
+        <form method="post" action="{{ path('admin_order_emails', {id: order.id}) }}" data-ops-form>
+            <input type="hidden" name="_token" value="{{ csrf_token(csrfToken) }}">
+            <p>Renvoyer au client ({{ order.userId ? order.userId.email : 'aucune adresse' }}) :</p>
+            <button type="submit" class="btn btn-outline-primary me-2" name="kind" value="confirmation">La confirmation de commande</button>
+            <button type="submit" class="btn btn-outline-primary me-2" name="kind" value="receipt">Le reçu (paiements et lien Stripe)</button>
+            <button type="submit" class="btn btn-outline-primary me-2" name="kind" value="shipped" {{ order.shippedAt is null and order.trackingNumber is null ? 'disabled' : '' }}>L'avis d'expédition avec le suivi</button>
+            <a class="btn btn-link" href="{{ backUrl }}">Retour</a>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

@@ -25,7 +25,10 @@ class PaymentsCrudController extends BaseTenantCrudController
 {
     use CashRecordLockTrait; // données de caisse non modifiables (C2)
 
-    // 3. Le constructeur est SUPPRIMÉ. Le parent s'en occupe !
+    public function __construct(\App\Services\TenantEntityManagerProvider $emProvider, private readonly ?\App\Services\BoutiqueSettingsService\TenantCurrencyProvider $currency = null)
+    {
+        parent::__construct($emProvider);
+    }
 
     public static function getEntityFqcn(): string
     {
@@ -34,9 +37,26 @@ class PaymentsCrudController extends BaseTenantCrudController
 
     public function configureCrud(Crud $crud): Crud
     {
-        return $crud->setEntityLabelInSingular('Payment')
-                    ->setEntityLabelInPlural('Payments')
-                    ->setSearchFields(['id', 'amount', 'paymentDate', 'squarePaymentId', 'squareStatus']);
+        return $crud->setEntityLabelInSingular('Paiement')
+                    ->setEntityLabelInPlural('Paiements')
+                    ->setHelp('index', 'Les encaissements et remboursements de chaque commande (montants en cents dans la devise du site). Pour rembourser, annuler ou renvoyer un reçu, passez par la commande : bouton « Rembourser » ci-dessous ou fiche de la commande.')
+                    ->setSearchFields(['id', 'amount', 'paymentDate', 'stripePaymentId', 'stripeStatus']);
+    }
+
+    /** Opérations de support (lot 3, 07/11/2026) : rembourser depuis la commande du paiement, ouvrir le reçu Stripe */
+    public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
+    {
+        $refund = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('refundFromOrder', 'Rembourser', 'fas fa-undo')
+            ->linkToRoute('admin_order_refund', fn (Payments $p) => ['id' => $p->getOrderPayment()?->getId()])
+            ->displayIf(fn ($p) => $p instanceof Payments && $p->getOrderPayment() !== null && $p->getOrderPayment()->getOrderSource()?->getId() !== 2 && (float) $p->getAmount() > 0 && $p->getStripePaymentId() && $p->getStripeStatus() === 'succeeded');
+        $receipt = \EasyCorp\Bundle\EasyAdminBundle\Config\Action::new('stripeReceipt', 'Reçu Stripe', 'fas fa-receipt')
+            ->linkToUrl(fn (Payments $p) => (string) $p->getStripeReceiptUrl())
+            ->setHtmlAttributes(['target' => '_blank', 'rel' => 'noopener'])
+            ->displayIf(fn ($p) => $p instanceof Payments && (string) $p->getStripeReceiptUrl() !== '');
+
+        return $this->lockCashRecordActions(parent::configureActions($actions))
+            ->add(Crud::PAGE_INDEX, $refund)->add(Crud::PAGE_DETAIL, $refund)
+            ->add(Crud::PAGE_INDEX, $receipt)->add(Crud::PAGE_DETAIL, $receipt);
     }
 
     // 4. On conserve configureFields car il est spécifique ET il a besoin de l'emProvider du parent
@@ -47,42 +67,42 @@ class PaymentsCrudController extends BaseTenantCrudController
 
         $fields = [
             IdField::new('id')->hideOnForm(),
-            AssociationField::new('orderPayment', 'Order')
+            AssociationField::new('orderPayment', 'Commande')
                 ->setRequired(true)
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn(OrderRepository $repo) => $repo->createQueryBuilder('o')->orderBy('o.orderDate', 'DESC'),
                     'choice_label' => 'reference'
                 ]),
-            MoneyField::new('amount', 'Amount')->setCurrency('USD'),
-            DateTimeField::new('paymentDate', 'Payment Date'),
-            AssociationField::new('paymentMethod', 'Payment Method')
+            MoneyField::new('amount', 'Montant')->setCurrency($this->currency?->code() ?? 'CAD')->setStoredAsCents(true),
+            DateTimeField::new('paymentDate', 'Date'),
+            AssociationField::new('paymentMethod', 'Moyen de paiement')
                 ->setRequired(true)
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn(PaymentMethodRepository $repo) => $repo->createQueryBuilder('pm')->orderBy('pm.name', 'ASC'),
                     'choice_label' => 'name'
                 ]),
-            AssociationField::new('statutPayment', 'Payment Status')
+            AssociationField::new('statutPayment', 'Statut')
                 ->setRequired(true)
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn(StatusPaymentRepository $repo) => $repo->createQueryBuilder('sp')->orderBy('sp.name', 'ASC'),
                     'choice_label' => 'name'
                 ]),
-            AssociationField::new('paymentType', 'Payment Type')
+            AssociationField::new('paymentType', 'Type (encaissement ou remboursement)')
                 ->setRequired(true)
                 ->setFormTypeOptions([
                     'em' => $tenantEm,
                     'query_builder' => fn(PaymentTypeRepository $repo) => $repo->createQueryBuilder('pt')->orderBy('pt.name', 'ASC'),
                     'choice_label' => 'name'
                 ]),
-            TextField::new('stripePaymentId', 'stripe Payment ID')->hideOnForm(),
-            TextField::new('stripeReceiptUrl', 'stripe Receipt URL')->hideOnForm(),
-            UrlField::new('stripeStatus', 'stripe Status')->hideOnIndex(),
-            TextField::new('stripeCardBrand', 'stripe Card Brand')->hideOnForm(),
-            TextField::new('stripeLast4', 'stripe Last 4')->hideOnForm(),
-            TextField::new('stripeRiskLevel', 'stripe Risk Level')->hideOnForm(),
+            TextField::new('stripePaymentId', 'Paiement Stripe (ou remboursement)')->hideOnForm(),
+            UrlField::new('stripeReceiptUrl', 'Reçu Stripe')->hideOnForm()->hideOnIndex(),
+            TextField::new('stripeStatus', 'État Stripe')->hideOnForm(),
+            TextField::new('stripeCardBrand', 'Carte')->hideOnForm()->hideOnIndex(),
+            TextField::new('stripeLast4', '4 derniers chiffres')->hideOnForm()->hideOnIndex(),
+            TextField::new('stripeRiskLevel', 'Risque (Stripe)')->hideOnForm()->hideOnIndex(),
 
         ];
 
@@ -103,11 +123,6 @@ class PaymentsCrudController extends BaseTenantCrudController
     protected function isCashRecordLocked(object $entity): bool
     {
         return $entity instanceof \App\Entity\Payments && self::isCounterSale($entity->getOrderPayment());
-    }
-
-    public function configureActions(\EasyCorp\Bundle\EasyAdminBundle\Config\Actions $actions): \EasyCorp\Bundle\EasyAdminBundle\Config\Actions
-    {
-        return $this->lockCashRecordActions(parent::configureActions($actions));
     }
 
     public function updateEntity(\Doctrine\ORM\EntityManagerInterface $entityManager, $entityInstance): void

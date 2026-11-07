@@ -96,6 +96,32 @@ final class StripeCheckoutPaymentGateway implements CheckoutPaymentGatewayInterf
         return true;
     }
 
+    public function refund(string $id, ?int $amountCents, string $idempotencyKey): ?array
+    {
+        $options = $this->stripe->accountOptions();
+        if ($options === null) {
+            $this->logger->error('[Checkout] Remboursement impossible : le site n\'a pas de compte Stripe actif.');
+
+            return null;
+        }
+        $params = ['payment_intent' => $id];
+        if ($amountCents !== null && $amountCents > 0) {
+            $params['amount'] = $amountCents;
+        }
+        if (isset($options['stripe_account'])) {
+            $params['refund_application_fee'] = true; // la plateforme rend sa commission au prorata
+        }
+        try {
+            $refund = (new StripeClient($this->stripe->secretKey()))->refunds->create($params, $options + ['idempotency_key' => $idempotencyKey]);
+
+            return ['id' => (string) $refund->id, 'status' => (string) $refund->status, 'amount' => (int) $refund->amount];
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            $this->logger->error(sprintf('[Checkout] Stripe (remboursement %s) : %s', $id, $e->getMessage()));
+
+            return null;
+        }
+    }
+
     private function call(callable $action, string $label): ?array
     {
         try {

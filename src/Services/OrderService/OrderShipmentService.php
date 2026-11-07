@@ -104,6 +104,25 @@ class OrderShipmentService
         return ['notified' => $notified, 'trackingUrl' => $trackingUrl];
     }
 
+    /** Renvoie le courriel « commande expédiée » avec le suivi déjà enregistré (lot 3 Opérations, 07/11/2026) */
+    public function notifyShipped(Order $order, string $domain): bool
+    {
+        $email = (string) ($order->getUserId()?->getEmail() ?? '');
+        if ($email === '' || str_ends_with($email, '@compte-supprime.invalid')) {
+            return false;
+        }
+        try {
+            return $this->mailer->sendCustomerEmail($email, 'order_shipped.subject', ['%reference%' => (string) $order->getReference()], 'emails/order_shipped.html.twig', [
+                'firstname' => $order->getUserId()?->getFirstname(), 'reference' => (string) $order->getReference(), 'carrier' => (string) ($order->getTrackingCarrier() ?? $order->getCarrier()?->getName() ?? ''),
+                'trackingNumber' => $order->getTrackingNumber(), 'trackingUrl' => $order->getTrackingUrl(), 'shippedAt' => $order->getShippedAt() ?? new \DateTimeImmutable(),
+            ], null, $domain, 'order_shipped.subject');
+        } catch (\Throwable $e) {
+            $this->logger->error('[Expédition] renvoi du courriel impossible : ' . $e->getMessage(), ['orderId' => $order->getId()]);
+
+            return false;
+        }
+    }
+
     public function deliver(Order $order): void
     {
         $em = $this->emProvider->getEntityManager();

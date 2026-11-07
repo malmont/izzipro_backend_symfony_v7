@@ -585,7 +585,7 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/shared-media` | aucune règle | `Controller\SharedMediaApiController\SharedMediaApiController::list` |
 | GET, HEAD | `/uploads/{path}` | aucune règle | `Controller\Storage\BucketSimulatorController::serve` |
 
-## Administration (EasyAdmin) (57)
+## Administration (EasyAdmin) (61)
 
 | Méthodes | Route | Accès | Contrôleur |
 |---|---|---|---|
@@ -609,9 +609,13 @@ Contexte : `docs/architecture.md` ; détail de chaque module : sa fiche.
 | GET | `/admin/mon-site/forfait` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::plan` |
 | POST | `/admin/mon-site/regler` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::settle` |
 | GET | `/admin/mon-site` | ROLE_ADMIN | `Controller\Admin\SiteConsoleAdminController::index` |
+| GET, POST | `/admin/orders/{id}/annuler` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderOperationsAdminController::cancel` |
+| POST | `/admin/orders/{id}/capturer` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderOperationsAdminController::capture` |
+| GET, POST | `/admin/orders/{id}/courriels` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderOperationsAdminController::emails` |
 | GET, POST | `/admin/orders/{id}/etiquette` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderLabelAdminController::label` |
 | GET, POST | `/admin/orders/{id}/expedier` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderShipmentAdminController::ship` |
 | POST | `/admin/orders/{id}/livree` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderShipmentAdminController::deliver` |
+| GET, POST | `/admin/orders/{id}/rembourser` | ROLE_ADMIN + `#[IsGranted(ROLE_ADMIN)]` | `Controller\Admin\OrderOperationsAdminController::refund` |
 | ANY | `/admin/pdf/print-barcode/{id}/{copies}` | ROLE_ADMIN | `Controller\Admin\BarcodeManagementController::pdfPrintBarcode` |
 | POST | `/admin/plateforme/accorder` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::grant` |
 | POST | `/admin/plateforme/boutique` | ROLE_ADMIN | `Controller\Admin\PlatformConsoleAdminController::shop` |

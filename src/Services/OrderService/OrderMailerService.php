@@ -103,6 +103,35 @@ class OrderMailerService
         }
     }
 
+    /**
+     * Courriel d'opération au client (lot 3, 07/11/2026) : `order_refunded` (amountCents, reason), `order_cancelled` (amountCents | null,
+     * reason), `order_receipt` (totalCents, paidCents, refundedCents, receiptUrls). Langue du site, montants dans sa devise.
+     */
+    public function sendOperationNotice(Order $order, string $kind, array $data, string $domain): bool
+    {
+        $email = (string) ($order->getUserId()?->getEmail() ?? '');
+        if ($email === '' || str_ends_with($email, '@compte-supprime.invalid') || !in_array($kind, ['order_refunded', 'order_cancelled', 'order_receipt'], true)) {
+            return false;
+        }
+        $language = $this->emailLocale?->language(null) ?? EmailLocale::FRENCH;
+        $currency = $this->currencyCode();
+        $money = fn (?int $cents): ?string => $cents === null ? null : ($language === 'en' ? number_format($cents / 100, 2, '.', ',') . ' ' . $currency : number_format($cents / 100, 2, ',', ' ') . ' ' . $currency);
+        $context = [
+            'kind' => $kind, 'reference' => (string) $order->getReference(), 'firstname' => $order->getUserId()?->getFirstname(),
+            'amountText' => $money($data['amountCents'] ?? null), 'reason' => isset($data['reason']) && trim((string) $data['reason']) !== '' ? trim((string) $data['reason']) : null,
+            'totalText' => $money($data['totalCents'] ?? null), 'paidText' => $money($data['paidCents'] ?? null), 'refundedText' => ($data['refundedCents'] ?? 0) > 0 ? $money($data['refundedCents']) : null,
+            'receiptUrls' => array_values(array_filter($data['receiptUrls'] ?? [])),
+            'dateText' => $order->getOrderDate() ? ($language === 'en' ? $order->getOrderDate()->format('Y-m-d') : $order->getOrderDate()->format('d/m/Y')) : '',
+        ];
+        try {
+            return $this->emailSenderService->sendCustomerEmail($email, $kind . '.subject', ['%reference%' => (string) $order->getReference()], 'emails/order_notice.html.twig', $context, $language, $domain, $kind . '.subject');
+        } catch (\Throwable $e) {
+            $this->logger->error(sprintf('Erreur courriel %s : %s', $kind, $e->getMessage()));
+
+            return false;
+        }
+    }
+
     /** Devise du site (fiche Entreprise), CAD à défaut ; avant le 03/11/2026 les gabarits écrivaient CAD en dur */
     private function currencyCode(): string
     {

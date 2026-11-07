@@ -25,4 +25,10 @@ interface CheckoutPaymentGatewayInterface
      * l'annulation a échoué ou n'est pas possible dans son état, l'échec étant journalisé en erreur avec l'identifiant)
      */
     public function cancel(string $id): bool;
+
+    /**
+     * Rembourse un paiement capturé, en entier (montant nul) ou en partie (cents) ; opérations, lot 3 (07/11/2026). Rend
+     * { id, status, amount } du remboursement, null si Stripe refuse (journalisé). Idempotent par clé.
+     */
+    public function refund(string $id, ?int $amountCents, string $idempotencyKey): ?array;
 }
